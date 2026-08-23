@@ -25,15 +25,19 @@ LINK_CACHE_TTL = 600  # seconds
 
 
 def _mapped_stores():
-    from sqlalchemy import select
-    from db.base import SessionLocal
-    from db.models.calendar import StoreCalendarCluster
-
-    session = SessionLocal()
     try:
-        return {r[0] for r in session.execute(select(StoreCalendarCluster.store_id)).all()}
-    finally:
-        session.close()
+        from sqlalchemy import select
+        from db.base import SessionLocal
+        from db.models.calendar import StoreCalendarCluster
+
+        session = SessionLocal()
+        try:
+            return {r[0] for r in session.execute(select(StoreCalendarCluster.store_id)).all()}
+        finally:
+            session.close()
+    except Exception:
+        pass
+    return set()
 
 
 def _scan_parquet_link():
