@@ -17,6 +17,21 @@ let _nextFestivalId = 1000
 // or lib/engine.js, so redefined here for building display rows.
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
+// Default date for a newly added festival row: today's day/month in the given year
+// (the configured Reference/Future year), falling back to the current year when
+// that isn't set yet. Unlike the old localStorage app, a blank date is not an
+// option here - put_cluster_profiles parses refDate/futDate with
+// date.fromisoformat() into NOT NULL columns, so persisting '' would 500. The
+// day is clamped to the target month's length so e.g. Feb 29 -> Feb 28 in a
+// non-leap year rather than silently rolling over into March.
+function defaultFestivalDate(year) {
+  const now = new Date()
+  const y = Number(year) || now.getFullYear()
+  const m = now.getMonth()
+  const daysInMonth = new Date(y, m + 1, 0).getDate()
+  return fmtISO(new Date(y, m, Math.min(now.getDate(), daysInMonth)))
+}
+
 // Converts one raw mapping object (as returned by generateMappings/reconstructed
 // from a saved calendar) into the flat row shape OutputSection.jsx renders.
 // Mirrors the cell derivations in the old app's renderDayTable() (calendar_engine.html
@@ -218,6 +233,28 @@ export default function CalendarisationTab({ isPlanner }) {
     persist(next)
   }
 
+  // "+ Add Festival" (old app: addFestival(), calendar_engine.html line ~2061).
+  // Appends an editable placeholder row to the active cluster and persists it
+  // through the same handleFestivalsChange/persist() path every other festival
+  // edit uses.
+  function handleAddFestival() {
+    const existing = profiles[activeIdx]?.festivals || []
+    // _nextFestivalId is module-scoped, so it resets to its initial value on every
+    // page load. Lift it above the ids already in use before handing one out, so a
+    // festival added today can't collide with one added in an earlier session -
+    // these ids are both the React keys in FestivalTable and the backend's
+    // source_festival_id.
+    const maxId = existing.reduce((m, f) => Math.max(m, Number(f.id) || 0), 0)
+    if (_nextFestivalId <= maxId) _nextFestivalId = maxId + 1
+    handleFestivalsChange([...existing, {
+      id: _nextFestivalId++,
+      name: 'New Festival',
+      refDate: defaultFestivalDate(refYear),
+      futDate: defaultFestivalDate(futYear),
+      pre: 1, core: 1, post: 1,
+    }])
+  }
+
   if (!profiles.length) return <div className="module-panel">Loading…</div>
 
   return (
@@ -227,7 +264,8 @@ export default function CalendarisationTab({ isPlanner }) {
           <ClusterTabs profiles={profiles} activeIdx={activeIdx} onSwitch={setActiveIdx}
             onReorder={handleReorder} onAdd={handleAdd} isPlanner={isPlanner} />
           <BulkAdjustPanels festivals={profiles[activeIdx].festivals} onChange={handleFestivalsChange} isPlanner={isPlanner} />
-          <FestivalTable festivals={profiles[activeIdx].festivals} onChange={handleFestivalsChange} isPlanner={isPlanner} />
+          <FestivalTable festivals={profiles[activeIdx].festivals} onChange={handleFestivalsChange}
+            onAdd={handleAddFestival} isPlanner={isPlanner} />
           <div style={{ margin: '12px 0' }}>
             <div style={{ fontSize: '11px', color: 'var(--muted)', margin: '4px 0 12px' }}>
               Reference Year {refYear ?? '—'} → Future Year {futYear ?? '—'} (set on the Version Setting tab)

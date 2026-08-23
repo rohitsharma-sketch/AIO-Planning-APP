@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-export default function FestivalTable({ festivals, onChange, isPlanner }) {
+export default function FestivalTable({ festivals, onChange, onAdd, isPlanner }) {
   const [dragIdx, setDragIdx] = useState(null)
   const [dragOverIdx, setDragOverIdx] = useState(null)
 
@@ -16,11 +16,18 @@ export default function FestivalTable({ festivals, onChange, isPlanner }) {
     onChange(next)
   }
 
+  // Removal persists to the shared DB immediately and there is no undo (a deleted
+  // festival can only be recreated by hand), so a stray click on the narrow × must
+  // be cancellable. Plain browser confirm() — the codebase has no other
+  // destructive-action confirmation pattern to follow.
   function removeRow(idx) {
+    const label = festivals[idx]?.name || 'this festival'
+    if (!window.confirm(`Delete "${label}"? This is saved immediately and cannot be undone.`)) return
     onChange(festivals.filter((_, i) => i !== idx))
   }
 
   return (
+    <>
     <table id="festTable">
       <thead>
         <tr>
@@ -51,5 +58,11 @@ export default function FestivalTable({ festivals, onChange, isPlanner }) {
         ))}
       </tbody>
     </table>
+    {isPlanner && (
+      <div style={{ margin: '8px 0' }}>
+        <button type="button" onClick={onAdd} title="Add a new festival row">+ Add Festival</button>
+      </div>
+    )}
+    </>
   )
 }
