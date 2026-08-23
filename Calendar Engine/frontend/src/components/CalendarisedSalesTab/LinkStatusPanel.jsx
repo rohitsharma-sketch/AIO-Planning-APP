@@ -14,7 +14,17 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
   }
   useEffect(() => {
     refresh(false)
-    getSalesdataLinkSelection(sourceType).then(s => { setSelection(s); setSelectedMonths(s.months || []) })
+    getSalesdataLinkSelection(sourceType).then(s => {
+      setSelection(s)
+      setSelectedMonths(s.months || [])
+      // Push the PERSISTED selection up to the parent too, not just the one made by
+      // an explicit sync() below. Without this the checkboxes visibly show last
+      // session's synced months while the parent's `selections` state is still {},
+      // so "Run Reindex" on a freshly loaded page posts months: [] and the backend
+      // rejects it with "months is required".
+      onSelectionChange?.(sourceType, s)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceType])
 
   async function sync() {
