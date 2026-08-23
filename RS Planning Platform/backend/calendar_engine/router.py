@@ -10,6 +10,7 @@ from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from sqlalchemy import delete, func, select
 
 from auth.deps import require_login, require_role
+from calendar_engine.scans import get_salesdata_link, get_salesdata_link_daywise, run_reindex
 from db.base import SessionLocal
 from db.models.calendar import (
     AppStateMeta,
@@ -19,6 +20,8 @@ from db.models.calendar import (
     CalendarDayPair,
     ClusterProfile,
     ClusterProfileFestival,
+    FestivalChangelogEntry,
+    SalesdataLinkSelection,
     StoreCalendarCluster,
     StoreClusterLogEntry,
     StoreClusterMapMeta,
@@ -369,3 +372,89 @@ def put_app_state(body: dict = Body(...), actor: dict = Depends(require_role("pl
         return {"ok": True}
     finally:
         session.close()
+
+
+@router.get("/festival-changelog")
+def get_festival_changelog(range_key: str | None = None, user: dict = Depends(require_login)):
+    session = SessionLocal()
+    try:
+        stmt = select(FestivalChangelogEntry)
+        if range_key:
+            stmt = stmt.where(FestivalChangelogEntry.range_key == range_key)
+        rows = session.execute(stmt.order_by(FestivalChangelogEntry.range_key, FestivalChangelogEntry.cluster_name, FestivalChangelogEntry.festival_name)).scalars().all()
+        return [{"rangeKey": r.range_key, "clusterName": r.cluster_name, "festivalName": r.festival_name,
+                  "refDate": r.ref_date.isoformat(), "futDate": r.fut_date.isoformat(), "savedAt": r.saved_at.isoformat()}
+                for r in rows]
+    finally:
+        session.close()
+
+
+@router.put("/festival-changelog")
+def put_festival_changelog(body: dict = Body(...), actor: dict = Depends(require_role("planner"))):
+    session = SessionLocal()
+    try:
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+        now = datetime.datetime.now(datetime.timezone.utc)
+        stmt = pg_insert(FestivalChangelogEntry).values(
+            range_key=body["rangeKey"], cluster_name=body["clusterName"], festival_name=body["festivalName"],
+            ref_date=datetime.date.fromisoformat(body["refDate"]), fut_date=datetime.date.fromisoformat(body["futDate"]),
+            saved_at=now,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["range_key", "cluster_name", "festival_name"],
+            set_={"ref_date": stmt.excluded.ref_date, "fut_date": stmt.excluded.fut_date, "saved_at": stmt.excluded.saved_at},
+        )
+        session.execute(stmt)
+        session.commit()
+        return {"ok": True}
+    finally:
+        session.close()
+
+
+@router.get("/salesdata-link-selection/{source_type}")
+def get_salesdata_link_selection(source_type: str, user: dict = Depends(require_login)):
+    if source_type not in ("mw", "dw"):
+        raise HTTPException(404, "source_type must be 'mw' or 'dw'")
+    session = SessionLocal()
+    try:
+        row = session.get(SalesdataLinkSelection, source_type)
+        if row is None:
+            return {"months": [], "path": None, "syncedAt": None}
+        return {"months": row.months, "path": row.path, "syncedAt": row.synced_at.isoformat()}
+    finally:
+        session.close()
+
+
+@router.put("/salesdata-link-selection/{source_type}")
+def put_salesdata_link_selection(source_type: str, body: dict = Body(...), actor: dict = Depends(require_role("planner"))):
+    if source_type not in ("mw", "dw"):
+        raise HTTPException(404, "source_type must be 'mw' or 'dw'")
+    session = SessionLocal()
+    try:
+        row = session.get(SalesdataLinkSelection, source_type)
+        if row is None:
+            row = SalesdataLinkSelection(source_type=source_type)
+            session.add(row)
+        row.months = body["months"]
+        row.path = body["path"]
+        row.synced_at = datetime.datetime.fromisoformat(body["syncedAt"])
+        session.commit()
+        return {"ok": True}
+    finally:
+        session.close()
+
+
+@router.get("/salesdata/link")
+def salesdata_link(refresh: bool = False, user: dict = Depends(require_login)):
+    return get_salesdata_link(force_refresh=refresh)
+
+
+@router.get("/salesdata/link-daywise")
+def salesdata_link_daywise(refresh: bool = False, user: dict = Depends(require_login)):
+    return get_salesdata_link_daywise(force_refresh=refresh)
+
+
+@router.post("/salesdata/reindex")
+def salesdata_reindex(payload: dict = Body(...), user: dict = Depends(require_login)):
+    return run_reindex(payload)
