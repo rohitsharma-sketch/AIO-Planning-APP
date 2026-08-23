@@ -2020,3 +2020,59 @@ Restart the unified backend (`:8010`). Using the browser (already logged in as `
 git add "Tentative AOP Forecaster/db/models/calendar.py" "Tentative AOP Forecaster/alembic/versions/" "RS Planning Platform/backend/calendar_engine/router.py"
 git commit -m "Fix cluster-profile ordering not persisting across reload (add seq column)"
 ```
+
+---
+
+### Task 17: Port the missing component CSS
+
+**Added mid-execution** — Task 6's reviewer found a real, plan-wide gap: no task in this plan ever assigned responsibility for porting the old app's component-level CSS (`.cluster-tab`, `.drag-handle`, `.fest-row-drag-over`, table styles, etc.). `src/index.css` (Task 1) only has the app-shell skeleton (nav bar, generic `.card`) using AOP Forecaster's tokens — every component built since (Tasks 4-12) renders real, functional markup with class names matching the old app's own CSS selectors (deliberately kept identical so this porting step would be mechanical), but with no matching CSS rules anywhere, so the app currently works but renders essentially unstyled. This task fixes that in one consolidated pass, once every component (Tasks 1-12) exists, rather than as scattered per-task additions.
+
+**Files:**
+- Modify: `Calendar Engine/frontend/src/index.css`
+
+**Interfaces:**
+- Consumes: nothing new — reads the already-built component files to know which classes need CSS, and the old `Calendar Engine/calendar_engine.html`'s `<style>` block (lines 4–1095) as the source of the actual rules.
+
+- [ ] **Step 1: Inventory which classes actually need CSS**
+
+```bash
+cd "Calendar Engine/frontend"
+grep -rohE 'className="[^"]*"' src/components | grep -oE '[a-zA-Z][a-zA-Z0-9_-]*' | sort -u
+```
+Cross-reference this list against what's already defined in `src/index.css` (the Task 1 skeleton: `.app-shell`, `.mod-nav`, `.mod-tab`, `.mod-tab.active`, `.mod-tab:disabled`, `.module-panel`, `.card`) — everything else on the list needs a rule.
+
+- [ ] **Step 2: Add the missing design tokens**
+
+The old app's CSS variables don't map 1:1 onto AOP Forecaster's token set (Task 1's `:root` block). Add these to `src/index.css`'s existing `:root` block — some are direct semantic substitutions of tokens Task 1 already defined (reuse those, don't redefine), some are genuinely new (no AOP equivalent):
+
+```css
+:root {
+  /* ...Task 1's existing --navy/--navy2/--navy3/--light/--bg/--white/--char/--muted/--border/--green/--red/--radius/--shadow stay as-is... */
+
+  /* New tokens with no AOP Forecaster equivalent — ported from the old
+     app's :root block (Calendar Engine/calendar_engine.html lines 21-39) */
+  --warn: #C87500;
+  --pre-bg: #FFF1DC;   --pre-row: #FFF8ED;   --pre-text: #7C3A00;   --pre-border: #F5C878;
+  --core-bg: #FFEA80;  --core-row: #FFFBE0;  --core-text: #5C3A00;  --core-border: #F0D000;
+  --post-bg: #D6ECFF;  --post-row: #EBF5FF;  --post-text: #0E3A70;  --post-border: #90C4F0;
+}
+```
+
+Everywhere the old app's CSS rules (Step 3) reference `--surface`, use `--white`; `--surface2` or `--primary-bg`, use `--light`; `--text`, use `--char`; `--text2` or `--muted`, use `--muted`; `--primary` or `--primary-light`, use `--navy` (or `--navy3` for a lighter accent instance — use judgment per rule, both are reasonable); `--success`, use `--green`; `--danger`, use `--red`; `--r`, use `--radius`; `--shadow`/`--shadow-md`, use `--shadow`. Do NOT port the old app's header/nav-specific tokens (`--app-hdr-bg`, `--mod-nav-bg`, `--mod-nav-active-bg`, `--sub-nav-bg`, `--tbl-hdr-bg`, `--cell-edit-bg`, `--left-bg`, `--left-border`, `--left-title`) — Task 1 already built equivalent nav/shell chrome using AOP's own tokens directly; these old ones have no consumer in the new app.
+
+- [ ] **Step 3: Port the actual CSS rules**
+
+For each class from Step 1's inventory, find its rule(s) in `Calendar Engine/calendar_engine.html`'s `<style>` block (lines 4–1095 — use `grep -n` for the exact selector to find the right rule quickly) and add it to `src/index.css`, substituting old token references for new ones per Step 2's mapping. This covers, at minimum (the classes already known to exist from Tasks 4-12's components): `.cluster-tab`, `.cluster-tab.active`, `.cluster-drag-over`, `.cluster-add-btn`, `.drag-handle`, `.fest-row-drag-over`, table/`th`/`td` styling for `#festTable`/`#dayTable`/`#scmTable`/`#dsTable`/output tables, `.tabs`/`.tabs button` (sub-tab bars), `.cal-sub-nav`, form control styling (`input`, `select`, `button` base styles if the old app has global ones), and the category-color classes if any component renders category badges (Pre/Core/Post-Festive, using the new `--pre-*`/`--core-*`/`--post-*` tokens from Step 2).
+
+Don't port CSS for selectors with no consumer in the new app (e.g., the old theme-switcher swatch styles, or markup this rewrite deliberately dropped like the month-pill bulk-scope picker) — matching this whole plan's YAGNI discipline, not blind duplication.
+
+- [ ] **Step 4: Verify visually**
+
+Build and serve the app (`npm run build`, or continue using the dev server already running from earlier tasks' verification). Log in as `planner1`, click through all 5 tabs, and confirm: cluster tabs and the active one are visually distinguishable, drag handles look draggable (not bare text), tables have visible borders/header styling, buttons look like buttons (not unstyled text). This is a sanity check for "not obviously broken," not a pixel-perfect comparison against the old app.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add "Calendar Engine/frontend/src/index.css"
+git commit -m "Port missing component CSS from the old app, mapped onto AOP Forecaster's tokens"
+```
