@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RS Planning · CityKart</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #0f1b2d;
+    --bg-grad-a: #1488cc;
+    --bg-grad-b: #020966;
+    --card-bg: rgba(255,255,255,0.06);
+    --card-border: rgba(255,255,255,0.12);
+    --text: #eef3f8;
+    --text-dim: rgba(238,243,248,0.65);
+    --teal: #026478;
+    --up: #2ecc71;
+    --down: #e74c3c;
+    --checking: #f1c40f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background:
+      radial-gradient(1200px 600px at 10% -10%, rgba(20,136,204,0.35), transparent),
+      radial-gradient(1000px 500px at 100% 0%, rgba(2,100,120,0.30), transparent),
+      var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 24px 80px;
+  }
+  header { text-align: center; margin-bottom: 12px; }
+  header .brand {
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 34px;
+    font-weight: 700;
+    background: linear-gradient(90deg, #ffffff, #bfe3ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  header p {
+    color: var(--text-dim);
+    margin-top: 10px;
+    font-size: 15px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 22px;
+    max-width: 980px;
+    width: 100%;
+    margin-top: 40px;
+  }
+  a.card {
+    position: relative;
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 26px 24px 22px;
+    backdrop-filter: blur(6px);
+    transition: transform .15s ease, border-color .15s ease, background .15s ease;
+  }
+  a.card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(255,255,255,0.28);
+    background: rgba(255,255,255,0.10);
+  }
+  .card-icon {
+    width: 46px; height: 46px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, var(--bg-grad-a), var(--bg-grad-b));
+  }
+  .card h2 {
+    margin: 0 0 6px;
+    font-size: 19px;
+  }
+  .card p.desc {
+    margin: 0 0 18px;
+    font-size: 13.5px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+  .card .meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-dim);
+    border-top: 1px solid var(--card-border);
+    padding-top: 12px;
+  }
+  .status { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--checking);
+    box-shadow: 0 0 0 3px rgba(241,196,15,0.18);
+  }
+  .dot.up { background: var(--up); box-shadow: 0 0 0 3px rgba(46,204,113,0.18); }
+  .dot.down { background: var(--down); box-shadow: 0 0 0 3px rgba(231,76,60,0.18); }
+  .status-label.up { color: var(--up); }
+  .status-label.down { color: var(--down); }
+  .status-label.checking { color: var(--checking); }
+  .port { font-variant-numeric: tabular-nums; opacity: 0.8; }
+  .sync-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 26px 24px 22px;
+    backdrop-filter: blur(6px);
+  }
+  .sync-section + .sync-section { margin-top: 18px; }
+  .sync-section-title {
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+  }
+  .sync-rows { display: flex; flex-direction: column; gap: 6px; }
+  .sync-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12.5px;
+    border-top: 1px solid var(--card-border);
+    padding-top: 6px;
+  }
+  .sync-row:first-child { border-top: none; padding-top: 0; }
+  .sync-row .sync-name { color: var(--text); font-weight: 600; }
+  .sync-row .sync-when { color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .sync-loading, .sync-empty, .sync-error { color: var(--text-dim); font-size: 12.5px; }
+  .sync-error { color: var(--down); }
+  .sync-badge {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  .sync-badge.ok { color: var(--up); background: rgba(46,204,113,0.14); }
+  .sync-badge.fail { color: var(--down); background: rgba(231,76,60,0.14); }
+  footer {
+    margin-top: 56px;
+    font-size: 12px;
+    color: var(--text-dim);
+    text-align: center;
+    max-width: 640px;
+  }
+  footer code {
+    background: rgba(255,255,255,0.08);
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand">CityKart · RS Planning</div>
+    <h1>Planning Modules</h1>
+    <p>Pick a module below. Each opens its own app in a new tab.</p>
+  </header>
+
+  <div class="grid">
+    <a class="card" href="http://localhost:7822/calendar_engine.html" target="_blank" data-check="http://localhost:7822/api/changelog">
+      <div class="card-icon">📅</div>
+      <h2>Calendar</h2>
+      <p class="desc">Calendarisation Suite — builds the locked, festival-aligned day-shift calendar per cluster, used to reindex last year's sales onto this year's dates.</p>
+      <div class="meta">
+        <span class="port">localhost:7822</span>
+        <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
+      </div>
+    </a>
+
+    <a class="card" href="http://localhost:8000" target="_blank" data-check="http://localhost:8000/api/config/summary">
+      <div class="card-icon">📊</div>
+      <h2>AOP Forecaster</h2>
+      <p class="desc">Annual Operating Plan forecaster — planning inputs (Store Master, Growth %, NSO openings) and the store×division×month forecast engine.</p>
+      <div class="meta">
+        <span class="port">localhost:8000</span>
+        <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
+      </div>
+    </a>
+
+    <a class="card" href="http://localhost:8002" target="_blank" data-check="http://localhost:8002/api/store-master">
+      <div class="card-icon">🧮</div>
+      <h2>Planning Engine</h2>
+      <p class="desc">Sales Plan — Division/Department plans, MRP reapportionment, PW-W &amp; SOR deviation, and display-type planning engines.</p>
+      <div class="meta">
+        <span class="port">localhost:8002</span>
+        <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
+      </div>
+    </a>
+
+    <div class="card sync-card" id="sync-card">
+      <div class="card-icon">🔄</div>
+      <h2>Data Sync &amp; Flow</h2>
+      <p class="desc">Live status of data extraction into Postgres, and of data handed off between modules.</p>
+
+      <div class="sync-section">
+        <div class="sync-section-title">Extraction — Calendar Engine → Postgres</div>
+        <div class="sync-rows" id="extraction-rows"><div class="sync-row sync-loading">Checking…</div></div>
+      </div>
+
+      <div class="sync-section">
+        <div class="sync-section-title">Flow — AOP Forecaster → Planning Engine</div>
+        <div class="sync-rows" id="flow-rows"><div class="sync-row sync-loading">Checking…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    A grey dot means a module's server isn't running yet — start it with its own
+    <code>start.bat</code> / <code>start_backend.bat</code>, then reload this page.
+  </footer>
+
+<script>
+  document.querySelectorAll('.card').forEach(function (card) {
+    var url = card.getAttribute('data-check');
+    var dot = card.querySelector('.dot');
+    var label = card.querySelector('.status-label');
+    function setStatus(state) {
+      dot.classList.remove('up', 'down');
+      label.classList.remove('up', 'down', 'checking');
+      if (state === 'up') { dot.classList.add('up'); label.classList.add('up'); label.textContent = 'online'; }
+      else if (state === 'down') { dot.classList.add('down'); label.classList.add('down'); label.textContent = 'offline'; }
+      else { label.classList.add('checking'); label.textContent = 'checking…'; }
+    }
+    fetch(url, { mode: 'no-cors', cache: 'no-store' })
+      .then(function () { setStatus('up'); })
+      .catch(function () { setStatus('down'); });
+  });
+
+  function fmtWhen(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+  }
+
+  // Extraction status — real sync.sync_runs rows from AOP Forecaster's Postgres sync
+  fetch('http://localhost:8000/api/config/db-sync/status', { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      var el = document.getElementById('extraction-rows');
+      var runs = data.runs || [];
+      if (!runs.length) { el.innerHTML = '<div class="sync-empty">No syncs run yet.</div>'; return; }
+      el.innerHTML = runs.map(function (r) {
+        var ok = r.status === 'success';
+        return '<div class="sync-row">' +
+          '<span class="sync-name">' + r.source_key + '</span>' +
+          '<span class="sync-when"><span class="sync-badge ' + (ok ? 'ok' : 'fail') + '">' + (ok ? 'ok' : 'failed') + '</span> ' + fmtWhen(r.completed_at || r.started_at) + '</span>' +
+        '</div>';
+      }).join('');
+    })
+    .catch(function () {
+      document.getElementById('extraction-rows').innerHTML = '<div class="sync-error">AOP Forecaster (localhost:8000) unreachable.</div>';
+    });
+
+  // Inter-module flow status — SalesPlan's cached pull from AOP Forecaster
+  fetch('http://localhost:8002/api/department-plan/aop-forecaster-status', { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      var el = document.getElementById('flow-rows');
+      if (!data.synced) { el.innerHTML = '<div class="sync-empty">Not synced yet — no AOP run pulled into Planning Engine.</div>'; return; }
+      el.innerHTML =
+        '<div class="sync-row">' +
+          '<span class="sync-name">Latest AOP run</span>' +
+          '<span class="sync-when"><span class="sync-badge ok">synced</span> ' + fmtWhen(data.synced_at) + '</span>' +
+        '</div>' +
+        '<div class="sync-row">' +
+          '<span class="sync-name">Run computed at</span>' +
+          '<span class="sync-when">' + fmtWhen(data.computed_at) + '</span>' +
+        '</div>';
+    })
+    .catch(function () {
+      document.getElementById('flow-rows').innerHTML = '<div class="sync-error">Planning Engine (localhost:8002) unreachable.</div>';
+    });
+</script>
+</body>
+</html>

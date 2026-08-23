@@ -1,0 +1,4 @@
+{
+  "sales_folder": "\\\\10.0.1.85\\Users\\Administrator\\Desktop\\AI SOLUTION\\INVENTORY AUTOMATION\\data_lake\\raw\\rs_sales_19-_till_date",
+  "sales_pattern": "*.parquet"
+}

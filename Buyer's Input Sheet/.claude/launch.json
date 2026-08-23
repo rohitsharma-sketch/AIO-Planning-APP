@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "CityKart OTB",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["sync_server.py"],
+      "port": 5050,
+      "url": "http://localhost:5050"
+    }
+  ]
+}

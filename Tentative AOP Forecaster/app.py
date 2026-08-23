@@ -1,0 +1,402 @@
+"""
+AOP Forecaster — FastAPI backend
+Run: uvicorn app:app --reload --port 8000
+"""
+import json, os, uuid, shutil
+from typing import Optional
+from fastapi import FastAPI, UploadFile, HTTPException, Body, Request, APIRouter
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from starlette.middleware.sessions import SessionMiddleware
+from engine_v3 import run_engine, get_file_info, EXCEL_PALETTES
+
+router = APIRouter()
+
+app = FastAPI(title="AOP Forecaster API")
+# Installed even in standalone mode so request.session is always safely
+# accessible (an unauthenticated standalone request just sees an empty
+# session — see _get_actor below) — when mounted under the unified platform,
+# the SAME session cookie/secret is used, so a real logged-in user's id/role
+# comes through here too.
+app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SESSION_SECRET", "dev-only-change-me"))
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+SESSIONS_DIR = os.path.join(os.path.dirname(__file__), "sessions")
+os.makedirs(SESSIONS_DIR, exist_ok=True)
+
+
+def _session_dir(session_id: str) -> str:
+    return os.path.join(SESSIONS_DIR, session_id)
+
+def _input_path(session_id: str) -> str:
+    return os.path.join(_session_dir(session_id), "inputs.xlsx")
+
+def _output_path(session_id: str) -> str:
+    return os.path.join(_session_dir(session_id), "AOP_Forecast.xlsx")
+
+def _detail_path(session_id: str) -> str:
+    return os.path.join(_session_dir(session_id), "detail.json")
+
+def _results_path(session_id: str) -> str:
+    return os.path.join(_session_dir(session_id), "results.json")
+
+
+_STANDALONE_USERNAME = "standalone-app"
+
+
+def _get_actor(request: Request):
+    """(actor_id, actor_role) for audit logging. A real logged-in session
+    (present when this router is mounted under the unified platform, behind
+    auth) wins; standalone :8000 has no login at all, so edits there are
+    attributed to a fixed, auto-created 'standalone-app' system user rather
+    than failing (audit.data_changes.actor_id is NOT NULL by design — every
+    edit must be attributable to *someone*, even a system actor)."""
+    user = request.session.get("user")
+    if user:
+        return uuid.UUID(user["id"]), user["role"]
+
+    from sqlalchemy import select
+    from db.base import SessionLocal
+    from db.models.auth import User
+
+    session = SessionLocal()
+    try:
+        u = session.execute(select(User).where(User.username == _STANDALONE_USERNAME)).scalar_one_or_none()
+        if u is None:
+            import hashlib
+            u = User(
+                username=_STANDALONE_USERNAME,
+                password_hash=hashlib.sha256(os.urandom(32)).hexdigest(),  # unusable password — this account never logs in
+                role="planner", is_admin=False,
+            )
+            session.add(u)
+            session.commit()
+            session.refresh(u)
+        return u.id, u.role
+    finally:
+        session.close()
+
+
+@router.post("/api/upload")
+async def upload(file: UploadFile):
+    if not file.filename.endswith(".xlsx"):
+        raise HTTPException(400, "Only .xlsx files accepted")
+    session_id = str(uuid.uuid4())
+    os.makedirs(_session_dir(session_id), exist_ok=True)
+    with open(_input_path(session_id), "wb") as f:
+        f.write(await file.read())
+    try:
+        info = get_file_info(_input_path(session_id))
+    except Exception as e:
+        shutil.rmtree(_session_dir(session_id), ignore_errors=True)
+        raise HTTPException(422, f"Could not parse file: {e}")
+    return {"session_id": session_id, **info}
+
+
+class RunRequest(BaseModel):
+    palette: str = "classic"
+    include_debug: bool = False
+    growth_overrides: Optional[dict] = None
+    overall_override: Optional[dict] = None
+
+@router.post("/api/run/{session_id}")
+async def run(session_id: str, body: RunRequest = RunRequest()):
+    inp = _input_path(session_id)
+    if not os.path.exists(inp):
+        raise HTTPException(404, "Session not found — upload inputs.xlsx first")
+    palette = body.palette if body.palette in EXCEL_PALETTES else "classic"
+    try:
+        results = run_engine(inp, _output_path(session_id), palette=palette,
+                             detail_file=_detail_path(session_id),
+                             include_debug=body.include_debug,
+                             growth_overrides=body.growth_overrides,
+                             overall_override=body.overall_override)
+    except Exception as e:
+        raise HTTPException(500, str(e))
+    with open(_results_path(session_id), "w", encoding="utf-8") as f:
+        json.dump(results, f)
+
+    run_id = None
+    if os.path.exists(os.path.join(_session_dir(session_id), ".from_db")):
+        from db.base import SessionLocal
+        from db.persist_run import persist_forecast_run
+
+        with open(_detail_path(session_id), encoding="utf-8") as f:
+            detail_records = json.load(f)
+        db_session = SessionLocal()
+        try:
+            run_id = str(persist_forecast_run(
+                db_session, detail_records, palette=palette,
+                growth_overrides=body.growth_overrides, overall_override=body.overall_override,
+            ))
+        finally:
+            db_session.close()
+
+    return {**results, "run_id": run_id}
+
+
+@router.get("/api/results/{session_id}")
+def get_results(session_id: str):
+    rp = _results_path(session_id)
+    if not os.path.exists(rp):
+        raise HTTPException(404, "Run the engine first")
+    with open(rp, encoding="utf-8") as f:
+        return json.load(f)
+
+
+@router.get("/api/data/{session_id}")
+def get_data(session_id: str):
+    dp = _detail_path(session_id)
+    if not os.path.exists(dp):
+        raise HTTPException(404, "Run the engine first")
+    with open(dp, encoding="utf-8") as f:
+        return json.load(f)
+
+
+@router.get("/api/palettes")
+def list_palettes():
+    labels = {
+        "classic": "Classic Navy",
+        "emerald": "Slate & Emerald",
+        "amber":   "Midnight & Amber",
+        "coral":   "Deep Purple & Coral",
+        "forest":  "Forest & Gold",
+    }
+    return [{"id": k, "label": labels.get(k, k), **v} for k, v in EXCEL_PALETTES.items()]
+
+
+@router.get("/api/download/{session_id}")
+def download(session_id: str):
+    out = _output_path(session_id)
+    if not os.path.exists(out):
+        raise HTTPException(404, "Run the engine first")
+    return FileResponse(
+        out,
+        filename="AOP_Forecast.xlsx",
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@router.delete("/api/sessions/{session_id}")
+def delete_session(session_id: str):
+    shutil.rmtree(_session_dir(session_id), ignore_errors=True)
+    return {"ok": True}
+
+
+
+@router.post("/api/config/session-from-db")
+def session_from_db():
+    """Start a forecast session sourced entirely from Postgres (rs_planning) —
+    no levers.json, no Excel read at request time. See db/to_workbook.py.
+    The only other way to start a session is /api/upload (a one-off run from
+    an uploaded workbook, bypassing the database entirely)."""
+    from db.base import SessionLocal
+    from db.to_workbook import build_workbook_from_db
+
+    session_id = str(uuid.uuid4())
+    os.makedirs(_session_dir(session_id), exist_ok=True)
+    db_session = SessionLocal()
+    try:
+        build_workbook_from_db(db_session, _input_path(session_id))
+        info = get_file_info(_input_path(session_id))
+    except Exception as e:
+        shutil.rmtree(_session_dir(session_id), ignore_errors=True)
+        raise HTTPException(422, f"Could not build inputs from database: {e}")
+    finally:
+        db_session.close()
+    open(os.path.join(_session_dir(session_id), ".from_db"), "w").close()  # marks provenance for /api/run
+    return {"session_id": session_id, "from_db": True, **info}
+
+
+DB_SYNC_JOBS = [
+    ("site_master", "data_lake_site_master"),
+    ("store_master_xlsx", "store_master_xlsx"),
+    ("calendar_library", "calendar_library"),
+    ("store_calendar_cluster", "store_calendar_cluster_map"),
+    ("day_shift", "data_lake_day_shift"),
+    ("store_actuals", "data_lake_sales"),  # last: depends on the calendar + cluster jobs above
+]
+
+
+@router.post("/api/config/db-sync")
+def db_sync_all():
+    """Runs every data-lake / Calendar Engine sync job into Postgres (rs_planning),
+    in dependency order (store_actuals needs the calendar + cluster map synced
+    first). Each job manages its own DB session and logs to sync.sync_runs
+    regardless of how it's invoked."""
+    import importlib
+
+    results = {}
+    for module_name, source_key in DB_SYNC_JOBS:
+        mod = importlib.import_module(f"sync.{module_name}_sync")
+        try:
+            mod.run()
+            results[source_key] = {"ok": True}
+        except Exception as e:
+            results[source_key] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    return {"results": results}
+
+
+@router.get("/api/config/db-sync/status")
+def db_sync_status():
+    """Latest sync.sync_runs row per source, for display."""
+    from sqlalchemy import select, func
+    from db.base import SessionLocal
+    from db.models.sync import SyncRun
+
+    with SessionLocal() as session:
+        latest_ids = session.execute(
+            select(func.max(SyncRun.sync_run_id)).group_by(SyncRun.source_key)
+        ).scalars().all()
+        if not latest_ids:
+            return {"runs": []}
+        runs = session.execute(select(SyncRun).where(SyncRun.sync_run_id.in_(latest_ids))).scalars().all()
+        return {"runs": [
+            {"source_key": r.source_key, "status": r.status, "started_at": r.started_at.isoformat(),
+             "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+             "rows_read": r.rows_read, "rows_updated": r.rows_updated, "rows_added": r.rows_added,
+             "error_message": r.error_message, "detail": r.detail}
+            for r in sorted(runs, key=lambda r: r.source_key)
+        ]}
+
+
+@router.get("/api/config/growth")
+def get_growth_config():
+    """Growth % grid: OVERALL + 5 divisions x Apr'27..Mar'28. Postgres-backed
+    replacement for the removed LeverEditor's Growth % tab."""
+    from db.base import SessionLocal
+    from db.editor import get_growth
+
+    with SessionLocal() as session:
+        return get_growth(session)
+
+
+@router.put("/api/config/growth")
+def put_growth_config(request: Request, body: dict = Body(...)):
+    from db.base import SessionLocal
+    from db.editor import put_growth
+
+    actor_id, actor_role = _get_actor(request)
+    with SessionLocal() as session:
+        try:
+            return put_growth(session, body.get("rows") or [], actor_id, actor_role)
+        except Exception as e:
+            raise HTTPException(422, f"Could not save growth rates: {e}")
+
+
+@router.get("/api/config/nso")
+def get_nso_config():
+    """NSO Opening Months (unnamed + Named NSO), unified. Postgres-backed
+    replacement for the removed LeverEditor's NSO tabs."""
+    from db.base import SessionLocal
+    from db.editor import get_nso
+
+    with SessionLocal() as session:
+        return get_nso(session)
+
+
+@router.put("/api/config/nso")
+def put_nso_config(request: Request, body: dict = Body(...)):
+    """Full-table replace: rows not included are deleted (see db/editor.py)."""
+    from db.base import SessionLocal
+    from db.editor import put_nso
+
+    actor_id, actor_role = _get_actor(request)
+    with SessionLocal() as session:
+        try:
+            return put_nso(session, body.get("rows") or [], actor_id, actor_role)
+        except Exception as e:
+            raise HTTPException(422, f"Could not save NSO openings: {e}")
+
+
+@router.get("/api/config/aop-overrides")
+def get_aop_overrides_config():
+    """AOP (Optional) overrides — sparse store x division x month. Postgres-
+    backed replacement for the removed LeverEditor's AOP tab."""
+    from db.base import SessionLocal
+    from db.editor import get_aop_overrides
+
+    with SessionLocal() as session:
+        return get_aop_overrides(session)
+
+
+@router.put("/api/config/aop-overrides")
+def put_aop_overrides_config(request: Request, body: dict = Body(...)):
+    """Delta editor: only listed rows are touched; a null value deletes that
+    override (see db/editor.py)."""
+    from db.base import SessionLocal
+    from db.editor import put_aop_overrides
+
+    actor_id, actor_role = _get_actor(request)
+    with SessionLocal() as session:
+        try:
+            return put_aop_overrides(session, body.get("rows") or [], actor_id, actor_role)
+        except Exception as e:
+            raise HTTPException(422, f"Could not save AOP overrides: {e}")
+
+
+@router.get("/api/config/division-aop-summary")
+def division_aop_summary():
+    """Latest persisted run's division-level annual AOP target (Rs Lakhs),
+    Apr'27..Mar'28 (next fiscal year only — Mar'27 is this year's last actual
+    month, not part of the plan). Consumed by SalesPlan's Department Plan
+    (POST /api/department-plan/calculate expects exactly this {division,
+    annual_target} shape) via its own sync-from-aop-forecaster endpoint."""
+    from sqlalchemy import select, func
+    from db.base import SessionLocal
+    from db.models.engine import ForecastResult, ForecastRun
+    from db.models.planning_inputs import Period
+
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "RS Planning Platform", "backend"))
+    from workflow.service import latest_approved_run_id
+
+    with SessionLocal() as session:
+        run_id = latest_approved_run_id(session)
+        if run_id is None:
+            raise HTTPException(404, "No approved plan cycle yet")
+        latest = session.get(ForecastRun, run_id)
+
+        # FY28 = Apr'27..Mar'28 (engine_v3.FY28_M minus its leading Mar'27, which
+        # is this year's last actual month, not part of the plan being AOP'd)
+        next_fy_labels = {"Apr'27", "May'27", "Jun'27", "Jul'27", "Aug'27", "Sep'27",
+                          "Oct'27", "Nov'27", "Dec'27", "Jan'28", "Feb'28", "Mar'28"}
+        next_fy_periods = {
+            p.period_id for p in session.execute(select(Period)).scalars().all()
+            if p.label in next_fy_labels
+        }
+        rows = session.execute(
+            select(ForecastResult.division_code, func.sum(ForecastResult.value))
+            .where(ForecastResult.run_id == latest.run_id, ForecastResult.metric_key == "forecast",
+                   ForecastResult.period_id.in_(next_fy_periods))
+            .group_by(ForecastResult.division_code)
+        ).all()
+        return {
+            "run_id": str(latest.run_id), "computed_at": latest.created_at.isoformat(),
+            "division_aops": [{"division": div, "annual_target": round(float(total), 2)} for div, total in rows],
+        }
+
+
+# Mount the extracted router onto this standalone app too — same routes,
+# same paths, as before the extraction. The unified platform (RS Planning
+# Platform/backend/app.py) imports `router` directly instead and mounts it
+# under /api/aop with an auth dependency; this standalone `app` stays
+# unprotected, for standalone use.
+app.include_router(router)
+
+# ── Serve built React app (must be last) ─────────────────────────────────────
+_dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
+if os.path.isdir(_dist):
+    app.mount("/assets", StaticFiles(directory=os.path.join(_dist, "assets")), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa_fallback(full_path: str):
+        return FileResponse(os.path.join(_dist, "index.html"))

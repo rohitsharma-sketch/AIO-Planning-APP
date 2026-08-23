@@ -1,0 +1,2029 @@
+[
+  {
+    "id": 1787371399023,
+    "name": "2024 -> 2025 Calendar",
+    "refYear": 2024,
+    "futYear": 2025,
+    "savedAt": "2026-08-22T04:03:19.023Z",
+    "clusters": [
+      {
+        "name": "Kashmir",
+        "region": "north",
+        "festivals": [
+          {
+            "id": 2,
+            "name": "Eid al-Fitr",
+            "refDate": "2024-04-11",
+            "futDate": "2025-03-30",
+            "pre": 10,
+            "core": 3,
+            "post": 5
+          },
+          {
+            "id": 12,
+            "name": "Eid al-Adha",
+            "refDate": "2024-06-17",
+            "futDate": "2025-06-06",
+            "pre": 5,
+            "core": 3,
+            "post": 3
+          },
+          {
+            "id": 15,
+            "name": "Milad-un-Nabi",
+            "refDate": "2024-09-16",
+            "futDate": "2025-09-04",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 9,
+            "name": "Diwali",
+            "refDate": "2024-10-31",
+            "futDate": "2025-10-20",
+            "pre": 10,
+            "core": 3,
+            "post": 7
+          }
+        ]
+      },
+      {
+        "name": "UP + NCR",
+        "region": "north",
+        "festivals": [
+          {
+            "id": 1,
+            "name": "Holi",
+            "refDate": "2024-03-25",
+            "futDate": "2025-03-14",
+            "pre": 7,
+            "core": 1,
+            "post": 5
+          },
+          {
+            "id": 2,
+            "name": "Eid al-Fitr",
+            "refDate": "2024-04-11",
+            "futDate": "2025-03-30",
+            "pre": 10,
+            "core": 3,
+            "post": 5
+          },
+          {
+            "id": 12,
+            "name": "Ram Navami",
+            "refDate": "2024-04-17",
+            "futDate": "2025-04-06",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 13,
+            "name": "Hanuman Jayanti",
+            "refDate": "2024-04-23",
+            "futDate": "2025-04-12",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 14,
+            "name": "Akshaya Tritiya",
+            "refDate": "2024-05-10",
+            "futDate": "2025-04-30",
+            "pre": 5,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 15,
+            "name": "Buddha Purnima",
+            "refDate": "2024-05-23",
+            "futDate": "2025-05-12",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 3,
+            "name": "Raksha Bandhan",
+            "refDate": "2024-08-19",
+            "futDate": "2025-08-09",
+            "pre": 5,
+            "core": 1,
+            "post": 3
+          },
+          {
+            "id": 4,
+            "name": "Janmashtami",
+            "refDate": "2024-08-26",
+            "futDate": "2025-08-16",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 5,
+            "name": "Onam",
+            "refDate": "2024-09-15",
+            "futDate": "2025-09-05",
+            "pre": 10,
+            "core": 2,
+            "post": 4
+          },
+          {
+            "id": 6,
+            "name": "Navratri",
+            "refDate": "2024-10-03",
+            "futDate": "2025-09-23",
+            "pre": 3,
+            "core": 9,
+            "post": 2
+          },
+          {
+            "id": 7,
+            "name": "Dussehra",
+            "refDate": "2024-10-12",
+            "futDate": "2025-10-02",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 8,
+            "name": "Dhanteras",
+            "refDate": "2024-10-29",
+            "futDate": "2025-10-18",
+            "pre": 7,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 9,
+            "name": "Diwali",
+            "refDate": "2024-10-31",
+            "futDate": "2025-10-20",
+            "pre": 10,
+            "core": 3,
+            "post": 7
+          },
+          {
+            "id": 10,
+            "name": "Bhai Dooj",
+            "refDate": "2024-11-03",
+            "futDate": "2025-10-22",
+            "pre": 1,
+            "core": 1,
+            "post": 3
+          },
+          {
+            "id": 20,
+            "name": "Chhath Puja",
+            "refDate": "2024-11-07",
+            "futDate": "2025-10-26",
+            "pre": 3,
+            "core": 4,
+            "post": 1
+          },
+          {
+            "id": 11,
+            "name": "Christmas",
+            "refDate": "2024-12-25",
+            "futDate": "2025-12-25",
+            "pre": 7,
+            "core": 2,
+            "post": 5
+          }
+        ]
+      },
+      {
+        "name": "UP + BIHAR - PUJA",
+        "region": "east",
+        "festivals": [
+          {
+            "id": 1,
+            "name": "Holi",
+            "refDate": "2024-03-25",
+            "futDate": "2025-03-14",
+            "pre": 7,
+            "core": 1,
+            "post": 5
+          },
+          {
+            "id": 2,
+            "name": "Eid al-Fitr",
+            "refDate": "2024-04-11",
+            "futDate": "2025-03-30",
+            "pre": 10,
+            "core": 3,
+            "post": 5
+          },
+          {
+            "id": 12,
+            "name": "Ram Navami",
+            "refDate": "2024-04-17",
+            "futDate": "2025-04-06",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 13,
+            "name": "Hanuman Jayanti",
+            "refDate": "2024-04-23",
+            "futDate": "2025-04-12",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 14,
+            "name": "Akshaya Tritiya",
+            "refDate": "2024-05-10",
+            "futDate": "2025-04-30",
+            "pre": 5,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 15,
+            "name": "Buddha Purnima",
+            "refDate": "2024-05-23",
+            "futDate": "2025-05-12",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 3,
+            "name": "Raksha Bandhan",
+            "refDate": "2024-08-19",
+            "futDate": "2025-08-09",
+            "pre": 5,
+            "core": 1,
+            "post": 3
+          },
+          {
+            "id": 4,
+            "name": "Janmashtami",
+            "refDate": "2024-08-26",
+            "futDate": "2025-08-16",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 5,
+            "name": "Onam",
+            "refDate": "2024-09-15",
+            "futDate": "2025-09-05",
+            "pre": 10,
+            "core": 2,
+            "post": 4
+          },
+          {
+            "id": 6,
+            "name": "Navratri",
+            "refDate": "2024-10-03",
+            "futDate": "2025-09-23",
+            "pre": 3,
+            "core": 9,
+            "post": 2
+          },
+          {
+            "id": 7,
+            "name": "Dussehra",
+            "refDate": "2024-10-12",
+            "futDate": "2025-10-02",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 9,
+            "name": "Diwali",
+            "refDate": "2024-10-31",
+            "futDate": "2025-10-20",
+            "pre": 10,
+            "core": 3,
+            "post": 3
+          },
+          {
+            "id": 11,
+            "name": "Christmas",
+            "refDate": "2024-12-25",
+            "futDate": "2025-12-25",
+            "pre": 7,
+            "core": 2,
+            "post": 5
+          },
+          {
+            "id": 21,
+            "name": "Lohri",
+            "refDate": "2024-01-13",
+            "futDate": "2025-01-13",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 22,
+            "name": "Makar Sankranti",
+            "refDate": "2024-01-15",
+            "futDate": "2025-01-14",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 23,
+            "name": "Basant Panchami",
+            "refDate": "2024-02-14",
+            "futDate": "2025-02-02",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 24,
+            "name": "Maha Shivaratri",
+            "refDate": "2024-03-08",
+            "futDate": "2025-02-26",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 25,
+            "name": "Good Friday",
+            "refDate": "2024-03-29",
+            "futDate": "2025-04-18",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 26,
+            "name": "Easter",
+            "refDate": "2024-03-31",
+            "futDate": "2025-04-20",
+            "pre": 3,
+            "core": 2,
+            "post": 2
+          },
+          {
+            "id": 27,
+            "name": "Baisakhi",
+            "refDate": "2024-04-13",
+            "futDate": "2025-04-13",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 28,
+            "name": "Eid al-Adha",
+            "refDate": "2024-06-17",
+            "futDate": "2025-06-06",
+            "pre": 5,
+            "core": 3,
+            "post": 3
+          },
+          {
+            "id": 29,
+            "name": "Milad-un-Nabi",
+            "refDate": "2024-09-16",
+            "futDate": "2025-09-04",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 30,
+            "name": "Karva Chauth",
+            "refDate": "2024-10-20",
+            "futDate": "2025-10-07",
+            "pre": 3,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 31,
+            "name": "Dhanteras",
+            "refDate": "2024-10-29",
+            "futDate": "2025-10-18",
+            "pre": 7,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 32,
+            "name": "Govardhan Puja",
+            "refDate": "2024-11-02",
+            "futDate": "2025-10-21",
+            "pre": 1,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 33,
+            "name": "Bhai Dooj",
+            "refDate": "2024-11-03",
+            "futDate": "2025-10-22",
+            "pre": 1,
+            "core": 1,
+            "post": 3
+          },
+          {
+            "id": 34,
+            "name": "Chhath Puja",
+            "refDate": "2024-11-07",
+            "futDate": "2025-10-26",
+            "pre": 3,
+            "core": 4,
+            "post": 1
+          },
+          {
+            "id": 35,
+            "name": "Guru Nanak Jayanti",
+            "refDate": "2024-11-15",
+            "futDate": "2025-11-05",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 36,
+            "name": "Bihu",
+            "refDate": "2024-04-14",
+            "futDate": "2025-04-14",
+            "pre": 3,
+            "core": 3,
+            "post": 2
+          },
+          {
+            "id": 37,
+            "name": "Rath Yatra",
+            "refDate": "2024-07-07",
+            "futDate": "2025-06-27",
+            "pre": 3,
+            "core": 2,
+            "post": 2
+          },
+          {
+            "id": 38,
+            "name": "Durga Puja",
+            "refDate": "2024-10-03",
+            "futDate": "2025-09-23",
+            "pre": 20,
+            "core": 5,
+            "post": 7
+          }
+        ]
+      },
+      {
+        "name": "BIHAR",
+        "region": "east",
+        "festivals": [
+          {
+            "id": 1,
+            "name": "Holi",
+            "refDate": "2024-03-25",
+            "futDate": "2025-03-14",
+            "pre": 7,
+            "core": 1,
+            "post": 5
+          },
+          {
+            "id": 2,
+            "name": "Eid al-Fitr",
+            "refDate": "2024-04-11",
+            "futDate": "2025-03-30",
+            "pre": 10,
+            "core": 3,
+            "post": 5
+          },
+          {
+            "id": 12,
+            "name": "Ram Navami",
+            "refDate": "2024-04-17",
+            "futDate": "2025-04-06",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 13,
+            "name": "Hanuman Jayanti",
+            "refDate": "2024-04-23",
+            "futDate": "2025-04-12",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 14,
+            "name": "Akshaya Tritiya",
+            "refDate": "2024-05-10",
+            "futDate": "2025-04-30",
+            "pre": 5,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 15,
+            "name": "Buddha Purnima",
+            "refDate": "2024-05-23",
+            "futDate": "2025-05-12",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 3,
+            "name": "Raksha Bandhan",
+            "refDate": "2024-08-19",
+            "futDate": "2025-08-09",
+            "pre": 5,
+            "core": 1,
+            "post": 3
+          },
+          {
+            "id": 4,
+            "name": "Janmashtami",
+            "refDate": "2024-08-26",
+            "futDate": "2025-08-16",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 5,
+            "name": "Onam",
+            "refDate": "2024-09-15",
+            "futDate": "2025-09-05",
+            "pre": 10,
+            "core": 2,
+            "post": 4
+          },
+          {
+            "id": 6,
+            "name": "Navratri",
+            "refDate": "2024-10-03",
+            "futDate": "2025-09-23",
+            "pre": 3,
+            "core": 9,
+            "post": 2
+          },
+          {
+            "id": 7,
+            "name": "Dussehra",
+            "refDate": "2024-10-12",
+            "futDate": "2025-10-02",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 8,
+            "name": "Dhanteras",
+            "refDate": "2024-10-29",
+            "futDate": "2025-10-18",
+            "pre": 7,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 9,
+            "name": "Diwali",
+            "refDate": "2024-10-31",
+            "futDate": "2025-10-20",
+            "pre": 10,
+            "core": 3,
+            "post": 7
+          },
+          {
+            "id": 10,
+            "name": "Bhai Dooj",
+            "refDate": "2024-11-03",
+            "futDate": "2025-10-22",
+            "pre": 1,
+            "core": 1,
+            "post": 3
+          },
+          {
+            "id": 11,
+            "name": "Christmas",
+            "refDate": "2024-12-25",
+            "futDate": "2025-12-25",
+            "pre": 7,
+            "core": 2,
+            "post": 5
+          },
+          {
+            "id": 20,
+            "name": "Lohri",
+            "refDate": "2024-01-13",
+            "futDate": "2025-01-13",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 21,
+            "name": "Makar Sankranti",
+            "refDate": "2024-01-15",
+            "futDate": "2025-01-14",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 22,
+            "name": "Republic Day",
+            "refDate": "2024-01-26",
+            "futDate": "2025-01-26",
+            "pre": 1,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 24,
+            "name": "Basant Panchami",
+            "refDate": "2024-02-14",
+            "futDate": "2025-02-02",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 25,
+            "name": "Maha Shivaratri",
+            "refDate": "2024-03-08",
+            "futDate": "2025-02-26",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 26,
+            "name": "Good Friday",
+            "refDate": "2024-03-29",
+            "futDate": "2025-04-18",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 27,
+            "name": "Easter",
+            "refDate": "2024-03-31",
+            "futDate": "2025-04-20",
+            "pre": 3,
+            "core": 2,
+            "post": 2
+          },
+          {
+            "id": 28,
+            "name": "Baisakhi",
+            "refDate": "2024-04-13",
+            "futDate": "2025-04-13",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 30,
+            "name": "Eid al-Adha",
+            "refDate": "2024-06-17",
+            "futDate": "2025-06-06",
+            "pre": 5,
+            "core": 3,
+            "post": 3
+          },
+          {
+            "id": 33,
+            "name": "Independence Day",
+            "refDate": "2024-08-15",
+            "futDate": "2025-08-15",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 34,
+            "name": "Milad-un-Nabi",
+            "refDate": "2024-09-16",
+            "futDate": "2025-09-04",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 35,
+            "name": "Gandhi Jayanti",
+            "refDate": "2024-10-02",
+            "futDate": "2025-10-02",
+            "pre": 1,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 36,
+            "name": "Karva Chauth",
+            "refDate": "2024-10-20",
+            "futDate": "2025-10-07",
+            "pre": 3,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 37,
+            "name": "Govardhan Puja",
+            "refDate": "2024-11-02",
+            "futDate": "2025-10-21",
+            "pre": 1,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 38,
+            "name": "Chhath Puja",
+            "refDate": "2024-11-07",
+            "futDate": "2025-10-26",
+            "pre": 3,
+            "core": 4,
+            "post": 1
+          },
+          {
+            "id": 39,
+            "name": "Guru Nanak Jayanti",
+            "refDate": "2024-11-15",
+            "futDate": "2025-11-05",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 43,
+            "name": "Pongal",
+            "refDate": "2024-01-15",
+            "futDate": "2025-01-14",
+            "pre": 2,
+            "core": 4,
+            "post": 2
+          },
+          {
+            "id": 44,
+            "name": "Gudi Padwa",
+            "refDate": "2024-04-09",
+            "futDate": "2025-03-30",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 45,
+            "name": "Vishu",
+            "refDate": "2024-04-14",
+            "futDate": "2025-04-14",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 46,
+            "name": "Rath Yatra",
+            "refDate": "2024-07-07",
+            "futDate": "2025-06-27",
+            "pre": 3,
+            "core": 2,
+            "post": 2
+          },
+          {
+            "id": 47,
+            "name": "Ganesh Chaturthi",
+            "refDate": "2024-09-07",
+            "futDate": "2025-08-27",
+            "pre": 5,
+            "core": 10,
+            "post": 5
+          },
+          {
+            "id": 48,
+            "name": "Bihu",
+            "refDate": "2024-04-14",
+            "futDate": "2025-04-14",
+            "pre": 3,
+            "core": 3,
+            "post": 2
+          },
+          {
+            "id": 49,
+            "name": "Durga Puja",
+            "refDate": "2024-10-03",
+            "futDate": "2025-09-23",
+            "pre": 20,
+            "core": 5,
+            "post": 7
+          },
+          {
+            "id": 50,
+            "name": "Uttarayan",
+            "refDate": "2024-01-14",
+            "futDate": "2025-01-14",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 51,
+            "name": "Navratri / Garba",
+            "refDate": "2024-10-03",
+            "futDate": "2025-09-23",
+            "pre": 7,
+            "core": 9,
+            "post": 4
+          }
+        ]
+      },
+      {
+        "name": "JAMMU + RJ",
+        "region": "north",
+        "festivals": [
+          {
+            "id": 1,
+            "name": "Holi",
+            "refDate": "2024-03-25",
+            "futDate": "2025-03-14",
+            "pre": 7,
+            "core": 1,
+            "post": 5
+          },
+          {
+            "id": 2,
+            "name": "Eid al-Fitr",
+            "refDate": "2024-04-11",
+            "futDate": "2025-03-30",
+            "pre": 10,
+            "core": 3,
+            "post": 5
+          },
+          {
+            "id": 21,
+            "name": "Eid al-Adha",
+            "refDate": "2024-06-17",
+            "futDate": "2025-06-06",
+            "pre": 5,
+            "core": 3,
+            "post": 3
+          },
+          {
+            "id": 22,
+            "name": "Milad-un-Nabi",
+            "refDate": "2024-09-16",
+            "futDate": "2025-09-04",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 12,
+            "name": "Ram Navami",
+            "refDate": "2024-04-17",
+            "futDate": "2025-04-06",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 13,
+            "name": "Hanuman Jayanti",
+            "refDate": "2024-04-23",
+            "futDate": "2025-04-12",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 14,
+            "name": "Akshaya Tritiya",
+            "refDate": "2024-05-10",
+            "futDate": "2025-04-30",
+            "pre": 5,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 15,
+            "name": "Buddha Purnima",
+            "refDate": "2024-05-23",
+            "futDate": "2025-05-12",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 3,
+            "name": "Raksha Bandhan",
+            "refDate": "2024-08-19",
+            "futDate": "2025-08-09",
+            "pre": 5,
+            "core": 1,
+            "post": 3
+          },
+          {
+            "id": 4,
+            "name": "Janmashtami",
+            "refDate": "2024-08-26",
+            "futDate": "2025-08-16",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 5,
+            "name": "Onam",
+            "refDate": "2024-09-15",
+            "futDate": "2025-09-05",
+            "pre": 10,
+            "core": 2,
+            "post": 4
+          },
+          {
+            "id": 6,
+            "name": "Navratri",
+            "refDate": "2024-10-03",
+            "futDate": "2025-09-23",
+            "pre": 3,
+            "core": 9,
+            "post": 2
+          },
+          {
+            "id": 7,
+            "name": "Dussehra",
+            "refDate": "2024-10-12",
+            "futDate": "2025-10-02",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 8,
+            "name": "Dhanteras",
+            "refDate": "2024-10-29",
+            "futDate": "2025-10-18",
+            "pre": 7,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 9,
+            "name": "Diwali",
+            "refDate": "2024-10-31",
+            "futDate": "2025-10-20",
+            "pre": 10,
+            "core": 3,
+            "post": 7
+          },
+          {
+            "id": 10,
+            "name": "Bhai Dooj",
+            "refDate": "2024-11-03",
+            "futDate": "2025-10-22",
+            "pre": 1,
+            "core": 1,
+            "post": 3
+          },
+          {
+            "id": 20,
+            "name": "Chhath Puja",
+            "refDate": "2024-11-07",
+            "futDate": "2025-10-26",
+            "pre": 3,
+            "core": 4,
+            "post": 1
+          },
+          {
+            "id": 11,
+            "name": "Christmas",
+            "refDate": "2024-12-25",
+            "futDate": "2025-12-25",
+            "pre": 7,
+            "core": 2,
+            "post": 5
+          },
+          {
+            "id": 23,
+            "name": "Lohri",
+            "refDate": "2024-01-13",
+            "futDate": "2025-01-13",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 24,
+            "name": "Makar Sankranti",
+            "refDate": "2024-01-15",
+            "futDate": "2025-01-14",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 25,
+            "name": "Basant Panchami",
+            "refDate": "2024-02-14",
+            "futDate": "2025-02-02",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 26,
+            "name": "Maha Shivaratri",
+            "refDate": "2024-03-08",
+            "futDate": "2025-02-26",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 27,
+            "name": "Good Friday",
+            "refDate": "2024-03-29",
+            "futDate": "2025-04-18",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 28,
+            "name": "Easter",
+            "refDate": "2024-03-31",
+            "futDate": "2025-04-20",
+            "pre": 3,
+            "core": 2,
+            "post": 2
+          },
+          {
+            "id": 29,
+            "name": "Baisakhi",
+            "refDate": "2024-04-13",
+            "futDate": "2025-04-13",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 30,
+            "name": "Karva Chauth",
+            "refDate": "2024-10-20",
+            "futDate": "2025-10-07",
+            "pre": 3,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 31,
+            "name": "Govardhan Puja",
+            "refDate": "2024-11-02",
+            "futDate": "2025-10-21",
+            "pre": 1,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 32,
+            "name": "Guru Nanak Jayanti",
+            "refDate": "2024-11-15",
+            "futDate": "2025-11-05",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          }
+        ]
+      },
+      {
+        "name": "ODISHA",
+        "region": "east",
+        "festivals": [
+          {
+            "id": 1,
+            "name": "Holi",
+            "refDate": "2024-03-25",
+            "futDate": "2025-03-14",
+            "pre": 7,
+            "core": 1,
+            "post": 5
+          },
+          {
+            "id": 2,
+            "name": "Eid al-Fitr",
+            "refDate": "2024-04-11",
+            "futDate": "2025-03-30",
+            "pre": 10,
+            "core": 3,
+            "post": 5
+          },
+          {
+            "id": 12,
+            "name": "Ram Navami",
+            "refDate": "2024-04-17",
+            "futDate": "2025-04-06",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 13,
+            "name": "Hanuman Jayanti",
+            "refDate": "2024-04-23",
+            "futDate": "2025-04-12",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 14,
+            "name": "Akshaya Tritiya",
+            "refDate": "2024-05-10",
+            "futDate": "2025-04-30",
+            "pre": 5,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 15,
+            "name": "Buddha Purnima",
+            "refDate": "2024-05-23",
+            "futDate": "2025-05-12",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 3,
+            "name": "Raksha Bandhan",
+            "refDate": "2024-08-19",
+            "futDate": "2025-08-09",
+            "pre": 5,
+            "core": 1,
+            "post": 3
+          },
+          {
+            "id": 4,
+            "name": "Janmashtami",
+            "refDate": "2024-08-26",
+            "futDate": "2025-08-16",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 6,
+            "name": "Navratri",
+            "refDate": "2024-10-03",
+            "futDate": "2025-09-23",
+            "pre": 3,
+            "core": 9,
+            "post": 2
+          },
+          {
+            "id": 7,
+            "name": "Dussehra",
+            "refDate": "2024-10-12",
+            "futDate": "2025-10-02",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 8,
+            "name": "Dhanteras",
+            "refDate": "2024-10-29",
+            "futDate": "2025-10-18",
+            "pre": 7,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 9,
+            "name": "Diwali",
+            "refDate": "2024-10-31",
+            "futDate": "2025-10-20",
+            "pre": 10,
+            "core": 3,
+            "post": 7
+          },
+          {
+            "id": 10,
+            "name": "Bhai Dooj",
+            "refDate": "2024-11-03",
+            "futDate": "2025-10-22",
+            "pre": 1,
+            "core": 1,
+            "post": 3
+          },
+          {
+            "id": 11,
+            "name": "Rath Yatra",
+            "refDate": "2024-07-07",
+            "futDate": "2025-06-27",
+            "pre": 3,
+            "core": 2,
+            "post": 2
+          }
+        ]
+      },
+      {
+        "name": "N. EAST - PUJA",
+        "region": "bengal",
+        "festivals": [
+          {
+            "id": 1,
+            "name": "Holi",
+            "refDate": "2024-03-25",
+            "futDate": "2025-03-14",
+            "pre": 7,
+            "core": 1,
+            "post": 5
+          },
+          {
+            "id": 2,
+            "name": "Eid al-Fitr",
+            "refDate": "2024-04-11",
+            "futDate": "2025-03-30",
+            "pre": 10,
+            "core": 3,
+            "post": 5
+          },
+          {
+            "id": 12,
+            "name": "Ram Navami",
+            "refDate": "2024-04-17",
+            "futDate": "2025-04-06",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 13,
+            "name": "Hanuman Jayanti",
+            "refDate": "2024-04-23",
+            "futDate": "2025-04-12",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 14,
+            "name": "Akshaya Tritiya",
+            "refDate": "2024-05-10",
+            "futDate": "2025-04-30",
+            "pre": 5,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 15,
+            "name": "Buddha Purnima",
+            "refDate": "2024-05-23",
+            "futDate": "2025-05-12",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 3,
+            "name": "Raksha Bandhan",
+            "refDate": "2024-08-19",
+            "futDate": "2025-08-09",
+            "pre": 5,
+            "core": 1,
+            "post": 3
+          },
+          {
+            "id": 4,
+            "name": "Janmashtami",
+            "refDate": "2024-08-26",
+            "futDate": "2025-08-16",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 6,
+            "name": "Navratri",
+            "refDate": "2024-10-03",
+            "futDate": "2025-09-23",
+            "pre": 3,
+            "core": 9,
+            "post": 2
+          },
+          {
+            "id": 20,
+            "name": "Durga Puja",
+            "refDate": "2024-10-03",
+            "futDate": "2025-09-23",
+            "pre": 20,
+            "core": 5,
+            "post": 7
+          },
+          {
+            "id": 7,
+            "name": "Dussehra",
+            "refDate": "2024-10-12",
+            "futDate": "2025-10-02",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 8,
+            "name": "Dhanteras",
+            "refDate": "2024-10-29",
+            "futDate": "2025-10-18",
+            "pre": 7,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 9,
+            "name": "Diwali",
+            "refDate": "2024-10-31",
+            "futDate": "2025-10-20",
+            "pre": 10,
+            "core": 3,
+            "post": 7
+          },
+          {
+            "id": 10,
+            "name": "Bihu",
+            "refDate": "2024-04-14",
+            "futDate": "2025-04-14",
+            "pre": 3,
+            "core": 3,
+            "post": 2
+          }
+        ]
+      },
+      {
+        "name": "N. EAST",
+        "region": "bengal",
+        "festivals": [
+          {
+            "id": 1,
+            "name": "Holi",
+            "refDate": "2024-03-25",
+            "futDate": "2025-03-14",
+            "pre": 7,
+            "core": 1,
+            "post": 5
+          },
+          {
+            "id": 2,
+            "name": "Eid al-Fitr",
+            "refDate": "2024-04-11",
+            "futDate": "2025-03-30",
+            "pre": 10,
+            "core": 3,
+            "post": 5
+          },
+          {
+            "id": 12,
+            "name": "Ram Navami",
+            "refDate": "2024-04-17",
+            "futDate": "2025-04-06",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 13,
+            "name": "Hanuman Jayanti",
+            "refDate": "2024-04-23",
+            "futDate": "2025-04-12",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 14,
+            "name": "Akshaya Tritiya",
+            "refDate": "2024-05-10",
+            "futDate": "2025-04-30",
+            "pre": 5,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 15,
+            "name": "Buddha Purnima",
+            "refDate": "2024-05-23",
+            "futDate": "2025-05-12",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 3,
+            "name": "Raksha Bandhan",
+            "refDate": "2024-08-19",
+            "futDate": "2025-08-09",
+            "pre": 5,
+            "core": 1,
+            "post": 3
+          },
+          {
+            "id": 4,
+            "name": "Janmashtami",
+            "refDate": "2024-08-26",
+            "futDate": "2025-08-16",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 5,
+            "name": "Onam",
+            "refDate": "2024-09-15",
+            "futDate": "2025-09-05",
+            "pre": 10,
+            "core": 2,
+            "post": 4
+          },
+          {
+            "id": 6,
+            "name": "Navratri",
+            "refDate": "2024-10-03",
+            "futDate": "2025-09-23",
+            "pre": 3,
+            "core": 9,
+            "post": 2
+          },
+          {
+            "id": 7,
+            "name": "Dussehra",
+            "refDate": "2024-10-12",
+            "futDate": "2025-10-02",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 8,
+            "name": "Dhanteras",
+            "refDate": "2024-10-29",
+            "futDate": "2025-10-18",
+            "pre": 7,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 9,
+            "name": "Diwali",
+            "refDate": "2024-10-31",
+            "futDate": "2025-10-20",
+            "pre": 10,
+            "core": 3,
+            "post": 7
+          },
+          {
+            "id": 10,
+            "name": "Bhai Dooj",
+            "refDate": "2024-11-03",
+            "futDate": "2025-10-22",
+            "pre": 1,
+            "core": 1,
+            "post": 3
+          },
+          {
+            "id": 11,
+            "name": "Bihu",
+            "refDate": "2024-04-14",
+            "futDate": "2025-04-14",
+            "pre": 3,
+            "core": 3,
+            "post": 2
+          }
+        ]
+      },
+      {
+        "name": "JH + MP",
+        "region": "east",
+        "festivals": [
+          {
+            "id": 1,
+            "name": "Holi",
+            "refDate": "2024-03-25",
+            "futDate": "2025-03-14",
+            "pre": 7,
+            "core": 1,
+            "post": 5
+          },
+          {
+            "id": 2,
+            "name": "Eid al-Fitr",
+            "refDate": "2024-04-11",
+            "futDate": "2025-03-30",
+            "pre": 10,
+            "core": 3,
+            "post": 5
+          },
+          {
+            "id": 12,
+            "name": "Ram Navami",
+            "refDate": "2024-04-17",
+            "futDate": "2025-04-06",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 13,
+            "name": "Hanuman Jayanti",
+            "refDate": "2024-04-23",
+            "futDate": "2025-04-12",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 14,
+            "name": "Akshaya Tritiya",
+            "refDate": "2024-05-10",
+            "futDate": "2025-04-30",
+            "pre": 5,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 15,
+            "name": "Buddha Purnima",
+            "refDate": "2024-05-23",
+            "futDate": "2025-05-12",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 3,
+            "name": "Raksha Bandhan",
+            "refDate": "2024-08-19",
+            "futDate": "2025-08-09",
+            "pre": 5,
+            "core": 1,
+            "post": 3
+          },
+          {
+            "id": 4,
+            "name": "Janmashtami",
+            "refDate": "2024-08-26",
+            "futDate": "2025-08-16",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 5,
+            "name": "Onam",
+            "refDate": "2024-09-15",
+            "futDate": "2025-09-05",
+            "pre": 10,
+            "core": 2,
+            "post": 4
+          },
+          {
+            "id": 6,
+            "name": "Navratri",
+            "refDate": "2024-10-03",
+            "futDate": "2025-09-23",
+            "pre": 3,
+            "core": 9,
+            "post": 2
+          },
+          {
+            "id": 7,
+            "name": "Dussehra",
+            "refDate": "2024-10-12",
+            "futDate": "2025-10-02",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 8,
+            "name": "Dhanteras",
+            "refDate": "2024-10-29",
+            "futDate": "2025-10-18",
+            "pre": 7,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 9,
+            "name": "Diwali",
+            "refDate": "2024-10-31",
+            "futDate": "2025-10-20",
+            "pre": 10,
+            "core": 3,
+            "post": 7
+          },
+          {
+            "id": 10,
+            "name": "Bhai Dooj",
+            "refDate": "2024-11-03",
+            "futDate": "2025-10-22",
+            "pre": 1,
+            "core": 1,
+            "post": 3
+          },
+          {
+            "id": 11,
+            "name": "Christmas",
+            "refDate": "2024-12-25",
+            "futDate": "2025-12-25",
+            "pre": 7,
+            "core": 2,
+            "post": 5
+          },
+          {
+            "id": 20,
+            "name": "Makar Sankranti",
+            "refDate": "2024-01-15",
+            "futDate": "2025-01-14",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 21,
+            "name": "Basant Panchami",
+            "refDate": "2024-02-14",
+            "futDate": "2025-02-02",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 22,
+            "name": "Maha Shivaratri",
+            "refDate": "2024-03-08",
+            "futDate": "2025-02-26",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 23,
+            "name": "Good Friday",
+            "refDate": "2024-03-29",
+            "futDate": "2025-04-18",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 24,
+            "name": "Easter",
+            "refDate": "2024-03-31",
+            "futDate": "2025-04-20",
+            "pre": 3,
+            "core": 2,
+            "post": 2
+          },
+          {
+            "id": 25,
+            "name": "Bihu",
+            "refDate": "2024-04-14",
+            "futDate": "2025-04-14",
+            "pre": 3,
+            "core": 3,
+            "post": 2
+          },
+          {
+            "id": 26,
+            "name": "Eid al-Adha",
+            "refDate": "2024-06-17",
+            "futDate": "2025-06-06",
+            "pre": 5,
+            "core": 3,
+            "post": 3
+          },
+          {
+            "id": 27,
+            "name": "Rath Yatra",
+            "refDate": "2024-07-07",
+            "futDate": "2025-06-27",
+            "pre": 3,
+            "core": 2,
+            "post": 2
+          },
+          {
+            "id": 28,
+            "name": "Milad-un-Nabi",
+            "refDate": "2024-09-16",
+            "futDate": "2025-09-04",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 29,
+            "name": "Durga Puja",
+            "refDate": "2024-10-03",
+            "futDate": "2025-09-23",
+            "pre": 20,
+            "core": 5,
+            "post": 7
+          },
+          {
+            "id": 30,
+            "name": "Chhath Puja",
+            "refDate": "2024-11-07",
+            "futDate": "2025-10-26",
+            "pre": 3,
+            "core": 4,
+            "post": 1
+          }
+        ]
+      },
+      {
+        "name": "WB",
+        "region": "bengal",
+        "festivals": [
+          {
+            "id": 1,
+            "name": "Holi",
+            "refDate": "2024-03-25",
+            "futDate": "2025-03-14",
+            "pre": 7,
+            "core": 1,
+            "post": 5
+          },
+          {
+            "id": 2,
+            "name": "Eid al-Fitr",
+            "refDate": "2024-04-11",
+            "futDate": "2025-03-30",
+            "pre": 10,
+            "core": 3,
+            "post": 5
+          },
+          {
+            "id": 12,
+            "name": "Ram Navami",
+            "refDate": "2024-04-17",
+            "futDate": "2025-04-06",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 13,
+            "name": "Hanuman Jayanti",
+            "refDate": "2024-04-23",
+            "futDate": "2025-04-12",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 14,
+            "name": "Akshaya Tritiya",
+            "refDate": "2024-05-10",
+            "futDate": "2025-04-30",
+            "pre": 5,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 15,
+            "name": "Buddha Purnima",
+            "refDate": "2024-05-23",
+            "futDate": "2025-05-12",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 3,
+            "name": "Raksha Bandhan",
+            "refDate": "2024-08-19",
+            "futDate": "2025-08-09",
+            "pre": 5,
+            "core": 1,
+            "post": 3
+          },
+          {
+            "id": 4,
+            "name": "Janmashtami",
+            "refDate": "2024-08-26",
+            "futDate": "2025-08-16",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 5,
+            "name": "Onam",
+            "refDate": "2024-09-15",
+            "futDate": "2025-09-05",
+            "pre": 10,
+            "core": 2,
+            "post": 4
+          },
+          {
+            "id": 6,
+            "name": "Navratri",
+            "refDate": "2024-10-03",
+            "futDate": "2025-09-23",
+            "pre": 3,
+            "core": 9,
+            "post": 2
+          },
+          {
+            "id": 7,
+            "name": "Dussehra",
+            "refDate": "2024-10-12",
+            "futDate": "2025-10-02",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 8,
+            "name": "Dhanteras",
+            "refDate": "2024-10-29",
+            "futDate": "2025-10-18",
+            "pre": 7,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 9,
+            "name": "Diwali",
+            "refDate": "2024-10-31",
+            "futDate": "2025-10-20",
+            "pre": 10,
+            "core": 3,
+            "post": 7
+          },
+          {
+            "id": 10,
+            "name": "Bhai Dooj",
+            "refDate": "2024-11-03",
+            "futDate": "2025-10-22",
+            "pre": 1,
+            "core": 1,
+            "post": 3
+          },
+          {
+            "id": 11,
+            "name": "Christmas",
+            "refDate": "2024-12-25",
+            "futDate": "2025-12-25",
+            "pre": 7,
+            "core": 2,
+            "post": 5
+          },
+          {
+            "id": 20,
+            "name": "Makar Sankranti",
+            "refDate": "2024-01-15",
+            "futDate": "2025-01-14",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 21,
+            "name": "Basant Panchami",
+            "refDate": "2024-02-14",
+            "futDate": "2025-02-02",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 22,
+            "name": "Maha Shivaratri",
+            "refDate": "2024-03-08",
+            "futDate": "2025-02-26",
+            "pre": 3,
+            "core": 1,
+            "post": 2
+          },
+          {
+            "id": 23,
+            "name": "Good Friday",
+            "refDate": "2024-03-29",
+            "futDate": "2025-04-18",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 24,
+            "name": "Easter",
+            "refDate": "2024-03-31",
+            "futDate": "2025-04-20",
+            "pre": 3,
+            "core": 2,
+            "post": 2
+          },
+          {
+            "id": 25,
+            "name": "Bihu",
+            "refDate": "2024-04-14",
+            "futDate": "2025-04-14",
+            "pre": 3,
+            "core": 3,
+            "post": 2
+          },
+          {
+            "id": 26,
+            "name": "Eid al-Adha",
+            "refDate": "2024-06-17",
+            "futDate": "2025-06-06",
+            "pre": 5,
+            "core": 3,
+            "post": 3
+          },
+          {
+            "id": 27,
+            "name": "Rath Yatra",
+            "refDate": "2024-07-07",
+            "futDate": "2025-06-27",
+            "pre": 3,
+            "core": 2,
+            "post": 2
+          },
+          {
+            "id": 28,
+            "name": "Milad-un-Nabi",
+            "refDate": "2024-09-16",
+            "futDate": "2025-09-04",
+            "pre": 2,
+            "core": 1,
+            "post": 1
+          },
+          {
+            "id": 29,
+            "name": "Durga Puja",
+            "refDate": "2024-10-03",
+            "futDate": "2025-09-23",
+            "pre": 20,
+            "core": 5,
+            "post": 7
+          },
+          {
+            "id": 30,
+            "name": "Chhath Puja",
+            "refDate": "2024-11-07",
+            "futDate": "2025-10-26",
+            "pre": 3,
+            "core": 4,
+            "post": 1
+          }
+        ]
+      }
+    ],
+    "mappingSummary": [
+      {
+        "totalDays": 0
+      },
+      {
+        "totalDays": 0
+      },
+      {
+        "totalDays": 0
+      },
+      {
+        "totalDays": 0
+      },
+      {
+        "totalDays": 0
+      },
+      {
+        "totalDays": 0
+      },
+      {
+        "totalDays": 0
+      },
+      {
+        "totalDays": 0
+      },
+      {
+        "totalDays": 0
+      },
+      {
+        "totalDays": 0
+      }
+    ]
+  }
+]

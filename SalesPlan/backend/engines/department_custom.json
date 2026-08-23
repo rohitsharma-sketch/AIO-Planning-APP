@@ -1,0 +1,1492 @@
+[
+  {
+    "division": "GM",
+    "name": "FW_B_SANDAL",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "FW_B_SHOES",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "FW_B_SLIPPER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "FW_G_SANDAL",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "FW_G_SHOES",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "FW_L_BELLY_SHOES",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "FW_L_CASUAL SANDAL",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "FW_L_FANCY_SLIPPER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "FW_L_SHOES",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "FW_L_SLIPPER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "FW_M_CASUAL SANDAL",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "FW_M_SHOES",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "FW_M_SLIPPER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_BF_CUSHION",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_BF_DOUB BEDSHEET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_BF_PILLOW",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_BF_PILLOW COVER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_BF_SINGLE BEDSHEET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_DF_BOLSTER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_DF_CURTAIN",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_DF_DURRIE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_KF_TABLE MAT",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_TL_BABY TOWEL",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_TL_BATH TOWEL",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_TL_FACE TOWEL",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_TL_HAND TOWEL",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_TL_KITCHEN NAPKIN",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_BC_COFFEE MUG",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_BC_COFFEE SET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_G_BEER MUG",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_G_BOWL SET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_G_JAR SET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_G_TUMBLER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_G_WATER BOTTLE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_M_BABY PLATE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_M_DINNER SET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_M_FULL PLATE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_M_GIFT SET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_M_HALF PLATE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_M_SERVING TRAY",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_M_SNACKS PLATE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_M_VEG BOWL",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_PO_COFFEE MUG",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_S_BASKET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_CA_BRUSH",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_CA_DUST PAN",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_CA_DUSTER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_CA_MOP",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_CA_SCRUBBER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_CA_WIPER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_CUTLERY STAND",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_CYLINDER TROLEY",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_HANGER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_HOOK",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_KA_CHOPPING BOARD",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_KA_CUTTER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_KA_GAS LIGHTER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_KA_GRATER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_KA_KNIFE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_KA_MASALA BOX",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_KA_POTATO MASHER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_KA_SKIMMER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_KA_SQUEEZER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_KA_STRAINER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_BASKET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_BATH MUG",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_BOWL",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_CLOTH CLIP",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_CONTAINER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_CUP",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_FRIDGE BOTTLE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_JUG",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_KIDSLUNCH BOX",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_KIDSWATER BOTTLE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_LUNCH BOX",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_MULTI PUR. RACK",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_PATLA",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_PLATE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_ROPE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_SIPPER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_SNACK TRAY",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_SOAP DISH",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_WATER BOTTLE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_N_FRY PAN",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_N_GIFT SET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_N_KADAHI",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_N_TAWA",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_S_BOWL",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_S_CONTANIER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_S_FORK",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_S_GLASS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_S_MUG",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_S_PATILA",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_S_PLATE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_S_ROASTER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_S_SAUCE PAN",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_S_SPOON",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_S_WATER BOTTLE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_T_CASSEROLE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_T_FLASK",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_OTHER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_HD_PHOTOFRAME",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_HD_PLANTS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_BABY BEDING",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_BIB",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_BOOTY",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_BOTTLE COVER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_BRUSH",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_CAP",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_DIAPER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_LANGOT",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_PILLOW",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_PUFF",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_RATTLE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_TEETHER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_TOWEL",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_WIPES",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_KB_CAP",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_KB_SOCKS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_KG_HAIR ACCESSORIES",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_KG_SOCKS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_MA_BELT",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_MA_CAP",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_MA_HANDKERCHIEF",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_MA_SOCKS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_MA_WALLET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_OP_KIDS SUNGLASS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_OP_LADIES SUNGLASS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_OP_MENS SUNGLASS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_S_BALLOON",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_S_GULAL",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_S_KIDS PITCHKARI",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_S_KIDS UMBRELLA",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_S_LADIES UMBRELLA",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_S_MENS UMBRELLA",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_TZ_CLOCK",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_WA_BAG",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_WA_BELT",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_WA_HA_COMB",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_WA_PURSE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_WA_SOCKS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_WA_WALLET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "SF_ID_BALLS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TG_NS_BLOCKS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TG_NS_BO",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TG_NS_DOLLS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TG_NS_FRICTION",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TG_NS_GUN",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TG_NS_KIDS CHAIR",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TG_NS_MUSICAL",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TG_NS_P_RIDER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TG_NS_P_SET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TG_NS_P_TOYS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TG_NS_PULL ALONG",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TG_NS_VNL_TOYS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TG_ST_OTHERS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TG_ST_TEDDY BEAR",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "ST_NP_BOOKS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "ST_NP_CLAY",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "ST_NP_COIN BANK",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "ST_NP_COLOR",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "ST_NP_ERASER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "ST_NP_KIDS BAG",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "ST_NP_KIT",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "ST_NP_PEN",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "ST_NP_PEN STAND",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "ST_NP_PENCIL",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "ST_NP_PENCIL BOX",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "ST_NP_POUCH",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "ST_NP_SHARPNER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "ST_NP_KEY CHAIN",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "ST_NP_STICKERS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "ST_NP_DIARY",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TA_L_DUFFLE TROLLEY",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TA_L_UPRIGHT",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TA_P_SCHOOL BAG",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TA_P_BACKPACK",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_B_SHOWER GEL",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_F_DEO",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_B_LOTION",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_B_CREME",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_F_ROOM FRESHENER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_CC_NAILS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_B_SHAMPOO",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_C_DISHWASHER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_CC_FACE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_C_DETERGENT",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_B_HANDWASH",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_C_FLOOR CLEANER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_B_FACEWASH",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_C_TOILET CLEANER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_C_GLASS CLEANER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_CC_EYE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_F_PERFUME",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_B_SUNSCREEN",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_CC_LIPS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_C_BATHROOM CLEANER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_CC_ACCESSORIES",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_B_SOAP",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_F_TALCUM",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_CC_SANITARY PAD",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_C_FABRIC CONDITIONER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "MIX_ITEM",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "PROMO_ITEM",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "RT_CO_PACKAGING BAGS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "RT_CO_STAFF UNIFORM",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "FW_G_SLIPPER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_KA_LADLE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_GLASS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_SOCKS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_MA_TIE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_WA_HANKY",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "SF_ID_BOARD_GAMES",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "ST_NP_ACC",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_B_SCRUB",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "FW_B_WINTER SLIPPER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_DF_LAUNDRY BAG",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_CA_GARBAGE BUCKET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_PLANT POT",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_HARDWARE SET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_ACC_KEYCHAIN",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_MITTEN",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_KGW_EARMUFF",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_KIW_WINTER BOOTY",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_LWW_MUFFLER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "CLOTH ORGANIZER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TA_P_FILE BAG",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "FW_L_WINTER SLIPPER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_S_CUP STAND",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "SF_ID_CAROM BOARD",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_KIW_BLANKET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_DF_WALL HANGING",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_KA_COASTER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_MOSQUITO RACKET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_WA_HA_BABYCLIP",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_BATH GOWN",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_CA_GARBAGE BAG",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_G_CONTAINER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_BF_BED SERVER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_BF_POLAR",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_CUP",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_BF_COMFORTER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_LWW_SOCKS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_MW_GLOVES",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_MW_MUFFLER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_WA_HA_DYE BRUSH",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_CL_PILLOW COVER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_BOTTLE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "ST_NP_NOTEBOOK",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_CL_APPLIANCE COVER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_CA_BROOM",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_TE_EXTENSION CORD",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_DF_CNTR TBL CVR",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_WA_HA_HAIRBAND",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_WA_HA_RUBBER BAND",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_KGW_GLOVES",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_KIW_CAP",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_SPOON",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_M_SPOON",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_LWW_CAP",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_LWW_GLOVES",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_MW_CAP",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_KF_APRON",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_T_MUG",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_KA_GRIP",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_TL_FACE MASK",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_BF_FLANEL",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_GIFT SET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_CARRY BAG",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_ICE TRAY",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_WA_FOOT SCRUBBER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_M_BASKET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_G_JUG",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_KGW_CAP",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_KA_TONG",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_WATER TAP",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "SF_FT_YOGA MAT",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_S_KALAVA RAKSHA SUTRA",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_SLEEPING BAG",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "SF_ID_SOFT BALL",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "SF_OD_FOOTBALL",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_WA_MIRROR",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_KA_SERV SPOON",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_P_COOK & SERVE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_T_WATER BOTTLE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_WA_HA_HAIRCLUTCHER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_CL_CUSHION COVER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_OP_SUNGLASS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_B_FACIAL KIT",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TG_NS_STUDY SET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "SF_ID_BADMINTON RACKET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_U_S_PLATE STAND",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "SF_OD_BALLS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_KGW_MUFFLER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_KBW_GLOVES",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "FW_M_WINTER SLIPPER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_KIW_GLOVES",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_W_MIX",
+    "attribute": "REGULAR"
+  }
+]

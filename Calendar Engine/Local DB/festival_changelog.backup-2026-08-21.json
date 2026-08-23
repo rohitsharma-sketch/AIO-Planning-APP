@@ -1,0 +1,1449 @@
+{
+  "2025-2026": {
+    "Kashmir": {
+      "Eid al-Fitr": {
+        "refDate": "2026-03-20",
+        "futDate": "2027-03-09",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Eid al-Adha": {
+        "refDate": "2026-05-27",
+        "futDate": "2027-05-17",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Milad-un-Nabi": {
+        "refDate": "2026-09-04",
+        "futDate": "2027-08-25",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Diwali": {
+        "refDate": "2026-10-20",
+        "futDate": "2027-10-08",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      }
+    },
+    "UP + NCR": {
+      "Holi": {
+        "refDate": "2026-03-04",
+        "futDate": "2027-03-22",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Eid al-Fitr": {
+        "refDate": "2026-03-20",
+        "futDate": "2027-03-09",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Ram Navami": {
+        "refDate": "2026-03-28",
+        "futDate": "2027-04-16",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Hanuman Jayanti": {
+        "refDate": "2026-04-03",
+        "futDate": "2027-04-21",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Akshaya Tritiya": {
+        "refDate": "2026-04-21",
+        "futDate": "2027-05-09",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Buddha Purnima": {
+        "refDate": "2026-05-03",
+        "futDate": "2027-05-20",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Raksha Bandhan": {
+        "refDate": "2026-08-09",
+        "futDate": "2027-08-29",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Janmashtami": {
+        "refDate": "2026-08-14",
+        "futDate": "2027-08-04",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Onam": {
+        "refDate": "2026-09-07",
+        "futDate": "2027-08-27",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Navratri": {
+        "refDate": "2026-10-03",
+        "futDate": "2027-09-22",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Dussehra": {
+        "refDate": "2026-10-12",
+        "futDate": "2027-10-01",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Dhanteras": {
+        "refDate": "2026-10-18",
+        "futDate": "2027-10-06",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Diwali": {
+        "refDate": "2026-10-20",
+        "futDate": "2027-10-08",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Bhai Dooj": {
+        "refDate": "2026-10-23",
+        "futDate": "2027-10-11",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Chhath Puja": {
+        "refDate": "2026-10-27",
+        "futDate": "2027-10-16",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Christmas": {
+        "refDate": "2026-12-25",
+        "futDate": "2027-12-25",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      }
+    },
+    "JAMMU + RJ": {
+      "Holi": {
+        "refDate": "2026-03-04",
+        "futDate": "2027-03-22",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Eid al-Fitr": {
+        "refDate": "2026-03-20",
+        "futDate": "2027-03-09",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Eid al-Adha": {
+        "refDate": "2026-05-27",
+        "futDate": "2027-05-17",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Milad-un-Nabi": {
+        "refDate": "2026-09-04",
+        "futDate": "2027-08-25",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Ram Navami": {
+        "refDate": "2026-03-28",
+        "futDate": "2027-04-16",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Hanuman Jayanti": {
+        "refDate": "2026-04-03",
+        "futDate": "2027-04-21",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Akshaya Tritiya": {
+        "refDate": "2026-04-21",
+        "futDate": "2027-05-09",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Buddha Purnima": {
+        "refDate": "2026-05-03",
+        "futDate": "2027-05-20",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Raksha Bandhan": {
+        "refDate": "2026-08-09",
+        "futDate": "2027-08-29",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Janmashtami": {
+        "refDate": "2026-08-14",
+        "futDate": "2027-08-04",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Onam": {
+        "refDate": "2026-09-07",
+        "futDate": "2027-08-27",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Navratri": {
+        "refDate": "2026-10-03",
+        "futDate": "2027-09-22",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Dussehra": {
+        "refDate": "2026-10-12",
+        "futDate": "2027-10-01",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Dhanteras": {
+        "refDate": "2026-10-18",
+        "futDate": "2027-10-06",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Diwali": {
+        "refDate": "2026-10-20",
+        "futDate": "2027-10-08",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Bhai Dooj": {
+        "refDate": "2026-10-23",
+        "futDate": "2027-10-11",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Chhath Puja": {
+        "refDate": "2026-10-27",
+        "futDate": "2027-10-16",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Christmas": {
+        "refDate": "2026-12-25",
+        "futDate": "2027-12-25",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Lohri": {
+        "refDate": "2026-01-13",
+        "futDate": "2027-01-13",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Makar Sankranti": {
+        "refDate": "2026-01-14",
+        "futDate": "2027-01-14",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Basant Panchami": {
+        "refDate": "2026-02-02",
+        "futDate": "2027-01-23",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Maha Shivaratri": {
+        "refDate": "2026-02-26",
+        "futDate": "2027-02-15",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Good Friday": {
+        "refDate": "2026-04-03",
+        "futDate": "2027-03-26",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Easter": {
+        "refDate": "2026-04-05",
+        "futDate": "2027-03-28",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Baisakhi": {
+        "refDate": "2026-04-13",
+        "futDate": "2027-04-14",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Karva Chauth": {
+        "refDate": "2026-10-16",
+        "futDate": "2027-10-04",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Govardhan Puja": {
+        "refDate": "2026-10-21",
+        "futDate": "2027-10-09",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Guru Nanak Jayanti": {
+        "refDate": "2026-11-05",
+        "futDate": "2027-11-24",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      }
+    },
+    "ODISHA": {
+      "Holi": {
+        "refDate": "2026-03-04",
+        "futDate": "2027-03-22",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Eid al-Fitr": {
+        "refDate": "2026-03-20",
+        "futDate": "2027-03-09",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Ram Navami": {
+        "refDate": "2026-03-28",
+        "futDate": "2027-04-16",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Hanuman Jayanti": {
+        "refDate": "2026-04-03",
+        "futDate": "2027-04-21",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Akshaya Tritiya": {
+        "refDate": "2026-04-21",
+        "futDate": "2027-05-09",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Buddha Purnima": {
+        "refDate": "2026-05-03",
+        "futDate": "2027-05-20",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Raksha Bandhan": {
+        "refDate": "2026-08-09",
+        "futDate": "2027-08-29",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Janmashtami": {
+        "refDate": "2026-08-14",
+        "futDate": "2027-08-04",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Navratri": {
+        "refDate": "2026-10-03",
+        "futDate": "2027-09-22",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Dussehra": {
+        "refDate": "2026-10-12",
+        "futDate": "2027-10-01",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Dhanteras": {
+        "refDate": "2026-10-18",
+        "futDate": "2027-10-06",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Diwali": {
+        "refDate": "2026-10-20",
+        "futDate": "2027-10-08",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Bhai Dooj": {
+        "refDate": "2026-10-23",
+        "futDate": "2027-10-11",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Rath Yatra": {
+        "refDate": "2026-06-27",
+        "futDate": "2027-07-16",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      }
+    },
+    "N. EAST - PUJA": {
+      "Holi": {
+        "refDate": "2026-03-04",
+        "futDate": "2027-03-22",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Eid al-Fitr": {
+        "refDate": "2026-03-20",
+        "futDate": "2027-03-09",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Ram Navami": {
+        "refDate": "2026-03-28",
+        "futDate": "2027-04-16",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Hanuman Jayanti": {
+        "refDate": "2026-04-03",
+        "futDate": "2027-04-21",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Akshaya Tritiya": {
+        "refDate": "2026-04-21",
+        "futDate": "2027-05-09",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Buddha Purnima": {
+        "refDate": "2026-05-03",
+        "futDate": "2027-05-20",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Raksha Bandhan": {
+        "refDate": "2026-08-09",
+        "futDate": "2027-08-29",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Janmashtami": {
+        "refDate": "2026-08-14",
+        "futDate": "2027-08-04",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Onam": {
+        "refDate": "2026-09-07",
+        "futDate": "2027-08-27",
+        "savedAt": "2026-08-21T09:17:36.271Z"
+      },
+      "Navratri": {
+        "refDate": "2026-10-03",
+        "futDate": "2027-09-22",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Durga Puja": {
+        "refDate": "2026-10-03",
+        "futDate": "2027-09-22",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Dussehra": {
+        "refDate": "2026-10-12",
+        "futDate": "2027-10-01",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Dhanteras": {
+        "refDate": "2026-10-18",
+        "futDate": "2027-10-06",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Diwali": {
+        "refDate": "2026-10-20",
+        "futDate": "2027-10-08",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Bihu": {
+        "refDate": "2026-04-14",
+        "futDate": "2027-04-14",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      }
+    },
+    "N. EAST": {
+      "Holi": {
+        "refDate": "2026-03-04",
+        "futDate": "2027-03-22",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Eid al-Fitr": {
+        "refDate": "2026-03-20",
+        "futDate": "2027-03-09",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Ram Navami": {
+        "refDate": "2026-03-28",
+        "futDate": "2027-04-16",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Hanuman Jayanti": {
+        "refDate": "2026-04-03",
+        "futDate": "2027-04-21",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Akshaya Tritiya": {
+        "refDate": "2026-04-21",
+        "futDate": "2027-05-09",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Buddha Purnima": {
+        "refDate": "2026-05-03",
+        "futDate": "2027-05-20",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Raksha Bandhan": {
+        "refDate": "2026-08-09",
+        "futDate": "2027-08-29",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Janmashtami": {
+        "refDate": "2026-08-14",
+        "futDate": "2027-08-04",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Onam": {
+        "refDate": "2026-09-07",
+        "futDate": "2027-08-27",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Navratri": {
+        "refDate": "2026-10-03",
+        "futDate": "2027-09-22",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Dussehra": {
+        "refDate": "2026-10-12",
+        "futDate": "2027-10-01",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Dhanteras": {
+        "refDate": "2026-10-18",
+        "futDate": "2027-10-06",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Diwali": {
+        "refDate": "2026-10-20",
+        "futDate": "2027-10-08",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Bhai Dooj": {
+        "refDate": "2026-10-23",
+        "futDate": "2027-10-11",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Bihu": {
+        "refDate": "2026-04-14",
+        "futDate": "2027-04-14",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      }
+    },
+    "UP + BIHAR - PUJA": {
+      "Holi": {
+        "refDate": "2026-03-04",
+        "futDate": "2027-03-22",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Eid al-Fitr": {
+        "refDate": "2026-03-20",
+        "futDate": "2027-03-09",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Ram Navami": {
+        "refDate": "2026-03-28",
+        "futDate": "2027-04-16",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Hanuman Jayanti": {
+        "refDate": "2026-04-03",
+        "futDate": "2027-04-21",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Akshaya Tritiya": {
+        "refDate": "2026-04-21",
+        "futDate": "2027-05-09",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Buddha Purnima": {
+        "refDate": "2026-05-03",
+        "futDate": "2027-05-20",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Raksha Bandhan": {
+        "refDate": "2026-08-09",
+        "futDate": "2027-08-29",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Janmashtami": {
+        "refDate": "2026-08-14",
+        "futDate": "2027-08-04",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Onam": {
+        "refDate": "2026-09-07",
+        "futDate": "2027-08-27",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Navratri": {
+        "refDate": "2026-10-03",
+        "futDate": "2027-09-22",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Dussehra": {
+        "refDate": "2026-10-12",
+        "futDate": "2027-10-01",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Diwali": {
+        "refDate": "2026-10-20",
+        "futDate": "2027-10-08",
+        "post": 3,
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Christmas": {
+        "refDate": "2026-12-25",
+        "futDate": "2027-12-25",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Lohri": {
+        "refDate": "2026-01-13",
+        "futDate": "2027-01-13",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Makar Sankranti": {
+        "refDate": "2026-01-14",
+        "futDate": "2027-01-14",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Basant Panchami": {
+        "refDate": "2026-02-02",
+        "futDate": "2027-01-23",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Maha Shivaratri": {
+        "refDate": "2026-02-26",
+        "futDate": "2027-02-15",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Good Friday": {
+        "refDate": "2026-04-03",
+        "futDate": "2027-03-26",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Easter": {
+        "refDate": "2026-04-05",
+        "futDate": "2027-03-28",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Baisakhi": {
+        "refDate": "2026-04-13",
+        "futDate": "2027-04-14",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Eid al-Adha": {
+        "refDate": "2026-05-27",
+        "futDate": "2027-05-17",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Milad-un-Nabi": {
+        "refDate": "2026-09-04",
+        "futDate": "2027-08-25",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Karva Chauth": {
+        "refDate": "2026-10-16",
+        "futDate": "2027-10-04",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Dhanteras": {
+        "refDate": "2026-10-18",
+        "futDate": "2027-10-06",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Govardhan Puja": {
+        "refDate": "2026-10-21",
+        "futDate": "2027-10-09",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Bhai Dooj": {
+        "refDate": "2026-10-23",
+        "futDate": "2027-10-11",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Chhath Puja": {
+        "refDate": "2026-10-27",
+        "futDate": "2027-10-16",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Guru Nanak Jayanti": {
+        "refDate": "2026-11-05",
+        "futDate": "2027-11-24",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      }
+    },
+    "Cluster 8": {
+      "Holi": {
+        "refDate": "2026-03-04",
+        "futDate": "2027-03-22",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Eid al-Fitr": {
+        "refDate": "2026-03-20",
+        "futDate": "2027-03-09",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Ram Navami": {
+        "refDate": "2026-03-28",
+        "futDate": "2027-04-16",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Hanuman Jayanti": {
+        "refDate": "2026-04-03",
+        "futDate": "2027-04-21",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Akshaya Tritiya": {
+        "refDate": "2026-04-21",
+        "futDate": "2027-05-09",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Buddha Purnima": {
+        "refDate": "2026-05-03",
+        "futDate": "2027-05-20",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Raksha Bandhan": {
+        "refDate": "2026-08-09",
+        "futDate": "2027-08-29",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Janmashtami": {
+        "refDate": "2026-08-14",
+        "futDate": "2027-08-04",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Onam": {
+        "refDate": "2026-09-07",
+        "futDate": "2027-08-27",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Navratri": {
+        "refDate": "2026-10-03",
+        "futDate": "2027-09-22",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Dussehra": {
+        "refDate": "2026-10-12",
+        "futDate": "2027-10-01",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Dhanteras": {
+        "refDate": "2026-10-18",
+        "futDate": "2027-10-06",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Diwali": {
+        "refDate": "2026-10-20",
+        "futDate": "2027-10-08",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Bhai Dooj": {
+        "refDate": "2026-10-23",
+        "futDate": "2027-10-11",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Christmas": {
+        "refDate": "2026-12-25",
+        "futDate": "2027-12-25",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Lohri": {
+        "refDate": "2026-01-13",
+        "futDate": "2027-01-13",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Makar Sankranti": {
+        "refDate": "2026-01-14",
+        "futDate": "2027-01-14",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Republic Day": {
+        "refDate": "2026-01-26",
+        "futDate": "2027-01-26",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Basant Panchami": {
+        "refDate": "2026-02-02",
+        "futDate": "2027-01-23",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Maha Shivaratri": {
+        "refDate": "2026-02-26",
+        "futDate": "2027-02-15",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Good Friday": {
+        "refDate": "2026-04-03",
+        "futDate": "2027-03-26",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Easter": {
+        "refDate": "2026-04-05",
+        "futDate": "2027-03-28",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Baisakhi": {
+        "refDate": "2026-04-13",
+        "futDate": "2027-04-14",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Eid al-Adha": {
+        "refDate": "2026-05-27",
+        "futDate": "2027-05-17",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Independence Day": {
+        "refDate": "2026-08-15",
+        "futDate": "2027-08-15",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Milad-un-Nabi": {
+        "refDate": "2026-09-04",
+        "futDate": "2027-08-25",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Gandhi Jayanti": {
+        "refDate": "2026-10-02",
+        "futDate": "2027-10-02",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Karva Chauth": {
+        "refDate": "2026-10-16",
+        "futDate": "2027-10-04",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Govardhan Puja": {
+        "refDate": "2026-10-21",
+        "futDate": "2027-10-09",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Chhath Puja": {
+        "refDate": "2026-10-27",
+        "futDate": "2027-10-16",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Guru Nanak Jayanti": {
+        "refDate": "2026-11-05",
+        "futDate": "2027-11-24",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Pongal": {
+        "refDate": "2026-01-14",
+        "futDate": "2027-01-14",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Gudi Padwa": {
+        "refDate": "2026-03-20",
+        "futDate": "2027-04-08",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Vishu": {
+        "refDate": "2026-04-14",
+        "futDate": "2027-04-14",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Rath Yatra": {
+        "refDate": "2026-06-27",
+        "futDate": "2027-07-16",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Ganesh Chaturthi": {
+        "refDate": "2026-08-22",
+        "futDate": "2027-09-10",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Bihu": {
+        "refDate": "2026-04-14",
+        "futDate": "2027-04-14",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Durga Puja": {
+        "refDate": "2026-10-03",
+        "futDate": "2027-09-22",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Uttarayan": {
+        "refDate": "2026-01-14",
+        "futDate": "2027-01-14",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      },
+      "Navratri / Garba": {
+        "refDate": "2026-10-03",
+        "futDate": "2027-09-22",
+        "savedAt": "2026-08-21T09:10:10.479Z"
+      }
+    },
+    "Cluster 9": {
+      "Holi": {
+        "refDate": "2026-03-04",
+        "futDate": "2027-03-22",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Eid al-Fitr": {
+        "refDate": "2026-03-20",
+        "futDate": "2027-03-09",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Ram Navami": {
+        "refDate": "2026-03-28",
+        "futDate": "2027-04-16",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Hanuman Jayanti": {
+        "refDate": "2026-04-03",
+        "futDate": "2027-04-21",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Akshaya Tritiya": {
+        "refDate": "2026-04-21",
+        "futDate": "2027-05-09",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Buddha Purnima": {
+        "refDate": "2026-05-03",
+        "futDate": "2027-05-20",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Raksha Bandhan": {
+        "refDate": "2026-08-09",
+        "futDate": "2027-08-29",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Janmashtami": {
+        "refDate": "2026-08-14",
+        "futDate": "2027-08-04",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Onam": {
+        "refDate": "2026-09-07",
+        "futDate": "2027-08-27",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Navratri": {
+        "refDate": "2026-10-03",
+        "futDate": "2027-09-22",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Dussehra": {
+        "refDate": "2026-10-12",
+        "futDate": "2027-10-01",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Dhanteras": {
+        "refDate": "2026-10-18",
+        "futDate": "2027-10-06",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Diwali": {
+        "refDate": "2026-10-20",
+        "futDate": "2027-10-08",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Bhai Dooj": {
+        "refDate": "2026-10-23",
+        "futDate": "2027-10-11",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      },
+      "Christmas": {
+        "refDate": "2026-12-25",
+        "futDate": "2027-12-25",
+        "savedAt": "2026-08-21T10:24:20.348Z"
+      }
+    },
+    "BIHAR": {
+      "Holi": {
+        "refDate": "2026-03-04",
+        "futDate": "2027-03-22",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Eid al-Fitr": {
+        "refDate": "2026-03-20",
+        "futDate": "2027-03-09",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Ram Navami": {
+        "refDate": "2026-03-28",
+        "futDate": "2027-04-16",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Hanuman Jayanti": {
+        "refDate": "2026-04-03",
+        "futDate": "2027-04-21",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Akshaya Tritiya": {
+        "refDate": "2026-04-21",
+        "futDate": "2027-05-09",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Buddha Purnima": {
+        "refDate": "2026-05-03",
+        "futDate": "2027-05-20",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Raksha Bandhan": {
+        "refDate": "2026-08-09",
+        "futDate": "2027-08-29",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Janmashtami": {
+        "refDate": "2026-08-14",
+        "futDate": "2027-08-04",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Onam": {
+        "refDate": "2026-09-07",
+        "futDate": "2027-08-27",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Navratri": {
+        "refDate": "2026-10-03",
+        "futDate": "2027-09-22",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Dussehra": {
+        "refDate": "2026-10-12",
+        "futDate": "2027-10-01",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Dhanteras": {
+        "refDate": "2026-10-18",
+        "futDate": "2027-10-06",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Diwali": {
+        "refDate": "2026-10-20",
+        "futDate": "2027-10-08",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Bhai Dooj": {
+        "refDate": "2026-10-23",
+        "futDate": "2027-10-11",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Christmas": {
+        "refDate": "2026-12-25",
+        "futDate": "2027-12-25",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Lohri": {
+        "refDate": "2026-01-13",
+        "futDate": "2027-01-13",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Makar Sankranti": {
+        "refDate": "2026-01-14",
+        "futDate": "2027-01-14",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Republic Day": {
+        "refDate": "2026-01-26",
+        "futDate": "2027-01-26",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Basant Panchami": {
+        "refDate": "2026-02-02",
+        "futDate": "2027-01-23",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Maha Shivaratri": {
+        "refDate": "2026-02-26",
+        "futDate": "2027-02-15",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Good Friday": {
+        "refDate": "2026-04-03",
+        "futDate": "2027-03-26",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Easter": {
+        "refDate": "2026-04-05",
+        "futDate": "2027-03-28",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Baisakhi": {
+        "refDate": "2026-04-13",
+        "futDate": "2027-04-14",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Eid al-Adha": {
+        "refDate": "2026-05-27",
+        "futDate": "2027-05-17",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Independence Day": {
+        "refDate": "2026-08-15",
+        "futDate": "2027-08-15",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Milad-un-Nabi": {
+        "refDate": "2026-09-04",
+        "futDate": "2027-08-25",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Gandhi Jayanti": {
+        "refDate": "2026-10-02",
+        "futDate": "2027-10-02",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Karva Chauth": {
+        "refDate": "2026-10-16",
+        "futDate": "2027-10-04",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Govardhan Puja": {
+        "refDate": "2026-10-21",
+        "futDate": "2027-10-09",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Chhath Puja": {
+        "refDate": "2026-10-27",
+        "futDate": "2027-10-16",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Guru Nanak Jayanti": {
+        "refDate": "2026-11-05",
+        "futDate": "2027-11-24",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Pongal": {
+        "refDate": "2026-01-14",
+        "futDate": "2027-01-14",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Gudi Padwa": {
+        "refDate": "2026-03-20",
+        "futDate": "2027-04-08",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Vishu": {
+        "refDate": "2026-04-14",
+        "futDate": "2027-04-14",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Rath Yatra": {
+        "refDate": "2026-06-27",
+        "futDate": "2027-07-16",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Ganesh Chaturthi": {
+        "refDate": "2026-08-22",
+        "futDate": "2027-09-10",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Bihu": {
+        "refDate": "2026-04-14",
+        "futDate": "2027-04-14",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Durga Puja": {
+        "refDate": "2026-10-03",
+        "futDate": "2027-09-22",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Uttarayan": {
+        "refDate": "2026-01-14",
+        "futDate": "2027-01-14",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Navratri / Garba": {
+        "refDate": "2026-10-03",
+        "futDate": "2027-09-22",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      }
+    },
+    "JHARKHAND": {
+      "Holi": {
+        "refDate": "2026-03-04",
+        "futDate": "2027-03-22",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Eid al-Fitr": {
+        "refDate": "2026-03-20",
+        "futDate": "2027-03-09",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Ram Navami": {
+        "refDate": "2026-03-28",
+        "futDate": "2027-04-16",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Hanuman Jayanti": {
+        "refDate": "2026-04-03",
+        "futDate": "2027-04-21",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Akshaya Tritiya": {
+        "refDate": "2026-04-21",
+        "futDate": "2027-05-09",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Buddha Purnima": {
+        "refDate": "2026-05-03",
+        "futDate": "2027-05-20",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Raksha Bandhan": {
+        "refDate": "2026-08-09",
+        "futDate": "2027-08-29",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Janmashtami": {
+        "refDate": "2026-08-14",
+        "futDate": "2027-08-04",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Onam": {
+        "refDate": "2026-09-07",
+        "futDate": "2027-08-27",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Navratri": {
+        "refDate": "2026-10-03",
+        "futDate": "2027-09-22",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Dussehra": {
+        "refDate": "2026-10-12",
+        "futDate": "2027-10-01",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Dhanteras": {
+        "refDate": "2026-10-18",
+        "futDate": "2027-10-06",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Diwali": {
+        "refDate": "2026-10-20",
+        "futDate": "2027-10-08",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Bhai Dooj": {
+        "refDate": "2026-10-23",
+        "futDate": "2027-10-11",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Christmas": {
+        "refDate": "2026-12-25",
+        "futDate": "2027-12-25",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Makar Sankranti": {
+        "refDate": "2026-01-14",
+        "futDate": "2027-01-14",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Basant Panchami": {
+        "refDate": "2026-02-02",
+        "futDate": "2027-01-23",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Maha Shivaratri": {
+        "refDate": "2026-02-26",
+        "futDate": "2027-02-15",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Good Friday": {
+        "refDate": "2026-04-03",
+        "futDate": "2027-03-26",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Easter": {
+        "refDate": "2026-04-05",
+        "futDate": "2027-03-28",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Bihu": {
+        "refDate": "2026-04-14",
+        "futDate": "2027-04-14",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Eid al-Adha": {
+        "refDate": "2026-05-27",
+        "futDate": "2027-05-17",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Rath Yatra": {
+        "refDate": "2026-06-27",
+        "futDate": "2027-07-16",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Milad-un-Nabi": {
+        "refDate": "2026-09-04",
+        "futDate": "2027-08-25",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Durga Puja": {
+        "refDate": "2026-10-03",
+        "futDate": "2027-09-22",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      },
+      "Chhath Puja": {
+        "refDate": "2026-10-27",
+        "futDate": "2027-10-16",
+        "savedAt": "2026-08-21T09:15:09.226Z"
+      }
+    },
+    "JH + MP": {
+      "Holi": {
+        "refDate": "2026-03-04",
+        "futDate": "2027-03-22",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Eid al-Fitr": {
+        "refDate": "2026-03-20",
+        "futDate": "2027-03-09",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Ram Navami": {
+        "refDate": "2026-03-28",
+        "futDate": "2027-04-16",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Hanuman Jayanti": {
+        "refDate": "2026-04-03",
+        "futDate": "2027-04-21",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Akshaya Tritiya": {
+        "refDate": "2026-04-21",
+        "futDate": "2027-05-09",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Buddha Purnima": {
+        "refDate": "2026-05-03",
+        "futDate": "2027-05-20",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Raksha Bandhan": {
+        "refDate": "2026-08-09",
+        "futDate": "2027-08-29",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Janmashtami": {
+        "refDate": "2026-08-14",
+        "futDate": "2027-08-04",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Onam": {
+        "refDate": "2026-09-07",
+        "futDate": "2027-08-27",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Navratri": {
+        "refDate": "2026-10-03",
+        "futDate": "2027-09-22",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Dussehra": {
+        "refDate": "2026-10-12",
+        "futDate": "2027-10-01",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Dhanteras": {
+        "refDate": "2026-10-18",
+        "futDate": "2027-10-06",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Diwali": {
+        "refDate": "2026-10-20",
+        "futDate": "2027-10-08",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Bhai Dooj": {
+        "refDate": "2026-10-23",
+        "futDate": "2027-10-11",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Christmas": {
+        "refDate": "2026-12-25",
+        "futDate": "2027-12-25",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Makar Sankranti": {
+        "refDate": "2026-01-14",
+        "futDate": "2027-01-14",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Basant Panchami": {
+        "refDate": "2026-02-02",
+        "futDate": "2027-01-23",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Maha Shivaratri": {
+        "refDate": "2026-02-26",
+        "futDate": "2027-02-15",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Good Friday": {
+        "refDate": "2026-04-03",
+        "futDate": "2027-03-26",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Easter": {
+        "refDate": "2026-04-05",
+        "futDate": "2027-03-28",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Bihu": {
+        "refDate": "2026-04-14",
+        "futDate": "2027-04-14",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Eid al-Adha": {
+        "refDate": "2026-05-27",
+        "futDate": "2027-05-17",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Rath Yatra": {
+        "refDate": "2026-06-27",
+        "futDate": "2027-07-16",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Milad-un-Nabi": {
+        "refDate": "2026-09-04",
+        "futDate": "2027-08-25",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Durga Puja": {
+        "refDate": "2026-10-03",
+        "futDate": "2027-09-22",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      },
+      "Chhath Puja": {
+        "refDate": "2026-10-27",
+        "futDate": "2027-10-16",
+        "savedAt": "2026-08-21T10:21:24.904Z"
+      }
+    },
+    "Cluster 10": {
+      "Holi": {
+        "refDate": "2026-03-04",
+        "futDate": "2027-03-22",
+        "savedAt": "2026-08-21T09:17:36.271Z"
+      },
+      "Eid al-Fitr": {
+        "refDate": "2026-03-20",
+        "futDate": "2027-03-09",
+        "savedAt": "2026-08-21T09:17:36.271Z"
+      },
+      "Ram Navami": {
+        "refDate": "2026-03-28",
+        "futDate": "2027-04-16",
+        "savedAt": "2026-08-21T09:17:36.271Z"
+      },
+      "Hanuman Jayanti": {
+        "refDate": "2026-04-03",
+        "futDate": "2027-04-21",
+        "savedAt": "2026-08-21T09:17:36.271Z"
+      },
+      "Akshaya Tritiya": {
+        "refDate": "2026-04-21",
+        "futDate": "2027-05-09",
+        "savedAt": "2026-08-21T09:17:36.271Z"
+      },
+      "Buddha Purnima": {
+        "refDate": "2026-05-03",
+        "futDate": "2027-05-20",
+        "savedAt": "2026-08-21T09:17:36.271Z"
+      },
+      "Raksha Bandhan": {
+        "refDate": "2026-08-09",
+        "futDate": "2027-08-29",
+        "savedAt": "2026-08-21T09:17:36.271Z"
+      },
+      "Janmashtami": {
+        "refDate": "2026-08-14",
+        "futDate": "2027-08-04",
+        "savedAt": "2026-08-21T09:17:36.271Z"
+      },
+      "Onam": {
+        "refDate": "2026-09-07",
+        "futDate": "2027-08-27",
+        "savedAt": "2026-08-21T09:17:36.271Z"
+      },
+      "Navratri": {
+        "refDate": "2026-10-03",
+        "futDate": "2027-09-22",
+        "savedAt": "2026-08-21T09:17:36.271Z"
+      },
+      "Dussehra": {
+        "refDate": "2026-10-12",
+        "futDate": "2027-10-01",
+        "savedAt": "2026-08-21T09:17:36.271Z"
+      },
+      "Dhanteras": {
+        "refDate": "2026-10-18",
+        "futDate": "2027-10-06",
+        "savedAt": "2026-08-21T09:17:36.271Z"
+      },
+      "Diwali": {
+        "refDate": "2026-10-20",
+        "futDate": "2027-10-08",
+        "savedAt": "2026-08-21T09:17:36.271Z"
+      },
+      "Bhai Dooj": {
+        "refDate": "2026-10-23",
+        "futDate": "2027-10-11",
+        "savedAt": "2026-08-21T09:17:36.271Z"
+      },
+      "Christmas": {
+        "refDate": "2026-12-25",
+        "futDate": "2027-12-25",
+        "savedAt": "2026-08-21T09:17:36.271Z"
+      }
+    }
+  },
+  "2026-2027": {
+    "Cluster 1": {
+      "Holi": {
+        "refDate": "2026-03-05",
+        "savedAt": "2026-08-21T10:38:40.712Z"
+      }
+    }
+  }
+}

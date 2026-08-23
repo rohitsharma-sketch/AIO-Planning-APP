@@ -1,0 +1,360 @@
+{
+  "KIDS": {
+    "BOYS DESIGNER": {
+      "contrib_pct": 0.8475,
+      "active": true
+    },
+    "GIRLS DESIGNER": {
+      "contrib_pct": 0.8475
+    },
+    "KB_BABA SUIT DNM F/S": {
+      "contrib_pct": 0.8475
+    },
+    "KB_BABA SUIT DNM H/S": {
+      "contrib_pct": 0.8475
+    },
+    "KB_BABA SUIT HSR F/S": {
+      "contrib_pct": 0.8475
+    },
+    "KB_BABA SUIT HSR H/S": {
+      "contrib_pct": 0.8475
+    },
+    "KB_BABA SUIT TXTL H/S": {
+      "contrib_pct": 0.8475
+    },
+    "KB_BERMUDA": {
+      "contrib_pct": 0.8475,
+      "active": true
+    },
+    "KB_BLAZER SUIT": {
+      "contrib_pct": 0.8475
+    },
+    "KB_BLAZER": {
+      "contrib_pct": 0.8475
+    },
+    "KB_CASUAL SHIRT F/S": {
+      "contrib_pct": 0.8475
+    },
+    "KB_CASUAL SHIRT H/S": {
+      "contrib_pct": 0.8475
+    },
+    "KB_HALF PANT": {
+      "contrib_pct": 0.8475
+    },
+    "KB_IN_BRIEF": {
+      "contrib_pct": 0.8475
+    },
+    "KB_IN_VEST": {
+      "contrib_pct": 0.8475
+    },
+    "KB_INDO WESTERN": {
+      "contrib_pct": 0.8475
+    },
+    "KB_J_CTN TROUSER": {
+      "contrib_pct": 0.8475
+    },
+    "KB_J_JEANS": {
+      "contrib_pct": 0.8475
+    },
+    "KB_JAMAICAN": {
+      "contrib_pct": 0.8475
+    },
+    "KB_KURTA": {
+      "contrib_pct": 0.8475
+    },
+    "KB_MIX": {
+      "contrib_pct": 0.8475
+    },
+    "KB_NIGHT SUIT": {
+      "contrib_pct": 0.8475
+    },
+    "KB_PYJAMA": {
+      "contrib_pct": 0.8475
+    },
+    "KB_SANDO SET": {
+      "contrib_pct": 0.8475
+    },
+    "KB_SANDO": {
+      "contrib_pct": 0.8475
+    },
+    "KB_T-SHIRT F/S": {
+      "contrib_pct": 0.8475
+    },
+    "KB_T-SHIRT H/S": {
+      "contrib_pct": 0.8475
+    },
+    "KB_Y_CTN TROUSER": {
+      "contrib_pct": 0.8475
+    },
+    "KB_Y_JEANS": {
+      "contrib_pct": 0.8475
+    },
+    "KBW_BABA SUIT": {
+      "contrib_pct": 0.8475
+    },
+    "KBW_JACKET": {
+      "contrib_pct": 0.8475
+    },
+    "KBW_PULLOVER": {
+      "contrib_pct": 0.8475
+    },
+    "KBW_PYJAMA": {
+      "contrib_pct": 0.8475
+    },
+    "KBW_THERMAL LOWER": {
+      "contrib_pct": 0.8475
+    },
+    "KBW_THERMAL UPPER": {
+      "contrib_pct": 0.8475
+    },
+    "KBW_TRACK SUIT": {
+      "contrib_pct": 0.8475
+    },
+    "KBW_WINTER T-SHIRT": {
+      "contrib_pct": 0.8475
+    },
+    "KG_CAPRI SET": {
+      "contrib_pct": 0.8475
+    },
+    "KG_CAPRI": {
+      "contrib_pct": 0.8475
+    },
+    "KG_DANGRI F/S": {
+      "contrib_pct": 0.8475
+    },
+    "KG_DRESS": {
+      "contrib_pct": 0.8475
+    },
+    "KG_FANCY_FROCK": {
+      "contrib_pct": 0.8475
+    },
+    "KG_FROCK F/S": {
+      "contrib_pct": 0.8475
+    },
+    "KG_FROCK": {
+      "contrib_pct": 0.8475
+    },
+    "KG_HIPSTER SET F/S": {
+      "contrib_pct": 0.8475
+    },
+    "KG_HOT PANT SET": {
+      "contrib_pct": 0.8475
+    },
+    "KG_HOT PANT": {
+      "contrib_pct": 0.8475
+    },
+    "KG_IN_PANTY": {
+      "contrib_pct": 0.8475
+    },
+    "KG_IN_VEST": {
+      "contrib_pct": 0.8475
+    },
+    "KG_J_JEANS": {
+      "contrib_pct": 0.8475
+    },
+    "KG_KURTI": {
+      "contrib_pct": 0.8475
+    },
+    "KG_LEGGING SET": {
+      "contrib_pct": 0.8475
+    },
+    "KG_LEGGING": {
+      "contrib_pct": 0.8475
+    },
+    "KG_NIGHT SUIT": {
+      "contrib_pct": 0.8475
+    },
+    "KG_PALAZZO": {
+      "contrib_pct": 0.8475
+    },
+    "KG_PARALLEL": {
+      "contrib_pct": 0.8475
+    },
+    "KG_SALWAR SUIT": {
+      "contrib_pct": 0.8475
+    },
+    "KG_SKIRT TOP SET": {
+      "contrib_pct": 0.8475
+    },
+    "KG_SKIRT": {
+      "contrib_pct": 0.8475
+    },
+    "KG_TEES F/S": {
+      "contrib_pct": 0.8475
+    },
+    "KG_TEES": {
+      "contrib_pct": 0.8475
+    },
+    "KG_T-TOP F/S": {
+      "contrib_pct": 0.8475
+    },
+    "KG_T-TOP": {
+      "contrib_pct": 0.8475
+    },
+    "KG_Y_JEANS": {
+      "contrib_pct": 0.8475
+    },
+    "KGW_HIPSTER SET": {
+      "contrib_pct": 0.8475
+    },
+    "KGW_JACKET": {
+      "contrib_pct": 0.8475
+    },
+    "KGW_PYJAMA": {
+      "contrib_pct": 0.8475
+    },
+    "KGW_WINTER TOP": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_BABA SUIT DANGRI H/S": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_BABA SUIT DNM F/S": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_BABA SUIT DNM H/S": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_BABA SUIT HSR F/S": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_BABA SUIT HSR H/S": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_BABA SUIT NEW BORN  F/S": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_BABA SUIT NEW BORN H/S": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_BABA SUIT TXTL H/S": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_CAPRI SET": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_CAPRI": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_CASUAL SHIRT F/S": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_CASUAL SHIRT H/S": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_DANGRI_F/S": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_FANCY_FROCK": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_FROCK F/S": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_FROCK": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_HALF PANT": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_HIPSTER SET F/S": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_HOT PANT SET": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_HOT PANT": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_INDO WESTERN": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_JEANS": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_NEW BORN FROCK": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_NEW BORN GIRLS SET": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_NIGHT SUIT": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_PYJAMA": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_SANDO": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_SKIRT TOP SET": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_SKIRT": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_TOP F/S": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_TOP H/S": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_TROUSER": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_T-SHIRT F/S": {
+      "contrib_pct": 0.8475
+    },
+    "KI_AP_T-SHIRT H/S": {
+      "contrib_pct": 0.8475
+    },
+    "KI_IN_BLOOMER": {
+      "contrib_pct": 0.8475
+    },
+    "KI_IN_GIFT SET": {
+      "contrib_pct": 0.8475
+    },
+    "KI_IN_VEST": {
+      "contrib_pct": 0.8475
+    },
+    "KIW_BLANKET": {
+      "contrib_pct": 0.8475
+    },
+    "KIW_BOYS JACKET": {
+      "contrib_pct": 0.8475
+    },
+    "KIW_GIFT SET": {
+      "contrib_pct": 0.8475
+    },
+    "KIW_GIRLS JACKET": {
+      "contrib_pct": 0.8475
+    },
+    "KIW_HIPSTER SET": {
+      "contrib_pct": 0.8475
+    },
+    "KIW_PULLOVER": {
+      "contrib_pct": 0.8475
+    },
+    "KIW_PYJAMA": {
+      "contrib_pct": 0.8475
+    },
+    "KIW_VEST": {
+      "contrib_pct": 0.8475
+    },
+    "KIW_WINTER BABA_SUIT": {
+      "contrib_pct": 0.8475
+    },
+    "KIW_WINTER TOP": {
+      "contrib_pct": 0.8475
+    },
+    "KIW_WINTER T-SHIRT": {
+      "contrib_pct": 0.8475
+    },
+    "KW_MIX": {
+      "contrib_pct": 0.8475
+    },
+    "RAINCOAT": {
+      "contrib_pct": 0.8475
+    }
+  }
+}

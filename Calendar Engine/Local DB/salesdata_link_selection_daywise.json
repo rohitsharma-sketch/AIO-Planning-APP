@@ -1,0 +1,17 @@
+{
+  "months": [
+    "2020-01",
+    "2020-02",
+    "2020-03",
+    "2020-05",
+    "2020-06",
+    "2020-07",
+    "2020-08",
+    "2020-09",
+    "2020-10",
+    "2020-11",
+    "2020-12"
+  ],
+  "path": "\\\\10.0.1.85\\Users\\Administrator\\Desktop\\AI SOLUTION\\INVENTORY AUTOMATION\\data_lake\\raw\\billwise_fy16-20; \\\\10.0.1.85\\Users\\Administrator\\Desktop\\AI SOLUTION\\INVENTORY AUTOMATION\\data_lake\\raw\\bill_wise_fy20--23; \\\\10.0.1.85\\Users\\Administrator\\Desktop\\AI SOLUTION\\INVENTORY AUTOMATION\\data_lake\\raw\\billwise_fy-24-26; \\\\10.0.1.85\\Users\\Administrator\\Desktop\\AI SOLUTION\\INVENTORY AUTOMATION\\data_lake\\raw\\billwise_fy26-27",
+  "syncedAt": "2026-08-22T07:20:06.730Z"
+}

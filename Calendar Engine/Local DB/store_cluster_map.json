@@ -1,0 +1,901 @@
+{
+  "locked": true,
+  "lockedAt": "2026-08-22T04:25:00.945347+00:00",
+  "source": "Default Template.xlsx",
+  "aliases": {},
+  "stores": [
+    {
+      "store": "AAC",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "ABD",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "AGT",
+      "cluster": "NE"
+    },
+    {
+      "store": "AJL",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "ALC",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "ALK",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "AMG",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "AMP",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "ANG",
+      "cluster": "KASHMIR"
+    },
+    {
+      "store": "ANM",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "APM",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "ARG",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "ARN",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "AZM",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "BAC",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "BAH",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "BAR",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "BBR",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "BDG",
+      "cluster": "KASHMIR"
+    },
+    {
+      "store": "BGI",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "BGM",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "BGP",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "BHI",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "BHR",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "BIA",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "BKR",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "BLA",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "BLP",
+      "cluster": "NE-PUJA"
+    },
+    {
+      "store": "BLR",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "BNK",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "BPC",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "BPT",
+      "cluster": "NE-PUJA"
+    },
+    {
+      "store": "BRB",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "BRD",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "BRP",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "BSC",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "BSK",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "BTA",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "CHB",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "CND",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "CNW",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "COB",
+      "cluster": "WB"
+    },
+    {
+      "store": "CPA",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "CPR",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "CTA",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "CTR",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "DBH",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "DBL",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "DBR",
+      "cluster": "NE-PUJA"
+    },
+    {
+      "store": "DBY",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "DDC",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "DHI",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "DLS",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "DMB",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "DMK",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "DMP",
+      "cluster": "NE"
+    },
+    {
+      "store": "DMR",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "DNG",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "DPT",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "DRA",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "DRG",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "DTG",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "ETW",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "FBD",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "FGN",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "GBG",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "GCG",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "GDA",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "GKG",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "GKT",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "GLA",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "GLP",
+      "cluster": "NE-PUJA"
+    },
+    {
+      "store": "GNM",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "GPG",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "GRD",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "GRK",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "GSD",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "GWG",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "GWL",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "GWT",
+      "cluster": "NE-PUJA"
+    },
+    {
+      "store": "HJD",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "HMR",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "HPR",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "HRD",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "HZG",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "JBP",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "JCL",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "JDP",
+      "cluster": "JAMMU + RJ"
+    },
+    {
+      "store": "JDV",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "JGB",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "JGD",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "JGR",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "JHG",
+      "cluster": "ODISHA"
+    },
+    {
+      "store": "JHM",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "JMI",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "JML",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "JMR",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "JPC",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "JRC",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "JRT",
+      "cluster": "NE-PUJA"
+    },
+    {
+      "store": "JVC",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "KDC",
+      "cluster": "KASHMIR"
+    },
+    {
+      "store": "KDP",
+      "cluster": "ODISHA"
+    },
+    {
+      "store": "KDR",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "KGN",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "KGP",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "KGT",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "KHR",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "KMC",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "KND",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "KPC",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "KPH",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "KRB",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "KRC",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "LAD",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "LAM",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "LBK",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "LBL",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "LMD",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "LMP",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "LMT",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "LPR",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "LRP",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "LSR",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "LTL",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "LTN",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "LVP",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "MAR",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "MBA",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "MBG",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "MBI",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "MBR",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "MCN",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "MCR",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "MDB",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "MDH",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "MDP",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "MHN",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "MIC",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "MKM",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "MMR",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "MNP",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "MNR",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "MPR",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "MRP",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "MSR",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "MSW",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "MTH",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "MTR",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "MZM",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "NDA",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "NDM",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "NGC",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "NGZ",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "NKG",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "NLD",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "NNI",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "NRL",
+      "cluster": "NE"
+    },
+    {
+      "store": "NSM",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "NTV",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "PAR",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "PBA",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "PBM",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "PBS",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "PDR",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "PHB",
+      "cluster": "ODISHA"
+    },
+    {
+      "store": "PHR",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "PKD",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "PKM",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "PKR",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "PLB",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "PMT",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "PNA",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "PNB",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "PSM",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "PTS",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "RBL",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "RBR",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "RBT",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "REW",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "RGA",
+      "cluster": "NE-PUJA"
+    },
+    {
+      "store": "RKL",
+      "cluster": "ODISHA"
+    },
+    {
+      "store": "RKT",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "RLN",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "RNG",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "RSG",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "SBA",
+      "cluster": "JAMMU + RJ"
+    },
+    {
+      "store": "SBM",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "SBP",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "SDH",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "SGT",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "SHO",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "SHR",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "SKP",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "SLC",
+      "cluster": "NE-PUJA"
+    },
+    {
+      "store": "SMB",
+      "cluster": "ODISHA"
+    },
+    {
+      "store": "SNP",
+      "cluster": "ODISHA"
+    },
+    {
+      "store": "SPL",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "SPN",
+      "cluster": "KASHMIR"
+    },
+    {
+      "store": "SPR",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "SPR2",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "SRA",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "SSN",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "SSR",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "STM",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "STN",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "STP",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "STR",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "SVP",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "SWN",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "TGR",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "TNS",
+      "cluster": "NE-PUJA"
+    },
+    {
+      "store": "UBS",
+      "cluster": "JAMMU + RJ"
+    },
+    {
+      "store": "UDP",
+      "cluster": "JAMMU + RJ"
+    },
+    {
+      "store": "UNO",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "VLP",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "VRN",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "VRS",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "VSH",
+      "cluster": "BIHAR"
+    },
+    {
+      "store": "VSW",
+      "cluster": "UP + NCR"
+    },
+    {
+      "store": "BRN",
+      "cluster": "UP + BIHAR - PUJA"
+    },
+    {
+      "store": "SAH",
+      "cluster": "JH + MP + CG"
+    },
+    {
+      "store": "SBW",
+      "cluster": "JH + MP + CG"
+    }
+  ],
+  "editedAt": "2026-08-22T05:06:56.431Z"
+}

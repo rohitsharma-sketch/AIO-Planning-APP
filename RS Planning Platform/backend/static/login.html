@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RS Planning Platform — Sign in</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    background: #f4f5f7;
+  }
+  .card {
+    width: 320px; padding: 32px; background: #fff; border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.06);
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p.sub { margin: 0 0 20px; color: #6b7280; font-size: 13px; }
+  label { display: block; font-size: 12px; font-weight: 600; color: #374151; margin: 12px 0 4px; }
+  input {
+    width: 100%; padding: 9px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;
+  }
+  input:focus { outline: 2px solid #2563eb; outline-offset: -1px; border-color: #2563eb; }
+  button {
+    width: 100%; margin-top: 20px; padding: 10px; border: none; border-radius: 6px;
+    background: #2563eb; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  button:disabled { background: #93b4f0; cursor: default; }
+  .error {
+    margin-top: 14px; padding: 8px 10px; border-radius: 6px; background: #fef2f2;
+    color: #b91c1c; font-size: 13px; display: none;
+  }
+</style>
+</head>
+<body>
+  <form class="card" id="login-form">
+    <h1>RS Planning Platform</h1>
+    <p class="sub">Sign in to continue</p>
+    <label for="username">Username</label>
+    <input id="username" name="username" autocomplete="username" required>
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+    <button type="submit" id="submit-btn">Sign in</button>
+    <div class="error" id="error"></div>
+  </form>
+  <script>
+    const form = document.getElementById('login-form');
+    const errorBox = document.getElementById('error');
+    const btn = document.getElementById('submit-btn');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorBox.style.display = 'none';
+      btn.disabled = true;
+      btn.textContent = 'Signing in...';
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({
+            username: document.getElementById('username').value,
+            password: document.getElementById('password').value,
+          }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.detail || 'Login failed');
+        }
+        const params = new URLSearchParams(window.location.search);
+        window.location.href = params.get('next') || '/aop/';
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Sign in';
+      }
+    });
+  </script>
+</body>
+</html>

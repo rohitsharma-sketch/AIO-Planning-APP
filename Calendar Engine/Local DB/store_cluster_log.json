@@ -1,0 +1,1187 @@
+[
+  {
+    "at": "2026-08-22T04:25:00.945347+00:00",
+    "source": "Default Template.xlsx",
+    "summary": "Initial import of default template",
+    "added": 223,
+    "removed": 0,
+    "reassigned": 0,
+    "details": [
+      {
+        "type": "added",
+        "store": "AAC",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "ABD",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "AGT",
+        "to": "NE"
+      },
+      {
+        "type": "added",
+        "store": "AJL",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "ALC",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "ALK",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "AMG",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "AMP",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "ANG",
+        "to": "KASHMIR"
+      },
+      {
+        "type": "added",
+        "store": "ANM",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "APM",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "ARG",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "ARN",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "AZM",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "BAC",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "BAH",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "BAR",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "BBR",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "BDG",
+        "to": "KASHMIR"
+      },
+      {
+        "type": "added",
+        "store": "BGI",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "BGM",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "BGP",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "BHI",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "BHR",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "BIA",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "BKR",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "BLA",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "BLP",
+        "to": "NE-PUJA"
+      },
+      {
+        "type": "added",
+        "store": "BLR",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "BNK",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "BPC",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "BPT",
+        "to": "NE-PUJA"
+      },
+      {
+        "type": "added",
+        "store": "BRB",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "BRD",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "BRP",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "BSC",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "BSK",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "BTA",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "CHB",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "CND",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "CNW",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "COB",
+        "to": "WB"
+      },
+      {
+        "type": "added",
+        "store": "CPA",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "CPR",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "CTA",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "CTR",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "DBH",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "DBL",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "DBR",
+        "to": "NE-PUJA"
+      },
+      {
+        "type": "added",
+        "store": "DBY",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "DDC",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "DHI",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "DLS",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "DMB",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "DMK",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "DMP",
+        "to": "NE"
+      },
+      {
+        "type": "added",
+        "store": "DMR",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "DNG",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "DPT",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "DRA",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "DRG",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "DTG",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "ETW",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "FBD",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "FGN",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "GBG",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "GCG",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "GDA",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "GKG",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "GKT",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "GLA",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "GLP",
+        "to": "NE-PUJA"
+      },
+      {
+        "type": "added",
+        "store": "GNM",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "GPG",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "GRD",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "GRK",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "GSD",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "GWG",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "GWL",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "GWT",
+        "to": "NE-PUJA"
+      },
+      {
+        "type": "added",
+        "store": "HJD",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "HMR",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "HPR",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "HRD",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "HZG",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "JBP",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "JCL",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "JDP",
+        "to": "JAMMU + RJ"
+      },
+      {
+        "type": "added",
+        "store": "JDV",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "JGB",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "JGD",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "JGR",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "JHG",
+        "to": "ODISHA"
+      },
+      {
+        "type": "added",
+        "store": "JHM",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "JMI",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "JML",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "JMR",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "JPC",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "JRC",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "JRT",
+        "to": "NE-PUJA"
+      },
+      {
+        "type": "added",
+        "store": "JVC",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "KDC",
+        "to": "KASHMIR"
+      },
+      {
+        "type": "added",
+        "store": "KDP",
+        "to": "ODISHA"
+      },
+      {
+        "type": "added",
+        "store": "KDR",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "KGN",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "KGP",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "KGT",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "KHR",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "KMC",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "KND",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "KPC",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "KPH",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "KRB",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "KRC",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "LAD",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "LAM",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "LBK",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "LBL",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "LMD",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "LMP",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "LMT",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "LPR",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "LRP",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "LSR",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "LTL",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "LTN",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "LVP",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "MAR",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "MBA",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "MBG",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "MBI",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "MBR",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "MCN",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "MCR",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "MDB",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "MDH",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "MDP",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "MHN",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "MIC",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "MKM",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "MMR",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "MNP",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "MNR",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "MPR",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "MRP",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "MSR",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "MSW",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "MTH",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "MTR",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "MZM",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "NDA",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "NDM",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "NGC",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "NGZ",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "NKG",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "NLD",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "NNI",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "NRL",
+        "to": "NE"
+      },
+      {
+        "type": "added",
+        "store": "NSM",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "NTV",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "PAR",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "PBA",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "PBM",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "PBS",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "PDR",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "PHB",
+        "to": "ODISHA"
+      },
+      {
+        "type": "added",
+        "store": "PHR",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "PKD",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "PKM",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "PKR",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "PLB",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "PMT",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "PNA",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "PNB",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "PSM",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "PTS",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "RBL",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "RBR",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "RBT",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "REW",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "RGA",
+        "to": "NE-PUJA"
+      },
+      {
+        "type": "added",
+        "store": "RKL",
+        "to": "ODISHA"
+      },
+      {
+        "type": "added",
+        "store": "RKT",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "RLN",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "RNG",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "RSG",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "SBA",
+        "to": "JAMMU + RJ"
+      },
+      {
+        "type": "added",
+        "store": "SBM",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "SBP",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "SDH",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "SGT",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "SHO",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "SHR",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "SKP",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "SLC",
+        "to": "NE-PUJA"
+      },
+      {
+        "type": "added",
+        "store": "SMB",
+        "to": "ODISHA"
+      },
+      {
+        "type": "added",
+        "store": "SNP",
+        "to": "ODISHA"
+      },
+      {
+        "type": "added",
+        "store": "SPL",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "SPN",
+        "to": "KASHMIR"
+      },
+      {
+        "type": "added",
+        "store": "SPR",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "SPR2",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "SRA",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "SSN",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "SSR",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "STM",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "STN",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "STP",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "STR",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "SVP",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "SWN",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "TGR",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "TNS",
+        "to": "NE-PUJA"
+      },
+      {
+        "type": "added",
+        "store": "UBS",
+        "to": "JAMMU + RJ"
+      },
+      {
+        "type": "added",
+        "store": "UDP",
+        "to": "JAMMU + RJ"
+      },
+      {
+        "type": "added",
+        "store": "UNO",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "VLP",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "VRN",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "VRS",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "VSH",
+        "to": "BIHAR"
+      },
+      {
+        "type": "added",
+        "store": "VSW",
+        "to": "UP + NCR"
+      },
+      {
+        "type": "added",
+        "store": "BRN",
+        "to": "UP + BIHAR - PUJA"
+      },
+      {
+        "type": "added",
+        "store": "SAH",
+        "to": "JH + MP + CG"
+      },
+      {
+        "type": "added",
+        "store": "SBW",
+        "to": "JH + MP + CG"
+      }
+    ]
+  },
+  {
+    "at": "2026-08-22T05:05:45.703Z",
+    "source": "Manual edit",
+    "summary": "FDR added to Kashmir",
+    "added": 1,
+    "removed": 0,
+    "reassigned": 0,
+    "details": [
+      {
+        "type": "added",
+        "store": "FDR",
+        "to": "Kashmir"
+      }
+    ]
+  },
+  {
+    "at": "2026-08-22T05:05:53.330Z",
+    "source": "Manual edit",
+    "summary": "FDR removed (was Kashmir)",
+    "added": 0,
+    "removed": 1,
+    "reassigned": 0,
+    "details": [
+      {
+        "type": "removed",
+        "store": "FDR",
+        "from": "Kashmir"
+      }
+    ]
+  },
+  {
+    "at": "2026-08-22T05:06:47.126Z",
+    "source": "Manual edit",
+    "summary": "FRE added to UP + NCR",
+    "added": 1,
+    "removed": 0,
+    "reassigned": 0,
+    "details": [
+      {
+        "type": "added",
+        "store": "FRE",
+        "to": "UP + NCR"
+      }
+    ]
+  },
+  {
+    "at": "2026-08-22T05:06:56.431Z",
+    "source": "Manual edit",
+    "summary": "FRE removed (was UP + NCR)",
+    "added": 0,
+    "removed": 1,
+    "reassigned": 0,
+    "details": [
+      {
+        "type": "removed",
+        "store": "FRE",
+        "from": "UP + NCR"
+      }
+    ]
+  }
+]

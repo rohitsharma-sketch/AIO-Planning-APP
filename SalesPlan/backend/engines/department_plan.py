@@ -1,0 +1,665 @@
+from fastapi import APIRouter, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+import datetime
+import io, json, os
+import pandas as pd
+
+router = APIRouter()
+
+# ── Department master ─────────────────────────────────────────────────────────
+# Source: permanent hierarchy provided by CityKart.
+# GM and RETAIL have no pre-defined departments — they start empty.
+# custom_departments.json (auto-created alongside this file) persists user additions.
+
+_MASTER_RAW = [
+    # KIDS
+    ("KIDS","BOYS DESIGNER","REGULAR"),("KIDS","GIRLS DESIGNER","REGULAR"),
+    ("KIDS","KB_BABA SUIT DNM F/S","PREWINTER"),("KIDS","KB_BABA SUIT DNM H/S","SUMMER"),
+    ("KIDS","KB_BABA SUIT HSR F/S","PREWINTER"),("KIDS","KB_BABA SUIT HSR H/S","SUMMER"),
+    ("KIDS","KB_BABA SUIT TXTL H/S","SUMMER"),("KIDS","KB_BERMUDA","SUMMER"),
+    ("KIDS","KB_BLAZER SUIT","OCCASIONAL"),("KIDS","KB_BLAZER","OCCASIONAL"),
+    ("KIDS","KB_CASUAL SHIRT F/S","REGULAR"),("KIDS","KB_CASUAL SHIRT H/S","SUMMER"),
+    ("KIDS","KB_HALF PANT","SUMMER"),("KIDS","KB_IN_BRIEF","REGULAR"),
+    ("KIDS","KB_IN_VEST","REGULAR"),("KIDS","KB_INDO WESTERN","OCCASIONAL"),
+    ("KIDS","KB_J_CTN TROUSER","REGULAR"),("KIDS","KB_J_JEANS","REGULAR"),
+    ("KIDS","KB_JAMAICAN","SUMMER"),("KIDS","KB_KURTA","REGULAR"),
+    ("KIDS","KB_MIX","REGULAR"),("KIDS","KB_NIGHT SUIT","REGULAR"),
+    ("KIDS","KB_PYJAMA","REGULAR"),("KIDS","KB_SANDO SET","SUMMER"),
+    ("KIDS","KB_SANDO","SUMMER"),("KIDS","KB_T-SHIRT F/S","PREWINTER"),
+    ("KIDS","KB_T-SHIRT H/S","SUMMER"),("KIDS","KB_Y_CTN TROUSER","REGULAR"),
+    ("KIDS","KB_Y_JEANS","REGULAR"),("KIDS","KBW_BABA SUIT","LT WINTER"),
+    ("KIDS","KBW_JACKET","HVY WINTER"),("KIDS","KBW_PULLOVER","LT WINTER"),
+    ("KIDS","KBW_PYJAMA","LT WINTER"),("KIDS","KBW_THERMAL LOWER","LT WINTER"),
+    ("KIDS","KBW_THERMAL UPPER","LT WINTER"),("KIDS","KBW_TRACK SUIT","LT WINTER"),
+    ("KIDS","KBW_WINTER T-SHIRT","LT WINTER"),("KIDS","KG_CAPRI SET","SUMMER"),
+    ("KIDS","KG_CAPRI","SUMMER"),("KIDS","KG_DANGRI F/S","PREWINTER"),
+    ("KIDS","KG_DRESS","REGULAR"),("KIDS","KG_FANCY_FROCK","OCCASIONAL"),
+    ("KIDS","KG_FROCK F/S","PREWINTER"),("KIDS","KG_FROCK","SUMMER"),
+    ("KIDS","KG_HIPSTER SET F/S","PREWINTER"),("KIDS","KG_HOT PANT SET","SUMMER"),
+    ("KIDS","KG_HOT PANT","SUMMER"),("KIDS","KG_IN_PANTY","REGULAR"),
+    ("KIDS","KG_IN_VEST","REGULAR"),("KIDS","KG_J_JEANS","REGULAR"),
+    ("KIDS","KG_KURTI","REGULAR"),("KIDS","KG_LEGGING SET","REGULAR"),
+    ("KIDS","KG_LEGGING","REGULAR"),("KIDS","KG_NIGHT SUIT","REGULAR"),
+    ("KIDS","KG_PALAZZO","REGULAR"),("KIDS","KG_PARALLEL","REGULAR"),
+    ("KIDS","KG_SALWAR SUIT","REGULAR"),("KIDS","KG_SKIRT TOP SET","SUMMER"),
+    ("KIDS","KG_SKIRT","SUMMER"),("KIDS","KG_TEES F/S","PREWINTER"),
+    ("KIDS","KG_TEES","SUMMER"),("KIDS","KG_T-TOP F/S","PREWINTER"),
+    ("KIDS","KG_T-TOP","SUMMER"),("KIDS","KG_Y_JEANS","REGULAR"),
+    ("KIDS","KGW_HIPSTER SET","LT WINTER"),("KIDS","KGW_JACKET","HVY WINTER"),
+    ("KIDS","KGW_PYJAMA","LT WINTER"),("KIDS","KGW_WINTER TOP","LT WINTER"),
+    ("KIDS","KI_AP_BABA SUIT DANGRI H/S","SUMMER"),("KIDS","KI_AP_BABA SUIT DNM F/S","PREWINTER"),
+    ("KIDS","KI_AP_BABA SUIT DNM H/S","SUMMER"),("KIDS","KI_AP_BABA SUIT HSR F/S","PREWINTER"),
+    ("KIDS","KI_AP_BABA SUIT HSR H/S","SUMMER"),("KIDS","KI_AP_BABA SUIT NEW BORN  F/S","PREWINTER"),
+    ("KIDS","KI_AP_BABA SUIT NEW BORN H/S","SUMMER"),("KIDS","KI_AP_BABA SUIT TXTL H/S","SUMMER"),
+    ("KIDS","KI_AP_CAPRI SET","SUMMER"),("KIDS","KI_AP_CAPRI","SUMMER"),
+    ("KIDS","KI_AP_CASUAL SHIRT F/S","PREWINTER"),("KIDS","KI_AP_CASUAL SHIRT H/S","SUMMER"),
+    ("KIDS","KI_AP_DANGRI_F/S","PREWINTER"),("KIDS","KI_AP_FANCY_FROCK","OCCASIONAL"),
+    ("KIDS","KI_AP_FROCK F/S","PREWINTER"),("KIDS","KI_AP_FROCK","SUMMER"),
+    ("KIDS","KI_AP_HALF PANT","SUMMER"),("KIDS","KI_AP_HIPSTER SET F/S","PREWINTER"),
+    ("KIDS","KI_AP_HOT PANT SET","SUMMER"),("KIDS","KI_AP_HOT PANT","SUMMER"),
+    ("KIDS","KI_AP_INDO WESTERN","OCCASIONAL"),("KIDS","KI_AP_JEANS","REGULAR"),
+    ("KIDS","KI_AP_NEW BORN FROCK","SUMMER"),("KIDS","KI_AP_NEW BORN GIRLS SET","SUMMER"),
+    ("KIDS","KI_AP_NIGHT SUIT","REGULAR"),("KIDS","KI_AP_PYJAMA","PREWINTER"),
+    ("KIDS","KI_AP_SANDO","SUMMER"),("KIDS","KI_AP_SKIRT TOP SET","SUMMER"),
+    ("KIDS","KI_AP_SKIRT","SUMMER"),("KIDS","KI_AP_TOP F/S","PREWINTER"),
+    ("KIDS","KI_AP_TOP H/S","SUMMER"),("KIDS","KI_AP_TROUSER","REGULAR"),
+    ("KIDS","KI_AP_T-SHIRT F/S","PREWINTER"),("KIDS","KI_AP_T-SHIRT H/S","SUMMER"),
+    ("KIDS","KI_IN_BLOOMER","REGULAR"),("KIDS","KI_IN_GIFT SET","REGULAR"),
+    ("KIDS","KI_IN_VEST","REGULAR"),("KIDS","KIW_BLANKET","HVY WINTER"),
+    ("KIDS","KIW_BOYS JACKET","HVY WINTER"),("KIDS","KIW_GIFT SET","LT WINTER"),
+    ("KIDS","KIW_GIRLS JACKET","HVY WINTER"),("KIDS","KIW_HIPSTER SET","LT WINTER"),
+    ("KIDS","KIW_PULLOVER","LT WINTER"),("KIDS","KIW_PYJAMA","LT WINTER"),
+    ("KIDS","KIW_VEST","LT WINTER"),("KIDS","KIW_WINTER BABA_SUIT","LT WINTER"),
+    ("KIDS","KIW_WINTER TOP","LT WINTER"),("KIDS","KIW_WINTER T-SHIRT","LT WINTER"),
+    ("KIDS","KW_MIX","HVY WINTER"),("KIDS","RAINCOAT","OCCASIONAL"),
+    # LADIES
+    ("LADIES","L_EW_BLOUSE","OCCASIONAL"),("LADIES","L_EW_DRESS FABRIC","REGULAR"),
+    ("LADIES","L_EW_DUPATTA","REGULAR"),("LADIES","L_EW_KURTI S/L","REGULAR"),
+    ("LADIES","L_EW_KURTI SET","REGULAR"),("LADIES","L_EW_KURTI","REGULAR"),
+    ("LADIES","L_EW_LEGGING","REGULAR"),("LADIES","L_EW_LEHANGA","OCCASIONAL"),
+    ("LADIES","L_EW_MIX","REGULAR"),("LADIES","L_EW_NIGHT SUIT","REGULAR"),
+    ("LADIES","L_EW_NIGHTY","REGULAR"),("LADIES","L_EW_PETTICOAT","REGULAR"),
+    ("LADIES","L_EW_SALWAR SUIT","OCCASIONAL"),("LADIES","L_EW_SALWAR","REGULAR"),
+    ("LADIES","L_EW_SAREE_COTTON","OCCASIONAL"),("LADIES","L_EW_SAREE_FNCY","OCCASIONAL"),
+    ("LADIES","L_EW_SAREE_JAIPURI","OCCASIONAL"),("LADIES","L_EW_SAREE_PRINTED","OCCASIONAL"),
+    ("LADIES","L_EW_SAREE_SILK","OCCASIONAL"),("LADIES","L_EW_SAREE_TANT","OCCASIONAL"),
+    ("LADIES","L_EW_SHORT KURTA","REGULAR"),("LADIES","L_IN_BRA","REGULAR"),
+    ("LADIES","L_IN_PANTY","REGULAR"),("LADIES","L_IN_SLIPS","REGULAR"),
+    ("LADIES","LW_L_CAPRI","SUMMER"),("LADIES","LW_L_CULOTTES","REGULAR"),
+    ("LADIES","LW_L_HAREM_DHOTI","REGULAR"),("LADIES","LW_L_JEANS","REGULAR"),
+    ("LADIES","LW_L_JEGGING","REGULAR"),("LADIES","LW_L_PALAZZO","REGULAR"),
+    ("LADIES","LW_L_PARALLEL","REGULAR"),("LADIES","LW_L_PYJAMA","REGULAR"),
+    ("LADIES","LW_L_SETS","REGULAR"),("LADIES","LW_L_SHORTS","SUMMER"),
+    ("LADIES","LW_L_SKIRT","SUMMER"),("LADIES","LW_L_TROUSER","REGULAR"),
+    ("LADIES","LW_U_ACCESSORIES","SUMMER"),("LADIES","LW_U_CROP TEES","SUMMER"),
+    ("LADIES","LW_U_DRESS","REGULAR"),("LADIES","LW_U_ETHNIC DRESS","REGULAR"),
+    ("LADIES","LW_U_F.O TOP","REGULAR"),("LADIES","LW_U_RAINCOAT","OCCASIONAL"),
+    ("LADIES","LW_U_SETS","REGULAR"),("LADIES","LW_U_TEES F/S","PREWINTER"),
+    ("LADIES","LW_U_TEES","SUMMER"),("LADIES","LW_U_T-TOP F/S","PREWINTER"),
+    ("LADIES","LW_U_T-TOP","REGULAR"),("LADIES","LWW_BLAZER","HVY WINTER"),
+    ("LADIES","LWW_CARDIGAN","HVY WINTER"),("LADIES","LWW_JACKET","HVY WINTER"),
+    ("LADIES","LWW_KURTI SET","HVY WINTER"),("LADIES","LWW_KURTI","HVY WINTER"),
+    ("LADIES","LWW_LEGGING","LT WINTER"),("LADIES","LWW_MIX","HVY WINTER"),
+    ("LADIES","LWW_NIGHT SUIT","HVY WINTER"),("LADIES","LWW_NIGHTY","HVY WINTER"),
+    ("LADIES","LWW_PYJAMA","HVY WINTER"),("LADIES","LWW_SHAWL","HVY WINTER"),
+    ("LADIES","LWW_THERMAL LOWER","HVY WINTER"),("LADIES","LWW_THERMAL UPPER","HVY WINTER"),
+    ("LADIES","LWW_TRACK SUIT","HVY WINTER"),("LADIES","LWW_WINDCHEATER","LT WINTER"),
+    ("LADIES","LWW_WINTER TOP","LT WINTER"),("LADIES","LWW_WINTER T-SHIRT","LT WINTER"),
+    # MENS
+    ("MENS","FABRIC-SUITING","REGULAR"),("MENS","M_IN_BRIEF","REGULAR"),
+    ("MENS","M_IN_VEST","REGULAR"),("MENS","ME_BLAZER S/L","OCCASIONAL"),
+    ("MENS","ME_BLAZER SUIT","OCCASIONAL"),("MENS","ME_BLAZER","HVY WINTER"),
+    ("MENS","ME_INDO WESTERN","REGULAR"),("MENS","ME_KURTA PYJAMA","OCCASIONAL"),
+    ("MENS","ME_KURTA","REGULAR"),("MENS","ME_PYJAMA","REGULAR"),
+    ("MENS","ML_CASUAL TROUSER","REGULAR"),("MENS","ML_CORDROY TROUSER","REGULAR"),
+    ("MENS","ML_FORMAL TROUSER","REGULAR"),("MENS","ML_JEANS","REGULAR"),
+    ("MENS","ML_JOGGERS","REGULAR"),("MENS","MSE_BERMUDA","SUMMER"),
+    ("MENS","MSE_BOXER","SUMMER"),("MENS","MSE_JAMAICAN","SUMMER"),
+    ("MENS","MSE_MIX","REGULAR"),("MENS","MSE_POLO T-SHIRT H/S","SUMMER"),
+    ("MENS","MSE_PYJAMA","REGULAR"),("MENS","MSE_R/N T-SHIRT H/S","SUMMER"),
+    ("MENS","MSE_RAINCOAT","OCCASIONAL"),("MENS","MSE_SANDO","SUMMER"),
+    ("MENS","MSE_T-SHIRT F/S","PREWINTER"),("MENS","MU_CASUAL SHIRT F/S","REGULAR"),
+    ("MENS","MU_CASUAL SHIRT H/S","SUMMER"),("MENS","MU_CORD SETS","SUMMER"),
+    ("MENS","MU_FORMAL SHIRT F/S","REGULAR"),("MENS","MU_FORMAL SHIRT H/S","SUMMER"),
+    ("MENS","MU_KNITTED SHIRT H/S","SUMMER"),("MENS","MU_PARTY WEAR SHIRT F/S","REGULAR"),
+    ("MENS","MU_SEMI CASUAL SHIRT F/S","REGULAR"),("MENS","MU_SHACKET","REGULAR"),
+    ("MENS","MW_BLAZER S/L","LT WINTER"),("MENS","MW_JACKET S/L","LT WINTER"),
+    ("MENS","MW_JACKET","HVY WINTER"),("MENS","MW_MIX","HVY WINTER"),
+    ("MENS","MW_PULLOVER S/L","LT WINTER"),("MENS","MW_PULLOVER","LT WINTER"),
+    ("MENS","MW_PYJAMA","LT WINTER"),("MENS","MW_SHACKET","LT WINTER"),
+    ("MENS","MW_THERMAL LOWER","HVY WINTER"),("MENS","MW_THERMAL UPPER","HVY WINTER"),
+    ("MENS","MW_TRACK-SUIT","HVY WINTER"),("MENS","MW_WINDCHEATER","LT WINTER"),
+    ("MENS","MW_WINTER T-SHIRT S/L","LT WINTER"),("MENS","MW_WINTER T-SHIRT","LT WINTER"),
+]
+
+CUSTOM_PATH = os.path.join(os.path.dirname(__file__), "department_custom.json")
+STATE_PATH  = os.path.join(os.path.dirname(__file__), "department_state.json")
+
+
+def _load_custom() -> list:
+    if os.path.exists(CUSTOM_PATH):
+        with open(CUSTOM_PATH) as f:
+            return json.load(f)
+    return []
+
+
+def _save_custom(entries: list):
+    with open(CUSTOM_PATH, "w") as f:
+        json.dump(entries, f, indent=2)
+
+
+def _load_state() -> dict:
+    """Returns {division: {dept: {active, contrib_pct}}}"""
+    if os.path.exists(STATE_PATH):
+        with open(STATE_PATH) as f:
+            return json.load(f)
+    return {}
+
+
+def _save_state(state: dict):
+    with open(STATE_PATH, "w") as f:
+        json.dump(state, f, indent=2)
+
+
+def _build_master() -> dict:
+    """Returns {division: [{name, attribute, source}]}"""
+    master: dict = {}
+    for div, dept, attr in _MASTER_RAW:
+        master.setdefault(div, [])
+        master[div].append({"name": dept, "attribute": attr, "source": "master"})
+    for entry in _load_custom():
+        div = entry["division"]
+        master.setdefault(div, [])
+        master[div].append({"name": entry["name"], "attribute": entry["attribute"], "source": "custom"})
+    return master
+
+
+def _merge_state(master: dict, state: dict) -> dict:
+    """Merge saved active/contrib state into master; compute default equal contrib for active depts."""
+    result = {}
+    for div, depts in master.items():
+        div_state = state.get(div, {})
+        active_depts = []
+        rows = []
+        for d in depts:
+            ds = div_state.get(d["name"], {})
+            active = ds.get("active", True)
+            rows.append({
+                "name": d["name"],
+                "attribute": d["attribute"],
+                "source": d["source"],
+                "active": active,
+                "contrib_pct": ds.get("contrib_pct", None),
+            })
+            if active:
+                active_depts.append(d["name"])
+
+        # Fill missing contrib_pct with equal distribution
+        n = len(active_depts)
+        default_pct = round(100.0 / n, 4) if n else 0.0
+
+        for row in rows:
+            if row["contrib_pct"] is None:
+                row["contrib_pct"] = default_pct if row["active"] else 0.0
+
+        result[div] = rows
+    return result
+
+
+def _get_full_config():
+    master = _build_master()
+    state  = _load_state()
+    return _merge_state(master, state)
+
+
+# ── Pydantic models ───────────────────────────────────────────────────────────
+
+class DeptToggle(BaseModel):
+    division: str
+    name: str
+    active: bool
+
+
+class DeptContrib(BaseModel):
+    division: str
+    name: str
+    contrib_pct: float
+
+
+class DeptContribBatch(BaseModel):
+    updates: list[DeptContrib]
+
+
+class NewDepartment(BaseModel):
+    division: str
+    name: str
+    attribute: str
+
+
+class DivisionAOP(BaseModel):
+    division: str
+    annual_target: float  # total division AOP in Lakhs
+
+
+class CalculateInput(BaseModel):
+    division_aops: list[DivisionAOP]
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _contrib_sum(rows: list) -> float:
+    return round(sum(r["contrib_pct"] for r in rows if r["active"]), 4)
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@router.get("/config")
+def get_config():
+    config = _get_full_config()
+    summary = {}
+    for div, rows in config.items():
+        active = [r for r in rows if r["active"]]
+        summary[div] = {
+            "total_depts": len(rows),
+            "active_depts": len(active),
+            "contrib_sum": _contrib_sum(rows),
+        }
+    return {"divisions": config, "summary": summary}
+
+
+@router.post("/toggle")
+def toggle_department(payload: DeptToggle):
+    state = _load_state()
+    state.setdefault(payload.division, {})
+    state[payload.division].setdefault(payload.name, {})
+    state[payload.division][payload.name]["active"] = payload.active
+
+    # Rebalance contrib_pct for active depts in this division
+    master = _build_master()
+    all_rows = master.get(payload.division, [])
+    dept_states = state[payload.division]
+    active_names = [d["name"] for d in all_rows if dept_states.get(d["name"], {}).get("active", True)]
+    n = len(active_names)
+    if n:
+        default = round(100.0 / n, 4)
+        for name in active_names:
+            if "contrib_pct" not in dept_states.get(name, {}):
+                state[payload.division].setdefault(name, {})["contrib_pct"] = default
+
+    _save_state(state)
+    return {"ok": True}
+
+
+@router.post("/contrib")
+def update_contrib(payload: DeptContribBatch):
+    state = _load_state()
+    for u in payload.updates:
+        state.setdefault(u.division, {})
+        state[u.division].setdefault(u.name, {})
+        state[u.division][u.name]["contrib_pct"] = u.contrib_pct
+    _save_state(state)
+    config = _get_full_config()
+    summary = {}
+    for div, rows in config.items():
+        active = [r for r in rows if r["active"]]
+        summary[div] = {"contrib_sum": _contrib_sum(rows), "active_depts": len(active)}
+    return {"ok": True, "summary": summary}
+
+
+@router.post("/auto-balance")
+def auto_balance(payload: dict):
+    division = payload.get("division")
+    state = _load_state()
+    master = _build_master()
+
+    divs = [division] if division else list(master.keys())
+    for div in divs:
+        all_rows = master.get(div, [])
+        div_state = state.get(div, {})
+        active_names = [d["name"] for d in all_rows if div_state.get(d["name"], {}).get("active", True)]
+        n = len(active_names)
+        if n:
+            eq = round(100.0 / n, 4)
+            state.setdefault(div, {})
+            for name in active_names:
+                state[div].setdefault(name, {})["contrib_pct"] = eq
+
+    _save_state(state)
+    return {"ok": True}
+
+
+@router.post("/add-department")
+def add_department(payload: NewDepartment):
+    custom = _load_custom()
+    # Guard duplicate
+    existing = [(e["division"], e["name"]) for e in custom]
+    master_names = [(d, n) for d, n, _ in _MASTER_RAW]
+    key = (payload.division.upper(), payload.name.upper())
+    if key in [(e[0].upper(), e[1].upper()) for e in existing + master_names]:
+        return {"ok": False, "error": "Department already exists"}
+    custom.append({"division": payload.division, "name": payload.name, "attribute": payload.attribute})
+    _save_custom(custom)
+    return {"ok": True}
+
+
+@router.post("/calculate")
+def calculate(payload: CalculateInput):
+    config = _get_full_config()
+    results = []
+    for daop in payload.division_aops:
+        div = daop.division
+        rows = config.get(div, [])
+        active = [r for r in rows if r["active"]]
+        total_pct = sum(r["contrib_pct"] for r in active)
+        dept_breakdown = []
+        for r in active:
+            effective_pct = (r["contrib_pct"] / total_pct * 100) if total_pct else 0.0
+            sales = round(daop.annual_target * r["contrib_pct"] / 100, 2)
+            dept_breakdown.append({
+                "name": r["name"],
+                "attribute": r["attribute"],
+                "contrib_pct": r["contrib_pct"],
+                "effective_pct": round(effective_pct, 4),
+                "sales_lakhs": sales,
+            })
+        results.append({
+            "division": div,
+            "annual_target": daop.annual_target,
+            "contrib_sum": round(total_pct, 4),
+            "dept_breakdown": dept_breakdown,
+        })
+    return {"results": results}
+
+
+# ── Growth Matrix ─────────────────────────────────────────────────────────────
+# 13 months × P1/P2 = 26 periods. Starts Mar'27, ends Mar'28.
+# Default baseline = 100.0 (index, not %). Stored in department_growth.json.
+
+GROWTH_PERIODS = []
+_period_months = [
+    "Mar'27","Apr'27","May'27","Jun'27","Jul'27","Aug'27",
+    "Sep'27","Oct'27","Nov'27","Dec'27","Jan'28","Feb'28","Mar'28"
+]
+for _m in _period_months:
+    GROWTH_PERIODS.append(f"{_m} P1")
+    GROWTH_PERIODS.append(f"{_m} P2")
+
+GROWTH_PATH = os.path.join(os.path.dirname(__file__), "department_growth.json")
+
+
+def _load_growth() -> dict:
+    if os.path.exists(GROWTH_PATH):
+        with open(GROWTH_PATH) as f:
+            return json.load(f)
+    return {}
+
+
+def _save_growth(data: dict):
+    with open(GROWTH_PATH, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def _get_growth_matrix(division: str) -> list:
+    """Returns [{name, attribute, periods: {period: float}}] for a division."""
+    master = _build_master()
+    depts  = master.get(division, [])
+    saved  = _load_growth().get(division, {})
+    result = []
+    for d in depts:
+        dept_vals = saved.get(d["name"], {})
+        periods = {p: dept_vals.get(p, 100.0) for p in GROWTH_PERIODS}
+        result.append({"name": d["name"], "attribute": d["attribute"], "periods": periods})
+    return result
+
+
+class GrowthUpdate(BaseModel):
+    division: str
+    updates: dict  # {dept_name: {period: value}}
+
+
+@router.get("/growth-matrix/{division}")
+def get_growth_matrix(division: str):
+    return {
+        "division": division,
+        "periods": GROWTH_PERIODS,
+        "departments": _get_growth_matrix(division.upper()),
+    }
+
+
+@router.post("/growth-matrix")
+def save_growth_matrix(payload: GrowthUpdate):
+    growth = _load_growth()
+    growth.setdefault(payload.division, {})
+    for dept_name, period_vals in payload.updates.items():
+        growth[payload.division].setdefault(dept_name, {})
+        growth[payload.division][dept_name].update(period_vals)
+    _save_growth(growth)
+    return {"ok": True, "saved": len(payload.updates)}
+
+
+@router.post("/growth-matrix/reset")
+def reset_growth_matrix(payload: dict):
+    division = payload.get("division")
+    growth   = _load_growth()
+    if division:
+        growth.pop(division, None)
+    else:
+        growth = {}
+    _save_growth(growth)
+    return {"ok": True}
+
+
+BUYER_UPLOAD_META_PATH = os.path.join(os.path.dirname(__file__), "..", "buyer_upload_meta.json")
+
+def _load_buyer_meta() -> dict:
+    if os.path.exists(BUYER_UPLOAD_META_PATH):
+        with open(BUYER_UPLOAD_META_PATH) as f:
+            return json.load(f)
+    return {}
+
+def _save_buyer_meta(meta: dict):
+    with open(BUYER_UPLOAD_META_PATH, "w") as f:
+        json.dump(meta, f, indent=2)
+
+
+@router.get("/buyer-upload-meta")
+def get_buyer_upload_meta():
+    return _load_buyer_meta()
+
+
+@router.post("/growth-matrix/import")
+async def import_buyer_growth(
+    file: UploadFile = File(...),
+    division: str = Form(...),
+):
+    """
+    Accepts an Excel or CSV file from the buyer.
+    Expected format — one row per department, columns:
+      Department | <period1> | <period2> | ...
+    Period column headers must match GROWTH_PERIODS exactly, e.g. "Apr'27 P1".
+    Any unrecognised columns are silently ignored.
+    """
+    content = await file.read()
+    try:
+        if file.filename.endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(content))
+        else:
+            df = pd.read_excel(io.BytesIO(content))
+    except Exception as e:
+        return {"ok": False, "error": f"Could not parse file: {e}"}
+
+    # Normalise column names
+    df.columns = [str(c).strip() for c in df.columns]
+
+    # Find department column (first column, or one named "Department")
+    dept_col = df.columns[0]
+    for candidate in df.columns:
+        if candidate.lower() in ("department", "dept", "department name"):
+            dept_col = candidate
+            break
+
+    valid_periods = set(GROWTH_PERIODS)
+    period_cols = [c for c in df.columns if c in valid_periods]
+
+    if not period_cols:
+        return {"ok": False, "error": "No matching period columns found. Columns must match period names like \"Apr'27 P1\"."}
+
+    growth = _load_growth()
+    div_upper = division.upper()
+    growth.setdefault(div_upper, {})
+
+    updated = 0
+    skipped = 0
+    for _, row in df.iterrows():
+        dept_name = str(row[dept_col]).strip().upper()
+        if not dept_name or dept_name == "NAN":
+            continue
+        growth[div_upper].setdefault(dept_name, {})
+        for p in period_cols:
+            val = row[p]
+            try:
+                growth[div_upper][dept_name][p] = float(val)
+                updated += 1
+            except (ValueError, TypeError):
+                skipped += 1
+
+    _save_growth(growth)
+
+    import datetime
+    meta = _load_buyer_meta()
+    meta[div_upper] = {
+        "filename": file.filename,
+        "uploaded_at": datetime.datetime.now().strftime("%d %b %Y, %I:%M %p"),
+        "periods_updated": len(period_cols),
+        "depts_updated": len(df),
+    }
+    _save_buyer_meta(meta)
+
+    return {
+        "ok": True,
+        "division": div_upper,
+        "depts_processed": len(df),
+        "values_updated": updated,
+        "values_skipped": skipped,
+        "periods_matched": period_cols,
+    }
+
+
+_MRP_PLAN_PATH = os.path.join(os.path.dirname(__file__), "mrp_plan.json")
+
+@router.post("/sync-from-buyer")
+def sync_from_buyer():
+    """
+    Mark departments active/inactive based on which departments appear in
+    the Integrated Buyer's Input (mrp_plan.json).
+    Departments present in the MRP plan → active; all others → inactive.
+    Contribution % is preserved. Returns counts of activated / deactivated depts.
+    """
+    if not os.path.exists(_MRP_PLAN_PATH):
+        from fastapi import HTTPException
+        raise HTTPException(400, "Integrated Buyer's Input (MRP plan) not synced yet. Go to MRP Plan → Buyer's Input first.")
+
+    with open(_MRP_PLAN_PATH) as f:
+        mrp = json.load(f)
+
+    # Build set of (division, dept) pairs present in MRP plan
+    buyer_depts: dict[str, set] = {}
+    for div, depts in mrp.items():
+        buyer_depts[div] = set(depts.keys())
+
+    state = _load_state()
+    master = _build_master()
+
+    activated = deactivated = 0
+
+    for div, dept_rows in master.items():
+        div_buyer = buyer_depts.get(div, set())
+        div_state = state.setdefault(div, {})
+        for row in dept_rows:
+            dept = row["name"]
+            was_active = div_state.get(dept, {}).get("active", True)
+            now_active = dept in div_buyer
+            entry = div_state.setdefault(dept, {})
+            entry["active"] = now_active
+            if "contrib_pct" not in entry:
+                entry["contrib_pct"] = None
+            if now_active and not was_active:
+                activated += 1
+            elif not now_active and was_active:
+                deactivated += 1
+
+    _save_state(state)
+    return {
+        "ok": True,
+        "activated": activated,
+        "deactivated": deactivated,
+        "message": f"Synced from Integrated Buyer's Input — {activated} activated, {deactivated} deactivated.",
+    }
+
+
+# ── AOP Forecaster integration ─────────────────────────────────────────────────
+# Real pipeline link (not just a navigation shortcut): pulls the latest
+# persisted forecast run's division-level annual AOP target (Rs Lakhs) from
+# the AOP Forecaster app (Tentative AOP Forecaster, port 8000 by default,
+# rs_planning Postgres underneath) and hands it back in exactly the shape
+# POST /api/department-plan/calculate expects ({division, annual_target}) —
+# nothing here auto-runs calculate(); the caller reviews then triggers it.
+AOP_FORECASTER_URL = os.environ.get("AOP_FORECASTER_URL", "http://localhost:8000")
+_AOP_SYNC_CACHE_PATH = os.path.join(os.path.dirname(__file__), "..", "aop_forecaster_sync.json")
+
+
+@router.get("/aop-forecaster-status")
+def aop_forecaster_status():
+    """Last cached sync-from-aop-forecaster result, if any — for the UI to show
+    without re-fetching."""
+    if not os.path.exists(_AOP_SYNC_CACHE_PATH):
+        return {"synced": False}
+    with open(_AOP_SYNC_CACHE_PATH) as f:
+        return {"synced": True, **json.load(f)}
+
+
+@router.post("/sync-from-aop-forecaster")
+def sync_from_aop_forecaster():
+    """Fetch GET {AOP_FORECASTER_URL}/api/config/division-aop-summary and cache
+    it locally. Returns division_aops ready to pass straight into
+    POST /api/department-plan/calculate as {"division_aops": [...]}."""
+    import urllib.error
+    import urllib.request
+    from fastapi import HTTPException
+
+    url = f"{AOP_FORECASTER_URL}/api/config/division-aop-summary"
+    try:
+        with urllib.request.urlopen(url, timeout=15) as resp:
+            payload = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            raise HTTPException(400, "AOP Forecaster has no persisted run yet — run it (session-from-db + run) first.")
+        raise HTTPException(502, f"AOP Forecaster returned HTTP {e.code}")
+    except Exception as e:
+        raise HTTPException(502, f"Could not reach AOP Forecaster at {url}: {type(e).__name__}: {e}")
+
+    cached = {
+        "source_url": url, "run_id": payload["run_id"], "computed_at": payload["computed_at"],
+        "synced_at": datetime.datetime.now().isoformat(timespec="seconds"),
+        "division_aops": payload["division_aops"],
+    }
+    with open(_AOP_SYNC_CACHE_PATH, "w") as f:
+        json.dump(cached, f, indent=2)
+    return {"ok": True, **cached}
+
+
+@router.get("/export")
+def export_csv():
+    config = _get_full_config()
+    lines = ["Division,Department,Attribute,Status,Contribution %"]
+    for div, rows in config.items():
+        for r in rows:
+            status = "Active" if r["active"] else "Inactive"
+            lines.append(f"{div},{r['name']},{r['attribute']},{status},{r['contrib_pct']}")
+    content = "\n".join(lines)
+    return StreamingResponse(
+        io.BytesIO(content.encode()),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=department_master.csv"},
+    )

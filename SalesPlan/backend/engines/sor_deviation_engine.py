@@ -1,0 +1,336 @@
+# SOR Deviation Engine
+# Summer / Occasional / Regular deviation logic
+#
+# Phase 1: User uploads Sales Plan Cont% + Stock PPO Cont% (same wide template)
+#   Template columns: ATTRIBUTE-1 | DEPARTMENT | ARTICLE NAME | FINAL MRP | <Month1> | <Month2> | ...
+#   Average = (plan_cont + ppo_cont) / 2 when both present
+#            = max(plan_cont, ppo_cont) when one is absent/zero
+# Phase 2 (reapportionment): within each DEPT x MONTH, normalise all article avg%
+#   values to sum to 100%.
+
+from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
+import os, json, datetime, io
+import pandas as pd
+
+router = APIRouter()
+
+_BASE          = os.path.dirname(__file__)
+SOR_DIR        = os.path.join(_BASE, "..")
+SOR_PLAN_PATH  = os.path.join(SOR_DIR, "sor_sales_plan.json")
+SOR_PPO_PATH   = os.path.join(SOR_DIR, "sor_stock_ppo.json")
+SOR_AVG_PATH   = os.path.join(SOR_DIR, "sor_avg_result.json")
+SOR_REAPP_PATH = os.path.join(SOR_DIR, "sor_reapp_result.json")
+
+_FIXED_COLS = {"ATTRIBUTE-1", "DEPARTMENT", "ARTICLE NAME", "FINAL MRP"}
+
+
+# ── helpers ────────────────────────────────────────────────────────────────────
+
+def _parse_file(contents: bytes, filename: str) -> dict:
+    """
+    Parse wide-format SOR Excel/CSV.
+    Returns {months: [...], rows: [{attr, dept, article, mrp, month_vals:{m:v}}]}
+    """
+    if filename.endswith(".csv"):
+        df = pd.read_csv(io.BytesIO(contents))
+    else:
+        df = pd.read_excel(io.BytesIO(contents))
+
+    df.columns = [str(c).strip() for c in df.columns]
+
+    # Identify month columns (everything after the 4 fixed cols)
+    month_cols = [c for c in df.columns if c not in _FIXED_COLS]
+
+    # Normalise fixed cols (case-insensitive fallback)
+    col_map = {}
+    for c in df.columns:
+        cu = c.upper().strip()
+        if cu == "ATTRIBUTE-1":     col_map[c] = "ATTRIBUTE-1"
+        elif cu == "DEPARTMENT":    col_map[c] = "DEPARTMENT"
+        elif cu == "ARTICLE NAME":  col_map[c] = "ARTICLE NAME"
+        elif cu == "FINAL MRP":     col_map[c] = "FINAL MRP"
+    df = df.rename(columns=col_map)
+
+    rows = []
+    for _, r in df.iterrows():
+        attr    = str(r.get("ATTRIBUTE-1", "")).strip()
+        dept    = str(r.get("DEPARTMENT",  "")).strip()
+        article = str(r.get("ARTICLE NAME","")).strip()
+        mrp_val = str(r.get("FINAL MRP",  "")).strip()
+
+        if not dept or dept == "nan":
+            continue
+
+        month_vals = {}
+        for m in month_cols:
+            raw = r.get(m, None)
+            try:
+                v = float(raw)
+            except (TypeError, ValueError):
+                v = 0.0
+            month_vals[m] = round(v, 6)
+
+        rows.append({
+            "attr":    attr,
+            "dept":    dept,
+            "article": article,
+            "mrp":     mrp_val,
+            "months":  month_vals,
+        })
+
+    return {"months": month_cols, "rows": rows}
+
+
+def _load_json(path: str):
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return None
+
+
+def _save_json(path: str, data):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)
+
+
+def _ts():
+    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+# ── status ─────────────────────────────────────────────────────────────────────
+
+@router.get("/status")
+def sor_status():
+    plan  = _load_json(SOR_PLAN_PATH)
+    ppo   = _load_json(SOR_PPO_PATH)
+    avg   = _load_json(SOR_AVG_PATH)
+    reapp = _load_json(SOR_REAPP_PATH)
+    return {
+        "plan_imported":  plan  is not None,
+        "plan_rows":      len(plan["rows"])   if plan  else 0,
+        "plan_months":    plan["months"]       if plan  else [],
+        "plan_date":      plan.get("imported_at","") if plan else "",
+        "ppo_imported":   ppo   is not None,
+        "ppo_rows":       len(ppo["rows"])    if ppo   else 0,
+        "ppo_date":       ppo.get("imported_at","")  if ppo  else "",
+        "avg_run":        avg   is not None,
+        "avg_date":       avg.get("run_at","")        if avg  else "",
+        "reapp_run":      reapp is not None,
+        "reapp_date":     reapp.get("run_at","")      if reapp else "",
+    }
+
+
+# ── imports ────────────────────────────────────────────────────────────────────
+
+@router.post("/import/sales-plan")
+async def import_sales_plan(file: UploadFile = File(...)):
+    contents = await file.read()
+    try:
+        parsed = _parse_file(contents, file.filename)
+    except Exception as e:
+        raise HTTPException(400, f"Parse error: {e}")
+    parsed["imported_at"] = _ts()
+    parsed["source_file"] = file.filename
+    _save_json(SOR_PLAN_PATH, parsed)
+    return {"ok": True, "rows": len(parsed["rows"]), "months": parsed["months"]}
+
+
+@router.post("/import/stock-ppo")
+async def import_stock_ppo(file: UploadFile = File(...)):
+    contents = await file.read()
+    try:
+        parsed = _parse_file(contents, file.filename)
+    except Exception as e:
+        raise HTTPException(400, f"Parse error: {e}")
+    parsed["imported_at"] = _ts()
+    parsed["source_file"] = file.filename
+    _save_json(SOR_PPO_PATH, parsed)
+    return {"ok": True, "rows": len(parsed["rows"]), "months": parsed["months"]}
+
+
+# ── average engine ─────────────────────────────────────────────────────────────
+
+@router.get("/run-avg")
+def run_avg():
+    plan = _load_json(SOR_PLAN_PATH)
+    ppo  = _load_json(SOR_PPO_PATH)
+    if not plan:
+        raise HTTPException(400, "Sales Plan not imported yet")
+    if not ppo:
+        raise HTTPException(400, "Stock PPO not imported yet")
+
+    # Build lookup: (dept, article, mrp) -> {month: val}
+    def build_lookup(data):
+        lkp = {}
+        for r in data["rows"]:
+            key = (r["dept"], r["article"], r["mrp"])
+            lkp[key] = r
+        return lkp
+
+    plan_lkp = build_lookup(plan)
+    ppo_lkp  = build_lookup(ppo)
+
+    # Union of all months from both files
+    all_months = list(dict.fromkeys(plan["months"] + [m for m in ppo["months"] if m not in plan["months"]]))
+
+    # Union of all article keys
+    all_keys = set(plan_lkp.keys()) | set(ppo_lkp.keys())
+
+    result_rows = []
+    for key in sorted(all_keys):
+        dept, article, mrp = key
+        plan_row = plan_lkp.get(key)
+        ppo_row  = ppo_lkp.get(key)
+
+        attr = (plan_row or ppo_row).get("attr", "")
+
+        month_detail = {}
+        for m in all_months:
+            p_val = plan_row["months"].get(m, 0.0) if plan_row else 0.0
+            o_val = ppo_row["months"].get(m,  0.0) if ppo_row  else 0.0
+
+            p_present = p_val > 0
+            o_present = o_val > 0
+
+            if p_present and o_present:
+                avg = round((p_val + o_val) / 2, 6)
+                rule = "avg"
+            elif p_present:
+                avg = p_val
+                rule = "plan_only"
+            elif o_present:
+                avg = o_val
+                rule = "ppo_only"
+            else:
+                avg = 0.0
+                rule = "zero"
+
+            month_detail[m] = {
+                "plan_cont": round(p_val, 4),
+                "ppo_cont":  round(o_val, 4),
+                "avg_cont":  avg,
+                "rule":      rule,
+            }
+
+        result_rows.append({
+            "attr":    attr,
+            "dept":    dept,
+            "article": article,
+            "mrp":     mrp,
+            "months":  month_detail,
+        })
+
+    out = {
+        "run_at": _ts(),
+        "months": all_months,
+        "rows":   result_rows,
+    }
+    _save_json(SOR_AVG_PATH, out)
+    return {"ok": True, "rows": len(result_rows), "months": all_months}
+
+
+@router.get("/avg-result")
+def avg_result():
+    d = _load_json(SOR_AVG_PATH)
+    if not d:
+        raise HTTPException(404, "Average not run yet")
+    return d
+
+
+# ── reapportionment ────────────────────────────────────────────────────────────
+
+@router.get("/reapportion")
+def reapportion():
+    avg = _load_json(SOR_AVG_PATH)
+    if not avg:
+        raise HTTPException(400, "Run average first")
+
+    months = avg["months"]
+
+    # For each DEPT x MONTH: sum avg_cont across all articles
+    # reapp_cont = avg_cont / dept_month_total * 100
+    dept_month_totals: dict[str, dict[str, float]] = {}
+    for row in avg["rows"]:
+        dept = row["dept"]
+        for m, md in row["months"].items():
+            dept_month_totals.setdefault(dept, {})
+            dept_month_totals[dept][m] = dept_month_totals[dept].get(m, 0.0) + md["avg_cont"]
+
+    reapp_rows = []
+    for row in avg["rows"]:
+        dept = row["dept"]
+        month_detail = {}
+        for m, md in row["months"].items():
+            total = dept_month_totals.get(dept, {}).get(m, 0.0)
+            if total > 0:
+                reapp = round(md["avg_cont"] / total * 100, 6)
+            else:
+                reapp = 0.0
+            month_detail[m] = {
+                "plan_cont":  md["plan_cont"],
+                "ppo_cont":   md["ppo_cont"],
+                "avg_cont":   md["avg_cont"],
+                "rule":       md["rule"],
+                "reapp_cont": reapp,
+            }
+        reapp_rows.append({
+            "attr":    row["attr"],
+            "dept":    row["dept"],
+            "article": row["article"],
+            "mrp":     row["mrp"],
+            "months":  month_detail,
+        })
+
+    out = {
+        "run_at": _ts(),
+        "months": months,
+        "rows":   reapp_rows,
+    }
+    _save_json(SOR_REAPP_PATH, out)
+    return {"ok": True, "rows": len(reapp_rows)}
+
+
+@router.get("/reapp-result")
+def reapp_result():
+    d = _load_json(SOR_REAPP_PATH)
+    if not d:
+        raise HTTPException(404, "Reapportionment not run yet")
+    return d
+
+
+# ── export ─────────────────────────────────────────────────────────────────────
+
+@router.get("/export")
+def export_reapp():
+    d = _load_json(SOR_REAPP_PATH)
+    if not d:
+        raise HTTPException(404, "Reapportionment not run yet")
+
+    months = d["months"]
+    records = []
+    for row in d["rows"]:
+        base = {
+            "ATTRIBUTE-1":  row["attr"],
+            "DEPARTMENT":   row["dept"],
+            "ARTICLE NAME": row["article"],
+            "FINAL MRP":    row["mrp"],
+        }
+        for m in months:
+            md = row["months"].get(m, {})
+            base[f"{m} - Plan%"]  = md.get("plan_cont",  0)
+            base[f"{m} - PPO%"]   = md.get("ppo_cont",   0)
+            base[f"{m} - Avg%"]   = md.get("avg_cont",   0)
+            base[f"{m} - Reapp%"] = md.get("reapp_cont", 0)
+        records.append(base)
+
+    df = pd.DataFrame(records)
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="SOR Reapportionment")
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=sor_reapportionment.xlsx"},
+    )

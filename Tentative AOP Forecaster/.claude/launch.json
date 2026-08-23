@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "AOP Frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "C:\\Users\\A9820\\Documents\\CLaude - New Projects\\Tentative AOP Forecaster\\frontend",
+      "port": 5173
+    }
+  ]
+}
