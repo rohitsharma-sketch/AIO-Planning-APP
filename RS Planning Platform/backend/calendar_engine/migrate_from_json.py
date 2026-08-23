@@ -9,10 +9,15 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "Tentative AOP Forecaster"))
+# backend/ — so `calendar_engine.cluster_names` resolves when this file is run as
+# a standalone script (`python calendar_engine/migrate_from_json.py`, the way the
+# task briefs invoke it), where sys.path[0] is calendar_engine/ rather than backend/.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from calendar_engine.cluster_names import resolve_cluster_name
 from db.base import SessionLocal
 from db.models.calendar import (
     AppStateMeta, Calendar, CalendarCluster, CalendarClusterFestival, CalendarDayPair,
@@ -79,8 +84,22 @@ def _migrate_store_cluster_map(session):
     stores = scm.get("stores", [])
     locked_at = scm.get("lockedAt")
 
+    # store_cluster_map.json still holds the raw template spellings (KASHMIR, NE,
+    # NE-PUJA). Resolve them against the real cluster_profiles.name values exactly
+    # as PUT /store-cluster-map does, so re-running this migration cannot
+    # reintroduce the cluster-name mismatch that silently drops those stores from
+    # DateShiftPreviewPanel, scans.reindex_*, and store_actuals_sync.
+    # NOTE: this relies on _migrate_app_state having already (re)created the
+    # ClusterProfile rows in this same session — see the ordering in run().
+    aliases = scm.get("aliases", {})
+    profile_names = session.execute(
+        select(ClusterProfile.name).order_by(ClusterProfile.seq, ClusterProfile.name)
+    ).scalars().all()
+
     session.execute(delete(StoreCalendarCluster))
-    rows = [{"store_id": s["store"].strip(), "cluster_name": s["cluster"].strip(), "locked_at": locked_at}
+    rows = [{"store_id": s["store"].strip(),
+             "cluster_name": resolve_cluster_name(s["cluster"].strip(), profile_names, aliases),
+             "locked_at": locked_at}
             for s in stores if s.get("store") and s.get("cluster")]
     if rows:
         session.execute(StoreCalendarCluster.__table__.insert(), rows)
@@ -125,8 +144,11 @@ def _migrate_app_state(session):
         session.execute(delete(ClusterProfileFestival).where(ClusterProfileFestival.cluster_profile_id.in_(old_ids)))
         session.execute(delete(ClusterProfile).where(ClusterProfile.id.in_(old_ids)))
     profiles_written = 0
-    for profile in state.get("clusterProfiles", []):
-        p = ClusterProfile(name=profile["name"], region=profile.get("region"), next_id=profile["nextId"])
+    # seq=i mirrors put_cluster_profiles' enumerate() — JSON array order IS the
+    # display order. Without it every row falls back to the column default of 0,
+    # and an all-ties seq makes `ORDER BY seq` non-deterministic in Postgres.
+    for i, profile in enumerate(state.get("clusterProfiles", [])):
+        p = ClusterProfile(name=profile["name"], region=profile.get("region"), next_id=profile["nextId"], seq=i)
         session.add(p)
         session.flush()
         for fest in profile.get("festivals", []):
@@ -198,15 +220,29 @@ def _migrate_salesdata_link_selection(session, filename, source_type):
 def run():
     session = SessionLocal()
     try:
+        # Order matters and is stated explicitly here rather than left to the
+        # evaluation order of a dict literal: _migrate_app_state delete+recreates
+        # the ClusterProfile rows that _migrate_store_cluster_map resolves each raw
+        # cluster name against, so it MUST run first. Run the other way round (as
+        # this did originally) and a fresh database has no profiles to resolve
+        # against yet, storing the raw names and reintroducing the mismatch.
+        # The `summary` keys below keep their original order for the printed output.
         changelog_rows, changelog_skipped = _migrate_festival_changelog(session)
+        calendar_library_rows = _migrate_calendar_library(session)
+        app_state_rows = _migrate_app_state(session)
+        store_cluster_map_rows = _migrate_store_cluster_map(session)
+        store_cluster_log_rows = _migrate_store_cluster_log(session)
+        link_mw_rows = _migrate_salesdata_link_selection(session, "salesdata_link_selection.json", "mw")
+        link_dw_rows = _migrate_salesdata_link_selection(session, "salesdata_link_selection_daywise.json", "dw")
+
         summary = {
-            "calendar_library": {"rows": _migrate_calendar_library(session)},
-            "store_cluster_map": {"rows": _migrate_store_cluster_map(session)},
-            "store_cluster_log": {"rows": _migrate_store_cluster_log(session)},
-            "app_state": {"rows": _migrate_app_state(session)},
+            "calendar_library": {"rows": calendar_library_rows},
+            "store_cluster_map": {"rows": store_cluster_map_rows},
+            "store_cluster_log": {"rows": store_cluster_log_rows},
+            "app_state": {"rows": app_state_rows},
             "festival_changelog": {"rows": changelog_rows, "skipped_incomplete": changelog_skipped},
-            "salesdata_link_selection_mw": {"rows": _migrate_salesdata_link_selection(session, "salesdata_link_selection.json", "mw")},
-            "salesdata_link_selection_dw": {"rows": _migrate_salesdata_link_selection(session, "salesdata_link_selection_daywise.json", "dw")},
+            "salesdata_link_selection_mw": {"rows": link_mw_rows},
+            "salesdata_link_selection_dw": {"rows": link_dw_rows},
         }
         session.commit()
         return summary

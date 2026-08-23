@@ -21,7 +21,10 @@ def _clean_cluster_profiles_and_app_state():
     # test_calendar_store_cluster.py's _clean_test_stores.
     session = SessionLocal()
     backup_profiles = [
-        {"id": r.id, "name": r.name, "region": r.region, "next_id": r.next_id}
+        # `seq` MUST be captured here: it has a column default of 0, so restoring
+        # without it silently collapses every row to seq=0 and destroys the display
+        # ordering this fixture is supposed to be preserving.
+        {"id": r.id, "name": r.name, "region": r.region, "next_id": r.next_id, "seq": r.seq}
         for r in session.execute(select(ClusterProfile)).scalars().all()
     ]
     backup_festivals = [
