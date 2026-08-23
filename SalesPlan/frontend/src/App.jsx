@@ -20,6 +20,12 @@ import DisplayTypePlan from './pages/DisplayTypePlan'
 import MrpReapportionment from './pages/MrpReapportionment'
 import SyncEngine from './pages/SyncEngine'
 
+// Served standalone at the root (:8002) or mounted under /planning/* on the
+// unified platform (:8010) - detect which at runtime so deep links, hard
+// refreshes, and browser back/forward all resolve against the real server
+// route rather than assuming one deployment.
+const basename = window.location.pathname.startsWith('/planning') ? '/planning' : '/'
+
 export default function App() {
   useEffect(() => {
     const root = document.documentElement
@@ -33,7 +39,7 @@ export default function App() {
   }, [])
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={basename}>
       <TopBar />
       <div style={{ display: 'flex', minHeight: '100vh' }}>
         <Sidebar />
