@@ -10,13 +10,13 @@ sys.path.insert(0, _HERE)
 sys.path.insert(0, _AOP_DIR)
 sys.path.insert(0, _SALESPLAN_DIR)
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
-from auth.deps import require_login
+from auth.deps import get_session_user, require_login
 from auth.routes import router as auth_router
 from workflow.routes import router as workflow_router
 from audit.routes import router as audit_router
@@ -88,6 +88,17 @@ def get_store_master():
 def reload_store_master():
     _sm.reload()
     return {"ok": True, "stores": len(list(_sm.load_store_master())), "clusters": _sm.get_clusters()}
+
+
+LANDING_PAGE_URL = "http://localhost:7800/"
+
+
+# Bare root has no page of its own — route by session state instead of 404ing.
+@app.get("/")
+def root(request: Request):
+    if get_session_user(request) is not None:
+        return RedirectResponse(LANDING_PAGE_URL)
+    return RedirectResponse("/login")
 
 
 # Login page (plain HTML — Phase 2's unified frontend replaces this)
