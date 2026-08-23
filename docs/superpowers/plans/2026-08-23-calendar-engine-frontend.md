@@ -1844,3 +1844,92 @@ git commit -m "Cutover: retire local_server.py, port 7822, and the 2 legacy sync
 ```
 
 At this point, `Calendar Engine/calendar_engine.html`, `Calendar Engine/local_server.py`, and `Calendar Engine/Local DB/*.json` are no longer referenced by anything live — per the spec's Cutover Path, archiving or deleting them is a separate, later cleanup pass done with fresh eyes once the new frontend has been live for a while, not part of this task.
+
+---
+
+### Task 15: Repoint the landing page at the unified platform
+
+**Added mid-execution** (not in the original spec) — the landing page at `Landing/index.html` (served standalone on port 7800) still has its 3 module cards pointing at the old standalone ports (`:7822`, `:8000`, `:8002`), never updated when AOP Forecaster and SalesPlan were unified onto `:8010` in an earlier piece of work this session. Once Task 14 retires port 7822, the landing page's Calendar card would point at a dead port. This task fixes that and, in the same pass, points the other two cards at the unified platform too — matching the platform's own "one consistent product" goal, not just patching the one card that would otherwise break.
+
+**Files:**
+- Modify: `Landing/index.html`
+
+**Interfaces:**
+- Consumes: nothing from earlier tasks directly — this is a static HTML file with no build step, pure client-side `fetch`.
+
+- [ ] **Step 1: Repoint the 3 primary cards to `:8010`**
+
+Replace the Calendar, AOP Forecaster, and Planning Engine cards' `href` and `data-check` attributes. All three now point at the unified platform's own paths, and all three use `:8010/docs` as a uniform, unauthenticated health-check target — the module-specific status endpoints the old checks used (`/api/config/summary`, `/api/store-master`, etc.) are now mounted behind `require_login` on `:8010`, so checking them directly would misreport "offline" for an anonymous visitor even when the server is healthy. `:8010/docs` (FastAPI's own auto-generated docs page) is always reachable without auth and exists on every FastAPI app in this platform, making it a safe, consistent choice for all three:
+
+```html
+<a class="card" href="http://localhost:8010/calendar/" target="_blank" data-check="http://localhost:8010/docs">
+  <div class="card-icon">📅</div>
+  <h2>Calendar</h2>
+  <p class="desc">Calendarisation Suite — builds the locked, festival-aligned day-shift calendar per cluster, used to reindex last year's sales onto this year's dates.</p>
+  <div class="meta">
+    <span class="port">localhost:8010/calendar</span>
+    <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
+  </div>
+</a>
+
+<a class="card" href="http://localhost:8010/aop/" target="_blank" data-check="http://localhost:8010/docs">
+  <div class="card-icon">📊</div>
+  <h2>AOP Forecaster</h2>
+  <p class="desc">Annual Operating Plan forecaster — planning inputs (Store Master, Growth %, NSO openings) and the store×division×month forecast engine.</p>
+  <div class="meta">
+    <span class="port">localhost:8010/aop</span>
+    <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
+  </div>
+</a>
+
+<a class="card" href="http://localhost:8010/planning/" target="_blank" data-check="http://localhost:8010/docs">
+  <div class="card-icon">🧮</div>
+  <h2>Planning Engine</h2>
+  <p class="desc">Sales Plan — Division/Department plans, MRP reapportionment, PW-W &amp; SOR deviation, and display-type planning engines.</p>
+  <div class="meta">
+    <span class="port">localhost:8010/planning</span>
+    <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
+  </div>
+</a>
+```
+
+Note each card's `data-check` is now identical (`:8010/docs`) — this is intentional, not a copy-paste mistake to "fix." The existing status-check `<script>` block (bottom of the file, the `document.querySelectorAll('.card').forEach(...)` loop) needs no changes; it already reads `data-check` generically per card.
+
+Since `:8010`'s routes require a login session, clicking a card takes the visitor to the app's React (or existing) frontend, which itself redirects to `/login` if the visitor isn't authenticated yet — this already works correctly (Task 2's `fetchJson` 401-redirect, and the equivalent behavior already live for AOP/SalesPlan's own frontends) and needs no special handling here.
+
+- [ ] **Step 2: Leave the "Data Sync & Flow" card's data-fetching unchanged**
+
+Do NOT repoint the `fetch('http://localhost:8000/api/config/db-sync/status', ...)` or `fetch('http://localhost:8002/api/department-plan/aop-forecaster-status', ...)` calls in the `<script>` block to their `:8010` equivalents. Those two specific endpoints are mounted behind `require_login` on `:8010` (`/api/aop/api/config/db-sync/status`, `/api/planning/department-plan/aop-forecaster-status`) — an anonymous landing-page visitor's fetch to either would get a 401 with no `runs`/`synced` field, and the existing `.then()` handlers would silently render "No syncs run yet" / "Not synced yet" instead of the real data, which is worse than confusing — it's actively misleading. The standalone AOP Forecaster (`:8000`) and SalesPlan (`:8002`) servers are not being retired by this or any other current plan (only Calendar Engine's `:7822` dies, in Task 14) — their `/api/config/db-sync/status` and `/api/department-plan/aop-forecaster-status` endpoints stay open, unauthenticated, and correctly populated regardless of this task, so leaving these two fetches as-is is the correct choice, not an oversight. Add a one-line code comment above this section explaining why, so a future reader doesn't "fix" the asymmetry into a regression:
+
+```javascript
+// NOTE: these two fetches intentionally stay pointed at the standalone
+// AOP Forecaster (:8000) and SalesPlan (:8002) ports, not :8010 — the
+// equivalent routes on :8010 require a login session, and an anonymous
+// landing-page visitor's fetch would silently get empty/misleading data
+// instead of a clear error. :8000/:8002 stay running unauthenticated
+// specifically for this kind of public status check.
+```
+
+- [ ] **Step 3: Update the footer copy**
+
+The current footer says "A grey dot means a module's server isn't running yet — start it with its own `start.bat` / `start_backend.bat`, then reload this page." — accurate for 3 independently-started standalone servers, no longer accurate once the 3 main cards point at one shared `:8010` process. Replace with:
+
+```html
+<footer>
+  Calendar, AOP Forecaster, and Planning Engine now run from one unified server
+  on <code>localhost:8010</code> — start it once and all three come up together.
+  A grey dot means that server isn't running yet.
+</footer>
+```
+
+- [ ] **Step 4: Verify in the browser**
+
+Start the unified app on `:8010` (with this plan's Tasks 1-14 already applied, so `/calendar/*` is live) and the standalone AOP Forecaster (`:8000`) and SalesPlan (`:8002`) servers (for the Data Sync card). Serve `Landing/index.html` (`python landing_server.py` from `Landing/`, port 7800) and open it in a browser. Confirm: all 3 primary cards show a green "online" dot, clicking each opens the correct `:8010` path in a new tab (prompting login if not already authenticated), and the "Data Sync & Flow" card still shows real data pulled from `:8000`/`:8002`.
+
+- [ ] **Step 5: Commit**
+
+```bash
+cd Landing
+git add index.html
+git commit -m "Repoint landing page at the unified platform (:8010), keep Data Sync card on standalone ports"
+```
