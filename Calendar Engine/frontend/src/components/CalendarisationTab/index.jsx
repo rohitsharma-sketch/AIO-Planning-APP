@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { getClusterProfiles, putClusterProfiles } from '../../lib/api'
 import ClusterTabs from './ClusterTabs'
 import FestivalTable from './FestivalTable'
+import BulkAdjustPanels from './BulkAdjustPanels'
 import { DEFAULT_FESTIVALS } from '../../lib/festivalData'
 
 let _nextFestivalId = 1000
@@ -60,6 +61,7 @@ export default function CalendarisationTab({ isPlanner }) {
         <div className="card">
           <ClusterTabs profiles={profiles} activeIdx={activeIdx} onSwitch={setActiveIdx}
             onReorder={handleReorder} onAdd={handleAdd} isPlanner={isPlanner} />
+          <BulkAdjustPanels festivals={profiles[activeIdx].festivals} onChange={handleFestivalsChange} isPlanner={isPlanner} />
           <FestivalTable festivals={profiles[activeIdx].festivals} onChange={handleFestivalsChange} isPlanner={isPlanner} />
         </div>
         {status && <p style={{ color: status.ok ? 'var(--green)' : 'var(--red)' }}>{status.msg}</p>}
