@@ -8,7 +8,7 @@ import BulkAdjustPanels from './BulkAdjustPanels'
 import OutputSection from './OutputSection'
 import CalendarLibrary from './CalendarLibrary'
 import ChangeLogViewer from './ChangeLogViewer'
-import { DEFAULT_FESTIVALS } from '../../lib/festivalData'
+import { DEFAULT_FESTIVALS, applyYearToProfiles, yearSyncMessage } from '../../lib/festivalData'
 
 let _nextFestivalId = 1000
 
@@ -123,7 +123,18 @@ export default function CalendarisationTab({ isPlanner }) {
     }).catch(() => {})
   }, [])
 
-  function runEngine() {
+  // "Create Calendar" — ports the old app's createCalendar() (calendar_engine.html
+  // lines 2922-2938), whose first real step was autoUpdateFestivalDates(): every
+  // cluster's every festival date is re-synced to the configured Reference/Future
+  // years BEFORE the engine runs. Without that step, changing the years on the
+  // Version Setting tab did nothing to the festival dates and the generated
+  // calendar was silently built from whatever years the festivals happened to be
+  // seeded with.
+  //
+  // The rewrite is planner-only: it mutates real persisted data, and persist()
+  // already no-ops the write for non-planners. A buyer clicking this still gets
+  // a calendar generated from the stored dates, read-only, exactly as before.
+  async function runEngine() {
     if (!refYear || !futYear) {
       setEngineStatus({ ok: false, msg: 'Set Reference Year and Future Year on the Version Setting tab first.' })
       return
@@ -133,14 +144,32 @@ export default function CalendarisationTab({ isPlanner }) {
       setEngineStatus({ ok: false, msg: 'Reference and Future year must be different.' })
       return
     }
+    if (ry < 1900 || ry > 2099 || fy < 1900 || fy > 2099) {
+      setEngineStatus({ ok: false, msg: 'Years must be between 1900 and 2099.' })
+      return
+    }
+
+    let workingProfiles = profiles
+    let syncMsg = ''
+    if (isPlanner) {
+      const sync = applyYearToProfiles(profiles, ry, fy)
+      workingProfiles = sync.profiles
+      if (sync.updated) {
+        // persist() also does setProfiles(), so the festival table on screen
+        // re-renders with the new dates — the old app's renderFestivalTable().
+        await persist(workingProfiles)
+        syncMsg = yearSyncMessage(ry, fy, sync.updated, sync.estimated) + ' · '
+      }
+    }
+
     try {
-      const perCluster = profiles.map(cp => ({ name: cp.name, mappings: generateMappings(cp.festivals, ry, fy, ms, moPri) }))
+      const perCluster = workingProfiles.map(cp => ({ name: cp.name, mappings: generateMappings(cp.festivals, ry, fy, ms, moPri) }))
       setClusterMappingsRaw(perCluster)
       const activeMappings = perCluster[activeIdx].mappings
       setDayMap(activeMappings.map(toRow))
-      setValidationIssues(validate(activeMappings, ry, fy, ms, profiles[activeIdx].festivals))
+      setValidationIssues(validate(activeMappings, ry, fy, ms, workingProfiles[activeIdx].festivals))
       setMonthlySummary(computeMonthly(activeMappings))
-      setEngineStatus({ ok: true, msg: `Calendar generated: ${activeMappings.length} days mapped for "${profiles[activeIdx].name}".` })
+      setEngineStatus({ ok: true, msg: `${syncMsg}Calendar generated: ${activeMappings.length} days mapped for "${workingProfiles[activeIdx].name}".` })
     } catch (e) {
       setEngineStatus({ ok: false, msg: e.message })
     }

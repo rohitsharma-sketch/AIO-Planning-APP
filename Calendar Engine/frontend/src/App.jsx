@@ -38,7 +38,11 @@ export default function App() {
           </button>
         ))}
       </nav>
-      {ActiveComponent && <ActiveComponent isPlanner={isPlanner} />}
+      {/* onNavigate lets a tab hand control to another tab by id — used by
+          VersionSettingTab's "Create Calendar", which re-syncs festival dates and
+          then drops the user on Calendarisation, the way the old app's
+          createCalendar() called switchModule('calendarisation'). */}
+      {ActiveComponent && <ActiveComponent isPlanner={isPlanner} onNavigate={setActiveModule} />}
     </div>
   )
 }
