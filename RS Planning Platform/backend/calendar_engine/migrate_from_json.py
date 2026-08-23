@@ -156,6 +156,13 @@ def _migrate_festival_changelog(session):
     for range_key, clusters in changelog.items():
         for cluster_name, festivals in clusters.items():
             for festival_name, entry in festivals.items():
+                # `entry` may also carry `pre`/`core`/`post` day-count overrides
+                # (the frontend writes a sparse override record). These are
+                # intentionally NOT migrated -- calendar.festival_changelog has
+                # no columns for them, and the controller ruled this deferred
+                # to a follow-up schema change rather than reopening the table
+                # design now. See the spec's Goals section
+                # (docs/superpowers/specs/2026-08-23-calendar-engine-backend-migration-design.md).
                 if "refDate" not in entry or "futDate" not in entry:
                     rows_skipped += 1
                     continue

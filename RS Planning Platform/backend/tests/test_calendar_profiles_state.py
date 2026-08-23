@@ -3,7 +3,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "..", "Tentative AOP Forecaster"))
 
 import pytest
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from db.base import SessionLocal
 from db.models.calendar import ClusterProfile, ClusterProfileFestival, AppStateMeta
@@ -11,18 +11,69 @@ from db.models.calendar import ClusterProfile, ClusterProfileFestival, AppStateM
 
 @pytest.fixture(autouse=True)
 def _clean_cluster_profiles_and_app_state():
-    # calendar.cluster_profiles and calendar.app_state_meta are brand-new
-    # tables (Task 1) with no pre-existing real data — no snapshot/restore
-    # dance needed here (unlike test_calendar_store_cluster.py). Just wipe
-    # whatever these tests create so runs stay isolated.
+    # calendar.cluster_profiles / cluster_profile_festivals / app_state_meta
+    # were brand-new, empty tables when this fixture was first written (Task
+    # 1) — but Task 7's migrate_from_json.py has since populated them with
+    # real data from Calendar Engine/Local DB/app_state.json (10 cluster
+    # profiles, ~214 festivals, 1 app_state_meta row). A naive full wipe here
+    # destroys that real data with nothing to restore it. Snapshot the real
+    # state before the test and restore it after, same pattern as
+    # test_calendar_store_cluster.py's _clean_test_stores.
+    session = SessionLocal()
+    backup_profiles = [
+        {"id": r.id, "name": r.name, "region": r.region, "next_id": r.next_id}
+        for r in session.execute(select(ClusterProfile)).scalars().all()
+    ]
+    backup_festivals = [
+        {"id": r.id, "cluster_profile_id": r.cluster_profile_id, "source_festival_id": r.source_festival_id,
+         "name": r.name, "ref_date": r.ref_date, "fut_date": r.fut_date,
+         "pre": r.pre, "core": r.core, "post": r.post}
+        for r in session.execute(select(ClusterProfileFestival)).scalars().all()
+    ]
+    backup_meta_row = session.get(AppStateMeta, 1)
+    backup_meta = (
+        {"active_cluster_idx": backup_meta_row.active_cluster_idx, "ref_year": backup_meta_row.ref_year,
+         "fut_year": backup_meta_row.fut_year, "max_shift": backup_meta_row.max_shift,
+         "mo_pri": backup_meta_row.mo_pri, "theme_id": backup_meta_row.theme_id,
+         "saved_at": backup_meta_row.saved_at, "migrations": backup_meta_row.migrations}
+        if backup_meta_row is not None else None
+    )
+    session.close()
+
     yield
+
     session = SessionLocal()
     try:
+        # Full delete + reinsert restores real state regardless of what the
+        # test itself created or replaced (PUT /cluster-profiles does a
+        # full-table replace, same as store-cluster-map).
         session.execute(delete(ClusterProfileFestival))
         session.execute(delete(ClusterProfile))
-        session.execute(delete(AppStateMeta))
+        if backup_profiles:
+            session.execute(ClusterProfile.__table__.insert(), backup_profiles)
+        if backup_festivals:
+            session.execute(ClusterProfileFestival.__table__.insert(), backup_festivals)
+
+        if backup_meta is None:
+            session.execute(delete(AppStateMeta).where(AppStateMeta.id == 1))
+        else:
+            meta_row = session.get(AppStateMeta, 1)
+            if meta_row is None:
+                meta_row = AppStateMeta(id=1)
+                session.add(meta_row)
+            meta_row.active_cluster_idx = backup_meta["active_cluster_idx"]
+            meta_row.ref_year = backup_meta["ref_year"]
+            meta_row.fut_year = backup_meta["fut_year"]
+            meta_row.max_shift = backup_meta["max_shift"]
+            meta_row.mo_pri = backup_meta["mo_pri"]
+            meta_row.theme_id = backup_meta["theme_id"]
+            meta_row.saved_at = backup_meta["saved_at"]
+            meta_row.migrations = backup_meta["migrations"]
         session.commit()
     finally:
+        # This is a real shared database holding real cluster-profile data —
+        # guarantee the session (and its connection) is released even if a
+        # restore statement above raises partway through.
         session.close()
 
 
