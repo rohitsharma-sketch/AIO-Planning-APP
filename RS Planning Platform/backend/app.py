@@ -31,6 +31,10 @@ app.include_router(auth_router, prefix="/api/auth")
 app.include_router(workflow_router, prefix="/api/aop/plan-cycles")
 app.include_router(audit_router, prefix="/api/audit")
 
+from calendar_engine.router import router as calendar_router  # noqa: E402
+
+app.include_router(calendar_router, prefix="/api/calendar", dependencies=[Depends(require_login)])
+
 # AOP Forecaster — its own app.py's `router` (extracted for this purpose),
 # protected here. This file is ALSO named app.py (uvicorn entrypoint
 # `app:app` requires that), so a plain `from app import router` would

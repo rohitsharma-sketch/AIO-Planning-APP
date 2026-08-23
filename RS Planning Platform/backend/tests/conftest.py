@@ -12,6 +12,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from auth.routes import router as auth_router
 from auth.security import hash_password
+from calendar_engine.router import router as calendar_router
 from db.base import SessionLocal
 from db.models.audit import DataChange
 from db.models.auth import User
@@ -26,6 +27,7 @@ def app():
     from audit.routes import router as audit_router
     a.include_router(workflow_router, prefix="/api/aop/plan-cycles")
     a.include_router(audit_router, prefix="/api/audit")
+    a.include_router(calendar_router, prefix="/api/calendar")
     return a
 
 
@@ -48,6 +50,36 @@ def test_user():
     # this user (e.g. calling db/editor.py's put_* functions) — delete those
     # first, or the FK constraint (correctly) blocks deleting the user.
     session.execute(DataChange.__table__.delete().where(DataChange.actor_id == user_id))
+    session.delete(session.get(User, user_id))
+    session.commit()
+    session.close()
+
+
+@pytest.fixture
+def planner_client(client):
+    session = SessionLocal()
+    u = User(username="test_cal_planner", password_hash=hash_password("testpass123"), role="planner")
+    session.add(u)
+    session.commit()
+    session.refresh(u)
+    user_id = u.id
+    client.post("/api/auth/login", json={"username": "test_cal_planner", "password": "testpass123"})
+    yield client
+    session.delete(session.get(User, user_id))
+    session.commit()
+    session.close()
+
+
+@pytest.fixture
+def buyer_client(client):
+    session = SessionLocal()
+    u = User(username="test_cal_buyer", password_hash=hash_password("testpass123"), role="buyer")
+    session.add(u)
+    session.commit()
+    session.refresh(u)
+    user_id = u.id
+    client.post("/api/auth/login", json={"username": "test_cal_buyer", "password": "testpass123"})
+    yield client
     session.delete(session.get(User, user_id))
     session.commit()
     session.close()

@@ -38,7 +38,24 @@ have no Postgres presence at all today.
 - Every piece of Calendar Engine's persisted state lives in Postgres, in
   the existing `calendar` schema, with no field silently dropped versus
   what the JSON files hold today (the two partial-extraction sync jobs get
-  fixed as part of this, not just replicated).
+  fixed as part of this, not just replicated) — **with one known,
+  deliberately deferred exception**: `festival_changelog.json` entries can
+  carry `pre`/`core`/`post` day-count overrides alongside (or instead of)
+  `refDate`/`futDate` (the frontend writes a sparse override record — only
+  the fields that actually changed). `calendar.festival_changelog` as
+  designed below has no columns for these three fields, so they are
+  dropped by both the migration and the `GET/PUT /festival-changelog`
+  routes. Found during the Task 7/final-review pass, after real data
+  revealed the gap; ruled out-of-scope for this sub-project rather than
+  reopening the table design, since sub-project B's frontend (the only
+  thing that would read/write these overrides) doesn't exist yet. A
+  follow-up migration (nullable `ref_date`/`fut_date`, new nullable
+  `pre`/`core`/`post` columns, a `DELETE /festival-changelog` route) is
+  needed before sub-project B can support editing them. Every other field
+  across all 8 JSON keys — including `pre`/`core`/`post` on
+  `calendar_library.json`'s and `app_state.json`'s festival records, which
+  route through `calendar_clusters`/`cluster_profiles` and are NOT
+  affected by this gap — is fully captured.
 - A FastAPI router, `calendar_engine/router.py`, exposes this data at
   `/api/calendar/*`, mounted into `RS Planning Platform/backend/app.py`
   behind the unified platform's existing auth.
@@ -343,3 +360,10 @@ transitions).
   app runs. This was already true for the standalone Calendar Engine and
   is unchanged by this migration — noted here only because it's an
   existing operational dependency this sub-project doesn't remove.
+- **`festival_changelog`'s `pre`/`core`/`post` gap** (see Goals — this is
+  the same risk, cross-referenced here since it's the most consequential
+  one discovered this pass): sub-project B cannot be built against the
+  current `calendar.festival_changelog` shape if it needs to support
+  editing these three fields — that requires the follow-up schema
+  migration described in Goals, done before sub-project B's frontend work
+  starts, not discovered mid-build there.

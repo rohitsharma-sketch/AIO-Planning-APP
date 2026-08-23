@@ -8,3 +8,7 @@ bcrypt
 itsdangerous
 pytest
 httpx
+pandas
+pyarrow
+openpyxl
+python-multipart
