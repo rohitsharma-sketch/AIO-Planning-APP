@@ -44,7 +44,7 @@ export default function DivisionPlan() {
   const loadConfig = async () => {
     setError(null)
     try {
-      const res = await axios.get('/api/division-plan/config')
+      const res = await axios.get('/api/planning/division-plan/config')
       setRows(res.data.divisions.map(d => ({ ...d })))
       setConfigMeta({ totalStores: res.data.total_stores, source: res.data.source })
     } catch {
@@ -85,7 +85,7 @@ export default function DivisionPlan() {
         plan_year: planYear,
         plan_name: planName,
       }
-      const res = await axios.post('/api/division-plan/calculate', payload)
+      const res = await axios.post('/api/planning/division-plan/calculate', payload)
       setResults(res.data)
     } catch {
       setError('Calculation failed. Check that the backend is running.')
@@ -96,7 +96,7 @@ export default function DivisionPlan() {
 
   const exportCSV = async () => {
     try {
-      const res = await axios.get('/api/division-plan/export', { responseType: 'blob' })
+      const res = await axios.get('/api/planning/division-plan/export', { responseType: 'blob' })
       const url = URL.createObjectURL(res.data)
       const a = document.createElement('a')
       a.href = url

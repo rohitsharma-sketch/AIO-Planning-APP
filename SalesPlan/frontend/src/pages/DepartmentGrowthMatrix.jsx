@@ -70,7 +70,7 @@ export default function DepartmentGrowthMatrix() {
   const fetchMatrix = useCallback(async (div) => {
     setLoading(true)
     try {
-      const r = await fetch(`/api/department-plan/growth-matrix/${div}`)
+      const r = await fetch(`/api/planning/department-plan/growth-matrix/${div}`)
       const d = await r.json()
       setData(d)
     } finally {
@@ -79,7 +79,7 @@ export default function DepartmentGrowthMatrix() {
   }, [])
 
   const fetchBuyerMeta = useCallback(async () => {
-    const r = await fetch('/api/department-plan/buyer-upload-meta')
+    const r = await fetch('/api/planning/department-plan/buyer-upload-meta')
     const d = await r.json()
     setBuyerMeta(d)
   }, [])
@@ -94,7 +94,7 @@ export default function DepartmentGrowthMatrix() {
   useEffect(() => { fetchBuyerMeta() }, [fetchBuyerMeta])
 
   useEffect(() => {
-    fetch('/api/dept-sales/actuals/status')
+    fetch('/api/planning/dept-sales/actuals/status')
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         if (d?.available_ty_months?.length) {
@@ -124,7 +124,7 @@ export default function DepartmentGrowthMatrix() {
       const batch = { ...pendingRef.current }
       pendingRef.current = {}
       setSaving(true)
-      await fetch('/api/department-plan/growth-matrix', {
+      await fetch('/api/planning/department-plan/growth-matrix', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ division: activeDiv, updates: batch }),
@@ -137,7 +137,7 @@ export default function DepartmentGrowthMatrix() {
   const handleGenerateBase = async () => {
     setGenerating(true); setGenMsg('')
     try {
-      const r = await fetch('/api/dept-sales/generate-base', { method: 'POST' })
+      const r = await fetch('/api/planning/dept-sales/generate-base', { method: 'POST' })
       const d = await r.json()
       if (d.ok) {
         setGenMsg(`✓ ${d.stores} stores — select engines below`)
@@ -164,7 +164,7 @@ export default function DepartmentGrowthMatrix() {
 
   const handleReset = async () => {
     setSaving(true)
-    await fetch('/api/department-plan/growth-matrix/reset', {
+    await fetch('/api/planning/department-plan/growth-matrix/reset', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ division: activeDiv }),
@@ -190,7 +190,7 @@ export default function DepartmentGrowthMatrix() {
     debounceRef.current = setTimeout(async () => {
       const b = { ...pendingRef.current }; pendingRef.current = {}
       setSaving(true)
-      await fetch('/api/department-plan/growth-matrix', {
+      await fetch('/api/planning/department-plan/growth-matrix', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ division: activeDiv, updates: b }),
@@ -208,7 +208,7 @@ export default function DepartmentGrowthMatrix() {
     form.append('file', uploadFile)
     form.append('division', activeDiv)
     try {
-      const r = await fetch('/api/department-plan/growth-matrix/import', { method: 'POST', body: form })
+      const r = await fetch('/api/planning/department-plan/growth-matrix/import', { method: 'POST', body: form })
       const result = await r.json()
       setUploadResult(result)
       if (result.ok) {

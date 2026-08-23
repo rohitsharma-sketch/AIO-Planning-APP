@@ -183,10 +183,10 @@ export default function MrpOutput() {
   useEffect(() => {
     // Fetch pipeline status for walkthrough header + deviation prompt
     Promise.all([
-      fetch('/api/mrp-plan/status').then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('/api/mrp-reapportionment/status').then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('/api/deviation/pww/status').then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('/api/deviation/sor/status').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/planning/mrp-plan/status').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/planning/mrp-reapportionment/status').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/planning/deviation/pww/status').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch('/api/planning/deviation/sor/status').then(r => r.ok ? r.json() : null).catch(() => null),
     ]).then(([mrp, reapp, pww, sor]) => {
       const mrpDone   = !!mrp?.imported
       const reappDone = !!reapp?.has_result
@@ -209,7 +209,7 @@ export default function MrpOutput() {
   }, [])
 
   useEffect(() => {
-    fetch('/api/mrp-plan/data')
+    fetch('/api/planning/mrp-plan/data')
       .then(r => r.ok ? r.json() : r.json().then(e => { throw new Error(e.detail) }))
       .then(d => { setData(d); setActiveDiv(d.divisions?.[0] || null); setLoading(false) })
       .catch(e => { setErr(e.message); setLoading(false) })
@@ -281,7 +281,7 @@ export default function MrpOutput() {
             style={{ padding: '7px 16px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'none', border: `1px solid ${theme.border}`, color: theme.textMuted }}>
             📐 Deviations
           </button>
-          <button onClick={() => window.open('/api/mrp-plan/export', '_blank')}
+          <button onClick={() => window.open('/api/planning/mrp-plan/export', '_blank')}
             style={{ padding: '7px 16px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'none', border: `1px solid ${theme.border}`, color: theme.textMuted }}>
             Export CSV ↓
           </button>

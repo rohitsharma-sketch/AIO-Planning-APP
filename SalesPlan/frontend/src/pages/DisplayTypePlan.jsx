@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { theme } from '../theme'
 
-const API = '/api/display-type'
+const API = '/api/planning/display-type'
 
 // ── shared styles ──────────────────────────────────────────────────────────────
 const MONO = theme.fontMono

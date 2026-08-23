@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { theme } from '../theme'
 
-const API = '/api/sync'
+const API = '/api/planning/sync'
 
 function StatusDot({ ok, error, syncing }) {
   const color = syncing ? '#F59E0B' : error ? '#EF4444' : ok ? '#10B981' : '#6B7280'

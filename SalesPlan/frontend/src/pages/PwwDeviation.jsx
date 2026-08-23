@@ -160,15 +160,15 @@ export default function PwwDeviation() {
   const flash = (m, ms = 5000) => { setMsg(m); setTimeout(() => setMsg(''), ms) }
 
   const fetchSyncStatus = useCallback(async () => {
-    try { setSyncStatus(await (await fetch('/api/deviation/pww/sync-status')).json()) } catch {}
+    try { setSyncStatus(await (await fetch('/api/planning/deviation/pww/sync-status')).json()) } catch {}
   }, [])
 
   const fetchStatus = useCallback(async () => {
-    try { setStatus(await (await fetch('/api/deviation/pww/status')).json()) } catch {}
+    try { setStatus(await (await fetch('/api/planning/deviation/pww/status')).json()) } catch {}
   }, [])
 
   const fetchBlocks = useCallback(async () => {
-    try { setBlocks(await (await fetch('/api/deviation/pww/blocks')).json()) } catch {}
+    try { setBlocks(await (await fetch('/api/planning/deviation/pww/blocks')).json()) } catch {}
   }, [])
 
   useEffect(() => {
@@ -180,7 +180,7 @@ export default function PwwDeviation() {
   const handleSync = async () => {
     setSyncing(true)
     try {
-      const d = await (await fetch('/api/deviation/pww/sync', { method: 'POST' })).json()
+      const d = await (await fetch('/api/planning/deviation/pww/sync', { method: 'POST' })).json()
       if (d.ok) {
         flash(`Synced — ${d.depts} departments, ${d.rows} MRP rows`)
         fetchStatus()
@@ -192,7 +192,7 @@ export default function PwwDeviation() {
   const handleRun = async () => {
     setRunning(true)
     try {
-      const d = await (await fetch(`/api/deviation/pww/run-phase1?block=${activeBlock}`)).json()
+      const d = await (await fetch(`/api/planning/deviation/pww/run-phase1?block=${activeBlock}`)).json()
       if (d.divisions) {
         setResult(d)
         setP2Result(null)
@@ -208,10 +208,10 @@ export default function PwwDeviation() {
   const handleRunP2 = async () => {
     setRunningP2(true)
     try {
-      const d = await (await fetch(`/api/deviation/pww/run-phase2?block=${result?.block || activeBlock}`)).json()
+      const d = await (await fetch(`/api/planning/deviation/pww/run-phase2?block=${result?.block || activeBlock}`)).json()
       if (d.ok) {
         flash(`Phase 2 done — ${d.clusters?.length} clusters · ${d.months?.length} months · ${d.total_depts} depts`)
-        const full = await (await fetch('/api/deviation/pww/phase2-result')).json()
+        const full = await (await fetch('/api/planning/deviation/pww/phase2-result')).json()
         setP2Result(full)
         setReappResult(null)
         const m0 = full.ly_months?.[0]
@@ -227,10 +227,10 @@ export default function PwwDeviation() {
   const handleReapportion = async () => {
     setRunningReapp(true)
     try {
-      const d = await (await fetch('/api/deviation/pww/reapportion')).json()
+      const d = await (await fetch('/api/planning/deviation/pww/reapportion')).json()
       if (d.ok) {
         flash(`Reapportionment done — ${d.clusters?.length} clusters · ${d.total_depts} depts/cluster`)
-        const full = await (await fetch('/api/deviation/pww/reapportion-result')).json()
+        const full = await (await fetch('/api/planning/deviation/pww/reapportion-result')).json()
         setReappResult(full)
         const cl0 = full.clusters?.[0]
         if (cl0) setReappCluster(cl0)

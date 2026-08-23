@@ -235,17 +235,17 @@ export default function MrpReapportionment() {
   const [resultTab, setResultTab] = useState('preview')
 
   const reload = useCallback(() => {
-    fetch('/api/mrp-reapportionment/status')
+    fetch('/api/planning/mrp-reapportionment/status')
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setStatus(d) })
-    fetch('/api/mrp-reapportionment/sales-status')
+    fetch('/api/planning/mrp-reapportionment/sales-status')
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setSalesInfo(d) })
   }, [])
 
   const loadGroups = useCallback(() => {
     setGroupsErr('')
-    fetch('/api/mrp-reapportionment/mrp-groups')
+    fetch('/api/planning/mrp-reapportionment/mrp-groups')
       .then(r => r.json())
       .then(d => {
         if (d.detail) { setGroupsErr(d.detail); return }
@@ -264,7 +264,7 @@ export default function MrpReapportionment() {
     setRunning(true); setError(''); setResult(null)
     try {
       const body = { cont_pcts: Object.keys(overrides).length ? overrides : null }
-      const r = await fetch('/api/mrp-reapportionment/run', {
+      const r = await fetch('/api/planning/mrp-reapportionment/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -326,7 +326,7 @@ export default function MrpReapportionment() {
               </strong>
             </div>
           </div>
-          <a href="/api/mrp-reapportionment/download" style={{
+          <a href="/api/planning/mrp-reapportionment/download" style={{
             padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 600,
             background: theme.primary, color: '#fff', textDecoration: 'none', flexShrink: 0,
           }}>↓ Download</a>
@@ -497,7 +497,7 @@ export default function MrpReapportionment() {
                     </button>
                   ))}
                   <div style={{ flex: 1 }} />
-                  <a href="/api/mrp-reapportionment/download" style={{
+                  <a href="/api/planning/mrp-reapportionment/download" style={{
                     display: 'flex', alignItems: 'center', padding: '6px 14px', borderRadius: 7,
                     fontSize: 12, fontWeight: 700, background: theme.primary, color: '#fff',
                     textDecoration: 'none', margin: '8px 0',
@@ -615,7 +615,7 @@ export default function MrpReapportionment() {
             ))}
           </div>
 
-          <a href="/api/mrp-reapportionment/template" style={{
+          <a href="/api/planning/mrp-reapportionment/template" style={{
             display: 'block', padding: '9px 14px', borderRadius: 8,
             background: 'transparent', border: `1px solid ${theme.border}`,
             color: theme.textMuted, textDecoration: 'none', fontSize: 12, textAlign: 'center',

@@ -46,7 +46,7 @@ function PlanSnapshot() {
 
   useEffect(() => {
     setLoading(true)
-    fetch('/api/dept-sales/plan-summary')
+    fetch('/api/planning/dept-sales/plan-summary')
       .then(r => r.ok ? r.json() : null)
       .then(d => {
         setData(d)

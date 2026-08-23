@@ -394,7 +394,7 @@ export default function NewDeptPlan() {
 
   const fetchSyncStatus = useCallback(async () => {
     try {
-      const r = await fetch('/api/dept-sales/new-depts/sync-status')
+      const r = await fetch('/api/planning/dept-sales/new-depts/sync-status')
       setSyncStatus(await r.json())
     } catch {}
   }, [])
@@ -402,7 +402,7 @@ export default function NewDeptPlan() {
   const handleSync = async () => {
     setSyncing(true); setSyncMsg('')
     try {
-      const r = await fetch('/api/dept-sales/new-depts/sync', { method: 'POST' })
+      const r = await fetch('/api/planning/dept-sales/new-depts/sync', { method: 'POST' })
       const d = await r.json()
       if (d.ok) {
         setSyncMsg(`Synced — ${d.total_entries} entries across ${d.divisions.join(', ')}`)
@@ -422,11 +422,11 @@ export default function NewDeptPlan() {
 
   const fetchDepts = useCallback(async () => {
     try {
-      const r = await fetch('/api/dept-sales/actuals/status')
+      const r = await fetch('/api/planning/dept-sales/actuals/status')
       setTyMonths((await r.json()).available_ty_months || [])
     } catch {}
     try {
-      const r = await fetch('/api/department-plan/config')
+      const r = await fetch('/api/planning/department-plan/config')
       const data = await r.json()
       const out = {}
       for (const [div, rows] of Object.entries(data.divisions || {}))
@@ -437,14 +437,14 @@ export default function NewDeptPlan() {
 
   const fetchMapping = useCallback(async () => {
     try {
-      const r = await fetch('/api/dept-sales/new-depts')
+      const r = await fetch('/api/planning/dept-sales/new-depts')
       setMapping(upgradeMapping(await r.json()))
     } finally { setLoading(false) }
   }, [])
 
   const fetchPreview = useCallback(async () => {
     try {
-      const r = await fetch('/api/dept-sales/run')
+      const r = await fetch('/api/planning/dept-sales/run')
       setPreview(await r.json())
     } catch {}
   }, [])
@@ -486,7 +486,7 @@ export default function NewDeptPlan() {
   const handleClear = async () => {
     if (!window.confirm('Clear all new department entries and remove the generated plan? This cannot be undone.')) return
     try {
-      const r = await fetch('/api/dept-sales/new-depts', { method: 'DELETE' })
+      const r = await fetch('/api/planning/dept-sales/new-depts', { method: 'DELETE' })
       const d = await r.json()
       if (d.ok) {
         setMapping({})
@@ -503,7 +503,7 @@ export default function NewDeptPlan() {
   const handleSave = async () => {
     setSaving(true); setSaveMsg('')
     try {
-      const r = await fetch('/api/dept-sales/new-depts', {
+      const r = await fetch('/api/planning/dept-sales/new-depts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(mapping),

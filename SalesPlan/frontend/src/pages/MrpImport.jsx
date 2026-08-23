@@ -15,10 +15,10 @@ export default function MrpImport() {
   const [clearing, setClearing]   = useState(false)
 
   const reload = () => {
-    fetch('/api/mrp-plan/status')
+    fetch('/api/planning/mrp-plan/status')
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setStatus(d) })
-    fetch('/api/mrp-plan/sync-status')
+    fetch('/api/planning/mrp-plan/sync-status')
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setFileInfo(d) })
   }
@@ -28,7 +28,7 @@ export default function MrpImport() {
   const handleSync = async () => {
     setSyncing(true); setResult(null)
     try {
-      const r = await fetch('/api/mrp-plan/sync', { method: 'POST' })
+      const r = await fetch('/api/planning/mrp-plan/sync', { method: 'POST' })
       const d = await r.json()
       if (!r.ok) { setResult({ ok: false, error: d.detail }); return }
       setResult(d)
@@ -42,7 +42,7 @@ export default function MrpImport() {
 
   const handleClear = async () => {
     setClearing(true)
-    await fetch('/api/mrp-plan/clear', { method: 'DELETE' })
+    await fetch('/api/planning/mrp-plan/clear', { method: 'DELETE' })
     setStatus(null); setResult(null); setClearing(false)
   }
 

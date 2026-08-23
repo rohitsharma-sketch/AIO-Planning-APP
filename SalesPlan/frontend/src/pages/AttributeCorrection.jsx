@@ -117,7 +117,7 @@ export default function AttributeCorrection() {
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    fetch('/api/attr-correction/preview')
+    fetch('/api/planning/attr-correction/preview')
       .then(r => { if (!r.ok) throw new Error(r.status); return r.json() })
       .then(d => {
         if (cancelled) return
@@ -225,7 +225,7 @@ export default function AttributeCorrection() {
   const handleSave = async () => {
     setSaving(true); setSaveMsg('')
     try {
-      const r = await fetch('/api/attr-correction/save', {
+      const r = await fetch('/api/planning/attr-correction/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(corrections),
@@ -258,7 +258,7 @@ export default function AttributeCorrection() {
   // ── Compare ─────────────────────────────────────────────────────────────────
   const handleCompare = async () => {
     try {
-      const r = await fetch('/api/attr-correction/comparison')
+      const r = await fetch('/api/planning/attr-correction/comparison')
       const d = await r.json()
       setCompareData({ pre: d.pre, post: d.post })
       setCompareOpen(true)

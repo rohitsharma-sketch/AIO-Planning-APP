@@ -68,7 +68,7 @@ export default function DepartmentPlan() {
 
   const fetchConfig = useCallback(async () => {
     try {
-      const r = await fetch('/api/department-plan/config')
+      const r = await fetch('/api/planning/department-plan/config')
       const data = await r.json()
       setConfig(data.divisions)
     } finally {
@@ -81,7 +81,7 @@ export default function DepartmentPlan() {
   // Pick up the last sync-from-aop-forecaster result on load, if any, so a
   // page reload doesn't lose it.
   useEffect(() => {
-    fetch('/api/department-plan/aop-forecaster-status')
+    fetch('/api/planning/department-plan/aop-forecaster-status')
       .then(r => r.json())
       .then(d => { if (d.synced) { setAopDivisionAops(d.division_aops); setAopRunMeta({ run_id: d.run_id, computed_at: d.computed_at }) } })
       .catch(() => {})
@@ -90,7 +90,7 @@ export default function DepartmentPlan() {
   const syncFromAop = async () => {
     setAopSyncing(true); setAopSyncResult(null)
     try {
-      const r = await fetch('/api/department-plan/sync-from-aop-forecaster', { method: 'POST' })
+      const r = await fetch('/api/planning/department-plan/sync-from-aop-forecaster', { method: 'POST' })
       const d = await r.json()
       if (r.ok) {
         setAopDivisionAops(d.division_aops)
@@ -108,7 +108,7 @@ export default function DepartmentPlan() {
     if (!aopDivisionAops) return
     setCalcRunning(true)
     try {
-      const r = await fetch('/api/department-plan/calculate', {
+      const r = await fetch('/api/planning/department-plan/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ division_aops: aopDivisionAops }),
@@ -127,7 +127,7 @@ export default function DepartmentPlan() {
       next[div] = prev[div].map(r => r.name === name ? { ...r, active } : r)
       return next
     })
-    await fetch('/api/department-plan/toggle', {
+    await fetch('/api/planning/department-plan/toggle', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ division: div, name, active }),
@@ -138,7 +138,7 @@ export default function DepartmentPlan() {
   const handleAddDept = async () => {
     setAddError('')
     if (!newDept.name.trim()) { setAddError('Department name is required'); return }
-    const r = await fetch('/api/department-plan/add-department', {
+    const r = await fetch('/api/planning/department-plan/add-department', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...newDept, name: newDept.name.trim().toUpperCase() }),
@@ -183,7 +183,7 @@ export default function DepartmentPlan() {
               onClick={async () => {
                 setBuyerSyncing(true); setBuyerSyncResult(null)
                 try {
-                  const r = await fetch('/api/department-plan/sync-from-buyer', { method: 'POST' })
+                  const r = await fetch('/api/planning/department-plan/sync-from-buyer', { method: 'POST' })
                   const d = await r.json()
                   setBuyerSyncResult({ ok: r.ok, msg: r.ok ? d.message : (d.detail || 'Error') })
                   if (r.ok) await fetchConfig()
@@ -384,7 +384,7 @@ export default function DepartmentPlan() {
           />
 
           {/* Export */}
-          <a href="/api/department-plan/export" style={{
+          <a href="/api/planning/department-plan/export" style={{
             padding: '6px 14px', borderRadius: 6, fontSize: 12,
             background: theme.surfaceAlt, border: `1px solid ${theme.border}`,
             color: theme.textSecondary, textDecoration: 'none', fontWeight: 500,

@@ -76,11 +76,11 @@ export default function FinalResults() {
   const NODEPT = ['GM', 'RETAIL']
 
   useEffect(() => {
-    fetch('/api/final-results/data')
+    fetch('/api/planning/final-results/data')
       .then(r => r.ok ? r.json() : r.json().then(e => { throw new Error(e.detail) }))
       .then(d => { setData(d); setLoading(false) })
       .catch(e => { setErr(e.message); setLoading(false) })
-    fetch('/api/final-results/dashboard')
+    fetch('/api/planning/final-results/dashboard')
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) { setDashboard(d); setDashDiv(Object.keys(d.divisions || {})[0] || null) } })
       .catch(() => {})
@@ -90,7 +90,7 @@ export default function FinalResults() {
   useEffect(() => {
     if (viewMode !== 'cluster' || clusterPlan) return
     setClusterLoading(true)
-    fetch('/api/dept-sales/cluster-plan')
+    fetch('/api/planning/dept-sales/cluster-plan')
       .then(r => r.json())
       .then(d => {
         setClusterPlan(d)

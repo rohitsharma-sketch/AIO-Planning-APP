@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { theme } from '../theme'
 
-const API = '/api/deviation/sor'
+const API = '/api/planning/deviation/sor'
 
 const RULE_BADGE = {
   avg:       { label: 'AVG',       bg: '#0D9488', color: '#fff' },

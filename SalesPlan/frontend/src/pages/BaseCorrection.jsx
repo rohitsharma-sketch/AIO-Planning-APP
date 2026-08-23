@@ -30,7 +30,7 @@ export default function BaseCorrection() {
   useEffect(() => {
     if (inPipeline) {
       setChecking(true)
-      fetch('/api/base-correction/check')
+      fetch('/api/planning/base-correction/check')
         .then(r => r.ok ? r.json() : null)
         .then(d => { if (d) { setCheckData(d); setChecking(false) } })
     }
@@ -40,7 +40,7 @@ export default function BaseCorrection() {
   const handleCheck = useCallback(async () => {
     setChecking(true); setCheckData(null); setApplied(false)
     try {
-      const r = await fetch('/api/base-correction/check')
+      const r = await fetch('/api/planning/base-correction/check')
       if (!r.ok) { flash((await r.json()).detail || 'Error'); return }
       const d = await r.json()
       setCheckData(d)
@@ -55,7 +55,7 @@ export default function BaseCorrection() {
   const handleApply = async () => {
     setApplying(true)
     try {
-      const r = await fetch('/api/base-correction/apply', { method: 'POST' })
+      const r = await fetch('/api/planning/base-correction/apply', { method: 'POST' })
       if (!r.ok) { flash((await r.json()).detail || 'Error'); return }
       const d = await r.json()
       setCheckData(d)
@@ -74,7 +74,7 @@ export default function BaseCorrection() {
 
   // ── Export ──────────────────────────────────────────────────────────────────
   const handleExport = () => {
-    window.open('/api/base-correction/export', '_blank')
+    window.open('/api/planning/base-correction/export', '_blank')
   }
 
   // ── Filtered gap list ───────────────────────────────────────────────────────

@@ -72,7 +72,7 @@ function GrowthMatrixTab({ data, matrix, setMatrix, setData }) {
 
   const recalculate = useCallback(async (mat) => {
     try {
-      const res = await axios.post('/api/division-plan/growth-structure', { growth_matrix: mat })
+      const res = await axios.post('/api/planning/division-plan/growth-structure', { growth_matrix: mat })
       setData(res.data)
     } catch {
       // silently ignore
@@ -606,7 +606,7 @@ export default function DivisionGrowthStructure() {
   const [activeTab, setActiveTab] = useState('matrix')
 
   useEffect(() => {
-    axios.get('/api/division-plan/growth-structure')
+    axios.get('/api/planning/division-plan/growth-structure')
       .then(res => {
         setData(res.data)
         setMatrix(res.data.growth_matrix)
