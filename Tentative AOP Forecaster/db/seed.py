@@ -48,7 +48,6 @@ LEVERS = [
 
 PROJECTS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # .../CLAUDE Projects
 STORE_MASTER_XLSX = os.path.join(PROJECTS_DIR, "..", "Store Master", "Store Master.xlsx")
-CALENDAR_ENGINE_DB = os.path.join(PROJECTS_DIR, "..", "Calendar Engine", "Local DB")
 
 SOURCES = [
     ("data_lake_sales", {"path": os.path.join(DATA_LAKE_RAW, "rs_sales_19-_till_date")}, 24 * 60),
@@ -57,11 +56,6 @@ SOURCES = [
     # Manually curated by the planning team — not on the data lake's automated
     # pipeline, so re-run this one on demand when the file changes, not nightly.
     ("store_master_xlsx", {"path": os.path.normpath(STORE_MASTER_XLSX)}, 0),
-    # The Calendar Engine's own state files — locked calendars (per-cluster
-    # dayMap) and the store->Calendar Cluster mapping. Updated whenever the
-    # planning team locks a new calendar or edits the cluster map, not nightly.
-    ("calendar_library", {"path": os.path.normpath(os.path.join(CALENDAR_ENGINE_DB, "calendar_library.json"))}, 0),
-    ("store_calendar_cluster_map", {"path": os.path.normpath(os.path.join(CALENDAR_ENGINE_DB, "store_cluster_map.json"))}, 0),
 ]
 
 

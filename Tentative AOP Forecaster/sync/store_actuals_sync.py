@@ -121,7 +121,7 @@ def run(include_partial=False):
             select(Calendar).where(Calendar.ref_year == REF_YEAR).order_by(Calendar.saved_at.desc())
         ).scalars().first()
         if cal is None:
-            raise LookupError(f"No locked calendar with refYear {REF_YEAR} synced yet — run calendar_library_sync.py")
+            raise LookupError(f"No locked calendar with refYear {REF_YEAR} found — save one via the Calendarisation Suite (/calendar/)")
 
         pairs = session.execute(
             select(CalendarDayPair).where(CalendarDayPair.calendar_id == cal.calendar_id)
