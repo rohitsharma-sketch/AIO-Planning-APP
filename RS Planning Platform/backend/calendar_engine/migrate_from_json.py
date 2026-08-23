@@ -143,36 +143,26 @@ def _migrate_festival_changelog(session):
     changelog = _load("festival_changelog.json")
 
     # A handful of real entries only record a partial diff (e.g. just `post`
-    # changed, no refDate/futDate) -- an old Calendar Engine logging quirk
-    # where a duration-only change was logged without restating the dates.
+    # changed, no refDate/futDate) -- these are artifacts of someone toggling
+    # the app's refYear/futYear UI fields while testing a "post" duration
+    # setting, not real historical calendar snapshots (confirmed: e.g. the
+    # "2025-2025" entry has no relation to its own range_key's implied dates).
+    # There is no correct ref_date/fut_date recoverable for these from the
+    # source data -- never fabricate calendar dates. Since
     # FestivalChangelogEntry.ref_date/fut_date are NOT NULL (Task 1's
-    # schema), so backfill from any sibling entry (any range_key) for the
-    # same cluster_name/festival_name that does carry full dates -- the real
-    # dates are known, just not repeated on this particular record.
-    known_dates = {}
-    for clusters in changelog.values():
-        for cluster_name, festivals in clusters.items():
-            for festival_name, entry in festivals.items():
-                if "refDate" in entry and "futDate" in entry:
-                    known_dates[(cluster_name, festival_name)] = (entry["refDate"], entry["futDate"])
-
+    # schema), entries missing either field are skipped entirely.
     rows_written = 0
     rows_skipped = 0
     for range_key, clusters in changelog.items():
         for cluster_name, festivals in clusters.items():
             for festival_name, entry in festivals.items():
-                ref_date_str = entry.get("refDate")
-                fut_date_str = entry.get("futDate")
-                if ref_date_str is None or fut_date_str is None:
-                    fallback = known_dates.get((cluster_name, festival_name))
-                    if fallback is None:
-                        rows_skipped += 1
-                        continue
-                    ref_date_str, fut_date_str = fallback
+                if "refDate" not in entry or "futDate" not in entry:
+                    rows_skipped += 1
+                    continue
 
                 stmt = pg_insert(FestivalChangelogEntry).values(
                     range_key=range_key, cluster_name=cluster_name, festival_name=festival_name,
-                    ref_date=datetime.date.fromisoformat(ref_date_str), fut_date=datetime.date.fromisoformat(fut_date_str),
+                    ref_date=datetime.date.fromisoformat(entry["refDate"]), fut_date=datetime.date.fromisoformat(entry["futDate"]),
                     saved_at=entry["savedAt"],
                 )
                 stmt = stmt.on_conflict_do_update(
