@@ -69,7 +69,7 @@
           throw new Error(body.detail || 'Login failed');
         }
         const params = new URLSearchParams(window.location.search);
-        window.location.href = params.get('next') || '/aop/';
+        window.location.href = params.get('next') || 'http://localhost:7800/';
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.style.display = 'block';
