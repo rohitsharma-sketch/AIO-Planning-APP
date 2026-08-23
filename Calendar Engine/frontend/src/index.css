@@ -655,3 +655,57 @@ input[type=number].year-input { width: 80px; font-size: 15px; font-weight: 600; 
   text-transform: uppercase;
   letter-spacing: .06em;
 }
+
+/* ═══ Month pills — Calendarised Sales link cards ═══════════════════════
+   Ported from the old app's .month-pills/.month-pill rules
+   (calendar_engine.html lines 318-323), used by
+   CalendarisedSalesTab/LinkStatusPanel.jsx to replace what was a flat wall of
+   ~91-124 `YYYY-MM (rows)` checkboxes with a year selector + compact chips.
+
+   Token mapping follows the convention already set by the .scm-* block above:
+     old --primary  (#1B4F72) → --navy
+     old --surface2 (#F3F6FA) → --light  (the pale tint; the pills sit on a
+                                          --white card, so they need a fill)
+     old --text2    (#3A5068) → --muted  (this codebase's secondary-text token)
+   --border and --radius carry over unchanged. */
+.month-pills { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.month-pill { position: relative; }
+/* Visually hidden, not display:none — the checkbox must stay focusable so the
+   pills remain keyboard-reachable and screen-reader-announced; the <label
+   for=...> is what actually gets painted. */
+.month-pill input[type=checkbox] { position: absolute; opacity: 0; width: 0; height: 0; }
+.month-pill label {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--light);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.month-pill input:checked + label { background: var(--navy); color: #fff; border-color: var(--navy); }
+.month-pill label:hover { border-color: var(--navy); color: var(--navy); }
+.month-pill input:checked + label:hover { color: #fff; }
+/* Keyboard focus ring, since the real checkbox is visually hidden. */
+.month-pill input:focus-visible + label { outline: 2px solid var(--navy3); outline-offset: 1px; }
+/* Read-only (non-planner) users still see the selection, but nothing is clickable. */
+.month-pill input:disabled + label { cursor: default; opacity: .65; }
+.month-pill input:disabled + label:hover { border-color: var(--border); color: var(--muted); }
+.month-pill input:disabled:checked + label:hover { color: #fff; border-color: var(--navy); }
+
+/* Year select + pills sit side by side; the pills flex to fill the rest. */
+.link-month-picker { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; margin-top: 12px; }
+.link-month-picker select { width: auto; }
+.link-month-picker-months { flex: 1; min-width: 260px; }
+.link-month-picker-months > label {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--muted);
+}
+/* inline-flex, not flex: the card's pre-existing "Refresh" button is a sibling
+   that follows this row, and a block-level flex container would push it onto a
+   line of its own. inline-flex keeps Select All / Clear / Sync / Refresh on one
+   line, as they were before the picker was added. */
+.link-month-actions { display: inline-flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; vertical-align: middle; }
