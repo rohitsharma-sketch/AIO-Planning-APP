@@ -10,6 +10,7 @@ from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from sqlalchemy import delete, func, select
 
 from auth.deps import require_login, require_role
+from calendar_engine.cluster_names import resolve_cluster_name
 from calendar_engine.scans import get_salesdata_link, get_salesdata_link_daywise, run_reindex
 from db.base import SessionLocal
 from db.models.calendar import (
@@ -223,7 +224,17 @@ def put_store_cluster_map(body: dict = Body(...), actor: dict = Depends(require_
     session = SessionLocal()
     try:
         before = {r.store_id: r.cluster_name for r in session.execute(select(StoreCalendarCluster)).scalars().all()}
-        after_rows = [{"store": s["store"].strip(), "cluster": s["cluster"].strip()} for s in body.get("stores", []) if s.get("store") and s.get("cluster")]
+        # Store the RESOLVED cluster name (see resolve_cluster_name above) so this
+        # table's cluster_name always matches a real cluster_profiles.name — the key
+        # every downstream day-map / month-map lookup is done with.
+        profile_names = session.execute(
+            select(ClusterProfile.name).order_by(ClusterProfile.seq, ClusterProfile.name)
+        ).scalars().all()
+        aliases = body.get("aliases") or {}
+        after_rows = [
+            {"store": s["store"].strip(), "cluster": resolve_cluster_name(s["cluster"].strip(), profile_names, aliases)}
+            for s in body.get("stores", []) if s.get("store") and s.get("cluster")
+        ]
         after = {r["store"]: r["cluster"] for r in after_rows}
 
         added = sorted(set(after) - set(before))
@@ -288,7 +299,10 @@ async def import_store_cluster(file: UploadFile = File(...), actor: dict = Depen
 def get_cluster_profiles(user: dict = Depends(require_login)):
     session = SessionLocal()
     try:
-        profiles = session.execute(select(ClusterProfile).order_by(ClusterProfile.name)).scalars().all()
+        # `name` is a tiebreaker only: seq is unique in practice (assigned per-row on
+        # save), but tied seq values would otherwise leave Postgres free to return an
+        # arbitrary — and unstable — order.
+        profiles = session.execute(select(ClusterProfile).order_by(ClusterProfile.seq, ClusterProfile.name)).scalars().all()
         out = []
         for p in profiles:
             festivals = session.execute(select(ClusterProfileFestival).where(ClusterProfileFestival.cluster_profile_id == p.id)).scalars().all()
@@ -312,8 +326,8 @@ def put_cluster_profiles(body: dict = Body(...), actor: dict = Depends(require_r
             session.execute(delete(ClusterProfileFestival).where(ClusterProfileFestival.cluster_profile_id.in_(old_ids)))
             session.execute(delete(ClusterProfile).where(ClusterProfile.id.in_(old_ids)))
 
-        for profile in body.get("profiles", []):
-            p = ClusterProfile(name=profile["name"], region=profile.get("region"), next_id=profile["nextId"])
+        for i, profile in enumerate(body.get("profiles", [])):
+            p = ClusterProfile(name=profile["name"], region=profile.get("region"), next_id=profile["nextId"], seq=i)
             session.add(p)
             session.flush()
             for fest in profile.get("festivals", []):

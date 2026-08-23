@@ -219,25 +219,23 @@ def session_from_db():
 DB_SYNC_JOBS = [
     ("site_master", "data_lake_site_master"),
     ("store_master_xlsx", "store_master_xlsx"),
-    ("calendar_library", "calendar_library"),
-    ("store_calendar_cluster", "store_calendar_cluster_map"),
     ("day_shift", "data_lake_day_shift"),
-    ("store_actuals", "data_lake_sales"),  # last: depends on the calendar + cluster jobs above
+    ("store_actuals", "data_lake_sales"),
 ]
 
 
 @router.post("/api/config/db-sync")
 def db_sync_all():
-    """Runs every data-lake / Calendar Engine sync job into Postgres (rs_planning),
-    in dependency order (store_actuals needs the calendar + cluster map synced
-    first). Each job manages its own DB session and logs to sync.sync_runs
-    regardless of how it's invoked."""
+    """Runs every data-lake sync job into Postgres (rs_planning). Each job
+    manages its own DB session and logs to sync.sync_runs regardless of how
+    it's invoked. The import is inside the try/except so one missing/broken
+    module can't abort the rest of the loop."""
     import importlib
 
     results = {}
     for module_name, source_key in DB_SYNC_JOBS:
-        mod = importlib.import_module(f"sync.{module_name}_sync")
         try:
+            mod = importlib.import_module(f"sync.{module_name}_sync")
             mod.run()
             results[source_key] = {"ok": True}
         except Exception as e:

@@ -105,6 +105,10 @@ _planning_dist = os.path.join(os.path.dirname(_SALESPLAN_DIR), "frontend", "dist
 if os.path.isdir(_planning_dist):
     app.mount("/planning/assets", StaticFiles(directory=os.path.join(_planning_dist, "assets")), name="planning_assets")
 
+_calendar_dist = os.path.join(_HERE, "..", "..", "Calendar Engine", "frontend", "dist")
+if os.path.isdir(_calendar_dist):
+    app.mount("/calendar/assets", StaticFiles(directory=os.path.join(_calendar_dist, "assets")), name="calendar_assets")
+
 
 @app.get("/aop/{full_path:path}", include_in_schema=False)
 def aop_spa(full_path: str):
@@ -114,3 +118,8 @@ def aop_spa(full_path: str):
 @app.get("/planning/{full_path:path}", include_in_schema=False)
 def planning_spa(full_path: str):
     return FileResponse(os.path.join(_planning_dist, "index.html"))
+
+
+@app.get("/calendar/{full_path:path}", include_in_schema=False)
+def calendar_spa(full_path: str):
+    return FileResponse(os.path.join(_calendar_dist, "index.html"))

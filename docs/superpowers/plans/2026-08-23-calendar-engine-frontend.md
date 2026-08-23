@@ -1844,3 +1844,235 @@ git commit -m "Cutover: retire local_server.py, port 7822, and the 2 legacy sync
 ```
 
 At this point, `Calendar Engine/calendar_engine.html`, `Calendar Engine/local_server.py`, and `Calendar Engine/Local DB/*.json` are no longer referenced by anything live — per the spec's Cutover Path, archiving or deleting them is a separate, later cleanup pass done with fresh eyes once the new frontend has been live for a while, not part of this task.
+
+---
+
+### Task 15: Repoint the landing page at the unified platform
+
+**Added mid-execution** (not in the original spec) — the landing page at `Landing/index.html` (served standalone on port 7800) still has its 3 module cards pointing at the old standalone ports (`:7822`, `:8000`, `:8002`), never updated when AOP Forecaster and SalesPlan were unified onto `:8010` in an earlier piece of work this session. Once Task 14 retires port 7822, the landing page's Calendar card would point at a dead port. This task fixes that and, in the same pass, points the other two cards at the unified platform too — matching the platform's own "one consistent product" goal, not just patching the one card that would otherwise break.
+
+**Files:**
+- Modify: `Landing/index.html`
+
+**Interfaces:**
+- Consumes: nothing from earlier tasks directly — this is a static HTML file with no build step, pure client-side `fetch`.
+
+- [ ] **Step 1: Repoint the 3 primary cards to `:8010`**
+
+Replace the Calendar, AOP Forecaster, and Planning Engine cards' `href` and `data-check` attributes. All three now point at the unified platform's own paths, and all three use `:8010/docs` as a uniform, unauthenticated health-check target — the module-specific status endpoints the old checks used (`/api/config/summary`, `/api/store-master`, etc.) are now mounted behind `require_login` on `:8010`, so checking them directly would misreport "offline" for an anonymous visitor even when the server is healthy. `:8010/docs` (FastAPI's own auto-generated docs page) is always reachable without auth and exists on every FastAPI app in this platform, making it a safe, consistent choice for all three:
+
+```html
+<a class="card" href="http://localhost:8010/calendar/" target="_blank" data-check="http://localhost:8010/docs">
+  <div class="card-icon">📅</div>
+  <h2>Calendar</h2>
+  <p class="desc">Calendarisation Suite — builds the locked, festival-aligned day-shift calendar per cluster, used to reindex last year's sales onto this year's dates.</p>
+  <div class="meta">
+    <span class="port">localhost:8010/calendar</span>
+    <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
+  </div>
+</a>
+
+<a class="card" href="http://localhost:8010/aop/" target="_blank" data-check="http://localhost:8010/docs">
+  <div class="card-icon">📊</div>
+  <h2>AOP Forecaster</h2>
+  <p class="desc">Annual Operating Plan forecaster — planning inputs (Store Master, Growth %, NSO openings) and the store×division×month forecast engine.</p>
+  <div class="meta">
+    <span class="port">localhost:8010/aop</span>
+    <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
+  </div>
+</a>
+
+<a class="card" href="http://localhost:8010/planning/" target="_blank" data-check="http://localhost:8010/docs">
+  <div class="card-icon">🧮</div>
+  <h2>Planning Engine</h2>
+  <p class="desc">Sales Plan — Division/Department plans, MRP reapportionment, PW-W &amp; SOR deviation, and display-type planning engines.</p>
+  <div class="meta">
+    <span class="port">localhost:8010/planning</span>
+    <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
+  </div>
+</a>
+```
+
+Note each card's `data-check` is now identical (`:8010/docs`) — this is intentional, not a copy-paste mistake to "fix." The existing status-check `<script>` block (bottom of the file, the `document.querySelectorAll('.card').forEach(...)` loop) needs no changes; it already reads `data-check` generically per card.
+
+Since `:8010`'s routes require a login session, clicking a card takes the visitor to the app's React (or existing) frontend, which itself redirects to `/login` if the visitor isn't authenticated yet — this already works correctly (Task 2's `fetchJson` 401-redirect, and the equivalent behavior already live for AOP/SalesPlan's own frontends) and needs no special handling here.
+
+- [ ] **Step 2: Leave the "Data Sync & Flow" card's data-fetching unchanged**
+
+Do NOT repoint the `fetch('http://localhost:8000/api/config/db-sync/status', ...)` or `fetch('http://localhost:8002/api/department-plan/aop-forecaster-status', ...)` calls in the `<script>` block to their `:8010` equivalents. Those two specific endpoints are mounted behind `require_login` on `:8010` (`/api/aop/api/config/db-sync/status`, `/api/planning/department-plan/aop-forecaster-status`) — an anonymous landing-page visitor's fetch to either would get a 401 with no `runs`/`synced` field, and the existing `.then()` handlers would silently render "No syncs run yet" / "Not synced yet" instead of the real data, which is worse than confusing — it's actively misleading. The standalone AOP Forecaster (`:8000`) and SalesPlan (`:8002`) servers are not being retired by this or any other current plan (only Calendar Engine's `:7822` dies, in Task 14) — their `/api/config/db-sync/status` and `/api/department-plan/aop-forecaster-status` endpoints stay open, unauthenticated, and correctly populated regardless of this task, so leaving these two fetches as-is is the correct choice, not an oversight. Add a one-line code comment above this section explaining why, so a future reader doesn't "fix" the asymmetry into a regression:
+
+```javascript
+// NOTE: these two fetches intentionally stay pointed at the standalone
+// AOP Forecaster (:8000) and SalesPlan (:8002) ports, not :8010 — the
+// equivalent routes on :8010 require a login session, and an anonymous
+// landing-page visitor's fetch would silently get empty/misleading data
+// instead of a clear error. :8000/:8002 stay running unauthenticated
+// specifically for this kind of public status check.
+```
+
+- [ ] **Step 3: Update the footer copy**
+
+The current footer says "A grey dot means a module's server isn't running yet — start it with its own `start.bat` / `start_backend.bat`, then reload this page." — accurate for 3 independently-started standalone servers, no longer accurate once the 3 main cards point at one shared `:8010` process. Replace with:
+
+```html
+<footer>
+  Calendar, AOP Forecaster, and Planning Engine now run from one unified server
+  on <code>localhost:8010</code> — start it once and all three come up together.
+  A grey dot means that server isn't running yet.
+</footer>
+```
+
+- [ ] **Step 4: Verify in the browser**
+
+Start the unified app on `:8010` (with this plan's Tasks 1-14 already applied, so `/calendar/*` is live) and the standalone AOP Forecaster (`:8000`) and SalesPlan (`:8002`) servers (for the Data Sync card). Serve `Landing/index.html` (`python landing_server.py` from `Landing/`, port 7800) and open it in a browser. Confirm: all 3 primary cards show a green "online" dot, clicking each opens the correct `:8010` path in a new tab (prompting login if not already authenticated), and the "Data Sync & Flow" card still shows real data pulled from `:8000`/`:8002`.
+
+- [ ] **Step 5: Commit**
+
+```bash
+cd Landing
+git add index.html
+git commit -m "Repoint landing page at the unified platform (:8010), keep Data Sync card on standalone ports"
+```
+
+---
+
+### Task 16: Fix cluster-profile ordering not persisting across reload
+
+**Added mid-execution** — Task 6's implementer found, during live verification, that dragging cluster tabs to reorder them works correctly in the UI and sends the right payload, but the new order doesn't survive a page reload: `GET /cluster-profiles` always returns profiles sorted alphabetically by name, discarding whatever order was submitted via `PUT /cluster-profiles`. Root cause: `calendar.cluster_profiles` has no column recording sort order, so `get_cluster_profiles`'s `order_by(ClusterProfile.name)` is the only ordering available. This is a real bug in already-merged code from sub-project A (`RS Planning Platform/backend/calendar_engine/router.py`, `Tentative AOP Forecaster/db/models/calendar.py`) — outside Task 6's own frontend-only file list, but it breaks functionality this same plan is shipping, so it's fixed here rather than left as unaddressed debt.
+
+**Files:**
+- Modify: `Tentative AOP Forecaster/db/models/calendar.py` (add a `seq` column to `ClusterProfile`)
+- Create: a new Alembic migration (autogenerated)
+- Modify: `RS Planning Platform/backend/calendar_engine/router.py` (`get_cluster_profiles`, `put_cluster_profiles`)
+
+**Interfaces:**
+- Consumes: nothing from earlier tasks in this plan.
+- Produces: `GET /api/calendar/cluster-profiles` now returns profiles in the order they were last submitted via `PUT`, not alphabetically.
+
+- [ ] **Step 1: Add the `seq` column to `ClusterProfile`**
+
+In `Tentative AOP Forecaster/db/models/calendar.py`, add a `seq` field to the existing `ClusterProfile` class (after `region`):
+
+```python
+    seq: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+```
+
+- [ ] **Step 2: Generate and apply the migration**
+
+```bash
+cd "Tentative AOP Forecaster"
+python -m alembic revision --autogenerate -m "add seq column to cluster_profiles"
+```
+Read the generated migration file before applying — confirm it only adds the one `seq` column (as `NOT NULL` with a server-side default of `0`, since existing rows need a value) and touches nothing else.
+
+```bash
+python -m alembic upgrade head
+python -m alembic check
+```
+Expected: upgrades cleanly, no drift.
+
+- [ ] **Step 3: Backfill existing rows with their current (alphabetical) order as a starting `seq`**
+
+The migration gives every existing row `seq=0` (same value, so they'd still sort arbitrarily among themselves until the next `PUT` explicitly sets real values). Assign them a stable starting order matching what's already live, so nothing visibly changes until the user next reorders something:
+
+```bash
+export PGPASSWORD='RsPlanning_2026Local'
+"/c/Program Files/PostgreSQL/18/bin/psql.exe" -U rs_planning_app -h 127.0.0.1 -p 5432 -d rs_planning -c "
+WITH ordered AS (SELECT id, row_number() OVER (ORDER BY name) - 1 AS rn FROM calendar.cluster_profiles)
+UPDATE calendar.cluster_profiles SET seq = ordered.rn FROM ordered WHERE calendar.cluster_profiles.id = ordered.id;
+"
+```
+
+- [ ] **Step 4: Update `get_cluster_profiles` and `put_cluster_profiles`**
+
+In `RS Planning Platform/backend/calendar_engine/router.py`, change the read to order by `seq` instead of `name`:
+
+```python
+profiles = session.execute(select(ClusterProfile).order_by(ClusterProfile.seq)).scalars().all()
+```
+
+And change the write to stamp each profile's position in the submitted array as its `seq`:
+
+```python
+for i, profile in enumerate(body.get("profiles", [])):
+    p = ClusterProfile(name=profile["name"], region=profile.get("region"), next_id=profile["nextId"], seq=i)
+    session.add(p)
+    session.flush()
+    for fest in profile.get("festivals", []):
+        session.add(ClusterProfileFestival(
+            cluster_profile_id=p.id, source_festival_id=fest["id"], name=fest["name"],
+            ref_date=datetime.date.fromisoformat(fest["refDate"]), fut_date=datetime.date.fromisoformat(fest["futDate"]),
+            pre=fest["pre"], core=fest["core"], post=fest["post"],
+        ))
+```
+(The `for profile in body.get("profiles", [])` line becomes `for i, profile in enumerate(...)` — everything else in the loop body is unchanged.)
+
+- [ ] **Step 5: Verify live**
+
+Restart the unified backend (`:8010`). Using the browser (already logged in as `planner1` from earlier tasks' verification, or log in fresh): go to Calendarisation, drag-reorder the cluster tabs, reload the page, confirm the new order persisted. Independently confirm via psql:
+```bash
+"/c/Program Files/PostgreSQL/18/bin/psql.exe" -U rs_planning_app -h 127.0.0.1 -p 5432 -d rs_planning -c "SELECT name, seq FROM calendar.cluster_profiles ORDER BY seq;"
+```
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add "Tentative AOP Forecaster/db/models/calendar.py" "Tentative AOP Forecaster/alembic/versions/" "RS Planning Platform/backend/calendar_engine/router.py"
+git commit -m "Fix cluster-profile ordering not persisting across reload (add seq column)"
+```
+
+---
+
+### Task 17: Port the missing component CSS
+
+**Added mid-execution** — Task 6's reviewer found a real, plan-wide gap: no task in this plan ever assigned responsibility for porting the old app's component-level CSS (`.cluster-tab`, `.drag-handle`, `.fest-row-drag-over`, table styles, etc.). `src/index.css` (Task 1) only has the app-shell skeleton (nav bar, generic `.card`) using AOP Forecaster's tokens — every component built since (Tasks 4-12) renders real, functional markup with class names matching the old app's own CSS selectors (deliberately kept identical so this porting step would be mechanical), but with no matching CSS rules anywhere, so the app currently works but renders essentially unstyled. This task fixes that in one consolidated pass, once every component (Tasks 1-12) exists, rather than as scattered per-task additions.
+
+**Files:**
+- Modify: `Calendar Engine/frontend/src/index.css`
+
+**Interfaces:**
+- Consumes: nothing new — reads the already-built component files to know which classes need CSS, and the old `Calendar Engine/calendar_engine.html`'s `<style>` block (lines 4–1095) as the source of the actual rules.
+
+- [ ] **Step 1: Inventory which classes actually need CSS**
+
+```bash
+cd "Calendar Engine/frontend"
+grep -rohE 'className="[^"]*"' src/components | grep -oE '[a-zA-Z][a-zA-Z0-9_-]*' | sort -u
+```
+Cross-reference this list against what's already defined in `src/index.css` (the Task 1 skeleton: `.app-shell`, `.mod-nav`, `.mod-tab`, `.mod-tab.active`, `.mod-tab:disabled`, `.module-panel`, `.card`) — everything else on the list needs a rule.
+
+- [ ] **Step 2: Add the missing design tokens**
+
+The old app's CSS variables don't map 1:1 onto AOP Forecaster's token set (Task 1's `:root` block). Add these to `src/index.css`'s existing `:root` block — some are direct semantic substitutions of tokens Task 1 already defined (reuse those, don't redefine), some are genuinely new (no AOP equivalent):
+
+```css
+:root {
+  /* ...Task 1's existing --navy/--navy2/--navy3/--light/--bg/--white/--char/--muted/--border/--green/--red/--radius/--shadow stay as-is... */
+
+  /* New tokens with no AOP Forecaster equivalent — ported from the old
+     app's :root block (Calendar Engine/calendar_engine.html lines 21-39) */
+  --warn: #C87500;
+  --pre-bg: #FFF1DC;   --pre-row: #FFF8ED;   --pre-text: #7C3A00;   --pre-border: #F5C878;
+  --core-bg: #FFEA80;  --core-row: #FFFBE0;  --core-text: #5C3A00;  --core-border: #F0D000;
+  --post-bg: #D6ECFF;  --post-row: #EBF5FF;  --post-text: #0E3A70;  --post-border: #90C4F0;
+}
+```
+
+Everywhere the old app's CSS rules (Step 3) reference `--surface`, use `--white`; `--surface2` or `--primary-bg`, use `--light`; `--text`, use `--char`; `--text2` or `--muted`, use `--muted`; `--primary` or `--primary-light`, use `--navy` (or `--navy3` for a lighter accent instance — use judgment per rule, both are reasonable); `--success`, use `--green`; `--danger`, use `--red`; `--r`, use `--radius`; `--shadow`/`--shadow-md`, use `--shadow`. Do NOT port the old app's header/nav-specific tokens (`--app-hdr-bg`, `--mod-nav-bg`, `--mod-nav-active-bg`, `--sub-nav-bg`, `--tbl-hdr-bg`, `--cell-edit-bg`, `--left-bg`, `--left-border`, `--left-title`) — Task 1 already built equivalent nav/shell chrome using AOP's own tokens directly; these old ones have no consumer in the new app.
+
+- [ ] **Step 3: Port the actual CSS rules**
+
+For each class from Step 1's inventory, find its rule(s) in `Calendar Engine/calendar_engine.html`'s `<style>` block (lines 4–1095 — use `grep -n` for the exact selector to find the right rule quickly) and add it to `src/index.css`, substituting old token references for new ones per Step 2's mapping. This covers, at minimum (the classes already known to exist from Tasks 4-12's components): `.cluster-tab`, `.cluster-tab.active`, `.cluster-drag-over`, `.cluster-add-btn`, `.drag-handle`, `.fest-row-drag-over`, table/`th`/`td` styling for `#festTable`/`#dayTable`/`#scmTable`/`#dsTable`/output tables, `.tabs`/`.tabs button` (sub-tab bars), `.cal-sub-nav`, form control styling (`input`, `select`, `button` base styles if the old app has global ones), and the category-color classes if any component renders category badges (Pre/Core/Post-Festive, using the new `--pre-*`/`--core-*`/`--post-*` tokens from Step 2).
+
+Don't port CSS for selectors with no consumer in the new app (e.g., the old theme-switcher swatch styles, or markup this rewrite deliberately dropped like the month-pill bulk-scope picker) — matching this whole plan's YAGNI discipline, not blind duplication.
+
+- [ ] **Step 4: Verify visually**
+
+Build and serve the app (`npm run build`, or continue using the dev server already running from earlier tasks' verification). Log in as `planner1`, click through all 5 tabs, and confirm: cluster tabs and the active one are visually distinguishable, drag handles look draggable (not bare text), tables have visible borders/header styling, buttons look like buttons (not unstyled text). This is a sanity check for "not obviously broken," not a pixel-perfect comparison against the old app.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add "Calendar Engine/frontend/src/index.css"
+git commit -m "Port missing component CSS from the old app, mapped onto AOP Forecaster's tokens"
+```

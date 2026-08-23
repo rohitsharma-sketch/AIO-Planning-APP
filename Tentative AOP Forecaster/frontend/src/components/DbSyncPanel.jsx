@@ -21,8 +21,6 @@ export async function fetchJson(url, opts) {
 const DB_SYNC_LABELS = {
   data_lake_site_master:      'Site Master (data lake)',
   store_master_xlsx:          'Store Master.xlsx',
-  calendar_library:           'Calendar library',
-  store_calendar_cluster_map: 'Store → Calendar Cluster map',
   data_lake_day_shift:        'Day-shift calendar (data lake)',
   data_lake_sales:            'Store Actuals (day-shifted sales)',
 }

@@ -136,6 +136,7 @@ class ClusterProfile(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
     region: Mapped[str | None] = mapped_column(String, nullable=True)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     next_id: Mapped[int] = mapped_column(Integer, nullable=False)
 
 

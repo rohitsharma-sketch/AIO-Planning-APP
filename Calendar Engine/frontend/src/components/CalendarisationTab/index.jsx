@@ -1,0 +1,298 @@
+import { useState, useEffect } from 'react'
+import { getClusterProfiles, putClusterProfiles, getAppState } from '../../lib/api'
+import { generateMappings, validate, computeMonthly, buildFestMap } from '../../lib/engine'
+import { parseDate, fmtISO, fmtDisp, calDiff, weekNum } from '../../lib/dateUtils'
+import ClusterTabs from './ClusterTabs'
+import FestivalTable from './FestivalTable'
+import BulkAdjustPanels from './BulkAdjustPanels'
+import OutputSection from './OutputSection'
+import CalendarLibrary from './CalendarLibrary'
+import ChangeLogViewer from './ChangeLogViewer'
+import { DEFAULT_FESTIVALS } from '../../lib/festivalData'
+
+let _nextFestivalId = 1000
+
+// Ported from `Calendar Engine/calendar_engine.html` line ~1332 (defined alongside
+// MONTHS, just above the Date Utilities section there) — not exported by lib/dateUtils.js
+// or lib/engine.js, so redefined here for building display rows.
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+// Default date for a newly added festival row: today's day/month in the given year
+// (the configured Reference/Future year), falling back to the current year when
+// that isn't set yet. Unlike the old localStorage app, a blank date is not an
+// option here - put_cluster_profiles parses refDate/futDate with
+// date.fromisoformat() into NOT NULL columns, so persisting '' would 500. The
+// day is clamped to the target month's length so e.g. Feb 29 -> Feb 28 in a
+// non-leap year rather than silently rolling over into March.
+function defaultFestivalDate(year) {
+  const now = new Date()
+  const y = Number(year) || now.getFullYear()
+  const m = now.getMonth()
+  const daysInMonth = new Date(y, m + 1, 0).getDate()
+  return fmtISO(new Date(y, m, Math.min(now.getDate(), daysInMonth)))
+}
+
+// Converts one raw mapping object (as returned by generateMappings/reconstructed
+// from a saved calendar) into the flat row shape OutputSection.jsx renders.
+// Mirrors the cell derivations in the old app's renderDayTable() (calendar_engine.html
+// lines 1819-1868).
+function toRow(m) {
+  const futInfo = m.futFestInfo
+  const futFestStr = futInfo ? `${futInfo.festival} ${futInfo.position >= 0 ? '+' : ''}${futInfo.position}` : ''
+  return {
+    refDate: fmtDisp(m.refDate),
+    refDay: DAYS[m.refDate.getDay()],
+    refWeek: weekNum(m.refDate),
+    festival: m.festival || '',
+    category: m.festiveCategory,
+    position: m.festivePosition != null ? (m.festivePosition >= 0 ? '+' : '') + m.festivePosition : '—',
+    futDate: fmtDisp(m.futureDate),
+    futDay: DAYS[m.futureDate.getDay()],
+    futWeek: weekNum(m.futureDate),
+    futFestival: futFestStr,
+    mappingType: m.mappingType,
+    score: Math.round(m.score || 0),
+    monthDelta: m.monthMatch ? 'Yes' : 'No',
+    weekdayDelta: m.weekdayMatch ? 'Yes' : 'No',
+    dayDelta: m.dateDiff,
+  }
+}
+
+// Reconstructs mapping objects (same shape generateMappings produces, minus
+// mappingPriority/score which aren't stored) from a saved calendar's flat
+// [refISO, futISO] day pairs, so the same toRow()/validate()/computeMonthly()
+// pipeline can render a loaded calendar. festival/category are looked up from
+// the saved cluster's own festival definitions via buildFestMap so the display
+// still shows festive context even though the day-pair storage itself doesn't
+// carry it (backend `CalendarDayPair` only has ref_date/fut_date columns).
+function mappingsFromSavedPairs(pairs, festivals, refYr, futYr) {
+  const rMap = buildFestMap(refYr, festivals, refYr)
+  const fMap = buildFestMap(futYr, festivals, refYr)
+  return pairs.map(([refIso, futIso]) => {
+    const rd = parseDate(refIso), fd = parseDate(futIso)
+    const ri = rMap[refIso], fi = fMap[futIso]
+    return {
+      refDate: rd, futureDate: fd,
+      festival: ri ? ri.festival : null,
+      festivePosition: ri ? ri.position : null,
+      festiveCategory: ri ? ri.category : (fi ? fi.category : 'Non-Festive'),
+      futFestInfo: fi || null,
+      mappingType: '(loaded from library)', mappingPriority: null, score: 0,
+      monthMatch: rd.getMonth() === fd.getMonth(),
+      weekdayMatch: rd.getDay() === fd.getDay(),
+      dateDiff: calDiff(rd, fd),
+    }
+  })
+}
+
+export default function CalendarisationTab({ isPlanner }) {
+  const [profiles, setProfiles] = useState([])
+  const [activeIdx, setActiveIdx] = useState(0)
+  const [status, setStatus] = useState(null)
+
+  // Engine run state. refYear/futYear/maxShift/moPri come from Task 4's
+  // /app-state endpoint (owned/edited by VersionSettingTab) — read once on
+  // mount, same as VersionSettingTab does. generateMappings/validate need
+  // refYear/futYear/maxShift as actual numbers (they do `yr === refYear`
+  // comparisons internally), so these are coerced with Number(...) wherever used.
+  const [refYear, setRefYear] = useState(null)
+  const [futYear, setFutYear] = useState(null)
+  const [maxShift, setMaxShift] = useState(45)
+  const [moPri, setMoPri] = useState('prev')
+
+  // Raw per-cluster mappings from the last "Create Calendar" run — Date-object
+  // based, keyed to profiles by index — used to build the save payload (needs
+  // every cluster's day map, not just the one currently being viewed). Cleared
+  // after loading a calendar from the library, since a loaded snapshot isn't a
+  // fresh generation and shouldn't be re-saved as though it were.
+  const [clusterMappingsRaw, setClusterMappingsRaw] = useState(null)
+  const [dayMap, setDayMap] = useState(null)
+  const [validationIssues, setValidationIssues] = useState([])
+  const [monthlySummary, setMonthlySummary] = useState(null)
+  const [engineStatus, setEngineStatus] = useState(null)
+
+  useEffect(() => {
+    getClusterProfiles().then(({ profiles }) => {
+      setProfiles(profiles.length ? profiles : [{ name: 'Cluster 1', region: 'all', nextId: 20, festivals: DEFAULT_FESTIVALS.map(f => ({ ...f })) }])
+    }).catch(e => setStatus({ ok: false, msg: e.message }))
+    getAppState().then(s => {
+      if (s.refYear != null) setRefYear(s.refYear)
+      if (s.futYear != null) setFutYear(s.futYear)
+      if (s.maxShift != null) setMaxShift(s.maxShift)
+      if (s.moPri) setMoPri(s.moPri)
+    }).catch(() => {})
+  }, [])
+
+  function runEngine() {
+    if (!refYear || !futYear) {
+      setEngineStatus({ ok: false, msg: 'Set Reference Year and Future Year on the Version Setting tab first.' })
+      return
+    }
+    const ry = Number(refYear), fy = Number(futYear), ms = Number(maxShift) || 45
+    if (ry === fy) {
+      setEngineStatus({ ok: false, msg: 'Reference and Future year must be different.' })
+      return
+    }
+    try {
+      const perCluster = profiles.map(cp => ({ name: cp.name, mappings: generateMappings(cp.festivals, ry, fy, ms, moPri) }))
+      setClusterMappingsRaw(perCluster)
+      const activeMappings = perCluster[activeIdx].mappings
+      setDayMap(activeMappings.map(toRow))
+      setValidationIssues(validate(activeMappings, ry, fy, ms, profiles[activeIdx].festivals))
+      setMonthlySummary(computeMonthly(activeMappings))
+      setEngineStatus({ ok: true, msg: `Calendar generated: ${activeMappings.length} days mapped for "${profiles[activeIdx].name}".` })
+    } catch (e) {
+      setEngineStatus({ ok: false, msg: e.message })
+    }
+  }
+
+  // Keep the output view in sync with whichever cluster tab is active, same as
+  // the old app's viewCluster() (calendar_engine.html lines 1787-1799).
+  useEffect(() => {
+    if (!clusterMappingsRaw || !clusterMappingsRaw[activeIdx] || !profiles[activeIdx]) return
+    const ry = Number(refYear), fy = Number(futYear), ms = Number(maxShift) || 45
+    const activeMappings = clusterMappingsRaw[activeIdx].mappings
+    setDayMap(activeMappings.map(toRow))
+    setValidationIssues(validate(activeMappings, ry, fy, ms, profiles[activeIdx].festivals))
+    setMonthlySummary(computeMonthly(activeMappings))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIdx])
+
+  function buildSavePayload() {
+    if (!clusterMappingsRaw) throw new Error('Click "Create Calendar" to generate mappings before saving.')
+    const dayMapByCluster = {}
+    clusterMappingsRaw.forEach(cm => {
+      dayMapByCluster[cm.name] = cm.mappings.map(m => [fmtISO(m.refDate), fmtISO(m.futureDate)])
+    })
+    return {
+      id: Date.now(),
+      name: `${profiles[activeIdx].name} Calendar`,
+      refYear: Number(refYear),
+      futYear: Number(futYear),
+      savedAt: new Date().toISOString(),
+      engine: 'calendarisation-v1',
+      clusters: profiles.map(cp => ({ name: cp.name, region: cp.region, festivals: cp.festivals })),
+      dayMap: dayMapByCluster,
+    }
+  }
+
+  function handleLoadFromLibrary(full) {
+    const cluster = (full.clusters || []).find(c => c.name === profiles[activeIdx]?.name) || full.clusters?.[0]
+    const pairs = (cluster && full.dayMap && full.dayMap[cluster.name]) || []
+    const ry = Number(full.refYear), fy = Number(full.futYear)
+    if (!cluster || !pairs.length) {
+      setEngineStatus({ ok: false, msg: `Loaded "${full.name}", but it has no saved day mapping for the current cluster.` })
+      setDayMap([])
+      setValidationIssues([])
+      setMonthlySummary(null)
+      setClusterMappingsRaw(null)
+      return
+    }
+    const mappings = mappingsFromSavedPairs(pairs, cluster.festivals, ry, fy)
+    setRefYear(full.refYear)
+    setFutYear(full.futYear)
+    setDayMap(mappings.map(toRow))
+    setValidationIssues(validate(mappings, ry, fy, Number(maxShift) || 45, cluster.festivals))
+    setMonthlySummary(computeMonthly(mappings))
+    setClusterMappingsRaw(null) // a loaded snapshot; regenerate via "Create Calendar" before saving again
+    setEngineStatus({ ok: true, msg: `Loaded "${full.name}" (${full.refYear} -> ${full.futYear}).` })
+  }
+
+  async function persist(nextProfiles) {
+    setProfiles(nextProfiles)
+    if (!isPlanner) return
+    try {
+      await putClusterProfiles({
+        profiles: nextProfiles.map(cp => ({ name: cp.name, region: cp.region, nextId: cp.nextId, festivals: cp.festivals })),
+      })
+      setStatus({ ok: true, msg: 'Saved' })
+    } catch (e) {
+      setStatus({ ok: false, msg: e.message })
+    }
+  }
+
+  function handleReorder(from, to) {
+    const next = [...profiles]
+    const [moved] = next.splice(from, 1)
+    next.splice(to, 0, moved)
+    let nextActive = activeIdx
+    if (activeIdx === from) nextActive = to
+    else if (from < activeIdx && to >= activeIdx) nextActive--
+    else if (from > activeIdx && to <= activeIdx) nextActive++
+    setActiveIdx(nextActive)
+    persist(next)
+  }
+
+  function handleAdd() {
+    const next = [...profiles, { name: `Cluster ${profiles.length + 1}`, region: 'all', nextId: 20, festivals: DEFAULT_FESTIVALS.map(f => ({ ...f })) }]
+    persist(next)
+  }
+
+  function handleFestivalsChange(nextFestivals) {
+    const next = profiles.map((cp, i) => i === activeIdx ? { ...cp, festivals: nextFestivals } : cp)
+    persist(next)
+  }
+
+  // "+ Add Festival" (old app: addFestival(), calendar_engine.html line ~2061).
+  // Appends an editable placeholder row to the active cluster and persists it
+  // through the same handleFestivalsChange/persist() path every other festival
+  // edit uses.
+  function handleAddFestival() {
+    const existing = profiles[activeIdx]?.festivals || []
+    // _nextFestivalId is module-scoped, so it resets to its initial value on every
+    // page load. Lift it above the ids already in use before handing one out, so a
+    // festival added today can't collide with one added in an earlier session -
+    // these ids are both the React keys in FestivalTable and the backend's
+    // source_festival_id.
+    const maxId = existing.reduce((m, f) => Math.max(m, Number(f.id) || 0), 0)
+    if (_nextFestivalId <= maxId) _nextFestivalId = maxId + 1
+    handleFestivalsChange([...existing, {
+      id: _nextFestivalId++,
+      name: 'New Festival',
+      refDate: defaultFestivalDate(refYear),
+      futDate: defaultFestivalDate(futYear),
+      pre: 1, core: 1, post: 1,
+    }])
+  }
+
+  if (!profiles.length) return <div className="module-panel">Loading…</div>
+
+  return (
+    <div className="module-panel" style={{ display: 'flex', gap: '16px' }}>
+      <main style={{ flex: 1 }}>
+        <div className="card">
+          <ClusterTabs profiles={profiles} activeIdx={activeIdx} onSwitch={setActiveIdx}
+            onReorder={handleReorder} onAdd={handleAdd} isPlanner={isPlanner} />
+          <BulkAdjustPanels festivals={profiles[activeIdx].festivals} onChange={handleFestivalsChange} isPlanner={isPlanner} />
+          <FestivalTable festivals={profiles[activeIdx].festivals} onChange={handleFestivalsChange}
+            onAdd={handleAddFestival} isPlanner={isPlanner} />
+          <div style={{ margin: '12px 0' }}>
+            <div style={{ fontSize: '11px', color: 'var(--muted)', margin: '4px 0 12px' }}>
+              Reference Year {refYear ?? '—'} → Future Year {futYear ?? '—'} (set on the Version Setting tab)
+            </div>
+            <button className="btn" onClick={runEngine}>Create Calendar</button>
+          </div>
+          {engineStatus && <p style={{ color: engineStatus.ok ? 'var(--green)' : 'var(--red)' }}>{engineStatus.msg}</p>}
+        </div>
+
+        <OutputSection dayMap={dayMap} validationIssues={validationIssues} monthlySummary={monthlySummary} />
+
+        {status && <p style={{ color: status.ok ? 'var(--green)' : 'var(--red)' }}>{status.msg}</p>}
+      </main>
+
+      <aside style={{ width: '320px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <CalendarLibrary onLoad={handleLoadFromLibrary} isPlanner={isPlanner} buildSavePayload={buildSavePayload} />
+        <ChangeLogViewer rangeKey={refYear && futYear ? `${refYear}-${futYear}` : null} />
+      </aside>
+    </div>
+  )
+}
+
+// NOTE (Task 6 known simplifications, to be addressed by later tasks if needed):
+// - Festival-name autocomplete (old calendar_engine.html lines 1222-1301, searchFestDB/FESTIVAL_DATES-driven
+//   suggestions dropdown) is not ported. Typing a full festival name still works without suggestions.
+// - autoFillDate (old calendar_engine.html lines 2036-2054): when a festival's Reference Date is edited and its
+//   Future Date is still empty (or vice versa), the old app auto-filled the other date by re-using the day/month
+//   against a separately-selected ref/fut year (inputs #refYear/#futYear, part of the bulk-adjust panel added in
+//   Task 7). Since those year selectors don't exist yet in this partial file, that auto-fill is deferred to
+//   Task 7/8 rather than approximated here.

@@ -1,0 +1,271 @@
+:root {
+  --navy: #1F3864;
+  --navy2: #2F5597;
+  --navy3: #4472C4;
+  --light: #EEF3FB;
+  --bg: #F4F6FB;
+  --white: #FFFFFF;
+  --char: #1A2332;
+  --muted: #6B7A99;
+  --border: #D0D9ED;
+  --green: #1A6B3C;
+  --red: #C0392B;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(31,56,100,0.08), 0 4px 16px rgba(31,56,100,0.06);
+
+  /* New tokens with no AOP Forecaster equivalent — ported from the old
+     app's :root block (Calendar Engine/calendar_engine.html lines 21-39) */
+  --warn: #C87500;
+  --pre-bg: #FFF1DC;   --pre-row: #FFF8ED;   --pre-text: #7C3A00;   --pre-border: #F5C878;
+  --core-bg: #FFEA80;  --core-row: #FFFBE0;  --core-text: #5C3A00;  --core-border: #F0D000;
+  --post-bg: #D6ECFF;  --post-row: #EBF5FF;  --post-text: #0E3A70;  --post-border: #90C4F0;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--bg);
+  color: var(--char);
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.mod-nav {
+  display: flex;
+  gap: 4px;
+  padding: 12px 20px 0;
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+}
+
+.mod-tab {
+  padding: 10px 18px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.mod-tab.active {
+  color: var(--navy);
+  background: var(--light);
+}
+
+.mod-tab:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.module-panel {
+  flex: 1;
+  padding: 20px;
+}
+
+.card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+/* ═══ Form controls ═══════════════════════════════════════════════════
+   Ported from the old app's global input/select rule (calendar_engine.html
+   ~line 138). The new components render bare <input>/<select> (no --r/--surface
+   wrapper classes), so this applies directly to the element types in use:
+   number, date, and untyped (defaults to text) inputs, plus <select>. */
+input[type=number], input[type=date], input:not([type]), select {
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--white);
+  color: var(--char);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color .15s;
+}
+input[type=number]:focus, input[type=date]:focus, input:not([type]):focus, select:focus {
+  border-color: var(--navy3);
+  box-shadow: 0 0 0 2px var(--light);
+}
+input[type=number] { font-variant-numeric: tabular-nums; width: 70px; }
+input[type=checkbox], input[type=radio] { accent-color: var(--navy); }
+
+/* ═══ Buttons ══════════════════════════════════════════════════════════
+   The old app styled every button via an explicit .btn/.btn-* class; the new
+   components render many plain, unclassed <button> elements (Load, Delete,
+   Refresh, Sync, Close, etc.). This gives all of them a real button look
+   (ported loosely from .btn-ghost, calendar_engine.html line 201) as the
+   default, while .mod-tab/.cluster-tab/.cluster-add-btn/.tabs button/
+   .cal-sub-nav button (all higher-specificity, one-class-or-more selectors)
+   override it for their own look regardless of source order. */
+button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 13px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--white);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity .15s, transform .08s, background .15s;
+  white-space: nowrap;
+}
+button:hover { background: var(--light); }
+button:active { transform: scale(.97); }
+button:disabled { opacity: .5; cursor: default; }
+
+/* Primary action button (e.g. "Create Calendar" in CalendarisationTab),
+   ported from .btn + .btn-generate (calendar_engine.html lines 196-207). */
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--navy);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.btn:hover { opacity: .88; background: var(--navy); }
+
+/* ═══ Cluster tabs (CalendarisationTab/ClusterTabs.jsx) ═══════════════════
+   Ported from calendar_engine.html lines 179-193. */
+.cluster-tab {
+  padding: 5px 13px;
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  color: var(--muted);
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  transition: background .15s, color .15s, border-color .15s;
+  white-space: nowrap;
+}
+.cluster-tab.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+.cluster-tab:hover:not(.active) { border-color: var(--navy3); color: var(--navy3); background: var(--white); }
+.cluster-tab.cluster-drag-over { border-color: var(--navy) !important; box-shadow: 0 0 0 3px var(--light); }
+
+.cluster-add-btn {
+  padding: 4px 10px;
+  border: 1.5px dashed var(--border);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 20px;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.1;
+}
+.cluster-add-btn:hover { border-color: var(--navy3); color: var(--navy3); background: transparent; }
+
+/* Festival row/cell drag-and-drop (CalendarisationTab/FestivalTable.jsx),
+   ported from calendar_engine.html lines 190-192. */
+.drag-handle {
+  cursor: grab;
+  color: var(--muted);
+  font-size: 14px;
+  padding: 0 6px;
+  user-select: none;
+  opacity: .35;
+  transition: opacity .1s;
+  line-height: 1;
+}
+.drag-handle:hover { opacity: 1; color: var(--navy3); }
+tr.fest-row-drag-over td { border-top: 2px solid var(--navy) !important; }
+
+/* ═══ Sub-tab bars ═════════════════════════════════════════════════════
+   .tabs (OutputSection.jsx / ReindexOutputPanel.jsx) and .cal-sub-nav
+   (StoreClusterMappingTab/index.jsx) both render bare <button> children
+   toggled between "" and "active" — the old app's .tab/.cal-sub-tab classes
+   have no consumer here, so the rules target the buttons directly.
+   Ported from calendar_engine.html lines 120-123, 210-213. */
+.tabs { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 14px; }
+.tabs button {
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  margin-bottom: -2px;
+  color: var(--muted);
+  transition: color .12s;
+}
+.tabs button:hover { color: var(--char); background: none; }
+.tabs button.active { color: var(--navy); border-bottom-color: var(--navy); font-weight: 600; }
+
+.cal-sub-nav { background: var(--white); border-bottom: 1px solid var(--border); display: flex; gap: 0; padding: 0 16px; flex-shrink: 0; overflow-x: auto; }
+.cal-sub-nav button {
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  margin-bottom: -1px;
+  color: var(--muted);
+  white-space: nowrap;
+  transition: color .12s;
+}
+.cal-sub-nav button:hover { color: var(--navy); background: none; }
+.cal-sub-nav button.active { color: var(--navy); border-bottom-color: var(--navy); }
+
+/* ═══ Tables ═══════════════════════════════════════════════════════════
+   #festTable and the plain <table> elements in StoreMappingPanel,
+   DateShiftPreviewPanel, ReindexOutputPanel and OutputSection all render
+   without the old app's .ftbl/.dtbl/.stbl classes, so these rules target
+   table/th/td directly. Ported from calendar_engine.html lines 156-160,
+   225-232, 235-239 (--tbl-hdr-bg has no equivalent here per Step 2 — using
+   --navy directly for the header band instead). */
+.tbl-wrap { overflow-x: auto; max-height: 480px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 7px 10px;
+  background: var(--navy);
+  color: #fff;
+  border-bottom: 2px solid rgba(255,255,255,.12);
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  white-space: nowrap;
+}
+table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+table tr:last-child td { border-bottom: none; }
+table tr:hover td { background: var(--light); }
+
+/* Festival table's editable cells need narrower, purpose-sized inputs
+   (ported from table.ftbl input rules, calendar_engine.html lines 161-164)
+   instead of the 70px generic number-input width above. */
+#festTable input:not([type]) { width: 130px; }
+#festTable input[type=date] { width: 130px; }
+#festTable input[type=number] { width: 55px; }

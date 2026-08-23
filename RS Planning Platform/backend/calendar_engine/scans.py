@@ -355,6 +355,24 @@ def _get_raw(source, months, sync_id, fetch_fn):
     return df.copy(), rows_read, False
 
 
+def _split_unknown_clusters(df, known_clusters):
+    """Separate rows whose cluster has NO entry at all in the calendar's map from
+    rows that merely lack a mapping for one specific date/month.
+
+    Both used to fail the same `dropna` and get counted as "unmapped dates", which
+    misattributes a cluster-name mismatch (a data-quality problem affecting every
+    row of those stores) to a handful of missing calendar days. Returns
+    (df_with_known_clusters, unknown_cluster_names, unknown_cluster_stores).
+    """
+    unknown_mask = ~df["cluster"].isin(known_clusters)
+    if not bool(unknown_mask.any()):
+        return df, [], []
+    unknown = df.loc[unknown_mask]
+    names = sorted(unknown["cluster"].unique().tolist())
+    stores = sorted(unknown["STORE_NAME"].unique().tolist())
+    return df.loc[~unknown_mask], names, stores
+
+
 def reindex_daywise(months, store_cluster, day_map, sync_id=None):
     cluster_ref_fut = {c: {p[0]: p[1] for p in pairs} for c, pairs in day_map.items()}
 
@@ -362,6 +380,8 @@ def reindex_daywise(months, store_cluster, day_map, sync_id=None):
     df["cluster"] = df["STORE_NAME"].map(store_cluster)
     unmapped_stores = sorted(df.loc[df["cluster"].isna(), "STORE_NAME"].unique().tolist())
     df = df.dropna(subset=["cluster"])
+
+    df, unknown_clusters, unknown_cluster_stores = _split_unknown_clusters(df, set(cluster_ref_fut))
 
     df["ref_iso"] = df["BILLDATE"].dt.strftime("%Y-%m-%d")
     df = _vectorized_lookup(df, "cluster", "ref_iso", "fut_date", cluster_ref_fut)
@@ -377,6 +397,7 @@ def reindex_daywise(months, store_cluster, day_map, sync_id=None):
         "ok": True, "source": "dw", "grain": "store", "metric": "NETAMT",
         "rowsRead": total_read, "rowsMapped": len(df), "rows": rows, "columns": columns,
         "unmappedStores": unmapped_stores, "unmappedDateCount": unmapped_dates, "unmappedDateSample": unmapped_sample,
+        "unmappedClusters": unknown_clusters, "unmappedClusterStores": unknown_cluster_stores,
         "usedFrozenSync": used_cache,
     }
 
@@ -398,6 +419,8 @@ def reindex_monthwise(months, store_cluster, day_map, sync_id=None):
     unmapped_stores = sorted(df.loc[df["cluster"].isna(), "STORE_NAME"].unique().tolist())
     df = df.dropna(subset=["cluster"])
 
+    df, unknown_clusters, unknown_cluster_stores = _split_unknown_clusters(df, set(cluster_month_map))
+
     df = _vectorized_lookup(df, "cluster", "ym", "fut_month", cluster_month_map)
     unmapped_months = int(df["fut_month"].isna().sum())
     unmapped_sample = sorted(df.loc[df["fut_month"].isna(), "ym"].unique().tolist())[:20]
@@ -412,6 +435,7 @@ def reindex_monthwise(months, store_cluster, day_map, sync_id=None):
         "ok": True, "source": "mw", "grain": "store_division", "metric": "SL_V",
         "rowsRead": total_read, "rowsMapped": len(df), "rows": rows, "columns": columns,
         "unmappedStores": unmapped_stores, "unmappedDateCount": unmapped_months, "unmappedDateSample": unmapped_sample,
+        "unmappedClusters": unknown_clusters, "unmappedClusterStores": unknown_cluster_stores,
         "usedFrozenSync": used_cache,
     }
 
