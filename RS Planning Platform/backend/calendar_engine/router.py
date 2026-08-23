@@ -12,10 +12,13 @@ from sqlalchemy import delete, func, select
 from auth.deps import require_login, require_role
 from db.base import SessionLocal
 from db.models.calendar import (
+    AppStateMeta,
     Calendar,
     CalendarCluster,
     CalendarClusterFestival,
     CalendarDayPair,
+    ClusterProfile,
+    ClusterProfileFestival,
     StoreCalendarCluster,
     StoreClusterLogEntry,
     StoreClusterMapMeta,
@@ -276,3 +279,93 @@ async def import_store_cluster(file: UploadFile = File(...), actor: dict = Depen
         return {"ok": True, "filename": file.filename, "rows": rows}
     except Exception as e:
         raise HTTPException(400, str(e))
+
+
+@router.get("/cluster-profiles")
+def get_cluster_profiles(user: dict = Depends(require_login)):
+    session = SessionLocal()
+    try:
+        profiles = session.execute(select(ClusterProfile).order_by(ClusterProfile.name)).scalars().all()
+        out = []
+        for p in profiles:
+            festivals = session.execute(select(ClusterProfileFestival).where(ClusterProfileFestival.cluster_profile_id == p.id)).scalars().all()
+            out.append({
+                "name": p.name, "region": p.region, "nextId": p.next_id,
+                "festivals": [{"id": f.source_festival_id, "name": f.name, "refDate": f.ref_date.isoformat(),
+                               "futDate": f.fut_date.isoformat(), "pre": f.pre, "core": f.core, "post": f.post}
+                              for f in festivals],
+            })
+        return {"profiles": out}
+    finally:
+        session.close()
+
+
+@router.put("/cluster-profiles")
+def put_cluster_profiles(body: dict = Body(...), actor: dict = Depends(require_role("planner"))):
+    session = SessionLocal()
+    try:
+        old_ids = [row[0] for row in session.execute(select(ClusterProfile.id)).all()]
+        if old_ids:
+            session.execute(delete(ClusterProfileFestival).where(ClusterProfileFestival.cluster_profile_id.in_(old_ids)))
+            session.execute(delete(ClusterProfile).where(ClusterProfile.id.in_(old_ids)))
+
+        for profile in body.get("profiles", []):
+            p = ClusterProfile(name=profile["name"], region=profile.get("region"), next_id=profile["nextId"])
+            session.add(p)
+            session.flush()
+            for fest in profile.get("festivals", []):
+                session.add(ClusterProfileFestival(
+                    cluster_profile_id=p.id, source_festival_id=fest["id"], name=fest["name"],
+                    ref_date=datetime.date.fromisoformat(fest["refDate"]), fut_date=datetime.date.fromisoformat(fest["futDate"]),
+                    pre=fest["pre"], core=fest["core"], post=fest["post"],
+                ))
+        session.commit()
+        return {"ok": True}
+    finally:
+        session.close()
+
+
+@router.get("/app-state")
+def get_app_state(user: dict = Depends(require_login)):
+    session = SessionLocal()
+    try:
+        s = session.get(AppStateMeta, 1)
+        if s is None:
+            return {"activeClusterIdx": 0, "refYear": None, "futYear": None, "maxShift": None,
+                    "moPri": None, "themeId": None, "savedAt": None, "migrations": []}
+        return {
+            "activeClusterIdx": s.active_cluster_idx, "refYear": s.ref_year, "futYear": s.fut_year,
+            "maxShift": s.max_shift, "moPri": s.mo_pri, "themeId": s.theme_id,
+            "savedAt": s.saved_at.isoformat() if s.saved_at else None, "migrations": s.migrations,
+        }
+    finally:
+        session.close()
+
+
+@router.put("/app-state")
+def put_app_state(body: dict = Body(...), actor: dict = Depends(require_role("planner"))):
+    session = SessionLocal()
+    try:
+        s = session.get(AppStateMeta, 1)
+        if s is None:
+            s = AppStateMeta(id=1)
+            session.add(s)
+        if "activeClusterIdx" in body:
+            s.active_cluster_idx = body["activeClusterIdx"]
+        if "refYear" in body:
+            s.ref_year = body["refYear"]
+        if "futYear" in body:
+            s.fut_year = body["futYear"]
+        if "maxShift" in body:
+            s.max_shift = body["maxShift"]
+        if "moPri" in body:
+            s.mo_pri = body["moPri"]
+        if "themeId" in body:
+            s.theme_id = body["themeId"]
+        if "migrations" in body:
+            s.migrations = body["migrations"]
+        s.saved_at = datetime.datetime.now(datetime.timezone.utc)
+        session.commit()
+        return {"ok": True}
+    finally:
+        session.close()
