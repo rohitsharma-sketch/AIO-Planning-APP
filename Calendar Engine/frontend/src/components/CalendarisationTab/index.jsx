@@ -176,26 +176,62 @@ export default function CalendarisationTab({ isPlanner }) {
     }
   }
 
+  // "Load" from the Calendar Library — ported from the old app's
+  // loadSavedCalendar() (calendar_engine.html lines 3827-3842), which replaced
+  // the whole working cluster-profiles state with the snapshot's clusters before
+  // re-rendering. That is the important half: without setProfiles(...) this only
+  // re-rendered a day table for whichever cluster happened to already be loaded
+  // from /cluster-profiles, so "Load" previewed a calendar instead of loading it.
+  //
+  // The restored profiles are in-memory only: they are NOT pushed to
+  // /cluster-profiles here, matching every other profiles-state change in this
+  // file (handleReorder/handleAdd/handleFestivalsChange all write through
+  // persist() only when the user actually edits something). The next real edit
+  // persists the loaded set through that same path.
   function handleLoadFromLibrary(full) {
-    const cluster = (full.clusters || []).find(c => c.name === profiles[activeIdx]?.name) || full.clusters?.[0]
-    const pairs = (cluster && full.dayMap && full.dayMap[cluster.name]) || []
+    const clusters = full.clusters || []
     const ry = Number(full.refYear), fy = Number(full.futYear)
-    if (!cluster || !pairs.length) {
-      setEngineStatus({ ok: false, msg: `Loaded "${full.name}", but it has no saved day mapping for the current cluster.` })
+    if (!clusters.length) {
+      setEngineStatus({ ok: false, msg: `Loaded "${full.name}", but it has no saved cluster definitions.` })
+      return
+    }
+
+    // Snapshot clusters carry {name, region, festivals} only — nextId isn't
+    // stored, so derive it from the highest festival id in the snapshot (same
+    // rule handleAddFestival uses) rather than from festivals.length, which
+    // would hand out ids that already exist.
+    const nextProfiles = clusters.map(c => {
+      const festivals = (c.festivals || []).map(f => ({ ...f }))
+      const maxId = festivals.reduce((m, f) => Math.max(m, Number(f.id) || 0), 0)
+      return { name: c.name, region: c.region || 'all', nextId: maxId + 1, festivals }
+    })
+
+    // Stay on the same-named cluster if the loaded calendar has one; otherwise
+    // fall back to the first, so activeIdx can never point past the new array.
+    const prevName = profiles[activeIdx]?.name
+    const foundIdx = nextProfiles.findIndex(p => p.name === prevName)
+    const nextIdx = foundIdx >= 0 ? foundIdx : 0
+    const cluster = nextProfiles[nextIdx]
+
+    setProfiles(nextProfiles)
+    setActiveIdx(nextIdx)
+    setRefYear(full.refYear)
+    setFutYear(full.futYear)
+    setClusterMappingsRaw(null) // a loaded snapshot; regenerate via "Create Calendar" before saving again
+
+    const pairs = (full.dayMap && full.dayMap[cluster.name]) || []
+    if (!pairs.length) {
       setDayMap([])
       setValidationIssues([])
       setMonthlySummary(null)
-      setClusterMappingsRaw(null)
+      setEngineStatus({ ok: false, msg: `Loaded "${full.name}" (${nextProfiles.length} clusters), but it has no saved day mapping for "${cluster.name}".` })
       return
     }
     const mappings = mappingsFromSavedPairs(pairs, cluster.festivals, ry, fy)
-    setRefYear(full.refYear)
-    setFutYear(full.futYear)
     setDayMap(mappings.map(toRow))
     setValidationIssues(validate(mappings, ry, fy, Number(maxShift) || 45, cluster.festivals))
     setMonthlySummary(computeMonthly(mappings))
-    setClusterMappingsRaw(null) // a loaded snapshot; regenerate via "Create Calendar" before saving again
-    setEngineStatus({ ok: true, msg: `Loaded "${full.name}" (${full.refYear} -> ${full.futYear}).` })
+    setEngineStatus({ ok: true, msg: `Loaded "${full.name}" (${full.refYear} -> ${full.futYear}) — ${nextProfiles.length} cluster${nextProfiles.length === 1 ? '' : 's'} restored, showing "${cluster.name}".` })
   }
 
   async function persist(nextProfiles) {

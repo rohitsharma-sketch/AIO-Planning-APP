@@ -533,6 +533,102 @@ input[type=number].year-input { width: 80px; font-size: 15px; font-weight: 600; 
 .leg-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
 .leg-dot { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
 
+/* ═══ Calendar Library panel (CalendarisationTab/CalendarLibrary.jsx) ═════
+   Ported from the old app's .lib-* rules (calendar_engine.html lines 423-442)
+   with the same token re-mapping used throughout this file
+   (--primary -> --navy, --surface -> --white, --surface2/--primary-bg -> --light,
+   --text -> --char, --text2/--muted -> --muted, --primary-light -> --navy-light,
+   --r -> --radius, --danger -> --red). The one deliberate change is .lib-grid's
+   track size: the old grid lived in a full-width page (minmax(300px,1fr)), while
+   this panel sits in the 320px right-hand aside, where a 300px minimum would
+   overflow the card's padding. */
+.lib-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.lib-title { font-size: 13px; font-weight: 700; color: var(--navy); }
+.lib-count { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 6px; }
+.lib-save-btn { padding: 6px 12px; font-size: 12px; }
+.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+
+.lib-card {
+  background: var(--white);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s;
+}
+.lib-card:hover { border-color: var(--navy-light); box-shadow: 0 2px 8px rgba(31, 56, 100, .12); }
+.lib-card:focus-visible { outline: 2px solid var(--navy3); outline-offset: 2px; }
+.lib-card-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+.lib-lock-icon {
+  width: 30px;
+  height: 30px;
+  background: var(--light);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--navy);
+  flex-shrink: 0;
+}
+.lib-name { font-size: 13px; font-weight: 700; color: var(--char); line-height: 1.35; }
+.lib-locked-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  background: #E3EEF6;
+  color: var(--navy);
+  border-radius: 3px;
+  padding: 2px 6px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.lib-pair { font-size: 11px; color: var(--navy); font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.lib-clusters { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.lib-cluster-chip {
+  font-size: 10px;
+  background: var(--light);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 7px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.lib-meta { font-size: 10px; color: var(--muted); margin-bottom: 12px; }
+
+/* Card actions. The generic `button` rule further up owns padding/size, so these
+   only need the compact override plus the danger treatment on Delete. The
+   `.lib-actions .btn` pair is two classes, so it outranks both `button:hover`
+   and the earlier `.btn:hover` regardless of source order. */
+.lib-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.lib-actions button { padding: 5px 11px; font-size: 12px; font-weight: 600; border-radius: 5px; }
+.lib-actions .btn { background: var(--navy); color: #fff; border: 1px solid var(--navy); }
+.lib-actions .btn:hover { background: var(--navy); opacity: .88; }
+.lib-del-btn { color: var(--red); border-color: var(--red); background: var(--white); }
+.lib-del-btn:hover { background: #FEE2E2; }
+
+.lib-empty { text-align: center; padding: 28px 16px; color: var(--muted); }
+.lib-empty-icon {
+  width: 48px;
+  height: 48px;
+  background: var(--light);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--navy);
+  margin: 0 auto 14px;
+}
+.lib-empty-title { font-size: 13px; font-weight: 700; color: var(--char); margin-bottom: 6px; }
+.lib-empty-desc { font-size: 12px; max-width: 360px; margin: 0 auto; line-height: 1.5; }
+
 /* ─── Stub / phase-2 badge (calendar_engine.html line 368) ───────────────── */
 .stub-badge {
   display: inline-block;
