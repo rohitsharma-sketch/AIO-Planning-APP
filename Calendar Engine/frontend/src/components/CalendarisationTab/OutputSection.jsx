@@ -17,6 +17,13 @@ const CAT_ROW = { 'Pre-Festive': 'r-pre', 'Core Festive': 'r-core', 'Post-Festiv
 // Ported from calendar_engine.html's renderValidation() (line ~1958).
 const VAL_CLASS = { error: 'val-error', warn: 'val-warn', info: 'val-info' }
 
+// Full month names, matching the old app's own MONTHS const (calendar_engine.html
+// line 1336) that renderMonthly() indexes by month number — and the same local
+// convention DateShiftPreviewPanel.jsx already uses. The By-Future-Month
+// contribution pills slice these to 3 chars exactly as the old app does.
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December']
+
 export default function OutputSection({ dayMap, validationIssues, monthlySummary }) {
   const [activeSub, setActiveSub] = useState('day')
 
@@ -36,6 +43,40 @@ export default function OutputSection({ dayMap, validationIssues, monthlySummary
       errors: (validationIssues || []).filter(i => i.type === 'error').length,
     }
   }, [dayMap, validationIssues])
+
+  // Monthly Summary derivations — ported 1:1 from the old app's renderMonthly()
+  // (calendar_engine.html lines 1870-1941). Both loops walk months 0-11 and
+  // `continue` past any month whose total is 0, so empty months are skipped
+  // rather than rendered as blank rows; the TOTAL row therefore sums only the
+  // months actually shown (which, since skipped months contribute 0, equals the
+  // grand total either way).
+  const { refRows, refTotals, futRows } = useMemo(() => {
+    if (!monthlySummary) return { refRows: [], refTotals: null, futRows: [] }
+    const { byRef, byFut } = monthlySummary
+    const totals = { total: 0, same: 0, prev: 0, next: 0, other: 0, pre: 0, core: 0, post: 0, non: 0 }
+    const rRows = []
+    for (let m = 0; m < 12; m++) {
+      const r = byRef[m]
+      if (!r || r.total === 0) continue
+      totals.total += r.total; totals.same += r.sameMonth; totals.prev += r.prevMonth
+      totals.next += r.nextMonth; totals.other += r.other
+      totals.pre += r.pre; totals.core += r.core; totals.post += r.post; totals.non += r.non
+      // "Shifted out" = every day of this ref month that did NOT land in the
+      // same-numbered future month (old app: prevMonth + nextMonth + other).
+      rRows.push({ m, r, lost: r.prevMonth + r.nextMonth + r.other })
+    }
+    const fRows = []
+    for (let m = 0; m < 12; m++) {
+      const f = byFut[m]
+      if (!f || f.total === 0) continue
+      const contribs = Object.entries(f.daysFromRef)
+        .sort((a, b) => +a[0] - +b[0])
+        .map(([rm, cnt]) => ({ rm: +rm, cnt, isSameMonth: +rm === m }))
+      const externalDays = contribs.filter(c => !c.isSameMonth).reduce((a, c) => a + c.cnt, 0)
+      fRows.push({ m, f, contribs, externalDays })
+    }
+    return { refRows: rRows, refTotals: totals, futRows: fRows }
+  }, [monthlySummary])
 
   if (!dayMap) return null
 
@@ -98,14 +139,106 @@ export default function OutputSection({ dayMap, validationIssues, monthlySummary
       )}
 
       {activeSub === 'monthly' && monthlySummary && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(520px, 1fr))', gap: '20px' }}>
+          {/* ── By Reference Month ─────────────────────────────────────── */}
           <div>
-            <h4>By Reference Month</h4>
-            <pre>{JSON.stringify(monthlySummary.byRef, null, 2)}</pre>
+            <div className="section-heading"><h4>By Reference Month — Where did each month map to?</h4></div>
+            <div className="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ref Month</th>
+                    <th className="num">Total</th>
+                    <th className="num" title="Mapped to same future month">Same Mo</th>
+                    <th className="num" title="Mapped to previous month">← Prev</th>
+                    <th className="num" title="Mapped to next month">→ Next</th>
+                    <th className="num">Pre-Fest</th>
+                    <th className="num">Core</th>
+                    <th className="num">Post-Fest</th>
+                    <th className="num">Non-Fest</th>
+                    <th>Net Month Shift</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {refRows.map(({ m, r, lost }) => (
+                    <tr key={m}>
+                      <td className="month-nm">{MONTHS[m]}</td>
+                      <td className="num">{r.total}</td>
+                      <td className="num">{r.sameMonth}</td>
+                      <td className="num" style={{ color: r.prevMonth > 0 ? 'var(--warn)' : 'var(--muted)' }}>{r.prevMonth || '—'}</td>
+                      <td className="num" style={{ color: r.nextMonth > 0 ? 'var(--warn)' : 'var(--muted)' }}>{r.nextMonth || '—'}</td>
+                      <td className="num" style={{ color: 'var(--pre-text)' }}>{r.pre || '—'}</td>
+                      <td className="num" style={{ color: 'var(--core-text)', fontWeight: 700 }}>{r.core || '—'}</td>
+                      <td className="num" style={{ color: 'var(--post-text)' }}>{r.post || '—'}</td>
+                      <td className="num" style={{ color: 'var(--muted)' }}>{r.non}</td>
+                      <td>
+                        {lost === 0
+                          ? <span className="shift-pill shift-neutral">Neutral</span>
+                          : <span className="shift-pill shift-loss">−{lost} day{lost > 1 ? 's' : ''} shifted out</span>}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="total-row">
+                    <td>TOTAL</td>
+                    <td className="num">{refTotals.total}</td>
+                    <td className="num">{refTotals.same}</td>
+                    <td className="num">{refTotals.prev}</td>
+                    <td className="num">{refTotals.next}</td>
+                    <td className="num">{refTotals.pre}</td>
+                    <td className="num">{refTotals.core}</td>
+                    <td className="num">{refTotals.post}</td>
+                    <td className="num">{refTotals.non}</td>
+                    <td></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
+
+          {/* ── By Future Month ────────────────────────────────────────── */}
           <div>
-            <h4>By Future Month</h4>
-            <pre>{JSON.stringify(monthlySummary.byFut, null, 2)}</pre>
+            <div className="section-heading"><h4>By Future Month — Which reference months feed each future month?</h4></div>
+            <div className="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Future Month</th>
+                    <th className="num">Total Days</th>
+                    <th>Contributions from Reference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {futRows.map(({ m, f, contribs, externalDays }) => (
+                    <tr key={m}>
+                      <td className="month-nm">{MONTHS[m]}</td>
+                      <td className="num">{f.total}</td>
+                      <td>
+                        {contribs.map(({ rm, cnt, isSameMonth }) => (
+                          <span
+                            key={rm}
+                            style={{
+                              fontSize: '11px',
+                              background: isSameMonth ? 'var(--light)' : 'var(--pre-bg)',
+                              color: isSameMonth ? 'var(--navy)' : 'var(--pre-text)',
+                              padding: '1px 7px',
+                              borderRadius: '10px',
+                              fontWeight: 600,
+                              marginRight: '4px',
+                              display: 'inline-block',
+                            }}
+                          >
+                            {MONTHS[rm].slice(0, 3)}: {cnt}
+                          </span>
+                        ))}
+                        {externalDays > 0 && (
+                          <span className="shift-pill shift-gain" style={{ marginLeft: '4px' }}>+{externalDays} shifted in</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
