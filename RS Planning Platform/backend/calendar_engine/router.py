@@ -288,7 +288,7 @@ async def import_store_cluster(file: UploadFile = File(...), actor: dict = Depen
 def get_cluster_profiles(user: dict = Depends(require_login)):
     session = SessionLocal()
     try:
-        profiles = session.execute(select(ClusterProfile).order_by(ClusterProfile.name)).scalars().all()
+        profiles = session.execute(select(ClusterProfile).order_by(ClusterProfile.seq)).scalars().all()
         out = []
         for p in profiles:
             festivals = session.execute(select(ClusterProfileFestival).where(ClusterProfileFestival.cluster_profile_id == p.id)).scalars().all()
@@ -312,8 +312,8 @@ def put_cluster_profiles(body: dict = Body(...), actor: dict = Depends(require_r
             session.execute(delete(ClusterProfileFestival).where(ClusterProfileFestival.cluster_profile_id.in_(old_ids)))
             session.execute(delete(ClusterProfile).where(ClusterProfile.id.in_(old_ids)))
 
-        for profile in body.get("profiles", []):
-            p = ClusterProfile(name=profile["name"], region=profile.get("region"), next_id=profile["nextId"])
+        for i, profile in enumerate(body.get("profiles", [])):
+            p = ClusterProfile(name=profile["name"], region=profile.get("region"), next_id=profile["nextId"], seq=i)
             session.add(p)
             session.flush()
             for fest in profile.get("festivals", []):
