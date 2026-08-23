@@ -47,7 +47,11 @@ export default function DateShiftPreviewPanel() {
       <table>
         <thead><tr><th>Store</th><th>Cluster</th><th>Ref Date</th><th>Future Date</th></tr></thead>
         <tbody>
-          {rows.map((r, i) => <tr key={i}><td>{r.store}</td><td>{r.cluster}</td><td>{r.refDate}</td><td>{r.futDate}</td></tr>)}
+          {/* No festive-category data reaches this component (the saved calendar's
+              dayMap is bare [refISO, futISO] pairs), so r-pre/r-core/r-post row
+              tinting is not possible here without the column rebuild that is a
+              separate follow-up task. Only .date-mono applies for now. */}
+          {rows.map((r, i) => <tr key={i}><td>{r.store}</td><td>{r.cluster}</td><td className="date-mono">{r.refDate}</td><td className="date-mono">{r.futDate}</td></tr>)}
         </tbody>
       </table>
     </div>

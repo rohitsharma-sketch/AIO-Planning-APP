@@ -16,6 +16,11 @@
   /* New tokens with no AOP Forecaster equivalent — ported from the old
      app's :root block (Calendar Engine/calendar_engine.html lines 21-39) */
   --warn: #C87500;
+  /* Old app's --primary-light (#B2CFEA): the pale tint used for badge/pill
+     borders and the info-validation icon. --navy3 (#4472C4) is far too
+     saturated to stand in for it on a pale background, so it is carried over
+     verbatim rather than re-mapped. */
+  --navy-light: #B2CFEA;
   --pre-bg: #FFF1DC;   --pre-row: #FFF8ED;   --pre-text: #7C3A00;   --pre-border: #F5C878;
   --core-bg: #FFEA80;  --core-row: #FFFBE0;  --core-text: #5C3A00;  --core-border: #F0D000;
   --post-bg: #D6ECFF;  --post-row: #EBF5FF;  --post-text: #0E3A70;  --post-border: #90C4F0;
@@ -263,6 +268,28 @@ table td {
 table tr:last-child td { border-bottom: none; }
 table tr:hover td { background: var(--light); }
 
+/* Festive row tinting for the Day-by-Day table (OutputSection.jsx).
+   Ported from table.dtbl tr.r-pre/.r-core/.r-post (calendar_engine.html lines
+   229-232). These must come AFTER the generic `table tr:hover td` rule above:
+   both selectors carry the same specificity, so source order decides, and the
+   tint has to win over the hover wash. Hover is re-expressed for tinted rows
+   the way the old app did it — a brightness filter over whatever tint the row
+   already has, instead of a flat background swap. */
+table tr.r-pre td  { background: var(--pre-row); }
+table tr.r-core td { background: var(--core-row); }
+table tr.r-post td { background: var(--post-row); }
+table tr.r-pre:hover td,
+table tr.r-core:hover td,
+table tr.r-post:hover td { filter: brightness(.97); }
+
+/* Monthly-summary table helpers (ported from table.stbl, calendar_engine.html
+   lines 240-242). The Monthly Summary panel is still a JSON dump pending its
+   own rebuild task, so these currently have no consumer — they are here so the
+   rebuild is a pure markup change. */
+table .month-nm { font-weight: 600; color: var(--navy); }
+table .num { text-align: right; }
+table tr.total-row td { font-weight: 700; background: var(--light); }
+
 /* Festival table's editable cells need narrower, purpose-sized inputs
    (ported from table.ftbl input rules, calendar_engine.html lines 161-164)
    instead of the 70px generic number-input width above. */
@@ -364,3 +391,157 @@ table.scm-mini th {
 }
 table.scm-mini td { padding: 4px 8px; }
 .scm-mini-wrap { max-height: 320px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ROUND 2 CSS PORT
+   Everything below is ported from `Calendar Engine/calendar_engine.html`'s
+   <style> block (line numbers cited per section). The old app's token names
+   have no equivalent here, so they are re-mapped consistently throughout:
+     --primary    -> --navy        --primary-bg -> --light
+     --primary-light -> --navy-light   --surface -> --white
+     --surface2   -> --light       --text  -> --char    --text2 -> --muted
+     --success    -> --green       --danger -> --red    --r     -> --radius
+   Hardcoded hexes (#FEE2E2 / #D1FAE5 / #FEF2F2 / #FECACA / #FFFBEB / #FDE68A)
+   are carried over verbatim, matching the precedent already set by the
+   .scm-pill-* rules above.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Badges (calendar_engine.html lines 244-254) ────────────────────────── */
+.badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.b-pre  { background: var(--pre-bg);  color: var(--pre-text);  border: 1px solid var(--pre-border); }
+.b-core { background: var(--core-bg); color: var(--core-text); border: 1px solid var(--core-border); }
+.b-post { background: var(--post-bg); color: var(--post-text); border: 1px solid var(--post-border); }
+.b-non  { background: var(--light);   color: var(--muted);     border: 1px solid var(--border); }
+.b-map  {
+  display: inline-block;
+  background: var(--light);
+  color: var(--navy);
+  border: 1px solid var(--navy-light);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 7px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.check { color: var(--green); font-weight: 700; font-variant-emoji: text; }
+.cross { color: var(--muted); font-variant-emoji: text; }
+.arrow-sep { color: var(--navy); font-weight: 700; padding: 0 4px; font-variant-emoji: text; }
+.date-mono { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; }
+
+/* ─── Shift pills (calendar_engine.html lines 256-260) ───────────────────────
+   Consumed by the Monthly Summary "Net Month Shift" column, which is still a
+   JSON dump pending its own rebuild task — ported now so that rebuild needs no
+   CSS work. */
+.shift-pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.shift-neutral { background: var(--light); color: var(--muted); }
+.shift-loss { background: #FEE2E2; color: var(--red); }
+.shift-gain { background: #D1FAE5; color: var(--green); }
+
+/* ─── Stats row (calendar_engine.html lines 217-221) ─────────────────────── */
+.stats { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.stat {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  flex: 1;
+  min-width: 110px;
+  box-shadow: var(--shadow);
+}
+.stat-val { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.stat-lbl { font-size: 10px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
+
+/* ─── Validation list (calendar_engine.html lines 267-290) ───────────────── */
+.val-list { display: flex; flex-direction: column; gap: 7px; }
+.val-item { display: flex; align-items: flex-start; gap: 10px; padding: 9px 13px; border-radius: var(--radius); font-size: 12px; }
+.val-error { background: #FEF2F2; border: 1px solid #FECACA; }
+.val-warn  { background: #FFFBEB; border: 1px solid #FDE68A; }
+.val-info  { background: var(--light); border: 1px solid var(--navy-light); }
+.val-icon {
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 1px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.val-error .val-icon { background: #FECACA; color: var(--red); }
+.val-warn  .val-icon { background: #FDE68A; color: var(--warn); }
+.val-info  .val-icon { background: var(--navy-light); color: var(--navy); }
+.val-txt { flex: 1; }
+.val-title { font-weight: 600; color: var(--char); }
+.val-desc { color: var(--muted); margin-top: 2px; }
+
+/* ─── Empty state + section heading (calendar_engine.html lines 288-295) ── */
+.empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
+.empty-state p { font-size: 13px; margin: 0; }
+.section-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.section-heading h3, .section-heading h4 { margin: 0; font-size: 13px; font-weight: 600; color: var(--char); }
+.section-heading .count { background: var(--light); color: var(--navy); font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 10px; }
+
+/* ─── Card label + field groups (calendar_engine.html lines 134-145) ─────── */
+.card-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 10px; }
+.field-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+/* Qualified with the element+attribute selector on purpose: an attribute
+   selector counts in the same specificity column as a class, so the generic
+   `input[type=number] { width: 70px; font-size: 13px }` rule further up
+   (0,1,1) outranks a bare `.year-input` (0,1,0) and silently wins. Verified
+   in the browser — the bare-class version computed to 70px/13px. */
+input[type=number].year-input { width: 80px; font-size: 15px; font-weight: 600; }
+
+/* ─── Radio group + hover tip (calendar_engine.html lines 297-304) ───────── */
+.radio-group { display: flex; flex-direction: column; gap: 5px; margin-top: 4px; }
+.radio-opt { position: relative; display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer; }
+.radio-opt input { accent-color: var(--navy); }
+.radio-tip {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 300;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 13px;
+  font-size: 11px;
+  color: var(--muted);
+  width: 300px;
+  box-shadow: var(--shadow);
+  line-height: 1.6;
+  pointer-events: none;
+}
+.radio-opt:hover .radio-tip { display: block; }
+.radio-tip strong { color: var(--char); }
+.radio-tip code { font-size: 10px; background: var(--light); padding: 1px 5px; border-radius: 3px; color: var(--navy); }
+
+/* ─── Collapsible card header (calendar_engine.html lines 315-317) ───────── */
+.card-toggle-hdr { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; padding: 2px 0 8px; }
+.card-toggle-hdr h4 { margin: 0; font-size: 14px; font-weight: 600; }
+.card-toggle-hdr .toggle-lbl { font-size: 11px; color: var(--navy3); font-weight: 600; white-space: nowrap; }
+.card-toggle-hdr:hover .toggle-lbl { opacity: .75; }
+
+/* ─── Legend (calendar_engine.html lines 370-373) ────────────────────────────
+   .leg-dot is 14px rather than the cited rule's 12px: its only consumer here is
+   Version Setting's Festive Category Legend, where the old app used 14px inline
+   swatches (calendar_engine.html lines 573-577) instead of the .leg-dot class.
+   Same for .leg-item's 8px gap / 12px text, which match that block. */
+.legend { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.leg-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.leg-dot { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+
+/* ─── Stub / phase-2 badge (calendar_engine.html line 368) ───────────────── */
+.stub-badge {
+  display: inline-block;
+  background: var(--light);
+  color: var(--navy);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}

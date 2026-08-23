@@ -48,7 +48,7 @@ export default function CalendarLibrary({ onLoad, isPlanner, buildSavePayload })
   return (
     <div className="card" id="calLibrary">
       <h3>Calendar Library</h3>
-      {isPlanner && <button onClick={handleSave} disabled={busy}>Lock & Save Calendar</button>}
+      {isPlanner && <button className="btn" onClick={handleSave} disabled={busy}>Lock &amp; Save Calendar</button>}
       <ul>
         {items.length === 0 && <li style={{ color: 'var(--muted)' }}>No saved calendars yet.</li>}
         {items.map(c => (

@@ -39,9 +39,12 @@ export default function ReindexOutputPanel({ result }) {
         <div>
           <p>Source: {result.source} ({result.grain}, metric {result.metric})</p>
           <p>Rows read: {result.rowsRead}, rows mapped: {result.rowsMapped}</p>
-          <p>Used frozen sync: {result.usedFrozenSync ? 'Yes' : 'No'}</p>
-          <p>Unmapped stores: {result.unmappedStores?.length || 0}</p>
-          <p>Unmapped dates: {result.unmappedDateCount || 0} (sample: {(result.unmappedDateSample || []).join(', ')})</p>
+          <p>Used frozen sync: <span className={`scm-pill ${result.usedFrozenSync ? 'scm-pill-ok' : 'scm-pill-warn'}`}>{result.usedFrozenSync ? 'Yes' : 'No'}</span></p>
+          <p>Unmapped stores: <span className={`scm-pill ${result.unmappedStores?.length ? 'scm-pill-warn' : 'scm-pill-ok'}`}>{result.unmappedStores?.length || 0}</span></p>
+          <p>
+            Unmapped dates: <span className={`scm-pill ${result.unmappedDateCount ? 'scm-pill-warn' : 'scm-pill-ok'}`}>{result.unmappedDateCount || 0}</span>
+            {' '}(sample: {(result.unmappedDateSample || []).join(', ')})
+          </p>
           {/* Distinct from "unmapped dates": these stores' calendar cluster has no entry
               at all in the selected calendar's day map (usually a cluster-name mismatch
               between the store/cluster map and the calendar), so EVERY one of their rows

@@ -81,31 +81,52 @@ export default function BulkAdjustPanels({ festivals, onChange, isPlanner }) {
   return (
     <>
       <div className="card">
-        <h4 onClick={() => setShiftOpen(!shiftOpen)} style={{ cursor: 'pointer' }}>Bulk Future Date Shift</h4>
+        <div className="card-toggle-hdr" onClick={() => setShiftOpen(!shiftOpen)}>
+          <h4>Bulk Future Date Shift</h4>
+          <span className="toggle-lbl">{shiftOpen ? 'Hide' : 'Show'}</span>
+        </div>
         {shiftOpen && (
-          <>
-            <select value={monthOffset} disabled={!isPlanner} onChange={e => setMonthOffset(e.target.value)}>
-              {[-3, -2, -1, 0, 1, 2, 3].map(n => <option key={n} value={n}>{n > 0 ? `+${n}` : n} month{Math.abs(n) === 1 ? '' : 's'}</option>)}
-            </select>
-            <button disabled={!isPlanner} onClick={applyShift}>Apply Shift</button>
+          <div className="field-row">
+            <div className="field">
+              <label>Shift By</label>
+              <select value={monthOffset} disabled={!isPlanner} onChange={e => setMonthOffset(e.target.value)}>
+                {[-3, -2, -1, 0, 1, 2, 3].map(n => <option key={n} value={n}>{n > 0 ? `+${n}` : n} month{Math.abs(n) === 1 ? '' : 's'}</option>)}
+              </select>
+            </div>
+            <button className="btn" disabled={!isPlanner} onClick={applyShift}>Apply Shift</button>
             <button disabled={!isPlanner} onClick={resetDates}>Reset Dates</button>
-          </>
+          </div>
         )}
       </div>
 
       <div className="card">
-        <h4 onClick={() => setDaysOpen(!daysOpen)} style={{ cursor: 'pointer' }}>Bulk Pre / Core / Post Adjust</h4>
+        <div className="card-toggle-hdr" onClick={() => setDaysOpen(!daysOpen)}>
+          <h4>Bulk Pre / Core / Post Adjust</h4>
+          <span className="toggle-lbl">{daysOpen ? 'Hide' : 'Show'}</span>
+        </div>
         {daysOpen && (
-          <>
-            <select value={daysMode} disabled={!isPlanner} onChange={e => setDaysMode(e.target.value)}>
-              <option value="set">Set to value</option>
-              <option value="add">Add / Subtract</option>
-            </select>
-            <label>Pre <input type="number" value={bulkPre} disabled={!isPlanner} onChange={e => setBulkPre(e.target.value)} /></label>
-            <label>Core <input type="number" value={bulkCore} disabled={!isPlanner} onChange={e => setBulkCore(e.target.value)} /></label>
-            <label>Post <input type="number" value={bulkPost} disabled={!isPlanner} onChange={e => setBulkPost(e.target.value)} /></label>
-            <button disabled={!isPlanner} onClick={applyBulkDays}>Apply & Save</button>
-          </>
+          <div className="field-row">
+            <div className="field">
+              <label>Mode</label>
+              <select value={daysMode} disabled={!isPlanner} onChange={e => setDaysMode(e.target.value)}>
+                <option value="set">Set to value</option>
+                <option value="add">Add / Subtract</option>
+              </select>
+            </div>
+            <div className="field">
+              <label>Pre</label>
+              <input type="number" value={bulkPre} disabled={!isPlanner} onChange={e => setBulkPre(e.target.value)} />
+            </div>
+            <div className="field">
+              <label>Core</label>
+              <input type="number" value={bulkCore} disabled={!isPlanner} onChange={e => setBulkCore(e.target.value)} />
+            </div>
+            <div className="field">
+              <label>Post</label>
+              <input type="number" value={bulkPost} disabled={!isPlanner} onChange={e => setBulkPost(e.target.value)} />
+            </div>
+            <button className="btn" disabled={!isPlanner} onClick={applyBulkDays}>Apply &amp; Save</button>
+          </div>
         )}
       </div>
     </>

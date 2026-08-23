@@ -51,7 +51,7 @@ export default function CalendarisedSalesTab({ isPlanner }) {
           <option value="">Select a locked calendar…</option>
           {calendars.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        {isPlanner && <button onClick={runRx}>Run Reindex</button>}
+        {isPlanner && <button className="btn" onClick={runRx}>Run Reindex</button>}
         {status && <p style={{ color: 'var(--red)' }}>{status.msg}</p>}
       </div>
 

@@ -49,8 +49,17 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
       <h4>Link Sales Data Source · {LABELS[sourceType]}</h4>
       {link.ok ? (
         <>
-          <p>{link.rowCount?.toLocaleString()} rows across {link.months?.length} months. Range: {link.dateRange?.min} – {link.dateRange?.max}.</p>
-          <p>Stores: {link.stores?.matched?.length} matched, {link.stores?.unmatchedInSource?.length} unmatched in source.</p>
+          <p>
+            <span className="scm-pill scm-pill-ok">Linked</span>{' '}
+            {link.rowCount?.toLocaleString()} rows across {link.months?.length} months.
+            {' '}Range: <span className="date-mono">{link.dateRange?.min}</span> – <span className="date-mono">{link.dateRange?.max}</span>.
+          </p>
+          <p>
+            Stores: <span className="scm-pill scm-pill-ok">{link.stores?.matched?.length} matched</span>{' '}
+            <span className={`scm-pill ${link.stores?.unmatchedInSource?.length ? 'scm-pill-warn' : 'scm-pill-ok'}`}>
+              {link.stores?.unmatchedInSource?.length} unmatched in source
+            </span>
+          </p>
           <div>
             {(link.months || []).map(m => (
               <label key={m.month}>
@@ -60,10 +69,10 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
               </label>
             ))}
           </div>
-          {isPlanner && <button onClick={sync}>Sync Selected Months</button>}
+          {isPlanner && <button className="btn" onClick={sync}>Sync Selected Months</button>}
         </>
       ) : (
-        <p style={{ color: 'var(--red)' }}>{link.error}</p>
+        <p><span className="scm-pill scm-pill-bad">Not linked</span> <span style={{ color: 'var(--red)' }}>{link.error}</span></p>
       )}
       <button onClick={() => refresh(true)}>Refresh</button>
       {selection?.syncedAt && <p style={{ color: 'var(--muted)' }}>Last synced: {selection.syncedAt}</p>}
