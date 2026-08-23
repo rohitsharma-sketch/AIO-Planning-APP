@@ -181,32 +181,32 @@
   </header>
 
   <div class="grid">
-    <a class="card" href="http://localhost:7822/calendar_engine.html" target="_blank" data-check="http://localhost:7822/api/changelog">
+    <a class="card" href="http://localhost:8010/calendar/" target="_blank" data-check="http://localhost:8010/docs">
       <div class="card-icon">📅</div>
       <h2>Calendar</h2>
       <p class="desc">Calendarisation Suite — builds the locked, festival-aligned day-shift calendar per cluster, used to reindex last year's sales onto this year's dates.</p>
       <div class="meta">
-        <span class="port">localhost:7822</span>
+        <span class="port">localhost:8010/calendar</span>
         <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
       </div>
     </a>
 
-    <a class="card" href="http://localhost:8000" target="_blank" data-check="http://localhost:8000/api/config/summary">
+    <a class="card" href="http://localhost:8010/aop/" target="_blank" data-check="http://localhost:8010/docs">
       <div class="card-icon">📊</div>
       <h2>AOP Forecaster</h2>
       <p class="desc">Annual Operating Plan forecaster — planning inputs (Store Master, Growth %, NSO openings) and the store×division×month forecast engine.</p>
       <div class="meta">
-        <span class="port">localhost:8000</span>
+        <span class="port">localhost:8010/aop</span>
         <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
       </div>
     </a>
 
-    <a class="card" href="http://localhost:8002" target="_blank" data-check="http://localhost:8002/api/store-master">
+    <a class="card" href="http://localhost:8010/planning/" target="_blank" data-check="http://localhost:8010/docs">
       <div class="card-icon">🧮</div>
       <h2>Planning Engine</h2>
       <p class="desc">Sales Plan — Division/Department plans, MRP reapportionment, PW-W &amp; SOR deviation, and display-type planning engines.</p>
       <div class="meta">
-        <span class="port">localhost:8002</span>
+        <span class="port">localhost:8010/planning</span>
         <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
       </div>
     </a>
@@ -229,8 +229,9 @@
   </div>
 
   <footer>
-    A grey dot means a module's server isn't running yet — start it with its own
-    <code>start.bat</code> / <code>start_backend.bat</code>, then reload this page.
+    Calendar, AOP Forecaster, and Planning Engine now run from one unified server
+    on <code>localhost:8010</code> — start it once and all three come up together.
+    A grey dot means that server isn't running yet.
   </footer>
 
 <script>
@@ -256,6 +257,13 @@
     if (isNaN(d.getTime())) return '—';
     return d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
   }
+
+  // NOTE: these two fetches intentionally stay pointed at the standalone
+  // AOP Forecaster (:8000) and SalesPlan (:8002) ports, not :8010 — the
+  // equivalent routes on :8010 require a login session, and an anonymous
+  // landing-page visitor's fetch would silently get empty/misleading data
+  // instead of a clear error. :8000/:8002 stay running unauthenticated
+  // specifically for this kind of public status check.
 
   // Extraction status — real sync.sync_runs rows from AOP Forecaster's Postgres sync
   fetch('http://localhost:8000/api/config/db-sync/status', { cache: 'no-store' })
