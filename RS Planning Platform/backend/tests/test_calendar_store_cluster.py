@@ -93,7 +93,12 @@ def test_import_store_cluster_parses_csv(planner_client):
     )
     assert r.status_code == 200, r.text
     rows = r.json()["rows"]
-    assert {"store": "ZZ3", "cluster": "TestClusterB"} in rows
+    # The raw file value stays in `cluster`; `resolvedCluster` is the additive field
+    # the mapping panel diffs on so alias/spelling variants aren't false changes.
+    assert {"store": "ZZ3", "cluster": "TestClusterB"} in [
+        {"store": x["store"], "cluster": x["cluster"]} for x in rows
+    ]
+    assert all("resolvedCluster" in x for x in rows)
 
 
 def test_buyer_cannot_replace_store_cluster_map(buyer_client):

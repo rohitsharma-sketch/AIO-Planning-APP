@@ -269,3 +269,98 @@ table tr:hover td { background: var(--light); }
 #festTable input:not([type]) { width: 130px; }
 #festTable input[type=date] { width: 130px; }
 #festTable input[type=number] { width: 55px; }
+
+/* ═══ Store-Cluster Mapping panel ══════════════════════════════════════
+   Ported from the old app's .scm-* rules (calendar_engine.html lines
+   ~455-483). The old app's --primary/--primary-bg/--surface2/--r/--danger
+   tokens have no equivalent here, so these use this codebase's own
+   --navy/--light/--border/--radius/--warn/--red set instead. */
+
+/* Per-cluster count cards ("Stores per calendar cluster") */
+.scm-cluster-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+.scm-cl {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--white);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 40px;
+}
+.scm-cl-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--char);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.scm-cl-count {
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--navy);
+  background: var(--light);
+  padding: 4px 10px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.scm-cl-miss { border-color: var(--warn); background: rgba(200, 117, 0, .06); }
+.scm-cl-miss .scm-cl-name { color: var(--warn); }
+.scm-cl-miss .scm-cl-count { color: var(--warn); background: rgba(200, 117, 0, .14); }
+
+/* Status / diff pills */
+.scm-pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 20px;
+  background: var(--light);
+  color: var(--navy);
+  white-space: nowrap;
+}
+.scm-pill-ok { background: #D1FAE5; color: var(--green); }
+.scm-pill-warn { background: #FEF3C7; color: var(--warn); }
+.scm-pill-bad { background: #FEE2E2; color: var(--red); }
+
+/* Toolbar above the store table */
+.scm-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.scm-toolbar-right { margin-left: auto; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+/* Per-row cluster dropdown */
+table select.scm-sel { min-width: 170px; font-size: 12px; padding: 3px 8px; }
+table select.scm-sel.scm-sel-miss { border-color: var(--warn); background: rgba(200, 117, 0, .08); }
+.scm-remove-btn { color: var(--red); padding: 2px 9px; border-color: transparent; background: transparent; font-weight: 700; }
+.scm-remove-btn:hover { background: #FEE2E2; }
+
+/* Change-log entries: collapsed head, expandable detail table */
+.scm-log-entry { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; background: var(--white); }
+.scm-log-head {
+  padding: 9px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.scm-log-head:hover { background: var(--light); border-radius: var(--radius); }
+.scm-log-toggle { margin-left: auto; font-size: 10px; color: var(--navy3); font-weight: 700; text-transform: uppercase; }
+.scm-log-details { padding: 0 12px 10px; }
+
+/* Small inner tables (log details, import diff) — the global table rules give
+   every <th> a sticky navy band, which is too heavy inside a nested card. */
+table.scm-mini { font-size: 12px; }
+table.scm-mini th {
+  position: static;
+  background: var(--light);
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  padding: 5px 8px;
+}
+table.scm-mini td { padding: 4px 8px; }
+.scm-mini-wrap { max-height: 320px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); }

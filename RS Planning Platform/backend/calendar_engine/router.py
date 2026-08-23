@@ -290,9 +290,27 @@ async def import_store_cluster(file: UploadFile = File(...), actor: dict = Depen
     data = await file.read()
     try:
         rows = parse_template(data, file.filename)
-        return {"ok": True, "filename": file.filename, "rows": rows}
     except Exception as e:
         raise HTTPException(400, str(e))
+    # Also hand back the RESOLVED cluster name for each row (same resolution
+    # put_store_cluster_map applies on write), so the client can diff an upload
+    # against the already-resolved current mapping without pure alias/spelling
+    # variants ("NE" vs "N. EAST") showing up as false reassignments. The raw
+    # `cluster` value from the file is left untouched for existing consumers.
+    session = SessionLocal()
+    try:
+        profile_names = session.execute(
+            select(ClusterProfile.name).order_by(ClusterProfile.seq, ClusterProfile.name)
+        ).scalars().all()
+        meta = session.get(StoreClusterMapMeta, 1)
+        aliases = (meta.aliases if meta else None) or {}
+    finally:
+        session.close()
+    out = [
+        {**r, "resolvedCluster": resolve_cluster_name(str(r.get("cluster", "")).strip(), profile_names, aliases)}
+        for r in rows
+    ]
+    return {"ok": True, "filename": file.filename, "rows": out}
 
 
 @router.get("/cluster-profiles")
