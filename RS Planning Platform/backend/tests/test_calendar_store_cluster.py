@@ -36,25 +36,31 @@ def _clean_test_stores():
     yield
 
     session = SessionLocal()
-    # Remove anything this test created directly.
-    session.execute(delete(StoreCalendarCluster).where(StoreCalendarCluster.store_id.in_(["ZZ1", "ZZ2", "ZZ3"])))
-    session.execute(delete(StoreClusterLogEntry).where(StoreClusterLogEntry.summary == "Test import"))
-    # Remove any store-cluster-log rows created during the test run (e.g. the
-    # diff log row from the PUT test), then restore the real table state.
-    session.execute(delete(StoreClusterLogEntry).where(StoreClusterLogEntry.id.not_in(pre_existing_log_ids)))
-    session.execute(delete(StoreCalendarCluster))
-    if backup_rows:
-        session.execute(StoreCalendarCluster.__table__.insert(), backup_rows)
-    if backup_meta is None:
-        session.execute(delete(StoreClusterMapMeta).where(StoreClusterMapMeta.id == 1))
-    else:
-        meta_row = session.get(StoreClusterMapMeta, 1)
-        if meta_row is not None:
-            meta_row.source = backup_meta["source"]
-            meta_row.aliases = backup_meta["aliases"]
-            meta_row.edited_at = backup_meta["edited_at"]
-    session.commit()
-    session.close()
+    try:
+        # Remove anything this test created directly.
+        session.execute(delete(StoreCalendarCluster).where(StoreCalendarCluster.store_id.in_(["ZZ1", "ZZ2", "ZZ3"])))
+        session.execute(delete(StoreClusterLogEntry).where(StoreClusterLogEntry.summary == "Test import"))
+        # Remove any store-cluster-log rows created during the test run (e.g. the
+        # diff log row from the PUT test), then restore the real table state.
+        session.execute(delete(StoreClusterLogEntry).where(StoreClusterLogEntry.id.not_in(pre_existing_log_ids)))
+        session.execute(delete(StoreCalendarCluster))
+        if backup_rows:
+            session.execute(StoreCalendarCluster.__table__.insert(), backup_rows)
+        if backup_meta is None:
+            session.execute(delete(StoreClusterMapMeta).where(StoreClusterMapMeta.id == 1))
+        else:
+            meta_row = session.get(StoreClusterMapMeta, 1)
+            if meta_row is not None:
+                meta_row.source = backup_meta["source"]
+                meta_row.aliases = backup_meta["aliases"]
+                meta_row.edited_at = backup_meta["edited_at"]
+        session.commit()
+    finally:
+        # This is a real shared database holding real store-cluster rows —
+        # guarantee the session (and its connection) is released even if a
+        # restore statement above raises partway through, so a transient DB
+        # error can't leave the pool holding an aborted-transaction session.
+        session.close()
 
 
 def test_planner_replaces_store_cluster_map_and_logs_diff(planner_client):
