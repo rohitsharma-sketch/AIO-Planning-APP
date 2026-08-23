@@ -42,6 +42,16 @@ export default function ReindexOutputPanel({ result }) {
           <p>Used frozen sync: {result.usedFrozenSync ? 'Yes' : 'No'}</p>
           <p>Unmapped stores: {result.unmappedStores?.length || 0}</p>
           <p>Unmapped dates: {result.unmappedDateCount || 0} (sample: {(result.unmappedDateSample || []).join(', ')})</p>
+          {/* Distinct from "unmapped dates": these stores' calendar cluster has no entry
+              at all in the selected calendar's day map (usually a cluster-name mismatch
+              between the store/cluster map and the calendar), so EVERY one of their rows
+              is dropped — not just a few dates. */}
+          {result.unmappedClusters?.length > 0 && (
+            <p style={{ color: 'var(--red)' }}>
+              Clusters missing from this calendar: {result.unmappedClusters.join(', ')}
+              {' '}({result.unmappedClusterStores?.length || 0} store(s) fully excluded)
+            </p>
+          )}
         </div>
       )}
     </div>
