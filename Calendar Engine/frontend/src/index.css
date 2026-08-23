@@ -358,6 +358,20 @@ table tr.total-row td { font-weight: 700; background: var(--light); }
 .scm-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
 .scm-toolbar-right { margin-left: auto; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 
+/* ─── Date Shift Preview: sortable headers + level radios ───────────────────
+   Ported from calendar_engine.html lines 484-488. The ::after arrow is on the
+   header itself (not a separate element) so the sort indicator cannot be
+   knocked out of alignment by the header's own text wrapping. */
+.ds-th { cursor: pointer; user-select: none; }
+/* A solid lighter navy, not a translucent overlay: these headers are
+   position:sticky over the scrolling rows, so any transparency would let the
+   data rows show through as they pass underneath. */
+.ds-th:hover { background: #2E4F87; }
+.ds-th.sorted-asc::after { content: " \25B2"; font-size: 8px; }
+.ds-th.sorted-desc::after { content: " \25BC"; font-size: 8px; }
+.ds-level { display: flex; gap: 12px; padding: 6px 0; font-size: 12px; }
+.ds-level label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+
 /* Per-row cluster dropdown */
 table select.scm-sel { min-width: 170px; font-size: 12px; padding: 3px 8px; }
 table select.scm-sel.scm-sel-miss { border-color: var(--warn); background: rgba(200, 117, 0, .08); }
