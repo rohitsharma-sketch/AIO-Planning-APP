@@ -708,4 +708,4 @@ if __name__ == "__main__":
     print("    GET /api/sync/history   - FY19 + FY26 full year -> JSON")
     print("    GET /api/sync/sellthru  - pull latest ST file  -> JSON")
     print()
-    app.run(host="0.0.0.0", port=5050, debug=False)
+    app.run(host="0.0.0.0", port=5050, debug=False, threaded=True)

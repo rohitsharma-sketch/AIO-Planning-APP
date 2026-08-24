@@ -200,6 +200,23 @@ def delete_calendar(calendar_id: int, actor: dict = Depends(require_role("planne
         session.close()
 
 
+@router.put("/calendar-library/{calendar_id}/name")
+def rename_calendar(calendar_id: int, body: dict = Body(...), actor: dict = Depends(require_role("planner"))):
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(422, "Name cannot be empty")
+    session = SessionLocal()
+    try:
+        c = session.get(Calendar, calendar_id)
+        if c is None:
+            raise HTTPException(404, "Calendar not found")
+        c.name = name
+        session.commit()
+        return {"ok": True, "id": calendar_id, "name": name}
+    finally:
+        session.close()
+
+
 @router.get("/store-cluster-map")
 def get_store_cluster_map(user: dict = Depends(require_login)):
     session = SessionLocal()

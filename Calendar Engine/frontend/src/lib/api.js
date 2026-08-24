@@ -28,6 +28,7 @@ export const listCalendarLibrary = () => fetchJson('/calendar-library')
 export const getCalendar = (id) => fetchJson(`/calendar-library/${id}`)
 export const saveCalendar = (payload) => jsonPost('/calendar-library', payload)
 export const deleteCalendar = (id) => fetchJson(`/calendar-library/${id}`, { method: 'DELETE' })
+export const renameCalendar = (id, name) => jsonPost(`/calendar-library/${id}/name`, { name }, 'PUT')
 
 // store-cluster-map
 export const getStoreClusterMap = () => fetchJson('/store-cluster-map')

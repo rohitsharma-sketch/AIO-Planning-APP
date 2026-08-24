@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { listCalendarLibrary, getCalendar, saveCalendar, deleteCalendar } from '../../lib/api'
+import { listCalendarLibrary, getCalendar, saveCalendar, deleteCalendar, renameCalendar } from '../../lib/api'
 
 // Saved-date format used on every library card, matching the old app's
 // renderCalendarLibrary() (calendar_engine.html line ~3849:
@@ -73,6 +73,21 @@ export default function CalendarLibrary({ onLoad, isPlanner, buildSavePayload })
       const full = await getCalendar(id)
       onLoad(full)
       setStatus(null)
+    } catch (e) {
+      setStatus({ ok: false, msg: e.message })
+    }
+  }
+
+  async function handleRename(c) {
+    if (!isPlanner) return
+    const entered = window.prompt('Rename this calendar:', c.name)
+    if (entered === null) return   // cancelled
+    const name = entered.trim()
+    if (!name || name === c.name) return
+    try {
+      await renameCalendar(c.id, name)
+      setStatus({ ok: true, msg: `Renamed to "${name}"` })
+      refresh()
     } catch (e) {
       setStatus({ ok: false, msg: e.message })
     }
@@ -159,6 +174,9 @@ export default function CalendarLibrary({ onLoad, isPlanner, buildSavePayload })
 
                 <div className="lib-actions">
                   <button className="btn" onClick={e => { e.stopPropagation(); handleLoad(c.id) }}>Load &amp; Preview</button>
+                  {isPlanner && (
+                    <button className="btn" onClick={e => { e.stopPropagation(); handleRename(c) }}>Rename</button>
+                  )}
                   {isPlanner && (
                     <button className="lib-del-btn" onClick={e => { e.stopPropagation(); handleDelete(c.id) }}>Delete</button>
                   )}
