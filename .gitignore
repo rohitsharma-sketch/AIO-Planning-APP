@@ -33,3 +33,7 @@ Tentative AOP Forecaster/sessions/
 # Durable last-known-good data-lake scan cache — regenerated on every
 # successful scan; also carries real store/sales data, never source.
 RS Planning Platform/backend/calendar_engine/Local DB/scan_cache/
+
+# Per-job payload/progress/result files for the reindex subprocess worker —
+# transient, carries real sales/store data, never source.
+RS Planning Platform/backend/calendar_engine/Local DB/reindex_jobs/

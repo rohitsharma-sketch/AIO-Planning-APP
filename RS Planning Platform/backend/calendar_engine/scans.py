@@ -332,7 +332,6 @@ _RAW_CACHE = {}  # {'dw': {'syncId':..., 'df':..., 'rowsRead':..., 'fetchedAt':.
 
 def _fetch_raw_daywise(months, progress=None):
     import pandas as pd
-    from concurrent.futures import ThreadPoolExecutor
 
     months_set = set(months)
     lo, hi = _month_bounds(months)
@@ -342,27 +341,29 @@ def _fetch_raw_daywise(months, progress=None):
     if progress is not None:
         progress["total"] = len(files)
 
-    def _read(fp):
-        result = _read_file_filtered(fp, ["BILLDATE", "STORE_NAME", "NETAMT"], "BILLDATE", lo, hi)
-        # Files run concurrently (ThreadPoolExecutor below) - a plain += here is
-        # not perfectly atomic, but this only feeds a rough progress percentage,
-        # not a row count anything downstream depends on, so the GIL's per-op
-        # serialization is more than good enough without an explicit lock.
-        if progress is not None:
-            progress["done"] += 1
-        return result
-
+    # Sequential, not a ThreadPoolExecutor - this used to read up to 8 files
+    # concurrently, which sounded like a speedup but actually made the whole
+    # platform unresponsive for everyone for several minutes on a multi-month
+    # run: several threads all doing sustained CPU-bound pandas/pyarrow work
+    # at once inside the SAME process compete hard for the GIL, starving
+    # every other request the server needs to handle (confirmed by isolated
+    # reproduction - the same fetch, single-threaded and outside the server
+    # process, completed in under 2 minutes with no slowdown at all). A
+    # somewhat longer fetch phase that leaves the server responsive is a much
+    # better trade than a faster one that freezes the app for every user.
     frames = []
     total_read = 0
-    with ThreadPoolExecutor(max_workers=min(8, len(files) or 1)) as ex:
-        for df in ex.map(_read, files):
-            if df is None or df.empty:
-                continue
-            total_read += len(df)
-            df["ym"] = df["BILLDATE"].dt.strftime("%Y-%m")
-            df = df[df["ym"].isin(months_set)]
-            if not df.empty:
-                frames.append(df)
+    for fp in files:
+        df = _read_file_filtered(fp, ["BILLDATE", "STORE_NAME", "NETAMT"], "BILLDATE", lo, hi)
+        if progress is not None:
+            progress["done"] += 1
+        if df is None or df.empty:
+            continue
+        total_read += len(df)
+        df["ym"] = df["BILLDATE"].dt.strftime("%Y-%m")
+        df = df[df["ym"].isin(months_set)]
+        if not df.empty:
+            frames.append(df)
     # Empty fallback needs the SAME columns (name + dtype) every real per-file
     # frame ends up with above ("ym" included, "BILLDATE" kept datetime64) —
     # a bare pd.DataFrame(columns=[...]) defaults every column to object
@@ -530,34 +531,58 @@ def run_reindex(payload, progress=None):
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
 
-# ─── Background job + poll (mirrors Buyer's Input Sheet's sync-job pattern) ──
+# ─── Background job + poll, running in a SEPARATE PROCESS ───────────────────
 # The plain POST /salesdata/reindex above blocked the request for the whole
 # read with zero feedback - a day-wise run reads tens of millions of rows.
-# This runs the same run_reindex() on a background thread and tracks
-# "files processed / total files" (see the `progress` dict threaded through
-# _fetch_raw_* above) so the frontend can show a real percentage instead.
-_REINDEX_JOBS = {}  # {job_id: {"status", "progress": {"done","total"}, "data", "error"}}
+#
+# This was first tried as a background THREAD (mirroring Buyer's Input
+# Sheet's sync-job pattern) - that made progress reporting work, but live
+# reproduction proved it doesn't fix the actual problem: a single large
+# parquet file's pandas/pyarrow decode can hold the GIL for minutes on its
+# own, freezing the ENTIRE server for every user, not just the request that
+# started the reindex (confirmed: 18 of 53 concurrent unrelated requests
+# failed during one multi-month day-wise run, even after cutting
+# _fetch_raw_daywise from 6 concurrent threads down to 1). No amount of
+# thread-count tuning fixes that - a thread in the same process shares the
+# same GIL no matter what.
+#
+# So this runs reindex_worker.py in a genuinely separate OS process via
+# subprocess.Popen, which has its own independent GIL - however long it
+# holds it, the server process answering everyone else's requests is
+# unaffected. The reindex functions touch no database (confirmed by
+# inspection), so there's no SQLAlchemy session/connection-pool concern
+# running them in a fresh process. Progress/result cross the process
+# boundary via small JSON files (atomic write-then-rename - see
+# reindex_worker.py) rather than a shared in-memory dict, since the two
+# processes don't share memory.
+_REINDEX_JOB_DIR = os.path.join(DB_DIR, "reindex_jobs")
+_REINDEX_JOBS = {}  # {job_id: {"progress_path", "result_path"}} - just the paths; state lives on disk
 
 
 def start_reindex_job(payload):
-    import threading
+    import subprocess
     import uuid as _uuid
 
     job_id = str(_uuid.uuid4())
-    progress = {"done": 0, "total": 0}
-    _REINDEX_JOBS[job_id] = {"status": "running", "progress": progress, "data": None, "error": None}
+    job_dir = os.path.join(_REINDEX_JOB_DIR, job_id)
+    os.makedirs(job_dir, exist_ok=True)
 
-    def _run():
-        try:
-            result = run_reindex(payload, progress=progress)
-            if result.get("ok"):
-                _REINDEX_JOBS[job_id] = {"status": "done", "progress": progress, "data": result, "error": None}
-            else:
-                _REINDEX_JOBS[job_id] = {"status": "error", "progress": progress, "data": None, "error": result.get("error")}
-        except Exception as e:
-            _REINDEX_JOBS[job_id] = {"status": "error", "progress": progress, "data": None, "error": f"{type(e).__name__}: {e}"}
+    payload_path = os.path.join(job_dir, "payload.json")
+    progress_path = os.path.join(job_dir, "progress.json")
+    result_path = os.path.join(job_dir, "result.json")
+    with open(payload_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f)
 
-    threading.Thread(target=_run, daemon=True).start()
+    worker_dir = os.path.dirname(os.path.abspath(__file__))
+    worker_script = os.path.join(worker_dir, "reindex_worker.py")
+    log_path = os.path.join(job_dir, "worker.log")  # captures a real traceback if the worker itself fails to start
+    with open(log_path, "w", encoding="utf-8") as logf:
+        subprocess.Popen(
+            [sys.executable, worker_script, payload_path, progress_path, result_path],
+            stdout=logf, stderr=subprocess.STDOUT, cwd=worker_dir,
+        )
+
+    _REINDEX_JOBS[job_id] = {"progress_path": progress_path, "result_path": result_path, "log_path": log_path}
     return job_id
 
 
@@ -565,10 +590,23 @@ def poll_reindex_job(job_id):
     job = _REINDEX_JOBS.get(job_id)
     if job is None:
         return {"ok": False, "status": "error", "error": "Unknown or expired job"}
-    p = job["progress"]
-    pct = round(100 * p["done"] / p["total"]) if p["total"] else 0
-    if job["status"] == "done":
-        return {**job["data"], "status": "done", "progressPct": 100}
-    if job["status"] == "error":
-        return {"ok": False, "status": "error", "error": job["error"]}
-    return {"ok": True, "status": "running", "progressPct": pct, "filesDone": p["done"], "filesTotal": p["total"]}
+
+    if os.path.exists(job["result_path"]):
+        try:
+            with open(job["result_path"], encoding="utf-8") as f:
+                result = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return {"ok": True, "status": "running", "progressPct": 100}  # result file mid-rename; poll again shortly
+        if result.get("ok"):
+            return {**result, "status": "done", "progressPct": 100}
+        return {"ok": False, "status": "error", "error": result.get("error", "Reindex failed")}
+
+    progress = {"done": 0, "total": 0}
+    if os.path.exists(job["progress_path"]):
+        try:
+            with open(job["progress_path"], encoding="utf-8") as f:
+                progress = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            pass  # progress file mid-write; next poll retries, not fatal
+    pct = round(100 * progress["done"] / progress["total"]) if progress["total"] else 0
+    return {"ok": True, "status": "running", "progressPct": pct, "filesDone": progress["done"], "filesTotal": progress["total"]}
