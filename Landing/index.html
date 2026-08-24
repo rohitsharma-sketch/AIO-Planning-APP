@@ -55,6 +55,50 @@
     margin-top: 10px;
     font-size: 15px;
   }
+  .breaker {
+    margin-top: 18px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 14px 6px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.18);
+    background: rgba(255,255,255,0.05);
+    cursor: pointer;
+    user-select: none;
+  }
+  .breaker:disabled { opacity: 0.6; cursor: default; }
+  .breaker-track {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.15);
+    transition: background 0.25s ease;
+    flex: none;
+  }
+  .breaker.on .breaker-track { background: var(--up); }
+  .breaker-knob {
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--text);
+    transition: transform 0.25s ease;
+  }
+  .breaker.on .breaker-knob { transform: translateX(18px); }
+  .breaker-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  #launch-all-msg {
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--text-dim);
+    min-height: 1.2em;
+  }
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -178,6 +222,11 @@
     <div class="brand">CityKart · RS Planning</div>
     <h1>Planning Modules</h1>
     <p>Pick a module below. Each opens its own app in a new tab.</p>
+    <button id="launch-all-btn" class="breaker" type="button" title="Sync & open all modules">
+      <span class="breaker-track"><span class="breaker-knob"></span></span>
+      <span class="breaker-label">⚡ Master Switch</span>
+    </button>
+    <div id="launch-all-msg"></div>
   </header>
 
   <div class="grid">
@@ -245,21 +294,68 @@
   </footer>
 
 <script>
-  document.querySelectorAll('.card[data-check]').forEach(function (card) {
-    var url = card.getAttribute('data-check');
-    var dot = card.querySelector('.dot');
-    var label = card.querySelector('.status-label');
-    function setStatus(state) {
-      dot.classList.remove('up', 'down');
-      label.classList.remove('up', 'down', 'checking');
-      if (state === 'up') { dot.classList.add('up'); label.classList.add('up'); label.textContent = 'online'; }
-      else if (state === 'down') { dot.classList.add('down'); label.classList.add('down'); label.textContent = 'offline'; }
-      else { label.classList.add('checking'); label.textContent = 'checking…'; }
-    }
-    fetch(url, { mode: 'no-cors', cache: 'no-store' })
-      .then(function () { setStatus('up'); })
-      .catch(function () { setStatus('down'); });
-  });
+  function checkAllStatuses() {
+    document.querySelectorAll('.card[data-check]').forEach(function (card) {
+      var url = card.getAttribute('data-check');
+      var dot = card.querySelector('.dot');
+      var label = card.querySelector('.status-label');
+      function setStatus(state) {
+        dot.classList.remove('up', 'down');
+        label.classList.remove('up', 'down', 'checking');
+        if (state === 'up') { dot.classList.add('up'); label.classList.add('up'); label.textContent = 'online'; }
+        else if (state === 'down') { dot.classList.add('down'); label.classList.add('down'); label.textContent = 'offline'; }
+        else { label.classList.add('checking'); label.textContent = 'checking…'; }
+      }
+      fetch(url, { mode: 'no-cors', cache: 'no-store' })
+        .then(function () { setStatus('up'); })
+        .catch(function () { setStatus('down'); });
+    });
+  }
+  checkAllStatuses();
+
+  // Master Switch — one flip: starts whichever backend servers aren't
+  // already listening (landing_server.py's own /api/launch-all) AND opens
+  // every module card's link in its own tab, like a breaker feeding every
+  // circuit at once. The tabs are opened SYNCHRONOUSLY, in the same click
+  // handler tick, before the async launch-all call - open them after an
+  // await/setTimeout instead and browsers block every one past the first as
+  // a popup, since by then it's no longer inside the trusted click gesture.
+  // A module whose server just started will briefly show connection-refused
+  // in its tab; reloading it once /api/launch-all's status recheck goes
+  // green (~3-20s later) picks it up, same as clicking the card again would.
+  (function () {
+    var btn = document.getElementById('launch-all-btn');
+    var msg = document.getElementById('launch-all-msg');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      btn.classList.add('on');
+      msg.textContent = 'Flipping the breaker — opening modules & starting offline servers…';
+
+      document.querySelectorAll('.card[href]').forEach(function (card) {
+        window.open(card.getAttribute('href'), '_blank');
+      });
+
+      fetch('/api/launch-all', { method: 'POST' })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          var parts = [];
+          if (data.launched && data.launched.length) parts.push('Starting: ' + data.launched.join(', '));
+          if (data.alreadyOnline && data.alreadyOnline.length) parts.push('Already online: ' + data.alreadyOnline.join(', '));
+          msg.textContent = parts.join(' · ') || 'Nothing to start.';
+          // Re-check a few times over ~20s while the new processes spin up,
+          // rather than once immediately (which would still show them offline).
+          [3000, 6000, 10000, 15000, 20000].forEach(function (delay) {
+            setTimeout(checkAllStatuses, delay);
+          });
+        })
+        .catch(function (e) { msg.textContent = 'Failed to reach Landing server: ' + e.message; })
+        .finally(function () {
+          btn.disabled = false;
+          setTimeout(function () { btn.classList.remove('on'); }, 20000); // matches the last status recheck
+        });
+    });
+  })();
 
   function fmtWhen(iso) {
     if (!iso) return '—';
