@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 
 // NOTE: `validationIssues` are the actual objects returned by `lib/engine.js`'s
 // `validate()` — `{ type: 'error'|'warn'|'info', icon, title, desc }` — not
@@ -24,8 +24,61 @@ const VAL_CLASS = { error: 'val-error', warn: 'val-warn', info: 'val-info' }
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December']
 
+// Day-by-Day filter option lists, ported from the old app's left filter rail
+// (calendar_engine.html lines 632-660). Category and Mapping Type are fixed sets
+// there and here; Festival and Month are derived from the live mapping set by
+// populateFilters() (line ~1811), so they're built with useMemo below instead.
+//
+// CATEGORY_OPTIONS deliberately reuses the exact strings CAT_BADGE/CAT_ROW key
+// off — i.e. engine.js's own festiveCategory values, which toRow() copies into
+// row.category verbatim. MAP_TYPE_OPTIONS is the same 7-value list now shown in
+// VersionSettingTab.jsx's Mapping Type Reference card and is what row.mappingType
+// actually contains. Note the old app's <option> *labels* were abbreviated
+// ("Same Month + Weekday") while its values were the full strings; the full
+// strings are used for both here so the dropdown reads the same as the table's
+// own Mapping Type column.
+const CATEGORY_OPTIONS = ['Pre-Festive', 'Core Festive', 'Post-Festive', 'Non-Festive']
+const MAP_TYPE_OPTIONS = [
+  'Festival-to-Festival',
+  'Festive Relative Day',
+  'Same Month + Same Weekday',
+  'Same Month + Nearest Weekday',
+  'Previous Month + Same Weekday',
+  'Next Month + Same Weekday',
+  'Nearest Available Date',
+]
+
+// Same four swatches as the old rail's Legend section (calendar_engine.html lines
+// 668-675), expressed with the .leg-item/.leg-dot classes already in index.css
+// and already used by VersionSettingTab.jsx's Festive Category Legend.
+const CATEGORY_LEGEND = [
+  ['var(--pre-bg)', 'var(--pre-border)', 'Pre-Festive'],
+  ['var(--core-bg)', 'var(--core-border)', 'Core Festive'],
+  ['var(--post-bg)', 'var(--post-border)', 'Post-Festive'],
+  ['var(--light)', 'var(--border)', 'Non-Festive'],
+]
+
 export default function OutputSection({ dayMap, validationIssues, monthlySummary }) {
   const [activeSub, setActiveSub] = useState('day')
+
+  // ── Day-by-Day filters (old app's #filterMonth/#filterCat/#filterMap/
+  // #filterFest/#filterMonthMatch). All are '' = no filter, and all combine with
+  // AND, exactly as renderDayTable() chains its .filter() calls (line 1829-1836).
+  const [fMonth, setFMonth] = useState('')       // '' | '0'..'11' (FUTURE month)
+  const [fCat, setFCat] = useState('')
+  const [fMapType, setFMapType] = useState('')
+  const [fFest, setFFest] = useState('')
+  const [fMoMatch, setFMoMatch] = useState('')   // '' | 'yes' | 'no'
+
+  // A new dayMap means a different data set — a regenerated calendar, a switched
+  // cluster tab, or a snapshot loaded from the library. Festival/month options are
+  // derived from that set, so a stale selection (a festival the new set doesn't
+  // have) would silently render an empty table. Clearing on identity change keeps
+  // the rail honest; the old app got this for free by rebuilding the <select>s in
+  // populateFilters() on every run.
+  useEffect(() => {
+    setFMonth(''); setFCat(''); setFMapType(''); setFFest(''); setFMoMatch('')
+  }, [dayMap])
 
   // Stats row (old app's renderStats(), calendar_engine.html lines 1762-1775).
   // Every figure is a count over data this component is already handed — no
@@ -43,6 +96,46 @@ export default function OutputSection({ dayMap, validationIssues, monthlySummary
       errors: (validationIssues || []).filter(i => i.type === 'error').length,
     }
   }, [dayMap, validationIssues])
+
+  // Festival and Month dropdown options, built from whatever is actually in the
+  // current mapping set — the old app's populateFilters() (calendar_engine.html
+  // lines 1811-1817). Festivals: distinct non-empty names, sorted. Months: the
+  // distinct FUTURE months present, ascending (for a full-year calendar that's all
+  // 12, but it's derived rather than hardcoded so a partial set narrows properly).
+  const { festivalOptions, monthOptions } = useMemo(() => {
+    if (!dayMap) return { festivalOptions: [], monthOptions: [] }
+    const fests = new Set()
+    const months = new Set()
+    for (const r of dayMap) {
+      if (r.festival) fests.add(r.festival)
+      if (r.futMonthIdx != null) months.add(r.futMonthIdx)
+    }
+    return {
+      festivalOptions: [...fests].sort(),
+      monthOptions: [...months].sort((a, b) => a - b),
+    }
+  }, [dayMap])
+
+  // The filter chain itself — a direct port of renderDayTable()'s (line 1829-1836),
+  // with the new app's row shape substituted for the raw mapping objects:
+  //   m.futureDate.getMonth() -> row.futMonthIdx   (added by index.jsx's toRow)
+  //   m.festiveCategory       -> row.category
+  //   m.monthMatch (boolean)  -> row.monthDelta === 'Yes'  (toRow stringifies it)
+  // Only the multi-select month picker is dropped; a single <select> covers the
+  // same filtering job (see the note at the foot of this file).
+  const filteredDayMap = useMemo(() => {
+    if (!dayMap) return []
+    let rows = dayMap
+    if (fMonth !== '') rows = rows.filter(r => r.futMonthIdx === +fMonth)
+    if (fCat) rows = rows.filter(r => r.category === fCat)
+    if (fMapType) rows = rows.filter(r => r.mappingType === fMapType)
+    if (fFest) rows = rows.filter(r => r.festival === fFest)
+    if (fMoMatch === 'yes') rows = rows.filter(r => r.monthDelta === 'Yes')
+    if (fMoMatch === 'no') rows = rows.filter(r => r.monthDelta !== 'Yes')
+    return rows
+  }, [dayMap, fMonth, fCat, fMapType, fFest, fMoMatch])
+
+  const anyFilterActive = fMonth !== '' || !!fCat || !!fMapType || !!fFest || !!fMoMatch
 
   // Monthly Summary derivations — ported 1:1 from the old app's renderMonthly()
   // (calendar_engine.html lines 1870-1941). Both loops walk months 0-11 and
@@ -100,6 +193,81 @@ export default function OutputSection({ dayMap, validationIssues, monthlySummary
               <div className="stat"><div className="stat-val" style={{ color: stats.errors ? 'var(--red)' : 'var(--green)' }}>{stats.errors}</div><div className="stat-lbl">Validation Errors</div></div>
             </div>
           )}
+
+          {/* ── Filter rail ──────────────────────────────────────────────────
+              The old app's equivalent is a fixed-width left <aside class="cal-left">
+              beside the table (calendar_engine.html lines 610-677). Rendered here as
+              a horizontal bar above the table instead: OutputSection is a single
+              `card` inside a <main> that already sits next to the 320px Calendar
+              Library aside, so a second left rail would mean restructuring both this
+              component and its parent's flex layout for no functional gain. The bar
+              uses .field-row/.field, the same grouping DateShiftPreviewPanel.jsx's
+              filter toolbar uses, so the two read as one pattern. */}
+          <div className="field-row" style={{ marginBottom: '10px' }}>
+            <div className="field">
+              <label htmlFor="dm-month">Month (future)</label>
+              <select id="dm-month" value={fMonth} onChange={e => setFMonth(e.target.value)}>
+                <option value="">All Months</option>
+                {monthOptions.map(m => <option key={m} value={m}>{MONTHS[m]}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="dm-cat">Category</label>
+              <select id="dm-cat" value={fCat} onChange={e => setFCat(e.target.value)}>
+                <option value="">All</option>
+                {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="dm-map">Mapping Type</label>
+              <select id="dm-map" style={{ maxWidth: '220px' }} value={fMapType} onChange={e => setFMapType(e.target.value)}>
+                <option value="">All Types</option>
+                {MAP_TYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="dm-fest">Festival</label>
+              <select id="dm-fest" style={{ maxWidth: '200px' }} value={fFest} onChange={e => setFFest(e.target.value)}>
+                <option value="">All Festivals</option>
+                {festivalOptions.map(f => <option key={f} value={f}>{f}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="dm-momatch">Month Match</label>
+              <select id="dm-momatch" value={fMoMatch} onChange={e => setFMoMatch(e.target.value)}>
+                <option value="">All</option>
+                <option value="yes">Same month</option>
+                <option value="no">Cross-month</option>
+              </select>
+            </div>
+            {/* Clear-filters is intentionally unclassed: index.css's bare `button`
+                rule is the ported ghost/secondary look, while .btn is the loud navy
+                primary reserved for "Create Calendar". */}
+            {anyFilterActive && (
+              <button onClick={() => {
+                setFMonth(''); setFCat(''); setFMapType(''); setFFest(''); setFMoMatch('')
+              }}>Clear filters</button>
+            )}
+          </div>
+
+          {/* Filtered row count (old app's #dayCount, set in renderDayTable at line
+              1838). Worded to stay distinct from the stat tiles above, which always
+              summarise the whole generated calendar and never react to these filters. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '8px' }}>
+            <span style={{ fontSize: '11px', color: 'var(--muted)' }}>
+              Showing <strong style={{ color: 'var(--char)' }}>{filteredDayMap.length}</strong> of {dayMap.length} mappings
+              {anyFilterActive && <> · stat tiles above always cover all {dayMap.length} days</>}
+            </span>
+            <div className="legend" style={{ flexDirection: 'row', gap: '12px', marginBottom: 0, marginLeft: 'auto' }}>
+              {CATEGORY_LEGEND.map(([bg, border, name]) => (
+                <div className="leg-item" key={name} style={{ gap: '6px', fontSize: '11px' }}>
+                  <div className="leg-dot" style={{ width: '11px', height: '11px', background: bg, border: `1px solid ${border}` }} />
+                  <span>{name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="tbl-wrap">
             <table>
               <thead>
@@ -110,7 +278,14 @@ export default function OutputSection({ dayMap, validationIssues, monthlySummary
                 </tr>
               </thead>
               <tbody>
-                {dayMap.map((row, i) => (
+                {filteredDayMap.length === 0 && (
+                  <tr><td colSpan={16} style={{ textAlign: 'center', color: 'var(--muted)', padding: '24px 12px' }}>
+                    {dayMap.length === 0
+                      ? 'No mappings to show.'
+                      : 'No mappings match the current filters.'}
+                  </td></tr>
+                )}
+                {filteredDayMap.map((row, i) => (
                   <tr key={i} className={CAT_ROW[row.category] || ''}>
                     <td className="date-mono">{row.refDate}</td>
                     <td>{row.refDay}</td>
@@ -272,3 +447,13 @@ export default function OutputSection({ dayMap, validationIssues, monthlySummary
     </div>
   )
 }
+
+// KNOWN SIMPLIFICATION vs. the old app's filter rail:
+// The Month filter is a single <select>. calendar_engine.html additionally carried a
+// checkbox multi-select with a search box (.mo-ms-* markup at lines 615-631, backed by
+// window._calMonths), whose Set took priority over the plain #filterMonth <select> when
+// non-empty — the two coexisted, filtering the same futureDate month. Only the plain
+// select is ported: the multi-select is a UX affordance, not extra filtering power, and
+// the single control covers the same behaviour with none of the dropdown/outside-click/
+// search plumbing. If multi-month selection is wanted later, `fMonth` becomes a Set and
+// the one `r.futMonthIdx === +fMonth` line becomes `fMonthSet.has(r.futMonthIdx)`.

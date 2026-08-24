@@ -47,6 +47,12 @@ function toRow(m) {
     category: m.festiveCategory,
     position: m.festivePosition != null ? (m.festivePosition >= 0 ? '+' : '') + m.festivePosition : '—',
     futDate: fmtDisp(m.futureDate),
+    // Raw 0-11 future-month index, carried alongside the formatted futDate so
+    // OutputSection's Month filter can match on it directly. The old app filtered
+    // with `m.futureDate.getMonth()` (calendar_engine.html line 1830); here the
+    // Date object doesn't survive into the row shape, and re-parsing the
+    // "20-Oct-2026" display string back into a month would be needlessly fragile.
+    futMonthIdx: m.futureDate.getMonth(),
     futDay: DAYS[m.futureDate.getDay()],
     futWeek: weekNum(m.futureDate),
     futFestival: futFestStr,
