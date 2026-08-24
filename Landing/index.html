@@ -332,8 +332,17 @@
       btn.classList.add('on');
       msg.textContent = 'Flipping the breaker — opening modules & starting offline servers…';
 
+      // Trigger a native click on each card link itself (they already carry
+      // target="_blank"), NOT window.open(url, '_blank') in a loop. Looped
+      // window.open() calls are unreliable across browsers/extensions -
+      // confirmed live: instead of opening 4 new tabs, it hijacked the
+      // CURRENT tab into navigating to one of the module URLs, taking the
+      // Landing page itself away mid-click. A real anchor's own target=_blank
+      // navigation goes through the browser's ordinary link-following path,
+      // not the Window-API popup path, which is why it doesn't have this
+      // failure mode.
       document.querySelectorAll('.card[href]').forEach(function (card) {
-        window.open(card.getAttribute('href'), '_blank');
+        card.click();
       });
 
       fetch('/api/launch-all', { method: 'POST' })
