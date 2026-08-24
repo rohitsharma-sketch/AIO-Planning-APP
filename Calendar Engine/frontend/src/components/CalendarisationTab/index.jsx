@@ -95,6 +95,10 @@ export default function CalendarisationTab({ isPlanner }) {
   const [profiles, setProfiles] = useState([])
   const [activeIdx, setActiveIdx] = useState(0)
   const [status, setStatus] = useState(null)
+  // Festival Master collapse state (old app: toggleFestMaster(), which started
+  // expanded — .fest-body had no inline display:none and #festToggle carried
+  // the "open" class in the markup).
+  const [festOpen, setFestOpen] = useState(true)
 
   // Engine run state. refYear/futYear/maxShift/moPri come from Task 4's
   // /app-state endpoint (owned/edited by VersionSettingTab) — read once on
@@ -304,6 +308,70 @@ export default function CalendarisationTab({ isPlanner }) {
     persist(next)
   }
 
+  // Rename the active cluster — old app: renameCluster() (calendar_engine.html
+  // lines 2197-2206). The trim/"Cluster N" fallback and the uniqueness check
+  // live in ClusterTabs (which owns the draft input); by the time this runs the
+  // name is already validated.
+  //
+  // IMPORTANT: cluster name is a join key elsewhere in this system
+  // (calendar.store_calendar_clusters.cluster_name and a saved calendar's
+  // per-cluster dayMap are both keyed by it), so this has to go through the same
+  // persist() -> putClusterProfiles write path as every other profile edit —
+  // which it does. Renaming does NOT retro-rewrite those other tables, exactly
+  // as in the old app; a renamed cluster loses its store mapping until the
+  // Store-Cluster Mapping tab is re-pointed at the new name.
+  function handleRename(name) {
+    persist(profiles.map((cp, i) => i === activeIdx ? { ...cp, name } : cp))
+  }
+
+  // Region selector — old app: setClusterRegion() (calendar_engine.html lines
+  // 2151-2154). Only cp.region is written here; the old app's
+  // autoApplyRegionalFestivals() side effect is intentionally not ported (see
+  // the note in ClusterTabs.jsx).
+  function handleRegionChange(region) {
+    persist(profiles.map((cp, i) => i === activeIdx ? { ...cp, region } : cp))
+  }
+
+  // "Copy from" — old app: copyFromCluster() (calendar_engine.html lines
+  // 2107-2121), including its confirm() before the destructive replace. The
+  // festival objects are deep-copied ({...f}) so the two clusters don't end up
+  // sharing row objects, same as handleAdd does with DEFAULT_FESTIVALS; nextId
+  // is carried over from the source so freshly added rows can't collide with
+  // the copied ids.
+  function handleCopyFrom(srcIdx) {
+    const src = profiles[srcIdx]
+    const dest = profiles[activeIdx]
+    if (!src || !dest || srcIdx === activeIdx) return
+    if (!window.confirm(`Copy all ${src.festivals.length} festivals from "${src.name}" into "${dest.name}"?\n\nThis replaces the current festival list for "${dest.name}", is saved immediately, and cannot be undone.`)) return
+    persist(profiles.map((cp, i) => i === activeIdx
+      ? { ...cp, festivals: src.festivals.map(f => ({ ...f })), nextId: src.nextId }
+      : cp))
+  }
+
+  // "Reset to Defaults" — old app: resetFestivals() (calendar_engine.html lines
+  // 2067-2074), which also reset the cluster's nextId to 20 (the DEFAULT_FESTIVALS
+  // ids top out at 15). The old app did NOT confirm first; a confirm is added
+  // here because this writes straight through to the shared database instead of
+  // localStorage, with no undo — the same reasoning FestivalTable's row delete
+  // already uses.
+  function handleResetFestivals() {
+    const dest = profiles[activeIdx]
+    if (!dest) return
+    if (!window.confirm(`Replace all ${dest.festivals.length} festivals in "${dest.name}" with the ${DEFAULT_FESTIVALS.length} built-in defaults?\n\nThis is saved immediately and cannot be undone.`)) return
+    persist(profiles.map((cp, i) => i === activeIdx
+      ? { ...cp, festivals: DEFAULT_FESTIVALS.map(f => ({ ...f })), nextId: 20 }
+      : cp))
+  }
+
+  // Header Pre/Core/Post bulk set — old app: applyHeaderBulk()
+  // (calendar_engine.html lines 1977-2000). Cross-cluster by design: the
+  // original loops `clusterProfiles.forEach`, so it sets the column for every
+  // festival of every cluster, not just the active one. FestivalTable clamps
+  // the value (core >= 1, pre/post >= 0) and confirms before calling this.
+  function handleHeaderBulk(field, value) {
+    persist(profiles.map(cp => ({ ...cp, festivals: cp.festivals.map(f => ({ ...f, [field]: value })) })))
+  }
+
   // "+ Add Festival" (old app: addFestival(), calendar_engine.html line ~2061).
   // Appends an editable placeholder row to the active cluster and persists it
   // through the same handleFestivalsChange/persist() path every other festival
@@ -331,18 +399,43 @@ export default function CalendarisationTab({ isPlanner }) {
   return (
     <div className="module-panel" style={{ display: 'flex', gap: '16px' }}>
       <main style={{ flex: 1 }}>
-        <div className="card">
-          <ClusterTabs profiles={profiles} activeIdx={activeIdx} onSwitch={setActiveIdx}
-            onReorder={handleReorder} onAdd={handleAdd} isPlanner={isPlanner} />
-          <BulkAdjustPanels festivals={profiles[activeIdx].festivals} onChange={handleFestivalsChange} isPlanner={isPlanner} />
-          <FestivalTable festivals={profiles[activeIdx].festivals} onChange={handleFestivalsChange}
-            onAdd={handleAddFestival} isPlanner={isPlanner} />
-          <div style={{ margin: '12px 0' }}>
-            <div style={{ fontSize: '11px', color: 'var(--muted)', margin: '4px 0 12px' }}>
-              Reference Year {refYear ?? '—'} → Future Year {futYear ?? '—'} (set on the Version Setting tab)
+        {/* The two Bulk Adjust cards sit ABOVE the Festival Master, as they do in
+            the old app (calendar_engine.html lines ~660-758 precede the
+            <div class="fest-wrap"> at 760). They are their own .card elements and
+            are not part of what the Festival Master header collapses. */}
+        <BulkAdjustPanels festivals={profiles[activeIdx].festivals} onChange={handleFestivalsChange} isPlanner={isPlanner} />
+
+        {/* Festival Master card chrome — ported from calendar_engine.html lines
+            760-826. The header (title + count pill + caret) collapses .fest-body,
+            which spans the cluster tabs, the rename/region/copy rows, the
+            festival table and the footer action bar — the same scope
+            toggleFestMaster() had (calendar_engine.html lines 2075-2080). */}
+        <div className="fest-wrap">
+          <div className="fest-header" onClick={() => setFestOpen(o => !o)}
+            title={festOpen ? 'Collapse Festival Master' : 'Expand Festival Master'}>
+            <div className="fest-header-title">
+              Festival Master
+              <span className="fest-count">{profiles[activeIdx].festivals.length}</span>
             </div>
-            <button className="btn" onClick={runEngine}>Create Calendar</button>
+            <span className={`toggle${festOpen ? ' open' : ''}`} />
           </div>
+          {festOpen && (
+            <div className="fest-body">
+              <ClusterTabs profiles={profiles} activeIdx={activeIdx} onSwitch={setActiveIdx}
+                onReorder={handleReorder} onAdd={handleAdd} onRename={handleRename}
+                onRegionChange={handleRegionChange} onCopyFrom={handleCopyFrom} isPlanner={isPlanner} />
+              <FestivalTable festivals={profiles[activeIdx].festivals} onChange={handleFestivalsChange}
+                onAdd={handleAddFestival} onReset={handleResetFestivals} onBulkSet={handleHeaderBulk}
+                isPlanner={isPlanner} />
+            </div>
+          )}
+        </div>
+
+        <div className="card">
+          <div style={{ fontSize: '11px', color: 'var(--muted)', margin: '0 0 12px' }}>
+            Reference Year {refYear ?? '—'} → Future Year {futYear ?? '—'} (set on the Version Setting tab)
+          </div>
+          <button className="btn" onClick={runEngine}>Create Calendar</button>
           {engineStatus && <p style={{ color: engineStatus.ok ? 'var(--green)' : 'var(--red)' }}>{engineStatus.msg}</p>}
         </div>
 

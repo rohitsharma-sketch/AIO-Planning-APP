@@ -21,6 +21,10 @@
      saturated to stand in for it on a pale background, so it is carried over
      verbatim rather than re-mapped. */
   --navy-light: #B2CFEA;
+  /* Pale-yellow wash marking a table cell as directly editable — ported
+     verbatim from the old app's --cell-edit-bg (calendar_engine.html line 17),
+     which has no AOP Forecaster equivalent to re-map onto. */
+  --cell-edit-bg: #FFFDE7;
   --pre-bg: #FFF1DC;   --pre-row: #FFF8ED;   --pre-text: #7C3A00;   --pre-border: #F5C878;
   --core-bg: #FFEA80;  --core-row: #FFFBE0;  --core-text: #5C3A00;  --core-border: #F0D000;
   --post-bg: #D6ECFF;  --post-row: #EBF5FF;  --post-text: #0E3A70;  --post-border: #90C4F0;
@@ -292,10 +296,16 @@ table tr.total-row td { font-weight: 700; background: var(--light); }
 
 /* Festival table's editable cells need narrower, purpose-sized inputs
    (ported from table.ftbl input rules, calendar_engine.html lines 161-164)
-   instead of the 70px generic number-input width above. */
+   instead of the 70px generic number-input width above. The pale-yellow
+   --cell-edit-bg wash on the date/number boxes is the old app's cue that a cell
+   is directly editable; the untyped (festival name) box is left white there
+   too. Scoped to tbody so the header bulk-set boxes, which live inside a <th>
+   on the navy band and carry their own dark styling, are unaffected. */
 #festTable input:not([type]) { width: 130px; }
 #festTable input[type=date] { width: 130px; }
 #festTable input[type=number] { width: 55px; }
+#festTable tbody input[type=date],
+#festTable tbody input[type=number] { background: var(--cell-edit-bg); }
 
 /* ═══ Store-Cluster Mapping panel ══════════════════════════════════════
    Ported from the old app's .scm-* rules (calendar_engine.html lines
@@ -709,3 +719,169 @@ input[type=number].year-input { width: 80px; font-size: 15px; font-weight: 600; 
    line of its own. inline-flex keeps Select All / Clear / Sync / Refresh on one
    line, as they were before the picker was added. */
 .link-month-actions { display: inline-flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; vertical-align: middle; }
+
+/* ═══ Festival Master card (CalendarisationTab/index.jsx, ClusterTabs.jsx,
+   FestivalTable.jsx) ═══════════════════════════════════════════════════════
+   Ported from calendar_engine.html lines 148-155, 165-176, 184-187. The old
+   app's --tbl-hdr-bg / --surface / --surface2 / --primary / --primary-bg / --r
+   tokens have no equivalent here, so these use this codebase's own
+   --navy / --white / --light / --navy3 / --border / --radius set, matching the
+   mapping convention used throughout this file. */
+.fest-wrap { margin-bottom: 16px; }
+
+.fest-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 14px;
+  background: var(--navy);
+  border-radius: var(--radius) var(--radius) 0 0;
+  cursor: pointer;
+  user-select: none;
+}
+.fest-header-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* Festival-count pill (old app's inline-styled #festCount span). */
+.fest-count {
+  font-size: 11px;
+  background: rgba(255,255,255,.2);
+  color: #fff;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+/* Collapse caret: a CSS triangle that rotates 90deg when open. */
+.fest-header .toggle {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255,255,255,.7);
+  transition: transform .2s;
+  flex-shrink: 0;
+}
+.fest-header .toggle::before {
+  content: '';
+  display: inline-block;
+  border-style: solid;
+  border-width: 5px 0 5px 8px;
+  border-color: transparent transparent transparent currentColor;
+}
+.fest-header .toggle.open { transform: rotate(90deg); }
+
+.fest-body {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  overflow: hidden;
+}
+/* The old markup's inline-styled #clusterTabsRow. */
+.cluster-tabs-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 10px 14px 0; }
+.fest-table-scroll { overflow-x: auto; margin-top: 10px; }
+
+.fest-footer {
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.fest-footer-note { font-size: 11px; color: var(--muted); margin-left: 4px; }
+
+/* Rename / Region / Copy-from rows (ClusterTabs.jsx). */
+.cluster-rename-row { display: flex; align-items: center; gap: 8px; padding: 8px 14px 0; }
+.cluster-rename-row label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+  min-width: 62px;
+}
+.cluster-rename-row input {
+  background: var(--light);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  width: 200px;
+}
+.cluster-rename-row select {
+  background: var(--light);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  max-width: 220px;
+}
+
+/* Pre/Core/Post cell: number box flanked by +/- steppers (old app's dayCell()
+   / .day-step, calendar_engine.html lines 166-168, 1967-1974). */
+.day-cell { display: flex; align-items: center; gap: 2px; }
+.day-step {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  line-height: 1;
+  padding: 0;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--white);
+  color: var(--muted);
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.day-step:hover { background: var(--light); color: var(--navy); border-color: var(--navy3); }
+.day-step:active { transform: scale(.92); }
+
+/* Header bulk-set boxes: they sit inside a <th> on the navy band, so they get
+   their own light-on-dark treatment rather than the page's default input look
+   (which would be an unreadable white box on navy). */
+.hdr-bulk {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 4px;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+}
+#festTable thead th .hdr-bulk input[type=number] {
+  width: 42px;
+  padding: 2px 5px;
+  font-size: 11px;
+  border: 1px solid rgba(255,255,255,.5);
+  border-radius: 3px;
+  background: rgba(0,0,0,.28);
+  color: #fff;
+  -webkit-text-fill-color: #fff;
+}
+#festTable thead th .hdr-bulk input[type=number]::placeholder { color: rgba(255,255,255,.65); }
+#festTable thead th .hdr-bulk input[type=number]:focus {
+  outline: none;
+  border-color: #fff;
+  background: rgba(0,0,0,.4);
+  box-shadow: 0 0 0 2px rgba(255,255,255,.25);
+}
+.hdr-bulk button {
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid rgba(255,255,255,.35);
+  border-radius: 3px;
+  background: rgba(255,255,255,.15);
+  color: #fff;
+}
+.hdr-bulk button:hover { background: rgba(255,255,255,.3); }
