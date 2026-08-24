@@ -14,6 +14,7 @@ from calendar_engine.cluster_names import resolve_cluster_name
 from calendar_engine.scans import (
     get_salesdata_link, get_salesdata_link_daywise, run_reindex,
     start_reindex_job, poll_reindex_job,
+    start_link_scan_job, poll_link_scan_job,
 )
 from db.base import SessionLocal
 from db.models.calendar import (
@@ -505,6 +506,21 @@ def salesdata_link(refresh: bool = False, user: dict = Depends(require_login)):
 @router.get("/salesdata/link-daywise")
 def salesdata_link_daywise(refresh: bool = False, user: dict = Depends(require_login)):
     return get_salesdata_link_daywise(force_refresh=refresh)
+
+
+@router.post("/salesdata/link/start")
+def salesdata_link_start(source_type: str, refresh: bool = False, user: dict = Depends(require_login)):
+    """Background variant of /salesdata/link[-daywise] - returns a job id
+    immediately instead of blocking for the whole scan (day-wise reads real
+    columns across 86M+ rows). Poll /salesdata/link/poll/{job_id}."""
+    if source_type not in ("mw", "dw"):
+        raise HTTPException(422, "source_type must be 'mw' or 'dw'")
+    return {"ok": True, "jobId": start_link_scan_job(source_type, force_refresh=refresh)}
+
+
+@router.get("/salesdata/link/poll/{job_id}")
+def salesdata_link_poll(job_id: str, user: dict = Depends(require_login)):
+    return poll_link_scan_job(job_id)
 
 
 @router.post("/salesdata/reindex")

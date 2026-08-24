@@ -1,12 +1,29 @@
-import { useState, useEffect, useMemo } from 'react'
-import { getSalesdataLink, getSalesdataLinkDaywise, getSalesdataLinkSelection, putSalesdataLinkSelection } from '../../lib/api'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { startLinkScan, pollLinkScan, getSalesdataLinkSelection, putSalesdataLinkSelection } from '../../lib/api'
 
-const FETCHERS = { mw: getSalesdataLink, dw: getSalesdataLinkDaywise }
 const LABELS = { mw: 'Month-wise', dw: 'Day-wise' }
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
+// "45s" / "2m 05s" - matches the compact style everywhere else in this app,
+// not a full duration-formatting library for what's just an estimate.
+function fmtDuration(totalSeconds) {
+  if (totalSeconds == null) return null
+  const m = Math.floor(totalSeconds / 60)
+  const s = totalSeconds % 60
+  return m > 0 ? `${m}m ${String(s).padStart(2, '0')}s` : `${s}s`
+}
+
 export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChange }) {
   const [link, setLink] = useState(null)
+  // null = idle; otherwise {pct, filesDone, filesTotal, elapsedSeconds, etaSeconds}
+  // while a background scan job is running. Day-wise reads real columns across
+  // 86M+ rows - the old code just called the scan endpoint directly and showed
+  // a bare "Loading…" with no feedback and, worse, no error handling at all: a
+  // network failure (not just a "not linked" response) left it stuck on
+  // "Loading…" forever with no way to recover short of a full page reload.
+  const [progress, setProgress] = useState(null)
+  const [fetchError, setFetchError] = useState(null)
+  const pollTimer = useRef(null)
   const [selection, setSelection] = useState(null)
   const [selectedMonths, setSelectedMonths] = useState([])
   // Which year's month pills are on screen. This is a VIEW filter only - it never
@@ -16,11 +33,51 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
   // 2026-08 ticked while looking at 2025's pills.
   const [year, setYear] = useState('')
 
-  function refresh(force) {
-    FETCHERS[sourceType](force).then(setLink)
+  async function refresh(force) {
+    clearTimeout(pollTimer.current)
+    setFetchError(null)
+    setLink(null)
+    setProgress({ pct: 0, filesDone: 0, filesTotal: 0, etaSeconds: null })
+    try {
+      const { jobId } = await startLinkScan(sourceType, force)
+
+      // Same transient-failure tolerance as Run Reindex's poll loop (see
+      // CalendarisedSalesTab/index.jsx) - the scan's own background work can
+      // briefly delay a poll response even though the job is still running fine.
+      let misses = 0
+      const MAX_MISSES = 5
+      const poll = async () => {
+        let p
+        try {
+          p = await pollLinkScan(jobId)
+          misses = 0
+        } catch (e) {
+          misses += 1
+          if (misses >= MAX_MISSES) { setProgress(null); setFetchError(`Lost contact with the scan job: ${e.message}`); return }
+          pollTimer.current = setTimeout(poll, 1000)
+          return
+        }
+        if (p.status === 'running') {
+          setProgress({ pct: p.progressPct || 0, filesDone: p.filesDone || 0, filesTotal: p.filesTotal || 0, etaSeconds: p.etaSeconds })
+          pollTimer.current = setTimeout(poll, 1000)
+          return
+        }
+        setProgress(null)
+        if (p.status === 'error' || !p.ok) { setFetchError(p.error || 'Scan failed'); return }
+        setLink(p)
+      }
+      await poll()
+    } catch (e) {
+      setProgress(null)
+      setFetchError(e.message)
+    }
   }
   useEffect(() => {
     refresh(false)
+    return () => clearTimeout(pollTimer.current) // stop polling if the tab/panel unmounts mid-scan
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  useEffect(() => {
     getSalesdataLinkSelection(sourceType).then(s => {
       setSelection(s)
       setSelectedMonths(s.months || [])
@@ -79,7 +136,37 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
     onSelectionChange?.(sourceType, payload)
   }
 
-  if (!link) return <p>Loading…</p>
+  if (progress) {
+    return (
+      <div className="card">
+        <h4>Link Sales Data Source · {LABELS[sourceType]}</h4>
+        <div style={{ background: 'var(--border)', borderRadius: '4px', height: '8px', overflow: 'hidden' }}>
+          <div style={{
+            width: `${progress.pct}%`, height: '100%', background: 'var(--navy2)',
+            transition: 'width 0.3s ease',
+          }} />
+        </div>
+        <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>
+          {progress.pct}%{progress.filesTotal > 0 && ` — ${progress.filesDone} of ${progress.filesTotal} files`}
+          {progress.etaSeconds != null
+            ? ` — about ${fmtDuration(progress.etaSeconds)} remaining`
+            : (progress.filesDone > 0 ? '' : ' — estimating time remaining…')}
+        </div>
+      </div>
+    )
+  }
+
+  if (fetchError) {
+    return (
+      <div className="card">
+        <h4>Link Sales Data Source · {LABELS[sourceType]}</h4>
+        <p><span className="scm-pill scm-pill-bad">Not linked</span> <span style={{ color: 'var(--red)' }}>{fetchError}</span></p>
+        <button className="btn" onClick={() => refresh(false)}>Retry</button>
+      </div>
+    )
+  }
+
+  if (!link) return null // brief gap between the progress state clearing and `link` being set
 
   return (
     <div className="card">

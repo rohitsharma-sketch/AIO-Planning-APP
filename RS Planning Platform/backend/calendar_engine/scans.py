@@ -64,12 +64,14 @@ def _mapped_stores():
     return set()
 
 
-def _scan_parquet_link():
+def _scan_parquet_link(progress=None):
     """Read only BILLMONTH + STORE_NAME across every .parquet file in PARQUET_DIR.
     No sales figures are read or processed here - this is detection only."""
     files = sorted(glob.glob(os.path.join(PARQUET_DIR, "*.parquet")))
     if not files:
         raise FileNotFoundError(f"No .parquet files found under {PARQUET_DIR}")
+    if progress is not None:
+        progress["total"] = len(files)
 
     import pyarrow.parquet as pq
     import pandas as pd
@@ -91,6 +93,8 @@ def _scan_parquet_link():
                            "sizeBytes": os.path.getsize(fp),
                            "modifiedAt": datetime.datetime.fromtimestamp(
                                os.path.getmtime(fp), datetime.timezone.utc).isoformat()})
+        if progress is not None:
+            progress["done"] += 1
 
     mapped_stores = _mapped_stores()
 
@@ -113,14 +117,16 @@ def _scan_parquet_link():
     }
 
 
-def get_salesdata_link(force_refresh=False):
+def get_salesdata_link(force_refresh=False, progress=None):
     now = time.time()
     if not force_refresh and _LINK_CACHE["data"] and (now - _LINK_CACHE["at"]) < LINK_CACHE_TTL:
+        if progress is not None:  # nothing to read - the in-memory cache IS the whole job
+            progress["total"] = progress["done"] = 1
         cached = dict(_LINK_CACHE["data"])
         cached["cached"] = True
         return cached
     try:
-        data = _scan_parquet_link()
+        data = _scan_parquet_link(progress=progress)
         _LINK_CACHE["data"] = data
         _LINK_CACHE["at"] = now
         _save_scan_cache("salesdata_link", data)
@@ -155,7 +161,7 @@ DAYWISE_DIRS = [
 _LINK_CACHE_DW = {"data": None, "at": 0}
 
 
-def _scan_daywise_link():
+def _scan_daywise_link(progress=None):
     """Read only BILLDATE + STORE_NAME across each billwise_fy* file. No sales
     figures are read or processed here - this is detection only."""
     import pyarrow.parquet as pq
@@ -167,6 +173,8 @@ def _scan_daywise_link():
         if not found:
             raise FileNotFoundError(f"No .parquet files found under {d}")
         files.extend(found)
+    if progress is not None:
+        progress["total"] = len(files)
 
     month_counts = {}
     store_set = set()
@@ -189,6 +197,8 @@ def _scan_daywise_link():
                            "dateMin": fmin, "dateMax": fmax,
                            "modifiedAt": datetime.datetime.fromtimestamp(
                                os.path.getmtime(fp), datetime.timezone.utc).isoformat()})
+        if progress is not None:
+            progress["done"] += 1
 
     # Real gaps: consecutive files (sorted by start date) whose ranges don't touch
     gaps = []
@@ -223,14 +233,16 @@ def _scan_daywise_link():
     }
 
 
-def get_salesdata_link_daywise(force_refresh=False):
+def get_salesdata_link_daywise(force_refresh=False, progress=None):
     now = time.time()
     if not force_refresh and _LINK_CACHE_DW["data"] and (now - _LINK_CACHE_DW["at"]) < LINK_CACHE_TTL:
+        if progress is not None:
+            progress["total"] = progress["done"] = 1
         cached = dict(_LINK_CACHE_DW["data"])
         cached["cached"] = True
         return cached
     try:
-        data = _scan_daywise_link()
+        data = _scan_daywise_link(progress=progress)
         _LINK_CACHE_DW["data"] = data
         _LINK_CACHE_DW["at"] = now
         _save_scan_cache("salesdata_link_daywise", data)
@@ -245,6 +257,81 @@ def get_salesdata_link_daywise(force_refresh=False):
             result["offline"] = True  # source unreachable right now - this is last-known-good, not live
             return result
         return {"ok": False, "error": f"{type(e).__name__}: {e}", "dirs": DAYWISE_DIRS}
+
+
+# ─── Link-scan background job + poll, running in a SEPARATE PROCESS ─────────
+# Same reasoning and mechanism as the reindex job below (kept above it since
+# this is the one the frontend hits first, on page load) - the scan reads
+# real columns out of every source file (day-wise: 86M+ rows across 6 files),
+# which carries the exact same GIL-starvation risk proven to freeze the whole
+# platform during Run Reindex before that was isolated into its own process.
+_LINK_SCAN_JOB_DIR = os.path.join(DB_DIR, "link_scan_jobs")
+_LINK_SCAN_JOBS = {}  # {job_id: {"progress_path", "result_path", "started_at"}}
+
+
+def start_link_scan_job(source_type, force_refresh=False):
+    import subprocess
+    import uuid as _uuid
+
+    job_id = str(_uuid.uuid4())
+    job_dir = os.path.join(_LINK_SCAN_JOB_DIR, job_id)
+    os.makedirs(job_dir, exist_ok=True)
+
+    progress_path = os.path.join(job_dir, "progress.json")
+    result_path = os.path.join(job_dir, "result.json")
+
+    worker_dir = os.path.dirname(os.path.abspath(__file__))
+    worker_script = os.path.join(worker_dir, "link_scan_worker.py")
+    log_path = os.path.join(job_dir, "worker.log")
+    with open(log_path, "w", encoding="utf-8") as logf:
+        subprocess.Popen(
+            [sys.executable, worker_script, source_type, "1" if force_refresh else "0", progress_path, result_path],
+            stdout=logf, stderr=subprocess.STDOUT, cwd=worker_dir,
+        )
+
+    _LINK_SCAN_JOBS[job_id] = {"progress_path": progress_path, "result_path": result_path, "started_at": time.time()}
+    return job_id
+
+
+def poll_link_scan_job(job_id):
+    job = _LINK_SCAN_JOBS.get(job_id)
+    if job is None:
+        return {"ok": False, "status": "error", "error": "Unknown or expired job"}
+
+    if os.path.exists(job["result_path"]):
+        try:
+            with open(job["result_path"], encoding="utf-8") as f:
+                result = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return {"ok": True, "status": "running", "progressPct": 100}
+        if result.get("ok"):
+            return {**result, "status": "done", "progressPct": 100}
+        return {"ok": False, "status": "error", "error": result.get("error", "Scan failed")}
+
+    progress = {"done": 0, "total": 0}
+    if os.path.exists(job["progress_path"]):
+        try:
+            with open(job["progress_path"], encoding="utf-8") as f:
+                progress = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            pass
+    done, total = progress["done"], progress["total"]
+    pct = round(100 * done / total) if total else 0
+
+    # ETA: simple linear extrapolation from the rate observed so far - good
+    # enough for "roughly how much longer" on a handful of files, not meant
+    # to be exact. None (shown as "estimating…") until at least one file has
+    # finished, since a rate computed from zero completed files is meaningless.
+    eta_seconds = None
+    elapsed = time.time() - job["started_at"]
+    if done > 0 and total > done:
+        eta_seconds = round(elapsed / done * (total - done))
+
+    return {
+        "ok": True, "status": "running", "progressPct": pct,
+        "filesDone": done, "filesTotal": total,
+        "elapsedSeconds": round(elapsed), "etaSeconds": eta_seconds,
+    }
 
 
 # ─── Reindexing engine ────────────────────────────────────────────────────────
