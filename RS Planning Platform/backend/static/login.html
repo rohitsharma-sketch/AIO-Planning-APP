@@ -28,6 +28,9 @@
     background: #2563eb; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
   }
   button:disabled { background: #93b4f0; cursor: default; }
+  .remember { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+  .remember input { width: auto; }
+  .remember label { display: inline; font-size: 13px; font-weight: 400; color: #374151; margin: 0; }
   .error {
     margin-top: 14px; padding: 8px 10px; border-radius: 6px; background: #fef2f2;
     color: #b91c1c; font-size: 13px; display: none;
@@ -42,6 +45,10 @@
     <input id="username" name="username" autocomplete="username" required>
     <label for="password">Password</label>
     <input id="password" name="password" type="password" autocomplete="current-password" required>
+    <div class="remember">
+      <input id="remember" name="remember" type="checkbox">
+      <label for="remember">Remember me on this device</label>
+    </div>
     <button type="submit" id="submit-btn">Sign in</button>
     <div class="error" id="error"></div>
   </form>
@@ -62,6 +69,7 @@
           body: JSON.stringify({
             username: document.getElementById('username').value,
             password: document.getElementById('password').value,
+            remember: document.getElementById('remember').checked,
           }),
         });
         if (!res.ok) {

@@ -2,14 +2,12 @@ import { useState, useEffect } from 'react'
 import { getMe } from './lib/api'
 import VersionSettingTab from './components/VersionSettingTab'
 import CalendarisationTab from './components/CalendarisationTab'
-import PeriodSettingTab from './components/PeriodSettingTab'
 import StoreClusterMappingTab from './components/StoreClusterMappingTab'
 import CalendarisedSalesTab from './components/CalendarisedSalesTab'
 
 const TABS = [
   { id: 'version', label: 'Version Setting', Component: VersionSettingTab },
   { id: 'calendarisation', label: 'Calendarisation', Component: CalendarisationTab },
-  { id: 'period', label: 'Period Setting', Component: PeriodSettingTab },
   { id: 'salesdata', label: 'Store-Cluster Mapping', Component: StoreClusterMappingTab },
   { id: 'calendarisedsales', label: 'Calendarised Sales', Component: CalendarisedSalesTab },
 ]

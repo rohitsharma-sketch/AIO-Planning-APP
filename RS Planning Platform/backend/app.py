@@ -24,7 +24,11 @@ from audit.routes import router as audit_router
 SESSION_SECRET = os.environ.get("SESSION_SECRET", "dev-only-change-me")
 
 app = FastAPI(title="RS Planning Platform")
-app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+# max_age=None -> a browser-session-only cookie (no Max-Age/Expires), so a
+# plain login ends when the browser closes. Longer persistence on the same
+# machine is opt-in via the separate "remember me" cookie (auth/deps.py),
+# not the default for every login.
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, max_age=None)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 app.include_router(auth_router, prefix="/api/auth")
@@ -103,7 +107,11 @@ def root(request: Request):
 
 # Login page (plain HTML — Phase 2's unified frontend replaces this)
 @app.get("/login")
-def login_page():
+def login_page(request: Request):
+    # Already authenticated (real session, or a "remember me" cookie from a
+    # prior visit on this device) — skip the form instead of asking again.
+    if get_session_user(request) is not None:
+        return RedirectResponse(LANDING_PAGE_URL)
     return FileResponse(os.path.join(_HERE, "static", "login.html"))
 
 
