@@ -23,6 +23,30 @@ PARQUET_DIR = (r"\\10.0.1.85\Users\Administrator\Desktop\AI SOLUTION\INVENTORY A
 _LINK_CACHE = {"data": None, "at": 0}
 LINK_CACHE_TTL = 600  # seconds
 
+# ─── Durable last-known-good scan cache (survives restarts and outages) ─────
+# _LINK_CACHE above is only an in-memory 10-min TTL to avoid re-hitting the
+# network on every request while it's reachable - it's empty again after any
+# restart and gives no fallback once it expires mid-outage. This one persists
+# a successful scan to disk and is served (clearly marked, see get_salesdata_
+# link's `offline` flag) whenever a live scan fails, e.g. this machine is off
+# the office LAN/VPN where \\10.0.1.85 lives - instead of the raw
+# FileNotFoundError the UI showed before.
+_SCAN_CACHE_DIR = os.path.join(DB_DIR, "scan_cache")
+
+
+def _save_scan_cache(name, data):
+    os.makedirs(_SCAN_CACHE_DIR, exist_ok=True)
+    with open(os.path.join(_SCAN_CACHE_DIR, f"{name}.json"), "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+
+def _load_scan_cache(name):
+    path = os.path.join(_SCAN_CACHE_DIR, f"{name}.json")
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
 
 def _mapped_stores():
     try:
@@ -99,10 +123,17 @@ def get_salesdata_link(force_refresh=False):
         data = _scan_parquet_link()
         _LINK_CACHE["data"] = data
         _LINK_CACHE["at"] = now
+        _save_scan_cache("salesdata_link", data)
         result = dict(data)
         result["cached"] = False
         return result
     except Exception as e:
+        stale = _load_scan_cache("salesdata_link")
+        if stale is not None:
+            result = dict(stale)
+            result["cached"] = True
+            result["offline"] = True  # source unreachable right now - this is last-known-good, not live
+            return result
         return {"ok": False, "error": f"{type(e).__name__}: {e}", "path": PARQUET_DIR}
 
 
@@ -202,10 +233,17 @@ def get_salesdata_link_daywise(force_refresh=False):
         data = _scan_daywise_link()
         _LINK_CACHE_DW["data"] = data
         _LINK_CACHE_DW["at"] = now
+        _save_scan_cache("salesdata_link_daywise", data)
         result = dict(data)
         result["cached"] = False
         return result
     except Exception as e:
+        stale = _load_scan_cache("salesdata_link_daywise")
+        if stale is not None:
+            result = dict(stale)
+            result["cached"] = True
+            result["offline"] = True  # source unreachable right now - this is last-known-good, not live
+            return result
         return {"ok": False, "error": f"{type(e).__name__}: {e}", "dirs": DAYWISE_DIRS}
 
 

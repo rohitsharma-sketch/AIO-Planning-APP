@@ -29,3 +29,7 @@ Thumbs.db
 # not source. (final_dept_plan.json alone exceeded GitHub's 100MB limit.)
 SalesPlan/backend/*.json
 Tentative AOP Forecaster/sessions/
+
+# Durable last-known-good data-lake scan cache — regenerated on every
+# successful scan; also carries real store/sales data, never source.
+RS Planning Platform/backend/calendar_engine/Local DB/scan_cache/

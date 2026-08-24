@@ -86,6 +86,13 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
       <h4>Link Sales Data Source · {LABELS[sourceType]}</h4>
       {link.ok ? (
         <>
+          {link.offline && (
+            <p>
+              <span className="scm-pill scm-pill-warn">Offline</span>{' '}
+              Source unreachable right now — showing last known data as of{' '}
+              <span className="date-mono">{link.scannedAt}</span>.
+            </p>
+          )}
           <p>
             <span className="scm-pill scm-pill-ok">Linked</span>{' '}
             {link.rowCount?.toLocaleString()} rows across {link.months?.length} months.
