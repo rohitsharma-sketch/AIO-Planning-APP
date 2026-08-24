@@ -211,6 +211,16 @@
       </div>
     </a>
 
+    <a class="card" href="http://localhost:5050/" target="_blank" data-check="http://localhost:5050/api/status">
+      <div class="card-icon">🛒</div>
+      <h2>Buyer's Input</h2>
+      <p class="desc">OTB buyer's plan — division/section-level growth% editing against the AOP seed, with per-cell locking and re-apportioning.</p>
+      <div class="meta">
+        <span class="port">localhost:5050</span>
+        <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
+      </div>
+    </a>
+
     <div class="card sync-card" id="sync-card">
       <div class="card-icon">🔄</div>
       <h2>Data Sync &amp; Flow</h2>
@@ -235,7 +245,7 @@
   </footer>
 
 <script>
-  document.querySelectorAll('.card').forEach(function (card) {
+  document.querySelectorAll('.card[data-check]').forEach(function (card) {
     var url = card.getAttribute('data-check');
     var dot = card.querySelector('.dot');
     var label = card.querySelector('.status-label');
