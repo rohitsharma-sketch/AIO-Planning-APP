@@ -4179,7 +4179,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   const w=document.querySelector('.sync-wrap');
   if(w){w.addEventListener('mouseenter',_placeSyncTip);window.addEventListener('resize',_placeSyncTip);}
 });
-function _syncUI(key,status,timeStr){
+function _syncUI(key,status,timeStr,progress){
   _syncState[key]={s:status,t:timeStr};
   const icons={ok:'<span style="color:var(--po)">✓</span>',err:'<span style="color:var(--ne)">✗</span>',syncing:'<span style="color:var(--wa)">⟳</span>',idle:'<span style="color:var(--mu)">○</span>'};
   const bdgLbls={ok:'Synced',err:'Error',syncing:'Syncing…',idle:'Pending'};
@@ -4188,7 +4188,14 @@ function _syncUI(key,status,timeStr){
   const bdg=document.getElementById('sync-'+key+'-bdg');
   if(icon)icon.innerHTML=icons[status]||icons.idle;
   if(timeEl)timeEl.textContent=timeStr||'—';
-  if(bdg){bdg.className='stbdg '+status;bdg.textContent=bdgLbls[status]||'Pending';}
+  if(bdg){
+    bdg.className='stbdg '+status;
+    // Append a live % while syncing (progress is undefined until the job's
+    // first poll reports one) - keeps the same compact badge rather than
+    // adding new layout just for this.
+    bdg.textContent=(status==='syncing'&&typeof progress==='number')
+      ? `Syncing… ${progress}%` : (bdgLbls[status]||'Pending');
+  }
   const vals=Object.values(_syncState);
   const anySyncing=vals.some(v=>v.s==='syncing');
   const anyErr=vals.some(v=>v.s==='err');
@@ -4267,20 +4274,34 @@ function applyTheme(mode){
 
 // Shared polling helper: polls pollUrl every 5 s until status==='done', rejects on error.
 // maxMs defaults to 10 minutes; a page reload starts fresh polling from the current job state.
-async function _pollUntilDone(pollUrl,maxMs=600000){
+// onProgress, if given, is called with each poll's numeric `progress` (0-100) while running.
+// A single poll can transiently fail (the job's own background work can briefly
+// starve the server) - that's retried a few times rather than aborting the whole
+// sync on one dropped request.
+async function _pollUntilDone(pollUrl,maxMs=600000,onProgress){
   const deadline=Date.now()+maxMs;
+  let misses=0;
   while(Date.now()<deadline){
     await new Promise(r=>setTimeout(r,5000));
-    const pr=await fetch(pollUrl,{signal:AbortSignal.timeout(60000)});
-    const pd=await pr.json();
+    let pd;
+    try{
+      const pr=await fetch(pollUrl,{signal:AbortSignal.timeout(60000)});
+      pd=await pr.json();
+      misses=0;
+    }catch(e){
+      misses++;
+      if(misses>=5)throw new Error('Lost contact with the sync job: '+e.message);
+      continue;
+    }
     if(pd.status==='done') return pd;
     if(pd.status==='error') throw new Error(pd.error||'Job failed');
+    if(onProgress&&typeof pd.progress==='number')onProgress(pd.progress);
   }
   throw new Error('Sync timed out');
 }
 
 async function syncSalesData(){
-  _syncUI('sales','syncing','...');
+  _syncUI('sales','syncing','...',0);
   try{
     // Kick off background job (returns immediately with status running or done)
     const r=await fetch(SYNC_BASE+'/api/sync/sales',{signal:AbortSignal.timeout(15000)});
@@ -4289,7 +4310,7 @@ async function syncSalesData(){
     // If already done from a previous run, fetch the result directly
     const data = d.status==='done'
       ? await fetch(SYNC_BASE+'/api/sync/sales/poll',{signal:AbortSignal.timeout(60000)}).then(r=>r.json())
-      : await _pollUntilDone(SYNC_BASE+'/api/sync/sales/poll');
+      : await _pollUntilDone(SYNC_BASE+'/api/sync/sales/poll',600000,pct=>_syncUI('sales','syncing','...',pct));
     // Populate DEPT_ACTUAL_LY with live AOP-month actuals
     Object.entries(data.dept_actual_ly||{}).forEach(([divId,months])=>{
       if(!DEPT_ACTUAL_LY[divId])DEPT_ACTUAL_LY[divId]={};

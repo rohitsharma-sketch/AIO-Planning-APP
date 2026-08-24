@@ -330,7 +330,7 @@ def _read_file_filtered(fp, columns, date_col, lo, hi):
 _RAW_CACHE = {}  # {'dw': {'syncId':..., 'df':..., 'rowsRead':..., 'fetchedAt':...}, 'mw': {...}}
 
 
-def _fetch_raw_daywise(months):
+def _fetch_raw_daywise(months, progress=None):
     import pandas as pd
     from concurrent.futures import ThreadPoolExecutor
 
@@ -339,9 +339,18 @@ def _fetch_raw_daywise(months):
     files = []
     for d in DAYWISE_DIRS:
         files.extend(sorted(glob.glob(os.path.join(d, "*.parquet"))))
+    if progress is not None:
+        progress["total"] = len(files)
 
     def _read(fp):
-        return _read_file_filtered(fp, ["BILLDATE", "STORE_NAME", "NETAMT"], "BILLDATE", lo, hi)
+        result = _read_file_filtered(fp, ["BILLDATE", "STORE_NAME", "NETAMT"], "BILLDATE", lo, hi)
+        # Files run concurrently (ThreadPoolExecutor below) - a plain += here is
+        # not perfectly atomic, but this only feeds a rough progress percentage,
+        # not a row count anything downstream depends on, so the GIL's per-op
+        # serialization is more than good enough without an explicit lock.
+        if progress is not None:
+            progress["done"] += 1
+        return result
 
     frames = []
     total_read = 0
@@ -368,15 +377,19 @@ def _fetch_raw_daywise(months):
     return df, total_read
 
 
-def _fetch_raw_monthwise(months):
+def _fetch_raw_monthwise(months, progress=None):
     months_set = set(months)
     lo, hi = _month_bounds(months)
     files = sorted(glob.glob(os.path.join(PARQUET_DIR, "*.parquet")))
+    if progress is not None:
+        progress["total"] = len(files)
 
     frames = []
     total_read = 0
     for fp in files:
         df = _read_file_filtered(fp, ["BILLMONTH", "DIVISION", "STORE_NAME", "SL_V"], "BILLMONTH", lo, hi)
+        if progress is not None:
+            progress["done"] += 1
         if df is None or df.empty:
             continue
         total_read += len(df)
@@ -396,15 +409,17 @@ def _fetch_raw_monthwise(months):
     return df, total_read
 
 
-def _get_raw(source, months, sync_id, fetch_fn):
+def _get_raw(source, months, sync_id, fetch_fn, progress=None):
     """Returns (df_copy, rows_read, used_cache). df_copy is always a fresh .copy()
     of the frozen/cached data - callers mutate it freely (adding cluster/date
     lookup columns) without ever corrupting the cache for the next run."""
     import time as _time
     slot = _RAW_CACHE.get(source)
     if sync_id and slot and slot.get("syncId") == sync_id:
+        if progress is not None:  # nothing to read - the frozen copy IS the whole job
+            progress["total"] = progress["done"] = 1
         return slot["df"].copy(), slot["rowsRead"], True
-    df, rows_read = fetch_fn(months)
+    df, rows_read = fetch_fn(months, progress=progress)
     if sync_id:  # only freeze when the client sent a real sync marker to key on
         _RAW_CACHE[source] = {"syncId": sync_id, "df": df, "rowsRead": rows_read, "fetchedAt": _time.time()}
     return df.copy(), rows_read, False
@@ -428,10 +443,10 @@ def _split_unknown_clusters(df, known_clusters):
     return df.loc[~unknown_mask], names, stores
 
 
-def reindex_daywise(months, store_cluster, day_map, sync_id=None):
+def reindex_daywise(months, store_cluster, day_map, sync_id=None, progress=None):
     cluster_ref_fut = {c: {p[0]: p[1] for p in pairs} for c, pairs in day_map.items()}
 
-    df, total_read, used_cache = _get_raw("dw", months, sync_id, _fetch_raw_daywise)
+    df, total_read, used_cache = _get_raw("dw", months, sync_id, _fetch_raw_daywise, progress=progress)
     df["cluster"] = df["STORE_NAME"].map(store_cluster)
     unmapped_stores = sorted(df.loc[df["cluster"].isna(), "STORE_NAME"].unique().tolist())
     df = df.dropna(subset=["cluster"])
@@ -457,7 +472,7 @@ def reindex_daywise(months, store_cluster, day_map, sync_id=None):
     }
 
 
-def reindex_monthwise(months, store_cluster, day_map, sync_id=None):
+def reindex_monthwise(months, store_cluster, day_map, sync_id=None, progress=None):
     # Per-cluster ref-month -> fut-month, by plurality of that month's mapped days
     # (a locked calendar maps individual days; month-wise source only has monthly
     # totals, so each LY month is assigned the TY month most of its days fall in).
@@ -469,7 +484,7 @@ def reindex_monthwise(months, store_cluster, day_map, sync_id=None):
             buckets.setdefault(ref_m, Counter())[fut_m] += 1
         cluster_month_map[cluster] = {rm: c.most_common(1)[0][0] for rm, c in buckets.items()}
 
-    df, total_read, used_cache = _get_raw("mw", months, sync_id, _fetch_raw_monthwise)
+    df, total_read, used_cache = _get_raw("mw", months, sync_id, _fetch_raw_monthwise, progress=progress)
     df["cluster"] = df["STORE_NAME"].map(store_cluster)
     unmapped_stores = sorted(df.loc[df["cluster"].isna(), "STORE_NAME"].unique().tolist())
     df = df.dropna(subset=["cluster"])
@@ -495,7 +510,7 @@ def reindex_monthwise(months, store_cluster, day_map, sync_id=None):
     }
 
 
-def run_reindex(payload):
+def run_reindex(payload, progress=None):
     source = payload.get("source")
     months = payload.get("months") or []
     store_cluster = payload.get("storeCluster") or {}
@@ -509,7 +524,51 @@ def run_reindex(payload):
         return {"ok": False, "error": "dayMap is required (pick a locked calendar)"}
     try:
         if source == "dw":
-            return reindex_daywise(months, store_cluster, day_map, sync_id)
-        return reindex_monthwise(months, store_cluster, day_map, sync_id)
+            return reindex_daywise(months, store_cluster, day_map, sync_id, progress=progress)
+        return reindex_monthwise(months, store_cluster, day_map, sync_id, progress=progress)
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+# ─── Background job + poll (mirrors Buyer's Input Sheet's sync-job pattern) ──
+# The plain POST /salesdata/reindex above blocked the request for the whole
+# read with zero feedback - a day-wise run reads tens of millions of rows.
+# This runs the same run_reindex() on a background thread and tracks
+# "files processed / total files" (see the `progress` dict threaded through
+# _fetch_raw_* above) so the frontend can show a real percentage instead.
+_REINDEX_JOBS = {}  # {job_id: {"status", "progress": {"done","total"}, "data", "error"}}
+
+
+def start_reindex_job(payload):
+    import threading
+    import uuid as _uuid
+
+    job_id = str(_uuid.uuid4())
+    progress = {"done": 0, "total": 0}
+    _REINDEX_JOBS[job_id] = {"status": "running", "progress": progress, "data": None, "error": None}
+
+    def _run():
+        try:
+            result = run_reindex(payload, progress=progress)
+            if result.get("ok"):
+                _REINDEX_JOBS[job_id] = {"status": "done", "progress": progress, "data": result, "error": None}
+            else:
+                _REINDEX_JOBS[job_id] = {"status": "error", "progress": progress, "data": None, "error": result.get("error")}
+        except Exception as e:
+            _REINDEX_JOBS[job_id] = {"status": "error", "progress": progress, "data": None, "error": f"{type(e).__name__}: {e}"}
+
+    threading.Thread(target=_run, daemon=True).start()
+    return job_id
+
+
+def poll_reindex_job(job_id):
+    job = _REINDEX_JOBS.get(job_id)
+    if job is None:
+        return {"ok": False, "status": "error", "error": "Unknown or expired job"}
+    p = job["progress"]
+    pct = round(100 * p["done"] / p["total"]) if p["total"] else 0
+    if job["status"] == "done":
+        return {**job["data"], "status": "done", "progressPct": 100}
+    if job["status"] == "error":
+        return {"ok": False, "status": "error", "error": job["error"]}
+    return {"ok": True, "status": "running", "progressPct": pct, "filesDone": p["done"], "filesTotal": p["total"]}

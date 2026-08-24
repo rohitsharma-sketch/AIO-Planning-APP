@@ -104,7 +104,7 @@ FY26_DATE_TO_MI = _fy_date_to_mi(2025)   # Apr 2025 – Mar 2026
 os.makedirs(LOCAL_CACHE, exist_ok=True)
 _last_sync: dict = {}
 _hist_job:  dict = {"status": "idle", "data": None, "error": None}
-_sales_job: dict = {"status": "idle", "data": None, "error": None}
+_sales_job: dict = {"status": "idle", "progress": 0, "data": None, "error": None}
 _st_job:    dict = {"status": "idle", "data": None, "error": None}
 
 
@@ -230,10 +230,12 @@ def _run_sales_job(src: str):
                 src = local_src
             except Exception:
                 pass  # fall back to network path
+        _sales_job["progress"] = 10
 
         import pyarrow.parquet as pq
         schema = pq.read_schema(src)
         cols_lower = {c.lower(): c for c in schema.names}
+        _sales_job["progress"] = 20
 
         date_col  = detect_col(cols_lower, ["bill_date", "tran_date", "billdate", "billmonth", "bill_month",
                                              "invoice_date", "sale_date", "trans_date", "date", "dt",
@@ -257,6 +259,7 @@ def _run_sales_job(src: str):
                     + ([store_col] if store_col else []) \
                     + ([tag_col]   if tag_col   else [])
         df = pd.read_parquet(src, columns=read_cols)
+        _sales_job["progress"] = 70
         df[date_col] = parse_date_col(df[date_col])
         df = df.dropna(subset=[date_col])
 
@@ -279,6 +282,7 @@ def _run_sales_job(src: str):
         df_f[amt_col] = pd.to_numeric(df_f[amt_col], errors="coerce").fillna(0)
         df_f = df_f.dropna(subset=["_div", "_mi"])
 
+        _sales_job["progress"] = 90
         grouped = df_f.groupby(["_div", "_mi"])[amt_col].sum()
         result: dict = {}
         for (dv, mi), total in grouped.items():
@@ -308,7 +312,7 @@ def api_sync_sales():
         return jsonify({"ok": True, "status": "running"})
     if _sales_job["status"] == "done":
         return jsonify({"ok": True, "status": "done"})
-    _sales_job = {"status": "running", "data": None, "error": None}
+    _sales_job = {"status": "running", "progress": 0, "data": None, "error": None}
     import threading
     threading.Thread(target=_run_sales_job, args=(src,), daemon=True).start()
     return jsonify({"ok": True, "status": "running"})
@@ -318,10 +322,10 @@ def api_sync_sales():
 def api_sync_sales_poll():
     job = _sales_job
     if job["status"] == "done":
-        return jsonify({**job["data"], "status": "done"})
+        return jsonify({**job["data"], "status": "done", "progress": 100})
     if job["status"] == "error":
         return jsonify({"ok": False, "status": "error", "error": job["error"]})
-    return jsonify({"ok": True, "status": job["status"]})
+    return jsonify({"ok": True, "status": job["status"], "progress": job.get("progress", 0)})
 
 
 def _run_st_job(src: str):

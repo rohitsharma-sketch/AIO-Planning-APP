@@ -66,3 +66,5 @@ export const putSalesdataLinkSelection = (sourceType, payload) => jsonPost(`/sal
 export const getSalesdataLink = (refresh) => fetchJson(`/salesdata/link${refresh ? '?refresh=1' : ''}`)
 export const getSalesdataLinkDaywise = (refresh) => fetchJson(`/salesdata/link-daywise${refresh ? '?refresh=1' : ''}`)
 export const runReindex = (payload) => jsonPost('/salesdata/reindex', payload)
+export const startReindex = (payload) => jsonPost('/salesdata/reindex/start', payload)
+export const pollReindex = (jobId) => fetchJson(`/salesdata/reindex/poll/${jobId}`)

@@ -11,7 +11,10 @@ from sqlalchemy import delete, func, select
 
 from auth.deps import require_login, require_role
 from calendar_engine.cluster_names import resolve_cluster_name
-from calendar_engine.scans import get_salesdata_link, get_salesdata_link_daywise, run_reindex
+from calendar_engine.scans import (
+    get_salesdata_link, get_salesdata_link_daywise, run_reindex,
+    start_reindex_job, poll_reindex_job,
+)
 from db.base import SessionLocal
 from db.models.calendar import (
     AppStateMeta,
@@ -507,3 +510,16 @@ def salesdata_link_daywise(refresh: bool = False, user: dict = Depends(require_l
 @router.post("/salesdata/reindex")
 def salesdata_reindex(payload: dict = Body(...), user: dict = Depends(require_login)):
     return run_reindex(payload)
+
+
+@router.post("/salesdata/reindex/start")
+def salesdata_reindex_start(payload: dict = Body(...), user: dict = Depends(require_login)):
+    """Background variant of /salesdata/reindex - returns a job id immediately
+    instead of blocking for the whole read (day-wise runs tens of millions of
+    rows). Poll /salesdata/reindex/poll/{job_id} for progress and the result."""
+    return {"ok": True, "jobId": start_reindex_job(payload)}
+
+
+@router.get("/salesdata/reindex/poll/{job_id}")
+def salesdata_reindex_poll(job_id: str, user: dict = Depends(require_login)):
+    return poll_reindex_job(job_id)
