@@ -316,7 +316,17 @@ def _fetch_raw_daywise(months):
             df = df[df["ym"].isin(months_set)]
             if not df.empty:
                 frames.append(df)
-    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["BILLDATE", "STORE_NAME", "NETAMT"])
+    # Empty fallback needs the SAME columns (name + dtype) every real per-file
+    # frame ends up with above ("ym" included, "BILLDATE" kept datetime64) —
+    # a bare pd.DataFrame(columns=[...]) defaults every column to object
+    # dtype and omits "ym" entirely, which crashed reindex_daywise/monthwise's
+    # downstream `.dt` and `df["ym"]` access with an AttributeError/KeyError
+    # whenever the source directory is unreachable (e.g. off the office LAN)
+    # instead of reporting "0 rows found" like every other empty-result path.
+    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame({
+        "BILLDATE": pd.Series(dtype="datetime64[ns]"), "STORE_NAME": pd.Series(dtype="object"),
+        "NETAMT": pd.Series(dtype="float64"), "ym": pd.Series(dtype="object"),
+    })
     return df, total_read
 
 
@@ -337,7 +347,14 @@ def _fetch_raw_monthwise(months):
         if not df.empty:
             frames.append(df)
     import pandas as pd
-    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["BILLMONTH", "DIVISION", "STORE_NAME", "SL_V"])
+    # See the matching comment in _fetch_raw_daywise — the fallback must carry
+    # the same columns/dtypes real frames get ("ym" included, "BILLMONTH" kept
+    # datetime64), or reindex_monthwise's `df["ym"]`/`fut_month` lookups crash
+    # instead of reporting zero rows when the source directory is unreachable.
+    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame({
+        "BILLMONTH": pd.Series(dtype="datetime64[ns]"), "DIVISION": pd.Series(dtype="object"),
+        "STORE_NAME": pd.Series(dtype="object"), "SL_V": pd.Series(dtype="float64"), "ym": pd.Series(dtype="object"),
+    })
     return df, total_read
 
 
