@@ -314,15 +314,16 @@
   checkAllStatuses();
 
   // Master Switch — one flip: starts whichever backend servers aren't
-  // already listening (landing_server.py's own /api/launch-all) AND opens
-  // every module card's link in its own tab, like a breaker feeding every
-  // circuit at once. The tabs are opened SYNCHRONOUSLY, in the same click
-  // handler tick, before the async launch-all call - open them after an
-  // await/setTimeout instead and browsers block every one past the first as
-  // a popup, since by then it's no longer inside the trusted click gesture.
-  // A module whose server just started will briefly show connection-refused
-  // in its tab; reloading it once /api/launch-all's status recheck goes
-  // green (~3-20s later) picks it up, same as clicking the card again would.
+  // already listening (landing_server.py's own /api/launch-all), then
+  // re-checks status as they come up so their dots turn green. Deliberately
+  // does NOT open any tabs itself - the user picks which module to actually
+  // go into by clicking its card, same as always, once it's green. (An
+  // earlier version tried to also open every module in its own tab from this
+  // one click; that was both unwanted - a burst of 4 tabs on every flip -
+  // and unreliable, since it depended on window.open()/synthetic link clicks
+  // being treated as a trusted user gesture, which isn't consistent across
+  // browsers/extensions and in one real case hijacked the Landing tab itself
+  // into navigating away instead of opening new ones.)
   (function () {
     var btn = document.getElementById('launch-all-btn');
     var msg = document.getElementById('launch-all-msg');
@@ -330,20 +331,7 @@
     btn.addEventListener('click', function () {
       btn.disabled = true;
       btn.classList.add('on');
-      msg.textContent = 'Flipping the breaker — opening modules & starting offline servers…';
-
-      // Trigger a native click on each card link itself (they already carry
-      // target="_blank"), NOT window.open(url, '_blank') in a loop. Looped
-      // window.open() calls are unreliable across browsers/extensions -
-      // confirmed live: instead of opening 4 new tabs, it hijacked the
-      // CURRENT tab into navigating to one of the module URLs, taking the
-      // Landing page itself away mid-click. A real anchor's own target=_blank
-      // navigation goes through the browser's ordinary link-following path,
-      // not the Window-API popup path, which is why it doesn't have this
-      // failure mode.
-      document.querySelectorAll('.card[href]').forEach(function (card) {
-        card.click();
-      });
+      msg.textContent = 'Flipping the breaker — starting offline servers…';
 
       fetch('/api/launch-all', { method: 'POST' })
         .then(function (r) { return r.json(); })
