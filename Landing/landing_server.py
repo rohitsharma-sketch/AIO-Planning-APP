@@ -10,6 +10,8 @@ import sys
 import webbrowser
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 
+import psutil
+
 PORT = 7800
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_HERE)
@@ -46,6 +48,34 @@ def _is_online(port, timeout=0.5):
         return False
 
 
+def _pid_listening_on(port):
+    # LISTEN-only, loopback/any-addr - matches _is_online's own definition of
+    # "online" so launch/shutdown agree on what counts as this app's process.
+    for conn in psutil.net_connections(kind="inet"):
+        if conn.status == psutil.CONN_LISTEN and conn.laddr and conn.laddr.port == port and conn.pid:
+            return conn.pid
+    return None
+
+
+def _shutdown(port):
+    # terminate() first (lets uvicorn/Flask close sockets cleanly), escalate
+    # to kill() only if it's still alive after a short grace period - same
+    # spirit as _launch's DETACHED_PROCESS: don't leave orphaned listeners.
+    pid = _pid_listening_on(port)
+    if pid is None:
+        return False
+    try:
+        proc = psutil.Process(pid)
+        proc.terminate()
+        try:
+            proc.wait(timeout=3)
+        except psutil.TimeoutExpired:
+            proc.kill()
+    except psutil.NoSuchProcess:
+        pass
+    return True
+
+
 def _launch(app):
     # DETACHED_PROCESS + CREATE_NEW_PROCESS_GROUP: fully independent of this
     # server's own process, matching how starting it from a separate terminal
@@ -62,11 +92,24 @@ class Handler(SimpleHTTPRequestHandler):
         pass
 
     def do_POST(self):
-        if self.path != "/api/launch-all":
+        if self.path == "/api/launch-all":
+            self._launch_all()
+        elif self.path == "/api/shutdown-all":
+            self._shutdown_all()
+        else:
             self.send_response(404)
             self.end_headers()
-            return
 
+    def _json(self, payload):
+        body = json.dumps(payload).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _launch_all(self):
         launched, already_online = [], []
         for app in APPS:
             if _is_online(app["port"]):
@@ -74,14 +117,16 @@ class Handler(SimpleHTTPRequestHandler):
             else:
                 _launch(app)
                 launched.append(app["name"])
+        self._json({"ok": True, "launched": launched, "alreadyOnline": already_online})
 
-        body = json.dumps({"ok": True, "launched": launched, "alreadyOnline": already_online}).encode("utf-8")
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.end_headers()
-        self.wfile.write(body)
+    def _shutdown_all(self):
+        stopped, already_offline = [], []
+        for app in APPS:
+            if _shutdown(app["port"]):
+                stopped.append(app["name"])
+            else:
+                already_offline.append(app["name"])
+        self._json({"ok": True, "stopped": stopped, "alreadyOffline": already_offline})
 
 
 if __name__ == "__main__":

@@ -336,10 +336,12 @@
   }
   checkAllStatuses();
 
-  // Master Switch — one flip: starts whichever backend servers aren't
-  // already listening (landing_server.py's own /api/launch-all), then
-  // re-checks status as they come up so their dots turn green. Deliberately
-  // does NOT open any tabs itself - the user picks which module to actually
+  // Master Switch — one flip in either direction. If everything's currently
+  // off (or mixed), a click starts whichever backend servers aren't already
+  // listening (landing_server.py's /api/launch-all). If everything's
+  // currently on, a click instead stops them (/api/shutdown-all) - same
+  // real-status-driven flip, just the opposite action. Deliberately does NOT
+  // open any tabs itself on launch - the user picks which module to actually
   // go into by clicking its card, same as always, once it's green. (An
   // earlier version tried to also open every module in its own tab from this
   // one click; that was both unwanted - a burst of 4 tabs on every flip -
@@ -356,20 +358,30 @@
       // checkAllStatuses()'s real "is everything actually reachable right
       // now" check (see above), so it always reflects the truth instead of
       // a fixed timer that used to flip it back off after 20s whether or
-      // not the servers had actually come up yet.
+      // not the servers had actually come up yet. Read that real state once,
+      // up front, to decide which direction this click means.
+      var turningOff = btn.classList.contains('on');
       btn.disabled = true;
-      msg.textContent = 'Flipping the breaker — starting offline servers…';
+      msg.textContent = turningOff
+        ? 'Flipping the breaker — stopping servers…'
+        : 'Flipping the breaker — starting offline servers…';
 
-      fetch('/api/launch-all', { method: 'POST' })
+      fetch(turningOff ? '/api/shutdown-all' : '/api/launch-all', { method: 'POST' })
         .then(function (r) { return r.json(); })
         .then(function (data) {
           var parts = [];
-          if (data.launched && data.launched.length) parts.push('Starting: ' + data.launched.join(', '));
-          if (data.alreadyOnline && data.alreadyOnline.length) parts.push('Already online: ' + data.alreadyOnline.join(', '));
-          msg.textContent = parts.join(' · ') || 'Nothing to start.';
-          // Re-check a few times over ~20s while the new processes spin up
-          // (rather than once immediately, which would still show them
-          // offline) — each recheck updates the switch too, once for real.
+          if (turningOff) {
+            if (data.stopped && data.stopped.length) parts.push('Stopped: ' + data.stopped.join(', '));
+            if (data.alreadyOffline && data.alreadyOffline.length) parts.push('Already offline: ' + data.alreadyOffline.join(', '));
+            msg.textContent = parts.join(' · ') || 'Nothing to stop.';
+          } else {
+            if (data.launched && data.launched.length) parts.push('Starting: ' + data.launched.join(', '));
+            if (data.alreadyOnline && data.alreadyOnline.length) parts.push('Already online: ' + data.alreadyOnline.join(', '));
+            msg.textContent = parts.join(' · ') || 'Nothing to start.';
+          }
+          // Re-check a few times over ~20s while servers spin up or wind
+          // down (rather than once immediately, which would still show the
+          // old state) — each recheck updates the switch too, once for real.
           [1000, 3000, 6000, 10000, 15000, 20000].forEach(function (delay) {
             setTimeout(checkAllStatuses, delay);
           });
