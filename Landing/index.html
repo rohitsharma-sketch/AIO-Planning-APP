@@ -124,6 +124,8 @@
     border-color: rgba(255,255,255,0.28);
     background: rgba(255,255,255,0.10);
   }
+  .card { cursor: grab; }
+  .card:active { cursor: grabbing; }
   .card-icon {
     width: 46px; height: 46px;
     border-radius: 12px;
@@ -374,12 +376,15 @@
     return d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
   }
 
-  // NOTE: these two fetches intentionally stay pointed at the standalone
-  // AOP Forecaster (:8000) and SalesPlan (:8002) ports, not :8010 — the
-  // equivalent routes on :8010 require a login session, and an anonymous
-  // landing-page visitor's fetch would silently get empty/misleading data
-  // instead of a clear error. :8000/:8002 stay running unauthenticated
-  // specifically for this kind of public status check.
+  // NOTE: this fetch intentionally stays pointed at the standalone
+  // AOP Forecaster (:8000) port, not :8010 — the equivalent route on
+  // :8010 requires a login session, and an anonymous landing-page
+  // visitor's fetch would silently get empty/misleading data instead
+  // of a clear error. :8000 stays running unauthenticated specifically
+  // for this kind of public status check. (The flow-status fetch below,
+  // by contrast, targets :8010 on purpose — it wants the buyer-review
+  // workflow's live plan-cycle data, which only exists there, so it
+  // handles the 401/unreachable cases explicitly instead.)
 
   // Extraction status — real sync.sync_runs rows from AOP Forecaster's Postgres sync
   fetch('http://localhost:8000/api/config/db-sync/status', { cache: 'no-store' })
@@ -400,25 +405,83 @@
       document.getElementById('extraction-rows').innerHTML = '<div class="sync-error">AOP Forecaster (localhost:8000) unreachable.</div>';
     });
 
-  // Inter-module flow status — SalesPlan's cached pull from AOP Forecaster
-  fetch('http://localhost:8002/api/department-plan/aop-forecaster-status', { cache: 'no-store' })
-    .then(function (r) { return r.json(); })
-    .then(function (data) {
-      var el = document.getElementById('flow-rows');
-      if (!data.synced) { el.innerHTML = '<div class="sync-empty">Not synced yet — no AOP run pulled into Planning Engine.</div>'; return; }
-      el.innerHTML =
-        '<div class="sync-row">' +
-          '<span class="sync-name">Latest AOP run</span>' +
-          '<span class="sync-when"><span class="sync-badge ok">synced</span> ' + fmtWhen(data.synced_at) + '</span>' +
-        '</div>' +
-        '<div class="sync-row">' +
-          '<span class="sync-name">Run computed at</span>' +
-          '<span class="sync-when">' + fmtWhen(data.computed_at) + '</span>' +
-        '</div>';
-    })
-    .catch(function () {
-      document.getElementById('flow-rows').innerHTML = '<div class="sync-error">Planning Engine (localhost:8002) unreachable.</div>';
+  // Inter-module flow status — live plan-cycle stage, polled straight from
+  // the unified :8010 platform (cross-origin, with session credentials) so
+  // it reflects the buyer-review workflow's actual current stage rather
+  // than the old AOP-forecaster-run "synced" flag.
+  const STAGE_ORDER = ['draft', 'pending_buyer', 'pending_review', 'pending_approval', 'approved'];
+  const STAGE_LABELS = {
+    draft: 'Draft', pending_buyer: 'Awaiting Buyer', pending_review: 'Awaiting Review',
+    pending_approval: 'Awaiting Approval', approved: 'Approved — synced to Sales Plan',
+  };
+
+  async function checkPlanCycleFlow() {
+    const el = document.getElementById('flow-rows');
+    try {
+      const res = await fetch('http://localhost:8010/api/aop/plan-cycles', { credentials: 'include', cache: 'no-store' });
+      if (res.status === 401) { el.innerHTML = '<div class="sync-empty">Sign in to the platform to see live cycle status.</div>'; return; }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const cycles = await res.json();
+      if (!cycles.length) { el.innerHTML = '<div class="sync-empty">No plan cycles started yet.</div>'; return; }
+      const latest = cycles[0]; // already newest-first per the backend's own ordering
+      const stageIdx = STAGE_ORDER.indexOf(latest.status);
+      el.innerHTML = `
+        <div class="sync-row">
+          <div style="display:flex; gap:4px; margin-bottom:6px">
+            ${STAGE_ORDER.map((s, i) => `<div style="flex:1; height:4px; border-radius:2px; background:${i <= stageIdx ? '#2ecc71' : 'rgba(255,255,255,0.15)'}"></div>`).join('')}
+          </div>
+          <div>Cycle ${latest.id.slice(0, 8)}: <strong>${STAGE_LABELS[latest.status] || latest.status}</strong></div>
+        </div>`;
+    } catch (e) {
+      el.innerHTML = `<div class="sync-error">Platform (localhost:8010) unreachable.</div>`;
+    }
+  }
+  checkPlanCycleFlow();
+  setInterval(checkPlanCycleFlow, 10000); // live - reflects new transitions without a manual reload
+
+  // Drag-and-drop card reordering — a personal browser preference, persisted
+  // to localStorage only (not synced anywhere else). Isolated in its own
+  // IIFE so it doesn't pollute the global scope.
+  (function () {
+    const grid = document.querySelector('.grid');
+    if (!grid) return;
+    const STORAGE_KEY = 'landing-card-order';
+
+    function applyStoredOrder() {
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      if (!stored.length) return;
+      const cards = [...grid.children];
+      const byHref = new Map(cards.map(c => [c.getAttribute('href') || c.id, c]));
+      stored.forEach(key => { const c = byHref.get(key); if (c) grid.appendChild(c); });
+    }
+
+    function saveOrder() {
+      const order = [...grid.children].map(c => c.getAttribute('href') || c.id);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(order));
+    }
+
+    [...grid.children].forEach(card => {
+      card.setAttribute('draggable', 'true');
+      card.addEventListener('dragstart', e => {
+        e.dataTransfer.setData('text/plain', card.getAttribute('href') || card.id);
+        card.style.opacity = '0.4';
+      });
+      card.addEventListener('dragend', () => { card.style.opacity = ''; saveOrder(); });
+      card.addEventListener('dragover', e => e.preventDefault());
+      card.addEventListener('drop', e => {
+        e.preventDefault();
+        const draggedKey = e.dataTransfer.getData('text/plain');
+        const dragged = [...grid.children].find(c => (c.getAttribute('href') || c.id) === draggedKey);
+        if (dragged && dragged !== card) {
+          const cards = [...grid.children];
+          const draggedIdx = cards.indexOf(dragged), targetIdx = cards.indexOf(card);
+          if (draggedIdx < targetIdx) card.after(dragged); else card.before(dragged);
+        }
+      });
     });
+
+    applyStoredOrder();
+  })();
 </script>
 </body>
 </html>
