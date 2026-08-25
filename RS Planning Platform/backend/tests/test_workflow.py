@@ -11,6 +11,7 @@ from db.models.engine import ForecastRun
 from db.models.workflow import PlanCycle, PlanCycleTransition
 from workflow.service import TRANSITIONS, create_cycle, transition
 from workflow.service import latest_approved_cycle
+from workflow.service import set_buyer_totals
 
 
 @pytest.fixture
@@ -126,4 +127,40 @@ def test_latest_approved_cycle_carries_buyer_adjusted_totals(fake_run, role_user
     assert found is not None
     assert found.id == cycle.id
     assert found.buyer_adjusted_totals == {"mens": 100.0, "ladies": 200.0, "kids": 50.0}
+    session.close()
+
+
+def test_set_buyer_totals_requires_buyer_role(fake_run, role_users):
+    session = SessionLocal()
+    cycle = create_cycle(session, fake_run, role_users["planner"])
+    cycle = transition(session, cycle.id, "submit", role_users["planner"])  # now pending_buyer
+    with pytest.raises(PermissionError):
+        set_buyer_totals(session, cycle.id, {"mens": 1, "ladies": 2, "kids": 3}, role_users["planner"])
+    session.close()
+
+
+def test_set_buyer_totals_requires_pending_buyer_status(fake_run, role_users):
+    session = SessionLocal()
+    cycle = create_cycle(session, fake_run, role_users["planner"])  # still draft
+    with pytest.raises(PermissionError):
+        set_buyer_totals(session, cycle.id, {"mens": 1, "ladies": 2, "kids": 3}, role_users["buyer"])
+    session.close()
+
+
+def test_set_buyer_totals_rejects_incomplete_totals(fake_run, role_users):
+    session = SessionLocal()
+    cycle = create_cycle(session, fake_run, role_users["planner"])
+    cycle = transition(session, cycle.id, "submit", role_users["planner"])
+    with pytest.raises(ValueError):
+        set_buyer_totals(session, cycle.id, {"mens": 1, "ladies": 2}, role_users["buyer"])  # missing kids
+    session.close()
+
+
+def test_set_buyer_totals_saves_without_transitioning_status(fake_run, role_users):
+    session = SessionLocal()
+    cycle = create_cycle(session, fake_run, role_users["planner"])
+    cycle = transition(session, cycle.id, "submit", role_users["planner"])
+    cycle = set_buyer_totals(session, cycle.id, {"mens": 10.5, "ladies": 20.5, "kids": 5.5}, role_users["buyer"])
+    assert cycle.status == "pending_buyer"  # unchanged - saving is not submitting
+    assert cycle.buyer_adjusted_totals == {"mens": 10.5, "ladies": 20.5, "kids": 5.5}
     session.close()

@@ -64,6 +64,23 @@ def transition(session: Session, cycle_id: uuid.UUID, action: str, actor: dict, 
     return cycle
 
 
+REQUIRED_DIVISIONS = ("mens", "ladies", "kids")
+
+
+def set_buyer_totals(session: Session, cycle_id: uuid.UUID, totals: dict, actor: dict) -> PlanCycle:
+    cycle = session.get(PlanCycle, cycle_id)
+    if cycle is None:
+        raise LookupError("Plan cycle not found")
+    if cycle.status != "pending_buyer" or actor["role"] != "buyer":
+        raise PermissionError("Only buyer may set totals while pending_buyer")
+    if not all(d in totals and isinstance(totals[d], (int, float)) for d in REQUIRED_DIVISIONS):
+        raise ValueError(f"totals must include numeric values for {REQUIRED_DIVISIONS}")
+    cycle.buyer_adjusted_totals = {d: float(totals[d]) for d in REQUIRED_DIVISIONS}
+    session.commit()
+    session.refresh(cycle)
+    return cycle
+
+
 def latest_approved_run_id(session: Session) -> uuid.UUID | None:
     cycle = session.execute(
         select(PlanCycle).where(PlanCycle.status == "approved").order_by(PlanCycle.updated_at.desc())

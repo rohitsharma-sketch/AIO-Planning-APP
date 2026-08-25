@@ -6,7 +6,7 @@ from sqlalchemy import select
 from auth.deps import require_login
 from db.base import SessionLocal
 from db.models.workflow import PlanCycle, PlanCycleTransition
-from workflow.service import create_cycle, set_current_run, transition
+from workflow.service import create_cycle, set_buyer_totals, set_current_run, transition
 
 router = APIRouter()
 
@@ -35,6 +35,23 @@ def update_run(cycle_id: str, body: dict = Body(...), user: dict = Depends(requi
         except PermissionError as e:
             raise HTTPException(403, str(e))
         return {"id": str(cycle.id), "status": cycle.status, "current_run_id": str(cycle.current_run_id)}
+    finally:
+        session.close()
+
+
+@router.put("/{cycle_id}/buyer-totals")
+def update_buyer_totals(cycle_id: str, body: dict = Body(...), user: dict = Depends(require_login)):
+    session = SessionLocal()
+    try:
+        try:
+            cycle = set_buyer_totals(session, uuid.UUID(cycle_id), body.get("totals") or {}, user)
+        except LookupError as e:
+            raise HTTPException(404, str(e))
+        except PermissionError as e:
+            raise HTTPException(403, str(e))
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        return {"id": str(cycle.id), "status": cycle.status, "buyer_adjusted_totals": cycle.buyer_adjusted_totals}
     finally:
         session.close()
 
