@@ -25,6 +25,12 @@ PERIODS = [
     {"period_id": y * 100 + m, "label": f"{MONTH_ABBR[m]}'{y % 100:02d}"}
     for y in range(2019, 2031) for m in range(1, 13)
 ]
+# InputValue.period_id has server_default="0" for levers whose shape has no
+# period axis at all ("settings", shape=scalar) - db/models/planning_inputs.py
+# documents this same '' sentinel pattern for division_code below. Without
+# this row the FK on period_id would reject any such row the same way
+# division_code's FK just did for the missing '' division.
+PERIODS.append({"period_id": 0, "label": ""})
 
 DATA_LAKE_RAW = r"C:\Users\Administrator\Desktop\AI SOLUTION\INVENTORY AUTOMATION\data_lake\raw"
 
@@ -34,6 +40,13 @@ DIVISIONS = [
     ("LADIES", "Ladies"),
     ("MENS", "Mens"),
     ("RETAIL", "Retail"),
+    # db/models/planning_inputs.py:62 documents this exact sentinel row -
+    # InputValue.division_code is NOT NULL with '' meaning "not applicable to
+    # this lever's shape" (e.g. growth_pct's OVERALL row), and its FK needs
+    # a real '' row to satisfy that. Missing here, this FK rejects every
+    # such row - caught live via ForeignKeyViolation running
+    # migrate_manual_levers.py against a freshly seeded database.
+    ("", "N/A — division-agnostic input value"),
 ]
 
 LEVERS = [
