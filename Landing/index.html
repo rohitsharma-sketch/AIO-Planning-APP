@@ -177,48 +177,33 @@
     padding: 20px 18px 16px;
     backdrop-filter: blur(6px);
   }
-  .sync-section + .sync-section { margin-top: 18px; }
+  .sync-section + .sync-section { margin-top: 20px; }
   .sync-section-title {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 10px;
-    font-size: 11px;
+    font-size: 11.5px;
     letter-spacing: 0.05em;
     text-transform: uppercase;
     color: var(--text-dim);
-    margin-bottom: 8px;
+    margin-bottom: 10px;
   }
-  /* Plan Cycles used to be its own card in the grid; the buyer-review
-     workflow it links to is exactly what this section already narrates
-     live, so the entry point belongs here now instead of a separate tile. */
-  .sync-section-link {
-    text-transform: none;
-    letter-spacing: normal;
-    font-size: 11.5px;
-    font-weight: 600;
-    /* --teal (#026478) is too dark to read against this navy background;
-       --bg-grad-a is the same bright cyan the card icons already use as
-       their accent, so this stays visually consistent with the page. */
-    color: var(--bg-grad-a);
-    text-decoration: none;
-    white-space: nowrap;
-  }
-  .sync-section-link:hover { text-decoration: underline; }
-  .sync-rows { display: flex; flex-direction: column; gap: 6px; }
+  /* No description paragraph and no link-out on this card anymore - it's
+     status only, read in place, no click needed - so the freed space goes
+     to the actual live rows instead: slightly larger text, more breathing
+     room between rows, than when this card also had to fit a blurb and a
+     link. */
+  .sync-rows { display: flex; flex-direction: column; gap: 8px; }
   .sync-row {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     gap: 10px;
-    font-size: 12.5px;
+    font-size: 13.5px;
     border-top: 1px solid var(--card-border);
-    padding-top: 6px;
+    padding-top: 8px;
   }
   .sync-row:first-child { border-top: none; padding-top: 0; }
   .sync-row .sync-name { color: var(--text); font-weight: 600; }
   .sync-row .sync-when { color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .sync-loading, .sync-empty, .sync-error { color: var(--text-dim); font-size: 12.5px; }
+  .sync-loading, .sync-empty, .sync-error { color: var(--text-dim); font-size: 13.5px; }
   .sync-error { color: var(--down); }
   .sync-badge {
     font-size: 10.5px;
@@ -300,7 +285,6 @@
     <div class="card sync-card" id="sync-card">
       <div class="card-icon">🔄</div>
       <h2>Data Sync &amp; Flow</h2>
-      <p class="desc">Live status of data extraction into Postgres, and of data handed off between modules.</p>
 
       <div class="sync-section">
         <div class="sync-section-title">Extraction — Calendar Engine → Postgres</div>
@@ -308,10 +292,7 @@
       </div>
 
       <div class="sync-section">
-        <div class="sync-section-title">
-          <span>Flow — AOP Forecaster → Planning Engine</span>
-          <a class="sync-section-link" href="http://localhost:8010/plan-cycles" target="_blank">Open Plan Cycles →</a>
-        </div>
+        <div class="sync-section-title">Flow — AOP Forecaster → Planning Engine</div>
         <div class="sync-rows" id="flow-rows"><div class="sync-row sync-loading">Checking…</div></div>
       </div>
     </div>
