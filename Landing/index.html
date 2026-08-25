@@ -101,9 +101,14 @@
   }
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 22px;
-    max-width: 980px;
+    /* Narrower cards + a wider cap than the old 3-up layout: with the flow
+       down to 5 tiles (Calendar, AOP Forecaster, Buyer's Input, Planning
+       Engine, Data Sync & Flow), this fits them in one linear row on a
+       normal desktop width, reading left-to-right as the actual pipeline
+       order instead of wrapping into a 3+2 grid that obscured it. */
+    grid-template-columns: repeat(auto-fit, minmax(208px, 1fr));
+    gap: 16px;
+    max-width: 1180px;
     width: 100%;
     margin-top: 40px;
   }
@@ -115,7 +120,7 @@
     background: var(--card-bg);
     border: 1px solid var(--card-border);
     border-radius: 16px;
-    padding: 26px 24px 22px;
+    padding: 20px 18px 16px;
     backdrop-filter: blur(6px);
     transition: transform .15s ease, border-color .15s ease, background .15s ease;
   }
@@ -127,22 +132,22 @@
   .card { cursor: grab; }
   .card:active { cursor: grabbing; }
   .card-icon {
-    width: 46px; height: 46px;
-    border-radius: 12px;
+    width: 40px; height: 40px;
+    border-radius: 11px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 22px;
-    margin-bottom: 16px;
+    font-size: 19px;
+    margin-bottom: 12px;
     background: linear-gradient(135deg, var(--bg-grad-a), var(--bg-grad-b));
   }
   .card h2 {
-    margin: 0 0 6px;
-    font-size: 19px;
+    margin: 0 0 5px;
+    font-size: 17px;
   }
   .card p.desc {
-    margin: 0 0 18px;
-    font-size: 13.5px;
+    margin: 0 0 14px;
+    font-size: 12.5px;
     color: var(--text-dim);
-    line-height: 1.5;
+    line-height: 1.45;
   }
   .card .meta {
     display: flex;
@@ -151,7 +156,7 @@
     font-size: 12px;
     color: var(--text-dim);
     border-top: 1px solid var(--card-border);
-    padding-top: 12px;
+    padding-top: 10px;
   }
   .status { display: flex; align-items: center; gap: 6px; font-weight: 600; }
   .dot {
@@ -169,17 +174,37 @@
     background: var(--card-bg);
     border: 1px solid var(--card-border);
     border-radius: 16px;
-    padding: 26px 24px 22px;
+    padding: 20px 18px 16px;
     backdrop-filter: blur(6px);
   }
   .sync-section + .sync-section { margin-top: 18px; }
   .sync-section-title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
     font-size: 11px;
     letter-spacing: 0.05em;
     text-transform: uppercase;
     color: var(--text-dim);
     margin-bottom: 8px;
   }
+  /* Plan Cycles used to be its own card in the grid; the buyer-review
+     workflow it links to is exactly what this section already narrates
+     live, so the entry point belongs here now instead of a separate tile. */
+  .sync-section-link {
+    text-transform: none;
+    letter-spacing: normal;
+    font-size: 11.5px;
+    font-weight: 600;
+    /* --teal (#026478) is too dark to read against this navy background;
+       --bg-grad-a is the same bright cyan the card icons already use as
+       their accent, so this stays visually consistent with the page. */
+    color: var(--bg-grad-a);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .sync-section-link:hover { text-decoration: underline; }
   .sync-rows { display: flex; flex-direction: column; gap: 6px; }
   .sync-row {
     display: flex;
@@ -252,16 +277,6 @@
       </div>
     </a>
 
-    <a class="card" href="http://localhost:8010/planning/" target="_blank" data-check="http://localhost:8010/docs">
-      <div class="card-icon">🧮</div>
-      <h2>Planning Engine</h2>
-      <p class="desc">Sales Plan — Division/Department plans, MRP reapportionment, PW-W &amp; SOR deviation, and display-type planning engines.</p>
-      <div class="meta">
-        <span class="port">localhost:8010/planning</span>
-        <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
-      </div>
-    </a>
-
     <a class="card" href="http://localhost:5050/" target="_blank" data-check="http://localhost:5050/api/status">
       <div class="card-icon">🛒</div>
       <h2>Buyer's Input</h2>
@@ -272,12 +287,12 @@
       </div>
     </a>
 
-    <a class="card" href="http://localhost:8010/plan-cycles" target="_blank" data-check="http://localhost:8010/docs">
-      <div class="card-icon">✅</div>
-      <h2>Plan Cycles</h2>
-      <p class="desc">Buyer review workflow — planner submits an AOP run, buyer adjusts totals, reviewer and approver sign off before Sales Plan syncs.</p>
+    <a class="card" href="http://localhost:8010/planning/" target="_blank" data-check="http://localhost:8010/docs">
+      <div class="card-icon">🧮</div>
+      <h2>Planning Engine</h2>
+      <p class="desc">Sales Plan — Division/Department plans, MRP reapportionment, PW-W &amp; SOR deviation, and display-type planning engines.</p>
       <div class="meta">
-        <span class="port">localhost:8010/plan-cycles</span>
+        <span class="port">localhost:8010/planning</span>
         <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
       </div>
     </a>
@@ -293,7 +308,10 @@
       </div>
 
       <div class="sync-section">
-        <div class="sync-section-title">Flow — AOP Forecaster → Planning Engine</div>
+        <div class="sync-section-title">
+          <span>Flow — AOP Forecaster → Planning Engine</span>
+          <a class="sync-section-link" href="http://localhost:8010/plan-cycles" target="_blank">Open Plan Cycles →</a>
+        </div>
         <div class="sync-rows" id="flow-rows"><div class="sync-row sync-loading">Checking…</div></div>
       </div>
     </div>
@@ -406,7 +424,14 @@
               if (reached || Date.now() >= settleDeadline) {
                 btn.disabled = false;
               } else {
-                setTimeout(settle, 1500);
+                // 700ms, not the original 1500ms - shutdown is now bounded by
+                // one shared ~3s wait server-side (see landing_server.py's
+                // _shutdown_many) instead of stacking per-app, so a tighter
+                // poll here means the switch visibly catches up to the real
+                // state within a second or so of it actually happening,
+                // rather than waiting out a poll interval sized for the old,
+                // slower sequential shutdown.
+                setTimeout(settle, 700);
               }
             });
           })();

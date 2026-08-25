@@ -57,23 +57,31 @@ def _pid_listening_on(port):
     return None
 
 
-def _shutdown(port):
-    # terminate() first (lets uvicorn/Flask close sockets cleanly), escalate
-    # to kill() only if it's still alive after a short grace period - same
-    # spirit as _launch's DETACHED_PROCESS: don't leave orphaned listeners.
-    pid = _pid_listening_on(port)
-    if pid is None:
-        return False
-    try:
-        proc = psutil.Process(pid)
-        proc.terminate()
+def _shutdown_many(ports_and_names):
+    # terminate() every listening app FIRST - each call is near-instant, it
+    # only sends the signal - then wait for all of them together. Doing
+    # terminate-then-wait one app at a time meant a slow-to-exit app blocked
+    # the NEXT app's terminate() from even being sent, so worst case stacked
+    # up to len(apps) x one grace period sequentially. Waiting concurrently
+    # instead bounds total wall time by the single slowest app, not their sum.
+    procs, missing = {}, []
+    for port, name in ports_and_names:
+        pid = _pid_listening_on(port)
+        if pid is None:
+            missing.append(name)
+            continue
         try:
-            proc.wait(timeout=3)
-        except psutil.TimeoutExpired:
-            proc.kill()
-    except psutil.NoSuchProcess:
-        pass
-    return True
+            proc = psutil.Process(pid)
+            proc.terminate()
+            procs[proc] = name
+        except psutil.NoSuchProcess:
+            missing.append(name)
+
+    gone, alive = psutil.wait_procs(list(procs.keys()), timeout=3)
+    for proc in alive:
+        proc.kill()
+
+    return [procs[p] for p in procs], missing
 
 
 def _launch(app):
@@ -120,12 +128,7 @@ class Handler(SimpleHTTPRequestHandler):
         self._json({"ok": True, "launched": launched, "alreadyOnline": already_online})
 
     def _shutdown_all(self):
-        stopped, already_offline = [], []
-        for app in APPS:
-            if _shutdown(app["port"]):
-                stopped.append(app["name"])
-            else:
-                already_offline.append(app["name"])
+        stopped, already_offline = _shutdown_many([(app["port"], app["name"]) for app in APPS])
         self._json({"ok": True, "stopped": stopped, "alreadyOffline": already_offline})
 
 
