@@ -3,7 +3,7 @@ state machine. See the spec for the full transition table."""
 import datetime
 import uuid
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, JSON, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,6 +21,7 @@ class PlanCycle(Base):
     current_run_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("engine.forecast_runs.run_id"), nullable=True
     )
+    buyer_adjusted_totals: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("auth.users.id"), nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime.datetime] = mapped_column(

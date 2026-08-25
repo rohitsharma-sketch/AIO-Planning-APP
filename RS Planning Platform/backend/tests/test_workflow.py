@@ -10,6 +10,7 @@ from db.models.auth import User
 from db.models.engine import ForecastRun
 from db.models.workflow import PlanCycle, PlanCycleTransition
 from workflow.service import TRANSITIONS, create_cycle, transition
+from workflow.service import latest_approved_cycle
 
 
 @pytest.fixture
@@ -101,4 +102,28 @@ def test_invalid_action_for_status_raises_value_error(fake_run, role_users):
     cycle = create_cycle(session, fake_run, role_users["planner"])
     with pytest.raises(ValueError):
         transition(session, cycle.id, "approve", role_users["reviewer"])  # can't approve straight from draft
+    session.close()
+
+
+def test_latest_approved_cycle_returns_none_when_nothing_approved(fake_run, role_users):
+    session = SessionLocal()
+    create_cycle(session, fake_run, role_users["planner"])  # stays in draft
+    assert latest_approved_cycle(session) is None
+    session.close()
+
+
+def test_latest_approved_cycle_carries_buyer_adjusted_totals(fake_run, role_users):
+    session = SessionLocal()
+    cycle = create_cycle(session, fake_run, role_users["planner"])
+    cycle = transition(session, cycle.id, "submit", role_users["planner"])
+    cycle.buyer_adjusted_totals = {"mens": 100.0, "ladies": 200.0, "kids": 50.0}
+    session.commit()
+    cycle = transition(session, cycle.id, "submit", role_users["buyer"])
+    cycle = transition(session, cycle.id, "approve", role_users["reviewer"])
+    cycle = transition(session, cycle.id, "approve", role_users["approver"])
+
+    found = latest_approved_cycle(session)
+    assert found is not None
+    assert found.id == cycle.id
+    assert found.buyer_adjusted_totals == {"mens": 100.0, "ladies": 200.0, "kids": 50.0}
     session.close()

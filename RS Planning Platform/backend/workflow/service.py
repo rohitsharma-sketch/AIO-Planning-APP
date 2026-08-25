@@ -69,3 +69,11 @@ def latest_approved_run_id(session: Session) -> uuid.UUID | None:
         select(PlanCycle).where(PlanCycle.status == "approved").order_by(PlanCycle.updated_at.desc())
     ).scalars().first()
     return cycle.current_run_id if cycle else None
+
+
+def latest_approved_cycle(session: Session) -> PlanCycle | None:
+    """Same lookup as latest_approved_run_id, but returns the cycle itself —
+    division_aop_summary() needs buyer_adjusted_totals off it, not just the run id."""
+    return session.execute(
+        select(PlanCycle).where(PlanCycle.status == "approved").order_by(PlanCycle.updated_at.desc())
+    ).scalars().first()
