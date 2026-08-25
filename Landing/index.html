@@ -332,6 +332,9 @@
       // timer disconnected from whether anything actually came up.
       var btn = document.getElementById('launch-all-btn');
       if (btn) btn.classList.toggle('on', states.length > 0 && states.every(function (s) { return s === 'up'; }));
+      return states; // callers that need to detect "fully settled" (e.g. the
+      // click handler's post-action poll) need the raw per-card results,
+      // not just the aggregate on/off class this function already set.
     });
   }
   checkAllStatuses();
@@ -379,15 +382,36 @@
             if (data.alreadyOnline && data.alreadyOnline.length) parts.push('Already online: ' + data.alreadyOnline.join(', '));
             msg.textContent = parts.join(' · ') || 'Nothing to start.';
           }
-          // Re-check a few times over ~20s while servers spin up or wind
-          // down (rather than once immediately, which would still show the
-          // old state) — each recheck updates the switch too, once for real.
-          [1000, 3000, 6000, 10000, 15000, 20000].forEach(function (delay) {
-            setTimeout(checkAllStatuses, delay);
-          });
+          // Keep the switch disabled for the whole settle window, not just
+          // this initial request - launch/shutdown-all return almost
+          // instantly, long before the servers they started/killed actually
+          // finish coming up or going down. Re-enabling right after that
+          // first response (the old behavior) let a click land mid-transition,
+          // while some servers were still up and others already down; that
+          // in-between state reads as neither fully "on" nor fully "off", so
+          // the NEXT click's turningOff-from-current-class check could
+          // misfire - most visibly, a click during a shutdown-in-progress
+          // reads as "off" (not everything's up) and fires launch-all,
+          // relaunching servers that were only mid-shutdown, not stopped.
+          // Poll until the actual target state is reached instead, so no
+          // click is possible while that mixed state exists; a hard 20s cap
+          // still re-enables it even if some server genuinely never settles,
+          // so a stuck process can't lock the switch forever.
+          var settleDeadline = Date.now() + 20000;
+          (function settle() {
+            checkAllStatuses().then(function (states) {
+              var reached = turningOff
+                ? states.length > 0 && states.every(function (s) { return s === 'down'; })
+                : states.length > 0 && states.every(function (s) { return s === 'up'; });
+              if (reached || Date.now() >= settleDeadline) {
+                btn.disabled = false;
+              } else {
+                setTimeout(settle, 1500);
+              }
+            });
+          })();
         })
-        .catch(function (e) { msg.textContent = 'Failed to reach Landing server: ' + e.message; })
-        .finally(function () { btn.disabled = false; });
+        .catch(function (e) { msg.textContent = 'Failed to reach Landing server: ' + e.message; btn.disabled = false; });
     });
   })();
 
