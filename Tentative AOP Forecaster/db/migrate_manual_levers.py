@@ -36,9 +36,12 @@ def _lever(c, key):
     return next(l for l in c["levers"] if l["key"] == key)
 
 
-def main():
-    c = cfg.load_config()
-    session = SessionLocal()
+def migrate_from_config(session, c):
+    """Same upsert logic main() below runs against config/levers.json, factored
+    out so app.py's /api/config/import endpoint can call it directly against a
+    freshly-parsed config dict (e.g. right after config_store.import_workbook())
+    without shelling out to this script or re-reading the file it just wrote.
+    Returns the row counts main() prints."""
     period_ids = {p.label: p.period_id for p in session.execute(select(Period)).scalars().all()}
 
     input_rows = []
@@ -105,7 +108,14 @@ def main():
         session.execute(stmt)
 
     session.commit()
-    print(f"Migrated {len(input_rows)} growth/AOP input_values rows, {len(nso_rows)} nso_openings rows.")
+    return {"input_values": len(input_rows), "nso_openings": len(nso_rows)}
+
+
+def main():
+    c = cfg.load_config()
+    session = SessionLocal()
+    counts = migrate_from_config(session, c)
+    print(f"Migrated {counts['input_values']} growth/AOP input_values rows, {counts['nso_openings']} nso_openings rows.")
     session.close()
 
 

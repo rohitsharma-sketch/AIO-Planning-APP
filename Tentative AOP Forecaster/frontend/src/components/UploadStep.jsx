@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import DbSyncPanel from './DbSyncPanel'
+import { apiUrl } from '../lib/apiBase'
 import './UploadStep.css'
 
 export default function UploadStep({ onUpload, onUseDb, onEditInputs }) {
@@ -8,6 +9,8 @@ export default function UploadStep({ onUpload, onUseDb, onEditInputs }) {
   const [loading, setLoading]    = useState(false)
   const [err, setErr]            = useState(null)
   const [dbBusy, setDbBusy]      = useState(false)
+  const [importBusy, setImportBusy] = useState(false)
+  const [notice, setNotice]      = useState(null)
   const inputRef                 = useRef()
 
   function handleFile(f) {
@@ -34,6 +37,29 @@ export default function UploadStep({ onUpload, onUseDb, onEditInputs }) {
   async function useDb() {
     setDbBusy(true); setErr(null)
     try { await onUseDb() } catch (e) { setErr(e.message) } finally { setDbBusy(false) }
+  }
+
+  // Re-baseline Growth %/NSO/AOP overrides from this workbook — the standalone
+  // app's old "Import as default for all levers" flow, restored on top of the
+  // Postgres-backed editor: the upload still becomes config/levers.json's
+  // source (unchanged since before the migration), and is now also migrated
+  // into Postgres in the same request, so "Continue from database" and the
+  // Planning Inputs editor immediately reflect it too.
+  async function importAsDefault() {
+    if (!file) return
+    setImportBusy(true); setErr(null); setNotice(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch(apiUrl('/api/config/import'), { method: 'POST', body: fd })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.detail || 'Import failed')
+      }
+      const data = await res.json()
+      setNotice(`${file.name} is now the default — updated ${data.input_values} growth/AOP values and ${data.nso_openings} NSO openings.`)
+    } catch (e) { setErr(e.message) }
+    finally { setImportBusy(false) }
   }
 
   return (
@@ -88,11 +114,15 @@ export default function UploadStep({ onUpload, onUseDb, onEditInputs }) {
         </div>
 
         {err && <p className="upload-err">{err}</p>}
+        {notice && <p className="upload-notice">{notice}</p>}
 
         <div className="upload-actions">
           <button className="btn-primary" style={{minWidth:160}}
             disabled={!file || loading} onClick={submit}>
             {loading ? 'Reading file…' : 'Continue with this file →'}
+          </button>
+          <button className="btn-outline" disabled={!file || importBusy} onClick={importAsDefault}>
+            {importBusy ? 'Importing…' : 'Import as default for all levers'}
           </button>
         </div>
       </div>
