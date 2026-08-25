@@ -192,50 +192,6 @@ def delete_session(session_id: str):
 
 
 
-@router.post("/api/config/import")
-async def import_config(file: UploadFile):
-    """Restores the standalone app's "Import as default for all levers" flow
-    (frontend/src/components/UploadStep.jsx's second button), dropped when
-    the Postgres migration removed the old file-based /api/config/import.
-    Parses the uploaded workbook the same way config_store always did
-    (config_store.import_workbook — still used for Growth %/NSO/AOP's
-    config/levers.json snapshot, unchanged by the migration) and immediately
-    migrates the result into Postgres via the same upsert logic
-    db/migrate_manual_levers.py uses for its one-time CLI run, so this
-    endpoint and that script can never drift apart. Store Master / Store
-    Actuals are intentionally untouched here — same as migrate_manual_levers.py,
-    they come from the sync jobs (see /api/config/db-sync), not from an
-    uploaded workbook."""
-    if not file.filename.endswith(".xlsx"):
-        raise HTTPException(400, "Only .xlsx files accepted")
-
-    import config_store as cfg
-    from db.base import SessionLocal
-    from db.migrate_manual_levers import migrate_from_config
-
-    tmp = os.path.join(SESSIONS_DIR, f"_import_{uuid.uuid4()}.xlsx")
-    os.makedirs(SESSIONS_DIR, exist_ok=True)
-    with open(tmp, "wb") as f:
-        f.write(await file.read())
-    try:
-        new_cfg = cfg.import_workbook(tmp, source=file.filename)
-    except Exception as e:
-        raise HTTPException(422, f"Could not import workbook: {e}")
-    finally:
-        try: os.remove(tmp)
-        except OSError: pass
-
-    db_session = SessionLocal()
-    try:
-        counts = migrate_from_config(db_session, new_cfg)
-    except Exception as e:
-        raise HTTPException(422, f"Imported the workbook but could not migrate it into Postgres: {e}")
-    finally:
-        db_session.close()
-
-    return {"ok": True, "source": file.filename, **counts}
-
-
 @router.post("/api/config/session-from-db")
 def session_from_db():
     """Start a forecast session sourced entirely from Postgres (rs_planning) —
