@@ -62,6 +62,10 @@ async function api(path, opts) {
   return res.json();
 }
 
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 let me = null;
 
 async function loadMe() {
@@ -76,7 +80,7 @@ async function loadMe() {
 }
 
 async function loadRecentRuns() {
-  const runs = await fetch('/api/aop/api/config/recent-runs', { credentials: 'same-origin' }).then(r => r.json());
+  const runs = await api('/api/config/recent-runs');
   const sel = document.getElementById('run-picker');
   sel.innerHTML = runs.map(r => {
     const totals = Object.entries(r.division_totals).map(([d, v]) => `${d}: ${v}`).join(', ') || 'no totals yet';
@@ -115,7 +119,7 @@ async function loadCycles() {
           <button class="reject-btn" data-id="${c.id}" style="background:#dc2626">Reject</button>
         </div>` : ''}
       <div class="transitions">
-        ${detail.transitions.map(t => `<div>${t.at.slice(0, 16)} — ${t.actor_role} ${t.from} → ${t.to}${t.comment ? ' ("' + t.comment + '")' : ''}</div>`).join('')}
+        ${detail.transitions.map(t => `<div>${escapeHtml(t.at.slice(0, 16))} — ${escapeHtml(t.actor_role)} ${escapeHtml(t.from)} → ${escapeHtml(t.to)}${t.comment ? ' ("' + escapeHtml(t.comment) + '")' : ''}</div>`).join('')}
       </div>
     `;
     list.appendChild(div);
