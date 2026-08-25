@@ -137,6 +137,47 @@ def _login_as(username):
     return c
 
 
+def test_recent_runs_lists_newest_first():
+    import datetime
+    session = SessionLocal()
+    run = ForecastRun(input_snapshot_at=datetime.datetime.now(datetime.timezone.utc), status="success")
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+    run_id = str(run.run_id)
+    session.close()
+
+    user = _make_role_user("planner")
+    try:
+        client = _login_as(user["username"])
+        r = client.get("/api/aop/api/config/recent-runs")
+        assert r.status_code == 200, r.text
+        run_ids = [row["run_id"] for row in r.json()]
+        assert run_id in run_ids
+    finally:
+        # Neither the ForecastRun nor the throwaway user is cleaned up by
+        # anything else — same pollution risk Task 3 hit (a stray row
+        # breaking an unrelated test), so tear both down explicitly.
+        cleanup = SessionLocal()
+        cleanup.execute(User.__table__.delete().where(User.id == _uuid.UUID(user["id"])))
+        cleanup.execute(ForecastRun.__table__.delete().where(ForecastRun.run_id == run.run_id))
+        cleanup.commit()
+        cleanup.close()
+
+
+def test_run_division_totals_404s_for_unknown_run():
+    user = _make_role_user("planner")
+    try:
+        client = _login_as(user["username"])
+        r = client.get(f"/api/aop/api/config/runs/{_uuid.uuid4()}/division-totals")
+        assert r.status_code == 404, r.text
+    finally:
+        cleanup = SessionLocal()
+        cleanup.execute(User.__table__.delete().where(User.id == _uuid.UUID(user["id"])))
+        cleanup.commit()
+        cleanup.close()
+
+
 def test_division_aop_summary_prefers_buyer_adjusted_totals():
     session = SessionLocal()
     import datetime

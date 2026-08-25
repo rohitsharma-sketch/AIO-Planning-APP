@@ -390,6 +390,63 @@ def division_aop_summary():
         }
 
 
+def _division_totals_for_run(session, run_id) -> dict:
+    # Local imports (matching division_aop_summary's own pattern above): this
+    # module has no module-level sqlalchemy/db.models imports, so select/func/
+    # Period/ForecastResult must be bound here rather than assumed in scope.
+    from sqlalchemy import select, func
+    from db.models.engine import ForecastResult
+    from db.models.planning_inputs import Period
+
+    next_fy_labels = {"Apr'27", "May'27", "Jun'27", "Jul'27", "Aug'27", "Sep'27",
+                      "Oct'27", "Nov'27", "Dec'27", "Jan'28", "Feb'28", "Mar'28"}
+    next_fy_periods = {
+        p.period_id for p in session.execute(select(Period)).scalars().all()
+        if p.label in next_fy_labels
+    }
+    rows = session.execute(
+        select(ForecastResult.division_code, func.sum(ForecastResult.value))
+        .where(ForecastResult.run_id == run_id, ForecastResult.metric_key == "forecast",
+               ForecastResult.period_id.in_(next_fy_periods))
+        .group_by(ForecastResult.division_code)
+    ).all()
+    return {div: round(float(total), 2) for div, total in rows}
+
+
+@router.get("/api/config/recent-runs")
+def recent_runs():
+    """Lists recent ForecastRuns for the planner's "submit for buyer review"
+    picker in plan-cycles.html — nothing else in this app lists runs by id."""
+    from sqlalchemy import select, func, desc
+    from db.base import SessionLocal
+    from db.models.engine import ForecastRun
+
+    with SessionLocal() as session:
+        runs = session.execute(select(ForecastRun).order_by(desc(ForecastRun.created_at)).limit(20)).scalars().all()
+        return [
+            {"run_id": str(r.run_id), "created_at": r.created_at.isoformat(), "status": r.status,
+             "division_totals": _division_totals_for_run(session, r.run_id)}
+            for r in runs
+        ]
+
+
+@router.get("/api/config/runs/{run_id}/division-totals")
+def run_division_totals(run_id: str):
+    """The buyer tab's totals source (Buyer's Input Sheet's AOP Review tab) -
+    a cycle's current_run_id isn't guaranteed to still be within recent-runs'
+    20-row window, so it looks a specific run up directly instead."""
+    import uuid as _uuid
+    from sqlalchemy import select
+    from db.base import SessionLocal
+    from db.models.engine import ForecastRun
+
+    with SessionLocal() as session:
+        run = session.get(ForecastRun, _uuid.UUID(run_id))
+        if run is None:
+            raise HTTPException(404, "Run not found")
+        return {"run_id": run_id, "division_totals": _division_totals_for_run(session, run.run_id)}
+
+
 # Mount the extracted router onto this standalone app too — same routes,
 # same paths, as before the extraction. The unified platform (RS Planning
 # Platform/backend/app.py) imports `router` directly instead and mounts it
