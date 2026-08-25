@@ -83,7 +83,7 @@ async function loadRecentRuns() {
   const runs = await api('/api/config/recent-runs');
   const sel = document.getElementById('run-picker');
   sel.innerHTML = runs.map(r => {
-    const totals = Object.entries(r.division_totals).map(([d, v]) => `${d}: ${v}`).join(', ') || 'no totals yet';
+    const totals = Object.entries(r.division_totals).map(([d, v]) => `${escapeHtml(d)}: ${escapeHtml(v)}`).join(', ') || 'no totals yet';
     return `<option value="${r.run_id}">${r.created_at.slice(0, 16)} — ${totals}</option>`;
   }).join('') || '<option value="">No runs yet</option>';
 }
@@ -108,6 +108,7 @@ async function loadCycles() {
     div.className = 'card';
     const canReview = me.role === 'reviewer' && c.status === 'pending_review';
     const canApprove = me.role === 'approver' && c.status === 'pending_approval';
+    const canResubmit = me.role === 'planner' && c.status === 'draft';
     div.innerHTML = `
       <div class="row">
         <div><strong>${c.id.slice(0, 8)}</strong> <span class="muted">created ${c.created_at.slice(0, 16)}</span></div>
@@ -118,18 +119,31 @@ async function loadCycles() {
           <button class="approve-btn" data-id="${c.id}">Approve</button>
           <button class="reject-btn" data-id="${c.id}" style="background:#dc2626">Reject</button>
         </div>` : ''}
+      ${canResubmit ? `
+        <div class="row" style="margin-top:10px">
+          <button class="resubmit-btn" data-id="${c.id}">Resubmit for buyer review</button>
+        </div>` : ''}
       <div class="transitions">
         ${detail.transitions.map(t => `<div>${escapeHtml(t.at.slice(0, 16))} — ${escapeHtml(t.actor_role)} ${escapeHtml(t.from)} → ${escapeHtml(t.to)}${t.comment ? ' ("' + escapeHtml(t.comment) + '")' : ''}</div>`).join('')}
       </div>
     `;
     list.appendChild(div);
   }
-  list.querySelectorAll('.approve-btn').forEach(b => b.addEventListener('click', () => actOn(b.dataset.id, 'approve')));
-  list.querySelectorAll('.reject-btn').forEach(b => b.addEventListener('click', () => actOn(b.dataset.id, 'reject')));
+  list.querySelectorAll('.approve-btn').forEach(b => b.addEventListener('click', () => {
+    const comment = prompt('Optional comment for this approval:');
+    actOn(b.dataset.id, 'approve', comment);
+  }));
+  list.querySelectorAll('.reject-btn').forEach(b => b.addEventListener('click', () => {
+    const comment = prompt('Optional comment for this rejection:');
+    actOn(b.dataset.id, 'reject', comment);
+  }));
+  list.querySelectorAll('.resubmit-btn').forEach(b => b.addEventListener('click', () => actOn(b.dataset.id, 'submit')));
 }
 
-async function actOn(id, action) {
-  await api(`/plan-cycles/${id}/${action}`, { method: 'POST' });
+async function actOn(id, action, comment) {
+  const opts = { method: 'POST' };
+  if (comment) { opts.headers = { 'Content-Type': 'application/json' }; opts.body = JSON.stringify({ comment }); }
+  await api(`/plan-cycles/${id}/${action}`, opts);
   loadCycles();
 }
 

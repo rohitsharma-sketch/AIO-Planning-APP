@@ -333,6 +333,7 @@ td.aop-col-bg input.gi{background:color-mix(in srgb,var(--ac) 6%,var(--s2))}
 .aopr-inp{width:100%;padding:6px 8px;text-align:right;border:1.5px solid var(--bm);border-radius:5px;background:var(--sf);color:var(--tx);font:700 13px/1.4 var(--mono);outline:none;-moz-appearance:textfield}
 .aopr-inp::-webkit-inner-spin-button,.aopr-inp::-webkit-outer-spin-button{-webkit-appearance:none}
 .aopr-inp:focus{border-color:var(--ac);background:var(--ac-l)}
+.aopr-hint{font-size:10px;color:var(--t3);margin-top:4px;font-style:italic}
 .aopr-ly{font-size:10px;color:var(--t3);margin-top:6px}
 .aopr-actions{display:flex;align-items:center;gap:10px}
 .aopr-msg{font-size:11px;font-weight:700;color:var(--po);margin-right:auto}
@@ -595,18 +596,21 @@ tr:hover .mag-trig{display:inline}
           </div>
           <div class="aopr-grid">
             <div class="aopr-field">
-              <label class="aopr-lbl">Mens Total (Rs. Cr)</label>
+              <label class="aopr-lbl">Mens Total (Rs. Lakhs)</label>
               <input class="aopr-inp" id="aop-review-mens" type="number" step="0.01">
+              <div class="aopr-hint" id="aop-review-cr-mens"></div>
               <div class="aopr-ly" id="aop-review-ly-mens">LY reference unavailable</div>
             </div>
             <div class="aopr-field">
-              <label class="aopr-lbl">Ladies Total (Rs. Cr)</label>
+              <label class="aopr-lbl">Ladies Total (Rs. Lakhs)</label>
               <input class="aopr-inp" id="aop-review-ladies" type="number" step="0.01">
+              <div class="aopr-hint" id="aop-review-cr-ladies"></div>
               <div class="aopr-ly" id="aop-review-ly-ladies">LY reference unavailable</div>
             </div>
             <div class="aopr-field">
-              <label class="aopr-lbl">Kids Total (Rs. Cr)</label>
+              <label class="aopr-lbl">Kids Total (Rs. Lakhs)</label>
               <input class="aopr-inp" id="aop-review-kids" type="number" step="0.01">
+              <div class="aopr-hint" id="aop-review-cr-kids"></div>
               <div class="aopr-ly" id="aop-review-ly-kids">LY reference unavailable</div>
             </div>
           </div>
@@ -4914,6 +4918,17 @@ async function platformApi(path, opts) {
       '<p>Sign in to the platform first — <a href="' + PLATFORM_BASE + '/login" target="_blank">open login</a>, then reload this tab.</p>';
     throw new Error('not authenticated to platform');
   }
+  if (res.status === 403) {
+    let role = 'unknown role';
+    try {
+      const meRes = await fetch(PLATFORM_BASE + '/api/auth/me', { credentials: 'include' });
+      if (meRes.ok) { const me = await meRes.json(); role = me.role || role; }
+    } catch (_) { /* best-effort role lookup only */ }
+    const msg = `Signed in as ${role} — this tab requires the buyer role.`;
+    const m = document.getElementById('aop-review-msg');
+    if (m) m.textContent = msg;
+    throw new Error(msg);
+  }
   if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || `HTTP ${res.status}`); }
   return res.json();
 }
@@ -4936,6 +4951,7 @@ async function loadCycleTotals(cycleId) {
   document.getElementById('aop-review-mens').value = division_totals.mens ?? '';
   document.getElementById('aop-review-ladies').value = division_totals.ladies ?? '';
   document.getElementById('aop-review-kids').value = division_totals.kids ?? '';
+  AOP_REVIEW_FIELDS.forEach(updateAopCrHint);
 }
 
 function readAopReviewTotals() {
@@ -4946,24 +4962,50 @@ function readAopReviewTotals() {
   };
 }
 
+// Buyer totals are stored/consumed as Rs Lakhs throughout the pipeline
+// (set_buyer_totals, division-aop-summary, SalesPlan's department_plan.py),
+// but this app is otherwise Crore-native — show a live Crore-equivalent
+// hint next to each Lakhs input so a raw 4-digit number doesn't look wrong.
+const AOP_REVIEW_FIELDS = ['mens', 'ladies', 'kids'];
+function updateAopCrHint(field) {
+  const el = document.getElementById(`aop-review-${field}`);
+  const hint = document.getElementById(`aop-review-cr-${field}`);
+  if (!el || !hint) return;
+  const v = parseFloat(el.value);
+  hint.textContent = Number.isFinite(v) ? `≈ ${(v / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })} Cr` : '';
+}
+AOP_REVIEW_FIELDS.forEach(f => {
+  document.getElementById(`aop-review-${f}`)?.addEventListener('input', () => updateAopCrHint(f));
+});
+
 document.getElementById('aop-review-save-btn').addEventListener('click', async () => {
   if (!aopReviewCycle) return;
-  await platformApi(`/api/aop/plan-cycles/${aopReviewCycle.id}/buyer-totals`, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ totals: readAopReviewTotals() }),
-  });
-  document.getElementById('aop-review-msg').textContent = 'Saved.';
+  try {
+    await platformApi(`/api/aop/plan-cycles/${aopReviewCycle.id}/buyer-totals`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ totals: readAopReviewTotals() }),
+    });
+    document.getElementById('aop-review-msg').textContent = 'Saved.';
+  } catch (err) {
+    const m = document.getElementById('aop-review-msg');
+    if (m) m.textContent = err.message;
+  }
 });
 
 document.getElementById('aop-review-submit-btn').addEventListener('click', async () => {
   if (!aopReviewCycle) return;
-  await platformApi(`/api/aop/plan-cycles/${aopReviewCycle.id}/buyer-totals`, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ totals: readAopReviewTotals() }),
-  });
-  await platformApi(`/api/aop/plan-cycles/${aopReviewCycle.id}/submit`, { method: 'POST' });
-  document.getElementById('aop-review-msg').textContent = 'Submitted for review.';
-  loadAopReviewCycles();
+  try {
+    await platformApi(`/api/aop/plan-cycles/${aopReviewCycle.id}/buyer-totals`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ totals: readAopReviewTotals() }),
+    });
+    await platformApi(`/api/aop/plan-cycles/${aopReviewCycle.id}/submit`, { method: 'POST' });
+    document.getElementById('aop-review-msg').textContent = 'Submitted for review.';
+    loadAopReviewCycles();
+  } catch (err) {
+    const m = document.getElementById('aop-review-msg');
+    if (m) m.textContent = err.message;
+  }
 });
 
 document.getElementById('aop-review-cycle-picker').addEventListener('change', e => {

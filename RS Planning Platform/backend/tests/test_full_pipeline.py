@@ -219,3 +219,52 @@ def test_division_aop_summary_prefers_buyer_adjusted_totals():
         cleanup.execute(ForecastRun.__table__.delete().where(ForecastRun.run_id == run_id))
         cleanup.commit()
         cleanup.close()
+
+
+def test_buyer_totals_route_saves_as_buyer_and_rejects_non_buyer():
+    """HTTP-level coverage for PUT /api/aop/plan-cycles/{id}/buyer-totals —
+    test_workflow.py already covers set_buyer_totals() the function, but the
+    actual route (its `body.get("totals") or {}` unwrapping and its
+    ValueError->422 mapping) had only been hit once by hand, against a
+    nonexistent cycle id (404 only). This exercises the real 200/403 path."""
+    session = SessionLocal()
+    import datetime
+    run = ForecastRun(input_snapshot_at=datetime.datetime.now(datetime.timezone.utc), status="success")
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+    run_id = run.run_id
+
+    users = {r: _make_role_user(r) for r in ("planner", "buyer")}
+    cycle_id = None
+    try:
+        cycle = create_cycle(session, run_id, users["planner"])
+        cycle_id = cycle.id
+        transition(session, cycle.id, "submit", users["planner"])  # draft -> pending_buyer
+        session.close()
+
+        totals = {"mens": 100.0, "ladies": 200.0, "kids": 300.0}
+
+        # Buyer PUTs real totals against the pending_buyer cycle -> 200,
+        # response reflects what was saved.
+        buyer_client = _login_as(users["buyer"]["username"])
+        r = buyer_client.put(f"/api/aop/plan-cycles/{cycle_id}/buyer-totals", json={"totals": totals})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["status"] == "pending_buyer"
+        assert body["buyer_adjusted_totals"] == totals
+
+        # Same cycle, same body, but a non-buyer role -> 403.
+        planner_client = _login_as(users["planner"]["username"])
+        r = planner_client.put(f"/api/aop/plan-cycles/{cycle_id}/buyer-totals", json={"totals": totals})
+        assert r.status_code == 403, r.text
+    finally:
+        cleanup = SessionLocal()
+        if cycle_id is not None:
+            cleanup.execute(PlanCycleTransition.__table__.delete().where(PlanCycleTransition.plan_cycle_id == cycle_id))
+            cleanup.execute(PlanCycle.__table__.delete().where(PlanCycle.id == cycle_id))
+        for u in users.values():
+            cleanup.execute(User.__table__.delete().where(User.id == _uuid.UUID(u["id"])))
+        cleanup.execute(ForecastRun.__table__.delete().where(ForecastRun.run_id == run_id))
+        cleanup.commit()
+        cleanup.close()
