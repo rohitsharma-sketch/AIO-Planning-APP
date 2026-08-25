@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RS Planning Platform — Plan Cycles</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; padding: 32px;
+    font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    background: #f4f5f7;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.sub { margin: 0 0 24px; color: #6b7280; font-size: 13px; }
+  .card {
+    background: #fff; border-radius: 10px; padding: 20px; margin-bottom: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.06);
+  }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .status {
+    display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  }
+  .status-draft { background: #e5e7eb; color: #374151; }
+  .status-pending_buyer, .status-pending_review, .status-pending_approval { background: #fef3c7; color: #92400e; }
+  .status-approved { background: #d1fae5; color: #065f46; }
+  select, button, input {
+    padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;
+  }
+  button { background: #2563eb; color: #fff; border: none; cursor: pointer; font-weight: 600; }
+  button:disabled { background: #93b4f0; cursor: default; }
+  .muted { color: #6b7280; font-size: 12px; }
+  .transitions { margin-top: 10px; font-size: 12px; color: #6b7280; }
+  .transitions div { padding: 2px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Plan Cycles</h1>
+  <p class="sub" id="role-line">Loading…</p>
+
+  <div class="card" id="planner-card" style="display:none">
+    <div class="row">
+      <strong>Submit an AOP run for buyer review</strong>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <select id="run-picker"></select>
+      <button id="submit-run-btn">Submit for buyer review</button>
+    </div>
+  </div>
+
+  <div id="cycle-list"></div>
+</div>
+
+<script>
+async function api(path, opts) {
+  const res = await fetch('/api/aop' + path, { credentials: 'same-origin', ...opts });
+  if (res.status === 401) { window.location.href = '/login?next=/plan-cycles'; throw new Error('not authenticated'); }
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || `HTTP ${res.status}`); }
+  return res.json();
+}
+
+let me = null;
+
+async function loadMe() {
+  me = await fetch('/api/auth/me', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null);
+  document.getElementById('role-line').textContent = me
+    ? `Signed in as ${me.username} (${me.role})`
+    : 'Not signed in';
+  if (me && me.role === 'planner') {
+    document.getElementById('planner-card').style.display = '';
+    loadRecentRuns();
+  }
+}
+
+async function loadRecentRuns() {
+  const runs = await fetch('/api/aop/api/config/recent-runs', { credentials: 'same-origin' }).then(r => r.json());
+  const sel = document.getElementById('run-picker');
+  sel.innerHTML = runs.map(r => {
+    const totals = Object.entries(r.division_totals).map(([d, v]) => `${d}: ${v}`).join(', ') || 'no totals yet';
+    return `<option value="${r.run_id}">${r.created_at.slice(0, 16)} — ${totals}</option>`;
+  }).join('') || '<option value="">No runs yet</option>';
+}
+
+document.getElementById('submit-run-btn').addEventListener('click', async () => {
+  const runId = document.getElementById('run-picker').value;
+  if (!runId) return;
+  const cycle = await api('/plan-cycles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ run_id: runId }) });
+  await api(`/plan-cycles/${cycle.id}/submit`, { method: 'POST' });
+  loadCycles();
+});
+
+function statusClass(s) { return 'status status-' + s; }
+
+async function loadCycles() {
+  const cycles = await api('/plan-cycles');
+  const list = document.getElementById('cycle-list');
+  list.innerHTML = '';
+  for (const c of cycles) {
+    const detail = await api(`/plan-cycles/${c.id}`);
+    const div = document.createElement('div');
+    div.className = 'card';
+    const canReview = me.role === 'reviewer' && c.status === 'pending_review';
+    const canApprove = me.role === 'approver' && c.status === 'pending_approval';
+    div.innerHTML = `
+      <div class="row">
+        <div><strong>${c.id.slice(0, 8)}</strong> <span class="muted">created ${c.created_at.slice(0, 16)}</span></div>
+        <span class="${statusClass(c.status)}">${c.status}</span>
+      </div>
+      ${(canReview || canApprove) ? `
+        <div class="row" style="margin-top:10px">
+          <button class="approve-btn" data-id="${c.id}">Approve</button>
+          <button class="reject-btn" data-id="${c.id}" style="background:#dc2626">Reject</button>
+        </div>` : ''}
+      <div class="transitions">
+        ${detail.transitions.map(t => `<div>${t.at.slice(0, 16)} — ${t.actor_role} ${t.from} → ${t.to}${t.comment ? ' ("' + t.comment + '")' : ''}</div>`).join('')}
+      </div>
+    `;
+    list.appendChild(div);
+  }
+  list.querySelectorAll('.approve-btn').forEach(b => b.addEventListener('click', () => actOn(b.dataset.id, 'approve')));
+  list.querySelectorAll('.reject-btn').forEach(b => b.addEventListener('click', () => actOn(b.dataset.id, 'reject')));
+}
+
+async function actOn(id, action) {
+  await api(`/plan-cycles/${id}/${action}`, { method: 'POST' });
+  loadCycles();
+}
+
+(async () => { await loadMe(); await loadCycles(); })();
+</script>
+</body>
+</html>

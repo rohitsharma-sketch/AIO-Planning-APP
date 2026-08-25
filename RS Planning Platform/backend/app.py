@@ -115,6 +115,13 @@ def login_page(request: Request):
     return FileResponse(os.path.join(_HERE, "static", "login.html"))
 
 
+@app.get("/plan-cycles")
+def plan_cycles_page(request: Request):
+    if get_session_user(request) is None:
+        return RedirectResponse(f"/login?next=/plan-cycles")
+    return FileResponse(os.path.join(_HERE, "static", "plan-cycles.html"))
+
+
 # Serve both existing frontends' built bundles under their own paths
 _aop_dist = os.path.join(_AOP_DIR, "frontend", "dist")
 if os.path.isdir(_aop_dist):
