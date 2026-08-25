@@ -7,8 +7,17 @@ and the planner1/buyer1/reviewer1/approver1 users seeded this session.
 Route note: AOP's own routes carry an internal `/api/...` prefix, so
 mounted under `/api/aop` they land at `/api/aop/api/...` — verified live,
 not copied blind from the plan draft (which omitted the inner `/api`)."""
+import uuid as _uuid
+
 import httpx
 import pytest
+
+from auth.security import hash_password
+from db.base import SessionLocal
+from db.models.auth import User
+from db.models.engine import ForecastRun
+from db.models.workflow import PlanCycle, PlanCycleTransition
+from workflow.service import create_cycle, set_buyer_totals, transition
 
 BASE = "http://127.0.0.1:8010"
 
@@ -105,3 +114,67 @@ def test_full_workflow_to_salesplan(planner_client, buyer_client, reviewer_clien
     r = planner_client.post("/api/planning/department-plan/sync-from-aop-forecaster")
     assert r.status_code == 200, r.text
     assert r.json()["run_id"] == run_id
+
+
+def _make_role_user(role):
+    """Throwaway user for this test only — test_full_pipeline.py's own
+    planner1/buyer1/... fixtures assume users seeded in an earlier session
+    that don't exist in this environment (confirmed via psql before writing
+    this)."""
+    session = SessionLocal()
+    u = User(username=f"{role}_{_uuid.uuid4().hex[:8]}", password_hash=hash_password("testpass123"), role=role)
+    session.add(u)
+    session.commit()
+    session.refresh(u)
+    session.close()
+    return {"id": str(u.id), "role": role, "username": u.username}
+
+
+def _login_as(username):
+    c = httpx.Client(base_url=BASE, timeout=30.0)
+    r = c.post("/api/auth/login", json={"username": username, "password": "testpass123"})
+    assert r.status_code == 200, r.text
+    return c
+
+
+def test_division_aop_summary_prefers_buyer_adjusted_totals():
+    session = SessionLocal()
+    import datetime
+    run = ForecastRun(input_snapshot_at=datetime.datetime.now(datetime.timezone.utc), status="success")
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+    run_id = run.run_id
+
+    users = {r: _make_role_user(r) for r in ("planner", "buyer", "reviewer", "approver")}
+    cycle_id = None
+    try:
+        cycle = create_cycle(session, run_id, users["planner"])
+        cycle_id = cycle.id
+        cycle = transition(session, cycle.id, "submit", users["planner"])
+        cycle = set_buyer_totals(session, cycle.id, {"mens": 111.0, "ladies": 222.0, "kids": 333.0}, users["buyer"])
+        transition(session, cycle.id, "submit", users["buyer"])
+        transition(session, cycle.id, "approve", users["reviewer"])
+        transition(session, cycle.id, "approve", users["approver"])
+        session.close()
+
+        client = _login_as(users["planner"]["username"])
+        r = client.get("/api/aop/api/config/division-aop-summary")
+        assert r.status_code == 200, r.text
+        by_div = {row["division"]: row["annual_target"] for row in r.json()["division_aops"]}
+        assert by_div == {"mens": 111.0, "ladies": 222.0, "kids": 333.0}
+    finally:
+        # This test approves a real plan cycle in the shared DB — clean it
+        # up (same pattern as test_workflow.py's role_users/fake_run
+        # fixtures), or test_workflow.py's
+        # test_latest_approved_cycle_returns_none_when_nothing_approved
+        # (and this file's own 404 test) start seeing a stray approved cycle.
+        cleanup = SessionLocal()
+        if cycle_id is not None:
+            cleanup.execute(PlanCycleTransition.__table__.delete().where(PlanCycleTransition.plan_cycle_id == cycle_id))
+            cleanup.execute(PlanCycle.__table__.delete().where(PlanCycle.id == cycle_id))
+        for u in users.values():
+            cleanup.execute(User.__table__.delete().where(User.id == _uuid.UUID(u["id"])))
+        cleanup.execute(ForecastRun.__table__.delete().where(ForecastRun.run_id == run_id))
+        cleanup.commit()
+        cleanup.close()

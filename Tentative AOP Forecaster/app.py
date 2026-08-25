@@ -355,13 +355,20 @@ def division_aop_summary():
 
     import sys as _sys
     _sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "RS Planning Platform", "backend"))
-    from workflow.service import latest_approved_run_id
+    from workflow.service import latest_approved_cycle
 
     with SessionLocal() as session:
-        run_id = latest_approved_run_id(session)
-        if run_id is None:
+        cycle = latest_approved_cycle(session)
+        if cycle is None or cycle.current_run_id is None:
             raise HTTPException(404, "No approved plan cycle yet")
+        run_id = cycle.current_run_id
         latest = session.get(ForecastRun, run_id)
+
+        if cycle.buyer_adjusted_totals:
+            return {
+                "run_id": str(latest.run_id), "computed_at": latest.created_at.isoformat(),
+                "division_aops": [{"division": d, "annual_target": v} for d, v in cycle.buyer_adjusted_totals.items()],
+            }
 
         # FY28 = Apr'27..Mar'28 (engine_v3.FY28_M minus its leading Mar'27, which
         # is this year's last actual month, not part of the plan being AOP'd)
