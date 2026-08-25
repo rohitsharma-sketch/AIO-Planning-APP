@@ -32,7 +32,11 @@ PERIODS = [
 # division_code's FK just did for the missing '' division.
 PERIODS.append({"period_id": 0, "label": ""})
 
-DATA_LAKE_RAW = r"C:\Users\Administrator\Desktop\AI SOLUTION\INVENTORY AUTOMATION\data_lake\raw"
+# UNC, not a local C:\ path - this app doesn't run on the Administrator
+# machine itself, so a local path only ever resolves there. Buyer's Input
+# Sheet's sync_server.py (SALES_DIR, same data lake) already uses this exact
+# network path successfully - matching it here instead of reinventing it.
+DATA_LAKE_RAW = r"\\10.0.1.85\Users\Administrator\Desktop\AI SOLUTION\INVENTORY AUTOMATION\data_lake\raw"
 
 DIVISIONS = [
     ("GM", "General Merchandise (rolled up from 8 GM departments)"),
