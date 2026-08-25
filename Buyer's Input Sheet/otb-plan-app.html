@@ -318,6 +318,25 @@ td.aop-col-bg input.gi{background:color-mix(in srgb,var(--ac) 6%,var(--s2))}
 .aop-ov-badge.ov{background:var(--ne-b);color:var(--ne)}
 .aop-ov-badge.un{background:var(--wa-b);color:var(--wa)}
 
+/* AOP REVIEW PANEL (buyer review workflow) */
+.aopr-panel{flex:1;display:none;flex-direction:column;overflow:auto;padding:24px;background:var(--bg)}
+.aopr-card{background:var(--sf);border:1px solid var(--bm);border-radius:12px;max-width:720px;width:100%;margin:0 auto;padding:20px 22px;box-shadow:0 2px 10px rgba(0,0,0,.05)}
+.aopr-hd{margin-bottom:16px}
+.aopr-title{font-size:14px;font-weight:800;color:var(--tx)}
+.aopr-sub{font-size:11px;color:var(--t3);margin-top:3px;line-height:1.5}
+.aopr-row{margin-bottom:16px}
+.aopr-lbl{display:block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--t2);margin-bottom:5px}
+.aopr-sel{width:100%;padding:7px 10px;border:1.5px solid var(--bm);border-radius:6px;background:var(--sf);color:var(--tx);font:600 12px/1.4 inherit;outline:none}
+.aopr-sel:focus{border-color:var(--ac);background:var(--ac-l)}
+.aopr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
+.aopr-field{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px 12px}
+.aopr-inp{width:100%;padding:6px 8px;text-align:right;border:1.5px solid var(--bm);border-radius:5px;background:var(--sf);color:var(--tx);font:700 13px/1.4 var(--mono);outline:none;-moz-appearance:textfield}
+.aopr-inp::-webkit-inner-spin-button,.aopr-inp::-webkit-outer-spin-button{-webkit-appearance:none}
+.aopr-inp:focus{border-color:var(--ac);background:var(--ac-l)}
+.aopr-ly{font-size:10px;color:var(--t3);margin-top:6px}
+.aopr-actions{display:flex;align-items:center;gap:10px}
+.aopr-msg{font-size:11px;font-weight:700;color:var(--po);margin-right:auto}
+
 /* GRAND TOTAL BAR */
 .gtbar{flex-shrink:0;background:var(--sf);border-top:2px solid var(--bm);padding:9px 16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 .gti{display:flex;flex-direction:column;gap:1px}
@@ -455,6 +474,9 @@ tr:hover .mag-trig{display:inline}
     <div class="ni" draggable="true" onclick="setReport('inactive')" id="ni-inactive">
       <span class="ni-dh">⠿</span><span class="lbl">Inactive Depts</span><span class="nbdg" id="ni-inactive-cnt" style="display:none;background:var(--wa);color:#000">0</span>
     </div>
+    <div class="ni" draggable="true" onclick="setReport('aopreview')" id="ni-aopreview">
+      <span class="ni-dh">⠿</span><span class="lbl">AOP Review</span><span class="nbdg" style="background:var(--cy);color:#fff">Buyer</span>
+    </div>
     </div>
 
     <div class="snav-foot">
@@ -533,7 +555,7 @@ tr:hover .mag-trig{display:inline}
       </div>
 
       <!-- REPORT AREA -->
-      <div class="rarea">
+      <div class="rarea" id="rarea">
         <!-- DIVISION TABS (buyers/summary only) -->
         <div class="divtabs" id="divtabs">
           <button class="dtab on" data-div="all" style="--dtab-c:#1D63E8" onclick="setDivTab('all')">ALL<span class="dtab-cnt" id="dtab-cnt-all"></span></button>
@@ -558,6 +580,42 @@ tr:hover .mag-trig{display:inline}
 
         <!-- GRAND TOTAL -->
         <div class="gtbar" id="gtbar"></div>
+      </div>
+
+      <!-- AOP REVIEW PANEL (buyer review workflow) -->
+      <div class="aopr-panel" id="aop-review-panel" style="display:none">
+        <div class="aopr-card">
+          <div class="aopr-hd">
+            <div class="aopr-title">AOP Review — Buyer Totals</div>
+            <div class="aopr-sub">Review the forecasted division totals for a cycle awaiting buyer input, adjust if needed, then Save or Submit for Review.</div>
+          </div>
+          <div class="aopr-row">
+            <label class="aopr-lbl" for="aop-review-cycle-picker">Plan Cycle (pending buyer input)</label>
+            <select class="aopr-sel" id="aop-review-cycle-picker"></select>
+          </div>
+          <div class="aopr-grid">
+            <div class="aopr-field">
+              <label class="aopr-lbl">Mens Total (Rs. Cr)</label>
+              <input class="aopr-inp" id="aop-review-mens" type="number" step="0.01">
+              <div class="aopr-ly" id="aop-review-ly-mens">LY reference unavailable</div>
+            </div>
+            <div class="aopr-field">
+              <label class="aopr-lbl">Ladies Total (Rs. Cr)</label>
+              <input class="aopr-inp" id="aop-review-ladies" type="number" step="0.01">
+              <div class="aopr-ly" id="aop-review-ly-ladies">LY reference unavailable</div>
+            </div>
+            <div class="aopr-field">
+              <label class="aopr-lbl">Kids Total (Rs. Cr)</label>
+              <input class="aopr-inp" id="aop-review-kids" type="number" step="0.01">
+              <div class="aopr-ly" id="aop-review-ly-kids">LY reference unavailable</div>
+            </div>
+          </div>
+          <div class="aopr-actions">
+            <span class="aopr-msg" id="aop-review-msg"></span>
+            <button class="tbtn" id="aop-review-save-btn">Save</button>
+            <button class="tbtn pri" id="aop-review-submit-btn">Submit for Review</button>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -1565,6 +1623,7 @@ const REPORT_META = {
   store: {title:'Store Summary', crumb:'Analytics'},
   division: {title:'Division Detail', crumb:'Plan | Results'},
   inactive: {title:'Inactive Departments', crumb:'Management'},
+  aopreview: {title:'AOP Review', crumb:'Planning | Buyer Review'},
 };
 
 /* ── HELPERS ───────────────────────────────────── */
@@ -2160,6 +2219,11 @@ function setReport(id){
   document.getElementById('lfl-tog').style.display=id==='store'?'flex':'none';
   const divTabsEl=document.getElementById('divtabs');
   if(divTabsEl)divTabsEl.classList.toggle('vis',id==='buyers'||id==='summary'||id==='division'||id==='attr');
+  const isAopReview=id==='aopreview';
+  document.getElementById('fpanel').style.display=isAopReview?'none':'';
+  document.getElementById('rarea').style.display=isAopReview?'none':'';
+  document.getElementById('aop-review-panel').style.display=isAopReview?'flex':'none';
+  if(isAopReview)loadAopReviewCycles().catch(err=>{const m=document.getElementById('aop-review-msg');if(m)m.textContent=err.message;});
   refresh();
 }
 function setStoreLfl(v){
@@ -4429,6 +4493,7 @@ function refresh(){
     divTabsEl.classList.toggle('vis',showTabs);
     if(showTabs)_syncDivTabs(divTabsEl);
   }
+  if(S.report==='aopreview')return; // AOP Review has its own render/load path — see loadAopReviewCycles()
   _syncInactiveBadge();
   _syncLockAllBtns();
   buildFP(); // keep sidebar counts in sync with divTab + filters
@@ -4838,6 +4903,72 @@ function parseAopCSV(text,fname){
   buildAopGrid();
   toast(`Loaded ${loaded} divisions from "${fname}" ✓`);
 }
+
+/* ── AOP REVIEW TAB (buyer review workflow) ──────── */
+const PLATFORM_BASE = 'http://localhost:8010';
+
+async function platformApi(path, opts) {
+  const res = await fetch(PLATFORM_BASE + path, { credentials: 'include', ...opts });
+  if (res.status === 401) {
+    document.getElementById('aop-review-panel').innerHTML =
+      '<p>Sign in to the platform first — <a href="' + PLATFORM_BASE + '/login" target="_blank">open login</a>, then reload this tab.</p>';
+    throw new Error('not authenticated to platform');
+  }
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || `HTTP ${res.status}`); }
+  return res.json();
+}
+
+let aopReviewCycle = null;
+
+async function loadAopReviewCycles() {
+  const cycles = await platformApi('/api/aop/plan-cycles');
+  const pending = cycles.filter(c => c.status === 'pending_buyer');
+  const sel = document.getElementById('aop-review-cycle-picker');
+  sel.innerHTML = pending.map(c => `<option value="${c.id}">${c.id.slice(0, 8)} — created ${c.created_at.slice(0, 16)}</option>`).join('')
+    || '<option value="">No cycles awaiting review</option>';
+  if (pending.length) await loadCycleTotals(pending[0].id);
+}
+
+async function loadCycleTotals(cycleId) {
+  aopReviewCycle = await platformApi(`/api/aop/plan-cycles/${cycleId}`);
+  if (!aopReviewCycle.current_run_id) return;
+  const { division_totals } = await platformApi(`/api/aop/api/config/runs/${aopReviewCycle.current_run_id}/division-totals`);
+  document.getElementById('aop-review-mens').value = division_totals.mens ?? '';
+  document.getElementById('aop-review-ladies').value = division_totals.ladies ?? '';
+  document.getElementById('aop-review-kids').value = division_totals.kids ?? '';
+}
+
+function readAopReviewTotals() {
+  return {
+    mens: parseFloat(document.getElementById('aop-review-mens').value),
+    ladies: parseFloat(document.getElementById('aop-review-ladies').value),
+    kids: parseFloat(document.getElementById('aop-review-kids').value),
+  };
+}
+
+document.getElementById('aop-review-save-btn').addEventListener('click', async () => {
+  if (!aopReviewCycle) return;
+  await platformApi(`/api/aop/plan-cycles/${aopReviewCycle.id}/buyer-totals`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ totals: readAopReviewTotals() }),
+  });
+  document.getElementById('aop-review-msg').textContent = 'Saved.';
+});
+
+document.getElementById('aop-review-submit-btn').addEventListener('click', async () => {
+  if (!aopReviewCycle) return;
+  await platformApi(`/api/aop/plan-cycles/${aopReviewCycle.id}/buyer-totals`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ totals: readAopReviewTotals() }),
+  });
+  await platformApi(`/api/aop/plan-cycles/${aopReviewCycle.id}/submit`, { method: 'POST' });
+  document.getElementById('aop-review-msg').textContent = 'Submitted for review.';
+  loadAopReviewCycles();
+});
+
+document.getElementById('aop-review-cycle-picker').addEventListener('change', e => {
+  if (e.target.value) loadCycleTotals(e.target.value);
+});
 </script>
 <!-- AOP IMPORT MODAL -->
 <div class="aop-ov" id="aopOv" style="display:none" onclick="if(event.target===this)closeAopModal()">
