@@ -328,36 +328,74 @@ git commit -m "Add PUT /plan-cycles/{id}/buyer-totals"
 
 - [ ] **Step 1: Read the existing test file's pattern**
 
-Run: `cat "RS Planning Platform/backend/tests/test_full_pipeline.py"` and note how it starts the AOP Forecaster app / hits its routes (likely via `TestClient` or direct function calls — match whichever pattern is already there for the new test).
+Run: `cat "RS Planning Platform/backend/tests/test_full_pipeline.py"`. It tests via real HTTP (`httpx.Client`) against the LIVE platform on `:8010`, using pre-seeded users `planner1/buyer1/reviewer1/approver1` — **do not use those users or that fixture as-is**: confirmed via `psql` that `auth.users` currently has only one row (`admin`, role `planner`); those seeded users don't exist in this environment. Do NOT import AOP Forecaster's `app.py` directly either — `RS Planning Platform/backend/app.py` is *also* named `app.py` and already carries a comment explaining why a plain `from app import ...` collides with itself when both are on `sys.path` in the same process (see its `importlib.util.spec_from_file_location` workaround). Testing through real HTTP against the mounted route sidesteps that collision entirely, which is why this task tests that way instead of calling `division_aop_summary()` directly.
+
+Requires the platform running on `:8010` before running these tests (`python -m uvicorn app:app --port 8010 --app-dir "RS Planning Platform/backend"`).
 
 - [ ] **Step 2: Write the failing test**
 
-Add a test following the pattern found in Step 1 — the shape below assumes direct function calls matching `test_workflow.py`'s style; adjust to match what Step 1 actually finds:
+Add to `RS Planning Platform/backend/tests/test_full_pipeline.py`:
 
 ```python
-def test_division_aop_summary_prefers_buyer_adjusted_totals(fake_run, role_users):
-    import sys, os
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "Tentative AOP Forecaster"))
-    from app import division_aop_summary
+import uuid as _uuid
 
+from auth.security import hash_password
+from db.base import SessionLocal
+from db.models.auth import User
+from db.models.engine import ForecastRun
+from workflow.service import create_cycle, set_buyer_totals, transition
+
+
+def _make_role_user(role):
+    """Throwaway user for this test only — test_full_pipeline.py's own
+    planner1/buyer1/... fixtures assume users seeded in an earlier session
+    that don't exist in this environment (confirmed via psql before writing
+    this)."""
     session = SessionLocal()
-    cycle = create_cycle(session, fake_run, role_users["planner"])
-    cycle = transition(session, cycle.id, "submit", role_users["planner"])
-    cycle = set_buyer_totals(session, cycle.id, {"mens": 111.0, "ladies": 222.0, "kids": 333.0}, role_users["buyer"])
-    transition(session, cycle.id, "submit", role_users["buyer"])
-    transition(session, cycle.id, "approve", role_users["reviewer"])
-    transition(session, cycle.id, "approve", role_users["approver"])
+    u = User(username=f"{role}_{_uuid.uuid4().hex[:8]}", password_hash=hash_password("testpass123"), role=role)
+    session.add(u)
+    session.commit()
+    session.refresh(u)
+    session.close()
+    return {"id": str(u.id), "role": role, "username": u.username}
+
+
+def _login_as(username):
+    c = httpx.Client(base_url=BASE, timeout=30.0)
+    r = c.post("/api/auth/login", json={"username": username, "password": "testpass123"})
+    assert r.status_code == 200, r.text
+    return c
+
+
+def test_division_aop_summary_prefers_buyer_adjusted_totals():
+    session = SessionLocal()
+    import datetime
+    run = ForecastRun(input_snapshot_at=datetime.datetime.now(datetime.timezone.utc), status="success")
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+    run_id = run.run_id
+
+    users = {r: _make_role_user(r) for r in ("planner", "buyer", "reviewer", "approver")}
+    cycle = create_cycle(session, run_id, users["planner"])
+    cycle = transition(session, cycle.id, "submit", users["planner"])
+    cycle = set_buyer_totals(session, cycle.id, {"mens": 111.0, "ladies": 222.0, "kids": 333.0}, users["buyer"])
+    transition(session, cycle.id, "submit", users["buyer"])
+    transition(session, cycle.id, "approve", users["reviewer"])
+    transition(session, cycle.id, "approve", users["approver"])
     session.close()
 
-    result = division_aop_summary()
-    by_div = {row["division"]: row["annual_target"] for row in result["division_aops"]}
+    client = _login_as(users["planner"]["username"])
+    r = client.get("/api/aop/api/config/division-aop-summary")
+    assert r.status_code == 200, r.text
+    by_div = {row["division"]: row["annual_target"] for row in r.json()["division_aops"]}
     assert by_div == {"mens": 111.0, "ladies": 222.0, "kids": 333.0}
 ```
 
 - [ ] **Step 3: Run the test to verify it fails**
 
-Run: `cd "RS Planning Platform/backend" && python -m pytest tests/test_full_pipeline.py -k buyer_adjusted -v`
-Expected: FAIL — `division_aop_summary()` still returns the raw computed sum (likely `{}` or unrelated values, since `fake_run` has no real `ForecastResult` rows), not the buyer's totals.
+Run (with the platform running on `:8010`): `cd "RS Planning Platform/backend" && python -m pytest tests/test_full_pipeline.py -k buyer_adjusted_totals -v`
+Expected: FAIL — the endpoint still returns the raw computed sum (empty, since this run has no real `ForecastResult` rows), not the buyer's totals.
 
 - [ ] **Step 4: Modify `division_aop_summary()`**
 
@@ -401,15 +439,26 @@ In `Tentative AOP Forecaster/app.py`, replace the body from `with SessionLocal()
 
 (The import of `latest_approved_run_id` at the top of the function is no longer used — remove that line; keep the `sys.path.insert` above it, since `latest_approved_cycle` needs the same path to resolve `workflow.service`.)
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [ ] **Step 5: Restart the platform and run the test to verify it passes**
 
-Run: `cd "RS Planning Platform/backend" && python -m pytest tests/test_full_pipeline.py -k buyer_adjusted -v`
+The route this test hits is mounted in-process when the platform starts — a code change to `Tentative AOP Forecaster/app.py` needs the platform process restarted before the running server reflects it. Find and kill the current listener, then restart:
+
+```bash
+# Windows: find the PID on :8010 and stop it, matching the pattern used all session
+netstat -ano | grep :8010
+# then: taskkill //F //PID <pid>   (or the platform-appropriate equivalent)
+python -m uvicorn app:app --port 8010 --app-dir "RS Planning Platform/backend" &
+```
+
+Wait for `http://127.0.0.1:8010/calendar/` to respond before testing. Then:
+
+Run: `cd "RS Planning Platform/backend" && python -m pytest tests/test_full_pipeline.py -k buyer_adjusted_totals -v`
 Expected: PASS
 
-- [ ] **Step 6: Run the full existing test suite to confirm no regression**
+- [ ] **Step 6: Run the rest of `test_full_pipeline.py` and `test_workflow.py`, noting pre-existing failures separately**
 
-Run: `cd "RS Planning Platform/backend" && python -m pytest tests/ -v`
-Expected: PASS (every existing test, including `test_full_pipeline.py`'s pre-existing cases that rely on the old raw-sum behavior when `buyer_adjusted_totals` is `None`)
+Run: `cd "RS Planning Platform/backend" && python -m pytest tests/test_workflow.py tests/test_full_pipeline.py -v`
+Expected: `test_workflow.py` fully PASS (no change to its fixtures). In `test_full_pipeline.py`, the *other* pre-existing tests (`test_division_aop_summary_404s_with_no_approved_cycle`, `test_full_workflow_to_salesplan`) were already failing before this task, since they depend on `planner1/buyer1/reviewer1/approver1` users that don't exist in this environment (confirmed via `psql` in Step 1) — that is a pre-existing gap, not a regression this task introduces. Confirm only that: (a) the new `test_division_aop_summary_prefers_buyer_adjusted_totals` passes, and (b) any pre-existing failures are the same missing-user failures as before this task's changes, not something new. If a pre-existing test now fails with a *different* error than a login/401 failure, that is a real regression — stop and investigate before continuing.
 
 - [ ] **Step 7: Commit**
 
@@ -431,32 +480,42 @@ git commit -m "division-aop-summary: prefer the buyer's adjusted totals once app
 
 - [ ] **Step 1: Write the failing tests**
 
-```python
-def test_recent_runs_lists_newest_first(fake_run):
-    import sys, os
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "Tentative AOP Forecaster"))
-    from app import recent_runs
+Same reasoning as Task 3's Step 1: test via real HTTP against the live `:8010` platform, not a direct `from app import ...` (the module-name collision), and don't depend on `test_workflow.py`'s `fake_run`/`role_users` fixtures — those are local to that file, not shared via `conftest.py` (checked: `conftest.py` defines `app`/`client`/`test_user`/`planner_client`/`buyer_client`, none of which mount AOP Forecaster's router or provide a `ForecastRun`). Use the same `_make_role_user`/`_login_as` helpers Task 3 added to this file.
 
-    result = recent_runs()
-    run_ids = [r["run_id"] for r in result]
-    assert str(fake_run) in run_ids
+Add to `RS Planning Platform/backend/tests/test_full_pipeline.py`:
+
+```python
+def test_recent_runs_lists_newest_first():
+    import datetime
+    session = SessionLocal()
+    run = ForecastRun(input_snapshot_at=datetime.datetime.now(datetime.timezone.utc), status="success")
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+    run_id = str(run.run_id)
+    session.close()
+
+    user = _make_role_user("planner")
+    client = _login_as(user["username"])
+    r = client.get("/api/aop/api/config/recent-runs")
+    assert r.status_code == 200, r.text
+    run_ids = [row["run_id"] for row in r.json()]
+    assert run_id in run_ids
 
 
 def test_run_division_totals_404s_for_unknown_run():
-    import sys, os, uuid
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "Tentative AOP Forecaster"))
-    from app import run_division_totals
-    from fastapi import HTTPException
-
-    with pytest.raises(HTTPException) as exc_info:
-        run_division_totals(str(uuid.uuid4()))
-    assert exc_info.value.status_code == 404
+    user = _make_role_user("planner")
+    client = _login_as(user["username"])
+    r = client.get(f"/api/aop/api/config/runs/{_uuid.uuid4()}/division-totals")
+    assert r.status_code == 404, r.text
 ```
+
+(`_make_role_user` and `_login_as` are the helpers Task 3 already added to this file — this task depends on Task 3 landing first, which the plan's task order already guarantees.)
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd "RS Planning Platform/backend" && python -m pytest tests/test_full_pipeline.py -k "recent_runs or run_division_totals" -v`
-Expected: FAIL with `ImportError`
+Run (with the platform running on `:8010`): `cd "RS Planning Platform/backend" && python -m pytest tests/test_full_pipeline.py -k "recent_runs or run_division_totals" -v`
+Expected: FAIL with a 404 on both routes (neither endpoint exists yet)
 
 - [ ] **Step 3: Implement, right after `division_aop_summary` in `Tentative AOP Forecaster/app.py`**
 
@@ -511,10 +570,12 @@ def run_division_totals(run_id: str):
         return {"run_id": run_id, "division_totals": _division_totals_for_run(session, run.run_id)}
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 4: Restart the platform and run tests to verify they pass**
 
-Run: `cd "RS Planning Platform/backend" && python -m pytest tests/test_full_pipeline.py -v`
-Expected: PASS (full file)
+Same reasoning as Task 3's Step 5 — this route is mounted in-process, restart the `:8010` server before testing:
+
+Run: `cd "RS Planning Platform/backend" && python -m pytest tests/test_full_pipeline.py -k "buyer_adjusted_totals or recent_runs or run_division_totals" -v`
+Expected: PASS (the new tests from this task and Task 3; the pre-existing `planner1`-dependent tests are still expected to fail the same way they did before this task, per Task 3 Step 6's note — don't treat that as this task's regression)
 
 - [ ] **Step 5: Manually verify against the running platform**
 
