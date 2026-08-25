@@ -406,6 +406,25 @@
                 : states.length > 0 && states.every(function (s) { return s === 'up'; });
               if (reached || Date.now() >= settleDeadline) {
                 btn.disabled = false;
+                // Sync Manager: once every server is genuinely confirmed up
+                // (not just "launched" - AOP Forecaster has to actually be
+                // accepting requests for this POST to succeed), automatically
+                // kick off the data-lake sync too, so flipping the switch on
+                // is the one action that gets both the servers AND their data
+                // current, instead of a second, easy-to-forget manual step.
+                // Deliberately NOT re-disabling the switch for this part -
+                // the sync itself can take anywhere from seconds to minutes
+                // depending on how much changed upstream, and the servers
+                // are already genuinely up, so there's no race left to guard
+                // against; the user can still flip the switch off mid-sync
+                // if they want to.
+                if (reached && !turningOff) {
+                  msg.textContent = 'All servers online — syncing data lake…';
+                  fetch('http://localhost:8000/api/config/db-sync', { method: 'POST' })
+                    .then(function () { return loadExtractionStatus(); })
+                    .then(function () { msg.textContent = 'All servers online — data lake synced (see Data Sync & Flow below).'; })
+                    .catch(function () { msg.textContent = 'All servers online — data lake sync failed (see Data Sync & Flow below).'; });
+                }
               } else {
                 // 700ms, not the original 1500ms - shutdown is now bounded by
                 // one shared ~3s wait server-side (see landing_server.py's
@@ -440,8 +459,12 @@
   // workflow's live plan-cycle data, which only exists there, so it
   // handles the 401/unreachable cases explicitly instead.)
 
-  // Extraction status — real sync.sync_runs rows from AOP Forecaster's Postgres sync
-  fetch('http://localhost:8000/api/config/db-sync/status', { cache: 'no-store' })
+  // Extraction status — real sync.sync_runs rows from AOP Forecaster's Postgres sync.
+  // Named (not just a bare top-level fetch) so the Master Switch can re-call it
+  // right after it triggers a fresh sync, instead of the card only ever
+  // reflecting whatever was true at the moment the page first loaded.
+  function loadExtractionStatus() {
+    return fetch('http://localhost:8000/api/config/db-sync/status', { cache: 'no-store' })
     .then(function (r) { return r.json(); })
     .then(function (data) {
       var el = document.getElementById('extraction-rows');
@@ -458,6 +481,8 @@
     .catch(function () {
       document.getElementById('extraction-rows').innerHTML = '<div class="sync-error">AOP Forecaster (localhost:8000) unreachable.</div>';
     });
+  }
+  loadExtractionStatus();
 
   // Inter-module flow status — live plan-cycle stage, polled straight from
   // the unified :8010 platform (cross-origin, with session credentials) so
