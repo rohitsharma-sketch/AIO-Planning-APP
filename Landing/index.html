@@ -222,7 +222,7 @@
     <div class="brand">CityKart · RS Planning</div>
     <h1>Planning Modules</h1>
     <p>Pick a module below. Each opens its own app in a new tab.</p>
-    <button id="launch-all-btn" class="breaker" type="button" title="Sync & open all modules">
+    <button id="launch-all-btn" class="breaker" type="button" title="Start any offline module servers">
       <span class="breaker-track"><span class="breaker-knob"></span></span>
       <span class="breaker-label">⚡ Master Switch</span>
     </button>
@@ -294,8 +294,11 @@
   </footer>
 
 <script>
+  // Returns a promise so the Master Switch can wait for every card's real
+  // status before deciding whether it should show "on" - a plain top-level
+  // await-free forEach(fetch) has no way to know when they've all settled.
   function checkAllStatuses() {
-    document.querySelectorAll('.card[data-check]').forEach(function (card) {
+    var checks = [...document.querySelectorAll('.card[data-check]')].map(function (card) {
       var url = card.getAttribute('data-check');
       var dot = card.querySelector('.dot');
       var label = card.querySelector('.status-label');
@@ -305,10 +308,18 @@
         if (state === 'up') { dot.classList.add('up'); label.classList.add('up'); label.textContent = 'online'; }
         else if (state === 'down') { dot.classList.add('down'); label.classList.add('down'); label.textContent = 'offline'; }
         else { label.classList.add('checking'); label.textContent = 'checking…'; }
+        return state;
       }
-      fetch(url, { mode: 'no-cors', cache: 'no-store' })
-        .then(function () { setStatus('up'); })
-        .catch(function () { setStatus('down'); });
+      return fetch(url, { mode: 'no-cors', cache: 'no-store' })
+        .then(function () { return setStatus('up'); })
+        .catch(function () { return setStatus('down'); });
+    });
+    return Promise.all(checks).then(function (states) {
+      // The switch's on/off reflects REAL, current status - every module
+      // checked here actually reachable right now - not a guess or a fixed
+      // timer disconnected from whether anything actually came up.
+      var btn = document.getElementById('launch-all-btn');
+      if (btn) btn.classList.toggle('on', states.length > 0 && states.every(function (s) { return s === 'up'; }));
     });
   }
   checkAllStatuses();
@@ -329,8 +340,12 @@
     var msg = document.getElementById('launch-all-msg');
     if (!btn) return;
     btn.addEventListener('click', function () {
+      // Not toggled here — its on/off state is driven entirely by
+      // checkAllStatuses()'s real "is everything actually reachable right
+      // now" check (see above), so it always reflects the truth instead of
+      // a fixed timer that used to flip it back off after 20s whether or
+      // not the servers had actually come up yet.
       btn.disabled = true;
-      btn.classList.add('on');
       msg.textContent = 'Flipping the breaker — starting offline servers…';
 
       fetch('/api/launch-all', { method: 'POST' })
@@ -340,17 +355,15 @@
           if (data.launched && data.launched.length) parts.push('Starting: ' + data.launched.join(', '));
           if (data.alreadyOnline && data.alreadyOnline.length) parts.push('Already online: ' + data.alreadyOnline.join(', '));
           msg.textContent = parts.join(' · ') || 'Nothing to start.';
-          // Re-check a few times over ~20s while the new processes spin up,
-          // rather than once immediately (which would still show them offline).
-          [3000, 6000, 10000, 15000, 20000].forEach(function (delay) {
+          // Re-check a few times over ~20s while the new processes spin up
+          // (rather than once immediately, which would still show them
+          // offline) — each recheck updates the switch too, once for real.
+          [1000, 3000, 6000, 10000, 15000, 20000].forEach(function (delay) {
             setTimeout(checkAllStatuses, delay);
           });
         })
         .catch(function (e) { msg.textContent = 'Failed to reach Landing server: ' + e.message; })
-        .finally(function () {
-          btn.disabled = false;
-          setTimeout(function () { btn.classList.remove('on'); }, 20000); // matches the last status recheck
-        });
+        .finally(function () { btn.disabled = false; });
     });
   })();
 
