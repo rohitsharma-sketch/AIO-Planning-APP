@@ -448,8 +448,13 @@
     const STORAGE_KEY = 'landing-card-order';
 
     function applyStoredOrder() {
-      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-      if (!stored.length) return;
+      let stored;
+      try {
+        stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      } catch (e) {
+        return; // corrupted stored value — leave the default DOM order in place
+      }
+      if (!Array.isArray(stored) || !stored.length) return;
       const cards = [...grid.children];
       const byHref = new Map(cards.map(c => [c.getAttribute('href') || c.id, c]));
       stored.forEach(key => { const c = byHref.get(key); if (c) grid.appendChild(c); });
