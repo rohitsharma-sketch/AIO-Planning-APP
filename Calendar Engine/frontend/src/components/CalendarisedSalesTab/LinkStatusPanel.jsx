@@ -13,7 +13,7 @@ function fmtDuration(totalSeconds) {
   return m > 0 ? `${m}m ${String(s).padStart(2, '0')}s` : `${s}s`
 }
 
-export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChange }) {
+export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChange, hintYear, hintCalendarName }) {
   const [link, setLink] = useState(null)
   // null = idle; otherwise {pct, filesDone, filesTotal, elapsedSeconds, etaSeconds}
   // while a background scan job is running. Day-wise reads real columns across
@@ -104,7 +104,15 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
   // Derive rather than store the effective year, so a Refresh that changes the
   // available years can never strand us on a year that no longer exists. Mirrors
   // the old app's `if (!_linkSelectedYear[src] || !byYear[...]) = years[0]` guard.
-  const activeYear = (year && byYear[year]) ? year : years[0]
+  // The selected Run Reindex calendar's reference year wins over "newest first"
+  // when its data is actually available here - reindex only ever matches sales
+  // from that exact year (see the comment in CalendarisedSalesTab/index.jsx), so
+  // defaulting the pills to it is what actually lets the user pick a working
+  // combination instead of guessing.
+  const hintYearStr = hintYear != null ? String(hintYear) : null
+  const activeYear = (year && byYear[year]) ? year
+    : (hintYearStr && byYear[hintYearStr]) ? hintYearStr
+    : years[0]
   const monthsForYear = byYear[activeYear] || []
 
   // Select All / Clear are scoped to the CURRENTLY VISIBLE year only - the old
@@ -191,6 +199,17 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
               {link.stores?.unmatchedInSource?.length} unmatched in source
             </span>
           </p>
+          {hintCalendarName && (
+            hintYearStr && byYear[hintYearStr] ? (
+              <p style={{ fontSize: '11px', color: 'var(--muted)' }}>
+                "{hintCalendarName}" reindexes <strong>{hintYear}</strong> sales — showing that year's months below.
+              </p>
+            ) : hintYearStr ? (
+              <p style={{ fontSize: '11px', color: 'var(--warn)' }}>
+                "{hintCalendarName}" reindexes <strong>{hintYear}</strong> sales, but no {hintYear} data is linked for {LABELS[sourceType]} here — Run Reindex will return nothing until that year is available.
+              </p>
+            ) : null
+          )}
           <div className="link-month-picker">
             <div className="field">
               <label htmlFor={`linkYearSel_${sourceType}`}>Sync Year</label>

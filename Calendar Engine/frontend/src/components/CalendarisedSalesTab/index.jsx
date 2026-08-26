@@ -23,14 +23,33 @@ export default function CalendarisedSalesTab({ isPlanner }) {
     setSelections(prev => ({ ...prev, [sourceType]: payload }))
   }
 
+  // The selected calendar's day-map is locked to one exact ref-year -> fut-year
+  // pair (e.g. a "2025 -> 2026" calendar's keys are all 2025 dates). Reindexing
+  // synced months from any other year matches zero keys and silently returns
+  // an empty result - there is no partial/fuzzy match. Surfacing refYear here
+  // lets both the guidance note below and the pre-flight check in runRx() warn
+  // BEFORE a wasted run instead of after an empty one.
+  const selectedCalendar = calendars.find(c => String(c.id) === String(calendarId))
+
   async function runRx() {
     if (!isPlanner || !calendarId || progress) return
     setStatus(null)
+    const sel = selections[source]
+    const syncedYears = new Set((sel?.months || []).map(m => m.slice(0, 4)))
+    if (selectedCalendar && !syncedYears.has(String(selectedCalendar.refYear))) {
+      setStatus({
+        ok: false,
+        msg: `"${selectedCalendar.name}" reindexes ${selectedCalendar.refYear} sales onto ${selectedCalendar.futYear} dates, `
+          + `but the months synced for ${source === 'dw' ? 'Day-wise' : 'Month-wise'} above `
+          + `(${[...syncedYears].sort().join(', ') || 'none selected'}) don't include ${selectedCalendar.refYear}. `
+          + `Sync ${selectedCalendar.refYear} months to use this calendar, or pick a calendar whose reference year matches what you synced.`,
+      })
+      return
+    }
     setProgress({ pct: 0, filesDone: 0, filesTotal: 0 })
     try {
       const [detail, storeMap] = await Promise.all([getCalendar(calendarId), getStoreClusterMap()])
       const storeCluster = Object.fromEntries((storeMap.stores || []).map(s => [s.store, s.cluster]))
-      const sel = selections[source]
       const { jobId } = await startReindex({
         source, months: sel?.months || [],
         storeCluster,
@@ -74,8 +93,10 @@ export default function CalendarisedSalesTab({ isPlanner }) {
 
   return (
     <div className="module-panel">
-      <LinkStatusPanel sourceType="mw" isPlanner={isPlanner} onSelectionChange={handleSelectionChange} />
-      <LinkStatusPanel sourceType="dw" isPlanner={isPlanner} onSelectionChange={handleSelectionChange} />
+      <LinkStatusPanel sourceType="mw" isPlanner={isPlanner} onSelectionChange={handleSelectionChange}
+        hintYear={source === 'mw' ? selectedCalendar?.refYear : null} hintCalendarName={selectedCalendar?.name} />
+      <LinkStatusPanel sourceType="dw" isPlanner={isPlanner} onSelectionChange={handleSelectionChange}
+        hintYear={source === 'dw' ? selectedCalendar?.refYear : null} hintCalendarName={selectedCalendar?.name} />
 
       <div className="card">
         <h4>Run Reindex</h4>
@@ -85,8 +106,14 @@ export default function CalendarisedSalesTab({ isPlanner }) {
         </select>
         <select value={calendarId || ''} onChange={e => setCalendarId(e.target.value)}>
           <option value="">Select a locked calendar…</option>
-          {calendars.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {calendars.map(c => <option key={c.id} value={c.id}>{c.name} ({c.refYear} → {c.futYear})</option>)}
         </select>
+        {selectedCalendar && (
+          <p style={{ fontSize: '11px', color: 'var(--muted)', margin: '6px 0 0' }}>
+            Reindexes <strong>{selectedCalendar.refYear}</strong> sales onto <strong>{selectedCalendar.futYear}</strong> dates —
+            sync {selectedCalendar.refYear} months above (for {source === 'dw' ? 'Day-wise' : 'Month-wise'}) to use it.
+          </p>
+        )}
         {isPlanner && <button className="btn" onClick={runRx} disabled={!!progress}>{progress ? 'Reindexing…' : 'Run Reindex'}</button>}
         {progress && (
           <div style={{ marginTop: '8px' }}>
