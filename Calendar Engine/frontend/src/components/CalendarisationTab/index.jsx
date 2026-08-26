@@ -444,7 +444,8 @@ export default function CalendarisationTab({ isPlanner }) {
                 onRegionChange={handleRegionChange} onCopyFrom={handleCopyFrom} isPlanner={isPlanner} />
               <FestivalTable festivals={profiles[activeIdx].festivals} onChange={handleFestivalsChange}
                 onAdd={handleAddFestival} onReset={handleResetFestivals} onBulkSet={handleHeaderBulk}
-                onDayFieldChange={handleDayFieldChange} isPlanner={isPlanner} />
+                onDayFieldChange={handleDayFieldChange} isPlanner={isPlanner}
+                refYear={refYear} futYear={futYear} />
             </div>
           )}
         </div>

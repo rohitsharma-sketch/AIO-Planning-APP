@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { suggestFestivalNames, resolveFestivalDefaults } from '../../lib/festivalData'
 
 const DAY_COLS = [
   ['pre', 'Pre (days)', 'Days before the core festival', 0],
@@ -6,13 +7,33 @@ const DAY_COLS = [
   ['post', 'Post (days)', 'Days after the core festival', 0],
 ]
 
-export default function FestivalTable({ festivals, onChange, onAdd, onReset, onBulkSet, onDayFieldChange, isPlanner }) {
+export default function FestivalTable({ festivals, onChange, onAdd, onReset, onBulkSet, onDayFieldChange, isPlanner, refYear, futYear }) {
   const [dragIdx, setDragIdx] = useState(null)
   const [dragOverIdx, setDragOverIdx] = useState(null)
   // Header bulk-set boxes, one per day column. Kept as strings so an empty box
   // stays empty (the old app's "all" placeholder state) instead of collapsing
   // to 0.
   const [bulk, setBulk] = useState({ pre: '', core: '', post: '' })
+  // Festival Name autocomplete: which row's dropdown is open (index, or null)
+  // and the current suggestion list for it. Suggestions come from FESTIVAL_DB
+  // (name + aliases) - see suggestFestivalNames() in lib/festivalData.js. Picking
+  // one auto-fills ref/fut dates (for the CURRENTLY set ref/fut year) and
+  // pre/core/post, same as the old app's autofill-on-name-match behaviour.
+  const [suggestIdx, setSuggestIdx] = useState(null)
+  const [suggestions, setSuggestions] = useState([])
+  // Screen position of the currently-focused name input, so the dropdown can
+  // render as position:fixed at that spot - the table body scrolls (.fest-
+  // table-scroll has overflow-x:auto, which computes overflow-y:auto too), so
+  // a plain position:absolute dropdown gets clipped by that scroll container
+  // for any row near the bottom of a long festival list.
+  const [suggestPos, setSuggestPos] = useState(null)
+
+  function openSuggestions(idx, value, inputEl) {
+    const r = inputEl.getBoundingClientRect()
+    setSuggestPos({ top: r.bottom, left: r.left, width: r.width })
+    setSuggestIdx(idx)
+    setSuggestions(suggestFestivalNames(value))
+  }
 
   function reorder(from, to) {
     const next = [...festivals]
@@ -24,6 +45,26 @@ export default function FestivalTable({ festivals, onChange, onAdd, onReset, onB
   function updateField(idx, field, value) {
     const next = festivals.map((f, i) => i === idx ? { ...f, [field]: value } : f)
     onChange(next)
+  }
+
+  // Festival Name typed: update the name as normal, and refresh the suggestion
+  // dropdown for this row from FESTIVAL_DB's names/aliases.
+  function updateName(idx, value, inputEl) {
+    updateField(idx, 'name', value)
+    openSuggestions(idx, value, inputEl)
+  }
+
+  // A suggestion was picked: snap the name to the canonical spelling and, if
+  // FESTIVAL_DB/FESTIVAL_DATES has real dates for the CURRENT ref/fut year,
+  // auto-fill refDate/futDate/pre/core/post too - stays cluster-local (plain
+  // onChange), same as any other name/date edit; it does not cascade like a
+  // pre/core/post edit on an EXISTING shared festival would.
+  function pickSuggestion(idx, name) {
+    const defaults = resolveFestivalDefaults(name, refYear, futYear)
+    const next = festivals.map((f, i) => i === idx ? { ...f, name, ...(defaults || {}) } : f)
+    onChange(next)
+    setSuggestIdx(null)
+    setSuggestions([])
   }
 
   // Pre/Core/Post edits cascade to every OTHER cluster's festival with the
@@ -115,7 +156,19 @@ export default function FestivalTable({ festivals, onChange, onAdd, onReset, onB
                   onDragEnd={() => { setDragIdx(null); setDragOverIdx(null) }}
                   title="Drag to reorder">::</td>
                 <td>{idx + 1}</td>
-                <td><input value={f.name} disabled={!isPlanner} onChange={e => updateField(idx, 'name', e.target.value)} /></td>
+                <td>
+                  <input value={f.name} disabled={!isPlanner} autoComplete="off"
+                    onChange={e => updateName(idx, e.target.value, e.target)}
+                    onFocus={e => { if (f.name) openSuggestions(idx, f.name, e.target) }}
+                    onBlur={() => setTimeout(() => setSuggestIdx(s => s === idx ? null : s), 150)} />
+                  {isPlanner && suggestIdx === idx && suggestions.length > 0 && suggestPos && (
+                    <ul className="fest-name-suggest" style={{ top: suggestPos.top, left: suggestPos.left, minWidth: suggestPos.width }}>
+                      {suggestions.map(name => (
+                        <li key={name} onMouseDown={e => { e.preventDefault(); pickSuggestion(idx, name) }}>{name}</li>
+                      ))}
+                    </ul>
+                  )}
+                </td>
                 <td><input type="date" value={f.refDate} disabled={!isPlanner} onChange={e => updateField(idx, 'refDate', e.target.value)} /></td>
                 <td><input type="date" value={f.futDate} disabled={!isPlanner} onChange={e => updateField(idx, 'futDate', e.target.value)} /></td>
                 {DAY_COLS.map(([field, , , min]) => (

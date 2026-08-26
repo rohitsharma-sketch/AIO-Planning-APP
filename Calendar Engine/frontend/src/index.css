@@ -788,6 +788,33 @@ input[type=number].year-input { width: 80px; font-size: 15px; font-weight: 600; 
 .cluster-tabs-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 10px 14px 0; }
 .fest-table-scroll { overflow-x: auto; margin-top: 10px; }
 
+/* Festival Name autocomplete dropdown - see FestivalTable.jsx's suggestIdx/
+   suggestions/suggestPos state. position:fixed with JS-computed top/left
+   (inline style, set per-row from the input's getBoundingClientRect()) so it
+   escapes .fest-table-scroll's own scroll clipping - a plain position:absolute
+   dropdown got clipped for any row near the bottom of a long festival list. */
+.fest-name-suggest {
+  position: fixed;
+  z-index: 20;
+  min-width: 180px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin: 2px 0 0;
+  padding: 4px 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 16px rgba(0,0,0,.15);
+}
+.fest-name-suggest li {
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.fest-name-suggest li:hover { background: var(--light); color: var(--navy); }
+
 .fest-footer {
   padding: 10px 14px;
   border-top: 1px solid var(--border);

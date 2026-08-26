@@ -115,6 +115,61 @@ export const FESTIVAL_DATES = {
   'Christmas':         {'2020':'2020-12-25','2021':'2021-12-25','2022':'2022-12-25','2023':'2023-12-25','2024':'2024-12-25','2025':'2025-12-25','2026':'2026-12-25','2027':'2027-12-25','2028':'2028-12-25'},
 };
 
+// ─── Festival Name Autocomplete ───────────────────────────────────────────────
+// Flat, searchable index built once from FESTIVAL_DB: every canonical name plus
+// its aliases, each pointing back to that festival's canonical name. Lets the
+// Festival Name input suggest-as-you-type against both the real name ("Rath
+// Yatra") and common alternate spellings/nicknames ("jagannath rath yatra"),
+// matching the old app's searchFestDB()-driven suggestions dropdown, which the
+// React rewrite never ported (calendar_engine.html lines 1222-1301).
+export const FESTIVAL_SEARCH_INDEX = FESTIVAL_DB.flatMap(f => [
+  { term: f.name.toLowerCase(), canonical: f.name },
+  ...(f.aliases || []).map(a => ({ term: a.toLowerCase(), canonical: f.name })),
+])
+
+// Given a query string, returns up to `limit` distinct canonical festival names
+// whose name or an alias contains the query (case-insensitive substring match),
+// prefix matches ranked above mid-string matches, then alphabetically.
+export function suggestFestivalNames(query, limit = 8) {
+  const q = query.trim().toLowerCase()
+  if (q.length < 2) return []
+  const seen = new Set()
+  const hits = []
+  for (const { term, canonical } of FESTIVAL_SEARCH_INDEX) {
+    if (!term.includes(q) || seen.has(canonical)) continue
+    seen.add(canonical)
+    hits.push({ canonical, rank: term.startsWith(q) ? 0 : 1 })
+  }
+  hits.sort((a, b) => a.rank - b.rank || a.canonical.localeCompare(b.canonical))
+  return hits.slice(0, limit).map(h => h.canonical)
+}
+
+// Resolves what a newly-picked festival name should fill in: refDate/futDate
+// for the CURRENT ref/fut year (real FESTIVAL_DATES entry if this year has
+// one, else FESTIVAL_DB's own date with the month/day kept and the year
+// swapped in - same fallback rule as applyYearToProfiles below), plus
+// FESTIVAL_DB's pre/core/post as a starting point the user can still adjust.
+// Returns null if the name isn't in FESTIVAL_DB (a custom/local festival name
+// with no known dates) - callers should leave the row's existing values alone.
+export function resolveFestivalDefaults(name, refYear, futYear) {
+  const dbDefault = FESTIVAL_DB.find(f => f.name === name)
+  if (!dbDefault) return null
+  const dbEntry = FESTIVAL_DATES[name]
+  const ry = Number(refYear), fy = Number(futYear)
+
+  function resolveOne(dbDateStr, targetYear, entryYearKey) {
+    if (dbEntry && dbEntry[entryYearKey]) return dbEntry[entryYearKey]
+    const d = parseDate(dbDateStr)
+    return d && Number.isFinite(targetYear) ? fmtISO(new Date(targetYear, d.getMonth(), d.getDate())) : dbDateStr
+  }
+
+  return {
+    refDate: resolveOne(dbDefault.ref, ry, String(ry)),
+    futDate: resolveOne(dbDefault.fut, fy, String(fy)),
+    pre: dbDefault.pre, core: dbDefault.core, post: dbDefault.post,
+  }
+}
+
 // ─── Year Re-sync ─────────────────────────────────────────────────────────────
 // Port of the old app's `autoUpdateFestivalDates(refYr, futYr)`
 // (calendar_engine.html lines 2691-2721), minus its DOM re-render / saveState()
