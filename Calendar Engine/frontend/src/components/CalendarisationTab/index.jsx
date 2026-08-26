@@ -363,6 +363,24 @@ export default function CalendarisationTab({ isPlanner }) {
       : cp))
   }
 
+  // Editing one row's Pre/Core/Post inline cascades to every OTHER cluster's
+  // festival with the same name, so a shared festival's window (e.g. "Diwali")
+  // stays consistent across clusters without a separate bulk-set step.
+  // Matched by name (falling back to the exact row by index/cluster so the
+  // edited cell itself always applies even if its name is blank or
+  // duplicated) - clusters with no festival of that name are left untouched.
+  // Unlike handleHeaderBulk, this is a normal-weight edit (one named
+  // festival, not "every festival in every cluster"), so it does not confirm.
+  function handleDayFieldChange(idx, field, value) {
+    const name = profiles[activeIdx].festivals[idx].name
+    persist(profiles.map((cp, ci) => ({
+      ...cp,
+      festivals: cp.festivals.map((f, fi) => ((ci === activeIdx && fi === idx) || f.name === name)
+        ? { ...f, [field]: value }
+        : f),
+    })))
+  }
+
   // Header Pre/Core/Post bulk set — old app: applyHeaderBulk()
   // (calendar_engine.html lines 1977-2000). Cross-cluster by design: the
   // original loops `clusterProfiles.forEach`, so it sets the column for every
@@ -426,7 +444,7 @@ export default function CalendarisationTab({ isPlanner }) {
                 onRegionChange={handleRegionChange} onCopyFrom={handleCopyFrom} isPlanner={isPlanner} />
               <FestivalTable festivals={profiles[activeIdx].festivals} onChange={handleFestivalsChange}
                 onAdd={handleAddFestival} onReset={handleResetFestivals} onBulkSet={handleHeaderBulk}
-                isPlanner={isPlanner} />
+                onDayFieldChange={handleDayFieldChange} isPlanner={isPlanner} />
             </div>
           )}
         </div>

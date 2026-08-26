@@ -535,6 +535,17 @@ def reindex_daywise(months, store_cluster, day_map, sync_id=None, progress=None)
     cluster_ref_fut = {c: {p[0]: p[1] for p in pairs} for c, pairs in day_map.items()}
 
     df, total_read, used_cache = _get_raw("dw", months, sync_id, _fetch_raw_daywise, progress=progress)
+
+    # "Actual" grouping: real sales on their own reference date, independent of
+    # whether the calendar-shift mapping below succeeds for that row - a store
+    # or date missing from the calendar shouldn't make its real sales vanish
+    # from the "actual" side too. Computed on the full raw read, before the
+    # cluster/date-mapping drops that follow.
+    actual_grp = df.groupby(["STORE_NAME", df["BILLDATE"].dt.strftime("%Y-%m-%d")], observed=True)["NETAMT"].sum().reset_index()
+    actual_grp.columns = ["STORE_NAME", "ref_iso", "NETAMT"]
+    actual_rows = [{"store": r.STORE_NAME, "col": r.ref_iso, "value": round(float(r.NETAMT), 2)} for r in actual_grp.itertuples()]
+    actual_columns = sorted(actual_grp["ref_iso"].unique().tolist())
+
     df["cluster"] = df["STORE_NAME"].map(store_cluster)
     unmapped_stores = sorted(df.loc[df["cluster"].isna(), "STORE_NAME"].unique().tolist())
     df = df.dropna(subset=["cluster"])
@@ -554,6 +565,7 @@ def reindex_daywise(months, store_cluster, day_map, sync_id=None, progress=None)
     return {
         "ok": True, "source": "dw", "grain": "store", "metric": "NETAMT",
         "rowsRead": total_read, "rowsMapped": len(df), "rows": rows, "columns": columns,
+        "actualRows": actual_rows, "actualColumns": actual_columns, "actualRowCount": len(actual_grp),
         "unmappedStores": unmapped_stores, "unmappedDateCount": unmapped_dates, "unmappedDateSample": unmapped_sample,
         "unmappedClusters": unknown_clusters, "unmappedClusterStores": unknown_cluster_stores,
         "usedFrozenSync": used_cache,
@@ -573,6 +585,15 @@ def reindex_monthwise(months, store_cluster, day_map, sync_id=None, progress=Non
         cluster_month_map[cluster] = {rm: c.most_common(1)[0][0] for rm, c in buckets.items()}
 
     df, total_read, used_cache = _get_raw("mw", months, sync_id, _fetch_raw_monthwise, progress=progress)
+    df["DIVISION"] = df["DIVISION"].fillna("(none)")
+
+    # "Actual" grouping: real sales on their own reference month, independent of
+    # whether the calendar-shift mapping below succeeds for that row - see the
+    # matching comment in reindex_daywise. Computed on the full raw read.
+    actual_grp = df.groupby(["STORE_NAME", "DIVISION", "ym"], observed=True)["SL_V"].sum().reset_index()
+    actual_rows = [{"store": r.STORE_NAME, "division": r.DIVISION, "col": r.ym, "value": round(float(r.SL_V), 2)} for r in actual_grp.itertuples()]
+    actual_columns = sorted(actual_grp["ym"].unique().tolist())
+
     df["cluster"] = df["STORE_NAME"].map(store_cluster)
     unmapped_stores = sorted(df.loc[df["cluster"].isna(), "STORE_NAME"].unique().tolist())
     df = df.dropna(subset=["cluster"])
@@ -584,7 +605,6 @@ def reindex_monthwise(months, store_cluster, day_map, sync_id=None, progress=Non
     unmapped_sample = sorted(df.loc[df["fut_month"].isna(), "ym"].unique().tolist())[:20]
     df = df.dropna(subset=["fut_month"])
 
-    df["DIVISION"] = df["DIVISION"].fillna("(none)")
     grp = df.groupby(["STORE_NAME", "DIVISION", "fut_month"], observed=True)["SL_V"].sum().reset_index()
     rows = [{"store": r.STORE_NAME, "division": r.DIVISION, "col": r.fut_month, "value": round(float(r.SL_V), 2)} for r in grp.itertuples()]
     columns = sorted(grp["fut_month"].unique().tolist())
@@ -592,10 +612,54 @@ def reindex_monthwise(months, store_cluster, day_map, sync_id=None, progress=Non
     return {
         "ok": True, "source": "mw", "grain": "store_division", "metric": "SL_V",
         "rowsRead": total_read, "rowsMapped": len(df), "rows": rows, "columns": columns,
+        "actualRows": actual_rows, "actualColumns": actual_columns, "actualRowCount": len(actual_grp),
         "unmappedStores": unmapped_stores, "unmappedDateCount": unmapped_months, "unmappedDateSample": unmapped_sample,
         "unmappedClusters": unknown_clusters, "unmappedClusterStores": unknown_cluster_stores,
         "usedFrozenSync": used_cache,
     }
+
+
+def _save_sales_snapshot(session, source_type, kind, grain, metric, columns, rows, rows_read, rows_mapped, computed_at):
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from db.models.calendar import SalesSnapshot
+
+    stmt = pg_insert(SalesSnapshot).values(
+        source_type=source_type, kind=kind, grain=grain, metric=metric,
+        columns=columns, rows=rows, rows_read=rows_read, rows_mapped=rows_mapped, computed_at=computed_at,
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["source_type", "kind"],
+        set_={"grain": stmt.excluded.grain, "metric": stmt.excluded.metric,
+              "columns": stmt.excluded.columns, "rows": stmt.excluded.rows,
+              "rows_read": stmt.excluded.rows_read, "rows_mapped": stmt.excluded.rows_mapped,
+              "computed_at": stmt.excluded.computed_at},
+    )
+    session.execute(stmt)
+
+
+def _save_calendarised_sales_snapshot(result):
+    """Persist a successful reindex result - both the 'actual' (real sales on
+    their own reference date) and 'trend_shifted' (calendar-shifted) sides -
+    to Postgres, one row each per source_type, full replace on every run. So
+    other apps (e.g. SalesPlan's Sales Sync) can read both straight from the
+    DB instead of re-running their own reindex or parquet parse. Best-effort:
+    a save failure must never turn a successful reindex into an error for the
+    Calendar Engine caller, so it's logged and swallowed."""
+    try:
+        from db.base import SessionLocal
+
+        session = SessionLocal()
+        try:
+            now = datetime.datetime.now(datetime.timezone.utc)
+            _save_sales_snapshot(session, result["source"], "trend_shifted", result["grain"], result["metric"],
+                                  result["columns"], result["rows"], result["rowsRead"], result["rowsMapped"], now)
+            _save_sales_snapshot(session, result["source"], "actual", result["grain"], result["metric"],
+                                  result["actualColumns"], result["actualRows"], result["rowsRead"], result["actualRowCount"], now)
+            session.commit()
+        finally:
+            session.close()
+    except Exception:
+        traceback.print_exc()
 
 
 def run_reindex(payload, progress=None):
@@ -611,9 +675,11 @@ def run_reindex(payload, progress=None):
     if not day_map:
         return {"ok": False, "error": "dayMap is required (pick a locked calendar)"}
     try:
-        if source == "dw":
-            return reindex_daywise(months, store_cluster, day_map, sync_id, progress=progress)
-        return reindex_monthwise(months, store_cluster, day_map, sync_id, progress=progress)
+        result = reindex_daywise(months, store_cluster, day_map, sync_id, progress=progress) if source == "dw" \
+            else reindex_monthwise(months, store_cluster, day_map, sync_id, progress=progress)
+        if result.get("ok"):
+            _save_calendarised_sales_snapshot(result)
+        return result
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 

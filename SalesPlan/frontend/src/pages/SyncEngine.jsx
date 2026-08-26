@@ -3,8 +3,8 @@ import { theme } from '../theme'
 
 const API = '/api/planning/sync'
 
-function StatusDot({ ok, error, syncing }) {
-  const color = syncing ? '#F59E0B' : error ? '#EF4444' : ok ? '#10B981' : '#6B7280'
+function StatusDot({ ok, syncing }) {
+  const color = syncing ? '#F59E0B' : ok ? '#10B981' : '#6B7280'
   return (
     <span style={{
       display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
@@ -26,6 +26,39 @@ function Card({ children, style }) {
     }}>
       {children}
     </div>
+  )
+}
+
+function StatusCard({ title, subtitle, summary, syncing, onView, viewDisabled }) {
+  const ok = !!summary?.synced
+  return (
+    <Card style={{ borderColor: ok ? '#3B82F644' : theme.border }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <StatusDot ok={ok} syncing={syncing} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: theme.textPrimary }}>{title}</div>
+          <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 1 }}>{subtitle}</div>
+          {ok ? (
+            <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 6 }}>
+              {summary.rowCount?.toLocaleString()} rows · {summary.columnCount} period(s)
+              {summary.dateRange && <> · {summary.dateRange.min} → {summary.dateRange.max}</>}
+              <br />computed {new Date(summary.computedAt).toLocaleString()}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 6 }}>Not synced yet</div>
+          )}
+        </div>
+        {ok && (
+          <button onClick={onView} disabled={viewDisabled} style={{
+            padding: '6px 14px', borderRadius: 6, border: `1px solid #3B82F644`,
+            background: '#3B82F611', color: '#3B82F6', fontSize: 12, fontWeight: 600,
+            cursor: viewDisabled ? 'default' : 'pointer', opacity: viewDisabled ? 0.5 : 1,
+          }}>
+            View Data
+          </button>
+        )}
+      </div>
+    </Card>
   )
 }
 
@@ -107,77 +140,41 @@ function DataTable({ data }) {
 }
 
 export default function SyncEngine() {
-  const [config,    setConfig]    = useState(null)
   const [status,    setStatus]    = useState(null)
   const [syncing,   setSyncing]   = useState(false)
+  const [syncErr,   setSyncErr]   = useState(null)
+  const [tableKind, setTableKind] = useState(null) // null | 'actual' | 'trend_shifted'
   const [tableData, setTableData] = useState(null)
   const [tableLoading, setTableLoading] = useState(false)
-
-  // config edit state
-  const [folder,    setFolder]    = useState('')
-  const [pattern,   setPattern]   = useState('*.parquet')
-  const [configDirty, setConfigDirty] = useState(false)
-
-  // folder preview
-  const [folderPreview,  setFolderPreview]  = useState(null)
-  const [previewLoading, setPreviewLoading] = useState(false)
 
   const fetchStatus = useCallback(async () => {
     try {
       const r = await fetch(`${API}/status`)
-      const d = await r.json()
-      setConfig(d.config)
-      setStatus(d.status)
-      // seed local edit state on first load
-      setFolder(f  => f || d.config?.sales_folder  || '')
-      setPattern(p => p !== '*.parquet' ? p : (d.config?.sales_pattern || '*.parquet'))
+      setStatus(await r.json())
     } catch {}
   }, [])
 
-  useEffect(() => { fetchStatus() }, [])
-
-  const handleSaveConfig = async () => {
-    await fetch(`${API}/config`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ sales_folder: folder, sales_pattern: pattern }),
-    })
-    setConfigDirty(false)
-    setFolderPreview(null)
-    await fetchStatus()
-  }
-
-  const handlePreviewFolder = async () => {
-    if (!folder) return
-    setPreviewLoading(true)
-    try {
-      const r = await fetch(`${API}/preview-folder?path=${encodeURIComponent(folder)}&pattern=${encodeURIComponent(pattern)}`)
-      setFolderPreview(await r.json())
-    } catch { setFolderPreview({ error: 'Request failed', files: [] }) }
-    finally  { setPreviewLoading(false) }
-  }
+  useEffect(() => { fetchStatus() }, [fetchStatus])
 
   const handleSync = async () => {
-    setSyncing(true)
+    setSyncing(true); setSyncErr(null)
     try {
       const r = await fetch(`${API}/sync`, { method: 'POST' })
+      if (!r.ok) { const e = await r.json(); setSyncErr(e.detail || 'Sync failed') }
       await fetchStatus()
-      if (r.ok) loadData()
-    } catch {}
+      if (tableKind) loadData(tableKind)
+    } catch { setSyncErr('Sync failed') }
     setSyncing(false)
   }
 
-  const loadData = async () => {
-    setTableLoading(true)
+  const loadData = async (kind) => {
+    setTableKind(kind); setTableLoading(true)
     try {
-      const r = await fetch(`${API}/data?limit=500`)
-      if (r.ok) setTableData(await r.json())
-    } catch {}
+      const r = await fetch(`${API}/data?kind=${kind}&limit=500`)
+      setTableData(r.ok ? await r.json() : null)
+    } catch { setTableData(null) }
     setTableLoading(false)
   }
-
-  const st      = status?.sales || {}
-  const isSynced = !!st.last_sync && !st.error
 
   return (
     <div style={{ padding: '28px 36px', maxWidth: 1000, margin: '0 auto' }}>
@@ -188,17 +185,18 @@ export default function SyncEngine() {
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: theme.textPrimary }}>Sales Sync</h1>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: theme.textMuted }}>
-            Parse the latest sales parquet from the server folder on demand
+            Reads the Calendarisation app's own sales link and Run Reindex output — no separate
+            server-folder setup needed here, and both stay in step with the same database.
           </p>
         </div>
 
         <button
           onClick={handleSync}
-          disabled={syncing || !config?.sales_folder}
+          disabled={syncing}
           style={{
             padding: '10px 26px', borderRadius: 8, border: 'none', fontSize: 14,
-            fontWeight: 700, cursor: syncing || !config?.sales_folder ? 'default' : 'pointer',
-            background: syncing || !config?.sales_folder ? theme.border : theme.primary,
+            fontWeight: 700, cursor: syncing ? 'default' : 'pointer',
+            background: syncing ? theme.border : theme.primary,
             color: '#fff', display: 'flex', alignItems: 'center', gap: 8,
           }}
         >
@@ -207,168 +205,41 @@ export default function SyncEngine() {
         </button>
       </div>
 
-      {/* ── Status card ── */}
-      <Card style={{ marginBottom: 20, borderColor: isSynced ? '#3B82F644' : theme.border }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <StatusDot ok={isSynced} error={st.error} syncing={syncing} />
-          <div style={{ flex: 1 }}>
-            {isSynced ? (
-              <>
-                <div style={{ fontWeight: 700, fontSize: 14, color: '#3B82F6' }}>
-                  {st.file}
-                </div>
-                <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 2 }}>
-                  {st.rows?.toLocaleString()} rows · synced {new Date(st.last_sync).toLocaleString()}
-                </div>
-              </>
-            ) : st.error ? (
-              <div style={{ color: '#EF4444', fontSize: 13, fontWeight: 600 }}>{st.error}</div>
-            ) : (
-              <div style={{ fontSize: 13, color: theme.textMuted }}>Not synced yet</div>
-            )}
-          </div>
-          {isSynced && !tableData && (
-            <button onClick={loadData} style={{
-              padding: '6px 14px', borderRadius: 6, border: `1px solid #3B82F644`,
-              background: '#3B82F611', color: '#3B82F6', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-            }}>
-              View Data
-            </button>
-          )}
+      {syncErr && (
+        <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 8, background: '#EF444411', color: '#EF4444', fontSize: 13 }}>
+          {syncErr}
         </div>
+      )}
 
-        {/* Column chips */}
-        {st.columns?.length > 0 && (
-          <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${theme.border}` }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.8, marginBottom: 8 }}>
-              COLUMNS ({st.columns.length})
-            </div>
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-              {st.columns.map(c => (
-                <span key={c} style={{
-                  fontSize: 10, padding: '2px 8px', borderRadius: 4,
-                  background: '#3B82F618', color: '#3B82F6', fontFamily: theme.fontMono,
-                }}>{c}</span>
-              ))}
-            </div>
+      {/* ── Status cards ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+        <StatusCard
+          title="Actual Sales" subtitle="Real sales on their own date, from the same sales link Calendar Engine reads"
+          summary={status?.actual} syncing={syncing}
+          onView={() => loadData('actual')} viewDisabled={tableLoading && tableKind === 'actual'}
+        />
+        <StatusCard
+          title="Trend Shifted Sales" subtitle="Same sales, moved onto the calendar-aligned future date"
+          summary={status?.trendShifted} syncing={syncing}
+          onView={() => loadData('trend_shifted')} viewDisabled={tableLoading && tableKind === 'trend_shifted'}
+        />
+      </div>
+
+      {!status?.actual?.synced && !status?.trendShifted?.synced && (
+        <Card style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 13, color: theme.textMuted }}>
+            No calendarised sales yet — run <strong style={{ color: theme.textPrimary }}>Reindex</strong> in the
+            Calendarisation app's <strong style={{ color: theme.textPrimary }}>Calendarised Sales</strong> tab first,
+            then click Sync Sales here.
           </div>
-        )}
-      </Card>
-
-      {/* ── Path config ── */}
-      <Card style={{ marginBottom: 20 }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: theme.textPrimary, marginBottom: 14 }}>
-          Server Folder Path
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div>
-            <label style={{ fontSize: 11, color: theme.textMuted, fontWeight: 600, display: 'block', marginBottom: 5 }}>
-              FOLDER (UNC or local)
-            </label>
-            <input
-              value={folder}
-              onChange={e => { setFolder(e.target.value); setConfigDirty(true); setFolderPreview(null) }}
-              placeholder={`\\\\server\\share\\sales`}
-              style={{
-                width: '100%', padding: '9px 13px', borderRadius: 7,
-                border: `1.5px solid ${configDirty ? theme.primary : theme.border}`,
-                background: theme.surfaceAlt, color: theme.textPrimary,
-                fontSize: 13, fontFamily: theme.fontMono, boxSizing: 'border-box',
-              }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', gap: 10 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 11, color: theme.textMuted, fontWeight: 600, display: 'block', marginBottom: 5 }}>
-                FILE PATTERN
-              </label>
-              <input
-                value={pattern}
-                onChange={e => { setPattern(e.target.value); setConfigDirty(true); setFolderPreview(null) }}
-                placeholder="*.parquet"
-                style={{
-                  width: '100%', padding: '9px 13px', borderRadius: 7,
-                  border: `1.5px solid ${configDirty ? theme.primary : theme.border}`,
-                  background: theme.surfaceAlt, color: theme.textPrimary,
-                  fontSize: 13, fontFamily: theme.fontMono, boxSizing: 'border-box',
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-              <button onClick={handlePreviewFolder} disabled={!folder || previewLoading} style={{
-                padding: '9px 16px', borderRadius: 7, border: `1px solid ${theme.border}`,
-                background: 'transparent', color: theme.textSecondary,
-                cursor: !folder || previewLoading ? 'default' : 'pointer', fontSize: 13,
-                opacity: !folder ? 0.5 : 1,
-              }}>
-                {previewLoading ? '…' : 'Browse'}
-              </button>
-
-              {configDirty && (
-                <button onClick={handleSaveConfig} style={{
-                  padding: '9px 20px', borderRadius: 7, border: 'none',
-                  background: theme.primary, color: '#fff',
-                  cursor: 'pointer', fontSize: 13, fontWeight: 700,
-                }}>
-                  Save
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Folder browse preview */}
-        {folderPreview && (
-          <div style={{ marginTop: 14 }}>
-            {!folderPreview.exists ? (
-              <div style={{ color: '#EF4444', fontSize: 12 }}>
-                {folderPreview.error || 'Folder not accessible'}
-              </div>
-            ) : folderPreview.files.length === 0 ? (
-              <div style={{ color: theme.textMuted, fontSize: 12 }}>No files matching pattern</div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 11 }}>
-                  <thead>
-                    <tr>
-                      {['File', 'Size (KB)', 'Modified'].map(h => (
-                        <th key={h} style={{
-                          textAlign: 'left', color: theme.textMuted, fontWeight: 700,
-                          padding: '4px 10px', borderBottom: `1px solid ${theme.border}`,
-                        }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {folderPreview.files.map((f, i) => (
-                      <tr key={i} style={{ background: i === 0 ? '#3B82F611' : 'transparent' }}>
-                        <td style={{
-                          padding: '5px 10px', fontFamily: theme.fontMono,
-                          color: i === 0 ? '#3B82F6' : theme.textPrimary,
-                          fontWeight: i === 0 ? 700 : 400,
-                        }}>
-                          {f.name}{i === 0 && <span style={{ fontSize: 9, marginLeft: 6, opacity: 0.7 }}>← latest</span>}
-                        </td>
-                        <td style={{ padding: '5px 10px', color: theme.textMuted }}>{f.size_kb}</td>
-                        <td style={{ padding: '5px 10px', color: theme.textMuted }}>{f.modified}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-      </Card>
+        </Card>
+      )}
 
       {/* ── Data preview ── */}
       {(tableData || tableLoading) && (
         <Card>
           <div style={{ fontWeight: 700, fontSize: 14, color: theme.textPrimary, marginBottom: 16 }}>
-            Data Preview
+            Data Preview — {tableKind === 'actual' ? 'Actual Sales' : 'Trend Shifted Sales'}
           </div>
           {tableLoading
             ? <div style={{ textAlign: 'center', padding: 40, color: theme.textMuted, fontSize: 13 }}>Loading…</div>

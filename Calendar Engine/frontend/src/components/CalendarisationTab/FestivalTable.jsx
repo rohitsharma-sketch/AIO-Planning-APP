@@ -6,7 +6,7 @@ const DAY_COLS = [
   ['post', 'Post (days)', 'Days after the core festival', 0],
 ]
 
-export default function FestivalTable({ festivals, onChange, onAdd, onReset, onBulkSet, isPlanner }) {
+export default function FestivalTable({ festivals, onChange, onAdd, onReset, onBulkSet, onDayFieldChange, isPlanner }) {
   const [dragIdx, setDragIdx] = useState(null)
   const [dragOverIdx, setDragOverIdx] = useState(null)
   // Header bulk-set boxes, one per day column. Kept as strings so an empty box
@@ -26,12 +26,21 @@ export default function FestivalTable({ festivals, onChange, onAdd, onReset, onB
     onChange(next)
   }
 
+  // Pre/Core/Post edits cascade to every OTHER cluster's festival with the
+  // same name (index.jsx's handleDayFieldChange does the actual cross-cluster
+  // write + persist) - unlike name/date edits, which stay local to this
+  // cluster via updateField/onChange above. Requested so a shared festival's
+  // window doesn't have to be kept in sync by hand, cluster by cluster.
+  function updateDayField(idx, field, value) {
+    onDayFieldChange(idx, field, value)
+  }
+
   // +/- buttons flanking each Pre/Core/Post box — ported from stepFest()
   // (calendar_engine.html lines 2001-2008), including its per-field minimum
   // (core can't go below 1, pre/post can't go below 0).
   function step(idx, field, min, delta) {
     const cur = Number(festivals[idx]?.[field]) || 0
-    updateField(idx, field, Math.max(min, cur + delta))
+    updateDayField(idx, field, Math.max(min, cur + delta))
   }
 
   // Removal persists to the shared DB immediately and there is no undo (a deleted
@@ -113,7 +122,7 @@ export default function FestivalTable({ festivals, onChange, onAdd, onReset, onB
                   <td key={field}>
                     <div className="day-cell">
                       {isPlanner && <button type="button" className="day-step" tabIndex={-1} title="-1 day" onClick={() => step(idx, field, min, -1)}>-</button>}
-                      <input type="number" min={min} value={f[field]} disabled={!isPlanner} onChange={e => updateField(idx, field, +e.target.value)} />
+                      <input type="number" min={min} value={f[field]} disabled={!isPlanner} onChange={e => updateDayField(idx, field, +e.target.value)} />
                       {isPlanner && <button type="button" className="day-step" tabIndex={-1} title="+1 day" onClick={() => step(idx, field, min, 1)}>+</button>}
                     </div>
                   </td>

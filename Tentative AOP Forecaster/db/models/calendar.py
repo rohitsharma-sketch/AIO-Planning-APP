@@ -216,3 +216,31 @@ class SalesdataLinkSelection(Base):
     months: Mapped[list] = mapped_column(JSONB, nullable=False)
     path: Mapped[str] = mapped_column(String, nullable=False)
     synced_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class SalesSnapshot(Base):
+    """The last successful Run Reindex output, one row per (source_type, kind):
+    'actual' is the real sales grouped on their own reference date/month,
+    'trend_shifted' is the same run's sales grouped on the calendar-shifted
+    future date/month. Both come out of the same reindex pass and are
+    replaced together on every run - same full-replace pattern as
+    StoreCalendarCluster. Other apps (e.g. SalesPlan's Sales Sync) read this
+    instead of re-running their own reindex or parquet parse, so both facts
+    are single DB-backed values shared across apps rather than trapped in
+    one browser tab's Calendar Engine session."""
+    __tablename__ = "sales_snapshots"
+    __table_args__ = (
+        CheckConstraint("source_type IN ('mw', 'dw')", name="ck_sales_snapshots_source_type"),
+        CheckConstraint("kind IN ('actual', 'trend_shifted')", name="ck_sales_snapshots_kind"),
+        {"schema": "calendar"},
+    )
+
+    source_type: Mapped[str] = mapped_column(String, primary_key=True)
+    kind: Mapped[str] = mapped_column(String, primary_key=True)
+    grain: Mapped[str] = mapped_column(String, nullable=False)
+    metric: Mapped[str] = mapped_column(String, nullable=False)
+    columns: Mapped[list] = mapped_column(JSONB, nullable=False)
+    rows: Mapped[list] = mapped_column(JSONB, nullable=False)  # long-form [{store, division?, col, value}]
+    rows_read: Mapped[int] = mapped_column(Integer, nullable=False)
+    rows_mapped: Mapped[int] = mapped_column(Integer, nullable=False)
+    computed_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)

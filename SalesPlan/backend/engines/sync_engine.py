@@ -1,226 +1,102 @@
-"""Sales Sync Engine
-Watches a server folder for the latest sales parquet file, parses it on demand,
-and caches the result locally. Always copies to scratch before reading.
+"""Sales Sync
+No longer parses its own parquet files from a manually-configured server
+folder - that duplicated work the Calendar Engine app already does against
+the same network source, and the two could silently drift apart (e.g. one
+pointed at a stale/wrong path). Instead this just reads what the
+Calendarisation app itself already computed and saved to Postgres on its
+last Run Reindex: 'actual' sales (real sales on their own reference date,
+straight off the same sales link Calendar Engine reads) and 'trend_shifted'
+sales (the same sales moved onto the calendar-aligned future date). Both
+live in the shared `calendar.sales_snapshots` table - see
+calendar_engine/scans.py's run_reindex()/_save_calendarised_sales_snapshot()
+- so "syncing" here means reading the latest row, not recomputing anything.
 """
-
 import os
-import json
-import shutil
-import hashlib
-import threading
-import traceback
-from pathlib import Path
-from datetime import datetime
+import sys
+
+# This router is mounted both by the unified RS Planning Platform backend
+# (which already puts "Tentative AOP Forecaster" on sys.path) and by
+# SalesPlan's own standalone main.py (port 8002 in landing_server.py's APPS
+# list), which does not. Insert it here too, same relative path scans.py
+# uses from its own directory, so `db.*` imports below resolve either way.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "Tentative AOP Forecaster"))
+
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import Optional
+
+from db.base import SessionLocal
+from db.models.calendar import SalesSnapshot
 
 router = APIRouter()
 
-DATA_DIR = Path("data")
-DATA_DIR.mkdir(exist_ok=True)
+# Month-wise (store x division x month, sourced from the same parquet link
+# Calendar Engine's PARQUET_DIR reads) - the same grain the old folder-based
+# sync worked at. Day-wise isn't surfaced here; nothing in SalesPlan needs it.
+SOURCE_TYPE = "mw"
 
-CONFIG_FILE  = DATA_DIR / "sync_config.json"
-STATUS_FILE  = DATA_DIR / "sync_status.json"
-SALES_CACHE  = DATA_DIR / "sync_sales_cache.json"
 
-SCRATCH = Path("data/sync_scratch")
-SCRATCH.mkdir(exist_ok=True)
-
-# ── config helpers ─────────────────────────────────────────────────────────────
-
-def load_config():
-    if CONFIG_FILE.exists():
-        return json.loads(CONFIG_FILE.read_text())
-    return {
-        "sales_folder":  "",
-        "sales_pattern": "*.parquet",
-    }
-
-def save_config(cfg: dict):
-    CONFIG_FILE.write_text(json.dumps(cfg, indent=2))
-
-def load_status():
-    if STATUS_FILE.exists():
-        return json.loads(STATUS_FILE.read_text())
-    return {
-        "sales": {
-            "last_sync": None,
-            "rows": 0,
-            "file": None,
-            "error": None,
-            "hash": None,
-            "columns": [],
-        }
-    }
-
-def save_status(st: dict):
-    STATUS_FILE.write_text(json.dumps(st, indent=2))
-
-# ── file discovery ─────────────────────────────────────────────────────────────
-
-def latest_file(folder: str, pattern: str) -> Optional[Path]:
-    """Return the most recently modified file matching pattern in folder."""
+def _load_snapshot(kind: str):
+    session = SessionLocal()
     try:
-        p = Path(folder)
-        if not p.exists():
+        row = session.get(SalesSnapshot, (SOURCE_TYPE, kind))
+        if row is None:
             return None
-        files = list(p.glob(pattern))
-        if not files:
-            return None
-        return max(files, key=lambda f: f.stat().st_mtime)
-    except Exception:
-        return None
-
-def file_hash(path: Path) -> str:
-    h = hashlib.md5()
-    h.update(str(path.stat().st_mtime).encode())
-    h.update(str(path.stat().st_size).encode())
-    return h.hexdigest()
-
-# ── parser ─────────────────────────────────────────────────────────────────────
-
-def parse_parquet(src_path: Path) -> dict:
-    """
-    Copy to scratch (avoids locking the server file), read with pandas,
-    return {rows, columns, preview (first 500 rows), meta}.
-    """
-    import pandas as pd
-
-    dst = SCRATCH / src_path.name
-    shutil.copy2(src_path, dst)
-    try:
-        df = pd.read_parquet(dst)
-
-        rows    = len(df)
-        columns = list(df.columns)
-
-        # Coerce non-serialisable types
-        for col in df.select_dtypes(include=["datetime64[ns]", "datetime64[ns, UTC]"]).columns:
-            df[col] = df[col].astype(str)
-
-        preview = df.head(500).fillna("").astype(str).to_dict(orient="records")
-
         return {
-            "rows":    rows,
-            "columns": columns,
-            "preview": preview,
-            "meta": {
-                "file":      src_path.name,
-                "parsed_at": datetime.now().isoformat(),
-            },
+            "grain": row.grain, "metric": row.metric, "columns": row.columns, "rows": row.rows,
+            "rowsRead": row.rows_read, "rowsMapped": row.rows_mapped, "computedAt": row.computed_at.isoformat(),
         }
     finally:
-        try:
-            dst.unlink()
-        except Exception:
-            pass
+        session.close()
 
-# ── sync worker ────────────────────────────────────────────────────────────────
 
-_sync_lock = threading.Lock()
+def _summary(snap):
+    if snap is None:
+        return {"synced": False}
+    return {
+        "synced": True, "computedAt": snap["computedAt"], "grain": snap["grain"], "metric": snap["metric"],
+        "rowCount": snap["rowsMapped"], "columnCount": len(snap["columns"]),
+        "dateRange": {"min": snap["columns"][0], "max": snap["columns"][-1]} if snap["columns"] else None,
+    }
 
-def _do_sync(folder: str, pattern: str):
-    st    = load_status()
-    entry = st.get("sales", {})
-    entry["error"] = None
-
-    try:
-        src = latest_file(folder, pattern)
-        if src is None:
-            raise FileNotFoundError(
-                f"No files matching '{pattern}' found in: {folder}"
-            )
-
-        h = file_hash(src)
-        if h == entry.get("hash") and SALES_CACHE.exists():
-            # File unchanged — just refresh timestamp
-            entry["last_sync"] = datetime.now().isoformat()
-            st["sales"] = entry
-            save_status(st)
-            return
-
-        result = parse_parquet(src)
-        SALES_CACHE.write_text(json.dumps(result, ensure_ascii=False))
-
-        entry.update({
-            "last_sync": datetime.now().isoformat(),
-            "rows":      result["rows"],
-            "file":      src.name,
-            "hash":      h,
-            "error":     None,
-            "columns":   result["columns"],
-        })
-
-    except Exception as e:
-        entry["error"]     = str(e)
-        entry["last_sync"] = datetime.now().isoformat()
-        traceback.print_exc()
-
-    st["sales"] = entry
-    save_status(st)
-
-# ── endpoints ──────────────────────────────────────────────────────────────────
 
 @router.get("/status")
 def sync_status():
-    return {"config": load_config(), "status": load_status()}
-
-
-class SyncConfig(BaseModel):
-    sales_folder:  Optional[str] = None
-    sales_pattern: Optional[str] = None
-
-
-@router.post("/config")
-def update_config(body: SyncConfig):
-    cfg = load_config()
-    if body.sales_folder  is not None: cfg["sales_folder"]  = body.sales_folder
-    if body.sales_pattern is not None: cfg["sales_pattern"] = body.sales_pattern
-    save_config(cfg)
-    return {"ok": True, "config": cfg}
+    return {
+        "actual": _summary(_load_snapshot("actual")),
+        "trendShifted": _summary(_load_snapshot("trend_shifted")),
+    }
 
 
 @router.post("/sync")
 def sync_sales():
-    cfg = load_config()
-    if not cfg.get("sales_folder"):
-        raise HTTPException(400, "Sales folder path not configured")
-    with _sync_lock:
-        _do_sync(cfg["sales_folder"], cfg.get("sales_pattern", "*.parquet"))
-    st = load_status()
-    if st["sales"].get("error"):
-        raise HTTPException(500, st["sales"]["error"])
-    return {"ok": True, "status": st["sales"]}
+    """Re-reads both snapshots from the DB - nothing to compute here. The
+    actual computation happens in the Calendarisation app's Run Reindex."""
+    actual = _load_snapshot("actual")
+    trend_shifted = _load_snapshot("trend_shifted")
+    if actual is None and trend_shifted is None:
+        raise HTTPException(
+            409,
+            "No calendarised sales yet - run Reindex in the Calendarisation app's "
+            "Calendarised Sales tab first, then sync here.",
+        )
+    return {"ok": True, "actual": _summary(actual), "trendShifted": _summary(trend_shifted)}
 
 
 @router.get("/data")
-def get_sales_data(limit: int = 500):
-    if not SALES_CACHE.exists():
-        raise HTTPException(404, "Sales data not synced yet")
-    data = json.loads(SALES_CACHE.read_text())
-    data["preview"] = data["preview"][:limit]
-    return data
+def get_sales_data(kind: str = "trend_shifted", limit: int = 500):
+    if kind not in ("actual", "trend_shifted"):
+        raise HTTPException(422, "kind must be 'actual' or 'trend_shifted'")
+    snap = _load_snapshot(kind)
+    if snap is None:
+        raise HTTPException(404, "Not synced yet")
 
+    key_fields = ["store", "division"] if snap["grain"] == "store_division" else ["store"]
+    by_key = {}
+    for r in snap["rows"]:
+        k = tuple(r.get(f) for f in key_fields)
+        by_key.setdefault(k, {f: r.get(f) for f in key_fields})[r["col"]] = r["value"]
+    preview = list(by_key.values())[:limit]
 
-@router.get("/preview-folder")
-def preview_folder(path: str, pattern: str = "*.parquet"):
-    """List files in a folder so the user can verify the path is correct."""
-    try:
-        p = Path(path)
-        if not p.exists():
-            return {"exists": False, "files": []}
-        files = sorted(p.glob(pattern), key=lambda f: f.stat().st_mtime, reverse=True)[:20]
-        return {
-            "exists": True,
-            "files": [
-                {
-                    "name":     f.name,
-                    "size_kb":  round(f.stat().st_size / 1024, 1),
-                    "modified": datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M"),
-                }
-                for f in files
-            ],
-        }
-    except Exception as e:
-        return {"exists": False, "error": str(e), "files": []}
+    return {
+        "columns": key_fields + snap["columns"], "preview": preview, "rows": len(by_key),
+        "computedAt": snap["computedAt"],
+    }

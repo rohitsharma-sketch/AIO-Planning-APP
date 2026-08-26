@@ -539,3 +539,28 @@ def salesdata_reindex_start(payload: dict = Body(...), user: dict = Depends(requ
 @router.get("/salesdata/reindex/poll/{job_id}")
 def salesdata_reindex_poll(job_id: str, user: dict = Depends(require_login)):
     return poll_reindex_job(job_id)
+
+
+@router.get("/salesdata/snapshot/{source_type}/{kind}")
+def salesdata_snapshot(source_type: str, kind: str, user: dict = Depends(require_login)):
+    """The last successful Run Reindex output for this source, saved by
+    run_reindex() - 'actual' (real sales on their own date) or 'trend_shifted'
+    (calendar-shifted). Read by other apps (e.g. SalesPlan's Sales Sync) so
+    they stay in step with Calendar Engine's own DB instead of re-parsing
+    sales themselves."""
+    from db.models.calendar import SalesSnapshot
+
+    if source_type not in ("mw", "dw") or kind not in ("actual", "trend_shifted"):
+        raise HTTPException(404, "source_type must be 'mw'/'dw', kind must be 'actual'/'trend_shifted'")
+    session = SessionLocal()
+    try:
+        row = session.get(SalesSnapshot, (source_type, kind))
+        if row is None:
+            return {"ok": False, "computedAt": None}
+        return {
+            "ok": True, "source": row.source_type, "kind": row.kind, "grain": row.grain, "metric": row.metric,
+            "columns": row.columns, "rows": row.rows, "rowsRead": row.rows_read, "rowsMapped": row.rows_mapped,
+            "computedAt": row.computed_at.isoformat(),
+        }
+    finally:
+        session.close()
