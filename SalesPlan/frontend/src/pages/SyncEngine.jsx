@@ -139,11 +139,13 @@ function DataTable({ data }) {
   )
 }
 
+const SOURCE_LABELS = { mw: 'Month-wise', dw: 'Day-wise' }
+
 export default function SyncEngine() {
   const [status,    setStatus]    = useState(null)
   const [syncing,   setSyncing]   = useState(false)
   const [syncErr,   setSyncErr]   = useState(null)
-  const [tableKind, setTableKind] = useState(null) // null | 'actual' | 'trend_shifted'
+  const [table,     setTable]     = useState(null) // null | { source, kind }
   const [tableData, setTableData] = useState(null)
   const [tableLoading, setTableLoading] = useState(false)
 
@@ -162,19 +164,23 @@ export default function SyncEngine() {
       const r = await fetch(`${API}/sync`, { method: 'POST' })
       if (!r.ok) { const e = await r.json(); setSyncErr(e.detail || 'Sync failed') }
       await fetchStatus()
-      if (tableKind) loadData(tableKind)
+      if (table) loadData(table.source, table.kind)
     } catch { setSyncErr('Sync failed') }
     setSyncing(false)
   }
 
-  const loadData = async (kind) => {
-    setTableKind(kind); setTableLoading(true)
+  const loadData = async (source, kind) => {
+    setTable({ source, kind }); setTableLoading(true)
     try {
-      const r = await fetch(`${API}/data?kind=${kind}&limit=500`)
+      const r = await fetch(`${API}/data?source=${source}&kind=${kind}&limit=500`)
       setTableData(r.ok ? await r.json() : null)
     } catch { setTableData(null) }
     setTableLoading(false)
   }
+
+  const anySynced = Object.keys(SOURCE_LABELS).some(
+    src => status?.[src]?.actual?.synced || status?.[src]?.trendShifted?.synced
+  )
 
   return (
     <div style={{ padding: '28px 36px', maxWidth: 1000, margin: '0 auto' }}>
@@ -211,21 +217,30 @@ export default function SyncEngine() {
         </div>
       )}
 
-      {/* ── Status cards ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-        <StatusCard
-          title="Actual Sales" subtitle="Real sales on their own date, from the same sales link Calendar Engine reads"
-          summary={status?.actual} syncing={syncing}
-          onView={() => loadData('actual')} viewDisabled={tableLoading && tableKind === 'actual'}
-        />
-        <StatusCard
-          title="Trend Shifted Sales" subtitle="Same sales, moved onto the calendar-aligned future date"
-          summary={status?.trendShifted} syncing={syncing}
-          onView={() => loadData('trend_shifted')} viewDisabled={tableLoading && tableKind === 'trend_shifted'}
-        />
-      </div>
+      {/* ── Status cards, grouped by source ── */}
+      {Object.entries(SOURCE_LABELS).map(([source, label]) => (
+        <div key={source} style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.6, marginBottom: 8 }}>
+            {label.toUpperCase()}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <StatusCard
+              title="Actual Sales" subtitle="Real sales on their own date, from the same sales link Calendar Engine reads"
+              summary={status?.[source]?.actual} syncing={syncing}
+              onView={() => loadData(source, 'actual')}
+              viewDisabled={tableLoading && table?.source === source && table?.kind === 'actual'}
+            />
+            <StatusCard
+              title="Trend Shifted Sales" subtitle="Same sales, moved onto the calendar-aligned future date"
+              summary={status?.[source]?.trendShifted} syncing={syncing}
+              onView={() => loadData(source, 'trend_shifted')}
+              viewDisabled={tableLoading && table?.source === source && table?.kind === 'trend_shifted'}
+            />
+          </div>
+        </div>
+      ))}
 
-      {!status?.actual?.synced && !status?.trendShifted?.synced && (
+      {!anySynced && (
         <Card style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 13, color: theme.textMuted }}>
             No calendarised sales yet — run <strong style={{ color: theme.textPrimary }}>Reindex</strong> in the
@@ -239,7 +254,7 @@ export default function SyncEngine() {
       {(tableData || tableLoading) && (
         <Card>
           <div style={{ fontWeight: 700, fontSize: 14, color: theme.textPrimary, marginBottom: 16 }}>
-            Data Preview — {tableKind === 'actual' ? 'Actual Sales' : 'Trend Shifted Sales'}
+            Data Preview — {SOURCE_LABELS[table?.source]} {table?.kind === 'actual' ? 'Actual Sales' : 'Trend Shifted Sales'}
           </div>
           {tableLoading
             ? <div style={{ textAlign: 'center', padding: 40, color: theme.textMuted, fontSize: 13 }}>Loading…</div>
