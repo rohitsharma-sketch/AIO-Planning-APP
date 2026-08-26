@@ -99,6 +99,18 @@ class Handler(SimpleHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
+    def end_headers(self):
+        # This page's whole job is to show live, just-checked server status
+        # and drive the Master Switch - a browser-cached copy from an old
+        # visit defeats that even on a plain reload/revisit (e.g. clicking a
+        # saved shortcut back to it), and index.html itself carries no
+        # cache-busting of its own the way a hashed JS bundle would. Force
+        # a real fetch every time instead of relying on the visitor
+        # remembering to hard-reload or append a cache-busting query string.
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        self.send_header("Pragma", "no-cache")
+        SimpleHTTPRequestHandler.end_headers(self)
+
     def do_POST(self):
         if self.path == "/api/launch-all":
             self._launch_all()
