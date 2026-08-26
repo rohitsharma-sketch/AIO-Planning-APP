@@ -239,6 +239,11 @@ class SalesSnapshot(Base):
     kind: Mapped[str] = mapped_column(String, primary_key=True)
     grain: Mapped[str] = mapped_column(String, nullable=False)
     metric: Mapped[str] = mapped_column(String, nullable=False)
+    # Ordered list of row dict keys that together identify one output row - e.g.
+    # ['store','division'] by default, or ['store','division','SECTION'] when the
+    # user picks extra output fields on Run Reindex. Consumers (ReindexOutputPanel,
+    # SalesPlan's Sales Sync) key off this instead of guessing from `grain`.
+    key_fields: Mapped[list] = mapped_column(JSONB, nullable=False, default=lambda: ["store"])
     columns: Mapped[list] = mapped_column(JSONB, nullable=False)
     rows: Mapped[list] = mapped_column(JSONB, nullable=False)  # long-form [{store, division?, col, value}]
     rows_read: Mapped[int] = mapped_column(Integer, nullable=False)

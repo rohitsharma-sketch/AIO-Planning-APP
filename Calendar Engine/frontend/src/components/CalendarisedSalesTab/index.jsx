@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import LinkStatusPanel from './LinkStatusPanel'
 import ReindexOutputPanel from './ReindexOutputPanel'
-import { startReindex, pollReindex, listCalendarLibrary, getCalendar, getStoreClusterMap } from '../../lib/api'
+import { startReindex, pollReindex, listCalendarLibrary, getCalendar, getStoreClusterMap, getSourceSchema } from '../../lib/api'
 
 export default function CalendarisedSalesTab({ isPlanner }) {
   const [selections, setSelections] = useState({})
@@ -16,8 +16,26 @@ export default function CalendarisedSalesTab({ isPlanner }) {
   const [progress, setProgress] = useState(null)
   const pollTimer = useRef(null)
 
+  // Customisable output fields - real columns for the CURRENT source, fetched
+  // fresh whenever `source` changes so the picker is always true to what that
+  // source actually has (day-wise has far fewer columns than month-wise).
+  const [schema, setSchema] = useState(null)
+  const [extraDims, setExtraDims] = useState([])
+  const [metric, setMetric] = useState(null)
+
   useEffect(() => { listCalendarLibrary().then(cs => setCalendars(cs.filter(c => c.mappingSummary?.length))) }, [])
   useEffect(() => () => clearTimeout(pollTimer.current), []) // stop polling if the tab unmounts mid-run
+
+  useEffect(() => {
+    setSchema(null)
+    setExtraDims([])
+    setMetric(null)
+    getSourceSchema(source).then(s => { setSchema(s); setMetric(s.defaultMetric) }).catch(() => setSchema({ ok: false }))
+  }, [source])
+
+  function toggleDim(name) {
+    setExtraDims(prev => prev.includes(name) ? prev.filter(d => d !== name) : [...prev, name])
+  }
 
   function handleSelectionChange(sourceType, payload) {
     setSelections(prev => ({ ...prev, [sourceType]: payload }))
@@ -54,6 +72,7 @@ export default function CalendarisedSalesTab({ isPlanner }) {
         source, months: sel?.months || [],
         storeCluster,
         dayMap: detail.dayMap, syncedAt: sel?.syncedAt,
+        extraDims, metric,
       })
 
       // A single poll can transiently fail - the backend does its own CPU-bound
@@ -114,7 +133,50 @@ export default function CalendarisedSalesTab({ isPlanner }) {
             sync {selectedCalendar.refYear} months above (for {source === 'dw' ? 'Day-wise' : 'Month-wise'}) to use it.
           </p>
         )}
-        {isPlanner && <button className="btn" onClick={runRx} disabled={!!progress}>{progress ? 'Reindexing…' : 'Run Reindex'}</button>}
+
+        {/* Customise output fields - real columns for the current source, so what's
+            offered here is always true to what that source actually has (day-wise
+            has far fewer than month-wise). Store (and Division, for month-wise) are
+            always included and not shown as options - only the extras are picked here. */}
+        {schema?.ok && (
+          <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--muted)', marginBottom: '6px' }}>
+              CUSTOMISE OUTPUT FIELDS
+            </div>
+            {schema.metrics.length > 1 && (
+              <div className="field" style={{ marginBottom: '8px' }}>
+                <label htmlFor="rx-metric">Metric</label>
+                <select id="rx-metric" value={metric || schema.defaultMetric} onChange={e => setMetric(e.target.value)}>
+                  {schema.metrics.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+            )}
+            {schema.dimensions.length > 0 ? (
+              <>
+                <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '6px' }}>
+                  Break the output out by additional fields (beyond Store{source === 'mw' ? ' + Division' : ''}):
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px' }}>
+                  {schema.dimensions.map(d => (
+                    <label key={d} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={extraDims.includes(d)} onChange={() => toggleDim(d)} />
+                      {d}
+                    </label>
+                  ))}
+                </div>
+                {extraDims.length > 0 && (
+                  <p style={{ fontSize: '11px', color: 'var(--warn)', marginTop: '6px' }}>
+                    High-cardinality fields (e.g. Article Name) can multiply the row count a lot.
+                  </p>
+                )}
+              </>
+            ) : (
+              <div style={{ fontSize: '11px', color: 'var(--muted)' }}>No extra fields available for this source.</div>
+            )}
+          </div>
+        )}
+
+        {isPlanner && <button className="btn" onClick={runRx} disabled={!!progress} style={{ marginTop: '12px' }}>{progress ? 'Reindexing…' : 'Run Reindex'}</button>}
         {progress && (
           <div style={{ marginTop: '8px' }}>
             <div style={{ background: 'var(--border)', borderRadius: '4px', height: '8px', overflow: 'hidden' }}>

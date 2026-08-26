@@ -40,7 +40,7 @@ def _load_snapshot(source_type: str, kind: str):
         if row is None:
             return None
         return {
-            "grain": row.grain, "metric": row.metric, "columns": row.columns, "rows": row.rows,
+            "grain": row.grain, "metric": row.metric, "keyFields": row.key_fields, "columns": row.columns, "rows": row.rows,
             "rowsRead": row.rows_read, "rowsMapped": row.rows_mapped, "computedAt": row.computed_at.isoformat(),
         }
     finally:
@@ -96,7 +96,7 @@ def get_sales_data(source: str = "mw", kind: str = "trend_shifted", limit: int =
     if snap is None:
         raise HTTPException(404, "Not synced yet")
 
-    key_fields = ["store", "division"] if snap["grain"] == "store_division" else ["store"]
+    key_fields = snap["keyFields"] or (["store", "division"] if snap["grain"] == "store_division" else ["store"])
     by_key = {}
     for r in snap["rows"]:
         k = tuple(r.get(f) for f in key_fields)

@@ -407,19 +407,85 @@ def _read_file_filtered(fp, columns, date_col, lo, hi):
     return tbl.to_pandas() if tbl.num_rows else None
 
 
+# ─── Customisable output fields ──────────────────────────────────────────────
+# The reindex used to hardcode exactly which columns it read (STORE_NAME/
+# DIVISION/SL_V for month-wise, STORE_NAME/NETAMT for day-wise) even though the
+# source parquet carries far more - confirmed by inspecting the actual schema.
+# These maps say, per source, which of the source's OTHER real columns are
+# offered as optional extra group-by dimensions or alternate sum metrics -
+# every name here is a real column in that source, nothing invented. Identifier
+# / already-fixed columns (the date column, STORE_NAME, BILLNO, OPENING_DATE)
+# are left out because grouping by them either does nothing (already the grain)
+# or defeats aggregation entirely (a bill number is unique per row).
+SOURCE_SCHEMA = {
+    "mw": {
+        "path_kind": "single_dir",
+        "dimensions": ["SECTION", "DEPARTMENT", "ARTICLE_NAME", "ATTRIBUTE1", "SEASON_TYPE",
+                       "DISPLAY_TYPE", "REGION_TYPE", "CLUSTER_TYPE", "STORE_STATUS", "DISTRICT",
+                       "STORE_GRADE", "GM_GRADE", "FESTIVAL_GROUPING", "STORE_CURRENT_STATUS",
+                       "STORE_DONOR_FILTER", "LOCATION", "TAG_TYPE"],
+        "metrics": ["SL_V", "SL_Q", "TAXAMT", "MRPAMT", "EXTAXAMT", "DIS_V", "COST_AMT", "MRP"],
+        "default_metric": "SL_V",
+        "always_dims": ["STORE_NAME", "DIVISION"],  # DIVISION is default-on, not just always-available
+    },
+    "dw": {
+        "path_kind": "multi_dir",
+        "dimensions": ["ADMSITE_CODE", "STORE_STATUS", "CLUSTER_TYPE"],
+        "metrics": ["NETAMT"],
+        "default_metric": "NETAMT",
+        "always_dims": ["STORE_NAME"],
+    },
+}
+
+
+def get_source_schema(source_type):
+    """Real columns available for this source, split into optional dimensions
+    (group-by candidates) and metrics (summable), read from one representative
+    file's footer only - no data read, so this is cheap even for day-wise."""
+    if source_type not in SOURCE_SCHEMA:
+        return {"ok": False, "error": "source_type must be 'mw' or 'dw'"}
+    if source_type == "mw":
+        files = sorted(glob.glob(os.path.join(PARQUET_DIR, "*.parquet")))
+    else:
+        files = []
+        for d in DAYWISE_DIRS:
+            files.extend(sorted(glob.glob(os.path.join(d, "*.parquet"))))
+    if not files:
+        return {"ok": False, "error": f"No files found for source '{source_type}'"}
+    try:
+        import pyarrow.parquet as pq
+
+        available = set(pq.ParquetFile(files[0]).schema_arrow.names)
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    cfg = SOURCE_SCHEMA[source_type]
+    # Filter against the real file in case the schema drifts from this list -
+    # never offer a field the actual file doesn't have.
+    return {
+        "ok": True, "source": source_type,
+        "dimensions": [d for d in cfg["dimensions"] if d in available],
+        "metrics": [m for m in cfg["metrics"] if m in available],
+        "defaultMetric": cfg["default_metric"],
+    }
+
+
 # ─── Frozen raw-data cache: one slot per source, keyed to the sync action ────────
 # "Sync" (clicking Sync Selected Months) stamps a syncedAt timestamp on the client.
 # The raw sales rows for that sync's months are fetched from the network once and
 # held here; every reindex run against the SAME sync (e.g. switching calendars)
 # reuses this frozen copy instead of re-reading the network. A new sync (even with
 # unchanged months - the user asked to refresh) stamps a new syncedAt, which misses
-# the cache and triggers a fresh fetch, replacing the old frozen copy.
-_RAW_CACHE = {}  # {'dw': {'syncId':..., 'df':..., 'rowsRead':..., 'fetchedAt':...}, 'mw': {...}}
+# the cache and triggers a fresh fetch, replacing the old frozen copy. The cache key
+# also carries the extra-dims/metric selection - a run with different customised
+# output fields needs different columns read, so it can't reuse a frozen frame
+# that was fetched without them.
+_RAW_CACHE = {}  # {'dw': {'syncId':..., 'fieldsKey':..., 'df':..., 'rowsRead':..., 'fetchedAt':...}, 'mw': {...}}
 
 
-def _fetch_raw_daywise(months, progress=None):
+def _fetch_raw_daywise(months, progress=None, extra_dims=None, metric_col="NETAMT"):
     import pandas as pd
 
+    extra_dims = extra_dims or []
     months_set = set(months)
     lo, hi = _month_bounds(months)
     files = []
@@ -427,6 +493,8 @@ def _fetch_raw_daywise(months, progress=None):
         files.extend(sorted(glob.glob(os.path.join(d, "*.parquet"))))
     if progress is not None:
         progress["total"] = len(files)
+
+    columns = ["BILLDATE", "STORE_NAME", metric_col] + [c for c in extra_dims if c not in ("BILLDATE", "STORE_NAME", metric_col)]
 
     # Sequential, not a ThreadPoolExecutor - this used to read up to 8 files
     # concurrently, which sounded like a speedup but actually made the whole
@@ -441,7 +509,7 @@ def _fetch_raw_daywise(months, progress=None):
     frames = []
     total_read = 0
     for fp in files:
-        df = _read_file_filtered(fp, ["BILLDATE", "STORE_NAME", "NETAMT"], "BILLDATE", lo, hi)
+        df = _read_file_filtered(fp, columns, "BILLDATE", lo, hi)
         if progress is not None:
             progress["done"] += 1
         if df is None or df.empty:
@@ -458,24 +526,29 @@ def _fetch_raw_daywise(months, progress=None):
     # downstream `.dt` and `df["ym"]` access with an AttributeError/KeyError
     # whenever the source directory is unreachable (e.g. off the office LAN)
     # instead of reporting "0 rows found" like every other empty-result path.
-    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame({
-        "BILLDATE": pd.Series(dtype="datetime64[ns]"), "STORE_NAME": pd.Series(dtype="object"),
-        "NETAMT": pd.Series(dtype="float64"), "ym": pd.Series(dtype="object"),
-    })
+    empty_cols = {"BILLDATE": pd.Series(dtype="datetime64[ns]"), "STORE_NAME": pd.Series(dtype="object"),
+                  metric_col: pd.Series(dtype="float64"), "ym": pd.Series(dtype="object")}
+    for c in extra_dims:
+        empty_cols.setdefault(c, pd.Series(dtype="object"))
+    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(empty_cols)
     return df, total_read
 
 
-def _fetch_raw_monthwise(months, progress=None):
+def _fetch_raw_monthwise(months, progress=None, extra_dims=None, metric_col="SL_V"):
+    extra_dims = extra_dims or []
     months_set = set(months)
     lo, hi = _month_bounds(months)
     files = sorted(glob.glob(os.path.join(PARQUET_DIR, "*.parquet")))
     if progress is not None:
         progress["total"] = len(files)
 
+    columns = ["BILLMONTH", "DIVISION", "STORE_NAME", metric_col] + \
+        [c for c in extra_dims if c not in ("BILLMONTH", "DIVISION", "STORE_NAME", metric_col)]
+
     frames = []
     total_read = 0
     for fp in files:
-        df = _read_file_filtered(fp, ["BILLMONTH", "DIVISION", "STORE_NAME", "SL_V"], "BILLMONTH", lo, hi)
+        df = _read_file_filtered(fp, columns, "BILLMONTH", lo, hi)
         if progress is not None:
             progress["done"] += 1
         if df is None or df.empty:
@@ -490,26 +563,29 @@ def _fetch_raw_monthwise(months, progress=None):
     # the same columns/dtypes real frames get ("ym" included, "BILLMONTH" kept
     # datetime64), or reindex_monthwise's `df["ym"]`/`fut_month` lookups crash
     # instead of reporting zero rows when the source directory is unreachable.
-    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame({
-        "BILLMONTH": pd.Series(dtype="datetime64[ns]"), "DIVISION": pd.Series(dtype="object"),
-        "STORE_NAME": pd.Series(dtype="object"), "SL_V": pd.Series(dtype="float64"), "ym": pd.Series(dtype="object"),
-    })
+    empty_cols = {"BILLMONTH": pd.Series(dtype="datetime64[ns]"), "DIVISION": pd.Series(dtype="object"),
+                  "STORE_NAME": pd.Series(dtype="object"), metric_col: pd.Series(dtype="float64"),
+                  "ym": pd.Series(dtype="object")}
+    for c in extra_dims:
+        empty_cols.setdefault(c, pd.Series(dtype="object"))
+    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(empty_cols)
     return df, total_read
 
 
-def _get_raw(source, months, sync_id, fetch_fn, progress=None):
+def _get_raw(source, months, sync_id, fetch_fn, progress=None, extra_dims=None, metric_col=None):
     """Returns (df_copy, rows_read, used_cache). df_copy is always a fresh .copy()
     of the frozen/cached data - callers mutate it freely (adding cluster/date
     lookup columns) without ever corrupting the cache for the next run."""
     import time as _time
+    fields_key = (tuple(sorted(extra_dims or [])), metric_col)
     slot = _RAW_CACHE.get(source)
-    if sync_id and slot and slot.get("syncId") == sync_id:
+    if sync_id and slot and slot.get("syncId") == sync_id and slot.get("fieldsKey") == fields_key:
         if progress is not None:  # nothing to read - the frozen copy IS the whole job
             progress["total"] = progress["done"] = 1
         return slot["df"].copy(), slot["rowsRead"], True
-    df, rows_read = fetch_fn(months, progress=progress)
+    df, rows_read = fetch_fn(months, progress=progress, extra_dims=extra_dims, metric_col=metric_col)
     if sync_id:  # only freeze when the client sent a real sync marker to key on
-        _RAW_CACHE[source] = {"syncId": sync_id, "df": df, "rowsRead": rows_read, "fetchedAt": _time.time()}
+        _RAW_CACHE[source] = {"syncId": sync_id, "fieldsKey": fields_key, "df": df, "rowsRead": rows_read, "fetchedAt": _time.time()}
     return df.copy(), rows_read, False
 
 
@@ -531,19 +607,41 @@ def _split_unknown_clusters(df, known_clusters):
     return df.loc[~unknown_mask], names, stores
 
 
-def reindex_daywise(months, store_cluster, day_map, sync_id=None, progress=None):
+def _rows_from_group(grp_df, group_cols, col_col, val_col, key_fields):
+    """grp_df is a reset_index() groupby result whose first len(group_cols) columns
+    are group_cols in order, followed by col_col and val_col. key_fields[i] is the
+    OUTPUT name for group_cols[i] (e.g. 'store' for 'STORE_NAME'; extra dims pass
+    their real column name through unchanged, e.g. 'SECTION' -> 'SECTION')."""
+    rows = []
+    for r in grp_df.itertuples(index=False):
+        d = {kf: getattr(r, gc) for kf, gc in zip(key_fields, group_cols)}
+        d["col"] = getattr(r, col_col)
+        d["value"] = round(float(getattr(r, val_col)), 2)
+        rows.append(d)
+    return rows
+
+
+def reindex_daywise(months, store_cluster, day_map, sync_id=None, progress=None, extra_dims=None, metric_col=None):
+    extra_dims = [d for d in (extra_dims or []) if d in SOURCE_SCHEMA["dw"]["dimensions"]]
+    metric_col = metric_col if metric_col in SOURCE_SCHEMA["dw"]["metrics"] else SOURCE_SCHEMA["dw"]["default_metric"]
     cluster_ref_fut = {c: {p[0]: p[1] for p in pairs} for c, pairs in day_map.items()}
 
-    df, total_read, used_cache = _get_raw("dw", months, sync_id, _fetch_raw_daywise, progress=progress)
+    df, total_read, used_cache = _get_raw("dw", months, sync_id, _fetch_raw_daywise, progress=progress,
+                                           extra_dims=extra_dims, metric_col=metric_col)
+    for c in extra_dims:
+        df[c] = df[c].fillna("(none)")
+
+    group_cols = ["STORE_NAME"] + extra_dims
+    key_fields = ["store"] + extra_dims
 
     # "Actual" grouping: real sales on their own reference date, independent of
     # whether the calendar-shift mapping below succeeds for that row - a store
     # or date missing from the calendar shouldn't make its real sales vanish
     # from the "actual" side too. Computed on the full raw read, before the
     # cluster/date-mapping drops that follow.
-    actual_grp = df.groupby(["STORE_NAME", df["BILLDATE"].dt.strftime("%Y-%m-%d")], observed=True)["NETAMT"].sum().reset_index()
-    actual_grp.columns = ["STORE_NAME", "ref_iso", "NETAMT"]
-    actual_rows = [{"store": r.STORE_NAME, "col": r.ref_iso, "value": round(float(r.NETAMT), 2)} for r in actual_grp.itertuples()]
+    actual_grp = df.groupby(group_cols + [df["BILLDATE"].dt.strftime("%Y-%m-%d")], observed=True)[metric_col].sum().reset_index()
+    actual_grp.columns = group_cols + ["ref_iso", metric_col]
+    actual_rows = _rows_from_group(actual_grp, group_cols, "ref_iso", metric_col, key_fields)
     actual_columns = sorted(actual_grp["ref_iso"].unique().tolist())
 
     df["cluster"] = df["STORE_NAME"].map(store_cluster)
@@ -558,12 +656,12 @@ def reindex_daywise(months, store_cluster, day_map, sync_id=None, progress=None)
     unmapped_sample = sorted(df.loc[df["fut_date"].isna(), "ref_iso"].unique().tolist())[:20]
     df = df.dropna(subset=["fut_date"])
 
-    grp = df.groupby(["STORE_NAME", "fut_date"], observed=True)["NETAMT"].sum().reset_index()
-    rows = [{"store": r.STORE_NAME, "col": r.fut_date, "value": round(float(r.NETAMT), 2)} for r in grp.itertuples()]
+    grp = df.groupby(group_cols + ["fut_date"], observed=True)[metric_col].sum().reset_index()
+    rows = _rows_from_group(grp, group_cols, "fut_date", metric_col, key_fields)
     columns = sorted(grp["fut_date"].unique().tolist())
 
     return {
-        "ok": True, "source": "dw", "grain": "store", "metric": "NETAMT",
+        "ok": True, "source": "dw", "keyFields": key_fields, "grain": "_".join(f.lower() for f in key_fields), "metric": metric_col,
         "rowsRead": total_read, "rowsMapped": len(df), "rows": rows, "columns": columns,
         "actualRows": actual_rows, "actualColumns": actual_columns, "actualRowCount": len(actual_grp),
         "unmappedStores": unmapped_stores, "unmappedDateCount": unmapped_dates, "unmappedDateSample": unmapped_sample,
@@ -572,7 +670,10 @@ def reindex_daywise(months, store_cluster, day_map, sync_id=None, progress=None)
     }
 
 
-def reindex_monthwise(months, store_cluster, day_map, sync_id=None, progress=None):
+def reindex_monthwise(months, store_cluster, day_map, sync_id=None, progress=None, extra_dims=None, metric_col=None):
+    extra_dims = [d for d in (extra_dims or []) if d in SOURCE_SCHEMA["mw"]["dimensions"]]
+    metric_col = metric_col if metric_col in SOURCE_SCHEMA["mw"]["metrics"] else SOURCE_SCHEMA["mw"]["default_metric"]
+
     # Per-cluster ref-month -> fut-month, by plurality of that month's mapped days
     # (a locked calendar maps individual days; month-wise source only has monthly
     # totals, so each LY month is assigned the TY month most of its days fall in).
@@ -584,14 +685,20 @@ def reindex_monthwise(months, store_cluster, day_map, sync_id=None, progress=Non
             buckets.setdefault(ref_m, Counter())[fut_m] += 1
         cluster_month_map[cluster] = {rm: c.most_common(1)[0][0] for rm, c in buckets.items()}
 
-    df, total_read, used_cache = _get_raw("mw", months, sync_id, _fetch_raw_monthwise, progress=progress)
+    df, total_read, used_cache = _get_raw("mw", months, sync_id, _fetch_raw_monthwise, progress=progress,
+                                           extra_dims=extra_dims, metric_col=metric_col)
     df["DIVISION"] = df["DIVISION"].fillna("(none)")
+    for c in extra_dims:
+        df[c] = df[c].fillna("(none)")
+
+    group_cols = ["STORE_NAME", "DIVISION"] + extra_dims
+    key_fields = ["store", "division"] + extra_dims
 
     # "Actual" grouping: real sales on their own reference month, independent of
     # whether the calendar-shift mapping below succeeds for that row - see the
     # matching comment in reindex_daywise. Computed on the full raw read.
-    actual_grp = df.groupby(["STORE_NAME", "DIVISION", "ym"], observed=True)["SL_V"].sum().reset_index()
-    actual_rows = [{"store": r.STORE_NAME, "division": r.DIVISION, "col": r.ym, "value": round(float(r.SL_V), 2)} for r in actual_grp.itertuples()]
+    actual_grp = df.groupby(group_cols + ["ym"], observed=True)[metric_col].sum().reset_index()
+    actual_rows = _rows_from_group(actual_grp, group_cols, "ym", metric_col, key_fields)
     actual_columns = sorted(actual_grp["ym"].unique().tolist())
 
     df["cluster"] = df["STORE_NAME"].map(store_cluster)
@@ -605,12 +712,12 @@ def reindex_monthwise(months, store_cluster, day_map, sync_id=None, progress=Non
     unmapped_sample = sorted(df.loc[df["fut_month"].isna(), "ym"].unique().tolist())[:20]
     df = df.dropna(subset=["fut_month"])
 
-    grp = df.groupby(["STORE_NAME", "DIVISION", "fut_month"], observed=True)["SL_V"].sum().reset_index()
-    rows = [{"store": r.STORE_NAME, "division": r.DIVISION, "col": r.fut_month, "value": round(float(r.SL_V), 2)} for r in grp.itertuples()]
+    grp = df.groupby(group_cols + ["fut_month"], observed=True)[metric_col].sum().reset_index()
+    rows = _rows_from_group(grp, group_cols, "fut_month", metric_col, key_fields)
     columns = sorted(grp["fut_month"].unique().tolist())
 
     return {
-        "ok": True, "source": "mw", "grain": "store_division", "metric": "SL_V",
+        "ok": True, "source": "mw", "keyFields": key_fields, "grain": "_".join(f.lower() for f in key_fields), "metric": metric_col,
         "rowsRead": total_read, "rowsMapped": len(df), "rows": rows, "columns": columns,
         "actualRows": actual_rows, "actualColumns": actual_columns, "actualRowCount": len(actual_grp),
         "unmappedStores": unmapped_stores, "unmappedDateCount": unmapped_months, "unmappedDateSample": unmapped_sample,
@@ -619,17 +726,17 @@ def reindex_monthwise(months, store_cluster, day_map, sync_id=None, progress=Non
     }
 
 
-def _save_sales_snapshot(session, source_type, kind, grain, metric, columns, rows, rows_read, rows_mapped, computed_at):
+def _save_sales_snapshot(session, source_type, kind, grain, metric, key_fields, columns, rows, rows_read, rows_mapped, computed_at):
     from sqlalchemy.dialects.postgresql import insert as pg_insert
     from db.models.calendar import SalesSnapshot
 
     stmt = pg_insert(SalesSnapshot).values(
-        source_type=source_type, kind=kind, grain=grain, metric=metric,
+        source_type=source_type, kind=kind, grain=grain, metric=metric, key_fields=key_fields,
         columns=columns, rows=rows, rows_read=rows_read, rows_mapped=rows_mapped, computed_at=computed_at,
     )
     stmt = stmt.on_conflict_do_update(
         index_elements=["source_type", "kind"],
-        set_={"grain": stmt.excluded.grain, "metric": stmt.excluded.metric,
+        set_={"grain": stmt.excluded.grain, "metric": stmt.excluded.metric, "key_fields": stmt.excluded.key_fields,
               "columns": stmt.excluded.columns, "rows": stmt.excluded.rows,
               "rows_read": stmt.excluded.rows_read, "rows_mapped": stmt.excluded.rows_mapped,
               "computed_at": stmt.excluded.computed_at},
@@ -651,9 +758,9 @@ def _save_calendarised_sales_snapshot(result):
         session = SessionLocal()
         try:
             now = datetime.datetime.now(datetime.timezone.utc)
-            _save_sales_snapshot(session, result["source"], "trend_shifted", result["grain"], result["metric"],
+            _save_sales_snapshot(session, result["source"], "trend_shifted", result["grain"], result["metric"], result["keyFields"],
                                   result["columns"], result["rows"], result["rowsRead"], result["rowsMapped"], now)
-            _save_sales_snapshot(session, result["source"], "actual", result["grain"], result["metric"],
+            _save_sales_snapshot(session, result["source"], "actual", result["grain"], result["metric"], result["keyFields"],
                                   result["actualColumns"], result["actualRows"], result["rowsRead"], result["actualRowCount"], now)
             session.commit()
         finally:
@@ -668,6 +775,12 @@ def run_reindex(payload, progress=None):
     store_cluster = payload.get("storeCluster") or {}
     day_map = payload.get("dayMap") or {}
     sync_id = payload.get("syncedAt")  # freezes the raw read to this specific sync action
+    # Optional customised output fields - real columns from SOURCE_SCHEMA only;
+    # reindex_daywise/reindex_monthwise silently drop anything not in that list,
+    # so a stale or hand-crafted request can't make the reindex read an arbitrary
+    # column off the parquet file.
+    extra_dims = payload.get("extraDims") or []
+    metric_col = payload.get("metric")
     if source not in ("mw", "dw"):
         return {"ok": False, "error": "source must be 'mw' or 'dw'"}
     if not months:
@@ -675,8 +788,10 @@ def run_reindex(payload, progress=None):
     if not day_map:
         return {"ok": False, "error": "dayMap is required (pick a locked calendar)"}
     try:
-        result = reindex_daywise(months, store_cluster, day_map, sync_id, progress=progress) if source == "dw" \
-            else reindex_monthwise(months, store_cluster, day_map, sync_id, progress=progress)
+        result = reindex_daywise(months, store_cluster, day_map, sync_id, progress=progress,
+                                  extra_dims=extra_dims, metric_col=metric_col) if source == "dw" \
+            else reindex_monthwise(months, store_cluster, day_map, sync_id, progress=progress,
+                                    extra_dims=extra_dims, metric_col=metric_col)
         if result.get("ok"):
             _save_calendarised_sales_snapshot(result)
         return result

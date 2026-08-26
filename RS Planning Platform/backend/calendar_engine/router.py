@@ -15,6 +15,7 @@ from calendar_engine.scans import (
     get_salesdata_link, get_salesdata_link_daywise, run_reindex,
     start_reindex_job, poll_reindex_job,
     start_link_scan_job, poll_link_scan_job,
+    get_source_schema,
 )
 from db.base import SessionLocal
 from db.models.calendar import (
@@ -521,6 +522,20 @@ def salesdata_link_start(source_type: str, refresh: bool = False, user: dict = D
 @router.get("/salesdata/link/poll/{job_id}")
 def salesdata_link_poll(job_id: str, user: dict = Depends(require_login)):
     return poll_link_scan_job(job_id)
+
+
+@router.get("/salesdata/schema/{source_type}")
+def salesdata_schema(source_type: str, user: dict = Depends(require_login)):
+    """Real columns available for this source, split into optional group-by
+    dimensions and summable metrics - lets Run Reindex offer a 'pick your own
+    output fields' picker that's always true to what the source actually has,
+    instead of the hardcoded store[+division]/SL_V-or-NETAMT shape."""
+    if source_type not in ("mw", "dw"):
+        raise HTTPException(404, "source_type must be 'mw' or 'dw'")
+    result = get_source_schema(source_type)
+    if not result.get("ok"):
+        raise HTTPException(502, result.get("error", "Could not read source schema"))
+    return result
 
 
 @router.post("/salesdata/reindex")

@@ -65,7 +65,12 @@ export default function ReindexOutputPanel({ result }) {
   }, [])
 
   const ok = !!(result && result.ok)
-  const keyFields = result?.grain === 'store_division' ? ['store', 'division'] : ['store']
+  // keyFields comes straight from the backend now - it always lists every field
+  // that identifies one output row (store[, division][, any extra output fields
+  // the user picked]), so the table adapts to however many were selected instead
+  // of assuming at most store+division. Falls back to the old grain-string guess
+  // only for a result cached before keyFields existed.
+  const keyFields = result?.keyFields || (result?.grain === 'store_division' ? ['store', 'division'] : ['store'])
 
   // rxWideRows(): group the long-form rows by the grain key, then hang each
   // row's {col: value} off that key. Deliberately does NOT depend on
@@ -85,10 +90,13 @@ export default function ReindexOutputPanel({ result }) {
       e.vals[row.col] = row.value
     }
     const out = [...byKey.values()]
-    const k2 = keyFields[1]
-    out.sort((a, b) =>
-      ((a.store > b.store) - (a.store < b.store)) ||
-      (k2 ? ((a[k2] > b[k2]) - (a[k2] < b[k2])) : 0))
+    out.sort((a, b) => {
+      for (const f of keyFields) {
+        const d = (a[f] > b[f]) - (a[f] < b[f])
+        if (d) return d
+      }
+      return 0
+    })
     return out
   }, [ok, result])
 

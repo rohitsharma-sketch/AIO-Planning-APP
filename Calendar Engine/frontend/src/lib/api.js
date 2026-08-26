@@ -71,3 +71,4 @@ export const pollLinkScan = (jobId) => fetchJson(`/salesdata/link/poll/${jobId}`
 export const runReindex = (payload) => jsonPost('/salesdata/reindex', payload)
 export const startReindex = (payload) => jsonPost('/salesdata/reindex/start', payload)
 export const pollReindex = (jobId) => fetchJson(`/salesdata/reindex/poll/${jobId}`)
+export const getSourceSchema = (sourceType) => fetchJson(`/salesdata/schema/${sourceType}`)
