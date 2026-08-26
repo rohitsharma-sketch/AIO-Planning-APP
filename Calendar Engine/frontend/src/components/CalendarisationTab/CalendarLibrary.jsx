@@ -11,7 +11,7 @@ function fmtSavedAt(iso) {
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-export default function CalendarLibrary({ onLoad, isPlanner, buildSavePayload }) {
+export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSavePayload }) {
   const [items, setItems] = useState([])
   const [status, setStatus] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -60,6 +60,7 @@ export default function CalendarLibrary({ onLoad, isPlanner, buildSavePayload })
       if (existing) await deleteCalendar(existing.id)
       await saveCalendar({ ...payload, name })
       setStatus({ ok: true, msg: existing ? `Template "${name}" updated with your changes` : `Template "${name}" locked & saved` })
+      onSaved?.(payload.id)
       refresh()
     } catch (e) {
       setStatus({ ok: false, msg: e.message })

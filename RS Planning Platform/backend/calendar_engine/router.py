@@ -186,6 +186,45 @@ def create_calendar(body: dict = Body(...), actor: dict = Depends(require_role("
         session.close()
 
 
+@router.put("/calendar-library/{calendar_id}/festivals")
+def update_calendar_festivals(calendar_id: int, body: dict = Body(...), actor: dict = Depends(require_role("planner"))):
+    """Autosave path for editing while a locked calendar is on the preview
+    board: replaces just that calendar's festival list (clusters + their
+    festival rows) with the given ones, same shape as create_calendar's
+    `clusters`. Deliberately does NOT touch calendar_day_pairs - the actual
+    computed day-by-day mapping stays exactly as last generated; only running
+    Create Calendar + Lock & Save again refreshes that. CalendarDayPair has no
+    FK to CalendarCluster (it's keyed by the cluster_name string), so
+    dropping and re-creating the cluster/festival rows here can't orphan or
+    break the existing day-map."""
+    session = SessionLocal()
+    try:
+        c = session.get(Calendar, calendar_id)
+        if c is None:
+            raise HTTPException(404, "Calendar not found")
+
+        cluster_ids = [row[0] for row in session.execute(select(CalendarCluster.id).where(CalendarCluster.calendar_id == calendar_id)).all()]
+        if cluster_ids:
+            session.execute(delete(CalendarClusterFestival).where(CalendarClusterFestival.calendar_cluster_id.in_(cluster_ids)))
+        session.execute(delete(CalendarCluster).where(CalendarCluster.calendar_id == calendar_id))
+
+        for cluster in body.get("clusters", []):
+            cl = CalendarCluster(calendar_id=calendar_id, cluster_name=cluster["name"], region=cluster.get("region"))
+            session.add(cl)
+            session.flush()
+            for fest in cluster.get("festivals", []):
+                session.add(CalendarClusterFestival(
+                    calendar_cluster_id=cl.id, source_festival_id=fest["id"], name=fest["name"],
+                    ref_date=datetime.datetime.fromisoformat(fest["refDate"]).date(), fut_date=datetime.datetime.fromisoformat(fest["futDate"]).date(),
+                    pre=fest["pre"], core=fest["core"], post=fest["post"],
+                ))
+
+        session.commit()
+        return {"ok": True, "id": calendar_id}
+    finally:
+        session.close()
+
+
 @router.delete("/calendar-library/{calendar_id}")
 def delete_calendar(calendar_id: int, actor: dict = Depends(require_role("planner"))):
     session = SessionLocal()

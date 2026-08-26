@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getClusterProfiles, putClusterProfiles, getAppState } from '../../lib/api'
+import { getClusterProfiles, putClusterProfiles, getAppState, updateCalendarFestivals } from '../../lib/api'
 import { generateMappings, validate, computeMonthly, buildFestMap } from '../../lib/engine'
 import { parseDate, fmtISO, fmtDisp, calDiff, weekNum } from '../../lib/dateUtils'
 import ClusterTabs from './ClusterTabs'
@@ -116,6 +116,13 @@ export default function CalendarisationTab({ isPlanner }) {
   // after loading a calendar from the library, since a loaded snapshot isn't a
   // fresh generation and shouldn't be re-saved as though it were.
   const [clusterMappingsRaw, setClusterMappingsRaw] = useState(null)
+  // Which locked calendar is currently "on the preview board" - set on Load &
+  // Preview, and again after Lock & Save. While set, every festival-list edit
+  // (name/date/pre/core/post) autosaves into THAT calendar's own stored
+  // festival list too, not just the live working set - see persist() below.
+  // Only the festival list autosaves this way; the day-by-day mapping stays
+  // exactly as last generated until Create Calendar + Lock & Save runs again.
+  const [previewCalendarId, setPreviewCalendarId] = useState(null)
   const [dayMap, setDayMap] = useState(null)
   const [validationIssues, setValidationIssues] = useState([])
   const [monthlySummary, setMonthlySummary] = useState(null)
@@ -257,6 +264,7 @@ export default function CalendarisationTab({ isPlanner }) {
     setRefYear(full.refYear)
     setFutYear(full.futYear)
     setClusterMappingsRaw(null) // a loaded snapshot; regenerate via "Create Calendar" before saving again
+    setPreviewCalendarId(full.id) // subsequent festival-list edits autosave into this calendar too
 
     const pairs = (full.dayMap && full.dayMap[cluster.name]) || []
     if (!pairs.length) {
@@ -283,6 +291,22 @@ export default function CalendarisationTab({ isPlanner }) {
       setStatus({ ok: true, msg: 'Saved' })
     } catch (e) {
       setStatus({ ok: false, msg: e.message })
+      return
+    }
+    // Autosave into whichever locked calendar is on the preview board (see
+    // previewCalendarId above) - festival list only, day-map untouched. Best-
+    // effort: a failure here doesn't roll back or re-throw, since the live
+    // working set above already saved fine; it just shows alongside the normal
+    // "Saved" status so a real problem (e.g. that calendar got deleted from
+    // another tab) is still visible instead of silently swallowed.
+    if (previewCalendarId != null) {
+      try {
+        await updateCalendarFestivals(previewCalendarId, {
+          clusters: nextProfiles.map(cp => ({ name: cp.name, region: cp.region, festivals: cp.festivals })),
+        })
+      } catch (e) {
+        setStatus({ ok: false, msg: `Saved to working set, but autosave into the previewed template failed: ${e.message}` })
+      }
     }
   }
 
@@ -464,7 +488,7 @@ export default function CalendarisationTab({ isPlanner }) {
       </main>
 
       <aside style={{ width: '320px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <CalendarLibrary onLoad={handleLoadFromLibrary} isPlanner={isPlanner} buildSavePayload={buildSavePayload} />
+        <CalendarLibrary onLoad={handleLoadFromLibrary} onSaved={setPreviewCalendarId} isPlanner={isPlanner} buildSavePayload={buildSavePayload} />
         <ChangeLogViewer rangeKey={refYear && futYear ? `${refYear}-${futYear}` : null} />
       </aside>
     </div>
