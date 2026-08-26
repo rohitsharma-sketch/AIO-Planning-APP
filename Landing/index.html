@@ -189,8 +189,23 @@
      status only, read in place, no click needed - so the freed space goes
      to the actual live rows instead: slightly larger text, more breathing
      room between rows, than when this card also had to fit a blurb and a
-     link. */
+     link. (The Flow section below is the one exception: its "Resume as
+     ___" button is a deliberate, later addition - not a link-out for its
+     own sake, but the whole point of showing whose turn it is.) */
   .sync-rows { display: flex; flex-direction: column; gap: 8px; }
+  .flow-resume-btn {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 5px 11px;
+    border-radius: 6px;
+    background: var(--bg-grad-a);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .flow-resume-btn:hover { filter: brightness(1.1); }
   .sync-row {
     display: flex;
     align-items: baseline;
@@ -493,6 +508,18 @@
     draft: 'Draft', pending_buyer: 'Awaiting Buyer', pending_review: 'Awaiting Review',
     pending_approval: 'Awaiting Approval', approved: 'Approved — synced to Sales Plan',
   };
+  // Whose turn it is right now, and where clicking through actually resumes
+  // their part of the work - not a generic link to "the app", the specific
+  // screen the next action happens on. No entry for 'approved': there's
+  // nothing left to resume, the cycle is done. No entry for 'draft' either
+  // deliberately - the planner action there is "submit a NEW run", not
+  // resuming this cycle (plan-cycles.html's own Resubmit button already
+  // covers the one real draft-resume case: a rejected cycle).
+  const STAGE_RESUME = {
+    pending_buyer:    { who: 'Buyer',     url: 'http://localhost:5050/',           label: 'Resume as Buyer →' },
+    pending_review:   { who: 'Reviewer',  url: 'http://localhost:8010/plan-cycles', label: 'Resume as Reviewer →' },
+    pending_approval: { who: 'Approver',  url: 'http://localhost:8010/plan-cycles', label: 'Resume as Approver →' },
+  };
 
   async function checkPlanCycleFlow() {
     const el = document.getElementById('flow-rows');
@@ -504,12 +531,18 @@
       if (!cycles.length) { el.innerHTML = '<div class="sync-empty">No plan cycles started yet.</div>'; return; }
       const latest = cycles[0]; // already newest-first per the backend's own ordering
       const stageIdx = STAGE_ORDER.indexOf(latest.status);
+      const isDone = latest.status === 'approved';
+      const resume = STAGE_RESUME[latest.status];
       el.innerHTML = `
-        <div class="sync-row">
+        <div class="sync-row" style="flex-direction:column; align-items:stretch;">
           <div style="display:flex; gap:4px; margin-bottom:6px">
             ${STAGE_ORDER.map((s, i) => `<div style="flex:1; height:4px; border-radius:2px; background:${i <= stageIdx ? '#2ecc71' : 'rgba(255,255,255,0.15)'}"></div>`).join('')}
           </div>
-          <div>Cycle ${latest.id.slice(0, 8)}: <strong>${STAGE_LABELS[latest.status] || latest.status}</strong></div>
+          <div class="status">
+            <span class="dot ${isDone ? 'up' : 'checking'}"></span>
+            <span class="status-label ${isDone ? 'up' : 'checking'}">Cycle ${latest.id.slice(0, 8)}: ${STAGE_LABELS[latest.status] || latest.status}</span>
+          </div>
+          ${resume ? `<a class="flow-resume-btn" href="${resume.url}" target="_blank">${resume.label}</a>` : ''}
         </div>`;
     } catch (e) {
       el.innerHTML = `<div class="sync-error">Platform (localhost:8010) unreachable.</div>`;
