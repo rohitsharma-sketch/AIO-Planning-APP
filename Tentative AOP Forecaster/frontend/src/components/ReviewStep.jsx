@@ -117,7 +117,14 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
 
   const livePreview = useMemo(() => {
     if (!base_sales) return null
-    const fmt = v => v >= 1e6 ? `${(v/1e6).toFixed(2)}M` : v >= 1e3 ? `${(v/1e3).toFixed(1)}K` : v.toFixed(0)
+    // base_sales (and everything derived from it here) is already Rs Lakhs -
+    // the app's one consistent unit everywhere else (AOP Review's own inputs,
+    // the AOP overrides grid, division-aop-summary). Generic K/M scaling on
+    // top of that just relabels an already-Lakhs number as if it were a raw
+    // rupee figure - "8.0K" for a true value of 8,000 Lakhs (₹80 Cr) reads as
+    // "eight thousand" of nothing in particular. Show the real Lakhs number
+    // instead, comma-grouped Indian-style for readability at these magnitudes.
+    const fmt = v => v.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 
     // Compute LFL monthly forecast per division
     const lflByDiv = {}
@@ -311,7 +318,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
         <div className="preview-row-wrap">
           {/* ── Values table ── */}
           <div className="card preview-card">
-            <h3 className="section-title">LFL Forecast — Quarterly</h3>
+            <h3 className="section-title">LFL Forecast — Quarterly (Rs. Lakhs)</h3>
             <p className="growth-note" style={{marginBottom:8}}>Live LFL estimate, updates as you edit growth rates.</p>
             <div className="table-scroll">
               <table className="growth-table preview-table">

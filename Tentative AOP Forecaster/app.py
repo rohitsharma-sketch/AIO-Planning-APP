@@ -4,7 +4,7 @@ Run: uvicorn app:app --reload --port 8000
 """
 import json, os, uuid, shutil
 from typing import Optional
-from fastapi import FastAPI, UploadFile, HTTPException, Body, Request, APIRouter
+from fastapi import FastAPI, HTTPException, Body, Request, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -83,22 +83,6 @@ def _get_actor(request: Request):
         return u.id, u.role
     finally:
         session.close()
-
-
-@router.post("/api/upload")
-async def upload(file: UploadFile):
-    if not file.filename.endswith(".xlsx"):
-        raise HTTPException(400, "Only .xlsx files accepted")
-    session_id = str(uuid.uuid4())
-    os.makedirs(_session_dir(session_id), exist_ok=True)
-    with open(_input_path(session_id), "wb") as f:
-        f.write(await file.read())
-    try:
-        info = get_file_info(_input_path(session_id))
-    except Exception as e:
-        shutil.rmtree(_session_dir(session_id), ignore_errors=True)
-        raise HTTPException(422, f"Could not parse file: {e}")
-    return {"session_id": session_id, **info}
 
 
 class RunRequest(BaseModel):

@@ -123,22 +123,6 @@ export default function App() {
     adoptSession(await res.json())
   }
 
-  async function handleUpload(file) {
-    setError(null)
-    const fd = new FormData()
-    fd.append('file', file)
-    const res = await fetch(apiUrl('/api/upload'), { method: 'POST', body: fd })
-    if (!res.ok) {
-      const err = await res.json()
-      const detail = err.detail
-      const msg = Array.isArray(detail)
-        ? detail.map(d => d.msg || JSON.stringify(d)).join('; ')
-        : (typeof detail === 'string' ? detail : JSON.stringify(detail) || 'Upload failed')
-      throw new Error(msg)
-    }
-    adoptSession(await res.json())
-  }
-
   async function handleRun(palette = 'classic', includeDebug = false, growthOverrides = null, overallOverride = null) {
     setError(null)
     setRunning(true)
@@ -220,7 +204,7 @@ export default function App() {
 
         {step === 0 && (showEditor
           ? <PlanningInputsEditor onBack={() => setShowEditor(false)} />
-          : <UploadStep onUpload={handleUpload} onUseDb={handleUseDb} onEditInputs={() => setShowEditor(true)} />
+          : <UploadStep onUseDb={handleUseDb} onEditInputs={() => setShowEditor(true)} />
         )}
 
         {step === 1 && session && rates && (
