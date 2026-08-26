@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getClusterProfiles, putClusterProfiles, getAppState, updateCalendarFestivals } from '../../lib/api'
+import { getClusterProfiles, putClusterProfiles, getAppState, updateCalendarFestivals, listCalendarLibrary, getCalendar } from '../../lib/api'
 import { generateMappings, validate, computeMonthly, buildFestMap } from '../../lib/engine'
 import { parseDate, fmtISO, fmtDisp, calDiff, weekNum } from '../../lib/dateUtils'
 import ClusterTabs from './ClusterTabs'
@@ -8,7 +8,7 @@ import BulkAdjustPanels from './BulkAdjustPanels'
 import OutputSection from './OutputSection'
 import CalendarLibrary from './CalendarLibrary'
 import ChangeLogViewer from './ChangeLogViewer'
-import { DEFAULT_FESTIVALS, applyYearToProfiles, yearSyncMessage } from '../../lib/festivalData'
+import { DEFAULT_FESTIVALS, applyYearToProfiles, yearSyncMessage, resolveFestivalDefaults } from '../../lib/festivalData'
 
 let _nextFestivalId = 1000
 
@@ -436,6 +436,56 @@ export default function CalendarisationTab({ isPlanner }) {
     }])
   }
 
+  // A festival picked from the Festival Name autocomplete (FestivalTable's
+  // pickSuggestion) auto-copies into every OTHER saved/locked calendar that
+  // has a cluster with this same name - each template gets the date resolved
+  // for ITS OWN refYear/futYear (resolveFestivalDefaults), not a copy of the
+  // date just entered here. Purely additive: a template whose matching
+  // cluster already has a festival of this name is left untouched (no
+  // overwrite of anything the user already has), and the currently-previewed
+  // template is skipped here since persist()'s own autosave already covers
+  // it. Best-effort per template - one template failing to update (e.g.
+  // deleted from another tab) doesn't block the others.
+  async function handleFestivalPicked(name) {
+    const clusterName = profiles[activeIdx]?.name
+    if (!clusterName) return
+    let items
+    try {
+      items = await listCalendarLibrary()
+    } catch {
+      return
+    }
+    let updated = 0
+    let failed = 0
+    for (const item of items) {
+      if (item.id === previewCalendarId) continue
+      try {
+        const full = await getCalendar(item.id)
+        const clusters = full.clusters || []
+        const ci = clusters.findIndex(c => c.name === clusterName)
+        if (ci < 0) continue
+        const festivals = clusters[ci].festivals || []
+        if (festivals.some(f => f.name === name)) continue
+        const perYear = resolveFestivalDefaults(name, full.refYear, full.futYear)
+        if (!perYear) continue
+        const maxId = festivals.reduce((m, f) => Math.max(m, Number(f.id) || 0), 0)
+        const nextClusters = clusters.map((c, i) => i === ci
+          ? { ...c, festivals: [...festivals, { id: maxId + 1, name, ...perYear }] }
+          : c)
+        await updateCalendarFestivals(item.id, { clusters: nextClusters })
+        updated++
+      } catch {
+        failed++
+      }
+    }
+    if (updated || failed) {
+      const parts = []
+      if (updated) parts.push(`copied into ${updated} other saved template${updated === 1 ? '' : 's'}`)
+      if (failed) parts.push(`${failed} failed`)
+      setStatus({ ok: failed === 0, msg: `"${name}" added to "${clusterName}" — ${parts.join(', ')}.` })
+    }
+  }
+
   if (!profiles.length) return <div className="module-panel">Loading…</div>
 
   return (
@@ -468,7 +518,7 @@ export default function CalendarisationTab({ isPlanner }) {
                 onRegionChange={handleRegionChange} onCopyFrom={handleCopyFrom} isPlanner={isPlanner} />
               <FestivalTable festivals={profiles[activeIdx].festivals} onChange={handleFestivalsChange}
                 onAdd={handleAddFestival} onReset={handleResetFestivals} onBulkSet={handleHeaderBulk}
-                onDayFieldChange={handleDayFieldChange} isPlanner={isPlanner}
+                onDayFieldChange={handleDayFieldChange} onFestivalPicked={handleFestivalPicked} isPlanner={isPlanner}
                 refYear={refYear} futYear={futYear} />
             </div>
           )}

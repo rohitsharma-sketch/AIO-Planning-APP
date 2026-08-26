@@ -7,7 +7,7 @@ const DAY_COLS = [
   ['post', 'Post (days)', 'Days after the core festival', 0],
 ]
 
-export default function FestivalTable({ festivals, onChange, onAdd, onReset, onBulkSet, onDayFieldChange, isPlanner, refYear, futYear }) {
+export default function FestivalTable({ festivals, onChange, onAdd, onReset, onBulkSet, onDayFieldChange, onFestivalPicked, isPlanner, refYear, futYear }) {
   const [dragIdx, setDragIdx] = useState(null)
   const [dragOverIdx, setDragOverIdx] = useState(null)
   // Header bulk-set boxes, one per day column. Kept as strings so an empty box
@@ -65,6 +65,11 @@ export default function FestivalTable({ festivals, onChange, onAdd, onReset, onB
     onChange(next)
     setSuggestIdx(null)
     setSuggestions([])
+    // Only a catalog pick (real FESTIVAL_DB dates, not a hand-typed custom
+    // name) is eligible to auto-copy into other saved templates - see
+    // handleFestivalPicked in index.jsx. A custom name has no per-year dates
+    // to resolve for another template's own ref/fut period.
+    if (defaults) onFestivalPicked?.(name)
   }
 
   // Pre/Core/Post edits cascade to every OTHER cluster's festival with the

@@ -63,6 +63,17 @@ export const FESTIVAL_DB = [
   { name:'Chhath Puja',        cat:'r', aliases:['chhath','chatth puja','surya shashti'], ref:'2026-10-27', fut:'2027-10-16', pre:3, core:4, post:1, regions:['north','east'] },
   { name:'Guru Nanak Jayanti', cat:'r', aliases:['gurpurab','guru nanak birthday'], ref:'2026-11-05', fut:'2027-11-24', pre:3, core:1, post:2,  regions:['north','punjab'] },
   { name:'Christmas',          cat:'r', aliases:['xmas','christmas day'],           ref:'2026-12-25', fut:'2027-12-25', pre:7, core:2, post:5,  regions:['all'] },
+  // Nuakhai (Odisha's harvest festival) falls on Panchami of Bhadrapada Shukla
+  // Paksha - the tithi immediately after Ganesh Chaturthi (Chaturthi) - so its
+  // date is derived as Ganesh Chaturthi + 1 day rather than independently
+  // sourced. Verify against a local source before relying on it for a specific
+  // year; the +1 relationship can occasionally shift by a day around a
+  // kshaya/adhika tithi.
+  { name:'Nuakhai',            cat:'r', aliases:['nuakhai bhetghat','nua khai'],    ref:'2026-08-23', fut:'2027-09-11', pre:2, core:1, post:2,  regions:['east','odisha'] },
+  // Kali Puja (Bengal) falls on the same Amavasya as Diwali/Lakshmi Puja -
+  // same date every year, so it is derived directly from the Diwali entry
+  // above rather than independently sourced.
+  { name:'Kali Puja',          cat:'r', aliases:['shyama puja','deepannwita kali puja'], ref:'2026-10-20', fut:'2027-10-08', pre:2, core:1, post:1, regions:['east','bengal'] },
 ];
 
 // ─── Multi-Year Festival Date Lookup (2025–2028) ──────────────────────────────
@@ -113,6 +124,10 @@ export const FESTIVAL_DATES = {
   'Chhath Puja':       {'2020':'2020-11-20','2021':'2021-11-10','2022':'2022-10-30','2023':'2023-11-19','2024':'2024-11-07','2025':'2025-10-26','2026':'2026-10-27','2027':'2027-10-16','2028':'2028-11-02'},
   'Guru Nanak Jayanti':{'2020':'2020-11-30','2021':'2021-11-19','2022':'2022-11-08','2023':'2023-11-27','2024':'2024-11-15','2025':'2025-11-05','2026':'2026-11-05','2027':'2027-11-24','2028':'2028-11-13'},
   'Christmas':         {'2020':'2020-12-25','2021':'2021-12-25','2022':'2022-12-25','2023':'2023-12-25','2024':'2024-12-25','2025':'2025-12-25','2026':'2026-12-25','2027':'2027-12-25','2028':'2028-12-25'},
+  // Derived as Ganesh Chaturthi + 1 day - see the FESTIVAL_DB comment above.
+  'Nuakhai':           {'2020':'2020-08-23','2021':'2021-09-11','2022':'2022-09-01','2023':'2023-09-20','2024':'2024-09-08','2025':'2025-08-28','2026':'2026-08-23','2027':'2027-09-11','2028':'2028-08-31'},
+  // Derived as identical to Diwali - see the FESTIVAL_DB comment above.
+  'Kali Puja':         {'2020':'2020-11-14','2021':'2021-11-04','2022':'2022-10-24','2023':'2023-11-12','2024':'2024-10-31','2025':'2025-10-20','2026':'2026-10-20','2027':'2027-10-08','2028':'2028-10-28'},
 };
 
 // ─── Festival Name Autocomplete ───────────────────────────────────────────────
