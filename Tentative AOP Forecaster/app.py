@@ -200,6 +200,24 @@ def session_from_db():
     return {"session_id": session_id, "from_db": True, **info}
 
 
+@router.get("/api/config/base-sales-reindexed")
+def base_sales_reindexed():
+    """The OTHER LFL base-sales source for ReviewStep's actuals-source toggle:
+    Calendar Engine's own saved month-wise reindex output, not AOP's own
+    independent replica of that same day-shift logic (see
+    db/reindexed_base_sales.py for why these are two genuinely different
+    computations today, not just two names for the same thing). Stateless -
+    doesn't need a session_id, reads straight from the DB."""
+    from db.base import SessionLocal
+    from db.reindexed_base_sales import get_reindexed_lfl_base_sales
+
+    db_session = SessionLocal()
+    try:
+        return get_reindexed_lfl_base_sales(db_session)
+    finally:
+        db_session.close()
+
+
 DB_SYNC_JOBS = [
     ("site_master", "data_lake_site_master"),
     ("store_master_xlsx", "store_master_xlsx"),

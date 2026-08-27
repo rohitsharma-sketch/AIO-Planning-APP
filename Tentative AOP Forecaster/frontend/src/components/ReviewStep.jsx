@@ -1,5 +1,6 @@
-import React, { useState, useCallback, useMemo } from 'react'
+import React, { useState, useCallback, useMemo, useEffect } from 'react'
 import './ReviewStep.css'
+import { apiUrl } from '../lib/apiBase'
 
 const MONTHS  = ["Mar'27","Apr'27","May'27","Jun'27","Jul'27","Aug'27","Sep'27","Oct'27","Nov'27","Dec'27","Jan'28","Feb'28","Mar'28"]
 const DIVS    = ['GM','KIDS','LADIES','MENS','RETAIL']
@@ -12,6 +13,30 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
 
   const [includeDebug, setIncludeDebug] = useState(false)
   const [quick,        setQuick]        = useState(initQuick)
+
+  // Actuals-source toggle for the LFL preview below: 'own' is AOP's own
+  // store_actuals sync (base_sales.LFL, already in `session`) - 'reindexed'
+  // is Calendar Engine's own saved month-wise reindex output, fetched lazily
+  // on first switch so a review that never touches the toggle never pays for
+  // it. These are two INDEPENDENT computations of "the same" LFL actuals
+  // (see db/reindexed_base_sales.py) - the toggle exists so a planner can
+  // compare AOP's replica against Calendar Engine's authoritative output.
+  const [actualsSource, setActualsSource] = useState('own')
+  const [reindexed, setReindexed] = useState(null)      // { base_sales, hasAttribute, availableMonths, note }
+  const [reindexedLoading, setReindexedLoading] = useState(false)
+  const [reindexedError, setReindexedError] = useState(null)
+
+  useEffect(() => {
+    if (actualsSource !== 'reindexed' || reindexed || reindexedLoading) return
+    setReindexedLoading(true)
+    fetch(apiUrl('/api/config/base-sales-reindexed'))
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+      .then(data => setReindexed(data))
+      .catch(e => setReindexedError(e.message))
+      .finally(() => setReindexedLoading(false))
+  }, [actualsSource, reindexed, reindexedLoading])
+
+  const activeLflBase = actualsSource === 'reindexed' ? (reindexed?.base_sales ?? null) : (base_sales?.LFL ?? null)
 
   const isLocked   = (row, m) => cellLocks[row]?.[m] ?? false
   const isChanged  = (row, m) => {
@@ -116,7 +141,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
   const QTR_LABELS = [...QTRS.map(q => q.label), 'Grand TTL']
 
   const livePreview = useMemo(() => {
-    if (!base_sales) return null
+    if (!activeLflBase) return null
     // base_sales (and everything derived from it here) is already Rs Lakhs -
     // the app's one consistent unit everywhere else (AOP Review's own inputs,
     // the AOP overrides grid, division-aop-summary). Generic K/M scaling on
@@ -129,7 +154,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
     // Compute LFL monthly forecast per division
     const lflByDiv = {}
     for (const div of DIVS) {
-      const base = base_sales?.LFL?.[div] ?? {}
+      const base = activeLflBase?.[div] ?? {}
       lflByDiv[div] = {}
       for (const m of MONTHS) {
         const b = base[m] ?? 0
@@ -142,7 +167,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
     // this forecast is built from) so the two can be read side by side per
     // cell instead of the LY figure requiring a separate lookup elsewhere.
     const rows = DIVS.map(div => {
-      const base = base_sales?.LFL?.[div] ?? {}
+      const base = activeLflBase?.[div] ?? {}
       const qVals = {}, lyVals = {}
       let grand = 0, lyGrand = 0
       for (const { label, months } of QTRS) {
@@ -167,7 +192,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
 
     // Effective growth % per division per quarter
     const gRows = DIVS.map(div => {
-      const base = base_sales?.LFL?.[div] ?? {}
+      const base = activeLflBase?.[div] ?? {}
       const gVals = {}
       let totalBase = 0, totalFcst = 0
       for (const { label, months } of QTRS) {
@@ -183,18 +208,18 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
     // Grand TTL growth row
     const gGrand = {}
     for (const { label, months } of QTRS) {
-      const qBase = DIVS.reduce((s, d) => s + months.reduce((ss, m) => ss + (base_sales?.LFL?.[d]?.[m] ?? 0), 0), 0)
+      const qBase = DIVS.reduce((s, d) => s + months.reduce((ss, m) => ss + (activeLflBase?.[d]?.[m] ?? 0), 0), 0)
       const qFcst = DIVS.reduce((s, d) => s + months.reduce((ss, m) => ss + (lflByDiv[d]?.[m] ?? 0), 0), 0)
       gGrand[label] = qBase > 0 ? ((qFcst - qBase) / qBase) * 100 : 0
     }
-    const allBase = DIVS.reduce((s, d) => s + MONTHS.reduce((ss, m) => ss + (base_sales?.LFL?.[d]?.[m] ?? 0), 0), 0)
+    const allBase = DIVS.reduce((s, d) => s + MONTHS.reduce((ss, m) => ss + (activeLflBase?.[d]?.[m] ?? 0), 0), 0)
     const allFcst = DIVS.reduce((s, d) => s + MONTHS.reduce((ss, m) => ss + (lflByDiv[d]?.[m] ?? 0), 0), 0)
     gGrand['Grand TTL'] = allBase > 0 ? ((allFcst - allBase) / allBase) * 100 : 0
 
     const fmtG = v => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
 
     return { rows, grandRow, lyGrandRow, gRows, gGrand, fmt, fmtG }
-  }, [rates, base_sales])
+  }, [rates, activeLflBase])
 
   const handleRun = () => {
     const { growth_overrides, overall_override } = buildOverrides()
@@ -321,6 +346,29 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
               Hover any cell to reveal its 🔒 lock. Locked cells are skipped by "All months →". Divisions and Overall are independent.
             </p>
         }
+      </div>
+
+      <div className="actuals-source-toggle">
+        <span className="actuals-source-label">LFL actuals source:</span>
+        <div className="actuals-source-btns">
+          <button
+            className={`actuals-source-btn ${actualsSource === 'own' ? 'active' : ''}`}
+            onClick={() => setActualsSource('own')}
+          >Store Sync</button>
+          <button
+            className={`actuals-source-btn ${actualsSource === 'reindexed' ? 'active' : ''}`}
+            onClick={() => setActualsSource('reindexed')}
+          >Calendar Engine Reindex</button>
+        </div>
+        {actualsSource === 'reindexed' && reindexedLoading && (
+          <span className="actuals-source-status">Loading Calendar Engine's reindexed sales…</span>
+        )}
+        {actualsSource === 'reindexed' && reindexedError && (
+          <span className="actuals-source-status actuals-source-status--err">Couldn't load: {reindexedError}</span>
+        )}
+        {actualsSource === 'reindexed' && reindexed?.note && (
+          <span className="actuals-source-status actuals-source-status--warn">{reindexed.note}</span>
+        )}
       </div>
 
       {livePreview && (

@@ -290,7 +290,7 @@ def pivot_actuals(actuals_df, aop_df=None):
         if s not in out:
             out[s] = {}
         # Store Actuals can now carry more than one row per (store, division) -
-        # one per Attribute/SEASON_TYPE (see to_workbook.py) - so this has to
+        # one per Attribute/ATTRIBUTE1 (see to_workbook.py) - so this has to
         # ACCUMULATE across rows, not assign. A plain `out[s][d] = {...}`
         # silently dropped every attribute's total but the last one iterated,
         # corrupting the real forecast base the moment a store/division had
@@ -1311,7 +1311,7 @@ def get_file_info(input_file):
         act = act.dropna(subset=["Store"])
         act["Store"]    = act["Store"].astype(str).str.strip()
         act["Division"] = act["Division"].astype(str).str.strip() if "Division" in act.columns else ""
-        # Attribute (SEASON_TYPE) is a newer column - a file built before
+        # Attribute (ATTRIBUTE1) is a newer column - a file built before
         # to_workbook.py started writing it won't have it, and should behave
         # exactly as before (no filtering at all, every row counts every
         # quarter) rather than error or silently drop every Q1 row.

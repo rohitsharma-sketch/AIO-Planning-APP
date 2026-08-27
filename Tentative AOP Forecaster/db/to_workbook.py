@@ -70,7 +70,7 @@ def build_workbook_from_db(session: Session, out_path: str) -> str:
                  [[s.store_id, s.ref_store, s.cluster_key, s.tag] for s in stores])
 
     # Store Actuals — pivot input_values(store_actuals) to Store x Division x
-    # Attribute x FY27 month grid. row_key carries the SEASON_TYPE the sync
+    # Attribute x FY27 month grid. row_key carries the ATTRIBUTE1 value the sync
     # wrote (see store_actuals_sync.py) - grouping includes it now so two rows
     # for the same store/division/month but different attributes don't
     # collapse into one one (the pre-attribute pivot only grouped by
