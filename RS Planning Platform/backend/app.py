@@ -97,6 +97,23 @@ def reload_store_master():
 LANDING_PAGE_URL = "http://localhost:7800/"
 
 
+# No-cache HTML entry points — every page below is either an auth screen or
+# an SPA's index.html. Unlike the hashed JS/CSS under */assets (safe to cache
+# forever: a rebuild changes the filename, so there's never a staleness
+# risk), these get requested by their bare, unchanging path - a browser that
+# caches them can keep serving a build from before the last code change even
+# after a normal reload, and only a genuine hard-reload (which most users
+# don't know to do) forces a re-fetch. Explicit no-store makes every reload
+# behave like a hard reload for these specific paths. Confirmed with the
+# user 2026-08-27: "make sure from now on for any app i want changes to be
+# reflected if i hard reload the landing page."
+_NO_CACHE_HEADERS = {"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"}
+
+
+def _html_no_cache(path: str) -> FileResponse:
+    return FileResponse(path, headers=_NO_CACHE_HEADERS)
+
+
 # Bare root has no page of its own — route by session state instead of 404ing.
 @app.get("/")
 def root(request: Request):
@@ -112,7 +129,7 @@ def login_page(request: Request):
     # prior visit on this device) — skip the form instead of asking again.
     if get_session_user(request) is not None:
         return RedirectResponse(LANDING_PAGE_URL)
-    return FileResponse(os.path.join(_HERE, "static", "login.html"))
+    return _html_no_cache(os.path.join(_HERE, "static", "login.html"))
 
 
 @app.get("/reset-password")
@@ -121,14 +138,14 @@ def reset_password_page():
     # server-side by /api/auth/reset-password (auth/security.py's
     # RESET_MAX_AGE). Getting here with no or a stale token still renders
     # the page; the form submit is what surfaces "invalid or expired".
-    return FileResponse(os.path.join(_HERE, "static", "reset-password.html"))
+    return _html_no_cache(os.path.join(_HERE, "static", "reset-password.html"))
 
 
 @app.get("/plan-cycles")
 def plan_cycles_page(request: Request):
     if get_session_user(request) is None:
         return RedirectResponse(f"/login?next=/plan-cycles")
-    return FileResponse(os.path.join(_HERE, "static", "plan-cycles.html"))
+    return _html_no_cache(os.path.join(_HERE, "static", "plan-cycles.html"))
 
 
 # Serve both existing frontends' built bundles under their own paths
@@ -147,14 +164,14 @@ if os.path.isdir(_calendar_dist):
 
 @app.get("/aop/{full_path:path}", include_in_schema=False)
 def aop_spa(full_path: str):
-    return FileResponse(os.path.join(_aop_dist, "index.html"))
+    return _html_no_cache(os.path.join(_aop_dist, "index.html"))
 
 
 @app.get("/planning/{full_path:path}", include_in_schema=False)
 def planning_spa(full_path: str):
-    return FileResponse(os.path.join(_planning_dist, "index.html"))
+    return _html_no_cache(os.path.join(_planning_dist, "index.html"))
 
 
 @app.get("/calendar/{full_path:path}", include_in_schema=False)
 def calendar_spa(full_path: str):
-    return FileResponse(os.path.join(_calendar_dist, "index.html"))
+    return _html_no_cache(os.path.join(_calendar_dist, "index.html"))

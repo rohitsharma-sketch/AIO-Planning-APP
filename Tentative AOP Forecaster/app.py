@@ -490,6 +490,12 @@ _dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 if os.path.isdir(_dist):
     app.mount("/assets", StaticFiles(directory=os.path.join(_dist, "assets")), name="assets")
 
+    # index.html is requested by a bare, unchanging path - unlike the hashed
+    # JS/CSS under /assets (safe to cache forever, since a rebuild changes
+    # the filename), a cached index.html can keep serving a build from
+    # before the last code change even after a normal reload. Explicit
+    # no-store makes every reload behave like a hard reload here.
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa_fallback(full_path: str):
-        return FileResponse(os.path.join(_dist, "index.html"))
+        return FileResponse(os.path.join(_dist, "index.html"),
+                             headers={"Cache-Control": "no-store, no-cache, must-revalidate", "Pragma": "no-cache"})
