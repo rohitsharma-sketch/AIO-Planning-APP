@@ -323,14 +323,26 @@ def pivot_actuals(actuals_df, aop_df=None):
 
 
 def build_aop_overrides(aop_df):
-    """{(store, div, fy28_month): value} from the AOP (Optional) sheet's Apr'27..Mar'28
-    columns — a direct, absolute override of the final AOP forecast for that cell.
-    Blank cells are left alone (the engine computes them as usual); Mar'27 is excluded
-    here — it is an actuals fallback, handled by pivot_actuals instead."""
+    """{(store, div, fy28_month): value} from the AOP (Optional) sheet's Mar'27..Mar'28
+    columns — a direct, absolute override of the final AOP forecast for that cell
+    (build_df() applies it in place of engine_val + adjustments entirely, not
+    blended with them). Blank cells are left alone (the engine computes them as
+    usual).
+
+    Mar'27 WAS excluded here (pre-2026-08-27) on the theory that it's purely an
+    actuals fallback, handled by pivot_actuals() instead - that meant a Mar'27
+    override typed into the AOP (Optional) sheet was silently dropped before it
+    ever reached build_df(), which otherwise already applies an override for
+    any FY28 month unconditionally. Mar'27 is a real forecast month like any
+    other and needs to be override-able the same way. Note pivot_actuals()
+    separately reads this SAME sheet's Mar'27 column too, but only as an
+    actuals-BASE fallback for a store/div whose real actual is zero/missing -
+    that's a distinct use of the same source cell, not something this override
+    conflicts with (Base and Forecast are different columns downstream)."""
     overrides = {}
     if aop_df is None:
         return overrides
-    override_months = [m for m in FY28_M if m != "Mar'27" and m in aop_df.columns]
+    override_months = [m for m in FY28_M if m in aop_df.columns]
     for _, row in aop_df.iterrows():
         s = str(row["Store"]).strip()
         d = str(row.get("Division","")).strip().upper()

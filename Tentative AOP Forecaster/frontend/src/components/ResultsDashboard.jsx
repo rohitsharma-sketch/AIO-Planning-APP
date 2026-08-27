@@ -52,7 +52,14 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
     setLeaves(null); setDataErr(null); setTypeFilter([])
     fetch(apiUrl(`/api/data/${sid}`))
       .then(r => r.ok ? r.json() : r.json().then(e => { throw new Error(e.detail || 'Failed to load detail data') }))
-      .then(rows => setLeaves(rows.map(toLeaf)))
+      // NOT rows.map(toLeaf) - Array.map calls its callback as (element, index,
+      // array), and toLeaf's 2nd param is `scale` (default 0.01) - passing
+      // toLeaf directly silently fed each row's ARRAY INDEX in as scale
+      // instead of 0.01, so every row past the first was multiplied by its
+      // own position (row 500 scaled by 500x instead of 0.01x). Summed across
+      // ~1,500 store x division rows, that's exactly the kind of
+      // astronomically wrong total that showed up in the KPI cards.
+      .then(rows => setLeaves(rows.map(r => toLeaf(r))))
       .catch(e => setDataErr(e.message))
   }, [session?.session_id, runKey])
 
