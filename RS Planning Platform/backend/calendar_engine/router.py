@@ -513,25 +513,41 @@ def get_salesdata_link_selection(source_type: str, user: dict = Depends(require_
     try:
         row = session.get(SalesdataLinkSelection, source_type)
         if row is None:
-            return {"months": [], "path": None, "syncedAt": None}
-        return {"months": row.months, "path": row.path, "syncedAt": row.synced_at.isoformat()}
+            return {"months": [], "path": None, "syncedAt": None, "extraDims": [], "metric": None}
+        return {"months": row.months, "path": row.path, "syncedAt": row.synced_at.isoformat(),
+                "extraDims": row.extra_dims, "metric": row.metric}
     finally:
         session.close()
 
 
 @router.put("/salesdata-link-selection/{source_type}")
 def put_salesdata_link_selection(source_type: str, body: dict = Body(...), actor: dict = Depends(require_role("planner"))):
+    """Partial update - every field is optional so this doubles as both the
+    "Sync Range" write (months/path/syncedAt) and the "customise output
+    fields" write (extraDims/metric, saved the moment a planner changes them
+    in Run Reindex - see CalendarisedSalesTab/index.jsx) without either one
+    clobbering fields the other doesn't send."""
     if source_type not in ("mw", "dw"):
         raise HTTPException(404, "source_type must be 'mw' or 'dw'")
     session = SessionLocal()
     try:
         row = session.get(SalesdataLinkSelection, source_type)
         if row is None:
-            row = SalesdataLinkSelection(source_type=source_type)
+            row = SalesdataLinkSelection(
+                source_type=source_type, months=[], path="",
+                synced_at=datetime.datetime.now(datetime.timezone.utc), extra_dims=[], metric=None,
+            )
             session.add(row)
-        row.months = body["months"]
-        row.path = body["path"]
-        row.synced_at = datetime.datetime.fromisoformat(body["syncedAt"])
+        if "months" in body:
+            row.months = body["months"]
+        if "path" in body:
+            row.path = body["path"]
+        if "syncedAt" in body:
+            row.synced_at = datetime.datetime.fromisoformat(body["syncedAt"])
+        if "extraDims" in body:
+            row.extra_dims = body["extraDims"]
+        if "metric" in body:
+            row.metric = body["metric"]
         session.commit()
         return {"ok": True}
     finally:

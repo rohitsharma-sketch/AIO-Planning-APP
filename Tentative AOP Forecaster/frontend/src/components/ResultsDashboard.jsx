@@ -9,6 +9,15 @@ import { toLeaf, MONTHS, TYPES } from '../lib/tags'
 import { apiUrl } from '../lib/apiBase'
 import './ResultsDashboard.css'
 
+// FY28_M = [Mar'27 (stub anchor), Apr'27..Jun'27 (Q1), Jul'27..Sep'27 (Q2),
+// Oct'27..Dec'27 (Q3), Jan'28..Mar'28 (Q4)] — quarter shortcuts skip the stub.
+const QUARTERS = [
+  { label: 'Q1', months: MONTHS.slice(1, 4) },
+  { label: 'Q2', months: MONTHS.slice(4, 7) },
+  { label: 'Q3', months: MONTHS.slice(7, 10) },
+  { label: 'Q4', months: MONTHS.slice(10, 13) },
+]
+
 const NAVY   = '#1F3864'
 const NAVY2  = '#2F5597'
 const LIGHT  = '#A8C0E8'
@@ -43,13 +52,14 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
   const [leaves, setLeaves]       = useState(null)
   const [dataErr, setDataErr]     = useState(null)
   const [typeFilter, setTypeFilter] = useState([])      // [] = all types
+  const [monthFilter, setMonthFilter] = useState([])    // [] = all months
   const [showLabels, setShowLabels] = useState(true)
 
   // Row-level detail (store × division) — shared by the chart filters and the drill table
   useEffect(() => {
     const sid = session?.session_id
     if (!sid) return
-    setLeaves(null); setDataErr(null); setTypeFilter([])
+    setLeaves(null); setDataErr(null); setTypeFilter([]); setMonthFilter([])
     fetch(apiUrl(`/api/data/${sid}`))
       .then(r => r.ok ? r.json() : r.json().then(e => { throw new Error(e.detail || 'Failed to load detail data') }))
       // NOT rows.map(toLeaf) - Array.map calls its callback as (element, index,
@@ -70,6 +80,16 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
     return next.length === TYPES.length ? [] : next.length ? next : [t]
   })
 
+  const monthOn = m => monthFilter.length === 0 || monthFilter.includes(m)
+  const toggleMonth = m => setMonthFilter(f => {
+    const cur = f.length ? f : MONTHS
+    const next = cur.includes(m) ? cur.filter(x => x !== m) : [...cur, m]
+    return next.length === MONTHS.length ? [] : next.length ? next : [m]
+  })
+  const setQuarter = months => setMonthFilter(f =>
+    f.length === months.length && months.every(m => f.includes(m)) ? [] : months
+  )
+
   // Chart + KPI datasets — recomputed from filtered rows when detail is loaded;
   // fall back to the API's own unfiltered aggregates until then (same fallback
   // the charts already used - the KPI row now shares it too, so "Base (Actuals)"/
@@ -79,24 +99,29 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
   const charts = useMemo(() => {
     if (!leaves) return { monthly: results.monthly, divisions: results.divisions, store_types: results.store_types, summary }
     const sel = leaves.filter(r => typeOn(r.Type))
-    const monthly = MONTHS.map((month, i) => ({
-      month,
+    const monthIdx = MONTHS.map((m, i) => i).filter(i => monthOn(MONTHS[i]))
+    // Sum only the selected months' base/forecast for one row — the Monthly
+    // chart shows just the selected months, everything else (KPIs, division
+    // breakdown, store-type pie) rolls up totals over that same subset.
+    const sumSel = (r, arr) => monthIdx.reduce((s, i) => s + arr[i], 0)
+    const monthly = monthIdx.map(i => ({
+      month: MONTHS[i],
       base:     +sel.reduce((s, r) => s + r.mb[i], 0).toFixed(2),
       forecast: +sel.reduce((s, r) => s + r.m[i], 0).toFixed(2),
     }))
     const divisions = DIVS.map(division => {
       const rs = sel.filter(r => r.Division === division)
-      const base = rs.reduce((s, r) => s + r.base, 0), forecast = rs.reduce((s, r) => s + r.fcst, 0)
+      const base = rs.reduce((s, r) => s + sumSel(r, r.mb), 0), forecast = rs.reduce((s, r) => s + sumSel(r, r.m), 0)
       return { division, base: +base.toFixed(2), forecast: +forecast.toFixed(2), growth_pct: base > 0 ? +((forecast / base - 1) * 100).toFixed(1) : 0 }
     })
     const store_types = TYPES.filter(typeOn).map(type => {
       const rs = leaves.filter(r => r.Type === type)
-      return { type, base: +rs.reduce((s, r) => s + r.base, 0).toFixed(2), forecast: +rs.reduce((s, r) => s + r.fcst, 0).toFixed(2), count: new Set(rs.map(r => r.Store)).size }
+      return { type, base: +rs.reduce((s, r) => s + sumSel(r, r.mb), 0).toFixed(2), forecast: +rs.reduce((s, r) => s + sumSel(r, r.m), 0).toFixed(2), count: new Set(rs.map(r => r.Store)).size }
     })
     // toLeaf's default scale (0.01) already puts .base/.fcst in ₹ Cr, matching
     // summary.base_cr/forecast_cr's own unit - no rescale needed here.
-    const base_cr = sel.reduce((s, r) => s + r.base, 0)
-    const forecast_cr = sel.reduce((s, r) => s + r.fcst, 0)
+    const base_cr = sel.reduce((s, r) => s + sumSel(r, r.mb), 0)
+    const forecast_cr = sel.reduce((s, r) => s + sumSel(r, r.m), 0)
     const filteredSummary = {
       base_cr, forecast_cr,
       growth_pct: base_cr > 0 ? (forecast_cr / base_cr - 1) * 100 : 0,
@@ -106,10 +131,19 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
       n_nso:  new Set(leaves.filter(r => r.Type === 'NSO'  && typeOn(r.Type)).map(r => r.Store)).size,
     }
     return { monthly, divisions, store_types, summary: filteredSummary }
-  }, [leaves, typeFilter, results, summary])
+  }, [leaves, typeFilter, monthFilter, results, summary])
 
   const { monthly, divisions, store_types, summary: kpiSummary } = charts
   const filterLabel = typeFilter.length ? typeFilter.join(' + ') : 'All store types'
+  const monthsChrono = MONTHS.filter(m => monthOn(m))   // click order -> fiscal order
+  const monthLabel = monthFilter.length === 0 ? 'Mar\'27 – Mar\'28'
+    : monthsChrono.length === 1 ? monthsChrono[0]
+    : `${monthsChrono[0]} – ${monthsChrono[monthsChrono.length - 1]} (${monthsChrono.length} mo)`
+  // Same-index LY month (Base column) is exactly one fiscal year behind its TY counterpart.
+  const toLY = m => m.replace(/'(\d\d)$/, (_, yy) => `'${String(+yy - 1).padStart(2, '0')}`)
+  const baseLabel = monthFilter.length === 0 ? 'Mar\'26 – Mar\'27'
+    : monthsChrono.length === 1 ? toLY(monthsChrono[0])
+    : `${toLY(monthsChrono[0])} – ${toLY(monthsChrono[monthsChrono.length - 1])}`
   const typeCount = t => (leaves ? new Set(leaves.filter(r => r.Type === t).map(r => r.Store)).size : { LfL: summary.n_lfl, Ramp: summary.n_ramp, NSO: summary.n_nso }[t])
 
   return (
@@ -147,8 +181,8 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
           useMemo above) ── */}
       <div className="kpi-row">
         {[
-          { label: 'Base (Actuals)',  value: `₹${fmt(kpiSummary.base_cr)} Cr`,     sub: 'Mar\'26 – Mar\'27' },
-          { label: 'Forecasted AOP', value: `₹${fmt(kpiSummary.forecast_cr)} Cr`, sub: 'Mar\'27 – Mar\'28', primary: true },
+          { label: 'Base (Actuals)',  value: `₹${fmt(kpiSummary.base_cr)} Cr`,     sub: baseLabel },
+          { label: 'Forecasted AOP', value: `₹${fmt(kpiSummary.forecast_cr)} Cr`, sub: monthLabel, primary: true },
           { label: 'Overall growth', value: fmtPct(kpiSummary.growth_pct),         sub: 'Base vs Forecast', pct: true, positive: kpiSummary.growth_pct >= 0 },
           {
             label: 'Total stores', value: kpiSummary.n_stores,
@@ -177,8 +211,30 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
           <input type="checkbox" checked={showLabels} onChange={e => setShowLabels(e.target.checked)} /> Data labels
         </label>
         <span className="chart-filter-note">
-          {dataErr ? `Detail unavailable — ${dataErr}` : !leaves ? 'Loading store detail…' : `Charts: ${filterLabel}`}
+          {dataErr ? `Detail unavailable — ${dataErr}` : !leaves ? 'Loading store detail…' : `Charts: ${filterLabel} · ${monthLabel}`}
         </span>
+      </div>
+
+      {/* ── Month filter: quarter shortcuts + individual month chips ── */}
+      <div className="chart-filter-bar">
+        <span className="sdt-tb-label">Month</span>
+        {QUARTERS.map(q => {
+          const on = q.months.every(m => monthOn(m)) && monthFilter.length > 0 && monthFilter.length <= q.months.length
+          return (
+            <button key={q.label} className={`sdt-chip${on ? ' on' : ''}`} onClick={() => setQuarter(q.months)}
+                    disabled={!leaves && !dataErr} title={`${q.months[0]} – ${q.months[q.months.length - 1]}`}>
+              {q.label}
+            </button>
+          )
+        })}
+        <span className="month-chip-sep" />
+        {MONTHS.map(m => (
+          <button key={m} className={`sdt-chip month-chip${monthOn(m) ? ' on' : ''}`} onClick={() => toggleMonth(m)}
+                  disabled={!leaves && !dataErr} title={`${monthOn(m) ? 'Hide' : 'Show'} ${m}`}>
+            {m}
+          </button>
+        ))}
+        {monthFilter.length > 0 && <button className="sdt-reset" onClick={() => setMonthFilter([])}>Full year</button>}
       </div>
 
       {/* ── Monthly chart ── */}
@@ -204,7 +260,7 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
       {/* ── Division + Store type row ── */}
       <div className="chart-row">
         <div className="card chart-card">
-          <h3 className="section-title">Division breakdown  (₹ Cr) — {filterLabel}</h3>
+          <h3 className="section-title">Division breakdown  (₹ Cr) — {filterLabel} · {monthLabel}</h3>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={divisions} layout="vertical" margin={{ top: 4, right: showLabels ? 48 : 16, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E5EDF7" horizontal={false} />
@@ -223,7 +279,7 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
         </div>
 
         <div className="card chart-card">
-          <h3 className="section-title">Store type forecast share — {filterLabel}</h3>
+          <h3 className="section-title">Store type forecast share — {filterLabel} · {monthLabel}</h3>
           <ResponsiveContainer width="100%" height={240}>
             <PieChart>
               <Pie data={store_types} dataKey="forecast" nameKey="type"

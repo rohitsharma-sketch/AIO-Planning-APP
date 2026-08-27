@@ -27,6 +27,24 @@ FY28_M = ["Mar'27","Apr'27","May'27","Jun'27","Jul'27","Aug'27","Sep'27",
 FY27_M = ["Mar'26","Apr'26","May'26","Jun'26","Jul'26","Aug'26","Sep'26",
           "Oct'26","Nov'26","Dec'26","Jan'27","Feb'27","Mar'27"]
 M_IDX  = {m: i for i, m in enumerate(FY28_M)}
+_MON_NUM = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
+            "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12}
+
+
+def _open_months(as_of=None):
+    """FY27_M labels that have NOT yet fully closed as of `as_of` (defaults
+    to real today) - the current, in-progress calendar month and any later
+    one. A month closes the instant the calendar moves past it (the 1st of
+    the following month) - the exact same cutoff store_actuals_sync.py's
+    _complete_months() already uses to decide what to sync, so the engine
+    and the sync agree on the identical "is this month usable yet" line.
+    pivot_actuals() uses this to refuse a not-yet-closed month's actuals even
+    if a stale/partial sync already wrote something for it into the DB -
+    defence in depth, since the sync-side skip only stops FUTURE partial
+    writes, it can't retroactively hide one that already landed."""
+    as_of = as_of or datetime.date.today()
+    cur = (as_of.year, as_of.month)
+    return {m for m in FY27_M if (2000 + int(m.split("'")[1]), _MON_NUM[m.split("'")[0]]) >= cur}
 
 LFL_TAGS  = {"032 - Stores","080 - Stores","095 - Stores","125 - Stores","3 - Stores",
              "FY26 - Q1","FY26 - Q2","FY26 - Q3"}
@@ -275,14 +293,23 @@ def build_growth_map(growth_df):
     return gmap
 
 # ── Actuals pivot ──────────────────────────────────────────────────────────────
-def pivot_actuals(actuals_df, aop_df=None):
+def pivot_actuals(actuals_df, aop_df=None, open_months=None):
     """{store: {div: {fy27_month: value}}}
     If aop_df is provided (AOP (Optional) sheet), its Mar'27 column patches the
     Mar'27 *actual* for any store-div where the actual is zero/missing (fallback
     mode, unchanged from the legacy Mar27 Targets behaviour) — this feeds the
     base for the Mar'28 forecast. Apr'27..Mar'28 columns are handled separately
     by build_aop_overrides() as direct AOP forecast overrides.
+
+    A month in `open_months` (defaults to _open_months(), i.e. real today)
+    is skipped entirely in the actuals_df loop below — any value synced for
+    it stays untouched in the DB, but the engine treats that month as 0.0
+    (its normal "no data yet" default) until the real calendar moves past it.
+    This does NOT apply to the aop_df Mar'27 patch just below: that's a
+    planner's deliberate manual figure for a month with no real actual yet,
+    the exact case this whole mechanism exists for, not data leaking in early.
     """
+    open_months = _open_months() if open_months is None else open_months
     out = {}
     for _, row in actuals_df.iterrows():
         s = str(row["Store"]).strip()
@@ -299,6 +326,8 @@ def pivot_actuals(actuals_df, aop_df=None):
         # concern; the actual forecast engine always wants the full total.
         vals = out[s].setdefault(d, {m: 0.0 for m in FY27_M})
         for m in FY27_M:
+            if m in open_months:
+                continue
             v = row.get(m)
             if v is not None and v == v:  # not NaN
                 vals[m] += float(v)
@@ -397,7 +426,7 @@ def _ref_fc_for_store(ref, store_info, actuals_pivot, lfl_fc, gmap):
     return fc
 
 
-def pass1b_ramp_forecasts(store_info, actuals_pivot, lfl_fc, gmap):
+def pass1b_ramp_forecasts(store_info, actuals_pivot, lfl_fc, gmap, open_months=None):
     """
     For Ramp stores:
     - Months WITH FY27 actuals  → exactly base × (1 + growth%)
@@ -407,8 +436,19 @@ def pass1b_ramp_forecasts(store_info, actuals_pivot, lfl_fc, gmap):
           division contribution %, scaled to the store's known-actuals magnitude,
           then × (1 + growth%). Base stays 0 so deviation is positive.
         * All other Ramp tags (FY26-*): always have full FY27 actuals; zero stays zero.
+
+    A month in `open_months` (defaults to _open_months(), i.e. real today) is
+    excluded from the ref-store MoM chain below even when prev_derived>0 -
+    that chain is a genuine TY assumption (project this month from the ref
+    store's pattern), which is only valid once real LY data could exist at
+    all. A month that hasn't closed yet has no LY by definition, not "LY
+    happens to be missing" - the two look identical in actual_base (both
+    0.0) but only the latter is fair game to bridge with the ref store's
+    curve. Doesn't touch the actual_base>0 branch just below: that only
+    fires on a real (or deliberately overridden) base value, never a guess.
     """
     PROJ_MISSING = {"FY27 - Q1", "FY27 - Q2"}
+    open_months = _open_months() if open_months is None else open_months
 
     fc = {}
     for store, si in store_info.items():
@@ -443,6 +483,11 @@ def pass1b_ramp_forecasts(store_info, actuals_pivot, lfl_fc, gmap):
 
             fc[store][div] = {}
             prev_derived = 0.0   # running value for MoM chain
+            # (ref_val, derived_val) at the last month the ref store had real data,
+            # within the current MoM-chain run — lets the chain survive a gap in the
+            # ref store's own data and resume once the ref store's data reappears,
+            # instead of permanently locking at 0 the first time ref_curr is 0.
+            ref_anchor = None
             for i, (fy27m, fy28m) in enumerate(zip(FY27_M, FY28_M)):
                 actual_base = store_base[fy28m]
                 g_m         = rates.get(fy28m, 0.0)
@@ -452,23 +497,35 @@ def pass1b_ramp_forecasts(store_info, actuals_pivot, lfl_fc, gmap):
 
                 if fy28m == FY28_M[0] and actual_mar27 > 0:
                     val = actual_mar27
+                    ref_anchor = None
                 elif actual_base > 0 and (prev_derived == 0 or (
                         prev_actual_base > 0
                         and actual_base / prev_actual_base <= ANOMALY_DEV_THRESHOLD)):
                     # Consecutive bases are comparable (no distorted opening-month jump),
                     # OR chain hasn't started yet — apply standard growth%
                     val = actual_base * (1.0 + g_m)
-                elif prev_derived > 0 and si["tag"] in PROJ_MISSING:
+                    ref_anchor = None
+                elif prev_derived > 0 and si["tag"] in PROJ_MISSING and fy27m not in open_months:
                     # MoM chain: either actual_base==0 (no FY27 history) OR
                     # prev_actual_base==0 (opening-transition month — deviation is 0%
                     # for this store, so use ref store's MoM ratio instead)
-                    prev_fy28m = FY28_M[i - 1]
-                    ref_prev   = ref_div_fc.get(prev_fy28m, 0.0)
-                    ref_curr   = ref_div_fc.get(fy28m, 0.0)
-                    mom_ratio  = (ref_curr / ref_prev) if ref_prev > 0 else 1.0
-                    val        = prev_derived * mom_ratio
+                    ref_curr = ref_div_fc.get(fy28m, 0.0)
+                    if ref_anchor is None:
+                        prev_fy28m = FY28_M[i - 1]
+                        ref_anchor = (ref_div_fc.get(prev_fy28m, 0.0), prev_derived)
+                    anchor_ref_val, anchor_derived_val = ref_anchor
+                    if ref_curr > 0 and anchor_ref_val > 0:
+                        val = anchor_derived_val * (ref_curr / anchor_ref_val)
+                        ref_anchor = (ref_curr, val)
+                    else:
+                        # Ref store itself has no data this month (a gap in its own
+                        # actuals) — hold the derived value flat rather than forcing
+                        # it toward zero, and keep the existing anchor so the chain
+                        # can resume the moment the ref store's data reappears.
+                        val = prev_derived
                 else:
                     val = 0.0
+                    ref_anchor = None
 
                 fc[store][div][fy28m] = val
                 prev_derived = val

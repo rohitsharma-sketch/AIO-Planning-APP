@@ -216,6 +216,12 @@ class SalesdataLinkSelection(Base):
     months: Mapped[list] = mapped_column(JSONB, nullable=False)
     path: Mapped[str] = mapped_column(String, nullable=False)
     synced_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Persisted "customise output fields" choice (Run Reindex's extra dimensions
+    # + metric column, both drawn from get_source_schema's real-column list) -
+    # saved here so a planner picks them once and every later reindex reuses
+    # the same fields without re-selecting.
+    extra_dims: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    metric: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class SalesSnapshot(Base):

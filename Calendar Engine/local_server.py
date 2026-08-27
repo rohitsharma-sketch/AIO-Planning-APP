@@ -115,35 +115,41 @@ def get_salesdata_link(force_refresh=False):
 
 
 # ─── Day-wise (billwise) sources ─────────────────────────────────────────────
-# Confirmed with the user: billwise_fy16-20 and billwise_fy-24-26 replace the
-# smaller/incomplete billwise_fy16-22 and billwise_fy-24-25 folders, which are
-# a near-empty stub and a strict subset respectively - using both would either
-# leave a multi-year gap or double-count the overlapping period.
+# Single compiled source (replaces the old 4-folder billwise_fy16-20 /
+# bill_wise_fy20--23 / billwise_fy-24-26 / billwise_fy26-27 split) - fixes the
+# extra-header and attribute mismatches those separately-exported folders had.
 DAYWISE_DIRS = [
     (r"\\10.0.1.85\Users\Administrator\Desktop\AI SOLUTION\INVENTORY AUTOMATION"
-     r"\data_lake\raw\billwise_fy16-20"),
-    (r"\\10.0.1.85\Users\Administrator\Desktop\AI SOLUTION\INVENTORY AUTOMATION"
-     r"\data_lake\raw\bill_wise_fy20--23"),
-    (r"\\10.0.1.85\Users\Administrator\Desktop\AI SOLUTION\INVENTORY AUTOMATION"
-     r"\data_lake\raw\billwise_fy-24-26"),
-    (r"\\10.0.1.85\Users\Administrator\Desktop\AI SOLUTION\INVENTORY AUTOMATION"
-     r"\data_lake\raw\billwise_fy26-27"),
+     r"\data_lake\raw\rs_19_to_26_day_wise_sales_data_compiled"),
 ]
 _LINK_CACHE_DW = {"data": None, "at": 0}
 
 
+def _latest_daywise_files():
+    """Only the single most-recently-modified *.parquet across DAYWISE_DIRS -
+    this source drops full compiled re-exports (each covers the whole
+    2019-2026 span on its own), not incremental partitions, so once a newer
+    export lands every older one is a stale, superseded snapshot to ignore -
+    reading more than one would double-count every sale in the overlap.
+    Mirrors calendar_engine/scans.py's helper of the same name (this is the
+    legacy standalone dev server, kept in sync in case it's still run)."""
+    candidates = []
+    for d in DAYWISE_DIRS:
+        candidates.extend(glob.glob(os.path.join(d, "*.parquet")))
+    if not candidates:
+        return []
+    return [max(candidates, key=os.path.getmtime)]
+
+
 def _scan_daywise_link():
-    """Read only BILLDATE + STORE_NAME across each billwise_fy* file. No sales
-    figures are read or processed here - this is detection only."""
+    """Read only BILLDATE + STORE_NAME from the latest compiled day-wise file.
+    No sales figures are read or processed here - this is detection only."""
     import pyarrow.parquet as pq
     import pandas as pd
 
-    files = []
-    for d in DAYWISE_DIRS:
-        found = sorted(glob.glob(os.path.join(d, "*.parquet")))
-        if not found:
-            raise FileNotFoundError(f"No .parquet files found under {d}")
-        files.extend(found)
+    files = _latest_daywise_files()
+    if not files:
+        raise FileNotFoundError(f"No .parquet files found under {DAYWISE_DIRS}")
 
     month_counts = {}
     store_set = set()

@@ -25,6 +25,9 @@
 .sdt-reset { font-size: 12px; font-weight: 600; color: var(--red); background: none; border: 1px solid var(--red); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
 .sdt-reset:hover { background: var(--red); color: #fff; }
 
+.month-chip { font-size: 11px; padding: 3px 8px; }
+.month-chip-sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 2px; }
+
 /* Table */
 .sdt-scroll { max-height: 640px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
 .sdt-table thead th { position: sticky; top: 0; z-index: 2; padding: 0; }

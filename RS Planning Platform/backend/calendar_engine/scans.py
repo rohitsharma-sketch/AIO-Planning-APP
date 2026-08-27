@@ -144,35 +144,42 @@ def get_salesdata_link(force_refresh=False, progress=None):
 
 
 # ─── Day-wise (billwise) sources ─────────────────────────────────────────────
-# Confirmed with the user: billwise_fy16-20 and billwise_fy-24-26 replace the
-# smaller/incomplete billwise_fy16-22 and billwise_fy-24-25 folders, which are
-# a near-empty stub and a strict subset respectively - using both would either
-# leave a multi-year gap or double-count the overlapping period.
+# Single compiled source (replaces the old 4-folder billwise_fy16-20 /
+# bill_wise_fy20--23 / billwise_fy-24-26 / billwise_fy26-27 split) - fixes the
+# extra-header and attribute mismatches those separately-exported folders had.
 DAYWISE_DIRS = [
     (r"\\10.0.1.85\Users\Administrator\Desktop\AI SOLUTION\INVENTORY AUTOMATION"
-     r"\data_lake\raw\billwise_fy16-20"),
-    (r"\\10.0.1.85\Users\Administrator\Desktop\AI SOLUTION\INVENTORY AUTOMATION"
-     r"\data_lake\raw\bill_wise_fy20--23"),
-    (r"\\10.0.1.85\Users\Administrator\Desktop\AI SOLUTION\INVENTORY AUTOMATION"
-     r"\data_lake\raw\billwise_fy-24-26"),
-    (r"\\10.0.1.85\Users\Administrator\Desktop\AI SOLUTION\INVENTORY AUTOMATION"
-     r"\data_lake\raw\billwise_fy26-27"),
+     r"\data_lake\raw\rs_19_to_26_day_wise_sales_data_compiled"),
 ]
 _LINK_CACHE_DW = {"data": None, "at": 0}
 
 
+def _latest_daywise_files():
+    """Only the single most-recently-modified *.parquet across DAYWISE_DIRS.
+    This source drops full compiled re-exports (each one covers the whole
+    2019-2026 span on its own), not incremental partitions - reading more
+    than one file here would double-count every sale in the overlap, so once
+    a newer export lands, every older one is a stale, superseded snapshot to
+    ignore, not more data to add. Every day-wise read (link scan, schema
+    introspection, and the actual reindex fetch) goes through this so all
+    three always agree on which single file is "the" source."""
+    candidates = []
+    for d in DAYWISE_DIRS:
+        candidates.extend(glob.glob(os.path.join(d, "*.parquet")))
+    if not candidates:
+        return []
+    return [max(candidates, key=os.path.getmtime)]
+
+
 def _scan_daywise_link(progress=None):
-    """Read only BILLDATE + STORE_NAME across each billwise_fy* file. No sales
-    figures are read or processed here - this is detection only."""
+    """Read only BILLDATE + STORE_NAME from the latest compiled day-wise file.
+    No sales figures are read or processed here - this is detection only."""
     import pyarrow.parquet as pq
     import pandas as pd
 
-    files = []
-    for d in DAYWISE_DIRS:
-        found = sorted(glob.glob(os.path.join(d, "*.parquet")))
-        if not found:
-            raise FileNotFoundError(f"No .parquet files found under {d}")
-        files.extend(found)
+    files = _latest_daywise_files()
+    if not files:
+        raise FileNotFoundError(f"No .parquet files found under {DAYWISE_DIRS}")
     if progress is not None:
         progress["total"] = len(files)
 
@@ -466,9 +473,7 @@ def get_source_schema(source_type):
     if source_type == "mw":
         files = sorted(glob.glob(os.path.join(PARQUET_DIR, "*.parquet")))
     else:
-        files = []
-        for d in DAYWISE_DIRS:
-            files.extend(sorted(glob.glob(os.path.join(d, "*.parquet"))))
+        files = _latest_daywise_files()
     if not files:
         return {"ok": False, "error": f"No files found for source '{source_type}'"}
     try:
@@ -507,9 +512,7 @@ def _fetch_raw_daywise(months, progress=None, extra_dims=None, metric_col="NETAM
     extra_dims = extra_dims or []
     months_set = set(months)
     lo, hi = _month_bounds(months)
-    files = []
-    for d in DAYWISE_DIRS:
-        files.extend(sorted(glob.glob(os.path.join(d, "*.parquet"))))
+    files = _latest_daywise_files()
     if progress is not None:
         progress["total"] = len(files)
 

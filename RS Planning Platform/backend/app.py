@@ -115,6 +115,15 @@ def login_page(request: Request):
     return FileResponse(os.path.join(_HERE, "static", "login.html"))
 
 
+@app.get("/reset-password")
+def reset_password_page():
+    # No auth gate — a valid ?token= IS the credential, checked/expired
+    # server-side by /api/auth/reset-password (auth/security.py's
+    # RESET_MAX_AGE). Getting here with no or a stale token still renders
+    # the page; the form submit is what surfaces "invalid or expired".
+    return FileResponse(os.path.join(_HERE, "static", "reset-password.html"))
+
+
 @app.get("/plan-cycles")
 def plan_cycles_page(request: Request):
     if get_session_user(request) is None:

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import LinkStatusPanel from './LinkStatusPanel'
 import ReindexOutputPanel from './ReindexOutputPanel'
-import { startReindex, pollReindex, listCalendarLibrary, getCalendar, getStoreClusterMap, getSourceSchema } from '../../lib/api'
+import { startReindex, pollReindex, listCalendarLibrary, getCalendar, getStoreClusterMap, getSourceSchema, putSalesdataLinkSelection } from '../../lib/api'
 
 export default function CalendarisedSalesTab({ isPlanner }) {
   const [selections, setSelections] = useState({})
@@ -28,17 +28,43 @@ export default function CalendarisedSalesTab({ isPlanner }) {
 
   useEffect(() => {
     setSchema(null)
-    setExtraDims([])
-    setMetric(null)
-    getSourceSchema(source).then(s => { setSchema(s); setMetric(s.defaultMetric) }).catch(() => setSchema({ ok: false }))
+    getSourceSchema(source).then(s => setSchema(s)).catch(() => setSchema({ ok: false }))
   }, [source])
 
+  // Hydrate extraDims/metric from the persisted selection once it's available
+  // (LinkStatusPanel loads it independently via GET and reports it up through
+  // onSelectionChange) instead of always resetting to "no extras" - this is
+  // what makes a planner's field choice stick across visits: pick it once via
+  // toggleDim/changeMetric below (which saves immediately), and every later
+  // page load - and every later Run Reindex - starts from the same fields
+  // without asking again.
+  useEffect(() => {
+    if (!schema?.ok) return
+    const saved = selections[source]
+    setExtraDims(saved?.extraDims || [])
+    setMetric(saved?.metric || schema.defaultMetric)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, schema, selections[source]?.extraDims, selections[source]?.metric])
+
   function toggleDim(name) {
-    setExtraDims(prev => prev.includes(name) ? prev.filter(d => d !== name) : [...prev, name])
+    const next = extraDims.includes(name) ? extraDims.filter(d => d !== name) : [...extraDims, name]
+    setExtraDims(next)
+    putSalesdataLinkSelection(source, { extraDims: next }).catch(() => {})
+  }
+
+  function changeMetric(value) {
+    setMetric(value)
+    putSalesdataLinkSelection(source, { metric: value }).catch(() => {})
   }
 
   function handleSelectionChange(sourceType, payload) {
-    setSelections(prev => ({ ...prev, [sourceType]: payload }))
+    // Merge, not replace: LinkStatusPanel's own GET/PUT calls only ever carry
+    // months/path/syncedAt, never extraDims/metric (those are this
+    // component's concern, saved via changeMetric/toggleDim below) - a
+    // replace would wipe the persisted extraDims/metric out of `selections`
+    // the moment a planner re-syncs a year range, even though they're still
+    // safely persisted server-side (the PUT there is a partial update too).
+    setSelections(prev => ({ ...prev, [sourceType]: { ...prev[sourceType], ...payload } }))
   }
 
   // The selected calendar's day-map is locked to one exact ref-year -> fut-year
@@ -140,13 +166,16 @@ export default function CalendarisedSalesTab({ isPlanner }) {
             always included and not shown as options - only the extras are picked here. */}
         {schema?.ok && (
           <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--muted)', marginBottom: '6px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--muted)', marginBottom: '2px' }}>
               CUSTOMISE OUTPUT FIELDS
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '6px' }}>
+              Saved automatically — picked once here, every later Run Reindex for this source reuses it.
             </div>
             {schema.metrics.length > 1 && (
               <div className="field" style={{ marginBottom: '8px' }}>
                 <label htmlFor="rx-metric">Metric</label>
-                <select id="rx-metric" value={metric || schema.defaultMetric} onChange={e => setMetric(e.target.value)}>
+                <select id="rx-metric" value={metric || schema.defaultMetric} onChange={e => changeMetric(e.target.value)}>
                   {schema.metrics.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>

@@ -38,3 +38,25 @@ def read_remember_token(token: str) -> str | None:
     except (BadSignature, SignatureExpired):
         return None
     return data.get("uid")
+
+
+# Same stateless signed-token pattern as remember-me, above, but salted
+# separately so a remember-me cookie can never be replayed as a reset link
+# (and vice versa) even though both just wrap {"uid": ...}. Short-lived by
+# design - a reset link is meant to be used within minutes of being emailed.
+RESET_MAX_AGE = 30 * 60  # 30 minutes
+_reset_serializer = URLSafeTimedSerializer(SESSION_SECRET, salt="password-reset")
+
+
+def make_reset_token(user_id: str) -> str:
+    return _reset_serializer.dumps({"uid": user_id})
+
+
+def read_reset_token(token: str) -> str | None:
+    """Returns the user id encoded in a still-valid reset token, or None if
+    the token is missing, tampered with, or older than RESET_MAX_AGE."""
+    try:
+        data = _reset_serializer.loads(token, max_age=RESET_MAX_AGE)
+    except (BadSignature, SignatureExpired):
+        return None
+    return data.get("uid")

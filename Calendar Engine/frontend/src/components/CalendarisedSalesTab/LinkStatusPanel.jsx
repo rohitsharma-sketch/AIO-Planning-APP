@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { startLinkScan, pollLinkScan, getSalesdataLinkSelection, putSalesdataLinkSelection } from '../../lib/api'
 
 const LABELS = { mw: 'Month-wise', dw: 'Day-wise' }
-const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 // "45s" / "2m 05s" - matches the compact style everywhere else in this app,
 // not a full duration-formatting library for what's just an estimate.
@@ -25,17 +24,11 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
   const [fetchError, setFetchError] = useState(null)
   const pollTimer = useRef(null)
   const [selection, setSelection] = useState(null)
-  const [selectedMonths, setSelectedMonths] = useState([])
-  // Which year's month pills are on screen. This is a VIEW filter only - it never
-  // touches `selectedMonths`, which stays a flat list of 'YYYY-MM' strings spanning
-  // every year (matching the old app, where _linkSelectedMonths was one global Set
-  // per source and linkSelectYear only re-rendered the pills). So a user can have
-  // 2026-08 ticked while looking at 2025's pills.
-  const [year, setYear] = useState('')
-  // Bulk "From year -> To year" range select, same idea as Version Setting's
-  // Reference Year/Future Year pair used to generate a calendar - lets a multi-
-  // year comparison (e.g. sync 2023-2026 in one go) be selected without
-  // switching the single-year Sync Year view and clicking Select All per year.
+  const [syncing, setSyncing] = useState(false)
+  // "From year -> To year" range, same idea as Version Setting's Reference
+  // Year/Future Year pair used to generate a calendar - this is the ONLY way
+  // to pick what syncs (the old per-year month-pill picker was dropped: a
+  // planner just wants "give me these years", not a month-by-month tickbox).
   const [rangeFrom, setRangeFrom] = useState('')
   const [rangeTo, setRangeTo] = useState('')
 
@@ -86,7 +79,6 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
   useEffect(() => {
     getSalesdataLinkSelection(sourceType).then(s => {
       setSelection(s)
-      setSelectedMonths(s.months || [])
       // Push the PERSISTED selection up to the parent too, not just the one made by
       // an explicit sync() below. Without this the checkboxes visibly show last
       // session's synced months while the parent's `selections` state is still {},
@@ -107,52 +99,29 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
     return { byYear: g, years: Object.keys(g).sort().reverse() }
   }, [link])
 
-  // Derive rather than store the effective year, so a Refresh that changes the
-  // available years can never strand us on a year that no longer exists. Mirrors
-  // the old app's `if (!_linkSelectedYear[src] || !byYear[...]) = years[0]` guard.
-  // The selected Run Reindex calendar's reference year wins over "newest first"
-  // when its data is actually available here - reindex only ever matches sales
-  // from that exact year (see the comment in CalendarisedSalesTab/index.jsx), so
-  // defaulting the pills to it is what actually lets the user pick a working
-  // combination instead of guessing.
+  // Derive rather than store the effective from/to year, so a Refresh that
+  // shrinks `years` can never strand the selects on a year that no longer
+  // exists. Defaults to the full span (oldest -> newest) so a first-ever sync
+  // with no prior interaction just syncs everything available. The selected
+  // Run Reindex calendar's reference year (hintYear) wins for "To Year" when
+  // its data is actually available here - reindex only ever matches sales
+  // from that exact year (see the comment in CalendarisedSalesTab/index.jsx),
+  // so defaulting to it is what actually lets the user pick a working range
+  // instead of guessing.
   const hintYearStr = hintYear != null ? String(hintYear) : null
-  const activeYear = (year && byYear[year]) ? year
+  const effRangeFrom = (rangeFrom && byYear[rangeFrom]) ? rangeFrom : years[years.length - 1]
+  const effRangeTo = (rangeTo && byYear[rangeTo]) ? rangeTo
     : (hintYearStr && byYear[hintYearStr]) ? hintYearStr
     : years[0]
-  const monthsForYear = byYear[activeYear] || []
 
-  // Select All / Clear are scoped to the CURRENTLY VISIBLE year only - the old
-  // app's linkSelectAllMonths() iterates byYear[_linkSelectedYear[src]], not the
-  // whole month list, and its button is literally labelled "Select All (this year)".
-  function setYearMonths(on) {
-    const inYear = monthsForYear.map(m => m.month)
-    setSelectedMonths(on
-      ? [...selectedMonths, ...inYear.filter(m => !selectedMonths.includes(m))]
-      : selectedMonths.filter(m => !inYear.includes(m)))
-  }
-
-  // Same derive-don't-store pattern as activeYear above, so a Refresh that
-  // shrinks `years` can't leave the range selects pointing at a year that no
-  // longer exists. Defaults to the full span (oldest -> newest) so "Select
-  // Range" with no prior interaction just selects everything, like ticking
-  // every year one by one would.
-  const effRangeFrom = (rangeFrom && byYear[rangeFrom]) ? rangeFrom : years[years.length - 1]
-  const effRangeTo = (rangeTo && byYear[rangeTo]) ? rangeTo : years[0]
-
-  function setRangeMonths(on) {
-    if (!effRangeFrom || !effRangeTo) return
+  async function syncRange() {
+    if (!isPlanner || !link || !effRangeFrom || !effRangeTo) return
     const lo = Math.min(+effRangeFrom, +effRangeTo)
     const hi = Math.max(+effRangeFrom, +effRangeTo)
-    const inRange = (link?.months || [])
+    const months = (link.months || [])
       .filter(m => { const y = +m.month.slice(0, 4); return y >= lo && y <= hi })
       .map(m => m.month)
-    setSelectedMonths(on
-      ? [...selectedMonths, ...inRange.filter(m => !selectedMonths.includes(m))]
-      : selectedMonths.filter(m => !inRange.includes(m)))
-  }
-
-  async function sync() {
-    if (!isPlanner || !link) return
+      .sort()
     // The mw scan result carries a single `path` string, but the dw (day-wise)
     // scan result has no `path` field at all - it reads from multiple folders
     // and returns them as `dirs` (see scans.py _scan_daywise_link). The backend's
@@ -160,14 +129,15 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
     // (dropped by JSON.stringify) would 500 with a KeyError on PUT for dw. Fall back
     // to joining `dirs` so both source types always send a non-empty string.
     const path = link.path || (Array.isArray(link.dirs) ? link.dirs.join('; ') : '')
-    // Sort before sending: with the year-scoped picker the user can tick months in
-    // any order across years, and the old app likewise sorted on sync
-    // (`[..._linkSelectedMonths[src]].sort()`). Keeps the persisted list readable
-    // and the "Last synced" line stable.
-    const payload = { months: [...selectedMonths].sort(), path, syncedAt: new Date().toISOString() }
-    await putSalesdataLinkSelection(sourceType, payload)
-    setSelection(payload)
-    onSelectionChange?.(sourceType, payload)
+    const payload = { months, path, syncedAt: new Date().toISOString() }
+    setSyncing(true)
+    try {
+      await putSalesdataLinkSelection(sourceType, payload)
+      setSelection(payload)
+      onSelectionChange?.(sourceType, payload)
+    } finally {
+      setSyncing(false)
+    }
   }
 
   if (progress) {
@@ -228,7 +198,7 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
           {hintCalendarName && (
             hintYearStr && byYear[hintYearStr] ? (
               <p style={{ fontSize: '11px', color: 'var(--muted)' }}>
-                "{hintCalendarName}" reindexes <strong>{hintYear}</strong> sales — showing that year's months below.
+                "{hintCalendarName}" reindexes <strong>{hintYear}</strong> sales — set To Year to {hintYear} below to sync it.
               </p>
             ) : hintYearStr ? (
               <p style={{ fontSize: '11px', color: 'var(--warn)' }}>
@@ -236,40 +206,8 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
               </p>
             ) : null
           )}
-          <div className="link-month-picker">
-            <div className="field">
-              <label htmlFor={`linkYearSel_${sourceType}`}>Sync Year</label>
-              <select id={`linkYearSel_${sourceType}`} value={activeYear || ''} onChange={e => setYear(e.target.value)}>
-                {years.map(y => (
-                  <option key={y} value={y}>{y} ({byYear[y].length} months)</option>
-                ))}
-              </select>
-            </div>
-            <div className="link-month-picker-months">
-              <label>Months</label>
-              <div className="month-pills">
-                {monthsForYear.map(m => {
-                  const id = `lmp_${sourceType}_${m.month}`
-                  return (
-                    <div className="month-pill" key={m.month}>
-                      <input type="checkbox" id={id} checked={selectedMonths.includes(m.month)} disabled={!isPlanner}
-                        onChange={e => setSelectedMonths(e.target.checked ? [...selectedMonths, m.month] : selectedMonths.filter(x => x !== m.month))} />
-                      <label htmlFor={id} title={`${m.rows.toLocaleString()} rows`}>{MONTH_ABBR[+m.month.slice(5, 7) - 1]}</label>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
           {isPlanner && (
-            <div className="link-month-actions">
-              <button onClick={() => setYearMonths(true)}>Select All (this year)</button>
-              <button onClick={() => setYearMonths(false)}>Clear</button>
-              <button className="btn" onClick={sync}>Sync Selected Months</button>
-            </div>
-          )}
-          {isPlanner && years.length > 1 && (
-            <div className="link-month-picker" style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+            <div className="link-month-picker">
               <div className="field">
                 <label htmlFor={`linkRangeFrom_${sourceType}`}>From Year</label>
                 <select id={`linkRangeFrom_${sourceType}`} value={effRangeFrom || ''} onChange={e => setRangeFrom(e.target.value)}>
@@ -284,12 +222,10 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
               </div>
               <div className="link-month-picker-months">
                 <label>&nbsp;</label>
-                <div className="link-month-actions" style={{ marginTop: 0 }}>
-                  <button onClick={() => setRangeMonths(true)} title={`Select every month from ${Math.min(+effRangeFrom, +effRangeTo)} to ${Math.max(+effRangeFrom, +effRangeTo)}`}>
-                    Select Range
-                  </button>
-                  <button onClick={() => setRangeMonths(false)} title="Deselect every month in this range">Clear Range</button>
-                </div>
+                <button className="btn" onClick={syncRange} disabled={syncing}
+                        title={`Sync every month from ${Math.min(+effRangeFrom, +effRangeTo)} to ${Math.max(+effRangeFrom, +effRangeTo)}`}>
+                  {syncing ? 'Syncing…' : 'Sync Selected Range'}
+                </button>
               </div>
             </div>
           )}

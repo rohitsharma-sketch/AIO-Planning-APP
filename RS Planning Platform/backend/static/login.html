@@ -35,6 +35,17 @@
     margin-top: 14px; padding: 8px 10px; border-radius: 6px; background: #fef2f2;
     color: #b91c1c; font-size: 13px; display: none;
   }
+  .notice {
+    margin-top: 14px; padding: 8px 10px; border-radius: 6px; background: #ecfdf5;
+    color: #047857; font-size: 13px; display: none;
+  }
+  .forgot-link {
+    display: block; margin-top: 14px; font-size: 13px; color: #2563eb;
+    text-decoration: none; text-align: center; background: none; border: none;
+    width: 100%; cursor: pointer; font-family: inherit;
+  }
+  .forgot-link:hover { text-decoration: underline; }
+  #forgot-form { display: none; }
 </style>
 </head>
 <body>
@@ -51,12 +62,36 @@
     </div>
     <button type="submit" id="submit-btn">Sign in</button>
     <div class="error" id="error"></div>
+    <button type="button" class="forgot-link" id="show-forgot">Forgot password?</button>
   </form>
+
+  <form class="card" id="forgot-form">
+    <h1>Reset password</h1>
+    <p class="sub">Enter your username — if the account has an email on file, we'll send a reset link.</p>
+    <label for="forgot-username">Username</label>
+    <input id="forgot-username" name="username" autocomplete="username" required>
+    <button type="submit" id="forgot-submit-btn">Send reset link</button>
+    <div class="error" id="forgot-error"></div>
+    <div class="notice" id="forgot-notice"></div>
+    <button type="button" class="forgot-link" id="show-login">← Back to sign in</button>
+  </form>
+
   <script>
-    const form = document.getElementById('login-form');
+    const loginForm = document.getElementById('login-form');
+    const forgotForm = document.getElementById('forgot-form');
     const errorBox = document.getElementById('error');
     const btn = document.getElementById('submit-btn');
-    form.addEventListener('submit', async (e) => {
+
+    document.getElementById('show-forgot').addEventListener('click', () => {
+      loginForm.style.display = 'none';
+      forgotForm.style.display = 'block';
+    });
+    document.getElementById('show-login').addEventListener('click', () => {
+      forgotForm.style.display = 'none';
+      loginForm.style.display = 'block';
+    });
+
+    loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       errorBox.style.display = 'none';
       btn.disabled = true;
@@ -83,6 +118,37 @@
         errorBox.style.display = 'block';
         btn.disabled = false;
         btn.textContent = 'Sign in';
+      }
+    });
+
+    const forgotErrorBox = document.getElementById('forgot-error');
+    const forgotNotice = document.getElementById('forgot-notice');
+    const forgotBtn = document.getElementById('forgot-submit-btn');
+    forgotForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      forgotErrorBox.style.display = 'none';
+      forgotNotice.style.display = 'none';
+      forgotBtn.disabled = true;
+      forgotBtn.textContent = 'Sending...';
+      try {
+        const res = await fetch('/api/auth/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ username: document.getElementById('forgot-username').value }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.detail || 'Could not send reset link');
+        }
+        forgotNotice.textContent = 'If that account has an email on file, a reset link is on its way.';
+        forgotNotice.style.display = 'block';
+      } catch (err) {
+        forgotErrorBox.textContent = err.message;
+        forgotErrorBox.style.display = 'block';
+      } finally {
+        forgotBtn.disabled = false;
+        forgotBtn.textContent = 'Send reset link';
       }
     });
   </script>
