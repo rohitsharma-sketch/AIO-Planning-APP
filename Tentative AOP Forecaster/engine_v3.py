@@ -34,11 +34,18 @@ RAMP_TAGS = {"FY26 - Q4","FY27 - Q1","FY27 - Q2"}
 NSO_TAGS  = {"NSO","MAMJ-NSO"}   # 750L ramp formula
 
 # Q1's base sales (Apr'27/May'27/Jun'27 forecast columns, i.e. the Apr'26/
-# May'26/Jun'26 LY actuals that feed them) only count SEASON_TYPE rows in
-# Q1_ALLOWED_SEASON_TYPES - every other quarter counts every SEASON_TYPE.
-# Business rule as given, not derived from data.
+# May'26/Jun'26 LY actuals that feed them) are meant to only count specific
+# attribute values - every other quarter counts every attribute.
+#
+# DISABLED as of 2026-08-26: the real SEASON_TYPE values turned out to be
+# collection codes (AW26, SS26 Q1, SS25 Q2, ...), not "Summer"/"Regular"/
+# "Occasional" as first given - confirmed by inspecting the actual synced
+# data (see [[aop-forecaster-lfl-data-model]] memory). Q1_ALLOWED_VALUES is
+# intentionally empty so the `if Q1_ALLOWED_VALUES and ...` guard below never
+# filters anything - base_sales behaves exactly as it did before this
+# feature, not silently zeroed - until the real column/values are confirmed.
 Q1_FY28_MONTHS = {"Apr'27", "May'27", "Jun'27"}
-Q1_ALLOWED_SEASON_TYPES = {"Summer", "Regular", "Occasional"}
+Q1_ALLOWED_VALUES = set()  # populate once the real attribute/values are confirmed
 
 MAMJ_DEFAULT_OPEN    = "Apr'27"
 # Deviation% above which a named store is treated as ref-compliant (opening-month distortion)
@@ -1328,8 +1335,8 @@ def get_file_info(input_file):
                 continue
             attribute = str(row.get("Attribute", "")).strip() if has_attribute else None
             for fy27m, fy28m in month_pairs:
-                if has_attribute and fy28m in Q1_FY28_MONTHS and attribute not in Q1_ALLOWED_SEASON_TYPES:
-                    continue  # Q1 only counts Summer/Regular/Occasional - this row's attribute isn't one of them
+                if Q1_ALLOWED_VALUES and has_attribute and fy28m in Q1_FY28_MONTHS and attribute not in Q1_ALLOWED_VALUES:
+                    continue  # Q1 only counts specific attribute values - this row's attribute isn't one of them
                 v = row.get(fy27m, 0)
                 try:
                     base_sales[grp][div][fy28m] += float(v) if v == v else 0.0
