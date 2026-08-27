@@ -73,6 +73,11 @@ SOURCES = [
     # Manually curated by the planning team — not on the data lake's automated
     # pipeline, so re-run this one on demand when the file changes, not nightly.
     ("store_master_xlsx", {"path": os.path.normpath(STORE_MASTER_XLSX)}, 0),
+    # Has no raw file path of its own - it drives Calendar Engine's own
+    # month-wise reindex (calendar.sales_snapshots) via a subprocess, see
+    # sync/calendar_reindex_sync.py. ttl_minutes is unused here (this job
+    # re-runs every db-sync click, by design - see that module's docstring).
+    ("calendar_reindex", {"note": "Triggers Calendar Engine's month-wise reindex - no file path"}, 0),
 ]
 
 

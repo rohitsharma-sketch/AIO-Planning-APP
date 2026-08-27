@@ -29,6 +29,16 @@ from engine_v3 import DIVS, LFL_TAGS, FY28_M, Q1_FY28_MONTHS, Q1_ALLOWED_VALUES
 GM_DEPTS = {"HOUSEHOLD", "LIFESTYLE", "NON FOOD", "HOME FURNISHING", "SPORTS & TOYS",
             "FOOTWEAR", "TRAVEL ACCESSORIES", "STATIONERY"}
 
+# calendar.sales_snapshots stores its SL_V sums in raw Rupees (Calendar Engine's
+# own convention) - AOP's base_sales is Lakhs everywhere else (ReviewStep.jsx's
+# own comment: "already Rs Lakhs - the app's one consistent unit"), and
+# store_actuals_sync.py's OWN reindex divides by this same constant before
+# writing to Postgres. Missing this here first showed up as a ~2,000 Lakh
+# GM month coming back as ~200,000,000 - a real bug caught by comparing this
+# source's numbers against the 'own' source's for the same month, not a
+# hypothetical.
+LAKH = 1e5
+
 MON_NAMES = {1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun",
              7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"}
 
@@ -112,7 +122,7 @@ def get_reindexed_lfl_base_sales(session):
             continue
         if Q1_ALLOWED_VALUES and has_attribute and label in Q1_FY28_MONTHS and attribute not in Q1_ALLOWED_VALUES:
             continue
-        base_sales[div][label] += float(total)
+        base_sales[div][label] += float(total) / LAKH
 
     for div in base_sales:
         for m in base_sales[div]:

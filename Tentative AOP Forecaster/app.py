@@ -223,6 +223,14 @@ DB_SYNC_JOBS = [
     ("store_master_xlsx", "store_master_xlsx"),
     ("day_shift", "data_lake_day_shift"),
     ("store_actuals", "data_lake_sales"),
+    # Runs Calendar Engine's own month-wise reindex (with ATTRIBUTE1) as a
+    # subprocess and saves it to calendar.sales_snapshots - keeps the
+    # "Calendar Engine Reindex" actuals-source toggle (ReviewStep.jsx) and
+    # the Q1 attribute filter fed without a separate manual trip to the
+    # Calendar Engine tab. Runs on every sync, same as the jobs above - see
+    # sync/calendar_reindex_sync.py's docstring for why (confirmed with the
+    # user, not a staleness-check).
+    ("calendar_reindex", "calendar_reindex"),
 ]
 
 
