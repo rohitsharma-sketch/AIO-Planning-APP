@@ -360,7 +360,7 @@
    silently reintroduces a few px of the same drift. A fixed `width` removes
    that: the table never shrinks below it, overflowing into .table-scroll's
    horizontal scroll instead on a narrow viewport. */
-.preview-table { width: 690px; font-size: 13px; table-layout: fixed; }
+.preview-table { width: 528px; font-size: 13px; table-layout: fixed; }
 .preview-table thead th {
   font-size: 12px;
   padding: 8px 12px;
@@ -397,20 +397,6 @@
   color: var(--char, #2D3A4A);
   box-sizing: border-box;
 }
-
-/* LY sub-line — sits directly under the TY figure in the same cell so the
-   two are read together at a glance ("gauge the numbers") without a
-   separate row or table. Own block so it wraps under the main number
-   regardless of column width. */
-.ly-sub {
-  display: block;
-  font-size: 10px;
-  font-weight: 400;
-  font-variant-numeric: tabular-nums;
-  color: var(--muted, #7A869C);
-  margin-top: 1px;
-}
-.ly-sub--onNavy { color: rgba(255,255,255,0.62); }
 
 .grand-ttl-col { border-left: 2px solid var(--mid, #3B5B99) !important; }
 .grand-ttl-val {

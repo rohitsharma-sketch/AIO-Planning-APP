@@ -163,32 +163,23 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
       }
     }
 
-    // Aggregate to quarters — TY forecast alongside LY (the same base_sales
-    // this forecast is built from) so the two can be read side by side per
-    // cell instead of the LY figure requiring a separate lookup elsewhere.
+    // Aggregate to quarters
     const rows = DIVS.map(div => {
-      const base = activeLflBase?.[div] ?? {}
-      const qVals = {}, lyVals = {}
-      let grand = 0, lyGrand = 0
+      const qVals = {}
+      let grand = 0
       for (const { label, months } of QTRS) {
-        const sum   = months.reduce((s, m) => s + (lflByDiv[div][m] ?? 0), 0)
-        const lySum = months.reduce((s, m) => s + (base[m] ?? 0), 0)
+        const sum = months.reduce((s, m) => s + (lflByDiv[div][m] ?? 0), 0)
         qVals[label] = sum
-        lyVals[label] = lySum
         grand += sum
-        lyGrand += lySum
       }
       qVals['Grand TTL'] = grand
-      lyVals['Grand TTL'] = lyGrand
-      return { div, qVals, lyVals }
+      return { div, qVals }
     })
 
     // Grand total row across all divisions
-    const grandRow = {}, lyGrandRow = {}
-    for (const lbl of QTR_LABELS) {
+    const grandRow = {}
+    for (const lbl of QTR_LABELS)
       grandRow[lbl] = rows.reduce((s, r) => s + (r.qVals[lbl] ?? 0), 0)
-      lyGrandRow[lbl] = rows.reduce((s, r) => s + (r.lyVals[lbl] ?? 0), 0)
-    }
 
     // Effective growth % per division per quarter
     const gRows = DIVS.map(div => {
@@ -218,7 +209,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
 
     const fmtG = v => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
 
-    return { rows, grandRow, lyGrandRow, gRows, gGrand, fmt, fmtG }
+    return { rows, grandRow, gRows, gGrand, fmt, fmtG }
   }, [rates, activeLflBase])
 
   const handleRun = () => {
@@ -376,13 +367,13 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
           {/* ── Values table ── */}
           <div className="card preview-card">
             <h3 className="section-title">LFL Forecast — Quarterly (Rs. Lakhs)</h3>
-            <p className="growth-note" style={{marginBottom:8}}>Live LFL estimate (bold) vs LY actual (grey), updates as you edit growth rates.</p>
+            <p className="growth-note" style={{marginBottom:8}}>Live LFL estimate, updates as you edit growth rates.</p>
             <div className="table-scroll">
               <table className="growth-table preview-table">
                 <colgroup>
+                  <col style={{width:80}} />
+                  <col style={{width:88}} /><col style={{width:88}} /><col style={{width:88}} /><col style={{width:88}} />
                   <col style={{width:96}} />
-                  <col style={{width:118}} /><col style={{width:118}} /><col style={{width:118}} /><col style={{width:118}} />
-                  <col style={{width:122}} />
                 </colgroup>
                 <thead>
                   <tr>
@@ -395,33 +386,17 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
                   </tr>
                 </thead>
                 <tbody>
-                  {livePreview.rows.map(({ div, qVals, lyVals }) => (
+                  {livePreview.rows.map(({ div, qVals }) => (
                     <tr key={div} className="preview-div-row">
                       <td className="preview-div-cell">{div}</td>
-                      {['Q1','Q2','Q3','Q4'].map(q => (
-                        <td key={q} className="preview-val">
-                          {livePreview.fmt(qVals[q])}
-                          <span className="ly-sub">LY {livePreview.fmt(lyVals[q])}</span>
-                        </td>
-                      ))}
-                      <td className="preview-val grand-ttl-val">
-                        {livePreview.fmt(qVals['Grand TTL'])}
-                        <span className="ly-sub">LY {livePreview.fmt(lyVals['Grand TTL'])}</span>
-                      </td>
+                      {['Q1','Q2','Q3','Q4'].map(q => <td key={q} className="preview-val">{livePreview.fmt(qVals[q])}</td>)}
+                      <td className="preview-val grand-ttl-val">{livePreview.fmt(qVals['Grand TTL'])}</td>
                     </tr>
                   ))}
                   <tr className="preview-grand-total">
                     <td>Grand TTL</td>
-                    {['Q1','Q2','Q3','Q4'].map(q => (
-                      <td key={q}>
-                        {livePreview.fmt(livePreview.grandRow[q])}
-                        <span className="ly-sub ly-sub--onNavy">LY {livePreview.fmt(livePreview.lyGrandRow[q])}</span>
-                      </td>
-                    ))}
-                    <td>
-                      {livePreview.fmt(livePreview.grandRow['Grand TTL'])}
-                      <span className="ly-sub ly-sub--onNavy">LY {livePreview.fmt(livePreview.lyGrandRow['Grand TTL'])}</span>
-                    </td>
+                    {['Q1','Q2','Q3','Q4'].map(q => <td key={q}>{livePreview.fmt(livePreview.grandRow[q])}</td>)}
+                    <td>{livePreview.fmt(livePreview.grandRow['Grand TTL'])}</td>
                   </tr>
                 </tbody>
               </table>
@@ -435,9 +410,9 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
             <div className="table-scroll">
               <table className="growth-table preview-table">
                 <colgroup>
+                  <col style={{width:80}} />
+                  <col style={{width:88}} /><col style={{width:88}} /><col style={{width:88}} /><col style={{width:88}} />
                   <col style={{width:96}} />
-                  <col style={{width:118}} /><col style={{width:118}} /><col style={{width:118}} /><col style={{width:118}} />
-                  <col style={{width:122}} />
                 </colgroup>
                 <thead>
                   <tr>
