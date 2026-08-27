@@ -366,45 +366,64 @@ def _vectorized_lookup(df, cluster_col, key_col, out_col, cluster_maps):
     return df
 
 
-def _row_group_range(pf, date_col):
-    """Cheap (footer-only, no data pages read) overall (min, max) of date_col across
-    every row group's stored statistics. Returns None if any row group lacks stats,
-    so the caller falls back to reading it normally rather than risk skipping data."""
+def _row_group_stats(pf, date_col):
+    """Cheap (footer-only, no data pages read) per-row-group (min, max) of date_col,
+    read from parquet footer statistics. Returns None if ANY row group lacks stats
+    (caller falls back to reading everything rather than risk skipping data), else
+    a list of (min, max) tuples, one per row group, in row-group order."""
     try:
         col_idx = pf.schema_arrow.names.index(date_col)
     except ValueError:
         return None
-    lo = hi = None
+    out = []
     for i in range(pf.num_row_groups):
         stats = pf.metadata.row_group(i).column(col_idx).statistics
         if stats is None or not stats.has_min_max:
             return None
-        mn, mx = stats.min, stats.max
-        if lo is None or mn < lo:
-            lo = mn
-        if hi is None or mx > hi:
-            hi = mx
-    return (lo, hi) if lo is not None else None
+        out.append((stats.min, stats.max))
+    return out
 
 
 def _read_file_filtered(fp, columns, date_col, lo, hi):
-    """Open once, skip entirely (no read call) if the file's own min/max for date_col
-    - read from parquet footer statistics, not data - has zero overlap with [lo, hi).
-    Otherwise read with row-group-level predicate pushdown on date_col."""
+    """Skip entirely (no data read) if the file's own row groups - from footer
+    statistics, not a data read - provably have zero overlap with [lo, hi).
+    Otherwise read only the OVERLAPPING row groups, off the SAME already-open
+    handle used for the stats check.
+
+    Previously this opened the file twice over the network: once via
+    ParquetFile() for the stats check, then again inside a separate
+    pq.read_table(fp, filters=...) call for the actual data - read_table has
+    no way to reuse an already-open handle, so on a slow network share (this
+    reads from a \\\\10.0.1.85\\... SMB mount, not local disk) that redundant
+    open cost real, measurable wall time per file. read_row_groups() on the
+    SAME ParquetFile object gets the same row-group-level pruning benefit
+    (only overlapping groups are fetched) from one network round-trip instead
+    of two. Row-group pruning is coarse - a group can straddle [lo, hi) with
+    only some of its rows actually matching - so the caller's existing exact
+    ym-based filter still runs afterward; this only cuts what gets fetched
+    over the network, not what counts as a match.
+    """
     import pyarrow.parquet as pq
 
-    pf = pq.ParquetFile(fp)  # footer-only open; used for the cheap stats check below
-    rng = _row_group_range(pf, date_col)
-    if rng is not None:
-        fmin, fmax = rng
-        lo_cmp = lo.to_pydatetime() if hasattr(lo, "to_pydatetime") else lo
-        hi_cmp = hi.to_pydatetime() if hasattr(hi, "to_pydatetime") else hi
-        if fmax < lo_cmp or fmin >= hi_cmp:
+    pf = pq.ParquetFile(fp)  # one footer-only network round-trip
+    stats = _row_group_stats(pf, date_col)
+    lo_cmp = lo.to_pydatetime() if hasattr(lo, "to_pydatetime") else lo
+    hi_cmp = hi.to_pydatetime() if hasattr(hi, "to_pydatetime") else hi
+
+    if stats is None:
+        matching = list(range(pf.num_row_groups))  # no stats to prune on - read everything
+    else:
+        matching = [i for i, (mn, mx) in enumerate(stats) if not (mx < lo_cmp or mn >= hi_cmp)]
+        if not matching:
             return None  # provably no matching rows - skip the read entirely
-    # ParquetFile.read() has no `filters` kwarg - the predicate-pushdown filtered
-    # read has to go through the module-level read_table (dataset-backed) API.
-    tbl = pq.read_table(fp, columns=columns, filters=[(date_col, ">=", lo), (date_col, "<", hi)])
-    return tbl.to_pandas() if tbl.num_rows else None
+
+    tbl = pf.read_row_groups(matching, columns=columns)
+    if tbl.num_rows == 0:
+        return None
+    df = tbl.to_pandas()
+    mask = (df[date_col] >= lo_cmp) & (df[date_col] < hi_cmp)
+    df = df.loc[mask]
+    return df if not df.empty else None
 
 
 # ─── Customisable output fields ──────────────────────────────────────────────

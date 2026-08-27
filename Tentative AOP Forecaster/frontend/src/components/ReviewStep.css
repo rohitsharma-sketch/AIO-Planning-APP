@@ -312,12 +312,26 @@
 /* ── Forecast Preview table ────────────────────────────────────────────────── */
 .preview-card { margin-top: 0; }
 
-.preview-table { width: auto; min-width: 520px; font-size: 13px; }
+/* A hard `width` (not min-width) + table-layout:fixed makes the <colgroup>
+   widths below exact and identical between the two preview tables, instead
+   of each table auto-sizing its own columns from its own content (₹ figures
+   here, %s in the sibling table) - that per-table auto-sizing is why the
+   two side-by-side tables' Q1-Q4 boundaries used to drift out of alignment
+   with each other despite each table individually looking fine. A `width:
+   auto` table under a flex parent with `min-width: 0` (see .preview-row-wrap
+   .preview-card below) can still get proportionally shrunk by the flex
+   algorithm, and - because the two tables' own content-driven minimums
+   differ slightly - shrinks each one by a slightly different amount, which
+   silently reintroduces a few px of the same drift. A fixed `width` removes
+   that: the table never shrinks below it, overflowing into .table-scroll's
+   horizontal scroll instead on a narrow viewport. */
+.preview-table { width: 690px; font-size: 13px; table-layout: fixed; }
 .preview-table thead th {
   font-size: 12px;
-  padding: 8px 16px;
+  padding: 8px 12px;
   text-align: right;
   white-space: nowrap;
+  box-sizing: border-box;
 }
 .preview-table thead th:first-child { text-align: left; }
 
@@ -337,17 +351,31 @@
   font-weight: 700;
   color: var(--navy);
   text-align: left !important;
-  padding: 7px 16px;
-  min-width: 72px;
+  padding: 7px 12px;
+  box-sizing: border-box;
 }
 
 .preview-val {
   text-align: right;
-  padding: 7px 16px;
+  padding: 6px 12px;
   font-variant-numeric: tabular-nums;
   color: var(--char, #2D3A4A);
-  min-width: 90px;
+  box-sizing: border-box;
 }
+
+/* LY sub-line — sits directly under the TY figure in the same cell so the
+   two are read together at a glance ("gauge the numbers") without a
+   separate row or table. Own block so it wraps under the main number
+   regardless of column width. */
+.ly-sub {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted, #7A869C);
+  margin-top: 1px;
+}
+.ly-sub--onNavy { color: rgba(255,255,255,0.62); }
 
 .grand-ttl-col { border-left: 2px solid var(--mid, #3B5B99) !important; }
 .grand-ttl-val {
@@ -363,8 +391,9 @@
   font-weight: 700;
   font-size: 13px;
   text-align: right;
-  padding: 7px 16px;
+  padding: 6px 12px;
   border-top: 2px solid var(--mid, #3B5B99);
+  box-sizing: border-box;
 }
 .preview-grand-total td:first-child { text-align: left; }
 
