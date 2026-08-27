@@ -675,6 +675,17 @@ def reindex_daywise(months, store_cluster, day_map, sync_id=None, progress=None,
     unmapped_sample = sorted(df.loc[df["fut_date"].isna(), "ref_iso"].unique().tolist())[:20]
     df = df.dropna(subset=["fut_date"])
 
+    # Reference (LY) date most commonly mapped to each future (TY) date column -
+    # lets the frontend show a "Reference Date" header row directly above the
+    # future-date row in the wide export, so a reader sees at a glance which
+    # source date each output column's sales were shifted from. Different
+    # clusters can map the same future date to slightly different reference
+    # dates (their calendars don't have to shift identically) - this is the
+    # PLURALITY across every mapped row for that future date, the same
+    # "most common wins" rule reindex_monthwise's own cluster_month_map
+    # already uses one level up, not a per-row guarantee.
+    ref_date_by_column = df.groupby("fut_date")["ref_iso"].agg(lambda s: s.value_counts().idxmax()).to_dict()
+
     grp = df.groupby(group_cols + ["fut_date"], observed=True)[metric_col].sum().reset_index()
     rows = _rows_from_group(grp, group_cols, "fut_date", metric_col, key_fields)
     columns = sorted(grp["fut_date"].unique().tolist())
@@ -682,6 +693,7 @@ def reindex_daywise(months, store_cluster, day_map, sync_id=None, progress=None,
     return {
         "ok": True, "source": "dw", "keyFields": key_fields, "grain": "_".join(f.lower() for f in key_fields), "metric": metric_col,
         "rowsRead": total_read, "rowsMapped": len(df), "rows": rows, "columns": columns,
+        "refDateByColumn": ref_date_by_column,
         "actualRows": actual_rows, "actualColumns": actual_columns, "actualRowCount": len(actual_grp),
         "unmappedStores": unmapped_stores, "unmappedDateCount": unmapped_dates, "unmappedDateSample": unmapped_sample,
         "unmappedClusters": unknown_clusters, "unmappedClusterStores": unknown_cluster_stores,
@@ -731,6 +743,10 @@ def reindex_monthwise(months, store_cluster, day_map, sync_id=None, progress=Non
     unmapped_sample = sorted(df.loc[df["fut_month"].isna(), "ym"].unique().tolist())[:20]
     df = df.dropna(subset=["fut_month"])
 
+    # See the matching comment in reindex_daywise - same plurality rule, one
+    # grain up (reference MONTH most commonly mapped to each future month).
+    ref_date_by_column = df.groupby("fut_month")["ym"].agg(lambda s: s.value_counts().idxmax()).to_dict()
+
     grp = df.groupby(group_cols + ["fut_month"], observed=True)[metric_col].sum().reset_index()
     rows = _rows_from_group(grp, group_cols, "fut_month", metric_col, key_fields)
     columns = sorted(grp["fut_month"].unique().tolist())
@@ -738,6 +754,7 @@ def reindex_monthwise(months, store_cluster, day_map, sync_id=None, progress=Non
     return {
         "ok": True, "source": "mw", "keyFields": key_fields, "grain": "_".join(f.lower() for f in key_fields), "metric": metric_col,
         "rowsRead": total_read, "rowsMapped": len(df), "rows": rows, "columns": columns,
+        "refDateByColumn": ref_date_by_column,
         "actualRows": actual_rows, "actualColumns": actual_columns, "actualRowCount": len(actual_grp),
         "unmappedStores": unmapped_stores, "unmappedDateCount": unmapped_months, "unmappedDateSample": unmapped_sample,
         "unmappedClusters": unknown_clusters, "unmappedClusterStores": unknown_cluster_stores,

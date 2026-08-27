@@ -272,6 +272,25 @@ table td {
 table tr:last-child td { border-bottom: none; }
 table tr:hover td { background: var(--light); }
 
+/* Reindexed Sales' extra Reference Date row (ReindexOutputPanel.jsx) sits
+   directly above the normal Cluster/date header row - both stick while
+   scrolling, so the second row needs its own sticky offset (below the first
+   row's own height) instead of both fighting over top:0. Visually distinct
+   (lighter navy, italic) so it reads as auxiliary context under the real
+   header, not a second identical header. */
+.rx-ref-date-row th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--navy2);
+  font-style: italic;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  opacity: 0.9;
+}
+.rx-ref-date-row + tr th { top: 28px; }
+
 /* Festive row tinting for the Day-by-Day table (OutputSection.jsx).
    Ported from table.dtbl tr.r-pre/.r-core/.r-post (calendar_engine.html lines
    229-232). These must come AFTER the generic `table tr:hover td` rule above:

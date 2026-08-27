@@ -153,6 +153,13 @@ export default function ReindexOutputPanel({ result }) {
 
   const kfHeaders = keyFields.map(f => KEY_LABELS[f] || f)
   const fileStem = `calendarised_sales_${result.source}`
+  // Reference (LY) date each future-date column was shifted from - see the
+  // backend comment in reindex_daywise/reindex_monthwise (scans.py): this is
+  // the plurality across every mapped row for that column, since different
+  // clusters' calendars don't have to shift a given future date from the
+  // exact same reference date. Falls back to '' for a result cached before
+  // refDateByColumn existed, so an old cached run doesn't crash the header.
+  const refDateByColumn = result.refDateByColumn || {}
 
   function countText(n) {
     if (!n) return 'No rows to show.'
@@ -163,6 +170,9 @@ export default function ReindexOutputPanel({ result }) {
 
   function downloadReindexed() {
     downloadCsv([
+      // Reference-date row sits directly above the future-date header row,
+      // same column order, so the two always line up one-to-one.
+      ['Reference Date', ...kfHeaders.map(() => ''), ...result.columns.map(c => refDateByColumn[c] || '')],
       ['Cluster', ...kfHeaders, ...result.columns],
       ...filteredWide.map(r => [clusterOf(r.store), ...keyFields.map(f => r[f]),
         ...result.columns.map(c => cell(r.vals[c]))]),
@@ -225,6 +235,14 @@ export default function ReindexOutputPanel({ result }) {
           <div className="tbl-wrap">
             <table>
               <thead>
+                {/* Reference-date row directly above the future-date row, same
+                    column order, so the two headers always align one-to-one -
+                    see refDateByColumn above. */}
+                <tr className="rx-ref-date-row">
+                  <th>Reference Date</th>
+                  {kfHeaders.map(h => <th key={`ref-${h}`} />)}
+                  {result.columns.map(c => <th key={`ref-${c}`} style={num}>{refDateByColumn[c] || ''}</th>)}
+                </tr>
                 <tr>
                   <th>Cluster</th>
                   {kfHeaders.map(h => <th key={h}>{h}</th>)}
