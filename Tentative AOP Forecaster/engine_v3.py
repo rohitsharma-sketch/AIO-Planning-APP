@@ -294,20 +294,33 @@ def build_growth_map(growth_df):
 
 # ── Actuals pivot ──────────────────────────────────────────────────────────────
 def pivot_actuals(actuals_df, aop_df=None, open_months=None):
-    """{store: {div: {fy27_month: value}}}
-    If aop_df is provided (AOP (Optional) sheet), its Mar'27 column patches the
-    Mar'27 *actual* for any store-div where the actual is zero/missing (fallback
-    mode, unchanged from the legacy Mar27 Targets behaviour) — this feeds the
-    base for the Mar'28 forecast. Apr'27..Mar'28 columns are handled separately
-    by build_aop_overrides() as direct AOP forecast overrides.
+    """Returns (actuals_pivot, mar27_anchor).
 
-    A month in `open_months` (defaults to _open_months(), i.e. real today)
-    is skipped entirely in the actuals_df loop below — any value synced for
-    it stays untouched in the DB, but the engine treats that month as 0.0
-    (its normal "no data yet" default) until the real calendar moves past it.
-    This does NOT apply to the aop_df Mar'27 patch just below: that's a
-    planner's deliberate manual figure for a month with no real actual yet,
-    the exact case this whole mechanism exists for, not data leaking in early.
+    actuals_pivot: {store: {div: {fy27_month: value}}} — the REAL synced FY27
+    actuals grid only. A month in `open_months` (defaults to _open_months(),
+    i.e. real today) is skipped entirely - any value synced for it stays
+    untouched in the DB, but the engine treats that month as 0.0 (its normal
+    "no data yet" default) until the real calendar moves past it. This is
+    what every "base for FY28 month X" lookup throughout the engine reads
+    (pass1_forecasts, the store_base dicts in pass1b/pass2, build_df's Base
+    column) - since FY27_M's last entry ("Mar'27") pairs with FY28_M's last
+    entry ("Mar'28") wherever the engine zips the two lists, this alone is
+    what makes Mar'28 wait for a REAL, closed Mar'27 actual and never see
+    the AOP-override figure below.
+
+    mar27_anchor: {store: {div: value}} — Mar'27's OWN forecast anchor
+    (FY28_M[0], used only by the Ramp/NSO passes to seed their MoM chain
+    when Mar'27 itself has no real actual yet). If aop_df is provided (AOP
+    (Optional) sheet), its Mar'27 column patches this anchor for any
+    store-div where the real actual is zero/missing (fallback mode,
+    unchanged from the legacy Mar27 Targets behaviour). Deliberately a
+    SEPARATE dict from actuals_pivot, not written into it: the AOP override
+    is a planner's deliberate figure for Mar'27 itself, valid as Mar'27's
+    own anchor, but not a substitute for a real closed actual that Mar'28
+    should be allowed to grow from — confirmed with the user 2026-08-27:
+    "We will make mar 28 when we will get mar 27 actuals not based out of
+    mar 27 aop." Apr'27..Mar'28 columns are handled separately by
+    build_aop_overrides() as direct AOP forecast overrides.
     """
     open_months = _open_months() if open_months is None else open_months
     out = {}
@@ -332,6 +345,7 @@ def pivot_actuals(actuals_df, aop_df=None, open_months=None):
             if v is not None and v == v:  # not NaN
                 vals[m] += float(v)
 
+    mar27_anchor = {s: {d: vals.get("Mar'27", 0.0) for d, vals in divs.items()} for s, divs in out.items()}
     if aop_df is not None and "Mar'27" in aop_df.columns:
         for _, row in aop_df.iterrows():
             s = str(row["Store"]).strip()
@@ -341,14 +355,12 @@ def pivot_actuals(actuals_df, aop_df=None, open_months=None):
             val = float(row["Mar'27"])
             if val == 0:
                 continue
-            if s not in out:
-                out[s] = {}
-            if d not in out[s]:
-                out[s][d] = {m: 0.0 for m in FY27_M}
-            if out[s][d].get("Mar'27", 0.0) == 0.0:
-                out[s][d]["Mar'27"] = val
+            if s not in mar27_anchor:
+                mar27_anchor[s] = {}
+            if mar27_anchor[s].get(d, 0.0) == 0.0:
+                mar27_anchor[s][d] = val
 
-    return out
+    return out, mar27_anchor
 
 
 def build_aop_overrides(aop_df):
@@ -402,7 +414,7 @@ def pass1_forecasts(store_info, actuals_pivot, gmap):
 
 
 # ── Pass 1b — Ramp forecasts (ref store cont% × scale × growth%) ───────────────
-def _ref_fc_for_store(ref, store_info, actuals_pivot, lfl_fc, gmap):
+def _ref_fc_for_store(ref, store_info, actuals_pivot, lfl_fc, gmap, mar27_anchor=None):
     """
     Return a {div: {fy28m: value}} forecast for a ref store.
     Uses lfl_fc if available; otherwise builds actuals x growth% directly
@@ -410,11 +422,12 @@ def _ref_fc_for_store(ref, store_info, actuals_pivot, lfl_fc, gmap):
     """
     if ref in lfl_fc:
         return lfl_fc[ref]
+    mar27_anchor = mar27_anchor or {}
     # Ref is a Ramp or unknown store — build a simple actuals x growth% forecast
     fc = {}
     for div in DIVS:
         rates = gmap.get(div.upper(), {})
-        actual_mar27 = actuals_pivot.get(ref, {}).get(div, {}).get(FY27_M[-1], 0.0)
+        actual_mar27 = mar27_anchor.get(ref, {}).get(div, 0.0)
         fc[div] = {}
         for fy27m, fy28m in zip(FY27_M, FY28_M):
             if fy28m == FY28_M[0] and actual_mar27 > 0:
@@ -426,7 +439,7 @@ def _ref_fc_for_store(ref, store_info, actuals_pivot, lfl_fc, gmap):
     return fc
 
 
-def pass1b_ramp_forecasts(store_info, actuals_pivot, lfl_fc, gmap, open_months=None):
+def pass1b_ramp_forecasts(store_info, actuals_pivot, lfl_fc, gmap, open_months=None, mar27_anchor=None):
     """
     For Ramp stores:
     - Months WITH FY27 actuals  → exactly base × (1 + growth%)
@@ -449,6 +462,7 @@ def pass1b_ramp_forecasts(store_info, actuals_pivot, lfl_fc, gmap, open_months=N
     """
     PROJ_MISSING = {"FY27 - Q1", "FY27 - Q2"}
     open_months = _open_months() if open_months is None else open_months
+    mar27_anchor = mar27_anchor or {}
 
     fc = {}
     for store, si in store_info.items():
@@ -456,7 +470,7 @@ def pass1b_ramp_forecasts(store_info, actuals_pivot, lfl_fc, gmap, open_months=N
             continue
 
         ref     = si.get("ref_store") or NSO_REF
-        ref_fcd = _ref_fc_for_store(ref, store_info, actuals_pivot, lfl_fc, gmap)
+        ref_fcd = _ref_fc_for_store(ref, store_info, actuals_pivot, lfl_fc, gmap, mar27_anchor)
         fc[store] = {}
 
         for div in DIVS:
@@ -475,8 +489,9 @@ def pass1b_ramp_forecasts(store_info, actuals_pivot, lfl_fc, gmap, open_months=N
                 for fy27m, fy28m in zip(FY27_M, FY28_M)
             }
 
-            # Mar'27 actual for this store-div (FY27_M[-1] pairs with FY28_M[0])
-            actual_mar27 = actuals_pivot.get(store, {}).get(div, {}).get(FY27_M[-1], 0.0)
+            # Mar'27 anchor for this store-div (FY28_M[0]) - real actual, or the
+            # AOP-override figure if that's all there is (see pivot_actuals()).
+            actual_mar27 = mar27_anchor.get(store, {}).get(div, 0.0)
 
             # Ref store forecast values per FY28 month (for MoM chaining)
             ref_div_fc = ref_fcd.get(div, {})
@@ -574,7 +589,7 @@ def nso_ramp(store, ref_store, open_month, ref_fc):
     return result
 
 # ── Pass 2 — NSO forecasts ─────────────────────────────────────────────────────
-def pass2_forecasts(store_info, nso_open, ref_fc, actuals_pivot, gmap):
+def pass2_forecasts(store_info, nso_open, ref_fc, actuals_pivot, gmap, mar27_anchor=None):
     """
     750L ramp formula for NSO stores.
     Floor: for stores that already have FY27 actuals (named NSO), ensure
@@ -582,6 +597,7 @@ def pass2_forecasts(store_info, nso_open, ref_fc, actuals_pivot, gmap):
     MoM chain: when base=0 or opening-transition (prev base=0) and a Mar'27 anchor
     exists, use ref store's MoM ratio x prev_derived instead of the ramp formula.
     """
+    mar27_anchor = mar27_anchor or {}
     fc = {}
     for store, si in store_info.items():
         if si["tag"] not in NSO_TAGS:
@@ -595,12 +611,12 @@ def pass2_forecasts(store_info, nso_open, ref_fc, actuals_pivot, gmap):
         ramp   = nso_ramp(store, ref, open_m, ref_fc)
 
         # Ref store monthly forecast for MoM chaining (ref_fc has lfl+ramp combined)
-        ref_fcd = _ref_fc_for_store(ref, store_info, actuals_pivot, ref_fc, gmap)
+        ref_fcd = _ref_fc_for_store(ref, store_info, actuals_pivot, ref_fc, gmap, mar27_anchor)
 
         fc[store] = {}
         for div in DIVS:
             rates        = gmap.get(div.upper(), {})
-            actual_mar27 = actuals_pivot.get(store, {}).get(div, {}).get(FY27_M[-1], 0.0)
+            actual_mar27 = mar27_anchor.get(store, {}).get(div, 0.0)
             ref_div_fc   = ref_fcd.get(div, {})
 
             # FY27 base per FY28 month for this store-div
@@ -1134,7 +1150,7 @@ def main():
 
     nso_open     = {str(r["Store"]).strip(): str(r["Opening Month"]).strip()
                     for _, r in nso_df.iterrows()}
-    actuals_pivot = pivot_actuals(actuals_df, aop_df)
+    actuals_pivot, mar27_anchor = pivot_actuals(actuals_df, aop_df)
     aop_overrides = build_aop_overrides(aop_df)
 
     n_lfl  = sum(1 for si in store_info.values() if si["tag"] in LFL_TAGS)
@@ -1148,12 +1164,12 @@ def main():
     lfl_fc = pass1_forecasts(store_info, actuals_pivot, gmap)
 
     print("[OK] Pass 1b -> Ramp stores: ref store cont% x scale (growth% embedded)...")
-    ramp_fc = pass1b_ramp_forecasts(store_info, actuals_pivot, lfl_fc, gmap)
+    ramp_fc = pass1b_ramp_forecasts(store_info, actuals_pivot, lfl_fc, gmap, mar27_anchor=mar27_anchor)
 
     ref_fc = {**lfl_fc, **ramp_fc}
 
     print("[OK] Pass 2  -> NSO ramp (750L target, LAM ref for unnamed)...")
-    nso_fc = pass2_forecasts(store_info, nso_open, ref_fc, actuals_pivot, gmap)
+    nso_fc = pass2_forecasts(store_info, nso_open, ref_fc, actuals_pivot, gmap, mar27_anchor=mar27_anchor)
 
     all_fc = {**ref_fc, **nso_fc}
 
@@ -1273,7 +1289,7 @@ def run_engine(input_file, output_file, palette="classic", detail_file=None, inc
 
     nso_open      = {str(r["Store"]).strip(): str(r["Opening Month"]).strip()
                      for _, r in nso_df.iterrows()}
-    actuals_pivot = pivot_actuals(actuals_df, aop_df)
+    actuals_pivot, mar27_anchor = pivot_actuals(actuals_df, aop_df)
     aop_overrides = build_aop_overrides(aop_df)
     gmap          = build_growth_map(growth_df)
     if growth_overrides:
@@ -1283,9 +1299,9 @@ def run_engine(input_file, output_file, palette="classic", detail_file=None, inc
                     if month in gmap[div]:
                         gmap[div][month] = float(rate_pct) / 100.0
     lfl_fc        = pass1_forecasts(store_info, actuals_pivot, gmap)
-    ramp_fc       = pass1b_ramp_forecasts(store_info, actuals_pivot, lfl_fc, gmap)
+    ramp_fc       = pass1b_ramp_forecasts(store_info, actuals_pivot, lfl_fc, gmap, mar27_anchor=mar27_anchor)
     ref_fc        = {**lfl_fc, **ramp_fc}
-    nso_fc        = pass2_forecasts(store_info, nso_open, ref_fc, actuals_pivot, gmap)
+    nso_fc        = pass2_forecasts(store_info, nso_open, ref_fc, actuals_pivot, gmap, mar27_anchor=mar27_anchor)
     all_fc        = {**ref_fc, **nso_fc}
     df            = build_df(store_info, actuals_pivot, all_fc, aop_overrides)
 

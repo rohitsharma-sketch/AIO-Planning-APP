@@ -15,7 +15,17 @@ Installed as a daily scheduled task by ../install_auto_sync.ps1 (see that
 script for the exact time and how to uninstall).
 """
 import importlib
+import os
 import sys
+
+# Run directly (`python sync/run_all.py`) rather than imported, Python sets
+# sys.path[0] to this file's OWN directory (.../sync), not its parent - so
+# `import sync.xxx` below fails with "No module named 'sync'" without this,
+# even though the identical import works fine from app.py (which lives in
+# the parent dir already). Same fixup every individual *_sync.py module
+# already does for itself, needed here too since this import happens before
+# any of them get a chance to run their own.
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Same list as app.py's DB_SYNC_JOBS - kept as a literal copy, not an import,
 # so this script has no dependency on app.py (which pulls in the full FastAPI
