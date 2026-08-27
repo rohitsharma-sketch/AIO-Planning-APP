@@ -21,19 +21,31 @@ _REPO_ROOT = os.path.dirname(_HERE)
 # never included here — if this endpoint is being hit at all, it's already
 # running. Each entry launches detached (its own process group) so it
 # outlives landing_server.py, exactly like starting it from its own terminal.
+#
+# Calendar Engine and Planning Engine do NOT get their own standalone entries
+# here (they did once, on ports 7822/8002) - both are served by the unified
+# RS Planning Platform on 8010 (see index.html's own footer: "Calendar, AOP
+# Forecaster, and Planning Engine now run from one unified server"), so a
+# standalone launch is pure duplication, not a fallback. It's worse than
+# idle waste for Calendar Engine specifically: its standalone
+# `local_server.py` persists to local JSON files under `Calendar Engine/
+# Local DB/`, a completely different store from the unified server's Postgres
+# `calendar.*` tables - a Master Switch click could silently start the user
+# on stale/disconnected data with no visible difference in the UI. Found and
+# removed 2026-08-26 after the Master Switch click launched both and left
+# them running.
 APPS = [
     {"name": "Buyer's Input", "port": 5050,
      "cmd": [sys.executable, "sync_server.py"],
      "cwd": os.path.join(_REPO_ROOT, "Buyer's Input Sheet")},
-    {"name": "Calendar Engine (standalone)", "port": 7822,
-     "cmd": [sys.executable, "local_server.py"],
-     "cwd": os.path.join(_REPO_ROOT, "Calendar Engine")},
+    # Deliberately kept standalone (unlike Calendar/Planning above) - the
+    # unified :8010 route needs a login session, and this landing page's own
+    # anonymous status checks and "sync data lake" trigger both need an
+    # unauthenticated port. See the fetch calls against :8000 further down in
+    # index.html for exactly why.
     {"name": "AOP Forecaster (standalone)", "port": 8000,
      "cmd": [sys.executable, "-m", "uvicorn", "app:app", "--port", "8000"],
      "cwd": os.path.join(_REPO_ROOT, "Tentative AOP Forecaster")},
-    {"name": "Planning Engine (standalone)", "port": 8002,
-     "cmd": [sys.executable, "-m", "uvicorn", "main:app", "--port", "8002"],
-     "cwd": os.path.join(_REPO_ROOT, "SalesPlan", "backend")},
     {"name": "RS Planning Platform", "port": 8010,
      "cmd": [sys.executable, "-m", "uvicorn", "app:app", "--port", "8010"],
      "cwd": os.path.join(_REPO_ROOT, "RS Planning Platform", "backend")},
