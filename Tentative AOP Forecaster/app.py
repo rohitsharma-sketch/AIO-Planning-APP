@@ -4,7 +4,7 @@ Run: uvicorn app:app --reload --port 8000
 """
 import json, os, uuid, shutil
 from typing import Optional
-from fastapi import FastAPI, HTTPException, Body, Request, APIRouter
+from fastapi import FastAPI, HTTPException, Body, Request, APIRouter, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -349,6 +349,27 @@ def put_aop_overrides_config(request: Request, body: dict = Body(...)):
             return put_aop_overrides(session, body.get("rows") or [], actor_id, actor_role)
         except Exception as e:
             raise HTTPException(422, f"Could not save AOP overrides: {e}")
+
+
+@router.post("/api/config/aop-overrides/import")
+async def import_aop_overrides_config(file: UploadFile = File(...)):
+    """Parses a CSV/XLSX (Store, Division, Month, Value columns) - does NOT
+    write to the DB. Returns rows in the same shape put_aop_overrides()
+    accepts, so AopTab merges them into its existing edits/review state and
+    the user still clicks "Save changes" to commit, same as any manual edit
+    - see db/editor.py's parse_aop_overrides_import() for why a bulk import
+    doesn't get to skip that review step."""
+    from db.base import SessionLocal
+    from db.editor import parse_aop_overrides_import
+
+    content = await file.read()
+    with SessionLocal() as session:
+        try:
+            return parse_aop_overrides_import(session, content, file.filename or "")
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        except Exception as e:
+            raise HTTPException(422, f"Could not parse file: {e}")
 
 
 @router.get("/api/config/division-aop-summary")

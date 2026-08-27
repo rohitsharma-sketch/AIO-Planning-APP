@@ -181,6 +181,8 @@ function AopTab() {
   const [status, setStatus]   = useState(null)
   const [busy, setBusy]       = useState(false)
   const [draft, setDraft]     = useState({ store_id: '', division: DIVS[0], month: AOP_MONTHS[0], value: '' })
+  const [importing, setImporting] = useState(false)
+  const [importSkipped, setImportSkipped] = useState(null) // [{row, reason}] from the last import, or null
 
   const load = () => fetchJson('/api/config/aop-overrides').then(d => { setRows(d); setEdits({}) }).catch(e => setStatus({ err: true, msg: e.message }))
   useEffect(() => { load() }, [])
@@ -212,6 +214,40 @@ function AopTab() {
     setStatus(null)
   }
 
+  // Import from CSV/XLSX (Store, Division, Month, Value columns) — parse-only
+  // on the server (see db/editor.py's parse_aop_overrides_import), so this
+  // only stages rows into `edits` the same way a manual edit does. Nothing
+  // reaches Postgres until the user reviews the grid below and clicks
+  // "Save changes" — a bulk import silently overwriting 1000+ live overrides
+  // with no review step is exactly what every other editor in this tab
+  // already avoids.
+  async function importFile(e) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // so picking the same file again still fires onChange
+    if (!file) return
+    setImporting(true); setStatus(null); setImportSkipped(null)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const result = await fetchJson('/api/config/aop-overrides/import', { method: 'POST', body: form })
+      if (result.rows.length) {
+        setEdits(prev => {
+          const next = { ...prev }
+          for (const r of result.rows) next[`${r.store_id}|${r.division}|${r.month}`] = String(r.value)
+          return next
+        })
+      }
+      setImportSkipped(result.skipped)
+      const parts = [`Staged ${result.rows.length} row(s) as pending changes`]
+      if (result.skipped.length) parts.push(`${result.skipped.length} row(s) skipped — see below`)
+      setStatus({ err: !result.rows.length && !!result.skipped.length, msg: parts.join(' · ') + '. Review below, then Save changes.' })
+    } catch (err) {
+      setStatus({ err: true, msg: `Import failed: ${err.message}` })
+    } finally {
+      setImporting(false)
+    }
+  }
+
   async function save() {
     const changed = Object.entries(edits)
     if (!changed.length) { setStatus({ err: false, msg: 'Nothing to save.' }); return }
@@ -235,9 +271,25 @@ function AopTab() {
       <div className="pie-toolbar">
         <input className="pie-search" placeholder="Search by store code…" value={search} onChange={e => setSearch(e.target.value)} />
         <span style={{ fontSize: 13, color: 'var(--muted)' }}>{rows.length} overrides · {Object.keys(edits).length} unsaved change(s)</span>
+        <label className="btn-outline pie-import-btn" title="Import Store, Division, Month, Value from a .csv or .xlsx">
+          {importing ? 'Importing…' : '⇪ Import'}
+          <input type="file" accept=".csv,.xlsx,.xlsm" onChange={importFile} disabled={importing} style={{ display: 'none' }} />
+        </label>
         <button className="btn-primary pie-save" onClick={save} disabled={busy || !Object.keys(edits).length}>{busy ? 'Saving…' : 'Save changes'}</button>
       </div>
       {status && <p className={`pie-status ${status.err ? 'err' : ''}`}>{status.msg}</p>}
+      {importSkipped && importSkipped.length > 0 && (
+        <div className="pie-import-skipped">
+          <div className="pie-import-skipped-head">
+            {importSkipped.length} row{importSkipped.length === 1 ? '' : 's'} skipped on import
+            <button className="pie-del" onClick={() => setImportSkipped(null)} title="Dismiss">✕</button>
+          </div>
+          <ul>
+            {importSkipped.slice(0, 20).map((s, i) => <li key={i}>Row {s.row}: {s.reason}</li>)}
+          </ul>
+          {importSkipped.length > 20 && <div className="pie-import-skipped-more">…and {importSkipped.length - 20} more</div>}
+        </div>
+      )}
       <div className="pie-scroll">
         <table className="pie-row-table">
           <thead><tr><th>Store</th><th>Division</th><th>Month</th><th>Value (₹ L)</th><th></th></tr></thead>

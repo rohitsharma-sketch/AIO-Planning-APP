@@ -231,3 +231,80 @@ def put_aop_overrides(session: Session, rows: list, actor_id, actor_role: str) -
         session.execute(stmt)
     session.commit()
     return get_aop_overrides(session)
+
+
+# ── AOP Overrides — bulk import ────────────────────────────────────────────────
+# Parse-only: this never writes to the DB. It returns the same
+# {"store_id", "division", "month", "value"} row shape put_aop_overrides()
+# already accepts, so the caller (AopTab's Import button) merges the result
+# into its existing `edits` state and the user reviews/edits in the normal
+# grid before clicking "Save changes" - the same delta-editor path a manual
+# row-by-row edit already goes through. A bulk import silently overwriting
+# 1000+ live overrides with no review step is exactly the kind of action
+# this app's other editors (NSO's full-table replace, Growth's grid) already
+# require an explicit Save for - this keeps that same guarantee for imports.
+IMPORT_COLUMN_ALIASES = {
+    "store": "store_id", "store id": "store_id", "store code": "store_id",
+    "division": "division", "div": "division",
+    "month": "month",
+    "value": "value", "value (₹ l)": "value", "value (rs l)": "value", "value (lakhs)": "value",
+}
+
+
+def parse_aop_overrides_import(session: Session, file_bytes: bytes, filename: str) -> dict:
+    """Reads an uploaded CSV or XLSX (Store, Division, Month, Value columns,
+    case/spacing-insensitive) and returns {"rows": [...valid...], "skipped":
+    [{"row": excel_row_number, "reason": "..."}]} - same validation
+    put_aop_overrides() applies (known store, real division, real FY28 AOP
+    month, numeric value), so nothing reaches the grid that Save would have
+    silently dropped anyway - the difference is the user sees WHY here,
+    instead of a row just quietly not appearing after Save."""
+    import io
+    import pandas as pd
+
+    lower = filename.lower()
+    if lower.endswith(".csv"):
+        df = pd.read_csv(io.BytesIO(file_bytes), dtype=str)
+    elif lower.endswith((".xlsx", ".xlsm")):
+        df = pd.read_excel(io.BytesIO(file_bytes), dtype=str, engine="calamine")
+    else:
+        raise ValueError("Unsupported file type — upload a .csv or .xlsx")
+
+    df.columns = [IMPORT_COLUMN_ALIASES.get(str(c).strip().lower(), str(c).strip().lower()) for c in df.columns]
+    required = {"store_id", "division", "month", "value"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"Missing column(s): {', '.join(sorted(missing))} — expected Store, Division, Month, Value")
+
+    stores = {s.store_id for s in session.execute(select(Store)).scalars().all()}
+    periods = _period_ids(session)
+
+    rows, skipped = [], []
+    for i, r in df.iterrows():
+        excel_row = i + 2  # header is row 1, data starts at row 2 in both CSV and XLSX
+        sid = str(r.get("store_id") or "").strip().upper()
+        div = str(r.get("division") or "").strip().upper()
+        month = str(r.get("month") or "").strip()
+        raw_val = r.get("value")
+
+        if not sid:
+            skipped.append({"row": excel_row, "reason": "Missing Store"})
+            continue
+        if sid not in stores:
+            skipped.append({"row": excel_row, "reason": f'Unknown store "{sid}"'})
+            continue
+        if div not in DIVS:
+            skipped.append({"row": excel_row, "reason": f'Division must be one of {", ".join(DIVS)}, got "{div}"'})
+            continue
+        if month not in FY28_AOP_M or month not in periods:
+            skipped.append({"row": excel_row, "reason": f'Month must be one of {", ".join(FY28_AOP_M)}, got "{month}"'})
+            continue
+        try:
+            val = float(raw_val)
+        except (TypeError, ValueError):
+            skipped.append({"row": excel_row, "reason": f'Value is not a number: "{raw_val}"'})
+            continue
+
+        rows.append({"store_id": sid, "division": div, "month": month, "value": val})
+
+    return {"rows": rows, "skipped": skipped}
