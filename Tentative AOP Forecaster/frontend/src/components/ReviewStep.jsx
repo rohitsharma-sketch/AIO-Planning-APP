@@ -354,11 +354,11 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
           <button
             className={`actuals-source-btn ${actualsSource === 'own' ? 'active' : ''}`}
             onClick={() => setActualsSource('own')}
-          >Store Sync</button>
+          >Actuals</button>
           <button
             className={`actuals-source-btn ${actualsSource === 'reindexed' ? 'active' : ''}`}
             onClick={() => setActualsSource('reindexed')}
-          >Calendar Engine Reindex</button>
+          >Re-indexed Sales</button>
         </div>
         {actualsSource === 'reindexed' && reindexedLoading && (
           <span className="actuals-source-status">Loading Calendar Engine's reindexed sales…</span>
