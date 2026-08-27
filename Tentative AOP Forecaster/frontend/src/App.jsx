@@ -203,7 +203,7 @@ export default function App() {
         )}
 
         {step === 0 && (showEditor
-          ? <PlanningInputsEditor onBack={() => setShowEditor(false)} />
+          ? <PlanningInputsEditor onBack={() => setShowEditor(false)} onContinue={handleUseDb} />
           : <UploadStep onUseDb={handleUseDb} onEditInputs={() => setShowEditor(true)} />
         )}
 

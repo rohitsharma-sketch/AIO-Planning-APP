@@ -37,8 +37,25 @@ function downloadAopTemplate() {
   URL.revokeObjectURL(url)
 }
 
-export default function PlanningInputsEditor({ onBack }) {
+export default function PlanningInputsEditor({ onBack, onContinue }) {
   const [tab, setTab] = useState('growth')
+  const [continuing, setContinuing] = useState(false)
+  const [continueErr, setContinueErr] = useState(null)
+
+  // Builds a fresh session straight from Postgres (same call "Continue from
+  // database" makes on the Upload screen) and drops the user into Review
+  // with it - whatever was just saved on any of the three tabs above is
+  // already live in the DB by the time Save's own request resolves, so
+  // this always reflects the latest edits, not a stale snapshot. Previously
+  // the only way to see edited Growth%/NSO/AOP values in Review was to
+  // click Back, then separately click "Continue from database" again - two
+  // disconnected steps for what's really one action ("I'm done editing,
+  // now generate with these values").
+  async function handleContinue() {
+    setContinuing(true); setContinueErr(null)
+    try { await onContinue() } catch (e) { setContinueErr(e.message) } finally { setContinuing(false) }
+  }
+
   return (
     <div className="pie-wrap">
       <div className="pie-head">
@@ -46,7 +63,13 @@ export default function PlanningInputsEditor({ onBack }) {
           <h1 className="pie-title">Planning Inputs</h1>
           <p className="pie-sub">Growth %, NSO openings, and AOP overrides — writes directly to Postgres (rs_planning), read by every "Continue from database" session.</p>
         </div>
-        <button className="btn-outline" onClick={onBack}>← Back</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {continueErr && <span className="pie-status err" style={{ maxWidth: 260 }}>{continueErr}</span>}
+          <button className="btn-primary" onClick={handleContinue} disabled={continuing}>
+            {continuing ? 'Building from database…' : 'Continue to Review →'}
+          </button>
+          <button className="btn-outline" onClick={onBack}>← Back</button>
+        </div>
       </div>
       <div className="pie-tabs">
         {TABS.map(t => (
