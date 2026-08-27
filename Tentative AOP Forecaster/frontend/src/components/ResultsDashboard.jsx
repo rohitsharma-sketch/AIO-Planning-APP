@@ -63,9 +63,14 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
     return next.length === TYPES.length ? [] : next.length ? next : [t]
   })
 
-  // Chart datasets — recomputed from filtered rows when detail is loaded; fall back to API aggregates
+  // Chart + KPI datasets — recomputed from filtered rows when detail is loaded;
+  // fall back to the API's own unfiltered aggregates until then (same fallback
+  // the charts already used - the KPI row now shares it too, so "Base (Actuals)"/
+  // "Forecasted AOP"/"Overall growth"/"Total stores" reflect the Store Type
+  // filter exactly like the charts below already did, instead of always
+  // showing the grand total regardless of which chips are toggled off.
   const charts = useMemo(() => {
-    if (!leaves) return { monthly: results.monthly, divisions: results.divisions, store_types: results.store_types }
+    if (!leaves) return { monthly: results.monthly, divisions: results.divisions, store_types: results.store_types, summary }
     const sel = leaves.filter(r => typeOn(r.Type))
     const monthly = MONTHS.map((month, i) => ({
       month,
@@ -81,10 +86,22 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
       const rs = leaves.filter(r => r.Type === type)
       return { type, base: +rs.reduce((s, r) => s + r.base, 0).toFixed(2), forecast: +rs.reduce((s, r) => s + r.fcst, 0).toFixed(2), count: new Set(rs.map(r => r.Store)).size }
     })
-    return { monthly, divisions, store_types }
-  }, [leaves, typeFilter, results])
+    // toLeaf's default scale (0.01) already puts .base/.fcst in ₹ Cr, matching
+    // summary.base_cr/forecast_cr's own unit - no rescale needed here.
+    const base_cr = sel.reduce((s, r) => s + r.base, 0)
+    const forecast_cr = sel.reduce((s, r) => s + r.fcst, 0)
+    const filteredSummary = {
+      base_cr, forecast_cr,
+      growth_pct: base_cr > 0 ? (forecast_cr / base_cr - 1) * 100 : 0,
+      n_stores: new Set(sel.map(r => r.Store)).size,
+      n_lfl:  new Set(leaves.filter(r => r.Type === 'LfL'  && typeOn(r.Type)).map(r => r.Store)).size,
+      n_ramp: new Set(leaves.filter(r => r.Type === 'Ramp' && typeOn(r.Type)).map(r => r.Store)).size,
+      n_nso:  new Set(leaves.filter(r => r.Type === 'NSO'  && typeOn(r.Type)).map(r => r.Store)).size,
+    }
+    return { monthly, divisions, store_types, summary: filteredSummary }
+  }, [leaves, typeFilter, results, summary])
 
-  const { monthly, divisions, store_types } = charts
+  const { monthly, divisions, store_types, summary: kpiSummary } = charts
   const filterLabel = typeFilter.length ? typeFilter.join(' + ') : 'All store types'
   const typeCount = t => (leaves ? new Set(leaves.filter(r => r.Type === t).map(r => r.Store)).size : { LfL: summary.n_lfl, Ramp: summary.n_ramp, NSO: summary.n_nso }[t])
 
@@ -117,13 +134,19 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
       {/* ── Summary tab ── */}
       {activeTab === 'summary' && <>
 
-      {/* ── KPI row ── */}
+      {/* ── KPI row — reflects the Store Type filter below (kpiSummary), not the
+          unfiltered grand total, once row-level detail has loaded (falls back
+          to the server's own unfiltered summary until it has - see charts
+          useMemo above) ── */}
       <div className="kpi-row">
         {[
-          { label: 'Base (Actuals)',  value: `₹${fmt(summary.base_cr)} Cr`,     sub: 'Mar\'26 – Mar\'27' },
-          { label: 'Forecasted AOP', value: `₹${fmt(summary.forecast_cr)} Cr`, sub: 'Mar\'27 – Mar\'28', primary: true },
-          { label: 'Overall growth', value: fmtPct(summary.growth_pct),         sub: 'Base vs Forecast', pct: true, positive: summary.growth_pct >= 0 },
-          { label: 'Total stores',   value: summary.n_stores,                  sub: `${summary.n_lfl} LfL · ${summary.n_ramp} Ramp · ${summary.n_nso} NSO` },
+          { label: 'Base (Actuals)',  value: `₹${fmt(kpiSummary.base_cr)} Cr`,     sub: 'Mar\'26 – Mar\'27' },
+          { label: 'Forecasted AOP', value: `₹${fmt(kpiSummary.forecast_cr)} Cr`, sub: 'Mar\'27 – Mar\'28', primary: true },
+          { label: 'Overall growth', value: fmtPct(kpiSummary.growth_pct),         sub: 'Base vs Forecast', pct: true, positive: kpiSummary.growth_pct >= 0 },
+          {
+            label: 'Total stores', value: kpiSummary.n_stores,
+            sub: TYPES.filter(typeOn).map(t => `${kpiSummary[`n_${t.toLowerCase()}`]} ${t}`).join(' · '),
+          },
         ].map(k => (
           <div key={k.label} className={`kpi-card card ${k.primary ? 'kpi-primary' : ''}`}>
             <div className="kpi-label">{k.label}</div>
