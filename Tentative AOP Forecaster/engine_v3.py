@@ -33,6 +33,13 @@ LFL_TAGS  = {"032 - Stores","080 - Stores","095 - Stores","125 - Stores","3 - St
 RAMP_TAGS = {"FY26 - Q4","FY27 - Q1","FY27 - Q2"}
 NSO_TAGS  = {"NSO","MAMJ-NSO"}   # 750L ramp formula
 
+# Q1's base sales (Apr'27/May'27/Jun'27 forecast columns, i.e. the Apr'26/
+# May'26/Jun'26 LY actuals that feed them) only count SEASON_TYPE rows in
+# Q1_ALLOWED_SEASON_TYPES - every other quarter counts every SEASON_TYPE.
+# Business rule as given, not derived from data.
+Q1_FY28_MONTHS = {"Apr'27", "May'27", "Jun'27"}
+Q1_ALLOWED_SEASON_TYPES = {"Summer", "Regular", "Occasional"}
+
 MAMJ_DEFAULT_OPEN    = "Apr'27"
 # Deviation% above which a named store is treated as ref-compliant (opening-month distortion)
 ANOMALY_DEV_THRESHOLD = 9.99   # = 999 %
@@ -275,7 +282,19 @@ def pivot_actuals(actuals_df, aop_df=None):
         d = str(row["Division"]).strip()
         if s not in out:
             out[s] = {}
-        out[s][d] = {m: float(row.get(m) or 0) for m in FY27_M}
+        # Store Actuals can now carry more than one row per (store, division) -
+        # one per Attribute/SEASON_TYPE (see to_workbook.py) - so this has to
+        # ACCUMULATE across rows, not assign. A plain `out[s][d] = {...}`
+        # silently dropped every attribute's total but the last one iterated,
+        # corrupting the real forecast base the moment a store/division had
+        # more than one attribute row - the quarter-specific attribute filter
+        # in get_file_info()'s own base_sales is a separate, LFL-preview-only
+        # concern; the actual forecast engine always wants the full total.
+        vals = out[s].setdefault(d, {m: 0.0 for m in FY27_M})
+        for m in FY27_M:
+            v = row.get(m)
+            if v is not None and v == v:  # not NaN
+                vals[m] += float(v)
 
     if aop_df is not None and "Mar'27" in aop_df.columns:
         for _, row in aop_df.iterrows():
@@ -1285,6 +1304,13 @@ def get_file_info(input_file):
         act = act.dropna(subset=["Store"])
         act["Store"]    = act["Store"].astype(str).str.strip()
         act["Division"] = act["Division"].astype(str).str.strip() if "Division" in act.columns else ""
+        # Attribute (SEASON_TYPE) is a newer column - a file built before
+        # to_workbook.py started writing it won't have it, and should behave
+        # exactly as before (no filtering at all, every row counts every
+        # quarter) rather than error or silently drop every Q1 row.
+        has_attribute = "Attribute" in act.columns
+        if has_attribute:
+            act["Attribute"] = act["Attribute"].astype(str).str.strip()
         month_pairs = list(zip(FY27_M, FY28_M))
         for _, row in act.iterrows():
             store = str(row["Store"])
@@ -1300,7 +1326,10 @@ def get_file_info(input_file):
                 grp = "NSO"
             else:
                 continue
+            attribute = str(row.get("Attribute", "")).strip() if has_attribute else None
             for fy27m, fy28m in month_pairs:
+                if has_attribute and fy28m in Q1_FY28_MONTHS and attribute not in Q1_ALLOWED_SEASON_TYPES:
+                    continue  # Q1 only counts Summer/Regular/Occasional - this row's attribute isn't one of them
                 v = row.get(fy27m, 0)
                 try:
                     base_sales[grp][div][fy28m] += float(v) if v == v else 0.0

@@ -32,7 +32,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import pandas as pd
 import pyarrow.parquet as pq
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from db.models.calendar import Calendar, CalendarDayPair, StoreCalendarCluster
@@ -89,7 +89,7 @@ def _fetch_raw_monthwise(folder, months):
     files = sorted(os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(".parquet"))
     frames, total_read = [], 0
     for fp in files:
-        tbl = pq.read_table(fp, columns=["BILLMONTH", "DIVISION", "STORE_NAME", "SL_V"],
+        tbl = pq.read_table(fp, columns=["BILLMONTH", "DIVISION", "STORE_NAME", "SL_V", "SEASON_TYPE"],
                              filters=[("BILLMONTH", ">=", lo), ("BILLMONTH", "<", hi)])
         if tbl.num_rows == 0:
             continue
@@ -99,7 +99,7 @@ def _fetch_raw_monthwise(folder, months):
         df = df[df["ym"].isin(months_set)]
         if not df.empty:
             frames.append(df)
-    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["BILLMONTH", "DIVISION", "STORE_NAME", "SL_V", "ym"])
+    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["BILLMONTH", "DIVISION", "STORE_NAME", "SL_V", "SEASON_TYPE", "ym"])
     return df, total_read
 
 
@@ -167,7 +167,12 @@ def run(include_partial=False):
         df = df.dropna(subset=["fut_month"])
 
         df["DIVISION"] = df["DIVISION"].fillna("(none)")
-        grp = df.groupby(["STORE_NAME", "DIVISION", "fut_month"], observed=True)["SL_V"].sum().reset_index()
+        # SEASON_TYPE carried through as its own group so a store/division/month's
+        # sales split by season type instead of collapsing into one row - see
+        # row_key below. A missing/blank SEASON_TYPE still needs a real string
+        # (not NaN) to group and to satisfy input_values' NOT NULL row_key.
+        df["SEASON_TYPE"] = df["SEASON_TYPE"].fillna("(none)").astype(str).str.strip()
+        grp = df.groupby(["STORE_NAME", "DIVISION", "SEASON_TYPE", "fut_month"], observed=True)["SL_V"].sum().reset_index()
 
         # 5. roll up division, relabel to FY27 period, convert to Lakhs
         excluded_lakhs = {}
@@ -180,17 +185,44 @@ def run(include_partial=False):
             label = _fut_to_label(r.fut_month)
             if label not in FY27_M:
                 continue
-            key = (r.STORE_NAME.strip(), div, label)
+            key = (r.STORE_NAME.strip(), div, r.SEASON_TYPE, label)
             agg[key] = agg.get(key, 0.0) + r.SL_V / LAKH
 
         # 6. write into planning_inputs.input_values (upsert on the identity constraint)
+        # row_key carries SEASON_TYPE - previously always "" (store_actuals had no
+        # sub-row dimension), now one row per store x division x period x season
+        # type so engine_v3.py's get_file_info() can filter Q1's base sales down
+        # to specific season types without losing the rest of the year's totals.
         period_ids = {p.label: p.period_id for p in session.execute(select(Period)).scalars().all()}
         rows = [
             {"lever_key": LEVER_KEY, "store_id": store, "division_code": div, "period_id": period_ids[label],
-             "row_key": "", "value": round(v, 10), "source": "calendar_sync"}
-            for (store, div, label), v in agg.items()
+             "row_key": season_type, "value": round(v, 10), "source": "calendar_sync"}
+            for (store, div, season_type, label), v in agg.items()
         ]
         if rows:
+            # Delete every existing store_actuals row for each (store, division,
+            # period) about to be (re)written, THEN insert fresh - not just an
+            # upsert keyed on the full identity including row_key. Two reasons:
+            # (a) migrating off the old scheme, where every row had row_key=""
+            #     - those rows share no key with the new season-split rows below,
+            #       so upsert alone would leave them behind as stale duplicates
+            #       that double-count every total downstream.
+            # (b) a season type that had sales in a PRIOR sync but genuinely has
+            #     none this time would otherwise never get cleared - upsert only
+            #     touches keys present in this run's `rows`, it can't remove one
+            #     that dropped out.
+            combos = {(store, div, label) for (store, div, _season, label) in agg}
+            del_stmt = (
+                InputValue.__table__.delete()
+                .where(InputValue.lever_key == LEVER_KEY)
+                .where(
+                    tuple_(InputValue.store_id, InputValue.division_code, InputValue.period_id).in_(
+                        [(store, div, period_ids[label]) for store, div, label in combos]
+                    )
+                )
+            )
+            session.execute(del_stmt)
+
             stmt = pg_insert(InputValue).values(rows)
             stmt = stmt.on_conflict_do_update(
                 index_elements=["lever_key", "store_id", "division_code", "period_id", "row_key"],

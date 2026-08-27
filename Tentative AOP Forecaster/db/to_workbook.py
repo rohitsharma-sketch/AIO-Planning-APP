@@ -69,14 +69,23 @@ def build_workbook_from_db(session: Session, out_path: str) -> str:
     _write_sheet(wb, "Store Master", ["Store", "Ref Store", "Cluster", "Tag"],
                  [[s.store_id, s.ref_store, s.cluster_key, s.tag] for s in stores])
 
-    # Store Actuals — pivot input_values(store_actuals) to Store x Division x FY27 month grid
+    # Store Actuals — pivot input_values(store_actuals) to Store x Division x
+    # Attribute x FY27 month grid. row_key carries the SEASON_TYPE the sync
+    # wrote (see store_actuals_sync.py) - grouping includes it now so two rows
+    # for the same store/division/month but different attributes don't
+    # collapse into one one (the pre-attribute pivot only grouped by
+    # (store, division), which silently overwrote one attribute's value with
+    # another's once store_actuals_sync started writing more than one row_key
+    # per store/division/month). A blank row_key (pre-migration data, or a
+    # lever other than store_actuals ever reusing this path) still pivots
+    # fine - it's just one more attribute value, "".
     periods = {p.period_id: p.label for p in session.execute(select(Period)).scalars().all()}
     actuals = session.execute(select(InputValue).where(InputValue.lever_key == "store_actuals")).scalars().all()
     grid = {}
     for v in actuals:
-        grid.setdefault((v.store_id, v.division_code), {})[periods.get(v.period_id)] = float(v.value)
-    actuals_rows = [[store, div] + [vals.get(m) for m in FY27_M] for (store, div), vals in grid.items()]
-    _write_sheet(wb, "Store Actuals", ["Store", "Division"] + FY27_M, actuals_rows)
+        grid.setdefault((v.store_id, v.division_code, v.row_key), {})[periods.get(v.period_id)] = float(v.value)
+    actuals_rows = [[store, div, attr] + [vals.get(m) for m in FY27_M] for (store, div, attr), vals in grid.items()]
+    _write_sheet(wb, "Store Actuals", ["Store", "Division", "Attribute"] + FY27_M, actuals_rows)
 
     # Growth % — pivot row_key (OVERALL/division) x FY28 month
     growth = session.execute(select(InputValue).where(InputValue.lever_key == "growth_pct")).scalars().all()
