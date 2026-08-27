@@ -14,6 +14,29 @@ const TABS = [
   { key: 'aop', label: 'AOP Overrides' },
 ]
 
+// Same quoting ReindexOutputPanel.jsx's downloadCsv uses, so a store/division
+// name containing a comma or quote can't corrupt the file.
+const csvField = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`
+
+// Template for the AOP Overrides Import button - exact column names/order
+// parse_aop_overrides_import() expects (db/editor.py), so a filled-in copy
+// of this always parses cleanly. The one data row is deliberately an
+// unreal store ("EXAMPLE") rather than a real one, so a user who imports
+// this file unedited gets a clear, self-explanatory "Unknown store" skip
+// reason instead of silently writing a real override they didn't intend.
+function downloadAopTemplate() {
+  const text = [
+    ['Store', 'Division', 'Month', 'Value'],
+    ['EXAMPLE', DIVS[0], AOP_MONTHS[0], '12.5'],
+  ].map(row => row.map(csvField).join(',')).join('\n')
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'aop_overrides_template.csv'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export default function PlanningInputsEditor({ onBack }) {
   const [tab, setTab] = useState('growth')
   return (
@@ -271,6 +294,9 @@ function AopTab() {
       <div className="pie-toolbar">
         <input className="pie-search" placeholder="Search by store code…" value={search} onChange={e => setSearch(e.target.value)} />
         <span style={{ fontSize: 13, color: 'var(--muted)' }}>{rows.length} overrides · {Object.keys(edits).length} unsaved change(s)</span>
+        <button className="btn-outline" onClick={downloadAopTemplate} title="Download a blank CSV with the right columns">
+          ⇩ Download Template
+        </button>
         <label className="btn-outline pie-import-btn" title="Import Store, Division, Month, Value from a .csv or .xlsx">
           {importing ? 'Importing…' : '⇪ Import'}
           <input type="file" accept=".csv,.xlsx,.xlsm" onChange={importFile} disabled={importing} style={{ display: 'none' }} />
