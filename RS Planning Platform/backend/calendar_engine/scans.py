@@ -342,9 +342,12 @@ def poll_link_scan_job(job_id):
 
 
 # ─── Reindexing engine ────────────────────────────────────────────────────────
-# Metric: Sales Value only (SL_V for month-wise, NETAMT for day-wise) - confirmed.
-# Row grain: Store x Division for month-wise, Store-only for day-wise - confirmed
-# (day-wise/billwise has no product hierarchy to break out by).
+# Metric: Sales Value by default for both sources - SL_V for month-wise,
+# SL_V for day-wise too as of the 2026-08-28 compiled export (was NETAMT
+# under the old billwise source, which no longer exists in this file at all).
+# Row grain: Store x Division for month-wise; day-wise now carries the SAME
+# merchandise hierarchy (DIVISION/SECTION/DEPARTMENT/ATTRIBUTE1/ARTICLE_NAME)
+# since the compiled source replaced billwise - it is no longer Store-only.
 # Calendar: caller supplies the locked template's dayMap (LY date -> TY date, per
 # cluster) and the resolved store->cluster map; this endpoint does no calendar or
 # store-cluster resolution of its own, so there is one source of truth (the app's
@@ -455,10 +458,18 @@ SOURCE_SCHEMA = {
         "always_dims": ["STORE_NAME", "DIVISION"],  # DIVISION is default-on, not just always-available
     },
     "dw": {
+        # Confirmed against the current compiled export (2026-08-28,
+        # c56319b8-...parquet, 17 cols / 7.07M rows) - this source now writes
+        # the SQL export's OWN output column names (SL_Q/SL_V/TAXAMT/
+        # TTL_DIS_V/COSTAMOUNT, DIVISION/SECTION/DEPARTMENT/ATTRIBUTE1/
+        # ARTICLE_NAME/SEASON_TYPE/DISPLAY_TYPE/STORE_STATUS/CLUSTER_TYPE/
+        # REGION_TYPE), not the old billwise source's raw ledger columns
+        # (ADMSITE_CODE, NETAMT) - those no longer exist in this file at all.
         "path_kind": "multi_dir",
-        "dimensions": ["ADMSITE_CODE", "STORE_STATUS", "CLUSTER_TYPE"],
-        "metrics": ["NETAMT"],
-        "default_metric": "NETAMT",
+        "dimensions": ["STORE_STATUS", "CLUSTER_TYPE", "REGION_TYPE", "DIVISION", "SECTION",
+                       "DEPARTMENT", "ATTRIBUTE1", "ARTICLE_NAME", "SEASON_TYPE", "DISPLAY_TYPE"],
+        "metrics": ["SL_V", "SL_Q", "TAXAMT", "TTL_DIS_V", "COSTAMOUNT"],
+        "default_metric": "SL_V",
         "always_dims": ["STORE_NAME"],
     },
 }
@@ -506,7 +517,7 @@ def get_source_schema(source_type):
 _RAW_CACHE = {}  # {'dw': {'syncId':..., 'fieldsKey':..., 'df':..., 'rowsRead':..., 'fetchedAt':...}, 'mw': {...}}
 
 
-def _fetch_raw_daywise(months, progress=None, extra_dims=None, metric_col="NETAMT"):
+def _fetch_raw_daywise(months, progress=None, extra_dims=None, metric_col="SL_V"):
     import pandas as pd
 
     extra_dims = extra_dims or []
