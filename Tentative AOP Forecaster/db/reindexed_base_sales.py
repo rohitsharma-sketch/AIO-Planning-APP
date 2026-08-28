@@ -24,7 +24,7 @@ breakdown - not wrong, just genuinely not there yet. See
 """
 from sqlalchemy import text
 
-from engine_v3 import DIVS, LFL_TAGS, FY28_M, Q1_FY28_MONTHS, Q1_ALLOWED_VALUES
+from engine_v3 import DIVS, LFL_TAGS, FY27_M, FY28_M, Q1_FY28_MONTHS, Q1_ALLOWED_VALUES, _open_months
 
 GM_DEPTS = {"HOUSEHOLD", "LIFESTYLE", "NON FOOD", "HOME FURNISHING", "SPORTS & TOYS",
             "FOOTWEAR", "TRAVEL ACCESSORIES", "STATIONERY"}
@@ -124,9 +124,18 @@ def get_reindexed_lfl_base_sales(session):
             continue
         base_sales[div][label] += float(total) / LAKH
 
+    # Zero out any FY28 month whose FY27-mapped predecessor hasn't fully
+    # closed yet - the same rule pivot_actuals() applies to AOP's own
+    # actuals (see module docstring above). Without this, a still-open
+    # month (synced early, before month-end) showed up here but not in the
+    # 'own' actuals source, making an artificial gap look like a genuine
+    # reindex effect when it was really just an apples-to-oranges month set.
+    open_months = _open_months()
+    closed_fy28_months = {fy28 for fy27, fy28 in zip(FY27_M, FY28_M) if fy27 not in open_months}
     for div in base_sales:
         for m in base_sales[div]:
-            base_sales[div][m] = round(base_sales[div][m], 2)
+            base_sales[div][m] = round(base_sales[div][m], 2) if m in closed_fy28_months else 0.0
+    available_fy28_months = [m for m in available_fy28_months if m in closed_fy28_months]
 
     return {"base_sales": base_sales, "hasAttribute": has_attribute,
             "availableMonths": available_fy28_months, "note": None}
