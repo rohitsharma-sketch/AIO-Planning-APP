@@ -10,11 +10,24 @@ import json
 import os
 import shutil
 import sys
+from decimal import Decimal, ROUND_HALF_DOWN
 import pandas as pd
 import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 import xlsxwriter
+
+
+def _round2(value):
+    """Round to 2 decimals for display/export.
+
+    Python's built-in round() uses banker's rounding, which can push a
+    number up OR down unpredictably at the boundary depending on float
+    representation noise accumulated through the ramp/MoM forecast chain.
+    Business rule: forecasts must never be inflated by a rounding tie, so
+    exact .xx5 ties round DOWN (toward zero), same as ROUND_HALF_DOWN.
+    """
+    return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_DOWN))
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 DIVS        = ["GM", "KIDS", "LADIES", "MENS", "RETAIL"]
@@ -694,13 +707,17 @@ def build_df(store_info, actuals_pivot, all_fc, aop_overrides=None):
                 else:
                     fcst = engine_val + adjustments.get(key, 0.0)
 
+                base       = _round2(base)
+                engine_val = _round2(engine_val)
+                fcst       = _round2(fcst)
+
                 row[f"{fy28m} | Base"]            = base
                 row[f"{fy28m} | Engine Forecast"] = engine_val   # pre-adjustment, exact growth%
                 row[f"{fy28m} | Forecast"]        = fcst         # engine + cumulative adjustment
                 if is_named(store) and base > 0 and (fcst - base) / base > ANOMALY_DEV_THRESHOLD:
                     row[f"{fy28m} | Deviation"] = 0.0
                 else:
-                    row[f"{fy28m} | Deviation"] = fcst - base
+                    row[f"{fy28m} | Deviation"] = _round2(fcst - base)
             rows.append(row)
     return pd.DataFrame(rows)
 
