@@ -55,6 +55,27 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
   const [monthFilter, setMonthFilter] = useState([])    // [] = all months
   const [showLabels, setShowLabels] = useState(true)
 
+  // Base source for the charts below: 'actual' is the DB's own actuals (what
+  // the engine itself forecast against); 'reindexed' swaps in Calendar
+  // Engine's saved month-wise reindex output for the LfL portion, so a
+  // planner can compare the SAME forecast's growth% against either base.
+  // Reindexed data is aggregate-only (div x month, LfL stores only - see
+  // db/reindexed_base_sales.py) - Ramp/NSO base is unaffected either way.
+  const [baseSource, setBaseSource] = useState('actual')   // 'actual' | 'reindexed'
+  const [reindexed, setReindexed] = useState(null)
+  const [reindexedLoading, setReindexedLoading] = useState(false)
+  const [reindexedError, setReindexedError] = useState(null)
+
+  useEffect(() => {
+    if (baseSource !== 'reindexed' || reindexed || reindexedLoading) return
+    setReindexedLoading(true)
+    fetch(apiUrl('/api/config/base-sales-reindexed'))
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('Failed to load')))
+      .then(data => setReindexed(data))
+      .catch(e => setReindexedError(e.message))
+      .finally(() => setReindexedLoading(false))
+  }, [baseSource, reindexed, reindexedLoading])
+
   // Row-level detail (store × division) — shared by the chart filters and the drill table
   useEffect(() => {
     const sid = session?.session_id
@@ -104,23 +125,42 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
     // chart shows just the selected months, everything else (KPIs, division
     // breakdown, store-type pie) rolls up totals over that same subset.
     const sumSel = (r, arr) => monthIdx.reduce((s, i) => s + arr[i], 0)
-    const monthly = monthIdx.map(i => ({
-      month: MONTHS[i],
-      base:     +sel.reduce((s, r) => s + r.mb[i], 0).toFixed(2),
-      forecast: +sel.reduce((s, r) => s + r.m[i], 0).toFixed(2),
-    }))
+
+    // Base-source swap: reindexed data only exists aggregated at div x month
+    // for LfL stores (see db/reindexed_base_sales.py), so it's substituted at
+    // the point of summation, not per store row. Forecast is never touched —
+    // this only changes which base the SAME forecast is compared against.
+    const reindexedOn = baseSource === 'reindexed' && !!reindexed?.base_sales
+    const rBase = (div, i) => (reindexed.base_sales[div]?.[MONTHS[i]] || 0) * 0.01   // Lakhs -> Cr
+
+    const monthly = monthIdx.map(i => {
+      const nonLfl = sel.filter(r => r.Type !== 'LfL').reduce((s, r) => s + r.mb[i], 0)
+      const lfl = reindexedOn && typeOn('LfL')
+        ? DIVS.reduce((s, d) => s + rBase(d, i), 0)
+        : sel.filter(r => r.Type === 'LfL').reduce((s, r) => s + r.mb[i], 0)
+      return { month: MONTHS[i], base: +(nonLfl + lfl).toFixed(2), forecast: +sel.reduce((s, r) => s + r.m[i], 0).toFixed(2) }
+    })
     const divisions = DIVS.map(division => {
       const rs = sel.filter(r => r.Division === division)
-      const base = rs.reduce((s, r) => s + sumSel(r, r.mb), 0), forecast = rs.reduce((s, r) => s + sumSel(r, r.m), 0)
+      const nonLfl = rs.filter(r => r.Type !== 'LfL').reduce((s, r) => s + sumSel(r, r.mb), 0)
+      const lfl = reindexedOn && typeOn('LfL')
+        ? monthIdx.reduce((s, i) => s + rBase(division, i), 0)
+        : rs.filter(r => r.Type === 'LfL').reduce((s, r) => s + sumSel(r, r.mb), 0)
+      const base = nonLfl + lfl, forecast = rs.reduce((s, r) => s + sumSel(r, r.m), 0)
       return { division, base: +base.toFixed(2), forecast: +forecast.toFixed(2), growth_pct: base > 0 ? +((forecast / base - 1) * 100).toFixed(1) : 0 }
     })
     const store_types = TYPES.filter(typeOn).map(type => {
       const rs = leaves.filter(r => r.Type === type)
-      return { type, base: +rs.reduce((s, r) => s + sumSel(r, r.mb), 0).toFixed(2), forecast: +rs.reduce((s, r) => s + sumSel(r, r.m), 0).toFixed(2), count: new Set(rs.map(r => r.Store)).size }
+      const base = reindexedOn && type === 'LfL'
+        ? DIVS.reduce((s, d) => s + monthIdx.reduce((ss, i) => ss + rBase(d, i), 0), 0)
+        : rs.reduce((s, r) => s + sumSel(r, r.mb), 0)
+      return { type, base: +base.toFixed(2), forecast: +rs.reduce((s, r) => s + sumSel(r, r.m), 0).toFixed(2), count: new Set(rs.map(r => r.Store)).size }
     })
     // toLeaf's default scale (0.01) already puts .base/.fcst in ₹ Cr, matching
     // summary.base_cr/forecast_cr's own unit - no rescale needed here.
-    const base_cr = sel.reduce((s, r) => s + sumSel(r, r.mb), 0)
+    // Reuse `monthly`'s per-month base (already swap-aware) rather than
+    // re-deriving the sum a second way.
+    const base_cr = monthly.reduce((s, m) => s + m.base, 0)
     const forecast_cr = sel.reduce((s, r) => s + sumSel(r, r.m), 0)
     const filteredSummary = {
       base_cr, forecast_cr,
@@ -131,7 +171,7 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
       n_nso:  new Set(leaves.filter(r => r.Type === 'NSO'  && typeOn(r.Type)).map(r => r.Store)).size,
     }
     return { monthly, divisions, store_types, summary: filteredSummary }
-  }, [leaves, typeFilter, monthFilter, results, summary])
+  }, [leaves, typeFilter, monthFilter, results, summary, baseSource, reindexed])
 
   const { monthly, divisions, store_types, summary: kpiSummary } = charts
   const filterLabel = typeFilter.length ? typeFilter.join(' + ') : 'All store types'
@@ -213,6 +253,35 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
         <span className="chart-filter-note">
           {dataErr ? `Detail unavailable — ${dataErr}` : !leaves ? 'Loading store detail…' : `Charts: ${filterLabel} · ${monthLabel}`}
         </span>
+      </div>
+
+      {/* ── Base source toggle: Actual vs Calendar Engine's reindexed sales.
+          Reindexed data only covers LfL stores (aggregate, div x month) — see
+          db/reindexed_base_sales.py — so Ramp/NSO base is unchanged either way. ── */}
+      <div className="actuals-source-toggle" style={{ padding: '0 2px' }}>
+        <span className="actuals-source-label">Base source (LfL):</span>
+        <div className="actuals-source-btns">
+          <button
+            className={`actuals-source-btn ${baseSource === 'actual' ? 'active' : ''}`}
+            onClick={() => setBaseSource('actual')}
+          >Actual Sales</button>
+          <button
+            className={`actuals-source-btn ${baseSource === 'reindexed' ? 'active' : ''}`}
+            onClick={() => setBaseSource('reindexed')}
+          >Re-indexed Sales</button>
+        </div>
+        {baseSource === 'reindexed' && reindexedLoading && (
+          <span className="actuals-source-status">Loading Calendar Engine's reindexed sales…</span>
+        )}
+        {baseSource === 'reindexed' && reindexedError && (
+          <span className="actuals-source-status actuals-source-status--err">Couldn't load: {reindexedError}</span>
+        )}
+        {baseSource === 'reindexed' && reindexed?.note && (
+          <span className="actuals-source-status actuals-source-status--warn">{reindexed.note}</span>
+        )}
+        {baseSource === 'reindexed' && reindexed?.base_sales && (
+          <span className="actuals-source-status">Ramp/NSO base unaffected — reindexed data covers LfL stores only.</span>
+        )}
       </div>
 
       {/* ── Month filter: quarter shortcuts + individual month chips ── */}
