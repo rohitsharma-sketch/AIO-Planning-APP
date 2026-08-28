@@ -176,6 +176,16 @@
     border-radius: 16px;
     padding: 20px 18px 16px;
     backdrop-filter: blur(6px);
+    /* Same lift/brighten as a.card:hover below - this tile is a <div>, not
+       an <a>, so that rule's selector never matched it and hovering felt
+       inert next to every other tile. Confirmed with the user: "i want the
+       effect to be similar with the other tiles." */
+    transition: transform .15s ease, border-color .15s ease, background .15s ease;
+  }
+  .sync-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(255,255,255,0.28);
+    background: rgba(255,255,255,0.10);
   }
   .sync-section + .sync-section { margin-top: 20px; }
   .sync-section-title {
@@ -232,6 +242,49 @@
   }
   .sync-badge.ok { color: var(--up); background: rgba(46,204,113,0.14); }
   .sync-badge.fail { color: var(--down); background: rgba(231,76,60,0.14); }
+  /* Collapsed by default — the tile used to show both sync-sections' full
+     row lists at all times, which crowded the grid with detail nobody was
+     reading yet. Now it reads like every other tile (icon, title, one status
+     line); clicking opens the detail in a popup instead of pushing the grid
+     around in place (an inline accordion was tried first and explicitly
+     rejected: "i dont want the drop down i want the click and view feature
+     in the tile"). */
+  .sync-card { cursor: pointer; }
+  .sync-card-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .sync-chevron { color: var(--text-dim); font-size: 13px; flex-shrink: 0; }
+  .sync-summary { margin-top: 10px; }
+
+  .sync-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(4, 8, 20, 0.6);
+    backdrop-filter: blur(2px);
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    z-index: 100;
+  }
+  .sync-modal-overlay.open { display: flex; }
+  .sync-modal {
+    background: #0e1730;
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 24px 22px 20px;
+    max-width: 460px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .sync-modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .sync-modal-header h2 { margin: 0; font-size: 18px; }
+  .sync-modal-close {
+    background: none; border: none; color: var(--text-dim); font-size: 20px;
+    line-height: 1; cursor: pointer; padding: 4px; border-radius: 6px;
+  }
+  .sync-modal-close:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+  .sync-modal .sync-section:first-of-type { margin-top: 18px; }
   footer {
     margin-top: 56px;
     font-size: 12px;
@@ -299,9 +352,31 @@
       </div>
     </a>
 
-    <div class="card sync-card" id="sync-card">
-      <div class="card-icon">🔄</div>
+    <div class="card sync-card" id="sync-card" role="button" tabindex="0" aria-haspopup="dialog">
+      <div class="sync-card-header">
+        <div class="card-icon">🔄</div>
+        <span class="sync-chevron">↗</span>
+      </div>
       <h2>Data Sync &amp; Flow</h2>
+      <div class="meta sync-summary">
+        <span class="status"><span class="dot" id="sync-summary-dot"></span><span class="status-label checking" id="sync-summary-label">checking…</span></span>
+        <span class="port">click to view</span>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Calendar, AOP Forecaster, and Planning Engine now run from one unified server
+    on <code>localhost:8010</code> — start it once and all three come up together.
+    A grey dot means that server isn't running yet.
+  </footer>
+
+  <div class="sync-modal-overlay" id="sync-modal-overlay">
+    <div class="sync-modal" id="sync-modal" role="dialog" aria-modal="true" aria-label="Data Sync & Flow">
+      <div class="sync-modal-header">
+        <h2>🔄 Data Sync &amp; Flow</h2>
+        <button class="sync-modal-close" id="sync-modal-close" type="button" aria-label="Close">✕</button>
+      </div>
 
       <div class="sync-section">
         <div class="sync-section-title">Extraction — Calendar Engine → Postgres</div>
@@ -314,12 +389,6 @@
       </div>
     </div>
   </div>
-
-  <footer>
-    Calendar, AOP Forecaster, and Planning Engine now run from one unified server
-    on <code>localhost:8010</code> — start it once and all three come up together.
-    A grey dot means that server isn't running yet.
-  </footer>
 
 <script>
   // Returns a promise so the Master Switch can wait for every card's real
@@ -474,6 +543,45 @@
   // workflow's live plan-cycle data, which only exists there, so it
   // handles the 401/unreachable cases explicitly instead.)
 
+  // Collapsed-tile summary dot — reflects whichever of the two sections (once
+  // both have finished loading) is worse: an error anywhere beats an ok
+  // everywhere, and "checking…" only shows before either has resolved. Reads
+  // the SAME rows the detail view already renders rather than a separate
+  // fetch, so the summary can never disagree with what expanding shows.
+  var _syncSummaryState = { extraction: false, flow: false };
+  function updateSyncSummary(which) {
+    _syncSummaryState[which] = true;
+    if (!_syncSummaryState.extraction || !_syncSummaryState.flow) return; // wait for both at least once
+    var dot = document.getElementById('sync-summary-dot');
+    var label = document.getElementById('sync-summary-label');
+    var hasError = !!document.querySelector('#extraction-rows .sync-error, #flow-rows .sync-error, #extraction-rows .sync-badge.fail');
+    dot.classList.remove('up', 'down');
+    label.classList.remove('up', 'down', 'checking');
+    if (hasError) { dot.classList.add('down'); label.classList.add('down'); label.textContent = 'attention needed'; }
+    else { dot.classList.add('up'); label.classList.add('up'); label.textContent = 'all clear'; }
+  }
+
+  // Click and view — the tile itself never changes shape (no inline
+  // accordion pushing the grid around); clicking it opens the same detail
+  // in a centered popup instead. Closes via the ✕ button, clicking the
+  // dimmed backdrop, or Escape.
+  (function () {
+    var card = document.getElementById('sync-card');
+    var overlay = document.getElementById('sync-modal-overlay');
+    var closeBtn = document.getElementById('sync-modal-close');
+    function open() { overlay.classList.add('open'); closeBtn.focus(); }
+    function close() { overlay.classList.remove('open'); card.focus(); }
+    card.addEventListener('click', open);
+    card.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+    });
+    closeBtn.addEventListener('click', close);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && overlay.classList.contains('open')) close();
+    });
+  })();
+
   // Extraction status — real sync.sync_runs rows from AOP Forecaster's Postgres sync.
   // Named (not just a bare top-level fetch) so the Master Switch can re-call it
   // right after it triggers a fresh sync, instead of the card only ever
@@ -495,7 +603,8 @@
     })
     .catch(function () {
       document.getElementById('extraction-rows').innerHTML = '<div class="sync-error">AOP Forecaster (localhost:8000) unreachable.</div>';
-    });
+    })
+    .then(function () { updateSyncSummary('extraction'); });
   }
   loadExtractionStatus();
 
@@ -523,6 +632,13 @@
 
   async function checkPlanCycleFlow() {
     const el = document.getElementById('flow-rows');
+    try {
+      return await _checkPlanCycleFlowInner(el);
+    } finally {
+      updateSyncSummary('flow'); // every exit path (early return, throw) still updates the tile summary
+    }
+  }
+  async function _checkPlanCycleFlowInner(el) {
     try {
       const res = await fetch('http://localhost:8010/api/aop/plan-cycles', { credentials: 'include', cache: 'no-store' });
       if (res.status === 401) { el.innerHTML = '<div class="sync-empty">Sign in to the platform to see live cycle status.</div>'; return; }
