@@ -95,6 +95,7 @@ def change_password(request: Request, body: dict = Body(...), user: dict = Depen
     the real owner out. Clears must_change_password so the forced
     change-password gate (see login's response) only fires once."""
     current_password, new_password = body.get("current_password"), body.get("new_password")
+    email = (body.get("email") or "").strip() or None
     if not current_password or not new_password:
         raise HTTPException(422, "current_password and new_password required")
     session = SessionLocal()
@@ -104,6 +105,13 @@ def change_password(request: Request, body: dict = Body(...), user: dict = Depen
             raise HTTPException(401, "Current password is incorrect")
         u.password_hash = hash_password(new_password)
         u.must_change_password = False
+        # Optional: the user registers their OWN recovery email here rather
+        # than an admin assigning one - only set if provided, and only
+        # overwrites what's on file if they actually typed something (an
+        # already-set email from a prior visit isn't cleared by leaving this
+        # field blank on a later, voluntary password change).
+        if email:
+            u.email = email
         session.commit()
         request.session["user"] = {
             "id": str(u.id), "username": u.username, "role": u.role, "is_admin": u.is_admin,
