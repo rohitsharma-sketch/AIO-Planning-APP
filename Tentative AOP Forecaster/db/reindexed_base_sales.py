@@ -1,26 +1,38 @@
 """
-Reads Calendar Engine's OWN saved reindex output (calendar.sales_snapshots,
-source_type='mw', kind='trend_shifted' - the same table SalesPlan's Sync
-Engine already reads from) and reshapes it into the same
-{div: {fy28_month_label: value}} structure engine_v3.get_file_info()'s
+Reads Calendar Engine's OWN saved DAY-WISE reindex output (calendar.
+sales_snapshots, source_type='dw', kind='trend_shifted') and reshapes it into
+the same {div: {fy28_month_label: value}} structure engine_v3.get_file_info()'s
 base_sales.LFL uses.
 
 Why this exists: store_actuals_sync.py (AOP's own sync) independently
-re-reads the raw parquet and re-implements the ref-month -> fut-month
-day-shift itself - it does NOT consume Calendar Engine's reindex output, even
-though both are conceptually "the same" LFL actuals. This module is the
-OTHER path: read what Calendar Engine actually computed and saved, so
-ReviewStep's actuals-source toggle can show AOP's own replica side by side
-with Calendar Engine's authoritative output, instead of only ever trusting
-the replica.
+re-reads the raw parquet and re-implements the ref-day -> fut-day day-shift
+itself - it does NOT consume Calendar Engine's reindex output, even though
+both are conceptually "the same" LFL actuals. This module is the OTHER path:
+read what Calendar Engine actually computed and saved, so the toggle can show
+AOP's own replica side by side with Calendar Engine's authoritative output,
+instead of only ever trusting the replica.
+
+Why DAY-wise, not month-wise: month-wise reindexing (reindex_monthwise() in
+calendar_engine/scans.py) has no day-level detail to redistribute, so it
+buckets each whole reference month to whichever future month WINS A
+PLURALITY VOTE across that month's ~30 days. A festival window is typically
+5-10 days - a small minority of any month - so it essentially never wins that
+vote, and the "reindexed" month total comes back identical to actual (just
+relabeled a year later) for any realistic calendar. Confirmed 2026-08-31: a
+freshly-computed month-wise trend_shifted snapshot matched the DB's own
+actuals to the rupee for every LFL division/month. Day-wise data has real
+per-day resolution, so it's the only source that can actually show a
+festival-driven shift between months.
 
 Real constraint, not a bug here: this only has data for whatever calendar +
-extra-dimension selection the LAST Calendar Engine month-wise reindex run
-actually used. If nobody has run that reindex against the "2026 -> 2027"
-calendar (the cycle AOP's current FY28 forecast needs) with ATTRIBUTE1
-selected as an extra output field, this returns zeros / no attribute
-breakdown - not wrong, just genuinely not there yet. See
-`available_months`/`has_attribute` in the return value.
+extra-dimension selection the LAST Calendar Engine day-wise reindex run
+actually used, AND requires DIVISION to have been ticked under "Customise
+Output Fields" before that run (day-wise's row grain is store-only by
+default - see reindex_daywise()'s key_fields - division is opt-in, unlike
+month-wise where it's baked into the grain). If nobody has run day-wise
+reindex with DIVISION selected against the calendar this forecast needs,
+this returns zeros / a `note` explaining why - not wrong, just genuinely not
+there yet. See `available_months`/`hasAttribute`/`note` in the return value.
 """
 from sqlalchemy import text
 
@@ -57,12 +69,13 @@ def _norm_div(d):
 
 
 def _col_to_fy28_label(col):
-    """'2027-04' -> \"Apr'27\" - FY28_M's labels are the future month's own
-    calendar year directly (unlike FY27_M's, which shift the year back one),
-    so this is a straight month-name + last-2-digits-of-year conversion, no
-    year arithmetic needed."""
+    """'2027-04-15' -> \"Apr'27\" - day-wise reindex columns are individual
+    ISO dates ('YYYY-MM-DD'), not months, so only the year-month prefix is
+    used. FY28_M's labels are the future date's own calendar year directly
+    (unlike FY27_M's, which shift the year back one), so this is a straight
+    month-name + last-2-digits-of-year conversion, no year arithmetic needed."""
     try:
-        y, m = col.split("-")
+        y, m = col.split("-")[:2]
         return f"{MON_NAMES[int(m)]}'{y[2:]}"
     except (ValueError, KeyError):
         return None
@@ -75,19 +88,27 @@ def get_reindexed_lfl_base_sales(session):
     message next to the toggle, not an error."""
     snap = session.execute(
         text("SELECT key_fields, columns FROM calendar.sales_snapshots "
-             "WHERE source_type = 'mw' AND kind = 'trend_shifted'")
+             "WHERE source_type = 'dw' AND kind = 'trend_shifted'")
     ).first()
     empty = {div: {m: 0.0 for m in FY28_M} for div in DIVS}
     if snap is None:
         return {"base_sales": empty, "hasAttribute": False, "availableMonths": [],
-                "note": "No Calendar Engine month-wise reindex has been saved yet."}
+                "note": "No Calendar Engine day-wise reindex has been saved yet."}
 
     key_fields, columns = snap
+    # Unlike month-wise (DIVISION is always part of the grain), day-wise's
+    # default grain is store-only - DIVISION only appears if it was ticked
+    # under "Customise Output Fields" before running Day-wise Reindex.
+    if "DIVISION" not in key_fields:
+        return {"base_sales": empty, "hasAttribute": "ATTRIBUTE1" in key_fields, "availableMonths": [],
+                "note": ("Calendar Engine's saved day-wise reindex has no Division breakdown - "
+                          "tick DIVISION under \"Customise Output Fields\" on the Calendarised "
+                          "Sales tab and re-run Day-wise Reindex.")}
     has_attribute = "ATTRIBUTE1" in key_fields
     available_fy28_months = sorted({m for c in columns if (m := _col_to_fy28_label(c)) in FY28_M})
     if not available_fy28_months:
         return {"base_sales": empty, "hasAttribute": has_attribute, "availableMonths": [],
-                "note": ("Calendar Engine's saved reindex has no months overlapping this forecast's "
+                "note": ("Calendar Engine's saved reindex has no dates overlapping this forecast's "
                           f"period ({FY28_M[1]} - {FY28_M[-1]}) - run its reindex against the "
                           "calendar that maps onto those dates first.")}
 
@@ -96,13 +117,17 @@ def get_reindexed_lfl_base_sales(session):
         {"tags": list(LFL_TAGS)},
     ).all()]
 
-    group_cols = "elem->>'division' AS raw_div, elem->>'col' AS col" + \
+    # 'col' is an individual ISO date ('YYYY-MM-DD') for day-wise, unlike
+    # month-wise's 'YYYY-MM' - collapse to the year-month prefix in SQL so the
+    # aggregate groups by month (≤13 buckets) rather than materializing one
+    # row per distinct day (up to ~365/year) before summing in Python.
+    group_cols = "elem->>'DIVISION' AS raw_div, SUBSTRING(elem->>'col' FROM 1 FOR 7) AS col" + \
         (", elem->>'ATTRIBUTE1' AS attribute" if has_attribute else "")
     rows = session.execute(
         text(f"""
             SELECT {group_cols}, SUM((elem->>'value')::numeric) AS total
             FROM calendar.sales_snapshots, jsonb_array_elements(rows) elem
-            WHERE source_type = 'mw' AND kind = 'trend_shifted'
+            WHERE source_type = 'dw' AND kind = 'trend_shifted'
               AND elem->>'store' = ANY(:stores)
             GROUP BY {"1, 2, 3" if has_attribute else "1, 2"}
         """),
