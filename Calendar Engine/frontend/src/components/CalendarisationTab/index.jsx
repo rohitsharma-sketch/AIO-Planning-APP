@@ -4,7 +4,6 @@ import { generateMappings, validate, computeMonthly, buildFestMap } from '../../
 import { parseDate, fmtISO, fmtDisp, calDiff, weekNum } from '../../lib/dateUtils'
 import ClusterTabs from './ClusterTabs'
 import FestivalTable from './FestivalTable'
-import BulkAdjustPanels from './BulkAdjustPanels'
 import OutputSection from './OutputSection'
 import CalendarLibrary from './CalendarLibrary'
 import ChangeLogViewer from './ChangeLogViewer'
@@ -36,10 +35,11 @@ function defaultFestivalDate(year) {
 // from a saved calendar) into the flat row shape OutputSection.jsx renders.
 // Mirrors the cell derivations in the old app's renderDayTable() (calendar_engine.html
 // lines 1819-1868).
-function toRow(m) {
+function toRow(m, clusterName) {
   const futInfo = m.futFestInfo
   const futFestStr = futInfo ? `${futInfo.festival} ${futInfo.position >= 0 ? '+' : ''}${futInfo.position}` : ''
   return {
+    cluster: clusterName,
     refDate: fmtDisp(m.refDate),
     refDay: DAYS[m.refDate.getDay()],
     refWeek: weekNum(m.refDate),
@@ -127,6 +127,14 @@ export default function CalendarisationTab({ isPlanner }) {
   const [validationIssues, setValidationIssues] = useState([])
   const [monthlySummary, setMonthlySummary] = useState(null)
   const [engineStatus, setEngineStatus] = useState(null)
+  // Every cluster's day-by-day rows combined, each tagged with its own cluster
+  // name — feeds OutputSection's Day-by-Day preview, which defaults to showing
+  // every cluster (not just whichever one ClusterTabs has "active" for editing
+  // purposes). Rebuilt whenever a full set of per-cluster mappings becomes
+  // available (a fresh "Create Calendar" run, or a calendar loaded from the
+  // library) — NOT on every activeIdx switch, since it doesn't depend on which
+  // cluster tab is being edited.
+  const [allDayMap, setAllDayMap] = useState(null)
 
   useEffect(() => {
     getClusterProfiles().then(({ profiles }) => {
@@ -182,8 +190,9 @@ export default function CalendarisationTab({ isPlanner }) {
     try {
       const perCluster = workingProfiles.map(cp => ({ name: cp.name, mappings: generateMappings(cp.festivals, ry, fy, ms, moPri) }))
       setClusterMappingsRaw(perCluster)
+      setAllDayMap(perCluster.flatMap(cm => cm.mappings.map(m => toRow(m, cm.name))))
       const activeMappings = perCluster[activeIdx].mappings
-      setDayMap(activeMappings.map(toRow))
+      setDayMap(activeMappings.map(m => toRow(m, perCluster[activeIdx].name)))
       setValidationIssues(validate(activeMappings, ry, fy, ms, workingProfiles[activeIdx].festivals))
       setMonthlySummary(computeMonthly(activeMappings))
       setEngineStatus({ ok: true, msg: `${syncMsg}Calendar generated: ${activeMappings.length} days mapped for "${workingProfiles[activeIdx].name}".` })
@@ -198,7 +207,7 @@ export default function CalendarisationTab({ isPlanner }) {
     if (!clusterMappingsRaw || !clusterMappingsRaw[activeIdx] || !profiles[activeIdx]) return
     const ry = Number(refYear), fy = Number(futYear), ms = Number(maxShift) || 45
     const activeMappings = clusterMappingsRaw[activeIdx].mappings
-    setDayMap(activeMappings.map(toRow))
+    setDayMap(activeMappings.map(m => toRow(m, clusterMappingsRaw[activeIdx].name)))
     setValidationIssues(validate(activeMappings, ry, fy, ms, profiles[activeIdx].festivals))
     setMonthlySummary(computeMonthly(activeMappings))
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -266,6 +275,18 @@ export default function CalendarisationTab({ isPlanner }) {
     setClusterMappingsRaw(null) // a loaded snapshot; regenerate via "Create Calendar" before saving again
     setPreviewCalendarId(full.id) // subsequent festival-list edits autosave into this calendar too
 
+    // Every cluster's saved pairs, reconstructed the same way the active
+    // cluster's are below — feeds the Day-by-Day preview's "all clusters"
+    // default. A cluster with no saved pairs of its own just contributes
+    // nothing here rather than blocking the others.
+    setAllDayMap(
+      nextProfiles.flatMap(p => {
+        const pPairs = (full.dayMap && full.dayMap[p.name]) || []
+        if (!pPairs.length) return []
+        return mappingsFromSavedPairs(pPairs, p.festivals, ry, fy).map(m => toRow(m, p.name))
+      })
+    )
+
     const pairs = (full.dayMap && full.dayMap[cluster.name]) || []
     if (!pairs.length) {
       setDayMap([])
@@ -275,7 +296,7 @@ export default function CalendarisationTab({ isPlanner }) {
       return
     }
     const mappings = mappingsFromSavedPairs(pairs, cluster.festivals, ry, fy)
-    setDayMap(mappings.map(toRow))
+    setDayMap(mappings.map(m => toRow(m, cluster.name)))
     setValidationIssues(validate(mappings, ry, fy, Number(maxShift) || 45, cluster.festivals))
     setMonthlySummary(computeMonthly(mappings))
     setEngineStatus({ ok: true, msg: `Loaded "${full.name}" (${full.refYear} -> ${full.futYear}) — ${nextProfiles.length} cluster${nextProfiles.length === 1 ? '' : 's'} restored, showing "${cluster.name}".` })
@@ -491,12 +512,6 @@ export default function CalendarisationTab({ isPlanner }) {
   return (
     <div className="module-panel" style={{ display: 'flex', gap: '16px' }}>
       <main style={{ flex: 1 }}>
-        {/* The two Bulk Adjust cards sit ABOVE the Festival Master, as they do in
-            the old app (calendar_engine.html lines ~660-758 precede the
-            <div class="fest-wrap"> at 760). They are their own .card elements and
-            are not part of what the Festival Master header collapses. */}
-        <BulkAdjustPanels festivals={profiles[activeIdx].festivals} onChange={handleFestivalsChange} isPlanner={isPlanner} />
-
         {/* Festival Master card chrome — ported from calendar_engine.html lines
             760-826. The header (title + count pill + caret) collapses .fest-body,
             which spans the cluster tabs, the rename/region/copy rows, the
@@ -532,7 +547,7 @@ export default function CalendarisationTab({ isPlanner }) {
           {engineStatus && <p style={{ color: engineStatus.ok ? 'var(--green)' : 'var(--red)' }}>{engineStatus.msg}</p>}
         </div>
 
-        <OutputSection dayMap={dayMap} validationIssues={validationIssues} monthlySummary={monthlySummary} />
+        <OutputSection dayMap={dayMap} allDayMap={allDayMap} validationIssues={validationIssues} monthlySummary={monthlySummary} />
 
         {status && <p style={{ color: status.ok ? 'var(--green)' : 'var(--red)' }}>{status.msg}</p>}
       </main>

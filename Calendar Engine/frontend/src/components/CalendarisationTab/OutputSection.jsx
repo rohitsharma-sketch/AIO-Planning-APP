@@ -58,63 +58,100 @@ const CATEGORY_LEGEND = [
   ['var(--light)', 'var(--border)', 'Non-Festive'],
 ]
 
-export default function OutputSection({ dayMap, validationIssues, monthlySummary }) {
+// Same quoting convention as CalendarisedSalesTab/ReindexOutputPanel.jsx's
+// csvField/downloadCsv - a cluster/festival name containing a comma or quote
+// can't corrupt the file.
+const csvField = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`
+
+function downloadCsv(rows, filename) {
+  const text = rows.map(r => r.map(csvField).join(',')).join('\n')
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export default function OutputSection({ dayMap, allDayMap, validationIssues, monthlySummary }) {
   const [activeSub, setActiveSub] = useState('day')
 
   // ── Day-by-Day filters (old app's #filterMonth/#filterCat/#filterMap/
   // #filterFest/#filterMonthMatch). All are '' = no filter, and all combine with
   // AND, exactly as renderDayTable() chains its .filter() calls (line 1829-1836).
+  // fCluster is new here (not in the old app, which had no cross-cluster preview
+  // at all) - '' means every cluster, matching the "don't default to one cluster"
+  // ask directly: the Day-by-Day preview shows the FULL combined set out of the
+  // box, filterable down to one cluster same as any other dimension below.
+  const [fCluster, setFCluster] = useState('')  // '' = all clusters
   const [fMonth, setFMonth] = useState('')       // '' | '0'..'11' (FUTURE month)
   const [fCat, setFCat] = useState('')
   const [fMapType, setFMapType] = useState('')
   const [fFest, setFFest] = useState('')
   const [fMoMatch, setFMoMatch] = useState('')   // '' | 'yes' | 'no'
 
-  // A new dayMap means a different data set — a regenerated calendar, a switched
-  // cluster tab, or a snapshot loaded from the library. Festival/month options are
-  // derived from that set, so a stale selection (a festival the new set doesn't
-  // have) would silently render an empty table. Clearing on identity change keeps
-  // the rail honest; the old app got this for free by rebuilding the <select>s in
-  // populateFilters() on every run.
+  // A new allDayMap means a different data set — a regenerated calendar or a
+  // snapshot loaded from the library (NOT a ClusterTabs switch — allDayMap is
+  // cluster-independent, see index.jsx). Cluster/Festival/Month options are
+  // derived from that set, so a stale selection (a cluster/festival the new set
+  // doesn't have) would silently render an empty table. Clearing on identity
+  // change keeps the rail honest; the old app got this for free by rebuilding
+  // the <select>s in populateFilters() on every run.
   useEffect(() => {
-    setFMonth(''); setFCat(''); setFMapType(''); setFFest(''); setFMoMatch('')
-  }, [dayMap])
+    setFCluster(''); setFMonth(''); setFCat(''); setFMapType(''); setFFest(''); setFMoMatch('')
+  }, [allDayMap])
+
+  // The base row set for the Day-by-Day tab: every cluster's rows, narrowed to
+  // one if fCluster is set. This is deliberately its own step (not folded into
+  // the filter chain below) because `stats` also needs it — the stat tiles
+  // reflect the cluster filter (selecting one cluster shows that cluster's own
+  // totals) but, matching the existing "stat tiles always cover all N days"
+  // convention, never reflect the OTHER filters (Month/Category/etc).
+  const clusterScopedDayMap = useMemo(() => {
+    if (!allDayMap) return []
+    return fCluster ? allDayMap.filter(r => r.cluster === fCluster) : allDayMap
+  }, [allDayMap, fCluster])
 
   // Stats row (old app's renderStats(), calendar_engine.html lines 1762-1775).
   // Every figure is a count over data this component is already handed — no
   // extra fetching. `festival` is '' for non-festive rows (see toRow()).
   const stats = useMemo(() => {
-    if (!dayMap) return null
-    const total = dayMap.length
-    const festive = dayMap.filter(r => r.festival).length
+    if (!allDayMap) return null
+    const total = clusterScopedDayMap.length
+    const festive = clusterScopedDayMap.filter(r => r.festival).length
     return {
       total,
       festive,
       nonFestive: total - festive,
-      sameMonth: dayMap.filter(r => r.monthDelta === 'Yes').length,
-      sameWeekday: dayMap.filter(r => r.weekdayDelta === 'Yes').length,
+      sameMonth: clusterScopedDayMap.filter(r => r.monthDelta === 'Yes').length,
+      sameWeekday: clusterScopedDayMap.filter(r => r.weekdayDelta === 'Yes').length,
       errors: (validationIssues || []).filter(i => i.type === 'error').length,
     }
-  }, [dayMap, validationIssues])
+  }, [allDayMap, clusterScopedDayMap, validationIssues])
 
-  // Festival and Month dropdown options, built from whatever is actually in the
-  // current mapping set — the old app's populateFilters() (calendar_engine.html
-  // lines 1811-1817). Festivals: distinct non-empty names, sorted. Months: the
-  // distinct FUTURE months present, ascending (for a full-year calendar that's all
-  // 12, but it's derived rather than hardcoded so a partial set narrows properly).
-  const { festivalOptions, monthOptions } = useMemo(() => {
-    if (!dayMap) return { festivalOptions: [], monthOptions: [] }
+  // Cluster/Festival/Month dropdown options, built from whatever is actually in
+  // the current combined mapping set — the old app's populateFilters()
+  // (calendar_engine.html lines 1811-1817), extended with clusters since the old
+  // app never had more than one cluster in view at once. Festivals/months are
+  // deliberately drawn from the FULL set (not clusterScopedDayMap) so switching
+  // the cluster filter doesn't also reshuffle the other dropdowns out from under
+  // a selection the user just made.
+  const { clusterOptions, festivalOptions, monthOptions } = useMemo(() => {
+    if (!allDayMap) return { clusterOptions: [], festivalOptions: [], monthOptions: [] }
+    const clusters = new Set()
     const fests = new Set()
     const months = new Set()
-    for (const r of dayMap) {
+    for (const r of allDayMap) {
+      if (r.cluster) clusters.add(r.cluster)
       if (r.festival) fests.add(r.festival)
       if (r.futMonthIdx != null) months.add(r.futMonthIdx)
     }
     return {
+      clusterOptions: [...clusters].sort(),
       festivalOptions: [...fests].sort(),
       monthOptions: [...months].sort((a, b) => a - b),
     }
-  }, [dayMap])
+  }, [allDayMap])
 
   // The filter chain itself — a direct port of renderDayTable()'s (line 1829-1836),
   // with the new app's row shape substituted for the raw mapping objects:
@@ -122,10 +159,10 @@ export default function OutputSection({ dayMap, validationIssues, monthlySummary
   //   m.festiveCategory       -> row.category
   //   m.monthMatch (boolean)  -> row.monthDelta === 'Yes'  (toRow stringifies it)
   // Only the multi-select month picker is dropped; a single <select> covers the
-  // same filtering job (see the note at the foot of this file).
+  // same filtering job (see the note at the foot of this file). Cluster is
+  // already applied via clusterScopedDayMap above, so it isn't repeated here.
   const filteredDayMap = useMemo(() => {
-    if (!dayMap) return []
-    let rows = dayMap
+    let rows = clusterScopedDayMap
     if (fMonth !== '') rows = rows.filter(r => r.futMonthIdx === +fMonth)
     if (fCat) rows = rows.filter(r => r.category === fCat)
     if (fMapType) rows = rows.filter(r => r.mappingType === fMapType)
@@ -133,9 +170,24 @@ export default function OutputSection({ dayMap, validationIssues, monthlySummary
     if (fMoMatch === 'yes') rows = rows.filter(r => r.monthDelta === 'Yes')
     if (fMoMatch === 'no') rows = rows.filter(r => r.monthDelta !== 'Yes')
     return rows
-  }, [dayMap, fMonth, fCat, fMapType, fFest, fMoMatch])
+  }, [clusterScopedDayMap, fMonth, fCat, fMapType, fFest, fMoMatch])
 
-  const anyFilterActive = fMonth !== '' || !!fCat || !!fMapType || !!fFest || !!fMoMatch
+  const anyFilterActive = !!fCluster || fMonth !== '' || !!fCat || !!fMapType || !!fFest || !!fMoMatch
+
+  // Exports exactly what's currently on screen (every active filter, cluster
+  // included) — "download the calendar to understand the gist" reads as "give
+  // me what I'm looking at", not a separate full-set export. Column order
+  // matches the visible table (see the <thead> below), with Cluster prepended.
+  function downloadCalendar() {
+    const header = ['Cluster', 'Ref Date', 'Ref Day', 'Ref Wk', 'Festival', 'Category', 'Position',
+      'Future Date', 'Future Day', 'Future Wk', 'Fut Festival', 'Mapping Type', 'Score', 'Mo', 'Wd', 'Day Delta']
+    const rows = filteredDayMap.map(r => [
+      r.cluster, r.refDate, r.refDay, r.refWeek, r.festival, r.category, r.position,
+      r.futDate, r.futDay, r.futWeek, r.futFestival, r.mappingType, r.score, r.monthDelta, r.weekdayDelta, r.dayDelta,
+    ])
+    const stamp = fCluster ? fCluster.replace(/[^a-z0-9]+/gi, '_') : 'all_clusters'
+    downloadCsv([header, ...rows], `calendar_day_by_day_${stamp}.csv`)
+  }
 
   // Monthly Summary derivations — ported 1:1 from the old app's renderMonthly()
   // (calendar_engine.html lines 1870-1941). Both loops walk months 0-11 and
@@ -171,7 +223,7 @@ export default function OutputSection({ dayMap, validationIssues, monthlySummary
     return { refRows: rRows, refTotals: totals, futRows: fRows }
   }, [monthlySummary])
 
-  if (!dayMap) return null
+  if (!allDayMap) return null
 
   return (
     <div className="card">
@@ -204,6 +256,13 @@ export default function OutputSection({ dayMap, validationIssues, monthlySummary
               uses .field-row/.field, the same grouping DateShiftPreviewPanel.jsx's
               filter toolbar uses, so the two read as one pattern. */}
           <div className="field-row" style={{ marginBottom: '10px' }}>
+            <div className="field">
+              <label htmlFor="dm-cluster">Cluster</label>
+              <select id="dm-cluster" value={fCluster} onChange={e => setFCluster(e.target.value)}>
+                <option value="">All Clusters</option>
+                {clusterOptions.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
             <div className="field">
               <label htmlFor="dm-month">Month (future)</label>
               <select id="dm-month" value={fMonth} onChange={e => setFMonth(e.target.value)}>
@@ -245,9 +304,16 @@ export default function OutputSection({ dayMap, validationIssues, monthlySummary
                 primary reserved for "Create Calendar". */}
             {anyFilterActive && (
               <button onClick={() => {
-                setFMonth(''); setFCat(''); setFMapType(''); setFFest(''); setFMoMatch('')
+                setFCluster(''); setFMonth(''); setFCat(''); setFMapType(''); setFFest(''); setFMoMatch('')
               }}>Clear filters</button>
             )}
+            {/* "if the preview pane is open" - this whole block only renders once
+                allDayMap exists (the `if (!allDayMap) return null` guard above),
+                so the button is inherently gated on that already. Exports exactly
+                what's currently filtered/visible, not a separate full-set dump. */}
+            <button className="btn" onClick={downloadCalendar} disabled={!filteredDayMap.length} style={{ marginLeft: anyFilterActive ? '0' : 'auto' }}>
+              ⬇ Download Calendar
+            </button>
           </div>
 
           {/* Filtered row count (old app's #dayCount, set in renderDayTable at line
@@ -255,8 +321,8 @@ export default function OutputSection({ dayMap, validationIssues, monthlySummary
               summarise the whole generated calendar and never react to these filters. */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '8px' }}>
             <span style={{ fontSize: '11px', color: 'var(--muted)' }}>
-              Showing <strong style={{ color: 'var(--char)' }}>{filteredDayMap.length}</strong> of {dayMap.length} mappings
-              {anyFilterActive && <> · stat tiles above always cover all {dayMap.length} days</>}
+              Showing <strong style={{ color: 'var(--char)' }}>{filteredDayMap.length}</strong> of {clusterScopedDayMap.length} mappings
+              {anyFilterActive && <> · stat tiles above always cover all {clusterScopedDayMap.length} days</>}
             </span>
             <div className="legend" style={{ flexDirection: 'row', gap: '12px', marginBottom: 0, marginLeft: 'auto' }}>
               {CATEGORY_LEGEND.map(([bg, border, name]) => (
@@ -272,21 +338,22 @@ export default function OutputSection({ dayMap, validationIssues, monthlySummary
             <table>
               <thead>
                 <tr>
-                  <th>Ref Date</th><th>Ref Day</th><th>Ref Wk</th><th>Festival</th><th>Category</th>
+                  <th>Cluster</th><th>Ref Date</th><th>Ref Day</th><th>Ref Wk</th><th>Festival</th><th>Category</th>
                   <th>Position</th><th>→</th><th>Future Date</th><th>Future Day</th><th>Future Wk</th>
                   <th>Fut Festival</th><th>Mapping Type</th><th>Score</th><th>Mo</th><th>Wd</th><th>Day Delta</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredDayMap.length === 0 && (
-                  <tr><td colSpan={16} style={{ textAlign: 'center', color: 'var(--muted)', padding: '24px 12px' }}>
-                    {dayMap.length === 0
+                  <tr><td colSpan={17} style={{ textAlign: 'center', color: 'var(--muted)', padding: '24px 12px' }}>
+                    {clusterScopedDayMap.length === 0
                       ? 'No mappings to show.'
                       : 'No mappings match the current filters.'}
                   </td></tr>
                 )}
                 {filteredDayMap.map((row, i) => (
                   <tr key={i} className={CAT_ROW[row.category] || ''}>
+                    <td style={{ fontWeight: 600 }}>{row.cluster}</td>
                     <td className="date-mono">{row.refDate}</td>
                     <td>{row.refDay}</td>
                     <td style={{ color: 'var(--muted)' }}>{row.refWeek}</td>
