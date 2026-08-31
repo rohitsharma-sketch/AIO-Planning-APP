@@ -117,7 +117,10 @@ def _html_no_cache(path: str) -> FileResponse:
 # Bare root has no page of its own — route by session state instead of 404ing.
 @app.get("/")
 def root(request: Request):
-    if get_session_user(request) is not None:
+    user = get_session_user(request)
+    if user is not None:
+        if user.get("must_change_password"):
+            return RedirectResponse("/change-password")
         return RedirectResponse(LANDING_PAGE_URL)
     return RedirectResponse("/login")
 
@@ -127,9 +130,22 @@ def root(request: Request):
 def login_page(request: Request):
     # Already authenticated (real session, or a "remember me" cookie from a
     # prior visit on this device) — skip the form instead of asking again.
-    if get_session_user(request) is not None:
+    user = get_session_user(request)
+    if user is not None:
+        if user.get("must_change_password"):
+            return RedirectResponse("/change-password")
         return RedirectResponse(LANDING_PAGE_URL)
     return _html_no_cache(os.path.join(_HERE, "static", "login.html"))
+
+
+@app.get("/change-password")
+def change_password_page(request: Request):
+    # Reachable by anyone with a valid session (not just must_change_password
+    # accounts) — a logged-in user can always choose to change their own
+    # password, this isn't exclusively the forced-reset screen.
+    if get_session_user(request) is None:
+        return RedirectResponse("/login?next=/change-password")
+    return _html_no_cache(os.path.join(_HERE, "static", "change-password.html"))
 
 
 @app.get("/reset-password")

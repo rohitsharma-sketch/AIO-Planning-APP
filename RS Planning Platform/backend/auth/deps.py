@@ -33,7 +33,8 @@ def _restore_from_remember_cookie(request: Request) -> dict | None:
         session.close()
     if user is None:
         return None
-    user_dict = {"id": str(user.id), "username": user.username, "role": user.role, "is_admin": user.is_admin}
+    user_dict = {"id": str(user.id), "username": user.username, "role": user.role, "is_admin": user.is_admin,
+                 "must_change_password": user.must_change_password}
     request.session["user"] = user_dict
     return user_dict
 

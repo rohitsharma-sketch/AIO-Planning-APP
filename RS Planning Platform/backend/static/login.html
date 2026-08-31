@@ -111,8 +111,11 @@
           const body = await res.json().catch(() => ({}));
           throw new Error(body.detail || 'Login failed');
         }
+        const user = await res.json();
         const params = new URLSearchParams(window.location.search);
-        window.location.href = params.get('next') || 'http://localhost:7800/';
+        window.location.href = user.must_change_password
+          ? '/change-password'
+          : (params.get('next') || 'http://localhost:7800/');
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.style.display = 'block';

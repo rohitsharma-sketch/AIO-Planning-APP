@@ -24,3 +24,8 @@ class User(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Set True for accounts created with a known/shared temporary password
+    # (e.g. admin-issued logins) - the login response surfaces this so the
+    # frontend can force a change-password screen before letting the user
+    # reach anything else. Cleared by POST /change-password.
+    must_change_password: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

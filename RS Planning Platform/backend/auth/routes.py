@@ -22,6 +22,7 @@ def login(request: Request, response: Response, body: dict = Body(...)):
             raise HTTPException(401, "Invalid credentials")
         request.session["user"] = {
             "id": str(user.id), "username": user.username, "role": user.role, "is_admin": user.is_admin,
+            "must_change_password": user.must_change_password,
         }
         # "Remember me on this device" — a separate long-lived cookie so this
         # machine skips the login screen on return visits even after the
@@ -86,6 +87,33 @@ def reset_password(body: dict = Body(...)):
         session.close()
 
 
+@router.post("/change-password")
+def change_password(request: Request, body: dict = Body(...), user: dict = Depends(require_login)):
+    """For an ALREADY-LOGGED-IN user (session cookie), unlike /reset-password
+    which is for a logged-OUT user with an emailed token. Requires the
+    current password so a hijacked/left-open session can't be used to lock
+    the real owner out. Clears must_change_password so the forced
+    change-password gate (see login's response) only fires once."""
+    current_password, new_password = body.get("current_password"), body.get("new_password")
+    if not current_password or not new_password:
+        raise HTTPException(422, "current_password and new_password required")
+    session = SessionLocal()
+    try:
+        u = session.get(User, uuid.UUID(user["id"]))
+        if u is None or not verify_password(current_password, u.password_hash):
+            raise HTTPException(401, "Current password is incorrect")
+        u.password_hash = hash_password(new_password)
+        u.must_change_password = False
+        session.commit()
+        request.session["user"] = {
+            "id": str(u.id), "username": u.username, "role": u.role, "is_admin": u.is_admin,
+            "must_change_password": False,
+        }
+        return {"ok": True}
+    finally:
+        session.close()
+
+
 @router.get("/me")
 def me(user: dict = Depends(require_login)):
     return user
@@ -100,11 +128,17 @@ def create_user(body: dict = Body(...), _admin: dict = Depends(require_admin)):
     try:
         if session.execute(select(User).where(User.username == username)).scalar_one_or_none():
             raise HTTPException(409, "Username already exists")
+        # Admin-issued accounts start with a password the admin themselves
+        # chose (so it's necessarily "known"/shared, unlike a self-service
+        # signup) - default True so the new owner is forced to pick their
+        # own on first login, unless the caller explicitly opts out.
+        must_change = bool(body.get("must_change_password", True))
         u = User(username=username, email=body.get("email") or None, password_hash=hash_password(password),
-                  role=role, is_admin=bool(body.get("is_admin", False)))
+                  role=role, is_admin=bool(body.get("is_admin", False)), must_change_password=must_change)
         session.add(u)
         session.commit()
-        return {"id": str(u.id), "username": u.username, "email": u.email, "role": u.role, "is_admin": u.is_admin}
+        return {"id": str(u.id), "username": u.username, "email": u.email, "role": u.role,
+                "is_admin": u.is_admin, "must_change_password": u.must_change_password}
     finally:
         session.close()
 
@@ -132,9 +166,15 @@ def update_user(user_id: str, body: dict = Body(...), _admin: dict = Depends(req
             user.is_active = bool(body["is_active"])
         if body.get("password"):
             user.password_hash = hash_password(body["password"])
+            # Same reasoning as creation: an admin-reset password is a new
+            # known/shared value, so force a change again unless told not to.
+            user.must_change_password = bool(body.get("must_change_password", True))
+        elif "must_change_password" in body:
+            user.must_change_password = bool(body["must_change_password"])
         session.commit()
         return {"id": str(user.id), "username": user.username, "email": user.email,
-                "role": user.role, "is_admin": user.is_admin, "is_active": user.is_active}
+                "role": user.role, "is_admin": user.is_admin, "is_active": user.is_active,
+                "must_change_password": user.must_change_password}
     finally:
         session.close()
 
@@ -144,6 +184,7 @@ def list_users(_admin: dict = Depends(require_admin)):
     session = SessionLocal()
     try:
         users = session.execute(select(User)).scalars().all()
-        return [{"id": str(u.id), "username": u.username, "email": u.email, "role": u.role, "is_admin": u.is_admin, "is_active": u.is_active} for u in users]
+        return [{"id": str(u.id), "username": u.username, "email": u.email, "role": u.role, "is_admin": u.is_admin,
+                 "is_active": u.is_active, "must_change_password": u.must_change_password} for u in users]
     finally:
         session.close()
