@@ -8,7 +8,7 @@ import { apiUrl } from './lib/apiBase'
 import ThemeSelector from './components/ThemeSelector'
 import './App.css'
 
-const STEPS = ['Upload', 'Review', 'Results']
+const STEPS = ['Configure', 'Review', 'Results']
 
 const MONTHS   = ["Mar'27","Apr'27","May'27","Jun'27","Jul'27","Aug'27","Sep'27","Oct'27","Nov'27","Dec'27","Jan'28","Feb'28","Mar'28"]
 const ALL_ROWS = ['GM','KIDS','LADIES','MENS','RETAIL','Overall']
