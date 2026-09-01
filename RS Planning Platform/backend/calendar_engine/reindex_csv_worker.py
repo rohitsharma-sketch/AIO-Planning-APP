@@ -23,11 +23,12 @@ downloadStacked() already write client-side:
            (store, column), summed across whatever extra fields the run was
            broken out by.
 Cluster comes from the reindex payload's own storeCluster map (already sent
-with the original request, so no extra DB lookup here). Festival names are
-NOT included here (unlike the interactive table's optional Festival row) -
-that mapping is built client-side from the calendar's festival records at
-run time and isn't persisted anywhere this worker can reach; a large-result
-CSV is missing that one enrichment column as a result.
+with the original request, so no extra DB lookup here). Festival names come
+from a DB lookup keyed by the payload's calendarId (added to the reindex
+request just for this) - same {date -> [names]} shape the interactive
+table's Festival row builds client-side from getCalendar(), just built here
+from calendar_cluster_festivals directly since this worker has no browser-
+fetched calendar detail to read.
 
 Usage: python reindex_csv_worker.py <result.json> <payload.json> <wide|stacked> <out.csv> <done_marker.json>
 """
@@ -35,6 +36,13 @@ import csv
 import json
 import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # this dir, for `import scans`
+# db.base / db.models live under Tentative AOP Forecaster - scans.py adds this
+# same path at its own module level, but that only helps if scans is already
+# imported first; _load_festival_by_date below imports db.base directly, so
+# this needs to be on sys.path unconditionally, not depend on import order.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "Tentative AOP Forecaster"))
 
 KEY_LABELS = {"store": "Store", "division": "Division"}
 
@@ -50,7 +58,48 @@ def _cluster_of(store_cluster, store):
     return store_cluster.get(store) or "(unmapped)"
 
 
-def write_wide_csv(result, store_cluster, out_path):
+def _load_festival_by_date(calendar_id):
+    """{date -> [festival names]} for every cluster in this calendar, keyed
+    both by exact futDate (day-wise columns) and its YYYY-MM prefix
+    (month-wise columns) - same dual-keying the client's festivalByDate
+    builder in CalendarisedSalesTab/index.jsx uses, so a plain lookup by the
+    column string works for both sources here too. Returns {} if calendarId
+    is missing (a result computed before this was threaded through) or the
+    lookup fails for any reason - a missing Festival column is a labelling
+    gap, not worth failing the whole CSV over."""
+    if not calendar_id:
+        return {}
+    try:
+        from sqlalchemy import select
+        from db.base import SessionLocal
+        from db.models.calendar import CalendarCluster, CalendarClusterFestival
+
+        session = SessionLocal()
+        try:
+            rows = session.execute(
+                select(CalendarClusterFestival.name, CalendarClusterFestival.fut_date)
+                .join(CalendarCluster, CalendarCluster.id == CalendarClusterFestival.calendar_cluster_id)
+                .where(CalendarCluster.calendar_id == int(calendar_id))
+            ).all()
+        finally:
+            session.close()
+        out = {}
+        for name, fut_date in rows:
+            if not fut_date or not name:
+                continue
+            ds = fut_date.isoformat()
+            out.setdefault(ds, set()).add(name)
+            out.setdefault(ds[:7], set()).add(name)
+        return {k: sorted(v) for k, v in out.items()}
+    except Exception:
+        return {}
+
+
+def _festival_of(festival_by_date, col):
+    return ", ".join(festival_by_date.get(col, []))
+
+
+def write_wide_csv(result, store_cluster, festival_by_date, out_path):
     key_fields = result.get("keyFields") or (["store", "division"] if result.get("grain") == "store_division" else ["store"])
     columns = sorted(result.get("columns") or [])
     ref_date_by_column = result.get("refDateByColumn") or {}
@@ -69,6 +118,8 @@ def write_wide_csv(result, store_cluster, out_path):
     with open(out_path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["Reference Date"] + [""] * len(key_fields) + [ref_date_by_column.get(c, "") for c in columns])
+        if festival_by_date:
+            w.writerow(["Festival"] + [""] * len(key_fields) + [_festival_of(festival_by_date, c) for c in columns])
         w.writerow(["Cluster"] + kf_headers + columns)
         for key in sorted(grouped.keys()):
             vals = grouped[key]
@@ -78,7 +129,7 @@ def write_wide_csv(result, store_cluster, out_path):
                        + [vals.get(c, "") for c in columns])
 
 
-def write_stacked_csv(result, store_cluster, out_path):
+def write_stacked_csv(result, store_cluster, festival_by_date, out_path):
     ref_date_by_column = result.get("refDateByColumn") or {}
     date_or_month_label = "Date" if result.get("source") == "dw" else "Month"
 
@@ -89,9 +140,17 @@ def write_stacked_csv(result, store_cluster, out_path):
 
     with open(out_path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["Cluster", "Store", date_or_month_label, "Reference Date", "Value"])
+        header = ["Cluster", "Store", date_or_month_label, "Reference Date"]
+        if festival_by_date:
+            header.append("Festival")
+        header.append("Value")
+        w.writerow(header)
         for (store, col) in sorted(totals.keys()):
-            w.writerow([_cluster_of(store_cluster, store), store, col, ref_date_by_column.get(col, ""), round(totals[(store, col)], 2)])
+            row = [_cluster_of(store_cluster, store), store, col, ref_date_by_column.get(col, "")]
+            if festival_by_date:
+                row.append(_festival_of(festival_by_date, col))
+            row.append(round(totals[(store, col)], 2))
+            w.writerow(row)
 
 
 def main():
@@ -100,16 +159,19 @@ def main():
     try:
         with open(result_path, encoding="utf-8") as f:
             result = json.load(f)
-        store_cluster = {}
+        store_cluster, calendar_id = {}, None
         if os.path.exists(payload_path):
             with open(payload_path, encoding="utf-8") as f:
-                store_cluster = json.load(f).get("storeCluster") or {}
+                payload = json.load(f)
+            store_cluster = payload.get("storeCluster") or {}
+            calendar_id = payload.get("calendarId")
+        festival_by_date = _load_festival_by_date(calendar_id)
 
         tmp_out = out_path + ".tmp"
         if view == "stacked":
-            write_stacked_csv(result, store_cluster, tmp_out)
+            write_stacked_csv(result, store_cluster, festival_by_date, tmp_out)
         else:
-            write_wide_csv(result, store_cluster, tmp_out)
+            write_wide_csv(result, store_cluster, festival_by_date, tmp_out)
         os.replace(tmp_out, out_path)
         _atomic_write_json(done_path, {"ok": True, "error": None})
     except Exception as e:

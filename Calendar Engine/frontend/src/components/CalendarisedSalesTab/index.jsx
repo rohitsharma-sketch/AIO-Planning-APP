@@ -283,6 +283,11 @@ export default function CalendarisedSalesTab({ isPlanner }) {
         storeCluster,
         dayMap: detail.dayMap, syncedAt: sel?.syncedAt,
         extraDims, metric,
+        // Carried through only so reindex_csv_worker.py can look up this
+        // calendar's own festival records when converting a too-large
+        // result to CSV server-side - see get_reindex_csv_path (scans.py).
+        // Not used by run_reindex itself.
+        calendarId,
       })
       saveActiveJob({ jobId, startedAt, source })
       await pollJob(jobId, startedAt)
