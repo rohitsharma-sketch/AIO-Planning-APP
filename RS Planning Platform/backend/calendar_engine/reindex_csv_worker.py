@@ -37,6 +37,13 @@ import json
 import os
 import sys
 
+# QUOTE_ALL to match the client-side csvField/downloadCsv convention every
+# other CSV in this app already uses (ReindexOutputPanel.jsx) - a plain
+# csv.writer() only quotes fields that need it, which is valid CSV either
+# way but looks inconsistent next to a file downloaded from the interactive
+# table instead of this large-result fallback.
+_CSV_KW = {"quoting": csv.QUOTE_ALL}
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # this dir, for `import scans`
 # db.base / db.models live under Tentative AOP Forecaster - scans.py adds this
 # same path at its own module level, but that only helps if scans is already
@@ -116,7 +123,7 @@ def write_wide_csv(result, store_cluster, festival_by_date, out_path):
         key_of.setdefault(key, {f: row.get(f, "") for f in key_fields})
 
     with open(out_path, "w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
+        w = csv.writer(f, **_CSV_KW)
         w.writerow(["Reference Date"] + [""] * len(key_fields) + [ref_date_by_column.get(c, "") for c in columns])
         if festival_by_date:
             w.writerow(["Festival"] + [""] * len(key_fields) + [_festival_of(festival_by_date, c) for c in columns])
@@ -139,7 +146,7 @@ def write_stacked_csv(result, store_cluster, festival_by_date, out_path):
         totals[key] = totals.get(key, 0) + row["value"]
 
     with open(out_path, "w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
+        w = csv.writer(f, **_CSV_KW)
         header = ["Cluster", "Store", date_or_month_label, "Reference Date"]
         if festival_by_date:
             header.append("Festival")
