@@ -3,7 +3,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "Tentative AOP Forecaster"))
 
-import csv, io, json, os, glob, time, datetime, calendar as _calendar, traceback, hashlib
+import csv, io, json, os, glob, time, datetime, calendar as _calendar, traceback, hashlib, threading
 from collections import Counter
 from urllib.parse import urlsplit, parse_qs
 
@@ -1279,19 +1279,19 @@ def _load_reindex_timing():
 _REINDEX_TIMING_MAX_SECONDS_PER_MONTH = 3600  # 1hr/month - real runs are minutes/month; a sample above this is corrupt, not slow
 
 
-def _record_reindex_timing(source, months_count, elapsed_seconds):
-    if not source or months_count <= 0:
+def _record_reindex_timing(timing_key, months_count, elapsed_seconds):
+    if not timing_key or months_count <= 0:
         return
     # Belt-and-braces against a bad elapsed_seconds slipping in from some
     # future code path the same way a recovered job's approximated started_at
     # once did (see _recover_reindex_job's "recovered" comment) - one such
-    # sample is enough to poison the average for every later ETA on this
-    # source, so a single implausible outlier is worth discarding outright
+    # sample is enough to poison the average for every later ETA under this
+    # key, so a single implausible outlier is worth discarding outright
     # rather than letting it dilute in with real samples.
     if elapsed_seconds / months_count > _REINDEX_TIMING_MAX_SECONDS_PER_MONTH:
         return
     stats = _load_reindex_timing()
-    records = stats.setdefault(source, [])
+    records = stats.setdefault(timing_key, [])
     records.append({"months": months_count, "seconds": elapsed_seconds})
     del records[:-_REINDEX_TIMING_MAX_RECORDS]
     tmp_path = _REINDEX_TIMING_PATH + ".tmp"
@@ -1300,19 +1300,39 @@ def _record_reindex_timing(source, months_count, elapsed_seconds):
     os.replace(tmp_path, _REINDEX_TIMING_PATH)
 
 
-def _estimate_reindex_eta(source, months_count, elapsed_seconds):
-    """Seconds-per-month rate averaged across every recorded past run of this
-    source, scaled to this run's own month count, minus time already spent.
-    None (shown as "estimating…") until at least one past run of this source
-    has completed - there's nothing to average yet on a cold start."""
-    if not source or months_count <= 0:
+def _estimate_reindex_eta(timing_key, months_count, elapsed_seconds):
+    """Seconds-per-month rate averaged across every recorded past run under
+    this exact timing key, scaled to this run's own month count, minus time
+    already spent. None (shown as "estimating…") until at least one past run
+    under this key has completed - there's nothing to average yet on a cold
+    start.
+
+    timing_key is source + the output fields selected (see
+    _reindex_timing_key below), not just source - the "real work" this ETA
+    is meant to predict is the post-read pandas aggregation, and that scales
+    with how many dimensions the output is broken out by, not just which
+    source it reads from. Averaging a Store-only run's ~20s/month against a
+    5-dimension-with-Article-Name run's several-minutes/month under one
+    bucket was observed live making a high-cardinality run's progress bar
+    hit "0s remaining" while the actual aggregation still had minutes left -
+    scoping the average to matching field selections fixes that."""
+    if not timing_key or months_count <= 0:
         return None
-    records = _load_reindex_timing().get(source) or []
+    records = _load_reindex_timing().get(timing_key) or []
     total_months = sum(r["months"] for r in records)
     if total_months <= 0:
         return None
     seconds_per_month = sum(r["seconds"] for r in records) / total_months
     return max(0, round(seconds_per_month * months_count - elapsed_seconds))
+
+
+def _reindex_timing_key(source, extra_dims, metric_col):
+    """source + output-field selection, combined into one bucket key for the
+    timing/ETA average - see _estimate_reindex_eta's docstring for why this
+    can't just be `source` alone."""
+    if not source:
+        return None
+    return f"{source}::{_reindex_fields_key(extra_dims, metric_col)}"
 
 
 def start_reindex_job(payload):
@@ -1338,9 +1358,11 @@ def start_reindex_job(payload):
             stdout=logf, stderr=subprocess.STDOUT, cwd=worker_dir,
         )
 
+    source = payload.get("source")
+    timing_key = _reindex_timing_key(source, payload.get("extraDims") or [], payload.get("metric"))
     _REINDEX_JOBS[job_id] = {
         "progress_path": progress_path, "result_path": result_path, "log_path": log_path,
-        "started_at": time.time(), "source": payload.get("source"),
+        "started_at": time.time(), "source": source, "timingKey": timing_key,
         "monthsCount": len(payload.get("months") or []), "timingRecorded": False,
     }
     return job_id
@@ -1363,7 +1385,7 @@ def _recover_reindex_job(job_id):
     if not os.path.isdir(job_dir):
         return None
     payload_path = os.path.join(job_dir, "payload.json")
-    source, months_count, started_at = None, 0, None
+    source, months_count, started_at, timing_key = None, 0, None, None
     if os.path.exists(payload_path):
         try:
             with open(payload_path, encoding="utf-8") as f:
@@ -1371,6 +1393,7 @@ def _recover_reindex_job(job_id):
             source = payload.get("source")
             months_count = len(payload.get("months") or [])
             started_at = os.path.getmtime(payload_path)
+            timing_key = _reindex_timing_key(source, payload.get("extraDims") or [], payload.get("metric"))
         except (json.JSONDecodeError, OSError):
             pass
     job = {
@@ -1378,7 +1401,7 @@ def _recover_reindex_job(job_id):
         "result_path": os.path.join(job_dir, "result.json"),
         "log_path": os.path.join(job_dir, "worker.log"),
         "started_at": started_at if started_at is not None else time.time(),
-        "source": source, "monthsCount": months_count, "timingRecorded": False,
+        "source": source, "timingKey": timing_key, "monthsCount": months_count, "timingRecorded": False,
         # A recovered job's started_at is an approximation (payload.json's
         # mtime), not the real start time the in-memory job would have had -
         # for a job that sat unpolled for a long time (e.g. across a restart,
@@ -1426,10 +1449,30 @@ def get_reindex_result_stream_path(job_id):
                     meta = json.load(f)
                 if meta.get("ok") and meta.get("rowsRead", 0) > 0:
                     job["timingRecorded"] = True
-                    _record_reindex_timing(job.get("source"), job.get("monthsCount", 0), round(time.time() - job["started_at"]))
+                    _record_reindex_timing(job.get("timingKey"), job.get("monthsCount", 0), round(time.time() - job["started_at"]))
             except (json.JSONDecodeError, OSError):
                 pass
     return job["result_path"]
+
+
+_REINDEX_CSV_LOCKS = {}
+_REINDEX_CSV_LOCKS_GUARD = threading.Lock()
+
+
+def _reindex_csv_lock(key):
+    """One lock per (job_id, view), so concurrent requests for the SAME
+    conversion (e.g. a user clicking "Download CSV" more than once because
+    the first click's multi-minute wait on a huge result looked like nothing
+    was happening - reproduced live on a 1.5GB+ result) block on each other
+    instead of each spawning its own redundant subprocess. The first request
+    in does the real conversion; every other one just waits for it, then
+    reads the same finished file - see get_reindex_csv_path below."""
+    with _REINDEX_CSV_LOCKS_GUARD:
+        lock = _REINDEX_CSV_LOCKS.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _REINDEX_CSV_LOCKS[key] = lock
+        return lock
 
 
 def get_reindex_csv_path(job_id, view):
@@ -1465,12 +1508,17 @@ def get_reindex_csv_path(job_id, view):
     done_path = os.path.join(job_dir, f"{view}_csv_done.json")
 
     if not os.path.exists(done_path):
-        worker_dir = os.path.dirname(os.path.abspath(__file__))
-        worker_script = os.path.join(worker_dir, "reindex_csv_worker.py")
-        subprocess.run(
-            [sys.executable, worker_script, job["result_path"], payload_path, view, csv_path, done_path],
-            cwd=worker_dir,
-        )
+        with _reindex_csv_lock((job_id, view)):
+            # Re-check now that the lock is held - if another request already
+            # did this conversion while we were waiting for it, done_path
+            # exists now and there's nothing left to run.
+            if not os.path.exists(done_path):
+                worker_dir = os.path.dirname(os.path.abspath(__file__))
+                worker_script = os.path.join(worker_dir, "reindex_csv_worker.py")
+                subprocess.run(
+                    [sys.executable, worker_script, job["result_path"], payload_path, view, csv_path, done_path],
+                    cwd=worker_dir,
+                )
 
     if not os.path.exists(done_path):
         return None, "CSV conversion did not complete"
@@ -1508,7 +1556,7 @@ def poll_reindex_job(job_id):
     # (seconds-per-month rate averaged from past completed runs of this
     # source) - None until at least one past run exists to average from.
     elapsed = round(time.time() - job["started_at"])
-    eta = _estimate_reindex_eta(job.get("source"), job.get("monthsCount", 0), elapsed)
+    eta = _estimate_reindex_eta(job.get("timingKey"), job.get("monthsCount", 0), elapsed)
     return {
         "ok": True, "status": "running", "progressPct": pct,
         "filesDone": progress["done"], "filesTotal": progress["total"],
