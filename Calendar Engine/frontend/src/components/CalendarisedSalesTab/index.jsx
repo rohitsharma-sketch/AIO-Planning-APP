@@ -449,12 +449,17 @@ export default function CalendarisedSalesTab({ isPlanner }) {
           <p style={{ fontSize: '12px', color: 'var(--muted)' }}>
             This run finished successfully ({(largeResult.contentLength / (1024 * 1024)).toFixed(0)} MB combined
             across the selected months) — too large to load into this page without risking the browser tab
-            crashing. Download the raw result below, or narrow the month/field selection above and run again
-            for an interactive preview.
+            crashing. Download the CSV below (same Wide/Stacked choice as the interactive table would offer),
+            or narrow the month/field selection above and run again for an interactive preview.
           </p>
-          <a className="btn" href={largeResult.downloadUrl} download style={{ display: 'inline-block', textDecoration: 'none' }}>
-            Download Raw JSON
-          </a>
+          <div className="scm-toolbar">
+            <a className="btn" href={largeResult.csvUrl('wide')} download style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Download CSV (Wide)
+            </a>
+            <a className="btn" href={largeResult.csvUrl('stacked')} download style={{ display: 'inline-block', textDecoration: 'none' }}>
+              Download CSV (Stacked)
+            </a>
+          </div>
         </div>
       )}
 

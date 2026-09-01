@@ -96,7 +96,14 @@ export async function pollReindex(jobId) {
   const contentLength = +(res.headers.get('content-length') || 0)
   if (contentLength > REINDEX_PREVIEW_MAX_BYTES) {
     res.body?.cancel?.()
-    return { ok: true, status: 'too_large', contentLength, downloadUrl: `${BASE}/salesdata/reindex/poll/${jobId}` }
+    // csvUrl(view): every download in this app is a CSV - never hand the
+    // user a raw JSON file. See salesdata/reindex/csv/{job_id} (router.py) /
+    // reindex_csv_worker.py, which converts the same result server-side,
+    // in its own process, into the wide or stacked CSV shape.
+    return {
+      ok: true, status: 'too_large', contentLength, jobId,
+      csvUrl: (view) => `${BASE}/salesdata/reindex/csv/${jobId}?view=${view}`,
+    }
   }
   return res.json()
 }

@@ -15,6 +15,7 @@ from calendar_engine.cluster_names import resolve_cluster_name
 from calendar_engine.scans import (
     get_salesdata_link, get_salesdata_link_daywise, run_reindex,
     start_reindex_job, poll_reindex_job, get_reindex_result_stream_path,
+    get_reindex_csv_path,
     start_link_scan_job, poll_link_scan_job,
     get_source_schema, reindex_month_cache_status,
 )
@@ -624,6 +625,20 @@ def salesdata_reindex_poll(job_id: str, user: dict = Depends(require_login)):
         # links straight here for a result too big to hold in the tab's memory.
         return FileResponse(stream_path, media_type="application/json", filename=f"reindex_{job_id}.json")
     return poll_reindex_job(job_id)
+
+
+@router.get("/salesdata/reindex/csv/{job_id}")
+def salesdata_reindex_csv(job_id: str, view: str = "wide", user: dict = Depends(require_login)):
+    """CSV download for a job whose result is too large to safely parse in
+    the browser - every download in this app is a CSV, so the "too large to
+    preview" fallback links here instead of ever handing the user a raw JSON
+    file. See get_reindex_csv_path's docstring for the wide/stacked shapes."""
+    if view not in ("wide", "stacked"):
+        raise HTTPException(400, "view must be 'wide' or 'stacked'")
+    csv_path, error = get_reindex_csv_path(job_id, view)
+    if error:
+        raise HTTPException(404 if "Unknown" in error or "not finished" in error else 500, error)
+    return FileResponse(csv_path, media_type="text/csv", filename=f"reindex_{job_id}_{view}.csv")
 
 
 @router.post("/salesdata/reindex/cache-status")

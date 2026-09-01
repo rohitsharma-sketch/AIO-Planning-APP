@@ -1412,6 +1412,55 @@ def get_reindex_result_stream_path(job_id):
     return job["result_path"]
 
 
+def get_reindex_csv_path(job_id, view):
+    """CSV (not JSON) download for a job whose result is too large for the
+    browser tab to safely parse and hold - see the "too large to preview"
+    fallback in CalendarisedSalesTab. Every other download in this app is a
+    CSV; this exists so a huge result is never the one exception.
+
+    Converts result.json to CSV via reindex_csv_worker.py, in its own
+    process for the same reason get_reindex_result_stream_path never parses
+    result.json in this process (json.load() on a huge file holds the GIL
+    long enough to freeze the whole server for every user). The conversion
+    itself is comparatively fast (no raw sales re-read, just a reshape of
+    already-computed data) so this runs synchronously and waits for it -
+    Starlette runs a sync route in its own threadpool thread, so waiting on
+    the subprocess here blocks only that one request, not the event loop or
+    any other user's request.
+
+    Returns (csv_path, error) - exactly one is None. csv_path is cached
+    per (job, view) so a repeat click of the same download button reuses it
+    instead of re-converting."""
+    import subprocess
+
+    job = _REINDEX_JOBS.get(job_id) or _recover_reindex_job(job_id)
+    if job is None:
+        return None, "Unknown or expired job"
+    if not os.path.exists(job["result_path"]):
+        return None, "Job is not finished yet"
+
+    job_dir = os.path.dirname(job["result_path"])
+    payload_path = os.path.join(job_dir, "payload.json")
+    csv_path = os.path.join(job_dir, f"{view}.csv")
+    done_path = os.path.join(job_dir, f"{view}_csv_done.json")
+
+    if not os.path.exists(done_path):
+        worker_dir = os.path.dirname(os.path.abspath(__file__))
+        worker_script = os.path.join(worker_dir, "reindex_csv_worker.py")
+        subprocess.run(
+            [sys.executable, worker_script, job["result_path"], payload_path, view, csv_path, done_path],
+            cwd=worker_dir,
+        )
+
+    if not os.path.exists(done_path):
+        return None, "CSV conversion did not complete"
+    with open(done_path, encoding="utf-8") as f:
+        done = json.load(f)
+    if not done.get("ok"):
+        return None, done.get("error") or "CSV conversion failed"
+    return csv_path, None
+
+
 def poll_reindex_job(job_id):
     """Handles the 'unknown job' and 'still running' responses only - a
     completed job is served by get_reindex_result_stream_path instead (see
