@@ -36,6 +36,7 @@ import csv
 import json
 import os
 import sys
+import time
 
 # QUOTE_ALL to match the client-side csvField/downloadCsv convention every
 # other CSV in this app already uses (ReindexOutputPanel.jsx) - a plain
@@ -58,7 +59,19 @@ def _atomic_write_json(path, data):
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f)
-    os.replace(tmp, path)
+    # Short retry on Windows: this repo lives under Documents (OneDrive-synced
+    # on this machine), which can briefly lock a just-written .tmp file to
+    # sync it, turning a plain rename into a WinError 5 - see the matching
+    # comment in reindex_worker.py's own _atomic_write_json, where this was
+    # observed live failing an entire reindex run.
+    for attempt in range(10):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == 9:
+                raise
+            time.sleep(0.1 * (attempt + 1))
 
 
 def _cluster_of(store_cluster, store):

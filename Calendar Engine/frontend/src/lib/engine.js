@@ -186,31 +186,39 @@ export function generateMappings(fests, refYr, futYr, maxShift, moPri, coreNames
   for (const fd of stillUnassigned) {
     const fs = fmtISO(fd), fi = fMap[fs];
     const fMonth = fd.getMonth();
-    let rd, sharedRef = false, crossedMonth = false;
+    let rd, sharedRef = false, mappingLabel;
 
     const sameMonthAvail = stillAvailRef.filter(d => d.getMonth() === fMonth);
     if (sameMonthAvail.length) {
       sameMonthAvail.sort((a, b) => Math.abs(calDiff(fd, a)) - Math.abs(calDiff(fd, b)));
       rd = sameMonthAvail[0];
       stillAvailRef.splice(stillAvailRef.indexOf(rd), 1);
-    } else if (stillAvailRef.length) {
-      // This month's own reference days are completely exhausted - a real
-      // but rare imbalance (e.g. core festivals consumed a different count
-      // of ref vs fut days in this month). Falling back to the nearest
-      // available day from ANY month rather than leaving this date
-      // unmapped - flagged explicitly via mappingType, and validate()'s
-      // existing Month Leakage check reports it too.
-      stillAvailRef.sort((a, b) => Math.abs(calDiff(fd, a)) - Math.abs(calDiff(fd, b)));
-      rd = stillAvailRef.shift();
-      crossedMonth = true;
+      mappingLabel = 'Nearest Available Date';
     } else {
-      // Leap-year case: the future year has more days than the reference year,
-      // so reuse the nearest reference day (prefer same weekday) instead of
-      // leaving this future day unmapped.
-      rd = rDays.slice().sort((a, b) =>
-        (Math.abs(calDiff(fd, a)) - Math.abs(calDiff(fd, b))) ||
-        ((b.getDay() === fd.getDay()) - (a.getDay() === fd.getDay())))[0];
-      sharedRef = true;
+      // This month's own reference days are completely exhausted - a real
+      // imbalance (e.g. a core festival's true date fell in a different
+      // month between refYr and futYr, shrinking this month's leftover
+      // pool). Non-festive days may NEVER cross into another month, so
+      // reuse (share) the nearest reference day already assigned within
+      // THIS SAME month rather than borrowing an unused day from
+      // elsewhere - the same sharing mechanism the leap-year case below
+      // already uses, just scoped to one month instead of the whole year.
+      const sameMonthAny = rDays.filter(d => d.getMonth() === fMonth);
+      if (sameMonthAny.length) {
+        sameMonthAny.sort((a, b) => Math.abs(calDiff(fd, a)) - Math.abs(calDiff(fd, b)));
+        rd = sameMonthAny[0];
+        sharedRef = true;
+        mappingLabel = 'Nearest Available Date (Same-Month Reuse)';
+      } else {
+        // Leap-year case (or, defensively, a reference year with literally
+        // no days in this month): reuse the nearest reference day anywhere
+        // (prefer same weekday) instead of leaving this future day unmapped.
+        rd = rDays.slice().sort((a, b) =>
+          (Math.abs(calDiff(fd, a)) - Math.abs(calDiff(fd, b))) ||
+          ((b.getDay() === fd.getDay()) - (a.getDay() === fd.getDay())))[0];
+        sharedRef = true;
+        mappingLabel = 'Nearest Available Date (Leap Year Reuse)';
+      }
     }
     const rs = fmtISO(rd), ri = rMap[rs];
     const s = scoreMapping(rd, fd, ri, fi, W, maxShift, moPri);
@@ -220,7 +228,7 @@ export function generateMappings(fests, refYr, futYr, maxShift, moPri, coreNames
       festivePosition: ri ? ri.position : null,
       festiveCategory: ri ? ri.category : (fi ? fi.category : 'Non-Festive'),
       futFestInfo: fi,
-      mappingType: crossedMonth ? 'Nearest Available Date (Month Exhausted)' : 'Nearest Available Date',
+      mappingType: mappingLabel,
       mappingPriority: 7, score: s.score,
       monthMatch: s.monthMatch, weekdayMatch: s.weekdayMatch, dateDiff: s.diff,
       sharedRef
@@ -359,9 +367,9 @@ export function validate(mappings, refYr, futYr, maxShift, fests, coreNames) {
   // B: Duplicate reference dates
   for (const [rd, futs] of usedRefDates.entries()) {
     if (futs.length > 1) {
-      const leapShare = mappings.some(m => fmtISO(m.refDate) === rd && m.sharedRef);
-      if (leapShare) {
-        issues.push({ type:'info', icon:'INFO', title:'Shared Reference Date (Leap Year)', desc:`${futYr} has more days than ${refYr}, so reference ${rd} is reused for ${futs.join(', ')}.` });
+      const shared = mappings.some(m => fmtISO(m.refDate) === rd && m.sharedRef);
+      if (shared) {
+        issues.push({ type:'info', icon:'INFO', title:'Shared Reference Date', desc:`Reference ${rd} is reused for ${futs.join(', ')} — that month (or ${futYr} overall, if it's a leap year) has more future days needing a match than it has spare reference days.` });
       } else {
         issues.push({ type:'error', icon:'ERR', title:'Duplicate Reference Date', desc:`${rd} is used by ${futs.length} future dates: ${futs.join(', ')}` });
       }

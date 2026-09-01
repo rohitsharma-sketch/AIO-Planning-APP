@@ -752,9 +752,26 @@ def _rows_from_group(grp_df, group_cols, col_col, val_col, key_fields):
 
 
 def reindex_daywise(months, store_cluster, day_map, sync_id=None, progress=None, extra_dims=None, metric_col=None):
+    import pandas as pd
+
     extra_dims = [d for d in (extra_dims or []) if d in SOURCE_SCHEMA["dw"]["dimensions"]]
     metric_col = metric_col if metric_col in SOURCE_SCHEMA["dw"]["metrics"] else SOURCE_SCHEMA["dw"]["default_metric"]
-    cluster_ref_fut = {c: {p[0]: p[1] for p in pairs} for c, pairs in day_map.items()}
+
+    # Long (cluster, ref_iso, fut_date) mapping table - one row per pair in
+    # day_map - instead of a {ref_iso: fut_date} dict. A locked calendar can
+    # legitimately reuse the same reference day for two different future
+    # days (engine.js's "Same-Month Reuse"/leap-year fallback, sharedRef:
+    # when a month's own reference days run out, the algorithm reuses the
+    # nearest already-used one from that SAME month rather than crossing
+    # into another month). A dict keyed by ref_iso can only hold one fut_date
+    # per key, so a reused reference day silently dropped its earlier
+    # mapping here - found live 2026-09-01 as future dates going completely
+    # missing from reindexed output. The merge below fans a reused
+    # reference day's sales out to every future day it maps to, instead of
+    # picking just one.
+    ref_fut_rows = [(c, p[0], p[1]) for c, pairs in day_map.items() for p in pairs]
+    ref_fut_map = pd.DataFrame(ref_fut_rows, columns=["cluster", "ref_iso", "fut_date"])
+    known_clusters = set(day_map)
 
     df, total_read, used_cache = _get_raw("dw", months, sync_id, _fetch_raw_daywise, progress=progress,
                                            extra_dims=extra_dims, metric_col=metric_col)
@@ -778,10 +795,13 @@ def reindex_daywise(months, store_cluster, day_map, sync_id=None, progress=None,
     unmapped_stores = sorted(df.loc[df["cluster"].isna(), "STORE_NAME"].unique().tolist())
     df = df.dropna(subset=["cluster"])
 
-    df, unknown_clusters, unknown_cluster_stores = _split_unknown_clusters(df, set(cluster_ref_fut))
+    df, unknown_clusters, unknown_cluster_stores = _split_unknown_clusters(df, known_clusters)
 
     df["ref_iso"] = df["BILLDATE"].dt.strftime("%Y-%m-%d")
-    df = _vectorized_lookup(df, "cluster", "ref_iso", "fut_date", cluster_ref_fut)
+    # merge (not _vectorized_lookup's dict .map()) so a reference day mapped
+    # to more than one future day fans this row out to each of them, instead
+    # of collapsing to a single fut_date - see ref_fut_map's comment above.
+    df = df.merge(ref_fut_map, on=["cluster", "ref_iso"], how="left")
     unmapped_dates = int(df["fut_date"].isna().sum())
     unmapped_sample = sorted(df.loc[df["fut_date"].isna(), "ref_iso"].unique().tolist())[:20]
     df = df.dropna(subset=["fut_date"])

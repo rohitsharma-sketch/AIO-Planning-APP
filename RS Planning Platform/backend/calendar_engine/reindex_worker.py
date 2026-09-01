@@ -21,6 +21,7 @@ memory.
 import json
 import os
 import sys
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # this dir, for `import scans`
 
@@ -31,9 +32,24 @@ def _atomic_write_json(path, data):
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f)
-    os.replace(tmp, path)  # atomic on both POSIX and Windows - the reader in
-    # the parent process never sees a partially-written file, just the old
-    # complete one or the new complete one.
+    # os.replace is atomic on both POSIX and Windows - the reader in the
+    # parent process never sees a partially-written file, just the old
+    # complete one or the new complete one. On Windows, though, this repo
+    # lives under Documents (OneDrive-synced on this machine), which briefly
+    # opens a newly-written .tmp file to sync it the instant it's created -
+    # a real WinError 5 "Access is denied" observed live 2026-09-01, killing
+    # an entire multi-minute reindex run over a single progress-bar tick's
+    # rename. Progress updates happen many times a second during a run, so
+    # even a rare per-write lock is near-certain to hit at least once - a
+    # short retry is the actual fix, not a hypothetical hardening.
+    for attempt in range(10):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == 9:
+                raise
+            time.sleep(0.1 * (attempt + 1))
 
 
 class _WatchedProgress(dict):
