@@ -20,6 +20,58 @@ export const DEFAULT_FESTIVALS = [
   { id:11, name:'Christmas',       refDate:'2026-12-25', futDate:'2027-12-25', pre:7,  core:2, post:5  },
 ];
 
+// ─── Core (anchor-driving) festivals per cluster ──────────────────────────────
+// User-specified 2026-09-01: only a small set of MASS-CELEBRATED festivals per
+// cluster should act as shift anchors in generateMappings (engine.js) - every
+// other festival on a cluster's list (Good Friday, Easter, Ram Navami, Karva
+// Chauth, Onam, Baisakhi, Milad-un-Nabi, Guru Nanak Jayanti, Pongal, Gudi
+// Padwa, Vishu, Ganesh Chaturthi, Uttarayan, Kali Puja, Shraad, national
+// holidays, etc.) still appears in the output/festival legend but no longer
+// pins the calendar shift - it's treated as an ordinary day, confined to the
+// same-month shuffling rule below.
+//
+// "core" here is unrelated to a festival's own pre/core/post day-WINDOW size
+// (the fields above) - this is a per-cluster CLASSIFICATION of which festival
+// NAMES are anchor-worthy at all, decided with the user against each
+// cluster's real festival list (see calendar-engine-business-rules memory):
+// - National majors everywhere they're actually observed: Holi, Diwali,
+//   Dussehra, Navratri.
+// - Each cluster's own biggest regional festival(s) - can be more than one
+//   where two are genuinely comparable in scale (e.g. Chhath Puja AND Durga
+//   Puja for the Bihar-adjacent clusters).
+// - Kashmir has neither Holi nor Dussehra/Navratri in its actual festival
+//   list (see the live data) - Diwali is its only national major, so its
+//   core set is just Diwali + both Eids.
+// - JAMMU + RJ has no single festival that clearly dominates the whole
+//   cluster - left at the 4 national majors with no regional addition,
+//   rather than forcing a pick.
+//
+// Matched by exact festival NAME against whatever a cluster's festival list
+// actually contains - a cluster missing one of its listed core names (e.g. no
+// Navratri configured yet) just has one fewer anchor, not an error.
+export const CORE_FESTIVALS_BY_CLUSTER = {
+  'Kashmir':           ['Diwali', 'Eid al-Fitr', 'Eid al-Adha'],
+  'UP + NCR':          ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja'],
+  'UP + BIHAR - PUJA': ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja'],
+  'BIHAR':             ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja'],
+  'JAMMU + RJ':        ['Holi', 'Navratri', 'Dussehra', 'Diwali'],
+  'ODISHA':            ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Rath Yatra', 'Nuakhai'],
+  'N. EAST - PUJA':    ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Durga Puja'],
+  'N. EAST':           ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Bihu'],
+  'JH + MP + CG':      ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja'],
+  'WB':                ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Durga Puja'],
+}
+
+// Any cluster not named above (a new cluster added later, or renamed) falls
+// back to just the 4 pan-India majors - never falls back to "everything is
+// core" (the old, now-rejected behaviour), since that would silently un-do
+// the whole point of this list for a cluster nobody has classified yet.
+export const DEFAULT_CORE_FESTIVALS = ['Holi', 'Navratri', 'Dussehra', 'Diwali']
+
+export function coreFestivalNamesFor(clusterName) {
+  return CORE_FESTIVALS_BY_CLUSTER[clusterName] || DEFAULT_CORE_FESTIVALS
+}
+
 // ─── Festival Date Database (2026 / 2027) ─────────────────────────────────────
 // regions: ['all'] = pan-India; specific tags filter/prioritise in region-aware search
 export const FESTIVAL_DB = [

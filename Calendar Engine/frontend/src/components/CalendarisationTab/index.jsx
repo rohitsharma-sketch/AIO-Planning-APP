@@ -7,7 +7,7 @@ import FestivalTable from './FestivalTable'
 import OutputSection from './OutputSection'
 import CalendarLibrary from './CalendarLibrary'
 import ChangeLogViewer from './ChangeLogViewer'
-import { DEFAULT_FESTIVALS, applyYearToProfiles, yearSyncMessage, resolveFestivalDefaults } from '../../lib/festivalData'
+import { DEFAULT_FESTIVALS, applyYearToProfiles, yearSyncMessage, resolveFestivalDefaults, coreFestivalNamesFor } from '../../lib/festivalData'
 
 let _nextFestivalId = 1000
 
@@ -188,12 +188,15 @@ export default function CalendarisationTab({ isPlanner }) {
     }
 
     try {
-      const perCluster = workingProfiles.map(cp => ({ name: cp.name, mappings: generateMappings(cp.festivals, ry, fy, ms, moPri) }))
+      const perCluster = workingProfiles.map(cp => ({
+        name: cp.name,
+        mappings: generateMappings(cp.festivals, ry, fy, ms, moPri, coreFestivalNamesFor(cp.name)),
+      }))
       setClusterMappingsRaw(perCluster)
       setAllDayMap(perCluster.flatMap(cm => cm.mappings.map(m => toRow(m, cm.name))))
       const activeMappings = perCluster[activeIdx].mappings
       setDayMap(activeMappings.map(m => toRow(m, perCluster[activeIdx].name)))
-      setValidationIssues(validate(activeMappings, ry, fy, ms, workingProfiles[activeIdx].festivals))
+      setValidationIssues(validate(activeMappings, ry, fy, ms, workingProfiles[activeIdx].festivals, coreFestivalNamesFor(workingProfiles[activeIdx].name)))
       setMonthlySummary(computeMonthly(activeMappings))
       setEngineStatus({ ok: true, msg: `${syncMsg}Calendar generated: ${activeMappings.length} days mapped for "${workingProfiles[activeIdx].name}".` })
     } catch (e) {
@@ -208,7 +211,7 @@ export default function CalendarisationTab({ isPlanner }) {
     const ry = Number(refYear), fy = Number(futYear), ms = Number(maxShift) || 45
     const activeMappings = clusterMappingsRaw[activeIdx].mappings
     setDayMap(activeMappings.map(m => toRow(m, clusterMappingsRaw[activeIdx].name)))
-    setValidationIssues(validate(activeMappings, ry, fy, ms, profiles[activeIdx].festivals))
+    setValidationIssues(validate(activeMappings, ry, fy, ms, profiles[activeIdx].festivals, coreFestivalNamesFor(clusterMappingsRaw[activeIdx].name)))
     setMonthlySummary(computeMonthly(activeMappings))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIdx])
@@ -297,7 +300,7 @@ export default function CalendarisationTab({ isPlanner }) {
     }
     const mappings = mappingsFromSavedPairs(pairs, cluster.festivals, ry, fy)
     setDayMap(mappings.map(m => toRow(m, cluster.name)))
-    setValidationIssues(validate(mappings, ry, fy, Number(maxShift) || 45, cluster.festivals))
+    setValidationIssues(validate(mappings, ry, fy, Number(maxShift) || 45, cluster.festivals, coreFestivalNamesFor(cluster.name)))
     setMonthlySummary(computeMonthly(mappings))
     setEngineStatus({ ok: true, msg: `Loaded "${full.name}" (${full.refYear} -> ${full.futYear}) — ${nextProfiles.length} cluster${nextProfiles.length === 1 ? '' : 's'} restored, showing "${cluster.name}".` })
   }

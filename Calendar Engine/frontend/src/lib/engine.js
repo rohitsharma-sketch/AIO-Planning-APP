@@ -78,11 +78,30 @@ export function scoreMapping(rDay, fDay, rInfo, fInfo, W, maxShift, moPri) {
 }
 
 // ─── Engine ───────────────────────────────────────────────────────────────────
-export function generateMappings(fests, refYr, futYr, maxShift, moPri) {
+// coreNames: per-cluster list of festival NAMES allowed to anchor the shift
+// (Phase 1) or exempt a mapping from the same-month containment rule below -
+// see CORE_FESTIVALS_BY_CLUSTER in festivalData.js. null/undefined = no
+// restriction (every festival on the list is core) - kept only so any other
+// caller of this function that hasn't been updated to pass core names still
+// behaves exactly as before, rather than silently losing every anchor.
+export function generateMappings(fests, refYr, futYr, maxShift, moPri, coreNames) {
   maxShift = +maxShift || 45;
   const W = getWeights();
   const rDays = yearDays(refYr), fDays = yearDays(futYr);
-  const rMap = buildFestMap(refYr, fests, refYr), fMap = buildFestMap(futYr, fests, refYr);
+
+  // Full festival map (every festival on the cluster's list, core or not) -
+  // used ONLY to LABEL each mapping's festival/festivePosition/
+  // festiveCategory for display (Monthly Summary, the output preview, the
+  // reindexed-sales Festival row) at the end of this function. Never
+  // consulted while deciding which day maps to which - a non-core festival
+  // like Good Friday must not get to move the calendar just because it's on
+  // the list.
+  const rMapFull = buildFestMap(refYr, fests, refYr), fMapFull = buildFestMap(futYr, fests, refYr);
+
+  // Core-only map - the ONLY festivals that can anchor Phase 1 or exempt a
+  // day from the same-month rule in Phases 2-4.
+  const coreFests = coreNames ? fests.filter(f => coreNames.includes(f.name)) : fests;
+  const rMap = buildFestMap(refYr, coreFests, refYr), fMap = buildFestMap(futYr, coreFests, refYr);
 
   // Build ref festive lookup: festival+position -> refDate
   const refFestLookup = {}; // 'FestName::pos' -> refDate
@@ -94,7 +113,7 @@ export function generateMappings(fests, refYr, futYr, maxShift, moPri) {
   const assignments = new Map(); // futDateStr -> mapping obj
   const usedRef = new Set();
 
-  // ── Phase 1: Festival anchor assignments (iterate FUT festive days) ───────
+  // ── Phase 1: Core festival anchor assignments (iterate FUT festive days) ──
   const festFutDays = fDays.filter(d => fMap[fmtISO(d)]);
   // Sort: core days first (position=0), then pre/post by absolute position
   festFutDays.sort((a, b) => Math.abs(fMap[fmtISO(a)].position) - Math.abs(fMap[fmtISO(b)].position));
@@ -116,18 +135,29 @@ export function generateMappings(fests, refYr, futYr, maxShift, moPri) {
     usedRef.add(rs);
   }
 
-  // ── Phase 2: Remaining days ────────────────────────────────────────────────
+  // ── Phase 2: Remaining days - SAME MONTH ONLY ─────────────────────────────
+  // Once core festivals are anchored, every other day (including non-core
+  // festival days - Good Friday etc. are ordinary days for this purpose)
+  // must be re-shuffled strictly within its own calendar month, never into
+  // an adjacent one. Bucketing candidates by month NUMBER (0-11, ignoring
+  // year since ref/fut are different years) enforces this directly - it
+  // replaces the old ±(maxShift + 14) day search window, which only
+  // preferred same-month via scoring and could still cross a boundary.
   const remFut = fDays.filter(d => !assignments.has(fmtISO(d)));
   const remRef = rDays.filter(d => !usedRef.has(fmtISO(d)));
 
-  // Generate candidate pairs (limit to ±(maxShift + 14) calendar days for performance)
-  const searchWindow = maxShift + 14;
+  const remRefByMonth = new Map();
+  for (const d of remRef) {
+    const mo = d.getMonth();
+    if (!remRefByMonth.has(mo)) remRefByMonth.set(mo, []);
+    remRefByMonth.get(mo).push(d);
+  }
+
   const allPairs = [];
   for (const fd of remFut) {
     const fs = fmtISO(fd), fi = fMap[fs];
-    for (const rd of remRef) {
-      const diff = calDiff(rd, fd);
-      if (Math.abs(diff) > searchWindow) continue;
+    const sameMonthRef = remRefByMonth.get(fd.getMonth()) || [];
+    for (const rd of sameMonthRef) {
       const rs = fmtISO(rd), ri = rMap[rs];
       const s = scoreMapping(rd, fd, ri, fi, W, maxShift, moPri);
       allPairs.push({ rs, fs, rd, fd, ri, fi, ...s });
@@ -150,16 +180,29 @@ export function generateMappings(fests, refYr, futYr, maxShift, moPri) {
     localUsedFut.add(p.fs); localUsedRef.add(p.rs);
   }
 
-  // ── Phase 3: Fallback for any still-unassigned fut days ───────────────────
+  // ── Phase 3: Fallback for any still-unassigned fut days - same month first ─
   const stillUnassigned = fDays.filter(d => !assignments.has(fmtISO(d)));
   const stillAvailRef   = rDays.filter(d => !usedRef.has(fmtISO(d)) && !localUsedRef.has(fmtISO(d)));
   for (const fd of stillUnassigned) {
     const fs = fmtISO(fd), fi = fMap[fs];
-    let rd, sharedRef = false;
-    if (stillAvailRef.length) {
-      // Find nearest available ref day by calendar diff
+    const fMonth = fd.getMonth();
+    let rd, sharedRef = false, crossedMonth = false;
+
+    const sameMonthAvail = stillAvailRef.filter(d => d.getMonth() === fMonth);
+    if (sameMonthAvail.length) {
+      sameMonthAvail.sort((a, b) => Math.abs(calDiff(fd, a)) - Math.abs(calDiff(fd, b)));
+      rd = sameMonthAvail[0];
+      stillAvailRef.splice(stillAvailRef.indexOf(rd), 1);
+    } else if (stillAvailRef.length) {
+      // This month's own reference days are completely exhausted - a real
+      // but rare imbalance (e.g. core festivals consumed a different count
+      // of ref vs fut days in this month). Falling back to the nearest
+      // available day from ANY month rather than leaving this date
+      // unmapped - flagged explicitly via mappingType, and validate()'s
+      // existing Month Leakage check reports it too.
       stillAvailRef.sort((a, b) => Math.abs(calDiff(fd, a)) - Math.abs(calDiff(fd, b)));
       rd = stillAvailRef.shift();
+      crossedMonth = true;
     } else {
       // Leap-year case: the future year has more days than the reference year,
       // so reuse the nearest reference day (prefer same weekday) instead of
@@ -177,16 +220,39 @@ export function generateMappings(fests, refYr, futYr, maxShift, moPri) {
       festivePosition: ri ? ri.position : null,
       festiveCategory: ri ? ri.category : (fi ? fi.category : 'Non-Festive'),
       futFestInfo: fi,
-      mappingType: 'Nearest Available Date', mappingPriority: 7, score: s.score,
+      mappingType: crossedMonth ? 'Nearest Available Date (Month Exhausted)' : 'Nearest Available Date',
+      mappingPriority: 7, score: s.score,
       monthMatch: s.monthMatch, weekdayMatch: s.weekdayMatch, dateDiff: s.diff,
       sharedRef
     });
   }
 
   // ── Phase 4: repair excessive shifts by swapping reference days ──────────
+  // (same-month constrained too - see repairExcessiveShifts)
   repairExcessiveShifts(assignments, rMap, fMap, W, maxShift, moPri);
 
-  return fDays.map(d => assignments.get(fmtISO(d))).filter(Boolean);
+  const mappings = fDays.map(d => assignments.get(fmtISO(d))).filter(Boolean);
+
+  // ── Labeling pass: attach the FULL festival identity for display ─────────
+  // Phases 1-4 above only ever see core festivals, so every non-core day's
+  // festival/festivePosition/festiveCategory is still null/Non-Festive at
+  // this point. Fill those in from the full map now - purely cosmetic, runs
+  // after every date decision is already final. Skips mappings the core map
+  // already anchored (mappingPriority <= 2: Festival-to-Festival / Festive
+  // Relative Day) so a genuinely core-anchored day can never be relabeled
+  // with a different, non-core festival that happens to share the date
+  // under "first defined wins" overlap resolution.
+  for (const m of mappings) {
+    if (m.mappingPriority <= 2) continue;
+    const fi = fMapFull[fmtISO(m.futureDate)];
+    if (fi) {
+      m.festival = fi.festival;
+      m.festivePosition = fi.position;
+      m.festiveCategory = fi.category;
+    }
+  }
+
+  return mappings;
 }
 
 // Greedy assignment can strand a few non-festive future days far from any free
@@ -224,9 +290,11 @@ export function repairExcessiveShifts(assignments, rMap, fMap, W, maxShift, moPr
       if (excess(m.dateDiff) === 0) continue; // fixed by an earlier swap this pass
       const fd = m.futureDate, fs = fmtISO(fd), r1 = m.refDate, r1s = fmtISO(r1);
       // Reference days closer to this future day than its current one (ideally within
-      // the limit), same weekday first, nearest first
+      // the limit), same weekday first, nearest first - same month only (see
+      // generateMappings' Phase 2 comment: non-core days may never cross a
+      // month boundary, and a repair swap must not undo that either).
       const cands = usedRefDays
-        .filter(r => Math.abs(calDiff(r, fd)) < Math.abs(m.dateDiff))
+        .filter(r => Math.abs(calDiff(r, fd)) < Math.abs(m.dateDiff) && r.getMonth() === fd.getMonth())
         .sort((a, b) => ((b.getDay() === fd.getDay()) - (a.getDay() === fd.getDay()))
                      || (Math.abs(calDiff(a, fd)) - Math.abs(calDiff(b, fd))));
       let best = null, bestGain = 0;
@@ -255,7 +323,13 @@ export function repairExcessiveShifts(assignments, rMap, fMap, W, maxShift, moPr
 }
 
 // ─── Validation ───────────────────────────────────────────────────────────────
-export function validate(mappings, refYr, futYr, maxShift, fests) {
+// coreNames: same per-cluster core-festival list generateMappings takes -
+// check C below only makes sense for festivals that are actually allowed to
+// anchor the shift; flagging a non-core festival (Good Friday etc.) as
+// "mismatched" would just be re-describing the same-month containment rule
+// as if it were a bug. null/undefined = every festival treated as core
+// (matches generateMappings' own no-restriction default).
+export function validate(mappings, refYr, futYr, maxShift, fests, coreNames) {
   const issues = [];
   const usedFutDates = new Map(); // futDateStr -> [refDates]
   maxShift = +maxShift || 45;
@@ -297,6 +371,7 @@ export function validate(mappings, refYr, futYr, maxShift, fests) {
   // C: Festival mismatch (festive ref → non-festive future when festive future available)
   for (const m of mappings) {
     if (!m.festival) continue;
+    if (coreNames && !coreNames.includes(m.festival)) continue; // non-core - not supposed to anchor, not a mismatch
     if (m.mappingType !== 'Festival-to-Festival' && m.mappingType !== 'Festive Relative Day') {
       const targetKey = m.festival + '::' + m.festivePosition;
       const targetFutDs = futFestLookup[targetKey];
