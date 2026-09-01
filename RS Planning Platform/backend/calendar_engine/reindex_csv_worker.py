@@ -73,10 +73,18 @@ def _load_festival_by_date(calendar_id):
     column string works for both sources here too. Returns {} if calendarId
     is missing (a result computed before this was threaded through) or the
     lookup fails for any reason - a missing Festival column is a labelling
-    gap, not worth failing the whole CSV over."""
+    gap, not worth failing the whole CSV over.
+
+    Expands the FULL pre/core/post window around each festival's fut_date,
+    not just the single anchor day - same loop engine.js's buildFestMap (and
+    this function's client-side counterpart) use. Labeling only the exact
+    fut_date was a real bug (found live 2026-09-01): a festival with
+    pre=4/core=3/post=0 only had its single core day labeled, leaving the
+    other 6 days of its real window blank."""
     if not calendar_id:
         return {}
     try:
+        from datetime import timedelta
         from sqlalchemy import select
         from db.base import SessionLocal
         from db.models.calendar import CalendarCluster, CalendarClusterFestival
@@ -84,19 +92,22 @@ def _load_festival_by_date(calendar_id):
         session = SessionLocal()
         try:
             rows = session.execute(
-                select(CalendarClusterFestival.name, CalendarClusterFestival.fut_date)
+                select(CalendarClusterFestival.name, CalendarClusterFestival.fut_date,
+                       CalendarClusterFestival.pre, CalendarClusterFestival.core, CalendarClusterFestival.post)
                 .join(CalendarCluster, CalendarCluster.id == CalendarClusterFestival.calendar_cluster_id)
                 .where(CalendarCluster.calendar_id == int(calendar_id))
             ).all()
         finally:
             session.close()
         out = {}
-        for name, fut_date in rows:
+        for name, fut_date, pre, core, post in rows:
             if not fut_date or not name:
                 continue
-            ds = fut_date.isoformat()
-            out.setdefault(ds, set()).add(name)
-            out.setdefault(ds[:7], set()).add(name)
+            core = core or 1
+            for pos in range(-(pre or 0), (post or 0) + core):
+                ds = (fut_date + timedelta(days=pos)).isoformat()
+                out.setdefault(ds, set()).add(name)
+                out.setdefault(ds[:7], set()).add(name)
         return {k: sorted(v) for k, v in out.items()}
     except Exception:
         return {}

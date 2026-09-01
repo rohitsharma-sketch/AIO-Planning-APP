@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import LinkStatusPanel from './LinkStatusPanel'
 import ReindexOutputPanel from './ReindexOutputPanel'
 import { startReindex, pollReindex, getReindexCacheStatus, listCalendarLibrary, getCalendar, getStoreClusterMap, getSourceSchema, putSalesdataLinkSelection } from '../../lib/api'
+import { parseDate, fmtISO, addDays } from '../../lib/dateUtils'
 
 // Same compact "45s" / "2m 05s" style as LinkStatusPanel's fmtDuration.
 function fmtDuration(totalSeconds) {
@@ -267,13 +268,28 @@ export default function CalendarisedSalesTab({ isPlanner }) {
       // calendars), so this deliberately isn't scoped to one cluster; a
       // future column showing multiple names just means more than one
       // cluster has a festival on that date.
+      //
+      // Expands the FULL pre/core/post window around each festival's futDate,
+      // not just the single anchor day - same loop engine.js's buildFestMap
+      // uses to decide which days a festival actually influences. Labeling
+      // only the exact futDate was a real bug (found live 2026-09-01): Eid
+      // al-Fitr's window pre=4/core=3/post=0 around futDate 2027-03-09 covers
+      // 2027-03-05 through 2027-03-11, but only 03-09 itself was ever getting
+      // labeled, leaving 6 of those 7 days blank even though they're squarely
+      // inside the festival's real window.
       const festMap = {}
       for (const cl of detail.clusters || []) {
         for (const f of cl.festivals || []) {
           if (!f.futDate || !f.name) continue
+          const fd = parseDate(f.futDate)
+          if (!fd) continue
+          const pre = +f.pre || 0, core = +f.core || 1, post = +f.post || 0
           const add = (key) => { (festMap[key] = festMap[key] || new Set()).add(f.name) }
-          add(f.futDate)
-          add(f.futDate.slice(0, 7))
+          for (let pos = -pre; pos <= post + core - 1; pos++) {
+            const dd = fmtISO(addDays(fd, pos))
+            add(dd)
+            add(dd.slice(0, 7))
+          }
         }
       }
       setFestivalByDate(Object.fromEntries(Object.entries(festMap).map(([k, v]) => [k, [...v].sort()])))
