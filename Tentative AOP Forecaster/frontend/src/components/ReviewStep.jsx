@@ -236,7 +236,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
             className="quickset-btn"
             onClick={() => applyQuick(row)}
             disabled={quick[row].trim() === ''}
-          >→</button>
+          >-&gt;</button>
         </div>
       </td>
 
@@ -262,7 +262,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
                 title={locked ? `Unlock ${row} ${m}` : `Lock ${row} ${m}`}
                 tabIndex={-1}
               >
-                {locked ? '🔒' : '🔓'}
+                {locked ? 'L' : 'U'}
               </button>
             </div>
           </td>
@@ -279,8 +279,8 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
           <p className="review-sub">Edit growth rates per division and month. Lock individual cells to protect them.</p>
         </div>
         <div style={{display:'flex', alignItems:'center', gap:10, alignSelf:'flex-start', marginTop:4}}>
-          {(anyChanged || !allLocked) && <span className="autosave-badge" title="Saved to this browser — restores automatically if you reload">◐ Autosaved locally</span>}
-          {anyChanged && <button className="btn-sm-outline" onClick={resetRates}>↺ Reset all</button>}
+          {(anyChanged || !allLocked) && <span className="autosave-badge" title="Saved to this browser — restores automatically if you reload">Autosaved locally</span>}
+          {anyChanged && <button className="btn-sm-outline" onClick={resetRates}>Reset all</button>}
         </div>
       </div>
 
@@ -308,7 +308,6 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
             onClick={toggleAllLocks}
             title={allLocked ? 'Unlock every cell' : 'Lock every cell'}
           >
-            <span className="lock-all-icon">{allLocked ? '🔒' : '🔓'}</span>
             <span className="lock-all-label">{allLocked ? 'Unlock all' : 'Lock all'}</span>
           </button>
         </div>
@@ -317,7 +316,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
             <thead>
               <tr>
                 <th>Division</th>
-                <th className="th-quickset">All months →</th>
+                <th className="th-quickset">All months</th>
                 {MONTHS.map(m => <th key={m}>{m}</th>)}
               </tr>
             </thead>
@@ -334,7 +333,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
               <button className="link-btn" onClick={resetRates}>Reset to uploaded values</button>
             </p>
           : <p className="growth-note">
-              Hover any cell to reveal its 🔒 lock. Locked cells are skipped by "All months →". Divisions and Overall are independent.
+              Hover any cell to reveal its lock control. Locked cells are skipped by "All months". Divisions and Overall are independent.
             </p>
         }
       </div>
@@ -454,7 +453,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
         <div style={{display:'flex', alignItems:'center', gap:12}}>
           {onBack && (
             <button className="btn-sm-outline" onClick={onBack} style={{fontSize:13}}>
-              View last results →
+              View last results
             </button>
           )}
         </div>
@@ -464,7 +463,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
             <span>Include flat detail sheet in Excel</span>
           </label>
           <button className="btn-primary" onClick={handleRun} disabled={running} style={{minWidth:180}}>
-            {running ? <span className="run-spinner">⟳ Running…</span> : '▶  Run forecast'}
+            {running ? <span className="run-spinner">Running…</span> : 'Run forecast'}
           </button>
         </div>
       </div>

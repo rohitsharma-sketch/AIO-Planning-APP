@@ -51,7 +51,6 @@ export default function StoreDrillTable({ leaves, error, runKey }) {
           <input type="checkbox" checked={showMonths} onChange={e => setShowMonths(e.target.checked)} /> Monthly forecast
         </label>
         <div className="sdt-search-wrap">
-          <span className="sdt-search-ic">⌕</span>
           <input className="sdt-search" placeholder="Search store / cluster / tag…" value={search} onChange={e => setSearch(e.target.value)} />
           {search && <button className="sdt-search-x" onClick={() => setSearch('')}>×</button>}
         </div>
@@ -90,7 +89,7 @@ export default function StoreDrillTable({ leaves, error, runKey }) {
                 <tr key={n.id} className={`sdt-row d${n.depth}${isLeaf ? ' leaf' : ''}`} onClick={() => !isLeaf && d.toggleNode(tree, n.id)}>
                   <td className="sdt-name">
                     <span className="sdt-indent" style={{ width: n.depth * 18 }} />
-                    <span className={`sdt-caret${isLeaf ? ' none' : open ? ' open' : ''}`}>▸</span>
+                    <span className={`sdt-caret${isLeaf ? ' none' : open ? ' open' : ''}`}>&gt;</span>
                     {n.level === 'Tag'   ? <span className={`tag ${tagClass(n.name)}`}>{n.name}</span>
                    : n.level === 'Store' ? <span className="store-name">{n.name}</span>
                    : <span>{n.name}</span>}

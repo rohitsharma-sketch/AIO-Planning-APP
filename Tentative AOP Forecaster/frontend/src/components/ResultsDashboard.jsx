@@ -196,8 +196,8 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
           <p className="dash-sub">FY28 Annual Operating Plan — Mar'27 to Mar'28</p>
         </div>
         <div className="dash-actions">
-          <button className="btn-secondary" onClick={onRunAgain}>← Back</button>
-          <button className="btn-primary"   onClick={onDownload}>⬇ Download Excel</button>
+          <button className="btn-secondary" onClick={onRunAgain}>Back</button>
+          <button className="btn-primary"   onClick={onDownload}>Download Excel</button>
         </div>
       </div>
 

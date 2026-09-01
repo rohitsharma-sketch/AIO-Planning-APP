@@ -114,7 +114,7 @@ export default function StoreMappingPanel({ isPlanner }) {
     if (!row || row.cluster === cluster) return
     persist(
       mapping.stores.map((s) => (s.store === store ? { ...s, cluster } : s)),
-      `${store}: ${row.cluster || 'unassigned'} → ${cluster}`,
+      `${store}: ${row.cluster || 'unassigned'} -> ${cluster}`,
     )
   }
 

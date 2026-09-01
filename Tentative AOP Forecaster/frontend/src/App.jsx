@@ -177,7 +177,7 @@ export default function App() {
           <nav className="stepper">
             {STEPS.map((s, i) => (
               <div key={s} className={`step-item ${i === step ? 'active' : ''} ${i < step ? 'done' : ''}`}>
-                <span className="step-num">{i < step ? '✓' : i + 1}</span>
+                <span className="step-num">{i < step ? 'OK' : i + 1}</span>
                 <span className="step-label">{s}</span>
                 {i < STEPS.length - 1 && <span className="step-sep" />}
               </div>
@@ -186,7 +186,7 @@ export default function App() {
           <div style={{display:'flex', alignItems:'center', gap:8, flexShrink:0}}>
             {step > 0 && (
               <button className="btn-outline" onClick={handleReset} style={{fontSize:12}}>
-                ↺ New forecast
+                New forecast
               </button>
             )}
             <ThemeSelector current={theme} onChange={setTheme} />

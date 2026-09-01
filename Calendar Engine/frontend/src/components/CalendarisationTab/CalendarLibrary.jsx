@@ -153,7 +153,7 @@ export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSaveP
                           are immutable, rather than driven by a (non-existent) `locked` field. */}
                       <span className="lib-locked-badge">Locked</span>
                     </div>
-                    <div className="lib-pair">{c.refYear} → {c.futYear}</div>
+                    <div className="lib-pair">{c.refYear} -&gt; {c.futYear}</div>
                   </div>
                 </div>
 

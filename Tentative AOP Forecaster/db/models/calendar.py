@@ -18,7 +18,7 @@ e.g. store AAC is "MP, CG, RJ - (NP)" / cluster_key business-side but
 """
 import datetime
 
-from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Integer, String, UniqueConstraint, func, SmallInteger, CheckConstraint
+from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Integer, LargeBinary, String, UniqueConstraint, func, SmallInteger, CheckConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -254,4 +254,49 @@ class SalesSnapshot(Base):
     rows: Mapped[list] = mapped_column(JSONB, nullable=False)  # long-form [{store, division?, col, value}]
     rows_read: Mapped[int] = mapped_column(Integer, nullable=False)
     rows_mapped: Mapped[int] = mapped_column(Integer, nullable=False)
+    computed_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ReindexMonthCache(Base):
+    """Caches ONE reference month's own reindex sub-result (day-wise or
+    month-wise), so a CLOSED month never needs its raw sales re-read and
+    re-aggregated on a later Run Reindex - only genuinely open/current months
+    (which can still change) get recomputed every time. See _is_month_closed
+    and run_reindex in scans.py for how this is used - "closed" means the
+    reference month has fully elapsed as of the server's system date.
+
+    Keyed by (source_type, ref_month, calendar_fingerprint, fields_key):
+    calendar_fingerprint is a hash of the day-map actually used (not just a
+    calendar id), so editing an existing locked calendar's mappings
+    self-invalidates every cache entry it touches instead of silently
+    serving a result computed under the old mapping. fields_key folds in the
+    exact extraDims + metric selection for the same reason - a cached row
+    here is reused ONLY when calendar, extra output fields, and metric all
+    match the current Run Reindex request exactly.
+
+    result_blob holds this one month's own {rows, actualRows, columns,
+    actualColumns, refDateByColumn, rowsRead, rowsMapped, unmappedStores,
+    ...} sub-result exactly as reindex_daywise/reindex_monthwise returned it
+    for months=[ref_month] alone - cached and freshly-computed sub-results
+    get concatenated back together by _merge_reindex_results into one
+    combined output for whatever full month range was actually requested.
+
+    Stored as UTF-8-encoded JSON bytes (BYTEA), not JSONB: a day-wise month
+    broken out by several extra fields easily exceeds Postgres's hard
+    per-JSONB-value limit of ~256MB (confirmed live - "total size of jsonb
+    object elements exceeds the maximum of 268435455 bytes" on a real
+    2026-04 day-wise write). BYTEA has no such ceiling. _save_month_cache /
+    _load_month_cache in scans.py do the json.dumps().encode() /
+    json.loads() at the Python level."""
+    __tablename__ = "reindex_month_cache"
+    __table_args__ = (
+        CheckConstraint("source_type IN ('mw', 'dw')", name="ck_reindex_month_cache_source_type"),
+        {"schema": "calendar"},
+    )
+
+    source_type: Mapped[str] = mapped_column(String, primary_key=True)
+    ref_month: Mapped[str] = mapped_column(String, primary_key=True)
+    calendar_fingerprint: Mapped[str] = mapped_column(String, primary_key=True)
+    fields_key: Mapped[str] = mapped_column(String, primary_key=True)
+    result_blob: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     computed_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)

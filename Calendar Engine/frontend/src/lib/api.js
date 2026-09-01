@@ -71,5 +71,34 @@ export const startLinkScan = (sourceType, refresh) =>
 export const pollLinkScan = (jobId) => fetchJson(`/salesdata/link/poll/${jobId}`)
 export const runReindex = (payload) => jsonPost('/salesdata/reindex', payload)
 export const startReindex = (payload) => jsonPost('/salesdata/reindex/start', payload)
-export const pollReindex = (jobId) => fetchJson(`/salesdata/reindex/poll/${jobId}`)
+// A completed job's result now streams straight off disk (see
+// get_reindex_result_stream_path in scans.py) with no server-side size cap -
+// but a large combined multi-month day-wise result (400+MB) can crash the
+// BROWSER TAB itself trying to JSON.parse and hold that much in memory
+// (reproduced live). Past this threshold, skip the parse: cancel the
+// in-flight body (so the bytes aren't downloaded twice for nothing) and
+// return a small marker the caller uses to offer a direct file download
+// instead of an in-page table. A normal single/few-month run comfortably
+// stays under this and behaves exactly as before.
+const REINDEX_PREVIEW_MAX_BYTES = 80 * 1024 * 1024
+
+export async function pollReindex(jobId) {
+  const res = await fetch(`${BASE}/salesdata/reindex/poll/${jobId}`, { credentials: 'same-origin' })
+  if (res.status === 401) {
+    window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`
+    throw new Error('Not authenticated')
+  }
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`
+    try { const e = await res.json(); msg = typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail ?? e) } catch {}
+    throw new Error(msg)
+  }
+  const contentLength = +(res.headers.get('content-length') || 0)
+  if (contentLength > REINDEX_PREVIEW_MAX_BYTES) {
+    res.body?.cancel?.()
+    return { ok: true, status: 'too_large', contentLength, downloadUrl: `${BASE}/salesdata/reindex/poll/${jobId}` }
+  }
+  return res.json()
+}
+export const getReindexCacheStatus = (payload) => jsonPost('/salesdata/reindex/cache-status', payload)
 export const getSourceSchema = (sourceType) => fetchJson(`/salesdata/schema/${sourceType}`)

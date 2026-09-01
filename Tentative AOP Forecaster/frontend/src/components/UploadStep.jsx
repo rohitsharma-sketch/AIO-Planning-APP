@@ -21,10 +21,10 @@ export default function UploadStep({ onUseDb, onEditInputs }) {
       <div className="card upload-card">
         <div className="upload-actions" style={{ marginBottom: 16 }}>
           <button className="btn-primary" style={{ minWidth: 220 }} onClick={useDb} disabled={dbBusy}>
-            {dbBusy ? 'Building from database…' : '🗄 Continue from database →'}
+            {dbBusy ? 'Building from database…' : 'Continue from database'}
           </button>
           <button className="btn-outline" onClick={onEditInputs}>
-            ✎ Edit Growth % / NSO / AOP overrides
+            Edit Growth % / NSO / AOP overrides
           </button>
         </div>
         {err && <p className="upload-err">{err}</p>}

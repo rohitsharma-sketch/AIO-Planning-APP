@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, Fragment } from 'react'
 import { getStoreClusterMap } from '../../lib/api'
 
 // Ported from the old app's reindex output tabs (calendar_engine.html
@@ -47,9 +47,28 @@ const KEY_SEP = '\u0001'
 
 const KEY_LABELS = { store: 'Store', division: 'Division' }
 
-export default function ReindexOutputPanel({ result }) {
+export default function ReindexOutputPanel({ result, festivalByDate }) {
   const [activeSub, setActiveSub] = useState('reindexed')
   const [search, setSearch] = useState('')
+  // Reindexed Sales has two layouts to choose from: Wide (the existing
+  // pivot - one row per store[+extra fields], one column per date/month;
+  // good for a full year at a glance but the column count explodes with
+  // extra output fields) and Stacked - one row per (store, date/month) pair,
+  // restricted to just Store + Date/Month + Value regardless of which extra
+  // fields were picked for the run, summed across those fields. Fewer
+  // columns, a much lighter table to compute and render, meant for a quick
+  // preview rather than the full detailed breakdown - the user picks
+  // whichever fits what they're looking at.
+  const [viewMode, setViewMode] = useState('wide')
+  // Which months to show/export - applies to both Day-wise (columns are
+  // individual dates, filtered by their own month) and Month-wise (columns
+  // are already months) results, since this one panel serves both sources.
+  // '' entries in the Set mean "not yet initialised"; empty Set after init
+  // means "none selected" (deliberately shows nothing rather than silently
+  // falling back to "all"). Starts null so the "select everything by
+  // default" effect below can tell "not initialised" apart from "user
+  // unchecked everything".
+  const [selectedMonths, setSelectedMonths] = useState(null)
   // The reindex response carries only {store, division?, col, value} — no
   // cluster — so the Cluster column and the whole By Cluster tab need the
   // store -> cluster map fetched separately (the same GET the Date Shift
@@ -115,6 +134,26 @@ export default function ReindexOutputPanel({ result }) {
       clusterOf(r.store).toLowerCase().includes(q))
   }, [wide, search, storeCluster])
 
+  // Stacked view: one row per (store, column) pair, summed across whatever
+  // OTHER key fields (division, department, attribute1...) the run was
+  // broken out by - restricted to Store + Date/Month + Value only, on
+  // purpose, so this stays a light long-form list no matter how many extra
+  // output fields were picked. Built straight off result.rows (not `wide`),
+  // same source `_by_cluster`/`_summary` already use.
+  const stacked = useMemo(() => {
+    if (!ok) return []
+    const byKey = new Map()  // `${store}${col}` -> {store, col, value}
+    for (const row of result.rows) {
+      const k = `${row.store}${KEY_SEP}${row.col}`
+      const e = byKey.get(k)
+      if (e) e.value += row.value
+      else byKey.set(k, { store: row.store, col: row.col, value: row.value })
+    }
+    return [...byKey.values()].sort((a, b) =>
+      (a.store > b.store) - (a.store < b.store) || (a.col > b.col) - (a.col < b.col))
+  }, [ok, result])
+
+
   // Day-wise columns are YYYY-MM-DD and collapse to months here; month-wise
   // columns are already YYYY-MM, so slice(0,7) leaves them untouched and the
   // summary is the same grain as the reindexed table (matching the old app).
@@ -122,24 +161,87 @@ export default function ReindexOutputPanel({ result }) {
     () => (ok ? [...new Set(result.columns.map(c => c.slice(0, 7)))].sort() : []),
     [ok, result])
 
+  // Reset the month filter to "everything" on a new result (a fresh reindex
+  // run or a switch between Day-wise/Month-wise) - a stale selection from a
+  // previous run's month list would otherwise silently hide months that are
+  // actually present in this one.
+  useEffect(() => { setSelectedMonths(new Set(monthCols)) }, [monthCols])
+
+  const activeMonths = selectedMonths || new Set(monthCols)
+  function toggleMonth(m) {
+    setSelectedMonths(prev => {
+      const next = new Set(prev || monthCols)
+      next.has(m) ? next.delete(m) : next.add(m)
+      return next
+    })
+  }
+
+  // What "Reindexed Sales" (day-level or month-level raw columns) shows and
+  // downloads - Day-wise columns are individual dates, so a month is excluded
+  // by matching its own YYYY-MM prefix; Month-wise columns already are that
+  // prefix, so this filters them directly.
+  const visibleColumns = useMemo(
+    () => result?.columns?.filter(c => activeMonths.has(c.slice(0, 7))) || [],
+    [result, activeMonths])
+  // What "Monthly Summary" and "By Cluster" show/download.
+  const visibleMonthCols = useMemo(() => monthCols.filter(m => activeMonths.has(m)), [monthCols, activeMonths])
+
+  // Stacked view's filtered rows - both the month filter (via visibleColumns,
+  // same as every other tab) and the search box, which for this restricted
+  // Store+Date/Month-only layout only makes sense against store/cluster (no
+  // division/extra-field columns exist here to search against).
+  const filteredStacked = useMemo(() => {
+    const cols = new Set(visibleColumns)
+    const q = search.toLowerCase().trim()
+    return stacked.filter(r => cols.has(r.col) &&
+      (!q || String(r.store).toLowerCase().includes(q) || clusterOf(r.store).toLowerCase().includes(q)))
+  }, [stacked, visibleColumns, search, storeCluster])
+
+  // Per-row (store[/division]) actual sums, keyed by reference month-number so
+  // they can be matched to the reindexed side's future-dated columns - same
+  // "actual is a different year, match by MM not by column string" rule as
+  // p1p2Rows below, but kept PER key here (not collapsed to one global total)
+  // so the Monthly Summary table can show a differential per store, not just
+  // per month. mw results carry actualRows too (see reindex_monthwise), so
+  // this works for both sources - a result cached before actualRows existed
+  // just yields an empty map and the Actual/Diff columns are hidden below.
+  const actualByKeyMM = useMemo(() => {
+    if (!ok || !result.actualRows) return null
+    const m = new Map()
+    for (const row of result.actualRows) {
+      const key = keyFields.map(f => row[f] ?? '').join(KEY_SEP)
+      const mm = row.col.slice(5, 7)
+      let e = m.get(key)
+      if (!e) { e = {}; m.set(key, e) }
+      e[mm] = (e[mm] || 0) + row.value
+    }
+    return m
+  }, [ok, result])
+
   const summaryRows = useMemo(() => {
     if (!ok) return []
     return filteredWide.map(r => {
       const sums = {}
-      for (const c of result.columns) {
+      for (const c of visibleColumns) {
         const v = r.vals[c]
         if (v != null) sums[c.slice(0, 7)] = (sums[c.slice(0, 7)] || 0) + v
       }
-      return { row: r, sums }
+      const key = keyFields.map(f => r[f] ?? '').join(KEY_SEP)
+      const actualForKey = actualByKeyMM?.get(key) || {}
+      const actualSums = {}
+      for (const m of visibleMonthCols) actualSums[m] = actualForKey[m.slice(5, 7)] || 0
+      return { row: r, sums, actualSums }
     })
-  }, [ok, result, filteredWide])
+  }, [ok, visibleColumns, visibleMonthCols, filteredWide, actualByKeyMM])
 
   // By Cluster sums straight off the long-form rows (not off `wide`), exactly
   // as calendar_engine.html does: one row per cluster, one cell per column.
   const clusterRows = useMemo(() => {
     if (!ok) return []
+    const cols = new Set(visibleColumns)
     const byCluster = new Map()
     for (const row of result.rows) {
+      if (!cols.has(row.col)) continue
       const cl = clusterOf(row.store)
       let e = byCluster.get(cl)
       if (!e) { e = {}; byCluster.set(cl, e) }
@@ -147,7 +249,74 @@ export default function ReindexOutputPanel({ result }) {
     }
     return [...byCluster.entries()].sort((a, b) => (a[0] > b[0]) - (a[0] < b[0]))
       .map(([cluster, vals]) => ({ cluster, vals }))
-  }, [ok, result, storeCluster])
+  }, [ok, result, storeCluster, visibleColumns])
+
+  // P1/P2: day 1-15 vs day 16-end of month, actual vs reindexed. The two
+  // sides use DIFFERENT date columns by design - `result.rows` (reindexed)
+  // are keyed by FUTURE dates (e.g. 2027), `result.actualRows` are keyed by
+  // each sale's own REFERENCE date (e.g. 2026, see reindex_daywise's own
+  // comment: "real sales on their own reference date"). That's not a bug to
+  // work around, it IS the comparison being asked for: "what did this month
+  // actually do last cycle" vs "what will the calendar-shifted version look
+  // like" - so actual is matched to reindexed by MONTH NUMBER (04 to 04),
+  // not by absolute year, since the two sides are never the same year.
+  //
+  // Month-wise has no day-of-month field anywhere in its source (see
+  // _fetch_raw_monthwise in scans.py - it reads BILLMONTH, never a day), so
+  // there is no real day 1-15/16-end split to compute there. Rather than hide
+  // the tab for that source, p1MwEven splits each month's real total evenly
+  // in half - clearly not a claim about actual intra-month pattern, just a
+  // consistent P1/P2 shape across both sources. isEven flags this so the
+  // render/download below can label it honestly instead of implying it's
+  // measured data.
+  const isEven = ok && result.source === 'mw'
+  const p1p2Rows = useMemo(() => {
+    if (!ok || !result.actualRows) return []
+    if (isEven) {
+      const actualByMM = {}  // {'04': total}
+      for (const row of result.actualRows) {
+        const mm = row.col.slice(5, 7)
+        actualByMM[mm] = (actualByMM[mm] || 0) + row.value
+      }
+      const cols = new Set(visibleColumns)
+      const reindexedByYM = {}  // {'2027-04': total}
+      for (const row of result.rows) {
+        if (!cols.has(row.col)) continue
+        reindexedByYM[row.col] = (reindexedByYM[row.col] || 0) + row.value
+      }
+      return visibleMonthCols.map(ym => {
+        const a = (actualByMM[ym.slice(5, 7)] || 0) / 2
+        const r = (reindexedByYM[ym] || 0) / 2
+        return { month: ym, a1: a, r1: r, a2: a, r2: r }
+      })
+    }
+    const actualByMM = {}  // {'04': {p1, p2}}
+    for (const row of result.actualRows) {
+      const mm = row.col.slice(5, 7)
+      const half = +row.col.slice(8, 10) <= 15 ? 'p1' : 'p2'
+      const e = (actualByMM[mm] = actualByMM[mm] || { p1: 0, p2: 0 })
+      e[half] += row.value
+    }
+    const cols = new Set(visibleColumns)
+    const reindexedByYM = {}  // {'2027-04': {p1, p2}}
+    for (const row of result.rows) {
+      if (!cols.has(row.col)) continue
+      const half = +row.col.slice(8, 10) <= 15 ? 'p1' : 'p2'
+      const e = (reindexedByYM[row.col.slice(0, 7)] = reindexedByYM[row.col.slice(0, 7)] || { p1: 0, p2: 0 })
+      e[half] += row.value
+    }
+    return visibleMonthCols.map(ym => {
+      const a = actualByMM[ym.slice(5, 7)] || { p1: 0, p2: 0 }
+      const r = reindexedByYM[ym] || { p1: 0, p2: 0 }
+      return { month: ym, a1: a.p1, r1: r.p1, a2: a.p2, r2: r.p2 }
+    })
+  }, [ok, result, visibleColumns, visibleMonthCols, isEven])
+
+  // Shared by Monthly Summary and P1/P2: null (rendered as "—") when actual is
+  // zero/missing rather than a misleading 0% or a divide-by-zero Infinity.
+  const pctDiff = (actual, reindexed) => (actual ? ((reindexed - actual) / actual) * 100 : null)
+  const fmtPct = (v) => (v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`)
+  const hasActual = ok && !!result.actualRows
 
   if (!result || !result.ok) return null
 
@@ -160,6 +329,14 @@ export default function ReindexOutputPanel({ result }) {
   // exact same reference date. Falls back to '' for a result cached before
   // refDateByColumn existed, so an old cached run doesn't crash the header.
   const refDateByColumn = result.refDateByColumn || {}
+  // Which festival(s), if any, land on this output column - built from the
+  // selected calendar's own festival records (see CalendarisedSalesTab's
+  // runRx). '' when none, so a planner scanning the table can spot a demand
+  // spike's cause instead of guessing. festivalByDate is keyed by exact
+  // YYYY-MM-DD for day-wise columns and by the YYYY-MM prefix for
+  // month-wise ones - a plain lookup by the column string works for both.
+  const festivalOf = (c) => (festivalByDate?.[c] || []).join(', ')
+  const hasFestivalRow = !!festivalByDate && Object.keys(festivalByDate).length > 0
 
   function countText(n) {
     if (!n) return 'No rows to show.'
@@ -170,27 +347,57 @@ export default function ReindexOutputPanel({ result }) {
 
   function downloadReindexed() {
     downloadCsv([
-      // Reference-date row sits directly above the future-date header row,
-      // same column order, so the two always line up one-to-one.
-      ['Reference Date', ...kfHeaders.map(() => ''), ...result.columns.map(c => refDateByColumn[c] || '')],
-      ['Cluster', ...kfHeaders, ...result.columns],
+      // Reference-date and Festival rows sit directly above the future-date
+      // header row, same column order, so all three always line up one-to-one.
+      ['Reference Date', ...kfHeaders.map(() => ''), ...visibleColumns.map(c => refDateByColumn[c] || '')],
+      ...(hasFestivalRow ? [['Festival', ...kfHeaders.map(() => ''), ...visibleColumns.map(festivalOf)]] : []),
+      ['Cluster', ...kfHeaders, ...visibleColumns],
       ...filteredWide.map(r => [clusterOf(r.store), ...keyFields.map(f => r[f]),
-        ...result.columns.map(c => cell(r.vals[c]))]),
+        ...visibleColumns.map(c => cell(r.vals[c]))]),
     ], `${fileStem}_reindexed.csv`)
   }
 
-  function downloadSummary() {
+  function downloadStacked() {
     downloadCsv([
-      ['Cluster', ...kfHeaders, ...monthCols],
-      ...summaryRows.map(({ row, sums }) => [clusterOf(row.store), ...keyFields.map(f => row[f]),
-        ...monthCols.map(m => round2(sums[m]))]),
+      ['Cluster', 'Store', result.source === 'dw' ? 'Date' : 'Month', 'Reference Date', 'Festival', 'Value'],
+      ...filteredStacked.map(r => [clusterOf(r.store), r.store, r.col, refDateByColumn[r.col] || '', festivalOf(r.col), round2(r.value)]),
+    ], `${fileStem}_stacked.csv`)
+  }
+
+  function downloadSummary() {
+    const monthHeaders = hasActual
+      ? visibleMonthCols.flatMap(m => [`${m} Actual`, `${m} Reindexed`, `${m} Diff`, `${m} Diff %`])
+      : visibleMonthCols
+    function monthCells(sums, actualSums) {
+      if (!hasActual) return visibleMonthCols.map(m => round2(sums[m]))
+      return visibleMonthCols.flatMap(m => {
+        const a = actualSums[m] || 0, r = sums[m] || 0
+        return [round2(a), round2(r), round2(r - a), fmtPct(pctDiff(a, r))]
+      })
+    }
+    downloadCsv([
+      ['Cluster', ...kfHeaders, ...monthHeaders],
+      ...summaryRows.map(({ row, sums, actualSums }) =>
+        [clusterOf(row.store), ...keyFields.map(f => row[f]), ...monthCells(sums, actualSums)]),
     ], `${fileStem}_summary.csv`)
+  }
+
+  function downloadP1P2() {
+    downloadCsv([
+      ...(isEven ? [['Note: Month-wise has no day-of-month field - P1/P2 below is an even half-and-half of each month\'s total, not measured data.']] : []),
+      ['Month', 'P1 Actual', 'P1 Reindexed', 'P1 Diff', 'P1 Diff %', 'P2 Actual', 'P2 Reindexed', 'P2 Diff', 'P2 Diff %'],
+      ...p1p2Rows.map(r => [
+        r.month,
+        round2(r.a1), round2(r.r1), round2(r.r1 - r.a1), fmtPct(pctDiff(r.a1, r.r1)),
+        round2(r.a2), round2(r.r2), round2(r.r2 - r.a2), fmtPct(pctDiff(r.a2, r.r2)),
+      ]),
+    ], `${fileStem}_p1_p2.csv`)
   }
 
   function downloadCluster() {
     downloadCsv([
-      ['Cluster', ...result.columns],
-      ...clusterRows.map(r => [r.cluster, ...result.columns.map(c => round2(r.vals[c]))]),
+      ['Cluster', ...visibleColumns],
+      ...clusterRows.map(r => [r.cluster, ...visibleColumns.map(c => round2(r.vals[c]))]),
     ], `${fileStem}_by_cluster.csv`)
   }
 
@@ -202,8 +409,32 @@ export default function ReindexOutputPanel({ result }) {
         <button className={activeSub === 'reindexed' ? 'active' : ''} onClick={() => setActiveSub('reindexed')}>Reindexed Sales</button>
         <button className={activeSub === 'summary' ? 'active' : ''} onClick={() => setActiveSub('summary')}>Monthly Summary</button>
         <button className={activeSub === 'cluster' ? 'active' : ''} onClick={() => setActiveSub('cluster')}>By Cluster</button>
+        {/* P1/P2 (first/second half of a month) is a real day 1-15/16-end split
+            for day-wise; month-wise has no day-of-month field in its source at
+            all, so its P1/P2 here is an even half-and-half of the month total
+            (isEven, see p1p2Rows) - shown either way for a consistent shape
+            across sources, but clearly labeled below when it's the even case. */}
+        {ok && result.actualRows && <button className={activeSub === 'p1p2' ? 'active' : ''} onClick={() => setActiveSub('p1p2')}>P1 / P2 Comparison</button>}
         <button className={activeSub === 'raw' ? 'active' : ''} onClick={() => setActiveSub('raw')}>Run Details</button>
       </div>
+
+      {/* Month filter - shared across every tab below (Reindexed/Summary/
+          Cluster/P1-P2), so picking "just April" once narrows the table AND
+          the CSV export on whichever tab is open, instead of each tab having
+          its own separate month picker. */}
+      {activeSub !== 'raw' && monthCols.length > 0 && (
+        <div className="scm-toolbar" style={{ marginBottom: '10px', flexWrap: 'wrap' }}>
+          <span className="sdt-tb-label">Months</span>
+          {monthCols.map(m => (
+            <label key={m} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer' }}>
+              <input type="checkbox" checked={activeMonths.has(m)} onChange={() => toggleMonth(m)} />
+              {m}
+            </label>
+          ))}
+          <button onClick={() => setSelectedMonths(new Set(monthCols))}>All</button>
+          <button onClick={() => setSelectedMonths(new Set())}>None</button>
+        </div>
+      )}
 
       {/* calendar_engine.html rxRenderTabs() lines ~3995-4011: a run whose synced
           months fall outside the chosen calendar's reference year maps nothing,
@@ -218,48 +449,105 @@ export default function ReindexOutputPanel({ result }) {
 
       {activeSub === 'reindexed' && (
         <>
+          {/* Wide = existing pivot (one row per store[+fields], one column per
+              date/month). Stacked = one row per store+date/month pair, Store +
+              Date/Month + Value only regardless of which extra fields were
+              picked - a lighter, restricted preview for a quicker look instead
+              of the full detailed breakdown. User's choice, not automatic. */}
+          <div className="scm-toolbar" style={{ marginBottom: '8px' }}>
+            <span className="sdt-tb-label">View</span>
+            <button className={viewMode === 'wide' ? 'active' : ''} onClick={() => setViewMode('wide')}>Wide</button>
+            <button className={viewMode === 'stacked' ? 'active' : ''} onClick={() => setViewMode('stacked')}>Stacked</button>
+            {viewMode === 'stacked' && (
+              <span style={{ fontSize: '11px', color: 'var(--muted)' }}>
+                Store + {result.source === 'dw' ? 'Date' : 'Month'} + Value only, summed across any other output fields.
+              </span>
+            )}
+          </div>
           <div className="scm-toolbar">
             <div className="field">
               <label htmlFor="rx-search">Search</label>
               <input id="rx-search" type="text" style={{ width: '240px' }}
-                placeholder="store, division, cluster"
+                placeholder={viewMode === 'wide' ? 'store, division, cluster' : 'store, cluster'}
                 value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-            <button className="btn" onClick={downloadReindexed} disabled={!filteredWide.length}>
-              Download CSV
-            </button>
+            {viewMode === 'wide' ? (
+              <button className="btn" onClick={downloadReindexed} disabled={!filteredWide.length}>
+                Download CSV
+              </button>
+            ) : (
+              <button className="btn" onClick={downloadStacked} disabled={!filteredStacked.length}>
+                Download CSV
+              </button>
+            )}
           </div>
           <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
-            {countText(filteredWide.length)}
+            {countText(viewMode === 'wide' ? filteredWide.length : filteredStacked.length)}
           </div>
-          <div className="tbl-wrap">
-            <table>
-              <thead>
-                {/* Reference-date row directly above the future-date row, same
-                    column order, so the two headers always align one-to-one -
-                    see refDateByColumn above. */}
-                <tr className="rx-ref-date-row">
-                  <th>Reference Date</th>
-                  {kfHeaders.map(h => <th key={`ref-${h}`} />)}
-                  {result.columns.map(c => <th key={`ref-${c}`} style={num}>{refDateByColumn[c] || ''}</th>)}
-                </tr>
-                <tr>
-                  <th>Cluster</th>
-                  {kfHeaders.map(h => <th key={h}>{h}</th>)}
-                  {result.columns.map(c => <th key={c} style={num}>{c}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredWide.slice(0, RX_CAP).map(r => (
-                  <tr key={keyFields.map(f => r[f]).join(KEY_SEP)}>
-                    <td>{clusterOf(r.store)}</td>
-                    {keyFields.map(f => <td key={f} style={{ fontWeight: f === 'store' ? 600 : 400 }}>{r[f]}</td>)}
-                    {result.columns.map(c => <td key={c} style={num}>{cell(r.vals[c])}</td>)}
+          {viewMode === 'wide' ? (
+            <div className="tbl-wrap">
+              <table>
+                <thead>
+                  {/* Reference-date row directly above the future-date row, same
+                      column order, so the two headers always align one-to-one -
+                      see refDateByColumn above. */}
+                  <tr className="rx-ref-date-row">
+                    <th>Reference Date</th>
+                    {kfHeaders.map(h => <th key={`ref-${h}`} />)}
+                    {visibleColumns.map(c => <th key={`ref-${c}`} style={num}>{refDateByColumn[c] || ''}</th>)}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                  {hasFestivalRow && (
+                    <tr className="rx-ref-date-row">
+                      <th>Festival</th>
+                      {kfHeaders.map(h => <th key={`fest-${h}`} />)}
+                      {visibleColumns.map(c => <th key={`fest-${c}`} style={{ ...num, color: 'var(--warn)' }}>{festivalOf(c)}</th>)}
+                    </tr>
+                  )}
+                  <tr>
+                    <th>Cluster</th>
+                    {kfHeaders.map(h => <th key={h}>{h}</th>)}
+                    {visibleColumns.map(c => <th key={c} style={num}>{c}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredWide.slice(0, RX_CAP).map(r => (
+                    <tr key={keyFields.map(f => r[f]).join(KEY_SEP)}>
+                      <td>{clusterOf(r.store)}</td>
+                      {keyFields.map(f => <td key={f} style={{ fontWeight: f === 'store' ? 600 : 400 }}>{r[f]}</td>)}
+                      {visibleColumns.map(c => <td key={c} style={num}>{cell(r.vals[c])}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cluster</th>
+                    <th>Store</th>
+                    <th>{result.source === 'dw' ? 'Date' : 'Month'}</th>
+                    <th>Reference Date</th>
+                    {hasFestivalRow && <th>Festival</th>}
+                    <th style={num}>Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredStacked.slice(0, RX_CAP).map(r => (
+                    <tr key={`${r.store}${KEY_SEP}${r.col}`}>
+                      <td>{clusterOf(r.store)}</td>
+                      <td style={{ fontWeight: 600 }}>{r.store}</td>
+                      <td>{r.col}</td>
+                      <td>{refDateByColumn[r.col] || ''}</td>
+                      {hasFestivalRow && <td style={{ color: 'var(--warn)' }}>{festivalOf(r.col)}</td>}
+                      <td style={num}>{round2(r.value)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
       )}
 
@@ -277,7 +565,7 @@ export default function ReindexOutputPanel({ result }) {
             </button>
           </div>
           <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
-            {countText(summaryRows.length)} · {monthCols.length} month column(s)
+            {countText(summaryRows.length)} · {visibleMonthCols.length} month column(s)
           </div>
           <div className="tbl-wrap">
             <table>
@@ -285,15 +573,42 @@ export default function ReindexOutputPanel({ result }) {
                 <tr>
                   <th>Cluster</th>
                   {kfHeaders.map(h => <th key={h}>{h}</th>)}
-                  {monthCols.map(m => <th key={m} style={num}>{m}</th>)}
+                  {visibleMonthCols.map(m => hasActual ? (
+                    <th key={m} colSpan={4} style={num}>{m}</th>
+                  ) : (
+                    <th key={m} style={num}>{m}</th>
+                  ))}
                 </tr>
+                {hasActual && (
+                  <tr>
+                    <th />
+                    {kfHeaders.map(h => <th key={`sub-${h}`} />)}
+                    {visibleMonthCols.map(m => (
+                      <Fragment key={m}>
+                        <th style={num}>Actual</th>
+                        <th style={num}>Reindexed</th>
+                        <th style={num}>Diff</th>
+                        <th style={num}>Diff %</th>
+                      </Fragment>
+                    ))}
+                  </tr>
+                )}
               </thead>
               <tbody>
-                {summaryRows.slice(0, RX_CAP).map(({ row, sums }) => (
+                {summaryRows.slice(0, RX_CAP).map(({ row, sums, actualSums }) => (
                   <tr key={keyFields.map(f => row[f]).join(KEY_SEP)}>
                     <td>{clusterOf(row.store)}</td>
                     {keyFields.map(f => <td key={f} style={{ fontWeight: f === 'store' ? 600 : 400 }}>{row[f]}</td>)}
-                    {monthCols.map(m => <td key={m} style={num}>{round2(sums[m])}</td>)}
+                    {visibleMonthCols.map(m => hasActual ? (
+                      <Fragment key={m}>
+                        <td style={num}>{round2(actualSums[m])}</td>
+                        <td style={num}>{round2(sums[m])}</td>
+                        <td style={num}>{round2((sums[m] || 0) - (actualSums[m] || 0))}</td>
+                        <td style={num}>{fmtPct(pctDiff(actualSums[m], sums[m]))}</td>
+                      </Fragment>
+                    ) : (
+                      <td key={m} style={num}>{round2(sums[m])}</td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
@@ -310,7 +625,7 @@ export default function ReindexOutputPanel({ result }) {
             </button>
           </div>
           <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
-            {clusterRows.length} cluster(s) × {result.columns.length} column(s)
+            {clusterRows.length} cluster(s) × {visibleColumns.length} column(s)
             {storeCluster === null && ' — loading store-cluster map…'}
           </div>
           <div className="tbl-wrap">
@@ -318,14 +633,71 @@ export default function ReindexOutputPanel({ result }) {
               <thead>
                 <tr>
                   <th>Cluster</th>
-                  {result.columns.map(c => <th key={c} style={num}>{c}</th>)}
+                  {visibleColumns.map(c => <th key={c} style={num}>{c}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {clusterRows.map(r => (
                   <tr key={r.cluster}>
                     <td style={{ fontWeight: 600 }}>{r.cluster}</td>
-                    {result.columns.map(c => <td key={c} style={num}>{round2(r.vals[c])}</td>)}
+                    {visibleColumns.map(c => <td key={c} style={num}>{round2(r.vals[c])}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {activeSub === 'p1p2' && (
+        <>
+          <div className="scm-toolbar">
+            <button className="btn" onClick={downloadP1P2} disabled={!p1p2Rows.length}>
+              Download CSV
+            </button>
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
+            P1 = day 1–15, P2 = day 16–end of month. Actual is that month's own reference-year
+            sales; Reindexed is the calendar-shifted future-year sales for the same month.
+            {isEven && (
+              <>
+                {' '}<strong style={{ color: 'var(--warn)' }}>Month-wise source has no day-of-month field —
+                P1/P2 here is an even half-and-half of each month's total, not a measured
+                intra-month pattern.</strong>
+              </>
+            )}
+          </div>
+          <div className="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th rowSpan={2}>Month</th>
+                  <th colSpan={4} style={num}>P1 (1–15)</th>
+                  <th colSpan={4} style={num}>P2 (16–end)</th>
+                </tr>
+                <tr>
+                  <th style={num}>Actual</th>
+                  <th style={num}>Reindexed</th>
+                  <th style={num}>Diff</th>
+                  <th style={num}>Diff %</th>
+                  <th style={num}>Actual</th>
+                  <th style={num}>Reindexed</th>
+                  <th style={num}>Diff</th>
+                  <th style={num}>Diff %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {p1p2Rows.map(r => (
+                  <tr key={r.month}>
+                    <td style={{ fontWeight: 600 }}>{r.month}</td>
+                    <td style={num}>{round2(r.a1)}</td>
+                    <td style={num}>{round2(r.r1)}</td>
+                    <td style={num}>{round2(r.r1 - r.a1)}</td>
+                    <td style={num}>{fmtPct(pctDiff(r.a1, r.r1))}</td>
+                    <td style={num}>{round2(r.a2)}</td>
+                    <td style={num}>{round2(r.r2)}</td>
+                    <td style={num}>{round2(r.r2 - r.a2)}</td>
+                    <td style={num}>{fmtPct(pctDiff(r.a2, r.r2))}</td>
                   </tr>
                 ))}
               </tbody>
@@ -338,6 +710,18 @@ export default function ReindexOutputPanel({ result }) {
         <div>
           <p>Source: {result.source} ({result.grain}, metric {result.metric})</p>
           <p>Rows read: {result.rowsRead}, rows mapped: {result.rowsMapped}</p>
+          {(result.cachedMonths?.length > 0 || result.computedMonths?.length > 0) && (
+            <p>
+              {result.cachedMonths?.length > 0 && (
+                <><span className="scm-pill scm-pill-ok">{result.cachedMonths.length} month(s) reused from cache</span>{' '}
+                ({result.cachedMonths.join(', ')}){' '}</>
+              )}
+              {result.computedMonths?.length > 0 && (
+                <><span className="scm-pill scm-pill-warn">{result.computedMonths.length} month(s) freshly computed</span>{' '}
+                ({result.computedMonths.join(', ')})</>
+              )}
+            </p>
+          )}
           <p>Used frozen sync: <span className={`scm-pill ${result.usedFrozenSync ? 'scm-pill-ok' : 'scm-pill-warn'}`}>{result.usedFrozenSync ? 'Yes' : 'No'}</span></p>
           <p>
             Unmapped stores: <span className={`scm-pill ${result.unmappedStores?.length ? 'scm-pill-warn' : 'scm-pill-ok'}`}>{result.unmappedStores?.length || 0}</span>

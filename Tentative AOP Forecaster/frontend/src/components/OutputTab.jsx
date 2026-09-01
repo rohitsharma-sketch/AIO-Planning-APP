@@ -82,7 +82,7 @@ function MultiSelect({ label, options, selected, onChange, colorMap, width }) {
         {!allSelected && (
           <span className="ms-sel-badge">{selected.length}</span>
         )}
-        <span className="ms-caret">{open ? '▲' : '▼'}</span>
+        <span className="ms-caret">{open ? '^' : 'v'}</span>
       </button>
       {open && (
         <div className="ms-dropdown">
@@ -100,7 +100,7 @@ function MultiSelect({ label, options, selected, onChange, colorMap, width }) {
               onClick={toggleAll}
             >
               <span className={`ms-pv-cb${allSelected ? ' ms-pv-cb--on' : ''}`}>
-                {allSelected ? '☑' : '☐'}
+                {allSelected ? '[x]' : '[ ]'}
               </span>
               <span className="ms-pv-row-label">(Select All)</span>
             </div>
@@ -118,7 +118,7 @@ function MultiSelect({ label, options, selected, onChange, colorMap, width }) {
                     className={`ms-pv-cb${checked ? ' ms-pv-cb--on' : ''}`}
                     onClick={e => toggleCheck(opt, e)}
                   >
-                    {checked ? '☑' : '☐'}
+                    {checked ? '[x]' : '[ ]'}
                   </span>
                   {/* Color dot */}
                   {colorMap?.[opt] && (
@@ -134,7 +134,7 @@ function MultiSelect({ label, options, selected, onChange, colorMap, width }) {
             })}
           </div>
           <div className="ms-pv-footer">
-            <span className="ms-pv-hint">☑ checkbox = multi-select · label = only</span>
+            <span className="ms-pv-hint">[x] checkbox = multi-select · label = only</span>
           </div>
         </div>
       )}
@@ -191,7 +191,7 @@ function MonthSelect({ selected, onChange }) {
         <span className="ms-label-text">Months</span>
         <span className={`ms-val${!allSelected ? ' ms-val--active' : ''}`}>{display}</span>
         {!allSelected && <span className="ms-sel-badge">{selected.length}</span>}
-        <span className="ms-caret">{open ? '▲' : '▼'}</span>
+        <span className="ms-caret">{open ? '^' : 'v'}</span>
       </button>
       {open && (
         <div className="ms-dropdown ms-dropdown--months">
@@ -210,7 +210,7 @@ function MonthSelect({ selected, onChange }) {
               onClick={() => onChange([...MONTHS])}
             >
               <span className={`ms-pv-cb${allSelected ? ' ms-pv-cb--on' : ''}`}>
-                {allSelected ? '☑' : '☐'}
+                {allSelected ? '[x]' : '[ ]'}
               </span>
               <span className="ms-pv-row-label">(Select All)</span>
             </div>
@@ -229,7 +229,7 @@ function MonthSelect({ selected, onChange }) {
                       className={`ms-pv-cb${checked ? ' ms-pv-cb--on' : ''}`}
                       onClick={e => toggleCheck(m, e)}
                     >
-                      {checked ? '☑' : '☐'}
+                      {checked ? '[x]' : '[ ]'}
                     </span>
                     <span className="ms-pv-row-label" onClick={e => selectOnly(m, e)}>
                       {m}
@@ -241,7 +241,7 @@ function MonthSelect({ selected, onChange }) {
             </div>
           </div>
           <div className="ms-pv-footer">
-            <span className="ms-pv-hint">☑ checkbox = multi-select · label = only</span>
+            <span className="ms-pv-hint">[x] checkbox = multi-select · label = only</span>
           </div>
         </div>
       )}
@@ -346,7 +346,7 @@ export default function OutputTab({ sessionId, runKey }) {
   const renderName = n => (
     <td className="sdt-name">
       <span className="sdt-indent" style={{ width: n.depth * 18 }} />
-      <span className={`sdt-caret${!n.children.length ? ' none' : exp.has(n.id) ? ' open' : ''}`}>▸</span>
+      <span className={`sdt-caret${!n.children.length ? ' none' : exp.has(n.id) ? ' open' : ''}`}>&gt;</span>
       {n.level === 'Division' ? <span className="div-pill" style={{ background: DIV_COLORS[n.name] }}>{n.name}</span>
      : n.level === 'Type'     ? <span className={`tag ${n.name === 'NSO' ? 'tag-nso' : n.name === 'Ramp' ? 'tag-ramp' : 'tag-lfl'}`}>{n.name}</span>
      : n.level === 'Tag'      ? <span className={`tag ${tagClass(n.name)}`}>{n.name}</span>
@@ -439,9 +439,8 @@ export default function OutputTab({ sessionId, runKey }) {
             </select>
           </div>
           <div className="out-search-wrap">
-            <span className="out-search-icon">🔍</span>
             <input className="out-search" placeholder="Search store…" value={storeSearch} onChange={e => setStoreSearch(e.target.value)} />
-            {storeSearch && <button className="out-search-clear" onClick={() => setStoreSearch('')}>✕</button>}
+            {storeSearch && <button className="out-search-clear" onClick={() => setStoreSearch('')}>x</button>}
           </div>
           {(hasBarFilters || drillFilters > 0) && (
             <button className="out-reset-btn" onClick={resetAll}>Reset filters{drillFilters ? ` (${drillFilters} in table)` : ''}</button>

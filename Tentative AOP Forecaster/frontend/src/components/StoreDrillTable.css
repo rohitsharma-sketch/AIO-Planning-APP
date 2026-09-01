@@ -18,8 +18,7 @@
 .sdt-chip.on    { background: var(--navy); color: #fff; border-color: var(--navy); }
 .sdt-toggle input { accent-color: var(--navy); margin: 0; }
 .sdt-search-wrap { position: relative; margin-left: auto; min-width: 220px; }
-.sdt-search-ic { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; }
-.sdt-search { width: 100%; padding: 6px 26px 6px 28px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; background: var(--white); }
+.sdt-search { width: 100%; padding: 6px 26px 6px 10px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; background: var(--white); }
 .sdt-search:focus { outline: none; border-color: var(--navy3); }
 .sdt-search-x { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: none; background: none; color: var(--muted); cursor: pointer; font-size: 16px; }
 .sdt-reset { font-size: 12px; font-weight: 600; color: var(--red); background: none; border: 1px solid var(--red); border-radius: 6px; padding: 5px 10px; cursor: pointer; }

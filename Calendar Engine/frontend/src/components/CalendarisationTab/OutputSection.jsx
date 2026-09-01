@@ -312,7 +312,7 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
                 so the button is inherently gated on that already. Exports exactly
                 what's currently filtered/visible, not a separate full-set dump. */}
             <button className="btn" onClick={downloadCalendar} disabled={!filteredDayMap.length} style={{ marginLeft: anyFilterActive ? '0' : 'auto' }}>
-              ⬇ Download Calendar
+              Download Calendar
             </button>
           </div>
 
@@ -339,7 +339,7 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
               <thead>
                 <tr>
                   <th>Cluster</th><th>Ref Date</th><th>Ref Day</th><th>Ref Wk</th><th>Festival</th><th>Category</th>
-                  <th>Position</th><th>→</th><th>Future Date</th><th>Future Day</th><th>Future Wk</th>
+                  <th>Position</th><th>-&gt;</th><th>Future Date</th><th>Future Day</th><th>Future Wk</th>
                   <th>Fut Festival</th><th>Mapping Type</th><th>Score</th><th>Mo</th><th>Wd</th><th>Day Delta</th>
                 </tr>
               </thead>
@@ -360,7 +360,7 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
                     <td>{row.festival || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
                     <td><span className={`badge ${CAT_BADGE[row.category] || 'b-non'}`}>{row.category}</span></td>
                     <td style={{ color: 'var(--muted)' }}>{row.position}</td>
-                    <td className="arrow-sep">→</td>
+                    <td className="arrow-sep">-&gt;</td>
                     <td className="date-mono">{row.futDate}</td>
                     <td>{row.futDay}</td>
                     <td style={{ color: 'var(--muted)' }}>{row.futWeek}</td>
@@ -392,8 +392,8 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
                     <th>Ref Month</th>
                     <th className="num">Total</th>
                     <th className="num" title="Mapped to same future month">Same Mo</th>
-                    <th className="num" title="Mapped to previous month">← Prev</th>
-                    <th className="num" title="Mapped to next month">→ Next</th>
+                    <th className="num" title="Mapped to previous month">Prev</th>
+                    <th className="num" title="Mapped to next month">Next</th>
                     <th className="num">Pre-Fest</th>
                     <th className="num">Core</th>
                     <th className="num">Post-Fest</th>
@@ -416,7 +416,7 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
                       <td>
                         {lost === 0
                           ? <span className="shift-pill shift-neutral">Neutral</span>
-                          : <span className="shift-pill shift-loss">−{lost} day{lost > 1 ? 's' : ''} shifted out</span>}
+                          : <span className="shift-pill shift-loss">-{lost} day{lost > 1 ? 's' : ''} shifted out</span>}
                       </td>
                     </tr>
                   ))}

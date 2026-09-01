@@ -84,9 +84,9 @@ export function GridTh({ j, label, grid, num, filterable = true, className = '',
     <th className={`${num || grid.numeric[j] ? 'num' : ''}${sorted ? ' sorted' : ''} ${className}`} style={style}>
       <div className="sdt-th">
         <button className="sdt-th-sort" onClick={() => grid.toggleSort(j)} title="Sort">
-          {label}<span className={`sdt-sort-ic${sorted ? ' on' : ''}`}>{sorted ? (grid.sortDir < 0 ? '↓' : '↑') : '↕'}</span>
+          {label}<span className={`sdt-sort-ic${sorted ? ' on' : ''}`}>{sorted ? (grid.sortDir < 0 ? 'v' : '^') : '^v'}</span>
         </button>
-        {filterable && <button className={`sdt-th-filter${grid.hasFilter(j) ? ' on' : ''}`} onClick={e => grid.openF(j, e)} title="Filter">▼</button>}
+        {filterable && <button className={`sdt-th-filter${grid.hasFilter(j) ? ' on' : ''}`} onClick={e => grid.openF(j, e)} title="Filter">v</button>}
       </div>
     </th>
   )

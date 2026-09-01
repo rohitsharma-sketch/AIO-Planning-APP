@@ -54,7 +54,7 @@ export default function DbSyncPanel({ onSynced }) {
       <div className="cfg-sync-main">
         <span className="cfg-sync-dot" />
         <div className="cfg-sync-text">
-          <strong>Data lake &amp; Calendar Engine ⇄ Postgres</strong>
+          <strong>Data lake &amp; Calendar Engine &lt;-&gt; Postgres</strong>
           <span className="cfg-sync-sub">
             {!runs ? 'Checking…'
               : !runs.length ? 'Never synced into Postgres yet.'
@@ -64,7 +64,7 @@ export default function DbSyncPanel({ onSynced }) {
         </div>
         <div className="cfg-sync-actions">
           <button className="btn-outline cfg-btn" onClick={() => setOpen(o => !o)}>{open ? 'Hide' : 'Details'}</button>
-          <button className="btn-outline cfg-btn" onClick={syncAll} disabled={busy}>{busy ? 'Syncing…' : '🗄 Sync into database'}</button>
+          <button className="btn-outline cfg-btn" onClick={syncAll} disabled={busy}>{busy ? 'Syncing…' : 'Sync into database'}</button>
         </div>
       </div>
       {err && <p className="upload-err">{err}</p>}
@@ -72,7 +72,7 @@ export default function DbSyncPanel({ onSynced }) {
         <div className="cfg-sync-details">
           {runs.map(r => (
             <div key={r.source_key} className="cfg-sync-row" style={{ justifyContent: 'space-between' }}>
-              <span>{r.status === 'success' ? '✓' : r.status === 'failed' ? '✗' : '…'} {DB_SYNC_LABELS[r.source_key] || r.source_key}</span>
+              <span>{r.status === 'success' ? 'OK' : r.status === 'failed' ? 'Failed' : '…'} {DB_SYNC_LABELS[r.source_key] || r.source_key}</span>
               <span className="cfg-sync-hint">
                 {r.status === 'failed' ? r.error_message : `${r.rows_updated ?? r.rows_read ?? 0} rows · ${fmtStamp(r.completed_at || r.started_at)}`}
               </span>

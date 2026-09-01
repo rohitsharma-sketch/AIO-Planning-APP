@@ -541,7 +541,7 @@ export default function CalendarisationTab({ isPlanner }) {
 
         <div className="card">
           <div style={{ fontSize: '11px', color: 'var(--muted)', margin: '0 0 12px' }}>
-            Reference Year {refYear ?? '—'} → Future Year {futYear ?? '—'} (set on the Version Setting tab)
+            Reference Year {refYear ?? '—'} -&gt; Future Year {futYear ?? '—'} (set on the Version Setting tab)
           </div>
           <button className="btn" onClick={runEngine}>Create Calendar</button>
           {engineStatus && <p style={{ color: engineStatus.ok ? 'var(--green)' : 'var(--red)' }}>{engineStatus.msg}</p>}

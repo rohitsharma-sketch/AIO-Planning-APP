@@ -64,6 +64,27 @@ def main():
         result = {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
     _atomic_write_json(result_path, result)
+    # A tiny companion file the parent process can check without ever parsing
+    # the (potentially huge - millions of rows) result.json above: reading
+    # that whole file just to see "did it succeed" was what froze the entire
+    # server on every poll of a large completed day-wise run (json.load() of
+    # a multi-hundred-MB file holds the GIL for the whole parse, starving
+    # every other request the same way the raw parquet read used to before
+    # this worker was moved to its own process - see the module docstring).
+    # The parent now streams result.json's bytes straight to the client
+    # instead (see get_reindex_result_stream_path in scans.py) and only reads
+    # this file, which stays tiny regardless of result size.
+    meta_path = os.path.join(os.path.dirname(result_path), "result_meta.json")
+    _atomic_write_json(meta_path, {
+        "ok": result.get("ok"), "error": result.get("error") if not result.get("ok") else None,
+        # rowsRead lets the parent decide whether this run is a real timing
+        # sample worth recording (see get_reindex_result_stream_path) - a run
+        # that read 0 rows (source unreachable) finishes almost instantly and
+        # would otherwise drag the "seconds per month" average toward zero,
+        # making later ETAs wildly optimistic the same way a stale/approximated
+        # elapsed time from a recovered job can make them wildly pessimistic.
+        "rowsRead": result.get("rowsRead", 0),
+    })
 
 
 if __name__ == "__main__":

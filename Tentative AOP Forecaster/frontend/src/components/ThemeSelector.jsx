@@ -29,7 +29,7 @@ export default function ThemeSelector({ current, onChange }) {
           <span className="swatch" style={{ background: active.accent }} />
         </span>
         <span className="theme-label">{active.label}</span>
-        <span className={`theme-chevron ${open ? 'open' : ''}`}>▾</span>
+        <span className={`theme-chevron ${open ? 'open' : ''}`}>v</span>
       </button>
 
       {open && (
@@ -46,7 +46,7 @@ export default function ThemeSelector({ current, onChange }) {
                 <span className="swatch" style={{ background: t.accent }} />
               </span>
               <span>{t.label}</span>
-              {t.id === current && <span className="theme-check">✓</span>}
+              {t.id === current && <span className="theme-check">Selected</span>}
             </button>
           ))}
         </div>

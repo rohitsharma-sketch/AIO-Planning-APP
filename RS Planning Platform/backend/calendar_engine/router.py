@@ -7,15 +7,16 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "Tentative AOP Forecaster"))
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy import delete, func, select
 
 from auth.deps import require_login, require_role
 from calendar_engine.cluster_names import resolve_cluster_name
 from calendar_engine.scans import (
     get_salesdata_link, get_salesdata_link_daywise, run_reindex,
-    start_reindex_job, poll_reindex_job,
+    start_reindex_job, poll_reindex_job, get_reindex_result_stream_path,
     start_link_scan_job, poll_link_scan_job,
-    get_source_schema,
+    get_source_schema, reindex_month_cache_status,
 )
 from db.base import SessionLocal
 from db.models.calendar import (
@@ -608,7 +609,54 @@ def salesdata_reindex_start(payload: dict = Body(...), user: dict = Depends(requ
 
 @router.get("/salesdata/reindex/poll/{job_id}")
 def salesdata_reindex_poll(job_id: str, user: dict = Depends(require_login)):
+    # A completed job's result is streamed straight off disk instead of being
+    # parsed into Python and re-serialized - see get_reindex_result_stream_path's
+    # docstring: doing that in-process for a large day-wise result was freezing
+    # the entire server (every user, every route) for as long as the parse took.
+    stream_path = get_reindex_result_stream_path(job_id)
+    if stream_path:
+        # filename=... makes FastAPI set Content-Disposition: attachment -
+        # harmless for the normal fetch().json() case (that header doesn't
+        # affect the Fetch API), but it's what lets a plain <a href> to this
+        # same URL trigger a real browser file download instead of trying to
+        # navigate/render a huge JSON payload as a page - see the frontend's
+        # "too large to preview" fallback in CalendarisedSalesTab, which
+        # links straight here for a result too big to hold in the tab's memory.
+        return FileResponse(stream_path, media_type="application/json", filename=f"reindex_{job_id}.json")
     return poll_reindex_job(job_id)
+
+
+@router.post("/salesdata/reindex/cache-status")
+def salesdata_reindex_cache_status(payload: dict = Body(...), user: dict = Depends(require_login)):
+    """Per-month Open/Cached/Pending status for the given (source, calendar,
+    extraDims, metric) combination, computed WITHOUT running a reindex - lets
+    Run Reindex show what a click would actually do (skip the closed months
+    already cached, only do real work for the rest) before the planner
+    commits to waiting on it. See ReindexMonthCache / run_reindex in scans.py."""
+    source = payload.get("source")
+    months = payload.get("months") or []
+    extra_dims = payload.get("extraDims") or []
+    metric = payload.get("metric")
+    if source not in ("mw", "dw") or not payload.get("calendarId") or not months:
+        raise HTTPException(400, "source, calendarId and months are required")
+    try:
+        calendar_id = int(payload["calendarId"])  # calendar_day_pairs.calendar_id is bigint; the frontend sends it as a <select> string value
+    except (TypeError, ValueError):
+        raise HTTPException(400, "calendarId must be an integer")
+    session = SessionLocal()
+    try:
+        pairs = session.execute(
+            select(CalendarDayPair.cluster_name, CalendarDayPair.ref_date, CalendarDayPair.fut_date)
+            .where(CalendarDayPair.calendar_id == calendar_id)
+        ).all()
+    finally:
+        session.close()
+    if not pairs:
+        raise HTTPException(404, "Calendar not found or has no mappings")
+    day_map = {}
+    for cluster, ref_date, fut_date in pairs:
+        day_map.setdefault(cluster, []).append([ref_date.isoformat(), fut_date.isoformat()])
+    return reindex_month_cache_status(source, months, day_map, extra_dims, metric)
 
 
 @router.get("/salesdata/snapshot/{source_type}/{kind}")

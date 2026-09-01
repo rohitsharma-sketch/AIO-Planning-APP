@@ -66,9 +66,9 @@ export default function PlanningInputsEditor({ onBack, onContinue }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {continueErr && <span className="pie-status err" style={{ maxWidth: 260 }}>{continueErr}</span>}
           <button className="btn-primary" onClick={handleContinue} disabled={continuing}>
-            {continuing ? 'Building from database…' : 'Continue to Review →'}
+            {continuing ? 'Building from database…' : 'Continue to Review'}
           </button>
-          <button className="btn-outline" onClick={onBack}>← Back</button>
+          <button className="btn-outline" onClick={onBack}>Back</button>
         </div>
       </div>
       <div className="pie-tabs">
@@ -201,7 +201,7 @@ function NsoTab() {
                 <td><input type="text" value={r.opening_month} placeholder="Apr'27"
                   onChange={e => updateRow(i, { opening_month: e.target.value })} /></td>
                 <td><input type="checkbox" checked={r.is_named} onChange={e => updateRow(i, { is_named: e.target.checked })} /></td>
-                <td><button className="pie-del" onClick={() => removeRow(i)} title="Remove">✕</button></td>
+                <td><button className="pie-del" onClick={() => removeRow(i)} title="Remove">Remove</button></td>
               </tr>
             ))}
           </tbody>
@@ -318,10 +318,10 @@ function AopTab() {
         <input className="pie-search" placeholder="Search by store code…" value={search} onChange={e => setSearch(e.target.value)} />
         <span style={{ fontSize: 13, color: 'var(--muted)' }}>{rows.length} overrides · {Object.keys(edits).length} unsaved change(s)</span>
         <button className="btn-outline" onClick={downloadAopTemplate} title="Download a blank CSV with the right columns">
-          ⇩ Download Template
+          Download Template
         </button>
         <label className="btn-outline pie-import-btn" title="Import Store, Division, Month, Value from a .csv or .xlsx">
-          {importing ? 'Importing…' : '⇪ Import'}
+          {importing ? 'Importing…' : 'Import'}
           <input type="file" accept=".csv,.xlsx,.xlsm" onChange={importFile} disabled={importing} style={{ display: 'none' }} />
         </label>
         <button className="btn-primary pie-save" onClick={save} disabled={busy || !Object.keys(edits).length}>{busy ? 'Saving…' : 'Save changes'}</button>
@@ -331,7 +331,7 @@ function AopTab() {
         <div className="pie-import-skipped">
           <div className="pie-import-skipped-head">
             {importSkipped.length} row{importSkipped.length === 1 ? '' : 's'} skipped on import
-            <button className="pie-del" onClick={() => setImportSkipped(null)} title="Dismiss">✕</button>
+            <button className="pie-del" onClick={() => setImportSkipped(null)} title="Dismiss">Dismiss</button>
           </div>
           <ul>
             {importSkipped.slice(0, 20).map((s, i) => <li key={i}>Row {s.row}: {s.reason}</li>)}
@@ -349,7 +349,7 @@ function AopTab() {
                 <td>{r.division}</td>
                 <td>{r.month}</td>
                 <td><input type="number" step="0.01" value={edits[r._key] ?? r.value} onChange={e => setValue(r, e.target.value)} /></td>
-                <td><button className="pie-del" onClick={() => deleteRow(r)} title="Remove">✕</button></td>
+                <td><button className="pie-del" onClick={() => deleteRow(r)} title="Remove">Remove</button></td>
               </tr>
             ))}
             {!filtered.length && <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--muted)', padding: 16 }}>No overrides match.</td></tr>}

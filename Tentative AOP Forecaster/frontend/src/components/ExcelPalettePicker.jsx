@@ -79,7 +79,6 @@ export default function ExcelPalettePicker({ value, onChange }) {
               >
                 <MiniPreview {...opt} selected={value === opt.id} />
                 <div className="epp-card-label">{opt.label}</div>
-                {value === opt.id && <div className="epp-card-check">✓</div>}
               </button>
             ))}
           </div>

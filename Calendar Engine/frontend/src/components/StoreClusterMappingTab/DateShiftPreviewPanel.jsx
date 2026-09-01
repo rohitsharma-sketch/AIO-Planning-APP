@@ -237,7 +237,7 @@ export default function DateShiftPreviewPanel() {
               value={calendarId || ''} onChange={e => setCalendarId(e.target.value)}>
               <option value="">Select a calendar…</option>
               {calendars.map(c => (
-                <option key={c.id} value={c.id}>{c.name} ({c.refYear} → {c.futYear}, locked)</option>
+                <option key={c.id} value={c.id}>{c.name} ({c.refYear} -&gt; {c.futYear}, locked)</option>
               ))}
             </select>
           </div>

@@ -3,7 +3,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "Tentative AOP Forecaster"))
 
-import csv, io, json, os, glob, time, datetime, calendar as _calendar
+import csv, io, json, os, glob, time, datetime, calendar as _calendar, traceback, hashlib
 from collections import Counter
 from urllib.parse import urlsplit, parse_qs
 
@@ -171,11 +171,42 @@ def _latest_daywise_files():
     return [max(candidates, key=os.path.getmtime)]
 
 
+def _months_between(lo, hi):
+    """Every 'YYYY-MM' label from lo's month through hi's month, inclusive -
+    used to expand one row group's (min, max) BILLDATE bound into the set of
+    months it touches, without reading which specific days actually have rows.
+    A row group spanning Jan 5 - Mar 10 with zero real rows in February would
+    report February as covered anyway - the same approximation trade-off the
+    footer-only date-range PRUNING elsewhere in this file already accepts
+    (_read_file_filtered's docstring: "coarse... only cuts what gets fetched,
+    not what counts as a match"). Acceptable here because nothing downstream
+    reads exact per-month counts (confirmed against LinkStatusPanel.jsx -
+    only `.month` labels and the file-level `rowCount` are ever displayed)."""
+    out = []
+    y, m = lo.year, lo.month
+    while (y, m) <= (hi.year, hi.month):
+        out.append(f"{y:04d}-{m:02d}")
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+    return out
+
+
 def _scan_daywise_link(progress=None):
-    """Read only BILLDATE + STORE_NAME from the latest compiled day-wise file.
-    No sales figures are read or processed here - this is detection only."""
+    """Detects which months + stores the latest compiled day-wise file covers.
+
+    Month/date-range detection is footer-only (row-group min/max BILLDATE
+    statistics, the same _row_group_stats() every reindex read already prunes
+    with) - no BILLDATE column data is read at all. Store detection genuinely
+    needs real data (a distinct-value set isn't in the footer), so that part
+    reads STORE_NAME alone - still half the I/O/memory the previous version
+    used (BILLDATE + STORE_NAME, in full, across all 87M+ rows), which was
+    the actual cause of this scan taking minutes and looking hung: its own
+    docstring claimed "no data read... detection only" while doing exactly
+    the opposite of that for BILLDATE.
+    """
     import pyarrow.parquet as pq
-    import pandas as pd
 
     files = _latest_daywise_files()
     if not files:
@@ -183,7 +214,7 @@ def _scan_daywise_link(progress=None):
     if progress is not None:
         progress["total"] = len(files)
 
-    month_counts = {}
+    months_seen = set()
     store_set = set()
     row_count = 0
     file_info = []
@@ -191,17 +222,32 @@ def _scan_daywise_link(progress=None):
     for fp in files:
         pf = pq.ParquetFile(fp)
         row_count += pf.metadata.num_rows
-        tbl = pf.read(columns=["BILLDATE", "STORE_NAME"])
-        bd = tbl.column("BILLDATE").to_pandas().dropna()
-        periods = bd.dt.to_period("M").astype(str)
-        for k, v in periods.value_counts().items():
-            month_counts[k] = month_counts.get(k, 0) + int(v)
-        store_set.update(tbl.column("STORE_NAME").to_pandas().dropna().unique().tolist())
-        fmin, fmax = (bd.min().date().isoformat(), bd.max().date().isoformat()) if len(bd) else (None, None)
-        all_dates.append((fmin, fmax))
+
+        stats = _row_group_stats(pf, "BILLDATE")
+        if stats:
+            fmin = min(mn for mn, _ in stats)
+            fmax = max(mx for _, mx in stats)
+            for mn, mx in stats:
+                months_seen.update(_months_between(mn.date() if hasattr(mn, "date") else mn,
+                                                    mx.date() if hasattr(mx, "date") else mx))
+            fmin_s, fmax_s = fmin.date().isoformat() if hasattr(fmin, "date") else str(fmin), \
+                             fmax.date().isoformat() if hasattr(fmax, "date") else str(fmax)
+        else:
+            # No footer stats on this file (rare/older writer) - fall back to
+            # actually reading the column rather than reporting nothing.
+            bd = pf.read(columns=["BILLDATE"]).column("BILLDATE").to_pandas().dropna()
+            if len(bd):
+                months_seen.update(bd.dt.to_period("M").astype(str).unique().tolist())
+                fmin_s, fmax_s = bd.min().date().isoformat(), bd.max().date().isoformat()
+            else:
+                fmin_s, fmax_s = None, None
+        all_dates.append((fmin_s, fmax_s))
+
+        store_set.update(pf.read(columns=["STORE_NAME"]).column("STORE_NAME").to_pandas().dropna().unique().tolist())
+
         file_info.append({"name": os.path.basename(fp), "folder": os.path.basename(os.path.dirname(fp)),
                            "rows": pf.metadata.num_rows, "sizeBytes": os.path.getsize(fp),
-                           "dateMin": fmin, "dateMax": fmax,
+                           "dateMin": fmin_s, "dateMax": fmax_s,
                            "modifiedAt": datetime.datetime.fromtimestamp(
                                os.path.getmtime(fp), datetime.timezone.utc).isoformat()})
         if progress is not None:
@@ -219,14 +265,17 @@ def _scan_daywise_link(progress=None):
 
     mapped_stores = _mapped_stores()
 
-    months = sorted(month_counts.keys())
+    months = sorted(months_seen)
     return {
         "ok": True,
         "sourceType": "daywise",
         "dirs": DAYWISE_DIRS,
         "files": file_info,
         "rowCount": row_count,
-        "months": [{"month": m, "rows": month_counts[m]} for m in months],
+        # `rows` is no longer computed per month (it required the full
+        # BILLDATE read this rewrite removes) - nothing in the frontend reads
+        # it, only `.month` labels and the file-level rowCount above.
+        "months": [{"month": m, "rows": None} for m in months],
         "dateRange": {"min": ordered[0][0] if ordered else None, "max": ordered[-1][1] if ordered else None},
         "gaps": gaps,
         "stores": {
@@ -286,6 +335,29 @@ def start_link_scan_job(source_type, force_refresh=False):
 
     progress_path = os.path.join(job_dir, "progress.json")
     result_path = os.path.join(job_dir, "result.json")
+
+    # A link scan is just "is anything new in the source" - not the sync
+    # action itself, and LinkStatusPanel fires this on every single mount
+    # (every page visit / login). Re-running even the fast footer-only dw
+    # scan (~9s) or the mw scan on every visit is pure overhead the user
+    # never asked for - the durable last-known scan (_save_scan_cache,
+    # written by get_salesdata_link[_daywise] on every real scan, survives
+    # restarts) is served here INSTANTLY with no subprocess at all unless
+    # the caller explicitly forces a refresh (the Refresh/Sync button) or no
+    # scan has ever completed yet. This is what "keep it in cache until the
+    # user force syncs it" means in practice for both mw and dw.
+    if not force_refresh:
+        cache_name = "salesdata_link_daywise" if source_type == "dw" else "salesdata_link"
+        cached = _load_scan_cache(cache_name)
+        if cached is not None:
+            result = dict(cached)
+            result["cached"] = True
+            with open(result_path, "w", encoding="utf-8") as f:
+                json.dump(result, f)
+            with open(progress_path, "w", encoding="utf-8") as f:
+                json.dump({"done": 1, "total": 1}, f)
+            _LINK_SCAN_JOBS[job_id] = {"progress_path": progress_path, "result_path": result_path, "started_at": time.time()}
+            return job_id
 
     worker_dir = os.path.dirname(os.path.abspath(__file__))
     worker_script = os.path.join(worker_dir, "link_scan_worker.py")
@@ -608,17 +680,33 @@ def _fetch_raw_monthwise(months, progress=None, extra_dims=None, metric_col="SL_
 def _get_raw(source, months, sync_id, fetch_fn, progress=None, extra_dims=None, metric_col=None):
     """Returns (df_copy, rows_read, used_cache). df_copy is always a fresh .copy()
     of the frozen/cached data - callers mutate it freely (adding cluster/date
-    lookup columns) without ever corrupting the cache for the next run."""
+    lookup columns) without ever corrupting the cache for the next run.
+
+    The cached slot can cover MORE months than a given call asks for - see
+    run_reindex's pre-warm, which fetches every uncached (closed-but-not-yet-
+    cached) month for a run in ONE pass (one file open + row-group scan)
+    instead of the N separate reads the old one-call-per-reference-month
+    loop did (each of those calls is still what makes a single reference
+    month's result safe to cache on its own - see ReindexMonthCache). A
+    request whose months are a SUBSET of what's already cached is served by
+    filtering the cached frame in memory (cheap) instead of re-reading the
+    source; an exact or wider request still requires a fresh fetch, since
+    filtering can only ever narrow, not widen, what's already in memory."""
     import time as _time
+    months_set = set(months)
     fields_key = (tuple(sorted(extra_dims or [])), metric_col)
     slot = _RAW_CACHE.get(source)
-    if sync_id and slot and slot.get("syncId") == sync_id and slot.get("fieldsKey") == fields_key:
-        if progress is not None:  # nothing to read - the frozen copy IS the whole job
+    if sync_id and slot and slot.get("syncId") == sync_id and slot.get("fieldsKey") == fields_key \
+            and months_set <= slot.get("months", set()):
+        if progress is not None:  # nothing to read - the frozen copy already covers this request
             progress["total"] = progress["done"] = 1
-        return slot["df"].copy(), slot["rowsRead"], True
+        df = slot["df"]
+        if months_set != slot["months"]:
+            df = df[df["ym"].isin(months_set)]
+        return df.copy(), int(len(df)), True
     df, rows_read = fetch_fn(months, progress=progress, extra_dims=extra_dims, metric_col=metric_col)
     if sync_id:  # only freeze when the client sent a real sync marker to key on
-        _RAW_CACHE[source] = {"syncId": sync_id, "fieldsKey": fields_key, "df": df, "rowsRead": rows_read, "fetchedAt": _time.time()}
+        _RAW_CACHE[source] = {"syncId": sync_id, "fieldsKey": fields_key, "months": months_set, "df": df, "rowsRead": rows_read, "fetchedAt": _time.time()}
     return df.copy(), rows_read, False
 
 
@@ -649,7 +737,16 @@ def _rows_from_group(grp_df, group_cols, col_col, val_col, key_fields):
     for r in grp_df.itertuples(index=False):
         d = {kf: getattr(r, gc) for kf, gc in zip(key_fields, group_cols)}
         d["col"] = getattr(r, col_col)
-        d["value"] = round(float(getattr(r, val_col)), 2)
+        v = float(getattr(r, val_col))
+        # A NaN/Infinity here (a genuine data-quality gap - null/malformed
+        # source values propagating through a SUM - is plausible at tens of
+        # millions of rows even though every smaller run to date has been
+        # clean) serializes as the bare token NaN/Infinity, which is valid
+        # for Python's json module but NOT valid JSON - Postgres' JSONB
+        # parser rejects it outright, failing the whole snapshot save over
+        # one bad row. 0.0 matches this codebase's existing NVL-style
+        # "swallow bad data, don't corrupt the whole result" convention.
+        d["value"] = round(v, 2) if v == v and v not in (float("inf"), float("-inf")) else 0.0
         rows.append(d)
     return rows
 
@@ -794,6 +891,47 @@ def _save_sales_snapshot(session, source_type, kind, grain, metric, key_fields, 
     session.execute(stmt)
 
 
+# Dims worth persisting to Postgres, independent of whatever extra fields a
+# planner ticked under "Customise Output Fields" for their OWN on-screen
+# view/download. db/reindexed_base_sales.py (AOP's consumer, the only known
+# reader of these snapshots) only ever looks at DIVISION (always) and
+# ATTRIBUTE1 (conditionally, for its Q1-quarter filter) - everything else
+# (DEPARTMENT, SECTION, ARTICLE_NAME, SEASON_TYPE, DISPLAY_TYPE, STORE_STATUS,
+# CLUSTER_TYPE, REGION_TYPE) inflates row count for zero downstream benefit.
+# "store" is always kept - it's the base grain, added separately below.
+_PERSIST_DIMS = {"DIVISION", "ATTRIBUTE1"}
+
+
+def _collapse_for_persistence(key_fields, rows):
+    """Re-aggregate `rows` down to only the dims _PERSIST_DIMS actually uses,
+    summing `value` across whatever's dropped. Confirmed necessary, not just
+    an optimisation: a real day-wise reindex at full history (store x DIVISION
+    x DEPARTMENT x ATTRIBUTE1 x date) produced 7.2M rows, and Postgres saving
+    that as a single JSONB value failed with WinError 10055 (socket send
+    buffer exhausted) - the save was silently swallowed by the best-effort
+    try/except around it, so the reindex reported success while the database
+    never actually got the data. Collapsing to only the dims anything reads
+    keeps this bounded (store x division x date, optionally x attribute) -
+    the same order of magnitude as month-wise's own row count, not two orders
+    larger."""
+    keep = [kf for kf in key_fields if kf in _PERSIST_DIMS or kf == "store"]
+    if keep == key_fields:
+        return key_fields, rows  # nothing to drop - already at (or under) the kept set
+    totals = {}
+    order = []  # preserve first-seen order for stable, deterministic output
+    for r in rows:
+        key = tuple(r[k] for k in keep) + (r["col"],)
+        if key not in totals:
+            totals[key] = 0.0
+            order.append(key)
+        totals[key] += r["value"]
+    collapsed = [
+        {**dict(zip(keep, key[:-1])), "col": key[-1], "value": round(totals[key], 2)}
+        for key in order
+    ]
+    return keep, collapsed
+
+
 def _save_calendarised_sales_snapshot(result):
     """Persist a successful reindex result - both the 'actual' (real sales on
     their own reference date) and 'trend_shifted' (calendar-shifted) sides -
@@ -808,15 +946,176 @@ def _save_calendarised_sales_snapshot(result):
         session = SessionLocal()
         try:
             now = datetime.datetime.now(datetime.timezone.utc)
-            _save_sales_snapshot(session, result["source"], "trend_shifted", result["grain"], result["metric"], result["keyFields"],
-                                  result["columns"], result["rows"], result["rowsRead"], result["rowsMapped"], now)
-            _save_sales_snapshot(session, result["source"], "actual", result["grain"], result["metric"], result["keyFields"],
-                                  result["actualColumns"], result["actualRows"], result["rowsRead"], result["actualRowCount"], now)
+            ts_keep, ts_rows = _collapse_for_persistence(result["keyFields"], result["rows"])
+            actual_keep, actual_rows = _collapse_for_persistence(result["keyFields"], result["actualRows"])
+            _save_sales_snapshot(session, result["source"], "trend_shifted", result["grain"], result["metric"], ts_keep,
+                                  result["columns"], ts_rows, result["rowsRead"], len(ts_rows), now)
+            _save_sales_snapshot(session, result["source"], "actual", result["grain"], result["metric"], actual_keep,
+                                  result["actualColumns"], actual_rows, result["rowsRead"], len(actual_rows), now)
             session.commit()
         finally:
             session.close()
     except Exception:
         traceback.print_exc()
+
+
+def _is_month_closed(ym, today=None):
+    """A reference month is 'closed' once it has fully elapsed as of the
+    server's system date - e.g. on 2026-09-01, 2026-08 is closed (August is
+    entirely in the past) but 2026-09 is not (today IS September, still
+    accumulating sales). Only closed months are safe to cache: an open
+    month's sales can still change between now and month-end, so caching it
+    would silently freeze it at a partial, stale total. `today` is only for
+    tests - real callers always use the actual system date."""
+    today = today or datetime.date.today()
+    y, m = (int(p) for p in ym.split("-"))
+    first_of_next = datetime.date(y + (m == 12), (m % 12) + 1, 1)
+    return today >= first_of_next
+
+
+def _calendar_fingerprint(day_map):
+    """Hashes the day-map actually used for a reindex - not a calendar id -
+    so editing an existing locked calendar's mappings self-invalidates every
+    cache entry that calendar produced, instead of a stale cache silently
+    surviving an in-place edit. sort_keys makes this stable regardless of
+    dict/list ordering."""
+    blob = json.dumps(day_map, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:32]
+
+
+def _reindex_fields_key(extra_dims, metric_col):
+    """Folds the extra output fields + metric selection into the cache key,
+    alongside _calendar_fingerprint - a cached month is reused only when
+    calendar, fields, AND metric all match the current request exactly."""
+    return "|".join(sorted(extra_dims or [])) + "::" + (metric_col or "")
+
+
+def _load_month_cache(source, ref_month, calendar_fp, fields_key):
+    from db.base import SessionLocal
+    from db.models.calendar import ReindexMonthCache
+
+    session = SessionLocal()
+    try:
+        row = session.get(ReindexMonthCache, (source, ref_month, calendar_fp, fields_key))
+        return json.loads(row.result_blob) if row is not None else None
+    finally:
+        session.close()
+
+
+def _save_month_cache(source, ref_month, calendar_fp, fields_key, result):
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from db.base import SessionLocal
+    from db.models.calendar import ReindexMonthCache
+
+    # BYTEA, not JSONB - a day-wise month broken out by several extra fields
+    # can serialize past Postgres's hard ~256MB per-JSONB-value limit (hit
+    # live on a real 2026-04 run); BYTEA has no such ceiling. See the
+    # result_blob docstring on ReindexMonthCache.
+    blob = json.dumps(result).encode("utf-8")
+    session = SessionLocal()
+    try:
+        stmt = pg_insert(ReindexMonthCache).values(
+            source_type=source, ref_month=ref_month, calendar_fingerprint=calendar_fp, fields_key=fields_key,
+            result_blob=blob, computed_at=datetime.datetime.now(datetime.timezone.utc),
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["source_type", "ref_month", "calendar_fingerprint", "fields_key"],
+            set_={"result_blob": stmt.excluded.result_blob, "computed_at": stmt.excluded.computed_at},
+        )
+        session.execute(stmt)
+        session.commit()
+    finally:
+        session.close()
+
+
+def _cached_months_status(source, months, calendar_fp, fields_key):
+    """{ref_month: computed_at_iso} for whichever of `months` are already
+    cached under this exact (source, calendar, fields) combination - used by
+    both run_reindex (to decide what it can skip) and the cache-status
+    endpoint (so the UI can show it before a run even starts)."""
+    from sqlalchemy import select
+    from db.base import SessionLocal
+    from db.models.calendar import ReindexMonthCache
+
+    session = SessionLocal()
+    try:
+        rows = session.execute(
+            select(ReindexMonthCache.ref_month, ReindexMonthCache.computed_at).where(
+                ReindexMonthCache.source_type == source,
+                ReindexMonthCache.calendar_fingerprint == calendar_fp,
+                ReindexMonthCache.fields_key == fields_key,
+                ReindexMonthCache.ref_month.in_(months),
+            )
+        ).all()
+        return {m: ts.isoformat() for m, ts in rows}
+    finally:
+        session.close()
+
+
+def reindex_month_cache_status(source, months, day_map, extra_dims, metric_col):
+    """Per-requested-month status for the Run Reindex UI, computed BEFORE any
+    actual run: 'open' (current/future month - always recomputed, never
+    cached), 'cached' (closed and already reindexed under these exact
+    calendar/fields/metric settings - the next run reuses it for free), or
+    'pending' (closed but never cached under this combination - the next run
+    will do real work for it, same as before this feature existed)."""
+    calendar_fp = _calendar_fingerprint(day_map)
+    fields_key = _reindex_fields_key(extra_dims, metric_col)
+    closed = [m for m in months if _is_month_closed(m)]
+    cached = _cached_months_status(source, closed, calendar_fp, fields_key) if closed else {}
+    out = []
+    for m in months:
+        if m not in closed:
+            out.append({"month": m, "status": "open"})
+        elif m in cached:
+            out.append({"month": m, "status": "cached", "computedAt": cached[m]})
+        else:
+            out.append({"month": m, "status": "pending"})
+    return {"ok": True, "months": out}
+
+
+def _merge_reindex_results(results):
+    """Concatenates N per-reference-month reindex results (each computed with
+    months=[that one month], so its rows/actualRows belong entirely to that
+    month - see run_reindex) back into one combined result matching the same
+    shape a single multi-month reindex_daywise/reindex_monthwise call would
+    have returned. Safe to just concatenate rather than re-aggregate: a
+    locked calendar's day-map is a per-cluster bijection ref-date -> fut-date,
+    so distinct reference months can never produce overlapping output
+    columns to sum together."""
+    if len(results) == 1:
+        return results[0]
+    first = results[0]
+    merged = {
+        "ok": True, "source": first["source"], "keyFields": first["keyFields"],
+        "grain": first["grain"], "metric": first["metric"],
+        "rows": [], "actualRows": [], "columns": [], "actualColumns": [],
+        "refDateByColumn": {}, "rowsRead": 0, "rowsMapped": 0,
+        "unmappedStores": set(), "unmappedDateCount": 0, "unmappedDateSample": [],
+        "unmappedClusters": set(), "unmappedClusterStores": set(),
+        "usedFrozenSync": True,
+    }
+    for r in results:
+        merged["rows"].extend(r.get("rows", []))
+        merged["actualRows"].extend(r.get("actualRows", []))
+        merged["columns"].extend(r.get("columns", []))
+        merged["actualColumns"].extend(r.get("actualColumns", []))
+        merged["refDateByColumn"].update(r.get("refDateByColumn", {}))
+        merged["rowsRead"] += r.get("rowsRead", 0)
+        merged["rowsMapped"] += r.get("rowsMapped", 0)
+        merged["unmappedStores"].update(r.get("unmappedStores", []))
+        merged["unmappedDateCount"] += r.get("unmappedDateCount", 0)
+        merged["unmappedDateSample"].extend(r.get("unmappedDateSample", []))
+        merged["unmappedClusters"].update(r.get("unmappedClusters", []))
+        merged["unmappedClusterStores"].update(r.get("unmappedClusterStores", []))
+        merged["usedFrozenSync"] = merged["usedFrozenSync"] and r.get("usedFrozenSync", False)
+    merged["columns"] = sorted(set(merged["columns"]))
+    merged["actualColumns"] = sorted(set(merged["actualColumns"]))
+    merged["unmappedStores"] = sorted(merged["unmappedStores"])
+    merged["unmappedDateSample"] = merged["unmappedDateSample"][:20]
+    merged["unmappedClusters"] = sorted(merged["unmappedClusters"])
+    merged["unmappedClusterStores"] = sorted(merged["unmappedClusterStores"])
+    return merged
 
 
 def run_reindex(payload, progress=None):
@@ -838,10 +1137,69 @@ def run_reindex(payload, progress=None):
     if not day_map:
         return {"ok": False, "error": "dayMap is required (pick a locked calendar)"}
     try:
-        result = reindex_daywise(months, store_cluster, day_map, sync_id, progress=progress,
-                                  extra_dims=extra_dims, metric_col=metric_col) if source == "dw" \
-            else reindex_monthwise(months, store_cluster, day_map, sync_id, progress=progress,
-                                    extra_dims=extra_dims, metric_col=metric_col)
+        fn = reindex_daywise if source == "dw" else reindex_monthwise
+        # Closed-month caching: a month that's fully in the past can never
+        # produce different sales again, so once it's been reindexed under
+        # this exact (calendar, extra fields, metric) combination there is no
+        # reason to ever re-read and re-aggregate its raw sales on a later
+        # run - only the open/current month (which can still change) needs
+        # fresh work every time. This is the main lever for "every login
+        # doesn't have to re-run the same months" - see ReindexMonthCache.
+        calendar_fp = _calendar_fingerprint(day_map)
+        fields_key = _reindex_fields_key(extra_dims, metric_col)
+        cached_status = _cached_months_status(
+            source, [m for m in months if _is_month_closed(m)], calendar_fp, fields_key)
+
+        results = []
+        computed_months = []
+        for m in months:
+            if m in cached_status:
+                results.append(_load_month_cache(source, m, calendar_fp, fields_key))
+                continue
+            computed_months.append(m)
+
+        # Pre-warm the raw-data cache with EVERY uncached month in one pass,
+        # instead of letting the per-month loop below each trigger its own
+        # separate file read - opening a 1.5GB+ parquet file and evaluating
+        # its row-group stats has real fixed overhead per call, so 5 separate
+        # single-month reads cost noticeably more than 1 read covering all 5
+        # months plus 5 cheap in-memory filters (see _get_raw's subset-reuse
+        # above). The per-month loop is still what makes each month's own
+        # result self-contained and safe to cache individually - this only
+        # removes the redundant I/O behind it, not the per-month structure.
+        if len(computed_months) > 1:
+            raw_fetch_fn = _fetch_raw_daywise if source == "dw" else _fetch_raw_monthwise
+            _get_raw(source, computed_months, sync_id, raw_fetch_fn, progress=progress,
+                     extra_dims=extra_dims, metric_col=metric_col)
+
+        for m in computed_months:
+            # One month at a time - each call's whole result belongs to
+            # exactly this one reference month, which is what makes it safe
+            # to cache directly and merge back later without re-splitting.
+            # Thanks to the pre-warm above, this no longer re-reads the
+            # source per month - _get_raw serves each one from the already-
+            # fetched combined frame.
+            r = fn(months=[m], store_cluster=store_cluster, day_map=day_map, sync_id=sync_id,
+                   progress=progress, extra_dims=extra_dims, metric_col=metric_col)
+            if not r.get("ok"):
+                return r
+            results.append(r)
+            # rowsRead == 0 means nothing was actually read for this month -
+            # almost always the sales data source being temporarily
+            # unreachable (parquet directory unmounted/offline), not a real
+            # "this month genuinely has zero sales" fact. ok=True either way
+            # (an unreachable source degrades gracefully to an empty
+            # dataframe rather than raising - see _fetch_raw_daywise), so
+            # caching on ok alone was caching that outage as if it were
+            # permanent: every later run replayed the same empty result
+            # forever, even once the source came back. Only a month that
+            # actually read real rows is safe to treat as "done for good".
+            if _is_month_closed(m) and r.get("rowsRead", 0) > 0:
+                _save_month_cache(source, m, calendar_fp, fields_key, r)
+
+        result = _merge_reindex_results(results)
+        result["cachedMonths"] = sorted(cached_status.keys())
+        result["computedMonths"] = sorted(computed_months)
         if result.get("ok"):
             _save_calendarised_sales_snapshot(result)
         return result
@@ -876,6 +1234,66 @@ def run_reindex(payload, progress=None):
 _REINDEX_JOB_DIR = os.path.join(DB_DIR, "reindex_jobs")
 _REINDEX_JOBS = {}  # {job_id: {"progress_path", "result_path"}} - just the paths; state lives on disk
 
+# A reindex job is almost always "1 of 1 files" the whole way through (see the
+# comment in poll_reindex_job) - there is no in-run completion signal to
+# extrapolate an ETA from the way poll_link_scan_job does. The only other
+# signal available is how long PAST runs of this source took relative to how
+# many months they covered, so a small rolling history of completed runs
+# (successful ones only - a run that errored out partway isn't a real duration
+# sample) is kept here and used to project "about how long this one will take"
+# from its own month count.
+_REINDEX_TIMING_PATH = os.path.join(DB_DIR, "reindex_timing_stats.json")
+_REINDEX_TIMING_MAX_RECORDS = 20  # per source
+
+
+def _load_reindex_timing():
+    if not os.path.exists(_REINDEX_TIMING_PATH):
+        return {}
+    try:
+        with open(_REINDEX_TIMING_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+_REINDEX_TIMING_MAX_SECONDS_PER_MONTH = 3600  # 1hr/month - real runs are minutes/month; a sample above this is corrupt, not slow
+
+
+def _record_reindex_timing(source, months_count, elapsed_seconds):
+    if not source or months_count <= 0:
+        return
+    # Belt-and-braces against a bad elapsed_seconds slipping in from some
+    # future code path the same way a recovered job's approximated started_at
+    # once did (see _recover_reindex_job's "recovered" comment) - one such
+    # sample is enough to poison the average for every later ETA on this
+    # source, so a single implausible outlier is worth discarding outright
+    # rather than letting it dilute in with real samples.
+    if elapsed_seconds / months_count > _REINDEX_TIMING_MAX_SECONDS_PER_MONTH:
+        return
+    stats = _load_reindex_timing()
+    records = stats.setdefault(source, [])
+    records.append({"months": months_count, "seconds": elapsed_seconds})
+    del records[:-_REINDEX_TIMING_MAX_RECORDS]
+    tmp_path = _REINDEX_TIMING_PATH + ".tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(stats, f)
+    os.replace(tmp_path, _REINDEX_TIMING_PATH)
+
+
+def _estimate_reindex_eta(source, months_count, elapsed_seconds):
+    """Seconds-per-month rate averaged across every recorded past run of this
+    source, scaled to this run's own month count, minus time already spent.
+    None (shown as "estimating…") until at least one past run of this source
+    has completed - there's nothing to average yet on a cold start."""
+    if not source or months_count <= 0:
+        return None
+    records = _load_reindex_timing().get(source) or []
+    total_months = sum(r["months"] for r in records)
+    if total_months <= 0:
+        return None
+    seconds_per_month = sum(r["seconds"] for r in records) / total_months
+    return max(0, round(seconds_per_month * months_count - elapsed_seconds))
+
 
 def start_reindex_job(payload):
     import subprocess
@@ -900,24 +1318,111 @@ def start_reindex_job(payload):
             stdout=logf, stderr=subprocess.STDOUT, cwd=worker_dir,
         )
 
-    _REINDEX_JOBS[job_id] = {"progress_path": progress_path, "result_path": result_path, "log_path": log_path}
+    _REINDEX_JOBS[job_id] = {
+        "progress_path": progress_path, "result_path": result_path, "log_path": log_path,
+        "started_at": time.time(), "source": payload.get("source"),
+        "monthsCount": len(payload.get("months") or []), "timingRecorded": False,
+    }
     return job_id
 
 
+def _recover_reindex_job(job_id):
+    """Reconstruct a job record from its on-disk directory when it's missing
+    from the in-memory _REINDEX_JOBS map - which happens on every backend
+    restart, since that dict (unlike progress/result files) isn't persisted.
+    Before this, a restart while a job was running or freshly done permanently
+    orphaned it: poll_reindex_job returned "Unknown or expired job" even
+    though the result was sitting right there in result.json, so a planner
+    waiting on a 15-20 minute day-wise run would see the progress bar vanish
+    with no download and no way to recover it short of re-running the whole
+    thing. started_at falls back to the payload file's mtime (its write is the
+    very first thing start_reindex_job does) - an approximation, but only used
+    for the elapsed/ETA display on a job that's still running; a job that's
+    already done doesn't need it at all."""
+    job_dir = os.path.join(_REINDEX_JOB_DIR, job_id)
+    if not os.path.isdir(job_dir):
+        return None
+    payload_path = os.path.join(job_dir, "payload.json")
+    source, months_count, started_at = None, 0, None
+    if os.path.exists(payload_path):
+        try:
+            with open(payload_path, encoding="utf-8") as f:
+                payload = json.load(f)
+            source = payload.get("source")
+            months_count = len(payload.get("months") or [])
+            started_at = os.path.getmtime(payload_path)
+        except (json.JSONDecodeError, OSError):
+            pass
+    job = {
+        "progress_path": os.path.join(job_dir, "progress.json"),
+        "result_path": os.path.join(job_dir, "result.json"),
+        "log_path": os.path.join(job_dir, "worker.log"),
+        "started_at": started_at if started_at is not None else time.time(),
+        "source": source, "monthsCount": months_count, "timingRecorded": False,
+        # A recovered job's started_at is an approximation (payload.json's
+        # mtime), not the real start time the in-memory job would have had -
+        # for a job that sat unpolled for a long time (e.g. across a restart,
+        # or a stale localStorage pointer picked up much later), "elapsed"
+        # computed from it can be wildly larger than the job's real runtime.
+        # Reproduced live: one such recovery recorded 55960 "seconds" for an
+        # 8-month run, dragging the seconds-per-month average enough to turn
+        # a real ~2-minute single-month ETA into a false 17-minute one. Never
+        # trust a recovered job's timing as a sample - see
+        # get_reindex_result_stream_path.
+        "recovered": True,
+    }
+    _REINDEX_JOBS[job_id] = job
+    return job
+
+
+def get_reindex_result_stream_path(job_id):
+    """Path to a completed job's result.json, for the router to stream
+    straight to the client (FileResponse) without this process ever calling
+    json.load() on it - see the comment in reindex_worker.py on why that
+    matters: a day-wise result over a full year can be a huge file, and
+    parsing (or re-serializing) it in pure Python holds the GIL for the
+    whole operation, freezing every other request on the server for however
+    long that takes - reproduced live: polling one finished 8-month result
+    made even GET /docs time out for the whole server. Returns None while
+    still running or if the job is unknown, in which case the caller should
+    fall back to poll_reindex_job for the running/error-status response.
+
+    Also records this run's timing as a side effect (once per job, via
+    result_meta.json - a tiny companion file, safe to actually parse) so
+    _estimate_reindex_eta has data for the next run of this source. Skips the
+    sample - rather than recording a misleading one - when: the result is
+    older than result_meta.json (nothing to check ok/rowsRead against); the
+    run read 0 rows (source was unreachable, not a real timing of real work);
+    or the job's started_at came from _recover_reindex_job's approximation
+    (see its "recovered" comment - not trustworthy as elapsed time)."""
+    job = _REINDEX_JOBS.get(job_id) or _recover_reindex_job(job_id)
+    if job is None or not os.path.exists(job["result_path"]):
+        return None
+    if not job.get("timingRecorded") and not job.get("recovered"):
+        meta_path = os.path.join(os.path.dirname(job["result_path"]), "result_meta.json")
+        if os.path.exists(meta_path):
+            try:
+                with open(meta_path, encoding="utf-8") as f:
+                    meta = json.load(f)
+                if meta.get("ok") and meta.get("rowsRead", 0) > 0:
+                    job["timingRecorded"] = True
+                    _record_reindex_timing(job.get("source"), job.get("monthsCount", 0), round(time.time() - job["started_at"]))
+            except (json.JSONDecodeError, OSError):
+                pass
+    return job["result_path"]
+
+
 def poll_reindex_job(job_id):
-    job = _REINDEX_JOBS.get(job_id)
+    """Handles the 'unknown job' and 'still running' responses only - a
+    completed job is served by get_reindex_result_stream_path instead (see
+    its docstring for why). The router checks that first and only falls back
+    here when it returns None."""
+    job = _REINDEX_JOBS.get(job_id) or _recover_reindex_job(job_id)
     if job is None:
         return {"ok": False, "status": "error", "error": "Unknown or expired job"}
 
     if os.path.exists(job["result_path"]):
-        try:
-            with open(job["result_path"], encoding="utf-8") as f:
-                result = json.load(f)
-        except (json.JSONDecodeError, OSError):
-            return {"ok": True, "status": "running", "progressPct": 100}  # result file mid-rename; poll again shortly
-        if result.get("ok"):
-            return {**result, "status": "done", "progressPct": 100}
-        return {"ok": False, "status": "error", "error": result.get("error", "Reindex failed")}
+        return {"ok": True, "status": "running", "progressPct": 100}  # result file just appeared between the two checks; next poll streams it
 
     progress = {"done": 0, "total": 0}
     if os.path.exists(job["progress_path"]):
@@ -927,4 +1432,16 @@ def poll_reindex_job(job_id):
         except (json.JSONDecodeError, OSError):
             pass  # progress file mid-write; next poll retries, not fatal
     pct = round(100 * progress["done"] / progress["total"]) if progress["total"] else 0
-    return {"ok": True, "status": "running", "progressPct": pct, "filesDone": progress["done"], "filesTotal": progress["total"]}
+    # No per-file ETA here (unlike poll_link_scan_job): a reindex job is
+    # typically "1 of 1 files" the whole way through - the real work is the
+    # post-read pandas aggregation, which has no sub-file progress signal to
+    # extrapolate from. The ETA below instead comes from _estimate_reindex_eta
+    # (seconds-per-month rate averaged from past completed runs of this
+    # source) - None until at least one past run exists to average from.
+    elapsed = round(time.time() - job["started_at"])
+    eta = _estimate_reindex_eta(job.get("source"), job.get("monthsCount", 0), elapsed)
+    return {
+        "ok": True, "status": "running", "progressPct": pct,
+        "filesDone": progress["done"], "filesTotal": progress["total"],
+        "elapsedSeconds": elapsed, "etaSeconds": eta,
+    }

@@ -309,7 +309,7 @@ export function validate(mappings, refYr, futYr, maxShift, fests) {
   // D: Excessive date shift
   for (const m of mappings) {
     if (Math.abs(m.dateDiff) > maxShift) {
-      issues.push({ type:'warn', icon:'WARN', title:'Excessive Date Shift', desc:`${fmtDisp(m.refDate)} → ${fmtDisp(m.futureDate)}: calendar shift of ${m.dateDiff > 0 ? '+' : ''}${m.dateDiff} days exceeds max (${maxShift}).` });
+      issues.push({ type:'warn', icon:'WARN', title:'Excessive Date Shift', desc:`${fmtDisp(m.refDate)} -> ${fmtDisp(m.futureDate)}: calendar shift of ${m.dateDiff > 0 ? '+' : ''}${m.dateDiff} days exceeds max (${maxShift}).` });
     }
   }
 

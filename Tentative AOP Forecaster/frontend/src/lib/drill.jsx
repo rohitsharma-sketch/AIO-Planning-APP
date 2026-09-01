@@ -173,12 +173,12 @@ export function HeaderFilter({ title, options, selected, onChange, range, onRang
       <input className="sdt-dd-search" autoFocus placeholder="Search…" value={q} onChange={e => setQ(e.target.value)} />
       <div className="sdt-dd-list">
         <div className="sdt-dd-row sdt-dd-all" onClick={toggleAllVisible}>
-          <span className="sdt-cb">{allVisibleOn ? '☑' : '☐'}</span>
+          <span className="sdt-cb">{allVisibleOn ? '[x]' : '[ ]'}</span>
           <span>{q ? '(Select All Search Results)' : '(Select All)'}</span>
         </div>
         {visible.map(o => (
           <div key={o.value} className={`sdt-dd-row${isOn(o.value) ? '' : ' off'}`}>
-            <span className="sdt-cb" onClick={() => toggle(o.value)}>{isOn(o.value) ? '☑' : '☐'}</span>
+            <span className="sdt-cb" onClick={() => toggle(o.value)}>{isOn(o.value) ? '[x]' : '[ ]'}</span>
             <span className="sdt-dd-label" onClick={() => only(o.value)} title="Click to select only this">{o.value}</span>
             <span className="sdt-dd-count">{o.count}</span>
           </div>
@@ -200,9 +200,9 @@ export function Th({ col, label, sub, num, filterable, sortCol, sortDir, toggleS
           <span className="sdt-th-text">
             {sub ? <><div className="sdt-th-l1">{label}</div><div className="sdt-th-l2">{sub}</div></> : label}
           </span>
-          <span className={`sdt-sort-ic${sorted ? ' on' : ''}`}>{sorted ? (sortDir < 0 ? '↓' : '↑') : '↕'}</span>
+          <span className={`sdt-sort-ic${sorted ? ' on' : ''}`}>{sorted ? (sortDir < 0 ? 'v' : '^') : '^v'}</span>
         </button>
-        {filterable && <button className={`sdt-th-filter${hasFilter?.(col) ? ' on' : ''}`} onClick={e => openF(col, e)} title="Filter">▼</button>}
+        {filterable && <button className={`sdt-th-filter${hasFilter?.(col) ? ' on' : ''}`} onClick={e => openF(col, e)} title="Filter">v</button>}
       </div>
     </th>
   )
@@ -213,7 +213,7 @@ export function DimFilterHeaders({ hasFilter, openF }) {
   return LEVELS.map(l => (
     <th key={l.key} className="sdt-dim-th">
       <button className={`sdt-th-filter sdt-dim-filter${hasFilter(l.key) ? ' on' : ''}`} onClick={e => openF(l.key, e)} title={`Filter ${l.label}`}>
-        {l.label} ▼
+        {l.label} v
       </button>
     </th>
   ))

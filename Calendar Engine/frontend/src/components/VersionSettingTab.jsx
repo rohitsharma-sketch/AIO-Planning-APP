@@ -119,7 +119,7 @@ export default function VersionSettingTab({ isPlanner, onNavigate }) {
               onChange={e => setRefYear(e.target.value)}
               onBlur={() => save({ refYear })} />
           </div>
-          <div style={{ fontSize: '18px', color: 'var(--muted)', alignSelf: 'flex-end', paddingBottom: '4px' }}>→</div>
+          <div style={{ fontSize: '18px', color: 'var(--muted)', alignSelf: 'flex-end', paddingBottom: '4px' }}>-&gt;</div>
           <div className="field">
             <label>Future Year</label>
             <input type="number" className="year-input" value={futYear} disabled={!isPlanner}
@@ -150,7 +150,7 @@ export default function VersionSettingTab({ isPlanner, onNavigate }) {
           <label className="radio-opt">
             <input type="radio" name="moPri" value="prev" checked={moPri === 'prev'} disabled={!isPlanner}
               onChange={() => { setMoPri('prev'); save({ moPri: 'prev' }) }} />
-            Same → Previous → Next
+            Same -&gt; Previous -&gt; Next
             <div className="radio-tip">
               <strong>Shift backward first.</strong> When a non-festive day has no same-month match in
               the future year, it tries the <code>previous</code> month before the next. Good when your
@@ -160,7 +160,7 @@ export default function VersionSettingTab({ isPlanner, onNavigate }) {
           <label className="radio-opt">
             <input type="radio" name="moPri" value="next" checked={moPri === 'next'} disabled={!isPlanner}
               onChange={() => { setMoPri('next'); save({ moPri: 'next' }) }} />
-            Same → Next → Previous
+            Same -&gt; Next -&gt; Previous
             <div className="radio-tip">
               <strong>Shift forward first.</strong> When a non-festive day has no same-month match, it
               tries the <code>next</code> month before the previous. Good for fiscal years running

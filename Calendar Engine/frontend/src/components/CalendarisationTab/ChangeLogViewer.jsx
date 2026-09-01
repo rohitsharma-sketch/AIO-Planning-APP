@@ -31,7 +31,7 @@ export default function ChangeLogViewer({ rangeKey }) {
           <ul>
             {entries.length === 0 && !error && <li style={{ color: 'var(--muted)' }}>No entries for this range.</li>}
             {entries.map((e, i) => (
-              <li key={i}>{e.clusterName} — {e.festivalName}: {e.refDate} → {e.futDate} ({e.savedAt})</li>
+              <li key={i}>{e.clusterName} — {e.festivalName}: {e.refDate} -&gt; {e.futDate} ({e.savedAt})</li>
             ))}
           </ul>
         </>
