@@ -197,39 +197,36 @@ def write_wide_csv(result, store_cluster, festival_by_cluster_date, ref_by_clust
     # Wide is one row per store(+fields), one column per date - a single
     # Reference Date / Festival header row at the top can only ever be
     # accurate for ONE cluster's mapping at a time (see _festival_of's /
-    # _ref_date_of's callers' docstrings for the cross-cluster bug this
-    # replaced). Only emit them when every row in this export is the same
-    # cluster; otherwise a wrong-for-most-rows header is worse than none -
-    # use Stacked instead, where Reference Date/Festival are per-row.
-    clusters_present = {_cluster_of(store_cluster, key_of[k].get("store", "")) for k in grouped}
-    # '(unmapped)' is _cluster_of's fallback for a store missing from
-    # store_cluster entirely - never treat it as a confidently-known single
-    # cluster (see the matching guard in ReindexOutputPanel.jsx's
-    # showWideHeaderRows): it isn't a real key in ref_by_cluster_col, so
-    # "one cluster" here would just fall back to the old global-plurality
-    # data, silently mislabeled as if it were accurate.
-    sole_cluster = next(iter(clusters_present)) if len(clusters_present) == 1 else None
-    show_header_rows = sole_cluster is not None and sole_cluster != "(unmapped)"
+    # _ref_date_of's docstrings for the cross-cluster bug this originally
+    # replaced). An earlier fix hid those rows entirely for a mixed-cluster
+    # export rather than show them wrong - found live 2026-09-02 that
+    # trading wrong data for MISSING data isn't right either. Instead, group
+    # rows by cluster and give each cluster its own accurate header block
+    # directly above its own rows - present and correct for every cluster,
+    # not just when the export happens to be a single one.
+    rows_by_cluster = {}
+    for key in grouped:
+        cluster = _cluster_of(store_cluster, key_of[key].get("store", ""))
+        rows_by_cluster.setdefault(cluster, []).append(key)
 
     with open(out_path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f, **_CSV_KW)
-        if show_header_rows:
-            w.writerow(["Reference Date"] + [""] * len(key_fields)
-                       + [_ref_date_of(ref_by_cluster_col, global_ref_date_by_column, sole_cluster, c) for c in columns])
-            if festival_by_cluster_date:
-                w.writerow(["Festival"] + [""] * len(key_fields)
-                           + [_festival_of(festival_by_cluster_date, sole_cluster, c) for c in columns])
-        elif len(clusters_present) > 1:
-            w.writerow([f"Reference Date / Festival omitted - {len(clusters_present)} different clusters are mixed "
-                        "in this export, and each can map a date differently. Use the Stacked view/download for "
-                        "cluster-accurate values."])
         w.writerow(["Cluster"] + kf_headers + columns)
-        for key in sorted(grouped.keys()):
-            vals = grouped[key]
-            row_key = key_of[key]
-            store = row_key.get("store", "")
-            w.writerow([_cluster_of(store_cluster, store)] + [row_key.get(f, "") for f in key_fields]
-                       + [vals.get(c, "") for c in columns])
+        for cluster in sorted(rows_by_cluster):
+            # Plain ASCII hyphen, not an em-dash: this Blob/file has no BOM,
+            # so Excel opened directly (double-click, not an explicit
+            # UTF-8 import) can misread a non-ASCII character as the system
+            # codepage and mangle it - not worth the risk for a label.
+            w.writerow([f"{cluster} - Reference Date"] + [""] * len(key_fields)
+                       + [_ref_date_of(ref_by_cluster_col, global_ref_date_by_column, cluster, c) for c in columns])
+            if (festival_by_cluster_date.get(cluster) or {}):
+                w.writerow([f"{cluster} - Festival"] + [""] * len(key_fields)
+                           + [_festival_of(festival_by_cluster_date, cluster, c) for c in columns])
+            for key in sorted(rows_by_cluster[cluster]):
+                vals = grouped[key]
+                row_key = key_of[key]
+                w.writerow([cluster] + [row_key.get(f, "") for f in key_fields]
+                           + [vals.get(c, "") for c in columns])
 
 
 def write_stacked_csv(result, store_cluster, festival_by_cluster_date, ref_by_cluster_col, out_path):

@@ -134,6 +134,24 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
       clusterOf(r.store).toLowerCase().includes(q))
   }, [wide, search, storeCluster])
 
+  // Wide rows grouped by cluster, sorted within each - lets both the table
+  // and downloadReindexed give every cluster its own Reference Date/Festival
+  // header block, instead of one global header row that can only ever be
+  // true for one cluster's mapping at a time. An earlier fix hid that header
+  // entirely for a mixed-cluster export rather than show it wrong - found
+  // live 2026-09-02 that trading wrong data for MISSING data isn't right
+  // either; a planner needs this info just as much as a single-cluster view
+  // does. Grouping keeps it both present and correct for every cluster.
+  const wideByCluster = useMemo(() => {
+    const byCluster = new Map()
+    for (const r of filteredWide) {
+      const cl = clusterOf(r.store)
+      if (!byCluster.has(cl)) byCluster.set(cl, [])
+      byCluster.get(cl).push(r)
+    }
+    return [...byCluster.entries()].sort((a, b) => (a[0] > b[0]) - (a[0] < b[0]))
+  }, [filteredWide, storeCluster])
+
   // Stacked view: one row per (store, column) pair, summed across whatever
   // OTHER key fields (division, department, attribute1...) the run was
   // broken out by - restricted to Store + Date/Month + Value only, on
@@ -342,26 +360,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
   // for month-wise ones - a plain lookup by the column string works for both.
   const festivalOf = (cluster, c) => (festivalByCluster?.[cluster]?.[c] || []).join(', ')
   const hasFestivalRow = !!festivalByCluster && Object.keys(festivalByCluster).length > 0
-  // Wide is one row per store(+fields), one column per date - a single
-  // Reference Date / Festival header row at the top can only ever be
-  // accurate for ONE cluster's mapping at a time. When every visible row
-  // belongs to the same cluster (a search/filter narrowed it down, or the
-  // calendar only has one cluster), show it - otherwise showing a header row
-  // that's only true for whichever cluster happens to win a plurality vote
-  // is worse than not showing one at all (found live 2026-09-01: UP+NCR's
-  // own Holi mapping and Onam - a festival UP+NCR doesn't even have - both
-  // shown wrong in a 10-cluster combined export). Stacked view always has
-  // this right since Reference Date/Festival are per-row there, not a
-  // shared header - point mixed-cluster users there instead.
-  const wideClusters = [...new Set(filteredWide.map(r => clusterOf(r.store)))]
-  // '(unmapped)' is clusterOf's fallback for a store with no real cluster -
-  // including it, a page load where storeCluster hasn't finished fetching
-  // yet (every store briefly reads as '(unmapped)') would trivially satisfy
-  // "exactly one cluster" and show a header sourced from refDateByCluster's
-  // missing '(unmapped)' entry falling back to the OLD global-plurality
-  // data, silently mislabeled as if it were one real cluster's own mapping.
-  // Never treat '(unmapped)' as a confidently-known single cluster.
-  const showWideHeaderRows = wideClusters.length === 1 && wideClusters[0] !== '(unmapped)'
+  const hasFestivalRowFor = (cluster) => Object.keys(festivalByCluster?.[cluster] || {}).length > 0
 
   function countText(n) {
     if (!n) return 'No rows to show.'
@@ -372,17 +371,20 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
 
   function downloadReindexed() {
     downloadCsv([
-      // Reference-date and Festival rows sit directly above the future-date
-      // header row, same column order, so all three always line up one-to-one.
-      // Only meaningful (and only shown) when every exported row is the same
-      // cluster - see showWideHeaderRows above.
-      ...(showWideHeaderRows ? [
-        ['Reference Date', ...kfHeaders.map(() => ''), ...visibleColumns.map(c => refDateOf(wideClusters[0], c))],
-        ...(hasFestivalRow ? [['Festival', ...kfHeaders.map(() => ''), ...visibleColumns.map(c => festivalOf(wideClusters[0], c))]] : []),
-      ] : []),
       ['Cluster', ...kfHeaders, ...visibleColumns],
-      ...filteredWide.map(r => [clusterOf(r.store), ...keyFields.map(f => r[f]),
-        ...visibleColumns.map(c => cell(r.vals[c]))]),
+      // One Reference Date / Festival header block per cluster, directly
+      // above that cluster's own rows - each block is that cluster's real
+      // mapping, never mixed with any other's. See wideByCluster above.
+      ...wideByCluster.flatMap(([cluster, rows]) => [
+        // Plain ASCII hyphen, not an em-dash: this Blob has no BOM, so Excel
+        // opened directly (double-click, not an explicit UTF-8 import) can
+        // misread a non-ASCII character as the system codepage and mangle it.
+        [`${cluster} - Reference Date`, ...kfHeaders.map(() => ''), ...visibleColumns.map(c => refDateOf(cluster, c))],
+        ...(hasFestivalRowFor(cluster)
+          ? [[`${cluster} - Festival`, ...kfHeaders.map(() => ''), ...visibleColumns.map(c => festivalOf(cluster, c))]]
+          : []),
+        ...rows.map(r => [cluster, ...keyFields.map(f => r[f]), ...visibleColumns.map(c => cell(r.vals[c]))]),
+      ]),
     ], `${fileStem}_reindexed.csv`)
   }
 
@@ -520,33 +522,6 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
             <div className="tbl-wrap">
               <table>
                 <thead>
-                  {/* Reference-date row directly above the future-date row, same
-                      column order, so the two headers always align one-to-one -
-                      see refDateOf/showWideHeaderRows above. Only shown when
-                      every visible row is one cluster - otherwise a single
-                      header row can't be accurate for all of them at once. */}
-                  {showWideHeaderRows ? (
-                    <>
-                      <tr className="rx-ref-date-row">
-                        <th>Reference Date</th>
-                        {kfHeaders.map(h => <th key={`ref-${h}`} />)}
-                        {visibleColumns.map(c => <th key={`ref-${c}`} style={num}>{refDateOf(wideClusters[0], c)}</th>)}
-                      </tr>
-                      {hasFestivalRow && (
-                        <tr className="rx-ref-date-row">
-                          <th>Festival</th>
-                          {kfHeaders.map(h => <th key={`fest-${h}`} />)}
-                          {visibleColumns.map(c => <th key={`fest-${c}`} style={{ ...num, color: 'var(--warn)' }}>{festivalOf(wideClusters[0], c)}</th>)}
-                        </tr>
-                      )}
-                    </>
-                  ) : wideClusters.length > 1 && (
-                    <tr className="rx-ref-date-row">
-                      <th colSpan={1 + kfHeaders.length + visibleColumns.length} style={{ fontWeight: 400, color: 'var(--muted)', textAlign: 'left' }}>
-                        Reference Date / Festival hidden - {wideClusters.length} different clusters are mixed in this view, and each can map a date differently. Switch to Stacked for cluster-accurate values, or search down to one cluster.
-                      </th>
-                    </tr>
-                  )}
                   <tr>
                     <th>Cluster</th>
                     {kfHeaders.map(h => <th key={h}>{h}</th>)}
@@ -554,13 +529,45 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredWide.slice(0, RX_CAP).map(r => (
-                    <tr key={keyFields.map(f => r[f]).join(KEY_SEP)}>
-                      <td>{clusterOf(r.store)}</td>
-                      {keyFields.map(f => <td key={f} style={{ fontWeight: f === 'store' ? 600 : 400 }}>{r[f]}</td>)}
-                      {visibleColumns.map(c => <td key={c} style={num}>{cell(r.vals[c])}</td>)}
-                    </tr>
-                  ))}
+                  {/* One Reference Date / Festival block per cluster, directly
+                      above that cluster's own rows - see wideByCluster above.
+                      RX_CAP limits DATA rows shown (matches the pre-grouping
+                      cap), not the header rows leading each cluster's block. */}
+                  {(() => {
+                    let shown = 0
+                    const out = []
+                    for (const [cluster, rows] of wideByCluster) {
+                      if (shown >= RX_CAP) break
+                      out.push(
+                        <tr className="rx-ref-date-row" key={`ref-${cluster}`}>
+                          <th style={{ textAlign: 'left' }}>{cluster} — Reference Date</th>
+                          {kfHeaders.map(h => <th key={`ref-${cluster}-${h}`} />)}
+                          {visibleColumns.map(c => <th key={`ref-${cluster}-${c}`} style={num}>{refDateOf(cluster, c)}</th>)}
+                        </tr>
+                      )
+                      if (hasFestivalRowFor(cluster)) {
+                        out.push(
+                          <tr className="rx-ref-date-row" key={`fest-${cluster}`}>
+                            <th style={{ textAlign: 'left' }}>{cluster} — Festival</th>
+                            {kfHeaders.map(h => <th key={`fest-${cluster}-${h}`} />)}
+                            {visibleColumns.map(c => <th key={`fest-${cluster}-${c}`} style={{ ...num, color: 'var(--warn)' }}>{festivalOf(cluster, c)}</th>)}
+                          </tr>
+                        )
+                      }
+                      for (const r of rows) {
+                        if (shown >= RX_CAP) break
+                        out.push(
+                          <tr key={keyFields.map(f => r[f]).join(KEY_SEP)}>
+                            <td>{cluster}</td>
+                            {keyFields.map(f => <td key={f} style={{ fontWeight: f === 'store' ? 600 : 400 }}>{r[f]}</td>)}
+                            {visibleColumns.map(c => <td key={c} style={num}>{cell(r.vals[c])}</td>)}
+                          </tr>
+                        )
+                        shown++
+                      }
+                    }
+                    return out
+                  })()}
                 </tbody>
               </table>
             </div>
