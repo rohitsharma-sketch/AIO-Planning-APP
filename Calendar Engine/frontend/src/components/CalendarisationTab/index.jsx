@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getClusterProfiles, putClusterProfiles, getAppState, updateCalendarFestivals, listCalendarLibrary, getCalendar } from '../../lib/api'
+import { getClusterProfiles, putClusterProfiles, getAppState, updateCalendarFestivals, listCalendarLibrary, getCalendar, saveCalendar, deleteCalendar } from '../../lib/api'
 import { generateMappings, validate, computeMonthly, buildFestMap } from '../../lib/engine'
 import { parseDate, fmtISO, fmtDisp, calDiff, weekNum } from '../../lib/dateUtils'
 import ClusterTabs from './ClusterTabs'
@@ -130,6 +130,13 @@ export default function CalendarisationTab({ isPlanner }) {
   // Only the festival list autosaves this way; the day-by-day mapping stays
   // exactly as last generated until Create Calendar + Lock & Save runs again.
   const [previewCalendarId, setPreviewCalendarId] = useState(null)
+  // The loaded template's own name, kept alongside previewCalendarId - lets
+  // handleSaveToLoadedTemplate overwrite that EXACT template without
+  // prompting (Lock & Save's own prompt defaults to an auto-generated name
+  // derived from the active cluster, not the loaded template's real name, so
+  // it can't be reused here without asking the user to retype it).
+  const [previewCalendarName, setPreviewCalendarName] = useState(null)
+  const [savingToTemplate, setSavingToTemplate] = useState(false)
   const [dayMap, setDayMap] = useState(null)
   const [validationIssues, setValidationIssues] = useState([])
   const [monthlySummary, setMonthlySummary] = useState(null)
@@ -166,19 +173,28 @@ export default function CalendarisationTab({ isPlanner }) {
   // The rewrite is planner-only: it mutates real persisted data, and persist()
   // already no-ops the write for non-planners. A buyer clicking this still gets
   // a calendar generated from the stored dates, read-only, exactly as before.
+  // Returns the freshly generated per-cluster mappings (or null on an early
+  // validation bail-out) - NOT just a success boolean, because a caller that
+  // needs the fresh data right away (e.g. handleSaveToLoadedTemplate, which
+  // must save what was JUST generated, not whatever the calendar looked like
+  // before) can't safely read it back off clusterMappingsRaw state: the
+  // setClusterMappingsRaw call below only takes effect on the next render,
+  // so a synchronous read immediately after awaiting this function would
+  // still see the STALE value from before this call ran (or null on a
+  // component's first-ever generate), not what was just computed.
   async function runEngine() {
     if (!refYear || !futYear) {
       setEngineStatus({ ok: false, msg: 'Set Reference Year and Future Year on the Version Setting tab first.' })
-      return
+      return null
     }
     const ry = Number(refYear), fy = Number(futYear), ms = Number(maxShift) || 45
     if (ry === fy) {
       setEngineStatus({ ok: false, msg: 'Reference and Future year must be different.' })
-      return
+      return null
     }
     if (ry < 1900 || ry > 2099 || fy < 1900 || fy > 2099) {
       setEngineStatus({ ok: false, msg: 'Years must be between 1900 and 2099.' })
-      return
+      return null
     }
 
     let workingProfiles = profiles
@@ -206,8 +222,16 @@ export default function CalendarisationTab({ isPlanner }) {
       setValidationIssues(validate(activeMappings, ry, fy, ms, workingProfiles[activeIdx].festivals, coreFestivalNamesFor(workingProfiles[activeIdx].name)))
       setMonthlySummary(computeMonthly(activeMappings))
       setEngineStatus({ ok: true, msg: `${syncMsg}Calendar generated: ${activeMappings.length} days mapped for "${workingProfiles[activeIdx].name}".` })
+      // workingProfiles alongside perCluster for the same reason: a year-sync
+      // just above (applyYearToProfiles) may have changed festival dates and
+      // called persist(workingProfiles), but that setProfiles() is equally
+      // subject to the stale-render problem in this function's own opening
+      // comment - the `profiles` variable in scope right now, and any closure
+      // that captured it, is still the pre-sync array until the next render.
+      return { mappings: perCluster, profiles: workingProfiles }
     } catch (e) {
       setEngineStatus({ ok: false, msg: e.message })
+      return null
     }
   }
 
@@ -223,21 +247,74 @@ export default function CalendarisationTab({ isPlanner }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIdx])
 
-  function buildSavePayload() {
-    if (!clusterMappingsRaw) throw new Error('Click "Create Calendar" to generate mappings before saving.')
+  // fresh, when given, overrides both the mappings and the profiles read
+  // from React state - needed by handleSaveToLoadedTemplate, which calls
+  // this immediately after runEngine() and can't rely on clusterMappingsRaw/
+  // profiles state having caught up yet (see runEngine's own comment on the
+  // same stale-render problem). Every other caller (CalendarLibrary's own
+  // Lock & Save) omits it and gets the normal state-backed behavior.
+  function buildSavePayload(fresh) {
+    const mappings = fresh?.mappings ?? clusterMappingsRaw
+    const sourceProfiles = fresh?.profiles ?? profiles
+    if (!mappings) throw new Error('Click "Create Calendar" to generate mappings before saving.')
     const dayMapByCluster = {}
-    clusterMappingsRaw.forEach(cm => {
+    mappings.forEach(cm => {
       dayMapByCluster[cm.name] = cm.mappings.map(m => [fmtISO(m.refDate), fmtISO(m.futureDate)])
     })
     return {
       id: Date.now(),
-      name: `${profiles[activeIdx].name} Calendar`,
+      name: `${sourceProfiles[activeIdx].name} Calendar`,
       refYear: Number(refYear),
       futYear: Number(futYear),
       savedAt: new Date().toISOString(),
       engine: 'calendarisation-v1',
-      clusters: profiles.map(cp => ({ name: cp.name, region: cp.region, festivals: cp.festivals })),
+      clusters: sourceProfiles.map(cp => ({ name: cp.name, region: cp.region, festivals: cp.festivals })),
       dayMap: dayMapByCluster,
+    }
+  }
+
+  // Overwrites the CURRENTLY LOADED locked template (previewCalendarId/Name,
+  // set by "Load & Preview") with the calendar regenerated from whatever the
+  // Festival Master edits currently look like - the one-click alternative to
+  // manually running "Create Calendar" and then "Lock & Save" with the exact
+  // existing name retyped into its prompt. Only meaningful when a template
+  // is actually loaded; the button that calls this is hidden otherwise.
+  async function handleSaveToLoadedTemplate() {
+    if (!isPlanner || !previewCalendarId || !previewCalendarName || savingToTemplate) return
+    if (!window.confirm(
+      `Overwrite locked template "${previewCalendarName}" with the current festival changes?\n`
+      + 'This regenerates it from your current Festival Master settings and cannot be undone.'
+    )) return
+
+    setSavingToTemplate(true)
+    try {
+      const fresh = await runEngine()
+      if (!fresh) return // runEngine already surfaced why via engineStatus
+
+      let payload
+      try {
+        payload = buildSavePayload(fresh)
+      } catch (e) {
+        setEngineStatus({ ok: false, msg: e.message })
+        return
+      }
+
+      const items = await listCalendarLibrary()
+      const existing = items.find(c => (c.name || '') === previewCalendarName)
+      // Same delete-then-create overwrite CalendarLibrary's own Lock & Save
+      // uses (see its handleSave comment - the backend has no update
+      // endpoint for a saved calendar). existing should always be found
+      // here (previewCalendarName only ever comes from an already-loaded
+      // template), but if it was deleted from another tab in the meantime,
+      // this still succeeds - just as a fresh save under the same name.
+      if (existing) await deleteCalendar(existing.id)
+      await saveCalendar({ ...payload, name: previewCalendarName })
+      setPreviewCalendarId(payload.id)
+      setEngineStatus({ ok: true, msg: `Template "${previewCalendarName}" overwritten with your current festival changes.` })
+    } catch (e) {
+      setEngineStatus({ ok: false, msg: e.message })
+    } finally {
+      setSavingToTemplate(false)
     }
   }
 
@@ -284,6 +361,7 @@ export default function CalendarisationTab({ isPlanner }) {
     setFutYear(full.futYear)
     setClusterMappingsRaw(null) // a loaded snapshot; regenerate via "Create Calendar" before saving again
     setPreviewCalendarId(full.id) // subsequent festival-list edits autosave into this calendar too
+    setPreviewCalendarName(full.name)
 
     // Every cluster's saved pairs, reconstructed the same way the active
     // cluster's are below — feeds the Day-by-Day preview's "all clusters"
@@ -611,6 +689,15 @@ export default function CalendarisationTab({ isPlanner }) {
             Reference Year {refYear ?? '—'} -&gt; Future Year {futYear ?? '—'} (set on the Version Setting tab)
           </div>
           <button className="btn" onClick={runEngine}>Create Calendar</button>
+          {/* One-click overwrite of whichever locked template is currently
+              loaded (see previewCalendarId/Name) - only shown when one
+              actually is, since there's nothing to overwrite otherwise. */}
+          {isPlanner && previewCalendarId != null && (
+            <button className="btn" onClick={handleSaveToLoadedTemplate} disabled={savingToTemplate}
+              style={{ marginLeft: '8px' }} title={`Regenerate and overwrite "${previewCalendarName}" with your current festival changes`}>
+              {savingToTemplate ? 'Saving…' : `Save Changes to "${previewCalendarName}"`}
+            </button>
+          )}
           {engineStatus && <p style={{ color: engineStatus.ok ? 'var(--green)' : 'var(--red)' }}>{engineStatus.msg}</p>}
         </div>
 
@@ -620,7 +707,9 @@ export default function CalendarisationTab({ isPlanner }) {
       </main>
 
       <aside style={{ width: '320px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <CalendarLibrary onLoad={handleLoadFromLibrary} onSaved={setPreviewCalendarId} isPlanner={isPlanner} buildSavePayload={buildSavePayload} />
+        <CalendarLibrary onLoad={handleLoadFromLibrary}
+          onSaved={(id, name) => { setPreviewCalendarId(id); setPreviewCalendarName(name) }}
+          isPlanner={isPlanner} buildSavePayload={buildSavePayload} />
         <ChangeLogViewer rangeKey={refYear && futYear ? `${refYear}-${futYear}` : null} />
       </aside>
     </div>

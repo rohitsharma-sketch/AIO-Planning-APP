@@ -60,7 +60,7 @@ export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSaveP
       if (existing) await deleteCalendar(existing.id)
       await saveCalendar({ ...payload, name })
       setStatus({ ok: true, msg: existing ? `Template "${name}" updated with your changes` : `Template "${name}" locked & saved` })
-      onSaved?.(payload.id)
+      onSaved?.(payload.id, name)
       refresh()
     } catch (e) {
       setStatus({ ok: false, msg: e.message })
