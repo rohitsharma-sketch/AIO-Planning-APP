@@ -137,6 +137,7 @@ export default function CalendarisationTab({ isPlanner }) {
   // it can't be reused here without asking the user to retype it).
   const [previewCalendarName, setPreviewCalendarName] = useState(null)
   const [savingToTemplate, setSavingToTemplate] = useState(false)
+  const [syncingStructure, setSyncingStructure] = useState(false)
   const [dayMap, setDayMap] = useState(null)
   const [validationIssues, setValidationIssues] = useState([])
   const [monthlySummary, setMonthlySummary] = useState(null)
@@ -633,6 +634,77 @@ export default function CalendarisationTab({ isPlanner }) {
     }
   }
 
+  // Sync the CURRENT festival structure (every cluster's full list, as it
+  // stands right now in the editor) into every OTHER saved template - the
+  // broader sibling of handleFestivalPicked above, which only ever copies
+  // ONE newly-added festival. Only a cluster name common to both the live
+  // editor and a given target template gets its festival list REPLACED
+  // (not merged) - a cluster unique to either side is left untouched, never
+  // added or deleted.
+  //
+  // Re-dates via applyYearToProfiles rather than resolveFestivalDefaults
+  // (used above): that function resolves against FESTIVAL_DB's generic
+  // default date whenever no exact per-year table entry exists, which would
+  // silently discard a deliberately customized date in favour of the
+  // generic one. applyYearToProfiles instead falls back to shifting the
+  // FESTIVAL'S OWN current day/month onto the target year - and never
+  // touches pre/core/post at all - so a customization survives the sync
+  // unless a real per-year table entry (the actual festival date for that
+  // specific year) overrides it, exactly as intended.
+  //
+  // Deliberately does NOT touch any target template's locked day-map -
+  // matching handleFestivalPicked's own precedent, this only updates the
+  // festival list metadata saved alongside each template. Regenerating a
+  // template's actual calendar is handleSaveToLoadedTemplate's job, one
+  // template at a time (Load & Preview it, then Save Changes).
+  async function handleSyncStructureToAllTemplates() {
+    if (!isPlanner || syncingStructure) return
+    let items
+    try {
+      items = await listCalendarLibrary()
+    } catch (e) {
+      setStatus({ ok: false, msg: e.message })
+      return
+    }
+    const targets = items.filter(it => it.id !== previewCalendarId)
+    if (!targets.length) {
+      setStatus({ ok: false, msg: 'No other saved templates to sync to.' })
+      return
+    }
+    const targetNames = targets.map(t => t.name).join(', ')
+    if (!window.confirm(
+      `Sync current festival structure to ${targets.length} other template(s): ${targetNames}?\n`
+      + "This replaces each one's festival list per cluster to match what you have now (dates resolved for their own year) - "
+      + 'any customizations unique to those templates will be lost.\nThis cannot be undone automatically.'
+    )) return
+
+    setSyncingStructure(true)
+    let updated = 0, failed = 0
+    try {
+      for (const item of targets) {
+        try {
+          const full = await getCalendar(item.id)
+          const resolved = applyYearToProfiles(profiles, full.refYear, full.futYear).profiles
+          const sourceByName = new Map(resolved.map(cp => [cp.name, cp]))
+          const nextClusters = (full.clusters || []).map(tc => {
+            const source = sourceByName.get(tc.name)
+            return source ? { ...tc, festivals: source.festivals } : tc
+          })
+          await updateCalendarFestivals(item.id, { clusters: nextClusters })
+          updated++
+        } catch {
+          failed++
+        }
+      }
+      setStatus({
+        ok: failed === 0,
+        msg: `Synced festival structure to ${updated} template${updated === 1 ? '' : 's'}${failed ? `, ${failed} failed` : ''}: ${targetNames}.`,
+      })
+    } finally {
+      setSyncingStructure(false)
+    }
+  }
+
   if (!profiles.length) return <div className="module-panel">Loading…</div>
 
   return (
@@ -673,6 +745,19 @@ export default function CalendarisationTab({ isPlanner }) {
                   </div>
                   <button className="btn" onClick={handleRedactFestival} disabled={!redactName.trim()}>
                     Remove from All Clusters
+                  </button>
+                </div>
+              )}
+              {/* Push the CURRENT full festival structure out to every other
+                  saved template, each re-dated for its own reference/future
+                  year - see handleSyncStructureToAllTemplates for exactly
+                  what this does and doesn't touch (festival lists only,
+                  never a target's locked day-map). */}
+              {isPlanner && (
+                <div className="scm-toolbar" style={{ margin: '10px 0' }}>
+                  <button className="btn" onClick={handleSyncStructureToAllTemplates} disabled={syncingStructure}
+                    title="Replace every other saved template's festival list per cluster with the current structure, dates resolved for each template's own year">
+                    {syncingStructure ? 'Syncing…' : 'Sync Festival Structure to All Templates'}
                   </button>
                 </div>
               )}
