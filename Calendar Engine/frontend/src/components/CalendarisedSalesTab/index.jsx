@@ -399,6 +399,25 @@ export default function CalendarisedSalesTab({ isPlanner }) {
           </p>
         )}
 
+        {/* Previously the "Months to Reindex" section below just silently
+            disappeared here with no explanation whenever this calendar's own
+            ref year had never been synced for the current source - found live
+            2026-09-02 (user: "shouldnt there be this feature for every locked
+            template i sense it is missing") on the 2024 -> 2025 calendar,
+            since only 2026 had ever been synced. The data isn't actually
+            missing from the section's own logic - syncedMonths (below) is
+            legitimately empty because nothing in {selectedCalendar.refYear}
+            has been pulled into `selections[source].months` yet; this just
+            says so instead of leaving a blank gap where the checklist should
+            be. */}
+        {selectedCalendar && syncedMonths.length === 0 && (
+          <p style={{ fontSize: '11px', color: 'var(--warn)', margin: '6px 0 0', fontWeight: 600 }}>
+            No {selectedCalendar.refYear} months are synced yet for {source === 'dw' ? 'Day-wise' : 'Month-wise'} —
+            set the {source === 'dw' ? 'Day-wise' : 'Month-wise'} panel's year range above to include {selectedCalendar.refYear}
+            and click "Sync Selected Range" before this calendar can be reindexed.
+          </p>
+        )}
+
         {/* Which synced months to actually reindex - previously always the full
             365-day/12-month set. Narrowing this is the main lever for "shorten
             the delay": fewer months means less raw data for the worker to read
