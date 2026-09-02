@@ -99,6 +99,13 @@ export default function CalendarisationTab({ isPlanner }) {
   // expanded — .fest-body had no inline display:none and #festToggle carried
   // the "open" class in the markup).
   const [festOpen, setFestOpen] = useState(true)
+  // "Redact festival from all clusters" input - the draft name typed before
+  // handleRedactFestival() runs. Deliberately free text, not a dropdown of
+  // existing names: whatever cluster you're currently viewing shows you the
+  // exact spelling to copy, and the confirm step in the handler names every
+  // cluster it actually found a match in before anything is removed, so a
+  // typo just reports "not found" rather than silently doing nothing useful.
+  const [redactName, setRedactName] = useState('')
 
   // Engine run state. refYear/futYear/maxShift/moPri come from Task 4's
   // /app-state endpoint (owned/edited by VersionSettingTab) — read once on
@@ -305,9 +312,13 @@ export default function CalendarisationTab({ isPlanner }) {
     setEngineStatus({ ok: true, msg: `Loaded "${full.name}" (${full.refYear} -> ${full.futYear}) — ${nextProfiles.length} cluster${nextProfiles.length === 1 ? '' : 's'} restored, showing "${cluster.name}".` })
   }
 
+  // Returns whether the working-set save itself succeeded, so a caller with
+  // its own more specific success message (e.g. handleRedactFestival) knows
+  // whether it's safe to show it - overwriting a genuine failure's status
+  // with a false "success" message would be worse than not having one.
   async function persist(nextProfiles) {
     setProfiles(nextProfiles)
-    if (!isPlanner) return
+    if (!isPlanner) return false
     try {
       await putClusterProfiles({
         profiles: nextProfiles.map(cp => ({ name: cp.name, region: cp.region, nextId: cp.nextId, festivals: cp.festivals })),
@@ -315,7 +326,7 @@ export default function CalendarisationTab({ isPlanner }) {
       setStatus({ ok: true, msg: 'Saved' })
     } catch (e) {
       setStatus({ ok: false, msg: e.message })
-      return
+      return false
     }
     // Autosave into whichever locked calendar is on the preview board (see
     // previewCalendarId above) - festival list only, day-map untouched. Best-
@@ -330,8 +341,10 @@ export default function CalendarisationTab({ isPlanner }) {
         })
       } catch (e) {
         setStatus({ ok: false, msg: `Saved to working set, but autosave into the previewed template failed: ${e.message}` })
+        return false
       }
     }
+    return true
   }
 
   function handleReorder(from, to) {
@@ -354,6 +367,38 @@ export default function CalendarisationTab({ isPlanner }) {
   function handleFestivalsChange(nextFestivals) {
     const next = profiles.map((cp, i) => i === activeIdx ? { ...cp, festivals: nextFestivals } : cp)
     persist(next)
+  }
+
+  // Remove a festival BY NAME from every cluster that has it, in one action -
+  // the manual alternative is switching to each of up to 10 cluster tabs and
+  // clicking that row's × individually. Exact match after trim + lowercase
+  // (a festival name is free text per cluster, so this is the only reliable
+  // way to find "the same festival" across clusters - there's no shared id).
+  // Goes through the same persist() every other Festival Master edit does,
+  // so it inherits the same working-set save + locked-preview autosave.
+  async function handleRedactFestival() {
+    const name = redactName.trim()
+    if (!name) return
+    const needle = name.toLowerCase()
+    const matches = profiles.filter(cp => cp.festivals.some(f => f.name.trim().toLowerCase() === needle))
+    if (!matches.length) {
+      setStatus({ ok: false, msg: `"${name}" was not found in any cluster's festival list.` })
+      return
+    }
+    const clusterNames = matches.map(cp => cp.name).join(', ')
+    if (!window.confirm(`Remove "${name}" from ${matches.length} cluster(s): ${clusterNames}?\nThis cannot be undone automatically.`)) {
+      return
+    }
+    const next = profiles.map(cp => ({ ...cp, festivals: cp.festivals.filter(f => f.name.trim().toLowerCase() !== needle) }))
+    // Awaited so this handler's own, more specific message can land AFTER
+    // persist()'s own "Saved" status - but only on success; a genuine save
+    // failure keeps persist()'s own error message on screen instead of being
+    // clobbered by a false "Removed" claim.
+    const saved = await persist(next)
+    if (saved) {
+      setRedactName('')
+      setStatus({ ok: true, msg: `Removed "${name}" from ${matches.length} cluster(s): ${clusterNames}.` })
+    }
   }
 
   // Rename the active cluster — old app: renameCluster() (calendar_engine.html
@@ -534,6 +579,25 @@ export default function CalendarisationTab({ isPlanner }) {
               <ClusterTabs profiles={profiles} activeIdx={activeIdx} onSwitch={setActiveIdx}
                 onReorder={handleReorder} onAdd={handleAdd} onRename={handleRename}
                 onRegionChange={handleRegionChange} onCopyFrom={handleCopyFrom} isPlanner={isPlanner} />
+              {/* Redact a festival by name from EVERY cluster in one action -
+                  the manual alternative is switching to each of up to 10
+                  cluster tabs and deleting that row individually. Cross-cluster
+                  (not scoped to activeIdx), so it lives here rather than inside
+                  FestivalTable, which only ever edits the active cluster. */}
+              {isPlanner && (
+                <div className="scm-toolbar" style={{ margin: '10px 0' }}>
+                  <div className="field">
+                    <label htmlFor="fest-redact-name">Remove festival from all clusters</label>
+                    <input id="fest-redact-name" type="text" style={{ width: '220px' }}
+                      placeholder="Exact festival name" value={redactName}
+                      onChange={e => setRedactName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleRedactFestival() }} />
+                  </div>
+                  <button className="btn" onClick={handleRedactFestival} disabled={!redactName.trim()}>
+                    Remove from All Clusters
+                  </button>
+                </div>
+              )}
               <FestivalTable festivals={profiles[activeIdx].festivals} onChange={handleFestivalsChange}
                 onAdd={handleAddFestival} onReset={handleResetFestivals} onBulkSet={handleHeaderBulk}
                 onDayFieldChange={handleDayFieldChange} onFestivalPicked={handleFestivalPicked} isPlanner={isPlanner}
