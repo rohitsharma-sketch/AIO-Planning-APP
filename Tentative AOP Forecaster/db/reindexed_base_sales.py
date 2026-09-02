@@ -96,26 +96,107 @@ def get_reindexed_lfl_base_sales(session):
                 "note": "No Calendar Engine day-wise reindex has been saved yet."}
 
     key_fields, columns = snap
-    # Unlike month-wise (DIVISION is always part of the grain), day-wise's
-    # default grain is store-only - DIVISION only appears if it was ticked
-    # under "Customise Output Fields" before running Day-wise Reindex.
-    if "DIVISION" not in key_fields:
-        return {"base_sales": empty, "hasAttribute": "ATTRIBUTE1" in key_fields, "availableMonths": [],
-                "note": ("Calendar Engine's saved day-wise reindex has no Division breakdown - "
-                          "tick DIVISION under \"Customise Output Fields\" on the Calendarised "
-                          "Sales tab and re-run Day-wise Reindex.")}
     has_attribute = "ATTRIBUTE1" in key_fields
+
+    lfl_stores = [r[0] for r in session.execute(
+        text("SELECT store_id FROM masterdata.stores WHERE tag = ANY(:tags)"),
+        {"tags": list(LFL_TAGS)},
+    ).all()]
+
+    # Unlike month-wise (DIVISION is always part of the grain), day-wise's
+    # default grain is store-only.  When DIVISION was not ticked before the
+    # last Day-wise Reindex run we still have correct monthly TOTALS — we just
+    # don't know which division contributed what.  The loophole: pull DW monthly
+    # totals (which carry the festival day-shift between months accurately) and
+    # split them across divisions using the MW snapshot's proportions (MW is
+    # always at div × month grain so it always has a division split).
+    if "DIVISION" not in key_fields:
+        # Step 1 — DW monthly totals for LfL stores
+        dw_rows = session.execute(text("""
+            SELECT SUBSTRING(elem->>'col' FROM 1 FOR 7) AS col,
+                   SUM((elem->>'value')::numeric) AS total
+            FROM calendar.sales_snapshots, jsonb_array_elements(rows) elem
+            WHERE source_type = 'dw' AND kind = 'trend_shifted'
+              AND elem->>'store' = ANY(:stores)
+            GROUP BY 1
+        """), {"stores": lfl_stores}).all()
+        dw_total_by_month = {}
+        for col, total in dw_rows:
+            label = _col_to_fy28_label(col)
+            if label in FY28_M:
+                dw_total_by_month[label] = dw_total_by_month.get(label, 0.0) + float(total)
+
+        if not dw_total_by_month:
+            return {"base_sales": empty, "hasAttribute": has_attribute, "availableMonths": [],
+                    "note": (f"Calendar Engine's saved reindex has no dates overlapping this "
+                              f"forecast's period ({FY28_M[1]} – {FY28_M[-1]}) — "
+                              "re-run Day-wise Reindex against the calendar that maps onto those dates first.")}
+
+        # Step 2 — MW division proportions (MW always carries DIVISION in its grain)
+        mw_div_total = {}    # {(div, label): raw-rupee total}
+        mw_month_total = {}  # {label: raw-rupee total across all divs}
+        # MW rows store the division in ATTRIBUTE1 (not DIVISION) — month-wise
+        # reindex always uses ATTRIBUTE1 as its dimension key regardless of what
+        # the source column is named in the parquet.
+        mw_div_rows = session.execute(text("""
+            SELECT elem->>'ATTRIBUTE1' AS raw_div,
+                   SUBSTRING(elem->>'col' FROM 1 FOR 7) AS col,
+                   SUM((elem->>'value')::numeric) AS total
+            FROM calendar.sales_snapshots, jsonb_array_elements(rows) elem
+            WHERE source_type = 'mw' AND kind = 'trend_shifted'
+              AND elem->>'store' = ANY(:stores)
+            GROUP BY 1, 2
+        """), {"stores": lfl_stores}).all()
+        for raw_div, col, total in mw_div_rows:
+            label = _col_to_fy28_label(col)
+            if label not in FY28_M:
+                continue
+            div = _norm_div(raw_div)
+            if div is None:
+                continue
+            mw_div_total[(div, label)] = mw_div_total.get((div, label), 0.0) + float(total)
+            mw_month_total[label] = mw_month_total.get(label, 0.0) + float(total)
+
+        # Step 3 — Combine: DW total × MW division share → Lakhs
+        base_sales = {div: {m: 0.0 for m in FY28_M} for div in DIVS}
+        for m, dw_total in dw_total_by_month.items():
+            mw_total = mw_month_total.get(m, 0.0)
+            if mw_total <= 0:
+                continue
+            for div in DIVS:
+                share = mw_div_total.get((div, m), 0.0) / mw_total
+                base_sales[div][m] = dw_total * share / LAKH
+
+        open_months = _open_months()
+        closed_fy28_months = {fy28 for fy27, fy28 in zip(FY27_M, FY28_M) if fy27 not in open_months}
+        for div in base_sales:
+            for m in base_sales[div]:
+                base_sales[div][m] = round(base_sales[div][m], 2) if m in closed_fy28_months else 0.0
+        available_fy28_months = sorted([m for m in dw_total_by_month if m in closed_fy28_months])
+
+        if mw_month_total:
+            note = ("Day-wise reindex has no Division breakdown — division split estimated from "
+                    "month-wise reindex proportions. Monthly totals (festival shifts) are from day-wise output.")
+        else:
+            # No MW data either — fall back to equal split so totals are at least correct
+            n = len(DIVS)
+            for m in available_fy28_months:
+                dw_total = dw_total_by_month.get(m, 0.0)
+                for div in DIVS:
+                    base_sales[div][m] = round(dw_total / n / LAKH, 2)
+            note = ("Day-wise reindex has no Division breakdown and no month-wise snapshot exists "
+                    "to estimate division splits — monthly totals are spread equally across divisions.")
+
+        return {"base_sales": base_sales, "hasAttribute": has_attribute,
+                "availableMonths": available_fy28_months, "note": note}
+
+    # --- Full path: DIVISION is in the DW snapshot key_fields ---
     available_fy28_months = sorted({m for c in columns if (m := _col_to_fy28_label(c)) in FY28_M})
     if not available_fy28_months:
         return {"base_sales": empty, "hasAttribute": has_attribute, "availableMonths": [],
                 "note": ("Calendar Engine's saved reindex has no dates overlapping this forecast's "
                           f"period ({FY28_M[1]} - {FY28_M[-1]}) - run its reindex against the "
                           "calendar that maps onto those dates first.")}
-
-    lfl_stores = [r[0] for r in session.execute(
-        text("SELECT store_id FROM masterdata.stores WHERE tag = ANY(:tags)"),
-        {"tags": list(LFL_TAGS)},
-    ).all()]
 
     # 'col' is an individual ISO date ('YYYY-MM-DD') for day-wise, unlike
     # month-wise's 'YYYY-MM' - collapse to the year-month prefix in SQL so the
