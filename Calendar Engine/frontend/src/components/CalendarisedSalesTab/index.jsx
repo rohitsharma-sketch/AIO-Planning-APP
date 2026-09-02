@@ -31,6 +31,54 @@ function clearActiveJob() {
   try { localStorage.removeItem(RX_JOB_KEY) } catch { /* nothing to clean up if this throws */ }
 }
 
+// Builds {cluster -> {date -> [festival labels]}} and {cluster -> {col -> refDate}}
+// from a calendar's own festival and day-map records, so both runRx() and the
+// localStorage resume path share one implementation instead of duplicating it.
+// Returns `detail` too so runRx() can pass detail.dayMap to startReindex without
+// a second getCalendar call.
+async function fetchCalendarMaps(calendarId, source) {
+  const detail = await getCalendar(calendarId)
+  const catLabel = (pos, core) => (pos < 0 ? 'Pre' : pos < core ? 'Core' : 'Post')
+  const festMap = {}
+  for (const cl of detail.clusters || []) {
+    const cm = (festMap[cl.name] = festMap[cl.name] || {})
+    for (const f of cl.festivals || []) {
+      if (!f.futDate || !f.name) continue
+      const fd = parseDate(f.futDate)
+      if (!fd) continue
+      const pre = +f.pre || 0, core = +f.core || 1, post = +f.post || 0
+      const add = (k, l) => { (cm[k] = cm[k] || new Set()).add(l) }
+      for (let pos = -pre; pos <= post + core - 1; pos++) {
+        const dd = fmtISO(addDays(fd, pos))
+        const lbl = `${f.name} (${catLabel(pos, core)})`
+        add(dd, lbl)
+        add(dd.slice(0, 7), lbl)
+      }
+    }
+  }
+  const festivalByDate = Object.fromEntries(Object.entries(festMap).map(
+    ([cl, m]) => [cl, Object.fromEntries(Object.entries(m).map(([k, v]) => [k, [...v].sort()]))]
+  ))
+  const refByCluster = {}
+  for (const [cl, pairs] of Object.entries(detail.dayMap || {})) {
+    if (source === 'dw') {
+      const m = (refByCluster[cl] = {})
+      for (const [ref, fut] of pairs) m[fut] = ref
+    } else {
+      const buckets = {}
+      for (const [ref, fut] of pairs) {
+        const rm = ref.slice(0, 7), fm = fut.slice(0, 7)
+        const b = (buckets[fm] = buckets[fm] || {})
+        b[rm] = (b[rm] || 0) + 1
+      }
+      const m = (refByCluster[cl] = {})
+      for (const [fm, counts] of Object.entries(buckets))
+        m[fm] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]
+    }
+  }
+  return { detail, festivalByDate, refByCluster }
+}
+
 export default function CalendarisedSalesTab({ isPlanner }) {
   const [selections, setSelections] = useState({})
   const [calendars, setCalendars] = useState([])
@@ -246,6 +294,12 @@ export default function CalendarisedSalesTab({ isPlanner }) {
     if (!job?.jobId) return
     setProgress({ pct: 0, filesDone: 0, filesTotal: 0, elapsedSeconds: 0 })
     pollJob(job.jobId, job.startedAt)
+    if (job.calendarId) {
+      fetchCalendarMaps(job.calendarId, job.source).then(({ festivalByDate: fbd, refByCluster }) => {
+        setFestivalByDate(fbd)
+        setRefDateByCluster(refByCluster)
+      }).catch(() => {})
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlanner])
 
@@ -277,79 +331,11 @@ export default function CalendarisedSalesTab({ isPlanner }) {
     const startedAt = Date.now()
     setProgress({ pct: 0, filesDone: 0, filesTotal: 0, elapsedSeconds: 0 })
     try {
-      const [detail, storeMap] = await Promise.all([getCalendar(calendarId), getStoreClusterMap()])
+      const [{ detail, festivalByDate: fbd, refByCluster }, storeMap] = await Promise.all([
+        fetchCalendarMaps(calendarId, source), getStoreClusterMap(),
+      ])
       const storeCluster = Object.fromEntries((storeMap.stores || []).map(s => [s.store, s.cluster]))
-
-      // Build {cluster -> {date -> [festival labels]}} - each cluster's own
-      // festival list only, never mixed with another cluster's (see
-      // festivalByDate's state comment for why that matters).
-      //
-      // Expands the FULL pre/core/post window around each festival's futDate,
-      // not just the single anchor day - same loop engine.js's buildFestMap
-      // uses to decide which days a festival actually influences. Labeling
-      // only the exact futDate was a real bug (found live 2026-09-01): Eid
-      // al-Fitr's window pre=4/core=3/post=0 around futDate 2027-03-09 covers
-      // 2027-03-05 through 2027-03-11, but only 03-09 itself was ever getting
-      // labeled, leaving 6 of those 7 days blank even though they're squarely
-      // inside the festival's real window.
-      //
-      // Each label is suffixed with its category - "Holi (Pre)" vs "Holi
-      // (Core)" - not just the bare name. Found live 2026-09-02: every day in
-      // a festival's window showed the identical bare name with no way to
-      // tell the true anchor day (Core) apart from a build-up day (Pre) or
-      // tail day (Post), which read as if the core festival date itself had
-      // "shifted" onto an earlier day - it hadn't; the date math was already
-      // correct (verified independently three times), the label just didn't
-      // say which day was which. Same category rule as buildFestMap
-      // (engine.js) and validate()'s issue descriptions: pos < 0 is Pre,
-      // pos < core is Core, else Post.
-      const festCategoryLabel = (pos, core) => (pos < 0 ? 'Pre' : pos < core ? 'Core' : 'Post')
-      const festMapByCluster = {}
-      for (const cl of detail.clusters || []) {
-        const clusterMap = (festMapByCluster[cl.name] = festMapByCluster[cl.name] || {})
-        for (const f of cl.festivals || []) {
-          if (!f.futDate || !f.name) continue
-          const fd = parseDate(f.futDate)
-          if (!fd) continue
-          const pre = +f.pre || 0, core = +f.core || 1, post = +f.post || 0
-          const add = (key, label) => { (clusterMap[key] = clusterMap[key] || new Set()).add(label) }
-          for (let pos = -pre; pos <= post + core - 1; pos++) {
-            const dd = fmtISO(addDays(fd, pos))
-            const label = `${f.name} (${festCategoryLabel(pos, core)})`
-            add(dd, label)
-            add(dd.slice(0, 7), label)
-          }
-        }
-      }
-      setFestivalByDate(Object.fromEntries(Object.entries(festMapByCluster).map(
-        ([cl, m]) => [cl, Object.fromEntries(Object.entries(m).map(([k, v]) => [k, [...v].sort()]))]
-      )))
-
-      // Build {cluster -> {futureCol -> referenceDate}} straight from this
-      // calendar's own locked day-map - exact for day-wise (one entry per
-      // future day per cluster, even when a reference day is legitimately
-      // reused across two future days). Month-wise has no per-day source
-      // column to read back, so this buckets by the same plurality-of-days
-      // rule reindex_monthwise (scans.py) uses server-side, just scoped to
-      // one cluster instead of mixed across all of them.
-      const refByCluster = {}
-      for (const [cl, pairs] of Object.entries(detail.dayMap || {})) {
-        if (source === 'dw') {
-          const m = (refByCluster[cl] = {})
-          for (const [ref, fut] of pairs) m[fut] = ref
-        } else {
-          const buckets = {}  // futMonth -> {refMonth: count}
-          for (const [ref, fut] of pairs) {
-            const rm = ref.slice(0, 7), fm = fut.slice(0, 7)
-            const b = (buckets[fm] = buckets[fm] || {})
-            b[rm] = (b[rm] || 0) + 1
-          }
-          const m = (refByCluster[cl] = {})
-          for (const [fm, counts] of Object.entries(buckets)) {
-            m[fm] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]
-          }
-        }
-      }
+      setFestivalByDate(fbd)
       setRefDateByCluster(refByCluster)
 
       const { jobId } = await startReindex({
@@ -363,7 +349,7 @@ export default function CalendarisedSalesTab({ isPlanner }) {
         // Not used by run_reindex itself.
         calendarId,
       })
-      saveActiveJob({ jobId, startedAt, source })
+      saveActiveJob({ jobId, startedAt, source, calendarId })
       await pollJob(jobId, startedAt)
     } catch (e) {
       setProgress(null)
