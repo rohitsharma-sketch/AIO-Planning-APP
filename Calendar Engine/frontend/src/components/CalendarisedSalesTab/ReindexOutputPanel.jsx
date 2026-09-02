@@ -287,7 +287,10 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
   // consistent P1/P2 shape across both sources. isEven flags this so the
   // render/download below can label it honestly instead of implying it's
   // measured data.
-  const isEven = ok && result.source === 'mw'
+  // Snapshot results carry monthly columns (YYYY-MM) regardless of source -
+  // the day-level detail was collapsed server-side. Treat them like mw so the
+  // P1/P2 code never tries col.slice(8,10) on a 7-char string.
+  const isEven = ok && (result.source === 'mw' || !!result.isSnapshot)
   const p1p2Rows = useMemo(() => {
     if (!ok || !result.actualRows) return []
     if (isEven) {
@@ -439,6 +442,12 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
 
   return (
     <div className="card">
+      {result.isSnapshot && (
+        <div style={{ background: 'var(--navy2)', color: '#fff', borderRadius: '4px', padding: '6px 10px', marginBottom: '10px', fontSize: '11px' }}>
+          Showing last run's monthly summary — computed {new Date(result.computedAt).toLocaleString()}.
+          Run Reindex above to refresh. Festival labels are not available in cached snapshots.
+        </div>
+      )}
       <div className="tabs">
         <button className={activeSub === 'reindexed' ? 'active' : ''} onClick={() => setActiveSub('reindexed')}>Reindexed Sales</button>
         <button className={activeSub === 'summary' ? 'active' : ''} onClick={() => setActiveSub('summary')}>Monthly Summary</button>

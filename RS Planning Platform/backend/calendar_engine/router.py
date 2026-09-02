@@ -697,3 +697,57 @@ def salesdata_snapshot(source_type: str, kind: str, user: dict = Depends(require
         }
     finally:
         session.close()
+
+
+@router.get("/salesdata/snapshot-summary")
+def salesdata_snapshot_summary(source: str = "dw", user: dict = Depends(require_login)):
+    """Monthly-aggregated view of the last completed Run Reindex, built from
+    SalesSnapshot so the Monthly Summary tab loads instantly without re-running
+    the reindex. For dw, the stored day-level rows are collapsed to YYYY-MM;
+    for mw they are already monthly. Returns both trend_shifted and actual so
+    the P1/P2 and differential columns work the same as a live result."""
+    from collections import defaultdict
+    from db.models.calendar import SalesSnapshot
+
+    if source not in ("mw", "dw"):
+        raise HTTPException(400, "source must be 'mw' or 'dw'")
+    session = SessionLocal()
+    try:
+        ts_row = session.get(SalesSnapshot, (source, "trend_shifted"))
+        actual_row = session.get(SalesSnapshot, (source, "actual"))
+        if ts_row is None:
+            return {"ok": False, "computedAt": None}
+
+        def monthly_agg(rows, key_fields):
+            totals = defaultdict(float)
+            order = []
+            seen = set()
+            for r in rows:
+                key = tuple(r.get(k, "") for k in key_fields) + (r["col"][:7],)
+                if key not in seen:
+                    order.append(key)
+                    seen.add(key)
+                totals[key] += r.get("value", 0)
+            out = []
+            for key in order:
+                row = dict(zip(key_fields, key[:-1]))
+                row["col"] = key[-1]
+                row["value"] = round(totals[key], 2)
+                out.append(row)
+            return out
+
+        key_fields = ts_row.key_fields
+        ts_monthly = monthly_agg(ts_row.rows, key_fields)
+        actual_monthly = monthly_agg(actual_row.rows, actual_row.key_fields) if actual_row else []
+        return {
+            "ok": True, "isSnapshot": True,
+            "source": source, "keyFields": key_fields,
+            "grain": ts_row.grain, "metric": ts_row.metric,
+            "columns": sorted({r["col"] for r in ts_monthly}),
+            "rows": ts_monthly,
+            "actualRows": actual_monthly,
+            "actualColumns": sorted({r["col"] for r in actual_monthly}),
+            "computedAt": ts_row.computed_at.isoformat(),
+        }
+    finally:
+        session.close()

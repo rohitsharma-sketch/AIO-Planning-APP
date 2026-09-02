@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import LinkStatusPanel from './LinkStatusPanel'
 import ReindexOutputPanel from './ReindexOutputPanel'
-import { startReindex, pollReindex, getReindexCacheStatus, listCalendarLibrary, getCalendar, getStoreClusterMap, getSourceSchema, putSalesdataLinkSelection } from '../../lib/api'
+import { startReindex, pollReindex, getReindexCacheStatus, listCalendarLibrary, getCalendar, getStoreClusterMap, getSourceSchema, putSalesdataLinkSelection, getSalesSnapshotSummary } from '../../lib/api'
 import { parseDate, fmtISO, addDays } from '../../lib/dateUtils'
 
 // Same compact "45s" / "2m 05s" style as LinkStatusPanel's fmtDuration.
@@ -88,6 +88,12 @@ export default function CalendarisedSalesTab({ isPlanner }) {
   // Set instead of `result` when a completed job's payload is too large to
   // safely parse/hold in the browser tab - see pollJob's 'too_large' branch.
   const [largeResult, setLargeResult] = useState(null)
+  // Pre-fetched monthly summary from the last completed reindex (SalesSnapshot
+  // table, via /salesdata/snapshot-summary). Shown automatically when no live
+  // result is present - lets a planner see the Monthly Summary the moment they
+  // open the tab without waiting for a fresh reindex. Cleared when source changes
+  // so a stale dw snapshot never shows on the mw tab, or vice versa.
+  const [snapshotResult, setSnapshotResult] = useState(null)
   // {cluster -> {futureDate -> [festival names]}} built from the selected
   // calendar's own festival records (getCalendar already returns
   // clusters[].festivals[]) so ReindexOutputPanel can label which output
@@ -142,6 +148,15 @@ export default function CalendarisedSalesTab({ isPlanner }) {
   useEffect(() => {
     setSchema(null)
     getSourceSchema(source).then(s => setSchema(s)).catch(() => setSchema({ ok: false }))
+  }, [source])
+
+  useEffect(() => {
+    setSnapshotResult(null)
+    let alive = true
+    getSalesSnapshotSummary(source)
+      .then(r => { if (alive && r.ok) setSnapshotResult(r) })
+      .catch(() => {})
+    return () => { alive = false }
   }, [source])
 
   // Hydrate extraDims/metric from the persisted selection once it's available
@@ -547,7 +562,7 @@ export default function CalendarisedSalesTab({ isPlanner }) {
         </div>
       )}
 
-      <ReindexOutputPanel result={result} festivalByCluster={festivalByDate} refDateByCluster={refDateByCluster} />
+      <ReindexOutputPanel result={result ?? snapshotResult} festivalByCluster={festivalByDate} refDateByCluster={refDateByCluster} />
     </div>
   )
 }

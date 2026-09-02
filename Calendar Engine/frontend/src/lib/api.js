@@ -71,6 +71,7 @@ export const startLinkScan = (sourceType, refresh) =>
 export const pollLinkScan = (jobId) => fetchJson(`/salesdata/link/poll/${jobId}`)
 export const runReindex = (payload) => jsonPost('/salesdata/reindex', payload)
 export const startReindex = (payload) => jsonPost('/salesdata/reindex/start', payload)
+export const getSalesSnapshotSummary = (source) => fetchJson(`/salesdata/snapshot-summary?source=${source}`)
 // A completed job's result now streams straight off disk (see
 // get_reindex_result_stream_path in scans.py) with no server-side size cap -
 // but a large combined multi-month day-wise result (400+MB) can crash the
