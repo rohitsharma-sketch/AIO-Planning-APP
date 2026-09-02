@@ -354,7 +354,14 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
   // this right since Reference Date/Festival are per-row there, not a
   // shared header - point mixed-cluster users there instead.
   const wideClusters = [...new Set(filteredWide.map(r => clusterOf(r.store)))]
-  const showWideHeaderRows = wideClusters.length === 1
+  // '(unmapped)' is clusterOf's fallback for a store with no real cluster -
+  // including it, a page load where storeCluster hasn't finished fetching
+  // yet (every store briefly reads as '(unmapped)') would trivially satisfy
+  // "exactly one cluster" and show a header sourced from refDateByCluster's
+  // missing '(unmapped)' entry falling back to the OLD global-plurality
+  // data, silently mislabeled as if it were one real cluster's own mapping.
+  // Never treat '(unmapped)' as a confidently-known single cluster.
+  const showWideHeaderRows = wideClusters.length === 1 && wideClusters[0] !== '(unmapped)'
 
   function countText(n) {
     if (!n) return 'No rows to show.'

@@ -202,8 +202,14 @@ def write_wide_csv(result, store_cluster, festival_by_cluster_date, ref_by_clust
     # cluster; otherwise a wrong-for-most-rows header is worse than none -
     # use Stacked instead, where Reference Date/Festival are per-row.
     clusters_present = {_cluster_of(store_cluster, key_of[k].get("store", "")) for k in grouped}
-    show_header_rows = len(clusters_present) == 1
-    sole_cluster = next(iter(clusters_present)) if show_header_rows else None
+    # '(unmapped)' is _cluster_of's fallback for a store missing from
+    # store_cluster entirely - never treat it as a confidently-known single
+    # cluster (see the matching guard in ReindexOutputPanel.jsx's
+    # showWideHeaderRows): it isn't a real key in ref_by_cluster_col, so
+    # "one cluster" here would just fall back to the old global-plurality
+    # data, silently mislabeled as if it were accurate.
+    sole_cluster = next(iter(clusters_present)) if len(clusters_present) == 1 else None
+    show_header_rows = sole_cluster is not None and sole_cluster != "(unmapped)"
 
     with open(out_path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f, **_CSV_KW)
