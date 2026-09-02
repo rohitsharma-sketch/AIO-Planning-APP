@@ -1,0 +1,14 @@
+{
+  "name": "rs-planning-qa",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "setup": "node setup-auth.js",
+    "test": "npx playwright test",
+    "test:headed": "npx playwright test --headed",
+    "report": "npx playwright show-report report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}

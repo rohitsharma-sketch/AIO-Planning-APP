@@ -1,0 +1,5 @@
+node_modules/
+auth/state.json
+screenshots/
+report/
+test-results/
