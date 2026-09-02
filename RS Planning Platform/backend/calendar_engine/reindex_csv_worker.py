@@ -126,8 +126,18 @@ def _load_festival_by_cluster_date(calendar_id):
             cluster_out = out.setdefault(cluster_name, {})
             for pos in range(-(pre or 0), (post or 0) + core):
                 ds = (fut_date + timedelta(days=pos)).isoformat()
-                cluster_out.setdefault(ds, set()).add(name)
-                cluster_out.setdefault(ds[:7], set()).add(name)
+                # Suffixed with its category - "Holi (Pre)" vs "Holi (Core)" -
+                # not just the bare name (matches CalendarisedSalesTab/
+                # index.jsx's festCategoryLabel exactly). Found live
+                # 2026-09-02: every day in a festival's window showed the
+                # identical bare name with no way to tell the true anchor day
+                # (Core) apart from a build-up day (Pre), which read as if the
+                # core festival date itself had "shifted" - it hadn't, the
+                # date math was already correct, the label just didn't say
+                # which day was which.
+                label = f"{name} ({'Pre' if pos < 0 else 'Core' if pos < core else 'Post'})"
+                cluster_out.setdefault(ds, set()).add(label)
+                cluster_out.setdefault(ds[:7], set()).add(label)
         return {cl: {k: sorted(v) for k, v in m.items()} for cl, m in out.items()}
     except Exception:
         return {}

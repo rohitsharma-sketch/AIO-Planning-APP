@@ -280,7 +280,7 @@ export default function CalendarisedSalesTab({ isPlanner }) {
       const [detail, storeMap] = await Promise.all([getCalendar(calendarId), getStoreClusterMap()])
       const storeCluster = Object.fromEntries((storeMap.stores || []).map(s => [s.store, s.cluster]))
 
-      // Build {cluster -> {date -> [festival names]}} - each cluster's own
+      // Build {cluster -> {date -> [festival labels]}} - each cluster's own
       // festival list only, never mixed with another cluster's (see
       // festivalByDate's state comment for why that matters).
       //
@@ -292,6 +292,18 @@ export default function CalendarisedSalesTab({ isPlanner }) {
       // 2027-03-05 through 2027-03-11, but only 03-09 itself was ever getting
       // labeled, leaving 6 of those 7 days blank even though they're squarely
       // inside the festival's real window.
+      //
+      // Each label is suffixed with its category - "Holi (Pre)" vs "Holi
+      // (Core)" - not just the bare name. Found live 2026-09-02: every day in
+      // a festival's window showed the identical bare name with no way to
+      // tell the true anchor day (Core) apart from a build-up day (Pre) or
+      // tail day (Post), which read as if the core festival date itself had
+      // "shifted" onto an earlier day - it hadn't; the date math was already
+      // correct (verified independently three times), the label just didn't
+      // say which day was which. Same category rule as buildFestMap
+      // (engine.js) and validate()'s issue descriptions: pos < 0 is Pre,
+      // pos < core is Core, else Post.
+      const festCategoryLabel = (pos, core) => (pos < 0 ? 'Pre' : pos < core ? 'Core' : 'Post')
       const festMapByCluster = {}
       for (const cl of detail.clusters || []) {
         const clusterMap = (festMapByCluster[cl.name] = festMapByCluster[cl.name] || {})
@@ -300,11 +312,12 @@ export default function CalendarisedSalesTab({ isPlanner }) {
           const fd = parseDate(f.futDate)
           if (!fd) continue
           const pre = +f.pre || 0, core = +f.core || 1, post = +f.post || 0
-          const add = (key) => { (clusterMap[key] = clusterMap[key] || new Set()).add(f.name) }
+          const add = (key, label) => { (clusterMap[key] = clusterMap[key] || new Set()).add(label) }
           for (let pos = -pre; pos <= post + core - 1; pos++) {
             const dd = fmtISO(addDays(fd, pos))
-            add(dd)
-            add(dd.slice(0, 7))
+            const label = `${f.name} (${festCategoryLabel(pos, core)})`
+            add(dd, label)
+            add(dd.slice(0, 7), label)
           }
         }
       }
