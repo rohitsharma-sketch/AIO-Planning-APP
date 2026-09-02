@@ -40,15 +40,32 @@ export default function CalendarisedSalesTab({ isPlanner }) {
   // Set instead of `result` when a completed job's payload is too large to
   // safely parse/hold in the browser tab - see pollJob's 'too_large' branch.
   const [largeResult, setLargeResult] = useState(null)
-  // {futureDate -> [festival names]} built from the selected calendar's own
-  // festival records (getCalendar already returns clusters[].festivals[]) so
-  // ReindexOutputPanel can label which output dates/months are festival-
-  // driven - a planner scanning a demand spike can see WHY it's there
-  // instead of guessing. Keyed by day-wise's exact YYYY-MM-DD futDate, and
-  // also by its YYYY-MM prefix for month-wise columns. Not populated for a
-  // job resumed from a previous page load (no fresh getCalendar call then) -
-  // an acceptable gap since this is a labelling aid, not core output data.
+  // {cluster -> {futureDate -> [festival names]}} built from the selected
+  // calendar's own festival records (getCalendar already returns
+  // clusters[].festivals[]) so ReindexOutputPanel can label which output
+  // dates/months are festival-driven - a planner scanning a demand spike can
+  // see WHY it's there instead of guessing. Keyed per CLUSTER (found live
+  // 2026-09-01: a flat cross-cluster map showed a cluster's own rows labeled
+  // with festivals only some OTHER cluster actually has configured - e.g.
+  // Onam appearing against a UP+NCR row when UP+NCR's own festival list has
+  // no Onam at all). Within each cluster, keyed by day-wise's exact
+  // YYYY-MM-DD futDate, and also by its YYYY-MM prefix for month-wise
+  // columns. Not populated for a job resumed from a previous page load (no
+  // fresh getCalendar call then) - an acceptable gap since this is a
+  // labelling aid, not core output data.
   const [festivalByDate, setFestivalByDate] = useState({})
+  // {cluster -> {col -> referenceDate}} - the SAME per-cluster scoping
+  // problem existed for "which reference date did this future column come
+  // from": the backend's refDateByColumn is a plurality vote across every
+  // cluster mixed together, so it can show a reference date that isn't even
+  // this cluster's own mapping (found live 2026-09-01: UP+NCR's Holi
+  // pre-festive window maps 2027-03-15 from 2026-02-25, but the mixed
+  // plurality showed 2026-03-09 - some OTHER cluster's ordinary-day mapping
+  // for that date, winning the vote). Built directly from this calendar's own
+  // day-map, so it's exact for day-wise (one ref per future day, per
+  // cluster) and matches reindex_monthwise's own per-cluster plurality
+  // bucketing for month-wise, just not mixed across clusters.
+  const [refDateByCluster, setRefDateByCluster] = useState({})
   const [status, setStatus] = useState(null)
   // null = idle; otherwise {pct, filesDone, filesTotal} while a background
   // reindex job is running (day-wise can read tens of millions of rows - the
@@ -263,11 +280,9 @@ export default function CalendarisedSalesTab({ isPlanner }) {
       const [detail, storeMap] = await Promise.all([getCalendar(calendarId), getStoreClusterMap()])
       const storeCluster = Object.fromEntries((storeMap.stores || []).map(s => [s.store, s.cluster]))
 
-      // Build {date -> [festival names]} from every cluster's festival list -
-      // a festival can land on a different exact date per cluster (regional
-      // calendars), so this deliberately isn't scoped to one cluster; a
-      // future column showing multiple names just means more than one
-      // cluster has a festival on that date.
+      // Build {cluster -> {date -> [festival names]}} - each cluster's own
+      // festival list only, never mixed with another cluster's (see
+      // festivalByDate's state comment for why that matters).
       //
       // Expands the FULL pre/core/post window around each festival's futDate,
       // not just the single anchor day - same loop engine.js's buildFestMap
@@ -277,14 +292,15 @@ export default function CalendarisedSalesTab({ isPlanner }) {
       // 2027-03-05 through 2027-03-11, but only 03-09 itself was ever getting
       // labeled, leaving 6 of those 7 days blank even though they're squarely
       // inside the festival's real window.
-      const festMap = {}
+      const festMapByCluster = {}
       for (const cl of detail.clusters || []) {
+        const clusterMap = (festMapByCluster[cl.name] = festMapByCluster[cl.name] || {})
         for (const f of cl.festivals || []) {
           if (!f.futDate || !f.name) continue
           const fd = parseDate(f.futDate)
           if (!fd) continue
           const pre = +f.pre || 0, core = +f.core || 1, post = +f.post || 0
-          const add = (key) => { (festMap[key] = festMap[key] || new Set()).add(f.name) }
+          const add = (key) => { (clusterMap[key] = clusterMap[key] || new Set()).add(f.name) }
           for (let pos = -pre; pos <= post + core - 1; pos++) {
             const dd = fmtISO(addDays(fd, pos))
             add(dd)
@@ -292,7 +308,36 @@ export default function CalendarisedSalesTab({ isPlanner }) {
           }
         }
       }
-      setFestivalByDate(Object.fromEntries(Object.entries(festMap).map(([k, v]) => [k, [...v].sort()])))
+      setFestivalByDate(Object.fromEntries(Object.entries(festMapByCluster).map(
+        ([cl, m]) => [cl, Object.fromEntries(Object.entries(m).map(([k, v]) => [k, [...v].sort()]))]
+      )))
+
+      // Build {cluster -> {futureCol -> referenceDate}} straight from this
+      // calendar's own locked day-map - exact for day-wise (one entry per
+      // future day per cluster, even when a reference day is legitimately
+      // reused across two future days). Month-wise has no per-day source
+      // column to read back, so this buckets by the same plurality-of-days
+      // rule reindex_monthwise (scans.py) uses server-side, just scoped to
+      // one cluster instead of mixed across all of them.
+      const refByCluster = {}
+      for (const [cl, pairs] of Object.entries(detail.dayMap || {})) {
+        if (source === 'dw') {
+          const m = (refByCluster[cl] = {})
+          for (const [ref, fut] of pairs) m[fut] = ref
+        } else {
+          const buckets = {}  // futMonth -> {refMonth: count}
+          for (const [ref, fut] of pairs) {
+            const rm = ref.slice(0, 7), fm = fut.slice(0, 7)
+            const b = (buckets[fm] = buckets[fm] || {})
+            b[rm] = (b[rm] || 0) + 1
+          }
+          const m = (refByCluster[cl] = {})
+          for (const [fm, counts] of Object.entries(buckets)) {
+            m[fm] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]
+          }
+        }
+      }
+      setRefDateByCluster(refByCluster)
 
       const { jobId } = await startReindex({
         source, months: monthsToRun,
@@ -484,7 +529,7 @@ export default function CalendarisedSalesTab({ isPlanner }) {
         </div>
       )}
 
-      <ReindexOutputPanel result={result} festivalByDate={festivalByDate} />
+      <ReindexOutputPanel result={result} festivalByCluster={festivalByDate} refDateByCluster={refDateByCluster} />
     </div>
   )
 }

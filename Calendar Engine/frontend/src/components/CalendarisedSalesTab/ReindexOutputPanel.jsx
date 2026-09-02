@@ -47,7 +47,7 @@ const KEY_SEP = '\u0001'
 
 const KEY_LABELS = { store: 'Store', division: 'Division' }
 
-export default function ReindexOutputPanel({ result, festivalByDate }) {
+export default function ReindexOutputPanel({ result, festivalByCluster, refDateByCluster }) {
   const [activeSub, setActiveSub] = useState('reindexed')
   const [search, setSearch] = useState('')
   // Reindexed Sales has two layouts to choose from: Wide (the existing
@@ -322,21 +322,39 @@ export default function ReindexOutputPanel({ result, festivalByDate }) {
 
   const kfHeaders = keyFields.map(f => KEY_LABELS[f] || f)
   const fileStem = `calendarised_sales_${result.source}`
-  // Reference (LY) date each future-date column was shifted from - see the
-  // backend comment in reindex_daywise/reindex_monthwise (scans.py): this is
-  // the plurality across every mapped row for that column, since different
-  // clusters' calendars don't have to shift a given future date from the
-  // exact same reference date. Falls back to '' for a result cached before
-  // refDateByColumn existed, so an old cached run doesn't crash the header.
-  const refDateByColumn = result.refDateByColumn || {}
-  // Which festival(s), if any, land on this output column - built from the
-  // selected calendar's own festival records (see CalendarisedSalesTab's
-  // runRx). '' when none, so a planner scanning the table can spot a demand
-  // spike's cause instead of guessing. festivalByDate is keyed by exact
-  // YYYY-MM-DD for day-wise columns and by the YYYY-MM prefix for
-  // month-wise ones - a plain lookup by the column string works for both.
-  const festivalOf = (c) => (festivalByDate?.[c] || []).join(', ')
-  const hasFestivalRow = !!festivalByDate && Object.keys(festivalByDate).length > 0
+  // Reference (LY) date a given CLUSTER's future-date column was shifted
+  // from - built per-cluster in CalendarisedSalesTab from the calendar's own
+  // day-map, so it's always that cluster's real mapping, never some other
+  // cluster's (see refDateByCluster's state comment there for the bug this
+  // replaced: a global plurality vote across every cluster mixed together
+  // could show a reference date that isn't even the row's own cluster's
+  // mapping). Falls back to the backend's global plurality only when no
+  // per-cluster map is available at all (a job resumed from a previous page
+  // load, with no fresh getCalendar call to build one from).
+  const globalRefDateByColumn = result.refDateByColumn || {}
+  const refDateOf = (cluster, c) => refDateByCluster?.[cluster]?.[c] ?? (globalRefDateByColumn[c] || '')
+  // Which festival(s), if any, land on this output column FOR THIS CLUSTER -
+  // built from that cluster's own festival records only (see
+  // festivalByCluster's state comment in CalendarisedSalesTab for the same
+  // cross-cluster leakage this replaced). '' when none, so a planner
+  // scanning the table can spot a demand spike's cause instead of guessing.
+  // Keyed by exact YYYY-MM-DD for day-wise columns and by the YYYY-MM prefix
+  // for month-wise ones - a plain lookup by the column string works for both.
+  const festivalOf = (cluster, c) => (festivalByCluster?.[cluster]?.[c] || []).join(', ')
+  const hasFestivalRow = !!festivalByCluster && Object.keys(festivalByCluster).length > 0
+  // Wide is one row per store(+fields), one column per date - a single
+  // Reference Date / Festival header row at the top can only ever be
+  // accurate for ONE cluster's mapping at a time. When every visible row
+  // belongs to the same cluster (a search/filter narrowed it down, or the
+  // calendar only has one cluster), show it - otherwise showing a header row
+  // that's only true for whichever cluster happens to win a plurality vote
+  // is worse than not showing one at all (found live 2026-09-01: UP+NCR's
+  // own Holi mapping and Onam - a festival UP+NCR doesn't even have - both
+  // shown wrong in a 10-cluster combined export). Stacked view always has
+  // this right since Reference Date/Festival are per-row there, not a
+  // shared header - point mixed-cluster users there instead.
+  const wideClusters = [...new Set(filteredWide.map(r => clusterOf(r.store)))]
+  const showWideHeaderRows = wideClusters.length === 1
 
   function countText(n) {
     if (!n) return 'No rows to show.'
@@ -349,8 +367,12 @@ export default function ReindexOutputPanel({ result, festivalByDate }) {
     downloadCsv([
       // Reference-date and Festival rows sit directly above the future-date
       // header row, same column order, so all three always line up one-to-one.
-      ['Reference Date', ...kfHeaders.map(() => ''), ...visibleColumns.map(c => refDateByColumn[c] || '')],
-      ...(hasFestivalRow ? [['Festival', ...kfHeaders.map(() => ''), ...visibleColumns.map(festivalOf)]] : []),
+      // Only meaningful (and only shown) when every exported row is the same
+      // cluster - see showWideHeaderRows above.
+      ...(showWideHeaderRows ? [
+        ['Reference Date', ...kfHeaders.map(() => ''), ...visibleColumns.map(c => refDateOf(wideClusters[0], c))],
+        ...(hasFestivalRow ? [['Festival', ...kfHeaders.map(() => ''), ...visibleColumns.map(c => festivalOf(wideClusters[0], c))]] : []),
+      ] : []),
       ['Cluster', ...kfHeaders, ...visibleColumns],
       ...filteredWide.map(r => [clusterOf(r.store), ...keyFields.map(f => r[f]),
         ...visibleColumns.map(c => cell(r.vals[c]))]),
@@ -360,7 +382,10 @@ export default function ReindexOutputPanel({ result, festivalByDate }) {
   function downloadStacked() {
     downloadCsv([
       ['Cluster', 'Store', result.source === 'dw' ? 'Date' : 'Month', 'Reference Date', 'Festival', 'Value'],
-      ...filteredStacked.map(r => [clusterOf(r.store), r.store, r.col, refDateByColumn[r.col] || '', festivalOf(r.col), round2(r.value)]),
+      ...filteredStacked.map(r => {
+        const cluster = clusterOf(r.store)
+        return [cluster, r.store, r.col, refDateOf(cluster, r.col), festivalOf(cluster, r.col), round2(r.value)]
+      }),
     ], `${fileStem}_stacked.csv`)
   }
 
@@ -490,17 +515,29 @@ export default function ReindexOutputPanel({ result, festivalByDate }) {
                 <thead>
                   {/* Reference-date row directly above the future-date row, same
                       column order, so the two headers always align one-to-one -
-                      see refDateByColumn above. */}
-                  <tr className="rx-ref-date-row">
-                    <th>Reference Date</th>
-                    {kfHeaders.map(h => <th key={`ref-${h}`} />)}
-                    {visibleColumns.map(c => <th key={`ref-${c}`} style={num}>{refDateByColumn[c] || ''}</th>)}
-                  </tr>
-                  {hasFestivalRow && (
+                      see refDateOf/showWideHeaderRows above. Only shown when
+                      every visible row is one cluster - otherwise a single
+                      header row can't be accurate for all of them at once. */}
+                  {showWideHeaderRows ? (
+                    <>
+                      <tr className="rx-ref-date-row">
+                        <th>Reference Date</th>
+                        {kfHeaders.map(h => <th key={`ref-${h}`} />)}
+                        {visibleColumns.map(c => <th key={`ref-${c}`} style={num}>{refDateOf(wideClusters[0], c)}</th>)}
+                      </tr>
+                      {hasFestivalRow && (
+                        <tr className="rx-ref-date-row">
+                          <th>Festival</th>
+                          {kfHeaders.map(h => <th key={`fest-${h}`} />)}
+                          {visibleColumns.map(c => <th key={`fest-${c}`} style={{ ...num, color: 'var(--warn)' }}>{festivalOf(wideClusters[0], c)}</th>)}
+                        </tr>
+                      )}
+                    </>
+                  ) : wideClusters.length > 1 && (
                     <tr className="rx-ref-date-row">
-                      <th>Festival</th>
-                      {kfHeaders.map(h => <th key={`fest-${h}`} />)}
-                      {visibleColumns.map(c => <th key={`fest-${c}`} style={{ ...num, color: 'var(--warn)' }}>{festivalOf(c)}</th>)}
+                      <th colSpan={1 + kfHeaders.length + visibleColumns.length} style={{ fontWeight: 400, color: 'var(--muted)', textAlign: 'left' }}>
+                        Reference Date / Festival hidden - {wideClusters.length} different clusters are mixed in this view, and each can map a date differently. Switch to Stacked for cluster-accurate values, or search down to one cluster.
+                      </th>
                     </tr>
                   )}
                   <tr>
@@ -534,16 +571,19 @@ export default function ReindexOutputPanel({ result, festivalByDate }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredStacked.slice(0, RX_CAP).map(r => (
-                    <tr key={`${r.store}${KEY_SEP}${r.col}`}>
-                      <td>{clusterOf(r.store)}</td>
-                      <td style={{ fontWeight: 600 }}>{r.store}</td>
-                      <td>{r.col}</td>
-                      <td>{refDateByColumn[r.col] || ''}</td>
-                      {hasFestivalRow && <td style={{ color: 'var(--warn)' }}>{festivalOf(r.col)}</td>}
-                      <td style={num}>{round2(r.value)}</td>
-                    </tr>
-                  ))}
+                  {filteredStacked.slice(0, RX_CAP).map(r => {
+                    const cluster = clusterOf(r.store)
+                    return (
+                      <tr key={`${r.store}${KEY_SEP}${r.col}`}>
+                        <td>{cluster}</td>
+                        <td style={{ fontWeight: 600 }}>{r.store}</td>
+                        <td>{r.col}</td>
+                        <td>{refDateOf(cluster, r.col)}</td>
+                        {hasFestivalRow && <td style={{ color: 'var(--warn)' }}>{festivalOf(cluster, r.col)}</td>}
+                        <td style={num}>{round2(r.value)}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

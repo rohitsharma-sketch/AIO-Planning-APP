@@ -38,6 +38,8 @@ import os
 import sys
 import time
 
+import pandas as pd
+
 # QUOTE_ALL to match the client-side csvField/downloadCsv convention every
 # other CSV in this app already uses (ReindexOutputPanel.jsx) - a plain
 # csv.writer() only quotes fields that need it, which is valid CSV either
@@ -78,15 +80,19 @@ def _cluster_of(store_cluster, store):
     return store_cluster.get(store) or "(unmapped)"
 
 
-def _load_festival_by_date(calendar_id):
-    """{date -> [festival names]} for every cluster in this calendar, keyed
+def _load_festival_by_cluster_date(calendar_id):
+    """{cluster_name -> {date -> [festival names]}} for this calendar, keyed
     both by exact futDate (day-wise columns) and its YYYY-MM prefix
-    (month-wise columns) - same dual-keying the client's festivalByDate
+    (month-wise columns) - same dual-keying the client's festivalByCluster
     builder in CalendarisedSalesTab/index.jsx uses, so a plain lookup by the
-    column string works for both sources here too. Returns {} if calendarId
-    is missing (a result computed before this was threaded through) or the
-    lookup fails for any reason - a missing Festival column is a labelling
-    gap, not worth failing the whole CSV over.
+    column string works for both sources here too. Scoped PER CLUSTER (found
+    live 2026-09-01: a single flat {date -> names} dict mixed every cluster's
+    festivals into one lookup, so a cluster with no Onam configured at all
+    still showed Onam in its output rows because some OTHER cluster in the
+    same calendar has it). Returns {} if calendarId is missing (a result
+    computed before this was threaded through) or the lookup fails for any
+    reason - a missing Festival column is a labelling gap, not worth failing
+    the whole CSV over.
 
     Expands the FULL pre/core/post window around each festival's fut_date,
     not just the single anchor day - same loop engine.js's buildFestMap (and
@@ -105,7 +111,7 @@ def _load_festival_by_date(calendar_id):
         session = SessionLocal()
         try:
             rows = session.execute(
-                select(CalendarClusterFestival.name, CalendarClusterFestival.fut_date,
+                select(CalendarCluster.cluster_name, CalendarClusterFestival.name, CalendarClusterFestival.fut_date,
                        CalendarClusterFestival.pre, CalendarClusterFestival.core, CalendarClusterFestival.post)
                 .join(CalendarCluster, CalendarCluster.id == CalendarClusterFestival.calendar_cluster_id)
                 .where(CalendarCluster.calendar_id == int(calendar_id))
@@ -113,27 +119,69 @@ def _load_festival_by_date(calendar_id):
         finally:
             session.close()
         out = {}
-        for name, fut_date, pre, core, post in rows:
+        for cluster_name, name, fut_date, pre, core, post in rows:
             if not fut_date or not name:
                 continue
             core = core or 1
+            cluster_out = out.setdefault(cluster_name, {})
             for pos in range(-(pre or 0), (post or 0) + core):
                 ds = (fut_date + timedelta(days=pos)).isoformat()
-                out.setdefault(ds, set()).add(name)
-                out.setdefault(ds[:7], set()).add(name)
-        return {k: sorted(v) for k, v in out.items()}
+                cluster_out.setdefault(ds, set()).add(name)
+                cluster_out.setdefault(ds[:7], set()).add(name)
+        return {cl: {k: sorted(v) for k, v in m.items()} for cl, m in out.items()}
     except Exception:
         return {}
 
 
-def _festival_of(festival_by_date, col):
-    return ", ".join(festival_by_date.get(col, []))
+def _build_ref_by_cluster_col(payload, source):
+    """{cluster_name -> {futureCol -> referenceDate}} straight from the
+    reindex payload's own day-map - the same per-cluster scoping problem as
+    festivals existed for "which reference date did this column come from":
+    a single flat lookup mixed every cluster's mapping together, so it could
+    show a reference date that isn't even this cluster's own (found live
+    2026-09-01: UP+NCR's Holi pre-festive window maps 2027-03-15 from
+    2026-02-25, but the mixed-cluster version showed 2026-03-09 - some other
+    cluster's ordinary-day mapping for that date, winning a plurality vote
+    across clusters that don't even share the same festival calendar).
+    Exact for day-wise (one ref per future day, per cluster, even when a
+    reference day is legitimately reused across two future days - see
+    engine.js's "Same-Month Reuse"). Month-wise has no per-day source column
+    to read back, so this buckets by the same plurality-of-days rule
+    reindex_monthwise (scans.py) uses server-side, just scoped to one
+    cluster instead of mixed across all of them."""
+    day_map = payload.get("dayMap") or {}
+    out = {}
+    for cluster, pairs in day_map.items():
+        if source == "dw":
+            out[cluster] = {fut: ref for ref, fut in pairs}
+        else:
+            buckets = {}  # fut_month -> {ref_month: count}
+            for ref, fut in pairs:
+                rm, fm = ref[:7], fut[:7]
+                b = buckets.setdefault(fm, {})
+                b[rm] = b.get(rm, 0) + 1
+            out[cluster] = {fm: max(counts, key=counts.get) for fm, counts in buckets.items()}
+    return out
 
 
-def write_wide_csv(result, store_cluster, festival_by_date, out_path):
+def _festival_of(festival_by_cluster_date, cluster, col):
+    return ", ".join((festival_by_cluster_date.get(cluster) or {}).get(col, []))
+
+
+def _ref_date_of(ref_by_cluster_col, global_ref_date_by_column, cluster, col):
+    per_cluster = ref_by_cluster_col.get(cluster)
+    if per_cluster is not None:
+        return per_cluster.get(col, "")
+    # No per-cluster map at all (e.g. calendarId missing from an older
+    # payload) - fall back to the backend's global plurality rather than
+    # showing nothing.
+    return global_ref_date_by_column.get(col, "")
+
+
+def write_wide_csv(result, store_cluster, festival_by_cluster_date, ref_by_cluster_col, out_path):
     key_fields = result.get("keyFields") or (["store", "division"] if result.get("grain") == "store_division" else ["store"])
     columns = sorted(result.get("columns") or [])
-    ref_date_by_column = result.get("refDateByColumn") or {}
+    global_ref_date_by_column = result.get("refDateByColumn") or {}
     kf_headers = [KEY_LABELS.get(f, f) for f in key_fields]
 
     # Group long-form rows into {key_tuple: {col: value}} - same grouping
@@ -146,11 +194,29 @@ def write_wide_csv(result, store_cluster, festival_by_date, out_path):
         e[row["col"]] = row["value"]
         key_of.setdefault(key, {f: row.get(f, "") for f in key_fields})
 
+    # Wide is one row per store(+fields), one column per date - a single
+    # Reference Date / Festival header row at the top can only ever be
+    # accurate for ONE cluster's mapping at a time (see _festival_of's /
+    # _ref_date_of's callers' docstrings for the cross-cluster bug this
+    # replaced). Only emit them when every row in this export is the same
+    # cluster; otherwise a wrong-for-most-rows header is worse than none -
+    # use Stacked instead, where Reference Date/Festival are per-row.
+    clusters_present = {_cluster_of(store_cluster, key_of[k].get("store", "")) for k in grouped}
+    show_header_rows = len(clusters_present) == 1
+    sole_cluster = next(iter(clusters_present)) if show_header_rows else None
+
     with open(out_path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f, **_CSV_KW)
-        w.writerow(["Reference Date"] + [""] * len(key_fields) + [ref_date_by_column.get(c, "") for c in columns])
-        if festival_by_date:
-            w.writerow(["Festival"] + [""] * len(key_fields) + [_festival_of(festival_by_date, c) for c in columns])
+        if show_header_rows:
+            w.writerow(["Reference Date"] + [""] * len(key_fields)
+                       + [_ref_date_of(ref_by_cluster_col, global_ref_date_by_column, sole_cluster, c) for c in columns])
+            if festival_by_cluster_date:
+                w.writerow(["Festival"] + [""] * len(key_fields)
+                           + [_festival_of(festival_by_cluster_date, sole_cluster, c) for c in columns])
+        elif len(clusters_present) > 1:
+            w.writerow([f"Reference Date / Festival omitted - {len(clusters_present)} different clusters are mixed "
+                        "in this export, and each can map a date differently. Use the Stacked view/download for "
+                        "cluster-accurate values."])
         w.writerow(["Cluster"] + kf_headers + columns)
         for key in sorted(grouped.keys()):
             vals = grouped[key]
@@ -160,8 +226,8 @@ def write_wide_csv(result, store_cluster, festival_by_date, out_path):
                        + [vals.get(c, "") for c in columns])
 
 
-def write_stacked_csv(result, store_cluster, festival_by_date, out_path):
-    ref_date_by_column = result.get("refDateByColumn") or {}
+def write_stacked_csv(result, store_cluster, festival_by_cluster_date, ref_by_cluster_col, out_path):
+    global_ref_date_by_column = result.get("refDateByColumn") or {}
     date_or_month_label = "Date" if result.get("source") == "dw" else "Month"
 
     totals = {}  # (store, col) -> summed value
@@ -172,14 +238,15 @@ def write_stacked_csv(result, store_cluster, festival_by_date, out_path):
     with open(out_path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f, **_CSV_KW)
         header = ["Cluster", "Store", date_or_month_label, "Reference Date"]
-        if festival_by_date:
+        if festival_by_cluster_date:
             header.append("Festival")
         header.append("Value")
         w.writerow(header)
         for (store, col) in sorted(totals.keys()):
-            row = [_cluster_of(store_cluster, store), store, col, ref_date_by_column.get(col, "")]
-            if festival_by_date:
-                row.append(_festival_of(festival_by_date, col))
+            cluster = _cluster_of(store_cluster, store)
+            row = [cluster, store, col, _ref_date_of(ref_by_cluster_col, global_ref_date_by_column, cluster, col)]
+            if festival_by_cluster_date:
+                row.append(_festival_of(festival_by_cluster_date, cluster, col))
             row.append(round(totals[(store, col)], 2))
             w.writerow(row)
 
@@ -190,19 +257,20 @@ def main():
     try:
         with open(result_path, encoding="utf-8") as f:
             result = json.load(f)
-        store_cluster, calendar_id = {}, None
+        store_cluster, calendar_id, ref_by_cluster_col = {}, None, {}
         if os.path.exists(payload_path):
             with open(payload_path, encoding="utf-8") as f:
                 payload = json.load(f)
             store_cluster = payload.get("storeCluster") or {}
             calendar_id = payload.get("calendarId")
-        festival_by_date = _load_festival_by_date(calendar_id)
+            ref_by_cluster_col = _build_ref_by_cluster_col(payload, result.get("source"))
+        festival_by_cluster_date = _load_festival_by_cluster_date(calendar_id)
 
         tmp_out = out_path + ".tmp"
         if view == "stacked":
-            write_stacked_csv(result, store_cluster, festival_by_date, tmp_out)
+            write_stacked_csv(result, store_cluster, festival_by_cluster_date, ref_by_cluster_col, tmp_out)
         else:
-            write_wide_csv(result, store_cluster, festival_by_date, tmp_out)
+            write_wide_csv(result, store_cluster, festival_by_cluster_date, ref_by_cluster_col, tmp_out)
         os.replace(tmp_out, out_path)
         _atomic_write_json(done_path, {"ok": True, "error": None})
     except Exception as e:
