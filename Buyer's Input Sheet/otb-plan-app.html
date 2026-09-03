@@ -484,7 +484,7 @@ body{letter-spacing:0}
 .dtab:hover:not(.on){border-color:var(--dtab-c);background:color-mix(in srgb,var(--dtab-c) 6%,var(--sf));color:var(--dtab-c)}
 .dtab.on{background:#4F46E5;color:#fff;border-color:#4F46E5;box-shadow:0 4px 14px rgba(79,70,229,.28)}
 .dtab-cnt{font-size:10px;font-weight:700;background:rgba(255,255,255,.25);color:#fff;padding:2px 8px;border-radius:12px;margin-left:8px;min-width:20px;text-align:center;vertical-align:middle;display:inline-block;line-height:1.6}
-.dtab:not(.on) .dtab-cnt{background:color-mix(in srgb,var(--dtab-c) 10%,var(--s2));color:var(--t3)}
+.dtab:not(.on) .dtab-cnt{background:#E8EAF0;color:#6B7280}
 
 /* Table headers: indigo */
 .dtbl .hr0 th,.dtbl .hr1 th,.dtbl .hr2 th{background:var(--th-bg) !important;border-bottom:1px solid rgba(255,255,255,.12) !important}
@@ -581,7 +581,7 @@ thead .c0,thead .c1{background:var(--th-bg) !important;color:var(--th-tx) !impor
           <button class="mode-btn-sb" id="mode-light" onclick="applyTheme('light')">☀️ Light</button>
           <button class="mode-btn-sb" id="mode-dark" onclick="applyTheme('dark')">🌙 Dark</button>
         </div>
-        <div id="paletteSwatches" style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px"></div>
+        <div id="paletteSwatches" style="display:flex;flex-wrap:wrap;gap:6px;padding:2px 0"></div>
       </div>
       <div class="snav-status">
         <span class="status-dot"></span><span id="autosave-lbl">Not saved</span>
@@ -654,10 +654,10 @@ thead .c0,thead .c1{background:var(--th-bg) !important;color:var(--th-tx) !impor
       <div class="rarea">
         <!-- DIVISION TABS (buyers/summary only) -->
         <div class="divtabs" id="divtabs">
-          <button class="dtab on" data-div="all" style="--dtab-c:#1D63E8" onclick="setDivTab('all')">ALL<span class="dtab-cnt" id="dtab-cnt-all"></span></button>
-          <button class="dtab" data-div="mens" style="--dtab-c:#077A4A" onclick="setDivTab('mens')">MENS<span class="dtab-cnt" id="dtab-cnt-mens"></span></button>
-          <button class="dtab" data-div="ladies" style="--dtab-c:#7420B8" onclick="setDivTab('ladies')">LADIES<span class="dtab-cnt" id="dtab-cnt-ladies"></span></button>
-          <button class="dtab" data-div="kids" style="--dtab-c:#C85A12" onclick="setDivTab('kids')">KIDS<span class="dtab-cnt" id="dtab-cnt-kids"></span></button>
+          <button class="dtab on" data-div="all" style="--dtab-c:#4F46E5" onclick="setDivTab('all')">ALL<span class="dtab-cnt" id="dtab-cnt-all"></span></button>
+          <button class="dtab" data-div="mens" style="--dtab-c:#4F46E5" onclick="setDivTab('mens')">MENS<span class="dtab-cnt" id="dtab-cnt-mens"></span></button>
+          <button class="dtab" data-div="ladies" style="--dtab-c:#4F46E5" onclick="setDivTab('ladies')">LADIES<span class="dtab-cnt" id="dtab-cnt-ladies"></span></button>
+          <button class="dtab" data-div="kids" style="--dtab-c:#4F46E5" onclick="setDivTab('kids')">KIDS<span class="dtab-cnt" id="dtab-cnt-kids"></span></button>
         </div>
         <!-- KPI STRIP -->
         <div class="kstrip" id="kstrip"></div>
@@ -1713,10 +1713,10 @@ function abbrev(arr){
 
 /* ── MONTH PILLS ───────────────────────────────── */
 const MP_QC=[
-  {c:'#F59E0B',bg:'rgba(245,158,11,.13)',t:'#D97706',b:'rgba(245,158,11,.35)'}, // Q1 Apr-Jun amber
-  {c:'#10B981',bg:'rgba(16,185,129,.13)',t:'#059669',b:'rgba(16,185,129,.35)'}, // Q2 Jul-Sep emerald
-  {c:'#6366F1',bg:'rgba(99,102,241,.13)',t:'#818CF8',b:'rgba(99,102,241,.35)'}, // Q3 Oct-Dec indigo
-  {c:'#A78BFA',bg:'rgba(167,139,250,.13)',t:'#A78BFA',b:'rgba(167,139,250,.35)'}, // Q4 Jan-Mar violet
+  {c:'#4F46E5',bg:'#F1F5F9',t:'#475569',b:'#E2E8F0'},
+  {c:'#4F46E5',bg:'#F1F5F9',t:'#475569',b:'#E2E8F0'},
+  {c:'#4F46E5',bg:'#F1F5F9',t:'#475569',b:'#E2E8F0'},
+  {c:'#4F46E5',bg:'#F1F5F9',t:'#475569',b:'#E2E8F0'},
 ];
 function toggleMonth(i){
   if(i===-1){S.selM=new Set([0,1,2,3,4,5,6,7,8,9,10,11]);}
@@ -4378,7 +4378,7 @@ function _recomputeAccentDerived(){
   // changes in testing. Setting them directly as a literal color is fully deterministic.
   if(ac){
     document.querySelectorAll('.ni.act').forEach(el=>{el.style.color=ac;});
-    document.querySelectorAll('.live-badge').forEach(el=>{el.style.background=ac;});
+    document.querySelectorAll('.live-badge').forEach(el=>{el.style.background='#059669';});
   }
 }
 function applyTheme(mode){
@@ -4678,7 +4678,7 @@ function _buildPaletteSwatches(){
     d.className='tsw';
     d.dataset.pid=p.id;
     d.title=p.label;
-    d.style.cssText=`width:100%;aspect-ratio:1;border-radius:50%;background:linear-gradient(135deg,${p.grad[0]},${p.grad[1]});cursor:pointer;transition:outline .12s;outline:${p.id===cur?'2px solid rgba(255,255,255,.75)':'none'};outline-offset:2px`;
+    d.style.cssText=`width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,${p.grad[0]},${p.grad[1]});cursor:pointer;flex-shrink:0;transition:outline .12s,box-shadow .12s;outline:${p.id===cur?'2px solid rgba(255,255,255,.8)':'none'};outline-offset:2px;box-shadow:0 1px 3px rgba(0,0,0,.25)`;
     d.addEventListener('click',()=>applyPalette(p.id));
     el.appendChild(d);
   });
