@@ -213,33 +213,41 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
     finally { setImporting(false) }
   }
 
-  // Unique filter options derived from all loaded data
+  // Full merged view: DB stores with edits overlaid + CSV-import-only rows
+  const mergedStores = useMemo(() => {
+    const inDb = new Set(safeStores.map(s => s.store_id))
+    const dbRows = safeStores.map(s => ({ ...s, ...(edits[s.store_id] || {}) }))
+    const importOnly = Object.entries(edits)
+      .filter(([id]) => !inDb.has(id))
+      .map(([, edit]) => edit)
+    return [...dbRows, ...importOnly]
+  }, [safeStores, edits])
+
+  // Unique filter options derived from full merged view
   const opts = useMemo(() => {
     const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort()
     return {
-      tag:     uniq(safeStores.map(s => s.tag)),
-      cluster: uniq(safeStores.map(s => s.cluster_key)),
-      region:  uniq(safeStores.map(s => s.region_type)),
-      grade:   uniq(safeStores.map(s => s.store_grade)),
+      tag:     uniq(mergedStores.map(s => s.tag)),
+      cluster: uniq(mergedStores.map(s => s.cluster_key)),
+      region:  uniq(mergedStores.map(s => s.region_type)),
+      grade:   uniq(mergedStores.map(s => s.store_grade)),
     }
-  }, [safeStores])
+  }, [mergedStores])
 
-  // Merge edits into stores, then apply filters + search
+  // Apply filters + search over the full merged view
   const filtered = useMemo(() => {
-    return safeStores
-      .map(s => ({ ...s, ...(edits[s.store_id] || {}) }))
-      .filter(s => {
-        if (search) {
-          const q = search.toLowerCase()
-          if (!s.store_id.toLowerCase().includes(q) && !(s.store_name || '').toLowerCase().includes(q)) return false
-        }
-        if (filters.tag.length     && !filters.tag.includes(s.tag))          return false
-        if (filters.cluster.length && !filters.cluster.includes(s.cluster_key)) return false
-        if (filters.region.length  && !filters.region.includes(s.region_type))  return false
-        if (filters.grade.length   && !filters.grade.includes(s.store_grade))   return false
-        return true
-      })
-  }, [stores, edits, filters, search])
+    return mergedStores.filter(s => {
+      if (search) {
+        const q = search.toLowerCase()
+        if (!(s.store_id || '').toLowerCase().includes(q) && !(s.store_name || '').toLowerCase().includes(q)) return false
+      }
+      if (filters.tag.length     && !filters.tag.includes(s.tag))             return false
+      if (filters.cluster.length && !filters.cluster.includes(s.cluster_key)) return false
+      if (filters.region.length  && !filters.region.includes(s.region_type))  return false
+      if (filters.grade.length   && !filters.grade.includes(s.store_grade))   return false
+      return true
+    })
+  }, [mergedStores, filters, search])
 
   // Count tiles — always computed from filtered view
   const counts = useMemo(() => ({
