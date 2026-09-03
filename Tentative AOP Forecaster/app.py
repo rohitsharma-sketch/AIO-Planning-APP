@@ -109,12 +109,15 @@ async def run(session_id: str, body: RunRequest = RunRequest()):
         json.dump(results, f)
 
     run_id = None
+    detail_records = None
+    if os.path.exists(_detail_path(session_id)):
+        with open(_detail_path(session_id), encoding="utf-8") as f:
+            detail_records = json.load(f)
+
     if os.path.exists(os.path.join(_session_dir(session_id), ".from_db")):
         from db.base import SessionLocal
         from db.persist_run import persist_forecast_run
 
-        with open(_detail_path(session_id), encoding="utf-8") as f:
-            detail_records = json.load(f)
         db_session = SessionLocal()
         try:
             run_id = str(persist_forecast_run(
@@ -123,6 +126,18 @@ async def run(session_id: str, body: RunRequest = RunRequest()):
             ))
         finally:
             db_session.close()
+
+    # Always publish division targets so Buyer's Input Sheet stays in sync
+    if detail_records:
+        from db.base import SessionLocal
+        from db.publish_aop_targets import publish_aop_targets
+        _pub = SessionLocal()
+        try:
+            publish_aop_targets(_pub, detail_records)
+        except Exception:
+            pass  # non-fatal: Buyer's Input Sheet falls back to previous values
+        finally:
+            _pub.close()
 
     return {**results, "run_id": run_id}
 
@@ -216,6 +231,47 @@ def base_sales_reindexed():
         return get_reindexed_lfl_base_sales(db_session)
     finally:
         db_session.close()
+
+
+@router.get("/api/config/aop-division-targets")
+def aop_division_targets():
+    """Latest MENS/LADIES/KIDS MAMJ targets published after the most recent
+    forecast run.  Used by the Buyer's Input Sheet for live auto-sync — no
+    authentication required (reads only, no user-specific data)."""
+    from db.base import SessionLocal
+    from sqlalchemy import text
+
+    db = SessionLocal()
+    try:
+        rows = db.execute(text("""
+            SELECT row_key, period_id, value, updated_at
+            FROM planning_inputs.input_values
+            WHERE lever_key = 'aop_division_target'
+              AND row_key   IN ('MENS','LADIES','KIDS')
+              AND period_id IN (202703,202704,202705,202706)
+            ORDER BY row_key, period_id
+        """)).all()
+
+        if not rows:
+            return {"targets": None, "published_at": None,
+                    "note": "No AOP forecast has been run yet."}
+
+        targets: dict[str, dict[int, float]] = {
+            "MENS": {}, "LADIES": {}, "KIDS": {}
+        }
+        published_at = None
+        for div, period_id, value, updated_at in rows:
+            targets[div][period_id] = float(value or 0)
+            if published_at is None or updated_at > published_at:
+                published_at = updated_at
+
+        return {
+            "targets": targets,
+            "published_at": published_at.isoformat() if published_at else None,
+            "note": None,
+        }
+    finally:
+        db.close()
 
 
 DB_SYNC_JOBS = [

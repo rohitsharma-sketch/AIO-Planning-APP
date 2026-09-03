@@ -317,6 +317,13 @@ td.aop-col-bg input.gi{background:color-mix(in srgb,var(--ac) 6%,var(--s2))}
 .aop-ov-badge{font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px}
 .aop-ov-badge.ov{background:var(--ne-b);color:var(--ne)}
 .aop-ov-badge.un{background:var(--wa-b);color:var(--wa)}
+/* AOP live constraint bar */
+#aop-live-bar{display:none;align-items:center;gap:12px;padding:5px 14px;background:color-mix(in srgb,var(--ac) 8%,var(--s1));border-bottom:1px solid var(--bd);font-size:12px;flex-wrap:wrap}
+#aop-live-bar .alb-badge{display:inline-flex;align-items:center;gap:4px;background:var(--ac);color:#fff;padding:1px 8px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.03em}
+.aop-div-chip{padding:2px 10px;border-radius:6px;font-size:11px}
+.aop-div-chip .aop-ok{color:var(--po);font-weight:700}
+.aop-div-chip .aop-gap{color:var(--ne);font-weight:700}
+#aop-live-at{margin-left:auto;font-size:10px;color:var(--mu)}
 
 /* AOP REVIEW PANEL (buyer review workflow) */
 .aopr-panel{flex:1;display:none;flex-direction:column;overflow:auto;padding:24px;background:var(--bg)}
@@ -541,6 +548,15 @@ tr:hover .mag-trig{display:inline}
         <button class="fpbtn" id="lockallbtn" onclick="toggleLockAllMAMJ()" title="Toggle lock for all buyer inputs in MAMJ block">🔒 Lock All</button>
         <button class="fpbtn on" id="fpbtn" onclick="toggleFP()">Hide Sidebar</button>
       </div>
+    </div>
+
+    <!-- AOP LIVE CONSTRAINT BAR — auto-populated from AOP Forecaster -->
+    <div id="aop-live-bar">
+      <span class="alb-badge">⚡ Live AOP</span>
+      <span id="aop-live-mens" class="aop-div-chip"></span>
+      <span id="aop-live-ladies" class="aop-div-chip"></span>
+      <span id="aop-live-kids" class="aop-div-chip"></span>
+      <span id="aop-live-at"></span>
     </div>
 
     <!-- CONTENT AREA -->
@@ -1598,6 +1614,7 @@ let S = {
   aop: {mens:{},ladies:{},kids:{}}, // Division AOP: {divId:{mi:Rs.Cr}}
   aopUnit: 'lakhs', // 'lakhs' or 'crore' — unit user enters in modal
   aopLocked: false,
+  aopLiveAt: null, // ISO timestamp of last live AOP fetch from Forecaster (null = manual/embedded)
   aqp: 0,         // active quick preset
   storeLflOnly: false,
   filters: {
@@ -3723,6 +3740,25 @@ function toggleLockAllMAMJ(){
   anyLocked?unlockAllMAMJ():lockAllMAMJ();
 }
 function lockAllMAMJ(){
+  // Hard constraint: when live AOP targets are loaded, each division's MAMJ plan
+  // total must be within ±0.5 Cr of the AOP target before locking is allowed.
+  if(S.aopLocked&&S.aopLiveAt){
+    const TOL=0.5;
+    const bad=[];
+    ['mens','ladies','kids'].forEach(divId=>{
+      const tgt=AOP_MIS.reduce((a,mi)=>a+(S.aop[divId]?.[mi]||0),0);
+      if(tgt<=0)return;
+      const plan=_divPlanMAMJTotal(divId);
+      const gap=plan-tgt;
+      if(Math.abs(gap)>TOL)
+        bad.push(`${divId.toUpperCase()}: Plan ₹${fCr(plan)} Cr vs AOP ₹${fCr(tgt)} Cr (${gap>0?'+':''}${fCr(gap)} Cr)`);
+    });
+    if(bad.length){
+      toast('Cannot lock — AOP mismatch:\n'+bad.join('\n'),6000);
+      _renderAopLiveBar(S.aopLiveAt); // refresh bar to highlight red gaps
+      return;
+    }
+  }
   DVDATA.forEach(dv=>{
     if(S.divLocked.has(dv.id))return;
     dv.secs.forEach(sec=>{
@@ -4111,7 +4147,7 @@ function revertToAop(dvId,attr){
 /* ── SAVE & EXPORT ─────────────────────────────── */
 function saveState(){
   const now=new Date();
-  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopUnit:S.aopUnit,locked:[...S.locked],aopSeeds:S.aopSeeds,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],at:now.toISOString()}))}catch(e){}
+  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopUnit:S.aopUnit,aopLiveAt:S.aopLiveAt||null,locked:[...S.locked],aopSeeds:S.aopSeeds,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],at:now.toISOString()}))}catch(e){}
   _updateSaveLabel(now);
   toast('State saved ✓');
 }
@@ -4192,6 +4228,7 @@ function loadState(){
     if(p.aop)S.aop=p.aop;
     if(p.aopLocked!=null)S.aopLocked=p.aopLocked;
     if(p.aopUnit)S.aopUnit=p.aopUnit;
+    if(p.aopLiveAt)S.aopLiveAt=p.aopLiveAt;
     if(p.locked)S.locked=new Set(p.locked);
     if(p.aopSeeds)S.aopSeeds=p.aopSeeds;
     if(p.divTab!=null)S.divTab=p.divTab;
@@ -4502,6 +4539,7 @@ function refresh(){
   _syncLockAllBtns();
   buildFP(); // keep sidebar counts in sync with divTab + filters
   renderTable();
+  if(S.aopLiveAt)_renderAopLiveBar(S.aopLiveAt); // keep constraint bar in sync
 }
 
 /* ── INIT ──────────────────────────────────────── */
@@ -4907,6 +4945,97 @@ function parseAopCSV(text,fname){
   buildAopGrid();
   toast(`Loaded ${loaded} divisions from "${fname}" ✓`);
 }
+
+/* ── LIVE AOP FROM FORECASTER ──────────────────────── */
+const AOP_LIVE_BASE = 'http://localhost:8000';
+const _AOP_LIVE_PID_MI = {202703:11,202704:0,202705:1,202706:2};
+const _AOP_LIVE_DIV = {MENS:'mens',LADIES:'ladies',KIDS:'kids'};
+
+async function fetchLiveAopTargets(){
+  try{
+    const r=await fetch(AOP_LIVE_BASE+'/api/config/aop-division-targets');
+    if(!r.ok)return;
+    const data=await r.json();
+    if(!data.targets)return;
+
+    // Build new S.aop in Rs Cr (API gives Rs Lakhs)
+    const nAop={mens:{},ladies:{},kids:{}};
+    let hasData=false;
+    for(const[apiDiv,months] of Object.entries(data.targets)){
+      const dk=_AOP_LIVE_DIV[apiDiv];
+      if(!dk)continue;
+      for(const[pid,lakhs] of Object.entries(months)){
+        const mi=_AOP_LIVE_PID_MI[parseInt(pid)];
+        if(mi==null)continue;
+        nAop[dk][mi]=lakhs/100; // Lakhs → Cr (S.aop is always Cr)
+        hasData=true;
+      }
+    }
+    if(!hasData)return;
+
+    S.aop=nAop;
+    S.aopUnit='crore';
+    S.aopLiveAt=data.published_at;
+
+    if(!S.aopLocked){
+      S.aopLocked=true;
+      const aopMs=new Set(AOP_MIS.filter(mi=>['mens','ladies','kids'].some(d=>(nAop[d][mi]||0)>0)));
+      if(aopMs.size>0)S.selM=aopMs;
+      seedPlanFromAop();
+      syncAopLockUI();
+      buildAopGrid();
+      syncAopLockStatus();
+      buildPills();
+    } else {
+      buildAopGrid();
+    }
+
+    _renderAopLiveBar(data.published_at);
+    saveState();
+  }catch(e){console.warn('fetchLiveAopTargets:',e);}
+}
+
+function _divPlanMAMJTotal(divId){
+  const dv=DVDATA.find(d=>d.id===divId);
+  if(!dv)return 0;
+  const divAnnual=dv.secs.reduce((a,s)=>a+s.ly,0);
+  let tot=0;
+  dv.secs.forEach(sec=>{
+    if(S.hiddenSecs.has(sec.id))return;
+    AOP_MIS.forEach(mi=>{
+      const ly=_secMonLY(sec,dv,mi,divAnnual);
+      const g=S.inputs[sec.id+'__'+mi]??0;
+      tot+=ly*(1+g/100);
+    });
+  });
+  return tot;
+}
+
+function _renderAopLiveBar(publishedAt){
+  const bar=document.getElementById('aop-live-bar');
+  if(!bar)return;
+  const divs=[{id:'mens',nm:'MENS'},{id:'ladies',nm:'LADIES'},{id:'kids',nm:'KIDS'}];
+  divs.forEach(dv=>{
+    const el=document.getElementById('aop-live-'+dv.id);
+    if(!el)return;
+    const target=AOP_MIS.reduce((a,mi)=>a+(S.aop[dv.id]?.[mi]||0),0);
+    const plan=_divPlanMAMJTotal(dv.id);
+    const gap=plan-target;
+    const ok=target<=0||Math.abs(gap)<=0.5;
+    const tgtStr=target>0?` / Tgt ₹${fCr(target)} Cr`:'';
+    const gapStr=target>0&&!ok?` <b>(${gap>0?'+':''}${fCr(gap)})</b> ✗`:target>0?' ✓':'';
+    el.innerHTML=`<b>${dv.nm}</b> <span class="${ok?'aop-ok':'aop-gap'}">Plan ₹${fCr(plan)} Cr${tgtStr}${gapStr}</span>`;
+  });
+  const atEl=document.getElementById('aop-live-at');
+  if(atEl&&publishedAt)atEl.textContent='Last synced: '+new Date(publishedAt).toLocaleString();
+  bar.style.display='flex';
+}
+
+// Poll every 2 min for changes in AOP Forecaster
+(function _startAopLivePoll(){
+  fetchLiveAopTargets();
+  setInterval(fetchLiveAopTargets,120000);
+})();
 
 /* ── AOP REVIEW TAB (buyer review workflow) ──────── */
 const PLATFORM_BASE = 'http://localhost:8010';
