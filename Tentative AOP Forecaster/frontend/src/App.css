@@ -11,13 +11,13 @@
   position: sticky;
   top: 0;
   z-index: 100;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.25);
 }
 .header-inner {
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 24px;
-  height: 56px;
+  height: 52px;
   display: flex;
   align-items: center;
   gap: 32px;
@@ -25,12 +25,13 @@
 
 .logo { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .logo-mark {
-  width: 30px; height: 30px; border-radius: 7px;
-  background: rgba(255,255,255,0.15);
+  width: 28px; height: 28px; border-radius: 7px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.18);
   display: flex; align-items: center; justify-content: center;
-  font-weight: 800; font-size: 16px;
+  font-weight: 800; font-size: 15px;
 }
-.logo-text { font-weight: 700; font-size: 15px; letter-spacing: 0.02em; }
+.logo-text { font-weight: 700; font-size: 14px; letter-spacing: 0.015em; }
 
 /* ── Stepper ─────────────────────────────────────────────── */
 .stepper {

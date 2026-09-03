@@ -1,12 +1,104 @@
-.cfg-btn { font-size: 12px; padding: 7px 12px; text-decoration: none; display: inline-flex; align-items: center; }
-.cfg-sync { border: 1px solid #BFE5CF; background: #F1FAF5; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.cfg-sync.off { border-color: var(--border); background: var(--bg); }
-.cfg-sync-main { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.cfg-sync-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
-.cfg-sync.off .cfg-sync-dot { background: var(--muted); }
-.cfg-sync-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 320px; font-size: 12px; color: var(--char); }
-.cfg-sync-sub { font-size: 11px; color: var(--muted); }
-.cfg-sync-actions { display: flex; gap: 6px; flex-shrink: 0; }
-.cfg-sync-details { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px dashed #BFE5CF; font-size: 12px; }
-.cfg-sync-row { display: flex; align-items: center; gap: 8px; color: var(--char); }
-.cfg-sync-hint { font-size: 11px; color: var(--muted); }
+/* ── DbSyncPanel ────────────────────────────────────────────────── */
+
+.cfg-sync {
+  border: 1px solid #BBF7D0;
+  background: #F0FDF4;
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.cfg-sync.off {
+  border-color: var(--border);
+  background: var(--white);
+}
+
+.cfg-sync-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Status dot */
+.cfg-sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #16a34a;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 3px rgba(22,163,74,0.15);
+}
+
+.cfg-sync.off .cfg-sync-dot {
+  background: var(--muted);
+  box-shadow: 0 0 0 3px rgba(107,122,153,0.12);
+}
+
+.cfg-sync-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 300px;
+  font-size: 12.5px;
+  color: var(--char);
+  font-weight: 600;
+}
+
+.cfg-sync-sub {
+  font-size: 11.5px;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.cfg-sync-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.cfg-btn {
+  font-size: 12px;
+  padding: 6px 12px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 7px;
+}
+
+/* Details panel */
+.cfg-sync-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(22,163,74,0.3);
+  font-size: 12px;
+}
+
+.cfg-sync.off .cfg-sync-details {
+  border-top-color: var(--border);
+}
+
+.cfg-sync-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--char);
+  padding: 3px 0;
+}
+
+.cfg-sync-hint {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+}

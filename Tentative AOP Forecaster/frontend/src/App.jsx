@@ -1,3 +1,4 @@
+// v2026.09.03
 import { useState, useEffect, useRef } from 'react'
 import UploadStep from './components/UploadStep'
 import ReviewStep from './components/ReviewStep'
