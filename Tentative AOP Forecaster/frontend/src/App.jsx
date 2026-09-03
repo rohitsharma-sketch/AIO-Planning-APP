@@ -186,10 +186,28 @@ export default function App() {
   }
   function handleSaveDialogDiscard() { setSaveDialog(null); _doReset() }
 
-  // Resume a saved plan version from the landing page
+  // Explicitly save current plan state as a version, then go to Results.
+  // If no results yet (on Config step), runs the engine first.
+  async function handleSaveVersion() {
+    if (!session) return
+    if (results) {
+      // Already have results — just record the version and show Results
+      if (rates) savePlanVersion(session.session_id, rates, session.from_db ? 'db' : 'upload')
+      setStep(2)
+    } else {
+      // On Config step — save + run → Results
+      if (rates) savePlanVersion(session.session_id, rates, session.from_db ? 'db' : 'upload')
+      await handleRun()
+    }
+  }
+
+  // Resume a saved plan version from the landing page — always lands on Results (step 3).
+  // If server results are gone but session files still exist, re-runs silently.
+  // Falls back to Config only if the session is completely gone.
   async function handleResumeSaved(sessionId) {
     if (!sessionId) return
     setError(null)
+    setShowLanding(false)
     try {
       const r = await fetch(apiUrl(`/api/results/${sessionId}`))
       if (r.ok) {
@@ -197,14 +215,30 @@ export default function App() {
         setSession({ session_id: sessionId, from_db: true })
         setResults(data)
         setStep(2)
+        return
+      }
+      // Results gone — try to re-run the session (files may still exist on server)
+      setRunning(true)
+      const runRes = await fetch(apiUrl(`/api/run/${sessionId}`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ palette: 'classic' }),
+      })
+      if (runRes.ok) {
+        const data = await runRes.json()
+        setSession({ session_id: sessionId, from_db: true })
+        setResults(data)
+        setRunKey(k => k + 1)
+        setStep(2)
       } else {
-        // Results gone — drop to Review/Config with whatever is in autosave
+        // Session files also gone — drop to Config so user can re-upload
         setSession({ session_id: sessionId, from_db: true })
         setStep(1)
       }
-      setShowLanding(false)
     } catch (e) {
       setError(`Could not load saved plan: ${e.message}`)
+    } finally {
+      setRunning(false)
     }
   }
 
@@ -228,6 +262,17 @@ export default function App() {
             </nav>
           )}
           <div style={{display:'flex', alignItems:'center', gap:8, flexShrink:0}}>
+            {!showLanding && session && (
+              <button
+                className="btn-outline"
+                onClick={handleSaveVersion}
+                disabled={running}
+                style={{fontSize:12, display:'flex', alignItems:'center', gap:4}}
+                title="Save this plan as a version and go to Results"
+              >
+                💾 Save
+              </button>
+            )}
             {!showLanding && (
               <button className="btn-outline" onClick={handleReset} style={{fontSize:12}}>
                 ← Plans
