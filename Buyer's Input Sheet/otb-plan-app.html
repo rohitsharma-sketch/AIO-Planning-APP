@@ -540,6 +540,46 @@ thead .c0,thead .c1{background:var(--th-bg) !important;color:var(--th-tx) !impor
 .vlog-load:hover{background:var(--ac);color:#fff;border-color:var(--ac)}
 .vlog-row-ft{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .vlog-hint{font-size:10px;color:var(--mu);font-style:italic;padding:8px 12px;background:var(--s2);border-radius:6px;margin-top:4px;line-height:1.5}
+
+/* ── TOPBAR: TRULY CENTRED TITLE ─────────────────────────────────────────── */
+:root{--TH:54px}
+.tbar{position:relative;justify-content:flex-start;padding:0 18px;gap:0}
+.tb-title{
+  position:absolute;left:50%;top:50%;
+  transform:translate(-50%,-50%);
+  flex:none;text-align:center;
+  pointer-events:none;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  max-width:38%;
+}
+#rptTitle{font-size:14px;font-weight:700;letter-spacing:-0.025em}
+.tbar-actions{margin-left:auto;display:flex;align-items:center;gap:7px;flex-shrink:0}
+
+/* ── KPI TILES: REFINED ──────────────────────────────────────────────────── */
+.kstrip{padding:12px 18px;gap:10px;border-bottom:1.5px solid var(--bd)}
+.ktile{
+  border-radius:10px;padding:12px 16px 10px;
+  box-shadow:0 1px 2px rgba(79,70,229,.05),0 2px 8px rgba(79,70,229,.07);
+  border:1.5px solid var(--bd);
+}
+.ktile.a{border-left-width:3px}
+.kl{font-size:9px;font-weight:700;letter-spacing:.13em;margin-bottom:3px}
+.kv{font-size:18px;line-height:1.15}
+.ks{font-size:10px;margin-top:2px}
+
+/* ── CONTROL STRIP: REFINED ──────────────────────────────────────────────── */
+.cstrip{padding:0 18px;gap:10px;height:44px;border-bottom:1.5px solid var(--bd)}
+.range-badge{font-size:11px;font-weight:700;padding:5px 14px;letter-spacing:.01em}
+.fpbtn{font-size:11px;font-weight:600;padding:5px 13px;border-radius:7px;letter-spacing:.01em;height:30px;display:inline-flex;align-items:center;gap:5px}
+.cs-right{gap:8px}
+
+/* ── DIVISION TABS: REFINED ──────────────────────────────────────────────── */
+.divtabs{padding:10px 18px;gap:8px}
+.dtab{height:44px;font-size:12px}
+
+/* ── TABLE: TIGHTER CELLS ───────────────────────────────────────────────── */
+.dtbl tbody td{font-size:11px;padding:6px 8px}
+.dtbl tbody td.l{font-size:11px;font-weight:600}
 </style>
 
 <!-- ─── APP ─────────────────────────────────────── -->
@@ -599,14 +639,16 @@ thead .c0,thead .c1{background:var(--th-bg) !important;color:var(--th-tx) !impor
         <span id="rptTitle">CK | Buyer's Input Sheet FY 27-28</span>
         <span class="tb-crumb" id="rptCrumb"></span>
       </div>
-      <div class="tbtn" onclick="exportCSV()">Export</div>
-      <div class="tbtn" onclick="seedPlanDefaults(true);refresh();toast('Plan reset to LFL defaults')">Reset</div>
-      <div class="tbtn dng" onclick="if(confirm('Clear all plan inputs?')){S.inputs={};refresh();toast('Plan cleared')}">Clear Plan</div>
-      <div class="tbtn" id="aop-btn" onclick="openAopModal()">Re-import AOP</div>
-      <div class="aop-lock-tag" id="aop-lock-tag" style="display:none" onclick="openAopModal()">&#x1F512; AOP Locked</div>
-      <div class="tbtn" id="aop-seed-btn" style="display:none" onclick="seedPlanFromAop()">&#x21BA; Seed from AOP</div>
-      <div class="tbtn" onclick="openVersionLog()" id="history-btn" title="Plan version history">&#x1F553; History</div>
-      <div class="tbtn pri" onclick="saveState()">Save</div>
+      <div class="tbar-actions">
+        <div class="tbtn" onclick="exportCSV()">Export</div>
+        <div class="tbtn" onclick="seedPlanDefaults(true);refresh();toast('Plan reset to LFL defaults')">Reset</div>
+        <div class="tbtn dng" onclick="if(confirm('Clear all plan inputs?')){S.inputs={};refresh();toast('Plan cleared')}">Clear Plan</div>
+        <div class="tbtn" id="aop-btn" onclick="openAopModal()">Re-import AOP</div>
+        <div class="aop-lock-tag" id="aop-lock-tag" style="display:none" onclick="openAopModal()">&#x1F512; AOP Locked</div>
+        <div class="tbtn" id="aop-seed-btn" style="display:none" onclick="seedPlanFromAop()">&#x21BA; Seed from AOP</div>
+        <div class="tbtn" onclick="openVersionLog()" id="history-btn" title="Plan version history">&#x1F553; History</div>
+        <div class="tbtn pri" onclick="saveState()">Save</div>
+      </div>
     </div>
 
     <!-- CONTROL STRIP -->
