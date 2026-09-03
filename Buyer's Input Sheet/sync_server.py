@@ -184,8 +184,12 @@ def parse_date_col(series: "pd.Series") -> "pd.Series":
 def serve_app():
     """Serve the OTB app HTML so it runs same-origin as the API (avoids CORS/data-URL blocks)."""
     html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "otb-plan-app.html")
-    from flask import send_file
-    return send_file(html_path, mimetype="text/html")
+    from flask import send_file, make_response
+    resp = make_response(send_file(html_path, mimetype="text/html"))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 @app.route("/demo")

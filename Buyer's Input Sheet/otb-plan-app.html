@@ -580,6 +580,31 @@ thead .c0,thead .c1{background:var(--th-bg) !important;color:var(--th-tx) !impor
 /* ── TABLE: TIGHTER CELLS ───────────────────────────────────────────────── */
 .dtbl tbody td{font-size:11px;padding:6px 8px}
 .dtbl tbody td.l{font-size:11px;font-weight:600}
+
+/* ── TABLE: COLOUR CORRECTIONS ─────────────────────────────────────────── */
+/* AOP reference amounts — indigo, not amber warning */
+.aop-ref-cell{color:var(--ac)!important;font-weight:600!important}
+/* Sell-through traffic light — replace amber mid with indigo */
+.st-mid{color:#4338CA!important;font-weight:600!important}
+.st-hi{color:#16a34a!important;font-weight:600!important}
+.st-lo{color:#b91c1c!important;font-weight:600!important}
+/* Growth % — soften to not compete with header */
+.gp{color:#15803d!important;font-weight:600!important}
+.gn{color:#b91c1c!important;font-weight:600!important}
+/* AOP month header highlight — lighter indigo tint, cleaner border */
+.aop-month-hl{background:color-mix(in srgb,var(--ac) 8%,var(--s2))!important;color:var(--ac)!important;border-bottom:2px solid color-mix(in srgb,var(--ac) 40%,transparent)!important}
+/* Table header: unify with deep indigo */
+.dtbl thead tr.hrow1 th,.dtbl thead tr.hrow2 th,.dtbl thead tr.hrow3 th{background:#312E81;color:#fff}
+/* Department name column — bolder, readable */
+.dtbl tbody td.l{font-size:11.5px;font-weight:600;color:var(--tx)}
+/* Alternating rows — very subtle */
+.dtbl tbody tr:nth-child(even) td{background:rgba(79,70,229,.025)}
+.dtbl tbody tr:hover td{background:color-mix(in srgb,var(--ac) 6%,var(--sf))!important}
+/* Section group header rows */
+.grphd td{background:rgba(79,70,229,.06)!important;color:var(--ac)!important;font-weight:700!important}
+/* Grand total row */
+.grandtot td{background:var(--ac)!important;color:#fff!important;font-weight:700!important}
+.grandtot td.l{color:#fff!important}
 </style>
 
 <!-- ─── APP ─────────────────────────────────────── -->
