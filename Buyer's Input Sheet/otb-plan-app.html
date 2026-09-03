@@ -605,6 +605,8 @@ thead .c0,thead .c1{background:var(--th-bg) !important;color:var(--th-tx) !impor
 /* Grand total row */
 .grandtot td{background:var(--ac)!important;color:#fff!important;font-weight:700!important}
 .grandtot td.l{color:#fff!important}
+/* Override higher-specificity .c0/.c1 rule so label cell also gets solid accent bg */
+.grandtot .c0,.grandtot .c1{background:var(--ac)!important;color:#fff!important}
 </style>
 
 <!-- ─── APP ─────────────────────────────────────── -->
