@@ -1,5 +1,6 @@
 ﻿<!-- CityKart Buyer's Input Sheet -->
 <meta charset="UTF-8">
+<meta name="bis-version" content="v4-2026-09-03">
 <title>CityKart - Buyer's Input Sheet</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -541,19 +542,38 @@ thead .c0,thead .c1{background:var(--th-bg) !important;color:var(--th-tx) !impor
 .vlog-row-ft{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .vlog-hint{font-size:10px;color:var(--mu);font-style:italic;padding:8px 12px;background:var(--s2);border-radius:6px;margin-top:4px;line-height:1.5}
 
-/* ── TOPBAR: TRULY CENTRED TITLE ─────────────────────────────────────────── */
+/* ── TOPBAR: CSS GRID CENTRED TITLE ─────────────────────────────────────── */
 :root{--TH:54px}
-.tbar{position:relative;justify-content:flex-start;padding:0 18px;gap:0}
-.tb-title{
-  position:absolute;left:50%;top:50%;
-  transform:translate(-50%,-50%);
-  flex:none;text-align:center;
-  pointer-events:none;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  max-width:38%;
+.tbar {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
+  align-items: center !important;
+  padding: 0 18px !important;
+  gap: 0 !important;
+  position: relative !important;
+}
+.tb-title {
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
+  grid-column: 2 !important;
+  text-align: center !important;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 420px;
 }
 #rptTitle{font-size:14px;font-weight:700;letter-spacing:-0.025em}
-.tbar-actions{margin-left:auto;display:flex;align-items:center;gap:7px;flex-shrink:0}
+.tbar-actions {
+  grid-column: 3 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 7px !important;
+  margin-left: 0 !important;
+}
 
 /* ── KPI TILES: REFINED ──────────────────────────────────────────────────── */
 .kstrip{padding:12px 18px;gap:10px;border-bottom:1.5px solid var(--bd)}
