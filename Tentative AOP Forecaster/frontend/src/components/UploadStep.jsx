@@ -28,7 +28,7 @@ export default function UploadStep({ onUseDb, onEditInputs }) {
           </button>
         </div>
         {err && <p className="upload-err">{err}</p>}
-        <DbSyncPanel />
+        <DbSyncPanel onSynced={useDb} />
       </div>
     </div>
   )
