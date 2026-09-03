@@ -34,6 +34,16 @@ export default function PlanningInputsEditor({ onBack, onContinue }) {
   const [continuing, setContinuing] = useState(false)
   const [continueErr, setContinueErr] = useState(null)
 
+  // Store master data is pre-fetched in the parent so switching to the tab
+  // is instant — no re-fetch on every tab click.
+  const [stores, setStores] = useState(null)
+  const [storeLoadErr, setStoreLoadErr] = useState(null)
+  useEffect(() => {
+    fetchJson('/api/config/store-master')
+      .then(d => setStores(d))
+      .catch(e => setStoreLoadErr(e.message))
+  }, [])
+
   async function handleContinue() {
     setContinuing(true); setContinueErr(null)
     try { await onContinue() } catch (e) { setContinueErr(e.message) } finally { setContinuing(false) }
@@ -69,7 +79,17 @@ export default function PlanningInputsEditor({ onBack, onContinue }) {
       {tab === 'growth'  && <GrowthTab />}
       {tab === 'nso'     && <NsoTab />}
       {tab === 'aop'     && <AopTab />}
-      {tab === 'stores'  && <StoreMasterTab />}
+      {tab === 'stores'  && (
+        <StoreMasterTab
+          stores={stores}
+          setStores={setStores}
+          loadErr={storeLoadErr}
+          reload={() => {
+            setStores(null); setStoreLoadErr(null)
+            fetchJson('/api/config/store-master').then(setStores).catch(e => setStoreLoadErr(e.message))
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -131,21 +151,65 @@ function MultiSelect({ label, options, selected, onChange }) {
   )
 }
 
+/* ── Store Master CSV template ───────────────────────────────────── */
+function downloadStoreMasterTemplate() {
+  const text = [
+    ['store_code', 'tag', 'cluster_key', 'ref_store'],
+    ['EXAMPLE', 'LFL', 'NORTH-1', ''],
+  ].map(row => row.map(csvField).join(',')).join('\n')
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }))
+  const a = document.createElement('a'); a.href = url; a.download = 'store_master_template.csv'; a.click()
+  URL.revokeObjectURL(url)
+}
+
 /* ── Store Master Tab ────────────────────────────────────────────── */
-function StoreMasterTab() {
-  const [stores, setStores] = useState(null)
+function StoreMasterTab({ stores, setStores, loadErr, reload }) {
   const [edits, setEdits]   = useState({})
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState({ tag: [], cluster: [], region: [], grade: [] })
   const [status, setStatus] = useState(null)
   const [busy, setBusy]     = useState(false)
+  const [importing, setImporting] = useState(false)
 
-  const load = () =>
-    fetchJson('/api/config/store-master')
-      .then(d => { setStores(d); setEdits({}) })
-      .catch(e => setStatus({ err: true, msg: e.message }))
-
-  useEffect(() => { load() }, [])
+  async function importCsv(e) {
+    const file = e.target.files?.[0]; e.target.value = ''
+    if (!file) return
+    setImporting(true); setStatus(null)
+    try {
+      const text = await file.text()
+      const lines = text.split(/\r?\n/).filter(l => l.trim())
+      if (!lines.length) throw new Error('Empty file')
+      // Auto-detect header by looking for known column names
+      const raw = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim().toLowerCase())
+      const colIdx = {
+        store:   raw.findIndex(h => ['store_code','store_id','store','storeid','code'].includes(h)),
+        tag:     raw.findIndex(h => h === 'tag'),
+        cluster: raw.findIndex(h => ['cluster_key','cluster','clusterkey'].includes(h)),
+        ref:     raw.findIndex(h => ['ref_store','ref','refstore','reference_store'].includes(h)),
+      }
+      if (colIdx.store === -1) throw new Error('Column "store_code" not found in file')
+      let staged = 0, skipped = 0
+      const next = {}
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(',').map(c => c.replace(/^"|"$/g, '').trim())
+        const sid = cols[colIdx.store]?.toUpperCase()
+        if (!sid) { skipped++; continue }
+        const patch = {}
+        if (colIdx.tag     >= 0) patch.tag         = cols[colIdx.tag]     ?? ''
+        if (colIdx.cluster >= 0) patch.cluster_key = cols[colIdx.cluster] ?? ''
+        if (colIdx.ref     >= 0) patch.ref_store   = cols[colIdx.ref]     ?? ''
+        if (Object.keys(patch).length) { next[sid] = { ...(next[sid] || {}), ...patch }; staged++ }
+        else skipped++
+      }
+      setEdits(prev => {
+        const merged = { ...prev }
+        for (const [sid, patch] of Object.entries(next)) merged[sid] = { ...(merged[sid] || {}), ...patch }
+        return merged
+      })
+      setStatus({ err: false, msg: `Staged ${staged} store(s) from import${skipped ? ` · ${skipped} row(s) skipped` : ''}. Review and Save changes.` })
+    } catch (err) { setStatus({ err: true, msg: `Import failed: ${err.message}` }) }
+    finally { setImporting(false) }
+  }
 
   // Unique filter options derived from all loaded data
   const opts = useMemo(() => {
@@ -200,13 +264,15 @@ function StoreMasterTab() {
         body: JSON.stringify({ rows }),
       })
       setStatus({ err: false, msg: `Saved ${r.updated} store(s).` })
-      load()
+      setEdits({})
+      reload()
     } catch (e) { setStatus({ err: true, msg: e.message }) }
     finally { setBusy(false) }
   }
 
   const unsavedCount = Object.keys(edits).length
 
+  if (loadErr) return <div className="card pie-card pie-loading" style={{color:'var(--red)'}}>Failed to load store master: {loadErr}</div>
   if (!stores) return <div className="card pie-card pie-loading">Loading store master…</div>
 
   return (
@@ -232,6 +298,11 @@ function StoreMasterTab() {
         <MultiSelect label="Region"  options={opts.region}  selected={filters.region}  onChange={v => setFilters(f => ({ ...f, region: v }))} />
         <MultiSelect label="Grade"   options={opts.grade}   selected={filters.grade}   onChange={v => setFilters(f => ({ ...f, grade: v }))} />
         <span className="pie-count-label">{filtered.length} stores{unsavedCount > 0 ? ` · ${unsavedCount} unsaved` : ''}</span>
+        <button className="btn-outline" onClick={downloadStoreMasterTemplate}>Template</button>
+        <label className="btn-outline pie-import-btn">
+          {importing ? 'Importing…' : 'Import CSV'}
+          <input type="file" accept=".csv" onChange={importCsv} disabled={importing} style={{ display: 'none' }} />
+        </label>
         <button className="btn-primary pie-save" onClick={save} disabled={busy || !unsavedCount}>
           {busy ? 'Saving…' : 'Save changes'}
         </button>

@@ -4,44 +4,45 @@
 <title>CityKart - Buyer's Input Sheet</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 /* ── RESET & TOKENS ─────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#F8FAFC;--sf:#FFFFFF;--s2:#F8FAFC;--s3:#EEF2FF;
-  --bd:#E0E7FF;--bm:#C7D2FE;--bh:#A5B4FC;
-  --tx:#1E1B4B;--t2:#334155;--t3:#64748B;--mu:#94A3B8;
-  --ac:#4F46E5;--ac-h:#3730A3;--ac-tint:14%;--ac-bord:38%;--ac-l:color-mix(in srgb,var(--ac) var(--ac-tint),var(--sf));--ac-b:color-mix(in srgb,var(--ac) var(--ac-bord),var(--sf));
+  --bg:#F0FAFA;--sf:#FFFFFF;--s2:#F0FAFA;--s3:#CCFBF1;
+  --bd:#99F6E4;--bm:#5EEAD4;--bh:#2DD4BF;
+  --tx:#0F2B2B;--t2:#1E3A3A;--t3:#3D6666;--mu:#6B9E9E;
+  --ac:#0D9488;--ac-h:#0F766E;--ac-tint:12%;--ac-bord:30%;--ac-l:color-mix(in srgb,var(--ac) var(--ac-tint),var(--sf));--ac-b:color-mix(in srgb,var(--ac) var(--ac-bord),var(--sf));
   --po:#059669;--po-b:#ECFDF5;--po-br:#6EE7B7;
-  --cy:#0891B2;--cy-b:#ECFEFF;--cy-br:#9FEFFF;
+  --cy:#0891B2;--cy-b:#ECFEFF;--cy-br:#A5F3FC;
   --ne:#DC2626;--ne-b:#FEF2F2;--ne-br:#FECACA;
   --wa:#92400E;--wa-b:#FEF3C7;--wa-br:#FDE68A;
-  --ac-grad:linear-gradient(135deg,#4F46E5,#6C4CF0);
-  --nav:#FFFFFF;--nav2:#E0E7FF;--nav3:#EEF2FF;
-  --nav-t:#1E1B4B;--nav-m:#64748B;--nav-a:var(--ac);--nav-ab-pct:16%;--nav-ab:color-mix(in srgb,var(--ac) var(--nav-ab-pct),var(--nav));
+  --ac-grad:linear-gradient(135deg,#0D9488,#0F766E);
+  --nav:#FFFFFF;--nav2:#CCFBF1;--nav3:#E6FFF9;
+  --nav-t:#0F2B2B;--nav-m:#4E8080;--nav-a:var(--ac);--nav-ab-pct:14%;--nav-ab:color-mix(in srgb,var(--ac) var(--nav-ab-pct),var(--nav));
   --mono:'SF Mono','Fira Code',ui-monospace,monospace;
   --r:8px;--NW:220px;--TH:48px;--CH:48px;
-  --topbar-bg:#312E81;--topbar-tx:#FFFFFF;
-  --th-bg:#312E81;--th-tx:#FFFFFF;--th-mu:rgba(255,255,255,0.55)
+  --topbar-bg:#134E4A;--topbar-tx:#FFFFFF;
+  --th-bg:#134E4A;--th-tx:#FFFFFF;--th-mu:rgba(255,255,255,0.55)
 }
 @media(prefers-color-scheme:dark){:root{
-  --bg:#090E1C;--sf:#101828;--s2:#141E30;--s3:#192436;
-  --bd:#1A2840;--bm:#22344C;--bh:#2A4060;
-  --tx:#E0EAF8;--t2:#7A90B0;--t3:#4A6080;--mu:#2A3C50;
+  --bg:#041212;--sf:#0A1E1E;--s2:#0D2424;--s3:#112C2C;
+  --bd:#143232;--bm:#1B4040;--bh:#224E4E;
+  --tx:#D0ECEC;--t2:#7AB0B0;--t3:#4A8080;--mu:#2A5050;
   --po:#059669;--po-b:#071A12;--po-br:#0A4028;
   --ne:#DC2626;--cy:#22D3EE;--cy-b:#083344;--cy-br:#155E75;
   --ne-b:#180810;--ne-br:#480818;
   --wa:#92400E;--wa-b:#140E00;--wa-br:#3A2800;
-  --ac:#4F46E5;--ac-h:#3730A3;--ac-tint:9%;--ac-bord:30%;
-  --nav:#0C1525;--nav2:#152035;--nav3:#1A2A40;--nav-t:#C8D8EC;--nav-m:#445A70;--nav-ab-pct:22%;
+  --ac:#14B8A6;--ac-h:#0D9488;--ac-tint:9%;--ac-bord:28%;
+  --nav:#071A1A;--nav2:#0E2828;--nav3:#123030;--nav-t:#B8DADA;--nav-m:#3A7070;--nav-ab-pct:20%;
   --topbar-bg:var(--sf);--topbar-tx:var(--tx);
   --th-bg:var(--s2);--th-tx:var(--t2);--th-mu:var(--mu)
 }}
-:root[data-theme=dark]{--bg:#090E1C;--sf:#101828;--s2:#141E30;--s3:#192436;--bd:#1A2840;--bm:#22344C;--bh:#2A4060;--tx:#E0EAF8;--t2:#7A90B0;--t3:#4A6080;--mu:#2A3C50;--po:#059669;--po-b:#071A12;--po-br:#0A4028;--ne:#DC2626;--cy:#22D3EE;--cy-b:#083344;--cy-br:#155E75;--ne-b:#180810;--ne-br:#480818;--wa:#92400E;--wa-b:#140E00;--wa-br:#3A2800;--ac:#4F46E5;--ac-h:#3730A3;--ac-tint:9%;--ac-bord:30%;--nav:#0C1525;--nav2:#152035;--nav3:#1A2A40;--nav-t:#C8D8EC;--nav-m:#445A70;--nav-ab-pct:22%;--topbar-bg:var(--sf);--topbar-tx:var(--tx);--th-bg:var(--s2);--th-tx:var(--t2);--th-mu:var(--mu)}
-:root[data-theme=light]{--bg:#F8FAFC;--sf:#FFFFFF;--s2:#F8FAFC;--s3:#EEF2FF;--bd:#E0E7FF;--bm:#C7D2FE;--bh:#A5B4FC;--tx:#1E1B4B;--t2:#334155;--t3:#64748B;--mu:#94A3B8;--ac:#4F46E5;--ac-h:#3730A3;--po:#059669;--po-b:#ECFDF5;--po-br:#6EE7B7;--cy:#0891B2;--cy-b:#ECFEFF;--cy-br:#9FEFFF;--ne:#DC2626;--ne-b:#FEF2F2;--ne-br:#FECACA;--wa:#92400E;--wa-b:#FEF3C7;--wa-br:#FDE68A;--ac-tint:14%;--ac-bord:38%;--ac-grad:linear-gradient(135deg,#4F46E5,#6C4CF0);--nav:#FFFFFF;--nav2:#E0E7FF;--nav3:#EEF2FF;--nav-t:#1E1B4B;--nav-m:#64748B;--nav-ab-pct:16%;--topbar-bg:#312E81;--topbar-tx:#FFFFFF;--th-bg:#312E81;--th-tx:#FFFFFF;--th-mu:rgba(255,255,255,0.55)}
+:root[data-theme=dark]{--bg:#041212;--sf:#0A1E1E;--s2:#0D2424;--s3:#112C2C;--bd:#143232;--bm:#1B4040;--bh:#224E4E;--tx:#D0ECEC;--t2:#7AB0B0;--t3:#4A8080;--mu:#2A5050;--po:#059669;--po-b:#071A12;--po-br:#0A4028;--ne:#DC2626;--cy:#22D3EE;--cy-b:#083344;--cy-br:#155E75;--ne-b:#180810;--ne-br:#480818;--wa:#92400E;--wa-b:#140E00;--wa-br:#3A2800;--ac:#14B8A6;--ac-h:#0D9488;--ac-tint:9%;--ac-bord:28%;--nav:#071A1A;--nav2:#0E2828;--nav3:#123030;--nav-t:#B8DADA;--nav-m:#3A7070;--nav-ab-pct:20%;--topbar-bg:var(--sf);--topbar-tx:var(--tx);--th-bg:var(--s2);--th-tx:var(--t2);--th-mu:var(--mu)}
+:root[data-theme=light]{--bg:#F0FAFA;--sf:#FFFFFF;--s2:#F0FAFA;--s3:#CCFBF1;--bd:#99F6E4;--bm:#5EEAD4;--bh:#2DD4BF;--tx:#0F2B2B;--t2:#1E3A3A;--t3:#3D6666;--mu:#6B9E9E;--ac:#0D9488;--ac-h:#0F766E;--po:#059669;--po-b:#ECFDF5;--po-br:#6EE7B7;--cy:#0891B2;--cy-b:#ECFEFF;--cy-br:#A5F3FC;--ne:#DC2626;--ne-b:#FEF2F2;--ne-br:#FECACA;--wa:#92400E;--wa-b:#FEF3C7;--wa-br:#FDE68A;--ac-tint:12%;--ac-bord:30%;--ac-grad:linear-gradient(135deg,#0D9488,#0F766E);--nav:#FFFFFF;--nav2:#CCFBF1;--nav3:#E6FFF9;--nav-t:#0F2B2B;--nav-m:#4E8080;--nav-ab-pct:14%;--topbar-bg:#134E4A;--topbar-tx:#FFFFFF;--th-bg:#134E4A;--th-tx:#FFFFFF;--th-mu:rgba(255,255,255,0.55)}
 
-body{font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;line-height:1.4;background:var(--bg);color:var(--tx);overflow:hidden;height:100vh}
+body{font-family:'Figtree',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;line-height:1.4;background:var(--bg);color:var(--tx);overflow:hidden;height:100vh;-webkit-font-smoothing:antialiased}
+.tb-title,.kl,.snav-brand-nm,.snav-sec,.fp-hl{font-family:'Sora','Figtree',sans-serif}
 
 /* ── LAYOUT ─────────────────────────────────────── */
 .app{display:flex;height:100vh;overflow:hidden}

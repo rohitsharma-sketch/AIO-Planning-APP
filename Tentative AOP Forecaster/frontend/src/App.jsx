@@ -268,9 +268,13 @@ export default function App() {
     }
   }
 
+  // When running embedded under the unified backend (port 8010) the outer
+  // shell already provides navigation — suppress the standalone header.
+  const isEmbedded = window.location.port === '8010'
+
   return (
     <div className="app-shell">
-      <header className="app-header">
+      {!isEmbedded && <header className="app-header">
         <div className="header-inner">
           <div className="logo">
             <span className="logo-mark">A</span>
@@ -306,7 +310,7 @@ export default function App() {
             )}
           </div>
         </div>
-      </header>
+      </header>}
 
       <main className="app-main">
         {error && (
