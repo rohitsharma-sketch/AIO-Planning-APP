@@ -1,0 +1,221 @@
+.pl-root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 24px 80px;
+  gap: 32px;
+  min-height: 60vh;
+}
+
+.pl-header {
+  text-align: center;
+}
+.pl-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 6px;
+  letter-spacing: -0.02em;
+}
+.pl-sub {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* ── TILE ROW ── */
+.pl-tiles {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+  max-width: 640px;
+}
+.pl-tiles--open .pl-tile--saved {
+  border-color: var(--accent);
+}
+
+.pl-tile {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 22px 20px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+  user-select: none;
+}
+.pl-tile:hover:not(.pl-tile--empty) {
+  border-color: var(--accent);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 20%, transparent);
+  transform: translateY(-1px);
+}
+.pl-tile--empty {
+  opacity: 0.45;
+  cursor: default;
+}
+.pl-tile--new .pl-tile-icon {
+  font-size: 28px;
+  font-weight: 300;
+  color: var(--accent);
+  line-height: 1;
+  min-width: 36px;
+  text-align: center;
+}
+.pl-tile--saved .pl-tile-icon {
+  font-size: 24px;
+  min-width: 36px;
+  text-align: center;
+}
+.pl-tile-body {
+  flex: 1;
+}
+.pl-tile-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+.pl-tile-desc {
+  font-size: 12px;
+  color: var(--muted);
+}
+.pl-tile-arrow {
+  font-size: 18px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+/* ── VERSION LOG ── */
+.pl-log {
+  width: 100%;
+  max-width: 640px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.pl-log-hd {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.pl-log-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+.pl-log-row:last-child { border-bottom: none; }
+.pl-log-row:hover { background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+
+.pl-log-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.pl-log-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pl-log-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+.pl-log-cur-badge {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+  padding: 1px 7px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 10px;
+}
+.pl-log-date { opacity: 0.7; }
+
+.pl-load-btn {
+  flex-shrink: 0;
+  padding: 7px 18px;
+  border-radius: 6px;
+  border: 1.5px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.pl-load-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Save-changes dialog overlay */
+.pl-save-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.pl-save-dialog {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 28px 32px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+}
+.pl-save-dialog h3 {
+  margin: 0 0 10px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+}
+.pl-save-dialog p {
+  margin: 0 0 22px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.pl-save-dialog-btns {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.pl-save-dialog-btns button {
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  transition: background 0.12s;
+}
+.pl-save-dialog-btns .pl-btn-save {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.pl-save-dialog-btns button:hover:not(.pl-btn-save) { background: var(--border); }

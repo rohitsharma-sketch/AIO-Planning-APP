@@ -3,10 +3,12 @@ import UploadStep from './components/UploadStep'
 import ReviewStep from './components/ReviewStep'
 import ResultsDashboard from './components/ResultsDashboard'
 import PlanningInputsEditor from './components/PlanningInputsEditor'
+import PlanLanding, { loadPlanVersions, savePlanVersion, isMajorChangeVsLog } from './components/PlanLanding'
 import { loadAutosave, useAutosave, clearAutosave, touchAutosaveIndex } from './lib/autosave'
 import { apiUrl } from './lib/apiBase'
 import ThemeSelector from './components/ThemeSelector'
 import './App.css'
+import './components/PlanLanding.css'
 
 const STEPS = ['Configure', 'Review', 'Results']
 
@@ -37,6 +39,11 @@ export default function App() {
   const [theme, setTheme]         = useState(() => localStorage.getItem('aop-theme') || 'classic')
   const [runKey, setRunKey]       = useState(0)
   const [showEditor, setShowEditor] = useState(false)
+
+  // Landing page: shown initially and after reset; bypassed when a session auto-resumes
+  const [showLanding, setShowLanding] = useState(true)
+  // Save-before-leave dialog state
+  const [saveDialog, setSaveDialog]   = useState(null) // {action, rates} | null
 
   // Lifted review state — survives step navigation
   const [rates,     setRates]     = useState(null)
@@ -73,31 +80,24 @@ export default function App() {
     localStorage.setItem('aop-theme', theme)
   }, [theme])
 
-  // Dev shortcut: ?session_id=xxx jumps to results
+  // Dev shortcut: ?session_id=xxx jumps to results (skips landing)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const sid = params.get('session_id')
     if (!sid) return
     fetch(apiUrl(`/api/results/${sid}`))
       .then(r => r.json())
-      .then(data => { setSession({ session_id: sid }); setResults(data); setStep(2) })
+      .then(data => { setSession({ session_id: sid }); setResults(data); setStep(2); setShowLanding(false) })
       .catch(() => {})
   }, [])
 
   // Resume the last active session across a plain reload (no ?session_id= needed).
   // Skipped when the URL already names a session — that takes priority.
+  // Shows the landing page rather than silently auto-resuming so the user can
+  // choose whether to continue or start fresh.
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('session_id')) return
-    const saved = loadAutosave('currentSession')
-    if (!saved?.session?.session_id || !saved.step) return
-    if (saved.step === 2) {
-      fetch(apiUrl(`/api/results/${saved.session.session_id}`))
-        .then(r => r.ok ? r.json() : Promise.reject())
-        .then(data => { setSession(saved.session); setResults(data); setStep(2) })
-        .catch(() => { setSession(saved.session); setStep(1) })   // run output gone — the inputs may still be fine, drop back to Review
-    } else {
-      setSession(saved.session); setStep(1)
-    }
+    // Leave showLanding = true; the landing "Continue" tile will offer to load it.
   }, [])
 
   // Remember which session/step is active so a reload can resume it (see effect above).
@@ -109,6 +109,7 @@ export default function App() {
     setRates(null)
     setCellLocks(null)
     setSession(data)
+    setShowLanding(false)
     setStep(1)
   }
 
@@ -144,6 +145,8 @@ export default function App() {
       setResults(data)
       setRunKey(k => k + 1)
       setStep(2)
+      // Record this run in the plan version log (only if rates are ready)
+      if (rates) savePlanVersion(session.session_id, rates, session.from_db ? 'db' : 'upload')
     } catch (e) {
       setError(e.message)
     } finally {
@@ -155,7 +158,7 @@ export default function App() {
     window.open(apiUrl(`/api/download/${session.session_id}`), '_blank')
   }
 
-  function handleReset() {
+  function _doReset() {
     if (session) {
       fetch(apiUrl(`/api/sessions/${session.session_id}`), { method: 'DELETE' })
       clearAutosave(`review:${session.session_id}`)
@@ -163,7 +166,46 @@ export default function App() {
     clearAutosave('currentSession')
     initedFor.current = null
     setSession(null); setResults(null); setRates(null); setCellLocks(null)
-    setStep(0); setError(null)
+    setStep(0); setError(null); setShowLanding(true)
+  }
+
+  function handleReset() {
+    // If the user has made major changes since the last saved run, offer to save first
+    if (rates && isMajorChangeVsLog(rates)) {
+      setSaveDialog({ action: 'reset', rates })
+    } else {
+      _doReset()
+    }
+  }
+
+  function handleSaveDialogSave() {
+    const { rates: r } = saveDialog
+    if (session && r) savePlanVersion(session.session_id, r, session.from_db ? 'db' : 'upload')
+    setSaveDialog(null)
+    _doReset()
+  }
+  function handleSaveDialogDiscard() { setSaveDialog(null); _doReset() }
+
+  // Resume a saved plan version from the landing page
+  async function handleResumeSaved(sessionId) {
+    if (!sessionId) return
+    setError(null)
+    try {
+      const r = await fetch(apiUrl(`/api/results/${sessionId}`))
+      if (r.ok) {
+        const data = await r.json()
+        setSession({ session_id: sessionId, from_db: true })
+        setResults(data)
+        setStep(2)
+      } else {
+        // Results gone — drop to Review/Config with whatever is in autosave
+        setSession({ session_id: sessionId, from_db: true })
+        setStep(1)
+      }
+      setShowLanding(false)
+    } catch (e) {
+      setError(`Could not load saved plan: ${e.message}`)
+    }
   }
 
   return (
@@ -174,19 +216,21 @@ export default function App() {
             <span className="logo-mark">A</span>
             <span className="logo-text">AOP Forecaster</span>
           </div>
-          <nav className="stepper">
-            {STEPS.map((s, i) => (
-              <div key={s} className={`step-item ${i === step ? 'active' : ''} ${i < step ? 'done' : ''}`}>
-                <span className="step-num">{i < step ? 'OK' : i + 1}</span>
-                <span className="step-label">{s}</span>
-                {i < STEPS.length - 1 && <span className="step-sep" />}
-              </div>
-            ))}
-          </nav>
+          {!showLanding && (
+            <nav className="stepper">
+              {STEPS.map((s, i) => (
+                <div key={s} className={`step-item ${i === step ? 'active' : ''} ${i < step ? 'done' : ''}`}>
+                  <span className="step-num">{i < step ? 'OK' : i + 1}</span>
+                  <span className="step-label">{s}</span>
+                  {i < STEPS.length - 1 && <span className="step-sep" />}
+                </div>
+              ))}
+            </nav>
+          )}
           <div style={{display:'flex', alignItems:'center', gap:8, flexShrink:0}}>
-            {step > 0 && (
+            {!showLanding && (
               <button className="btn-outline" onClick={handleReset} style={{fontSize:12}}>
-                New forecast
+                ← Plans
               </button>
             )}
             <ThemeSelector current={theme} onChange={setTheme} />
@@ -202,12 +246,20 @@ export default function App() {
           </div>
         )}
 
-        {step === 0 && (showEditor
+        {/* ── LANDING PAGE ── */}
+        {showLanding && (
+          <PlanLanding
+            onNewPlan={() => { setShowLanding(false); setStep(0) }}
+            onResume={handleResumeSaved}
+          />
+        )}
+
+        {!showLanding && step === 0 && (showEditor
           ? <PlanningInputsEditor onBack={() => setShowEditor(false)} onContinue={handleUseDb} />
           : <UploadStep onUseDb={handleUseDb} onEditInputs={() => setShowEditor(true)} />
         )}
 
-        {step === 1 && session && rates && (
+        {!showLanding && step === 1 && session && rates && (
           <ReviewStep
             session={session}
             running={running}
@@ -223,7 +275,7 @@ export default function App() {
         {/* Keep ResultsDashboard mounted once results exist so OutputTab filter state
             survives the Results→Review→Results round-trip. Hidden via CSS, not unmounted. */}
         {results && (
-          <div style={{ display: step === 2 ? '' : 'none' }}>
+          <div style={{ display: (!showLanding && step === 2) ? '' : 'none' }}>
             <ResultsDashboard
               results={results}
               session={session}
@@ -234,6 +286,23 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* ── SAVE-BEFORE-LEAVE DIALOG ── */}
+      {saveDialog && (
+        <div className="pl-save-dialog-backdrop" onClick={() => setSaveDialog(null)}>
+          <div className="pl-save-dialog" onClick={e => e.stopPropagation()}>
+            <h3>Save changes?</h3>
+            <p>
+              You've made significant changes to this plan since the last saved version.
+              Would you like to save them as a new version before leaving?
+            </p>
+            <div className="pl-save-dialog-btns">
+              <button onClick={handleSaveDialogDiscard}>Don't save</button>
+              <button className="pl-btn-save" onClick={handleSaveDialogSave}>Save new version</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
