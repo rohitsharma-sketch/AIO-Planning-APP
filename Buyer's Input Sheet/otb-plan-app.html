@@ -601,32 +601,35 @@ thead .c0,thead .c1{background:var(--th-bg) !important;color:var(--th-tx) !impor
 .dtbl tbody td{font-size:11px;padding:6px 8px}
 .dtbl tbody td.l{font-size:11px;font-weight:600}
 
-/* ── TABLE: COLOUR CORRECTIONS ─────────────────────────────────────────── */
-/* AOP reference amounts — indigo, not amber warning */
+/* ── TABLE: CLEAN SOBER STYLE ───────────────────────────────────────────── */
+/* ── All rows: plain white — no alternating shading ── */
+.dtbl tbody tr td,.dtbl tbody tr:nth-child(even) td,.dtbl tbody tr:nth-child(odd) td{background:var(--sf)!important}
+.dtbl tbody tr:nth-child(even) td.sc,.dtbl tbody tr:nth-child(odd) td.sc{background:var(--sf)!important;opacity:1}
+.dtbl tbody tr:nth-child(even) .c0,.dtbl tbody tr:nth-child(even) .c1,
+.dtbl tbody tr:nth-child(odd) .c0,.dtbl tbody tr:nth-child(odd) .c1{background:var(--sf)!important}
+/* ── Hover: single light row highlight ── */
+.dtbl tbody tr:hover td{background:#F1F5F9!important}
+/* ── MAMJ column: no background tint, just keep header text colour ── */
+.aop-month-hl{background:transparent!important;border-bottom:2px solid var(--ac)!important}
+/* ── Group header rows: neutral gray, no indigo tint ── */
+.grphd td{background:var(--s2)!important;color:var(--tx)!important;font-weight:700!important}
+.grphd td.dept-metric{background:var(--s2)!important}
+/* ── Table headers: unified deep indigo ── */
+.dtbl thead tr.hrow1 th,.dtbl thead tr.hrow2 th,.dtbl thead tr.hrow3 th{background:#312E81!important;color:#fff!important}
+/* ── Grand total: solid indigo, white text ── */
+.grandtot td,.grandtot .c0,.grandtot .c1{background:#312E81!important;color:#fff!important;font-weight:700!important}
+.grandtot td.l{color:#fff!important}
+/* ── AOP reference amounts: indigo text ── */
 .aop-ref-cell{color:var(--ac)!important;font-weight:600!important}
-/* Sell-through traffic light — replace amber mid with indigo */
-.st-mid{color:#4338CA!important;font-weight:600!important}
+/* ── ST% traffic light ── */
 .st-hi{color:#16a34a!important;font-weight:600!important}
+.st-mid{color:#4338CA!important;font-weight:600!important}
 .st-lo{color:#b91c1c!important;font-weight:600!important}
-/* Growth % — soften to not compete with header */
+/* ── Growth %: green / red ── */
 .gp{color:#15803d!important;font-weight:600!important}
 .gn{color:#b91c1c!important;font-weight:600!important}
-/* AOP month header highlight — lighter indigo tint, cleaner border */
-.aop-month-hl{background:color-mix(in srgb,var(--ac) 8%,var(--s2))!important;color:var(--ac)!important;border-bottom:2px solid color-mix(in srgb,var(--ac) 40%,transparent)!important}
-/* Table header: unify with deep indigo */
-.dtbl thead tr.hrow1 th,.dtbl thead tr.hrow2 th,.dtbl thead tr.hrow3 th{background:#312E81;color:#fff}
-/* Department name column — bolder, readable */
+/* ── Department name column ── */
 .dtbl tbody td.l{font-size:11.5px;font-weight:600;color:var(--tx)}
-/* Alternating rows — very subtle */
-.dtbl tbody tr:nth-child(even) td{background:rgba(79,70,229,.025)}
-.dtbl tbody tr:hover td{background:color-mix(in srgb,var(--ac) 6%,var(--sf))!important}
-/* Section group header rows */
-.grphd td{background:rgba(79,70,229,.06)!important;color:var(--ac)!important;font-weight:700!important}
-/* Grand total row */
-.grandtot td{background:var(--ac)!important;color:#fff!important;font-weight:700!important}
-.grandtot td.l{color:#fff!important}
-/* Override higher-specificity .c0/.c1 rule so label cell also gets solid accent bg */
-.grandtot .c0,.grandtot .c1{background:var(--ac)!important;color:#fff!important}
 </style>
 
 <!-- ─── APP ─────────────────────────────────────── -->
