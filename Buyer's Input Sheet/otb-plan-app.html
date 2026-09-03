@@ -542,38 +542,13 @@ thead .c0,thead .c1{background:var(--th-bg) !important;color:var(--th-tx) !impor
 .vlog-row-ft{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .vlog-hint{font-size:10px;color:var(--mu);font-style:italic;padding:8px 12px;background:var(--s2);border-radius:6px;margin-top:4px;line-height:1.5}
 
-/* ── TOPBAR: CSS GRID CENTRED TITLE ─────────────────────────────────────── */
+/* ── TOPBAR: SPACER-FLEX CENTRED TITLE ──────────────────────────────────── */
 :root{--TH:54px}
-.tbar {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
-  align-items: center !important;
-  padding: 0 18px !important;
-  gap: 0 !important;
-  position: relative !important;
-}
-.tb-title {
-  position: static !important;
-  left: auto !important;
-  top: auto !important;
-  transform: none !important;
-  grid-column: 2 !important;
-  text-align: center !important;
-  pointer-events: none;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 420px;
-}
+.tbar{display:flex!important;align-items:center!important;padding:0 18px!important;gap:0!important;position:relative!important}
+.tbar-spacer{flex:1!important;min-width:0!important}
+.tb-title{flex:none!important;position:static!important;left:auto!important;top:auto!important;transform:none!important;text-align:center!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:38%;pointer-events:none}
 #rptTitle{font-size:14px;font-weight:700;letter-spacing:-0.025em}
-.tbar-actions {
-  grid-column: 3 !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: flex-end !important;
-  gap: 7px !important;
-  margin-left: 0 !important;
-}
+.tbar-actions{flex:1!important;display:flex!important;align-items:center!important;justify-content:flex-end!important;gap:7px!important;margin-left:0!important;min-width:0!important}
 
 /* ── KPI TILES: REFINED ──────────────────────────────────────────────────── */
 .kstrip{padding:12px 18px;gap:10px;border-bottom:1.5px solid var(--bd)}
@@ -600,6 +575,9 @@ thead .c0,thead .c1{background:var(--th-bg) !important;color:var(--th-tx) !impor
 /* ── TABLE: TIGHTER CELLS ───────────────────────────────────────────────── */
 .dtbl tbody td{font-size:11px;padding:6px 8px}
 .dtbl tbody td.l{font-size:11px;font-weight:600}
+
+/* ── TABLE HEADER OVERFLOW FIX ─────────────────────────────────────────── */
+.dtbl thead th{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px}
 
 /* ── TABLE: CLEAN SOBER STYLE ───────────────────────────────────────────── */
 /* ── All rows: plain white — no alternating shading ── */
@@ -685,6 +663,7 @@ thead .c0,thead .c1{background:var(--th-bg) !important;color:var(--th-tx) !impor
 
     <!-- TOPBAR -->
     <div class="tbar">
+      <div class="tbar-spacer"></div>
       <div class="tb-title">
         <span id="rptTitle">CK | Buyer's Input Sheet FY 27-28</span>
         <span class="tb-crumb" id="rptCrumb"></span>
