@@ -170,6 +170,8 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
   const [status, setStatus] = useState(null)
   const [busy, setBusy]     = useState(false)
   const [importing, setImporting] = useState(false)
+  // Use empty array when DB load failed so import tools still render
+  const safeStores = stores || []
 
   async function importCsv(e) {
     const file = e.target.files?.[0]; e.target.value = ''
@@ -213,20 +215,18 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
 
   // Unique filter options derived from all loaded data
   const opts = useMemo(() => {
-    if (!stores) return { tag: [], cluster: [], region: [], grade: [] }
     const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort()
     return {
-      tag:     uniq(stores.map(s => s.tag)),
-      cluster: uniq(stores.map(s => s.cluster_key)),
-      region:  uniq(stores.map(s => s.region_type)),
-      grade:   uniq(stores.map(s => s.store_grade)),
+      tag:     uniq(safeStores.map(s => s.tag)),
+      cluster: uniq(safeStores.map(s => s.cluster_key)),
+      region:  uniq(safeStores.map(s => s.region_type)),
+      grade:   uniq(safeStores.map(s => s.store_grade)),
     }
-  }, [stores])
+  }, [safeStores])
 
   // Merge edits into stores, then apply filters + search
   const filtered = useMemo(() => {
-    if (!stores) return []
-    return stores
+    return safeStores
       .map(s => ({ ...s, ...(edits[s.store_id] || {}) }))
       .filter(s => {
         if (search) {
@@ -272,11 +272,20 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
 
   const unsavedCount = Object.keys(edits).length
 
-  if (loadErr) return <div className="card pie-card pie-loading" style={{color:'var(--red)'}}>Failed to load store master: {loadErr}</div>
-  if (!stores) return <div className="card pie-card pie-loading">Loading store master…</div>
+  if (!stores && !loadErr) return <div className="card pie-card pie-loading">Loading store master…</div>
 
   return (
     <div className="card pie-card">
+      {loadErr && (
+        <div className="pie-import-skipped" style={{marginBottom:14}}>
+          <div className="pie-import-skipped-head">
+            <span>Could not load store data from database — {loadErr}</span>
+          </div>
+          <p style={{marginTop:6,fontSize:12,color:'var(--char)'}}>
+            You can still import from a CSV file. Download the template, fill in store codes with tag / cluster / ref-store, and use Import CSV below.
+          </p>
+        </div>
+      )}
       {/* Count tiles */}
       <div className="sm-tiles">
         <CountTile label="TOTAL STORES" value={counts.total} variant="total" />

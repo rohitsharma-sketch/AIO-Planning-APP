@@ -2,7 +2,16 @@ import { useState } from 'react'
 import DbSyncPanel from './DbSyncPanel'
 import './UploadStep.css'
 
-export default function UploadStep({ onUseDb, onEditInputs }) {
+const THEMES = [
+  { id: 'indigo',  label: 'Indigo',    primary: '#312E81', accent: '#4F46E5' },
+  { id: 'classic', label: 'Classic',   primary: '#1F3864', accent: '#4472C4' },
+  { id: 'emerald', label: 'Emerald',   primary: '#1E293B', accent: '#10B981' },
+  { id: 'amber',   label: 'Amber',     primary: '#0F172A', accent: '#F59E0B' },
+  { id: 'coral',   label: 'Coral',     primary: '#3B1F6A', accent: '#F4845F' },
+  { id: 'forest',  label: 'Forest',    primary: '#14532D', accent: '#22C55E' },
+]
+
+export default function UploadStep({ onUseDb, onEditInputs, theme, onThemeChange }) {
   const [err, setErr]       = useState(null)
   const [dbBusy, setDbBusy] = useState(false)
 
@@ -85,6 +94,27 @@ export default function UploadStep({ onUseDb, onEditInputs }) {
         <div className="us-sync-label">Data Sources</div>
         <DbSyncPanel onSynced={useDb} />
       </div>
+
+      {/* ── Appearance ────────────────────────────────── */}
+      {onThemeChange && (
+        <div className="pl-theme-section">
+          <span className="pl-theme-label">Appearance</span>
+          <div className="pl-theme-swatches">
+            {THEMES.map(t => (
+              <button
+                key={t.id}
+                className={`pl-theme-swatch ${t.id === theme ? 'active' : ''}`}
+                title={t.label}
+                onClick={() => onThemeChange(t.id)}
+                style={{ '--sw-primary': t.primary, '--sw-accent': t.accent }}
+              >
+                <span className="pl-sw-1" />
+                <span className="pl-sw-2" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
     </div>
   )

@@ -332,7 +332,7 @@ export default function App() {
 
         {!showLanding && step === 0 && (showEditor
           ? <PlanningInputsEditor onBack={() => setShowEditor(false)} onContinue={handleUseDb} />
-          : <UploadStep onUseDb={handleUseDb} onEditInputs={() => setShowEditor(true)} />
+          : <UploadStep onUseDb={handleUseDb} onEditInputs={() => setShowEditor(true)} theme={theme} onThemeChange={setTheme} />
         )}
 
         {!showLanding && step === 1 && session && rates && (
