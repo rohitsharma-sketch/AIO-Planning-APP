@@ -159,10 +159,9 @@ export default function App() {
   }
 
   function _doReset() {
-    if (session) {
-      fetch(apiUrl(`/api/sessions/${session.session_id}`), { method: 'DELETE' })
-      clearAutosave(`review:${session.session_id}`)
-    }
+    // Keep session files on the server — "← Plans" preserves them so "Load →"
+    // on the version list can reload results without re-running the engine.
+    // Sessions are temp files and will be cleaned up on server restart.
     clearAutosave('currentSession')
     initedFor.current = null
     setSession(null); setResults(null); setRates(null); setCellLocks(null)
@@ -202,13 +201,17 @@ export default function App() {
   }
 
   // Resume a saved plan version from the landing page — always lands on Results (step 3).
-  // If server results are gone but session files still exist, re-runs silently.
-  // Falls back to Config only if the session is completely gone.
+  // Priority chain:
+  //   1. GET /api/results/{old_id}       — cached results still on server
+  //   2. POST /api/run/{old_id}          — session files still exist, just re-run
+  //   3. POST /api/config/session-from-db + run — server was restarted; create fresh session
   async function handleResumeSaved(sessionId) {
     if (!sessionId) return
     setError(null)
     setShowLanding(false)
+    setRunning(true)
     try {
+      // 1. Cached results?
       const r = await fetch(apiUrl(`/api/results/${sessionId}`))
       if (r.ok) {
         const data = await r.json()
@@ -217,8 +220,8 @@ export default function App() {
         setStep(2)
         return
       }
-      // Results gone — try to re-run the session (files may still exist on server)
-      setRunning(true)
+
+      // 2. Re-run stale session
       const runRes = await fetch(apiUrl(`/api/run/${sessionId}`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -230,13 +233,35 @@ export default function App() {
         setResults(data)
         setRunKey(k => k + 1)
         setStep(2)
-      } else {
-        // Session files also gone — drop to Config so user can re-upload
-        setSession({ session_id: sessionId, from_db: true })
-        setStep(1)
+        return
       }
+
+      // 3. Server restarted — create a fresh DB session and run it
+      const sessionRes = await fetch(apiUrl('/api/config/session-from-db'), { method: 'POST' })
+      if (!sessionRes.ok) {
+        const err = await sessionRes.json()
+        throw new Error(typeof err.detail === 'string' ? err.detail : 'Could not create session from DB')
+      }
+      const newSession = await sessionRes.json()
+      const freshRun = await fetch(apiUrl(`/api/run/${newSession.session_id}`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ palette: 'classic' }),
+      })
+      if (!freshRun.ok) {
+        const err = await freshRun.json()
+        throw new Error(typeof err.detail === 'string' ? err.detail : 'Engine run failed')
+      }
+      const data = await freshRun.json()
+      // Update version log so future loads use the fresh session_id
+      if (rates) savePlanVersion(newSession.session_id, rates, 'db')
+      setSession({ ...newSession })
+      setResults(data)
+      setRunKey(k => k + 1)
+      setStep(2)
     } catch (e) {
       setError(`Could not load saved plan: ${e.message}`)
+      setShowLanding(true)
     } finally {
       setRunning(false)
     }
