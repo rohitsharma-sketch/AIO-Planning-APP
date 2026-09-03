@@ -1,39 +1,46 @@
 ﻿<!-- CityKart Buyer's Input Sheet -->
 <meta charset="UTF-8">
 <title>CityKart - Buyer's Input Sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 /* ── RESET & TOKENS ─────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#F0F4FA;--sf:#FFFFFF;--s2:#F5F8FD;--s3:#EEF3FA;
-  --bd:#DCE5F2;--bm:#C4D2E6;--bh:#B0C4DC;
-  --tx:#0E1829;--t2:#374558;--t3:#65768C;--mu:#98AABF;
-  --ac:#1D63E8;--ac-h:#1550C8;--ac-tint:14%;--ac-bord:38%;--ac-l:color-mix(in srgb,var(--ac) var(--ac-tint),var(--sf));--ac-b:color-mix(in srgb,var(--ac) var(--ac-bord),var(--sf));
-  --po:#0A8F5C;--po-b:#EAFAF3;--po-br:#8EDFC0;
+  --bg:#F8FAFC;--sf:#FFFFFF;--s2:#F8FAFC;--s3:#EEF2FF;
+  --bd:#E0E7FF;--bm:#C7D2FE;--bh:#A5B4FC;
+  --tx:#1E1B4B;--t2:#334155;--t3:#64748B;--mu:#94A3B8;
+  --ac:#4F46E5;--ac-h:#3730A3;--ac-tint:14%;--ac-bord:38%;--ac-l:color-mix(in srgb,var(--ac) var(--ac-tint),var(--sf));--ac-b:color-mix(in srgb,var(--ac) var(--ac-bord),var(--sf));
+  --po:#059669;--po-b:#ECFDF5;--po-br:#6EE7B7;
   --cy:#0891B2;--cy-b:#ECFEFF;--cy-br:#9FEFFF;
-  --ne:#D03040;--ne-b:#FEF2F3;--ne-br:#F8B8BD;
-  --wa:#C07808;--wa-b:#FEF8E8;--wa-br:#EDD48A;
-  --ac-grad:linear-gradient(135deg,#1D63E8,#6C4CF0);
-  --nav:#E7EEF9;--nav2:#DBE6F6;--nav3:#C7D6EE;
-  --nav-t:#16233A;--nav-m:#5C7093;--nav-a:var(--ac);--nav-ab-pct:16%;--nav-ab:color-mix(in srgb,var(--ac) var(--nav-ab-pct),var(--nav));
+  --ne:#DC2626;--ne-b:#FEF2F2;--ne-br:#FECACA;
+  --wa:#92400E;--wa-b:#FEF3C7;--wa-br:#FDE68A;
+  --ac-grad:linear-gradient(135deg,#4F46E5,#6C4CF0);
+  --nav:#FFFFFF;--nav2:#E0E7FF;--nav3:#EEF2FF;
+  --nav-t:#1E1B4B;--nav-m:#64748B;--nav-a:var(--ac);--nav-ab-pct:16%;--nav-ab:color-mix(in srgb,var(--ac) var(--nav-ab-pct),var(--nav));
   --mono:'SF Mono','Fira Code',ui-monospace,monospace;
-  --r:8px;--NW:172px;--TH:46px;--CH:48px
+  --r:8px;--NW:220px;--TH:48px;--CH:48px;
+  --topbar-bg:#312E81;--topbar-tx:#FFFFFF;
+  --th-bg:#312E81;--th-tx:#FFFFFF;--th-mu:rgba(255,255,255,0.55)
 }
 @media(prefers-color-scheme:dark){:root{
   --bg:#090E1C;--sf:#101828;--s2:#141E30;--s3:#192436;
   --bd:#1A2840;--bm:#22344C;--bh:#2A4060;
   --tx:#E0EAF8;--t2:#7A90B0;--t3:#4A6080;--mu:#2A3C50;
-  --po-b:#071A12;--po-br:#0A4028;
-  --cy:#22D3EE;--cy-b:#083344;--cy-br:#155E75;
+  --po:#059669;--po-b:#071A12;--po-br:#0A4028;
+  --ne:#DC2626;--cy:#22D3EE;--cy-b:#083344;--cy-br:#155E75;
   --ne-b:#180810;--ne-br:#480818;
-  --wa-b:#140E00;--wa-br:#3A2800;
-  --ac-tint:9%;--ac-bord:30%;
-  --nav:#0C1525;--nav2:#152035;--nav3:#1A2A40;--nav-t:#C8D8EC;--nav-m:#445A70;--nav-ab-pct:22%
+  --wa:#92400E;--wa-b:#140E00;--wa-br:#3A2800;
+  --ac:#4F46E5;--ac-h:#3730A3;--ac-tint:9%;--ac-bord:30%;
+  --nav:#0C1525;--nav2:#152035;--nav3:#1A2A40;--nav-t:#C8D8EC;--nav-m:#445A70;--nav-ab-pct:22%;
+  --topbar-bg:var(--sf);--topbar-tx:var(--tx);
+  --th-bg:var(--s2);--th-tx:var(--t2);--th-mu:var(--mu)
 }}
-:root[data-theme=dark]{--bg:#090E1C;--sf:#101828;--s2:#141E30;--s3:#192436;--bd:#1A2840;--bm:#22344C;--bh:#2A4060;--tx:#E0EAF8;--t2:#7A90B0;--t3:#4A6080;--mu:#2A3C50;--po-b:#071A12;--po-br:#0A4028;--cy:#22D3EE;--cy-b:#083344;--cy-br:#155E75;--ne-b:#180810;--ne-br:#480818;--wa-b:#140E00;--wa-br:#3A2800;--ac-tint:9%;--ac-bord:30%;--nav:#0C1525;--nav2:#152035;--nav3:#1A2A40;--nav-t:#C8D8EC;--nav-m:#445A70;--nav-ab-pct:22%}
-:root[data-theme=light]{--bg:#F0F4FA;--sf:#FFFFFF;--s2:#F5F8FD;--s3:#EEF3FA;--bd:#DCE5F2;--bm:#C4D2E6;--tx:#0E1829;--t2:#374558;--t3:#65768C;--mu:#98AABF;--ac:#1D63E8;--ac-h:#1550C8;--po:#0A8F5C;--po-b:#EAFAF3;--po-br:#8EDFC0;--cy:#0891B2;--cy-b:#ECFEFF;--cy-br:#9FEFFF;--ne:#D03040;--ne-b:#FEF2F3;--ne-br:#F8B8BD;--wa:#C07808;--wa-b:#FEF8E8;--wa-br:#EDD48A;--ac-tint:14%;--ac-bord:38%;--nav:#E7EEF9;--nav2:#DBE6F6;--nav3:#C7D6EE;--nav-t:#16233A;--nav-m:#5C7093;--nav-ab-pct:16%}
+:root[data-theme=dark]{--bg:#090E1C;--sf:#101828;--s2:#141E30;--s3:#192436;--bd:#1A2840;--bm:#22344C;--bh:#2A4060;--tx:#E0EAF8;--t2:#7A90B0;--t3:#4A6080;--mu:#2A3C50;--po:#059669;--po-b:#071A12;--po-br:#0A4028;--ne:#DC2626;--cy:#22D3EE;--cy-b:#083344;--cy-br:#155E75;--ne-b:#180810;--ne-br:#480818;--wa:#92400E;--wa-b:#140E00;--wa-br:#3A2800;--ac:#4F46E5;--ac-h:#3730A3;--ac-tint:9%;--ac-bord:30%;--nav:#0C1525;--nav2:#152035;--nav3:#1A2A40;--nav-t:#C8D8EC;--nav-m:#445A70;--nav-ab-pct:22%;--topbar-bg:var(--sf);--topbar-tx:var(--tx);--th-bg:var(--s2);--th-tx:var(--t2);--th-mu:var(--mu)}
+:root[data-theme=light]{--bg:#F8FAFC;--sf:#FFFFFF;--s2:#F8FAFC;--s3:#EEF2FF;--bd:#E0E7FF;--bm:#C7D2FE;--bh:#A5B4FC;--tx:#1E1B4B;--t2:#334155;--t3:#64748B;--mu:#94A3B8;--ac:#4F46E5;--ac-h:#3730A3;--po:#059669;--po-b:#ECFDF5;--po-br:#6EE7B7;--cy:#0891B2;--cy-b:#ECFEFF;--cy-br:#9FEFFF;--ne:#DC2626;--ne-b:#FEF2F2;--ne-br:#FECACA;--wa:#92400E;--wa-b:#FEF3C7;--wa-br:#FDE68A;--ac-tint:14%;--ac-bord:38%;--ac-grad:linear-gradient(135deg,#4F46E5,#6C4CF0);--nav:#FFFFFF;--nav2:#E0E7FF;--nav3:#EEF2FF;--nav-t:#1E1B4B;--nav-m:#64748B;--nav-ab-pct:16%;--topbar-bg:#312E81;--topbar-tx:#FFFFFF;--th-bg:#312E81;--th-tx:#FFFFFF;--th-mu:rgba(255,255,255,0.55)}
 
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',sans-serif;font-size:13px;line-height:1.4;background:var(--bg);color:var(--tx);overflow:hidden;height:100vh}
+body{font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;line-height:1.4;background:var(--bg);color:var(--tx);overflow:hidden;height:100vh}
 
 /* ── LAYOUT ─────────────────────────────────────── */
 .app{display:flex;height:100vh;overflow:hidden}
@@ -317,33 +324,6 @@ td.aop-col-bg input.gi{background:color-mix(in srgb,var(--ac) 6%,var(--s2))}
 .aop-ov-badge{font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px}
 .aop-ov-badge.ov{background:var(--ne-b);color:var(--ne)}
 .aop-ov-badge.un{background:var(--wa-b);color:var(--wa)}
-/* AOP live constraint bar */
-#aop-live-bar{display:none;align-items:center;gap:12px;padding:5px 14px;background:color-mix(in srgb,var(--ac) 8%,var(--s1));border-bottom:1px solid var(--bd);font-size:12px;flex-wrap:wrap}
-#aop-live-bar .alb-badge{display:inline-flex;align-items:center;gap:4px;background:var(--ac);color:#fff;padding:1px 8px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.03em}
-.aop-div-chip{padding:2px 10px;border-radius:6px;font-size:11px}
-.aop-div-chip .aop-ok{color:var(--po);font-weight:700}
-.aop-div-chip .aop-gap{color:var(--ne);font-weight:700}
-#aop-live-at{margin-left:auto;font-size:10px;color:var(--mu)}
-
-/* AOP REVIEW PANEL (buyer review workflow) */
-.aopr-panel{flex:1;display:none;flex-direction:column;overflow:auto;padding:24px;background:var(--bg)}
-.aopr-card{background:var(--sf);border:1px solid var(--bm);border-radius:12px;max-width:720px;width:100%;margin:0 auto;padding:20px 22px;box-shadow:0 2px 10px rgba(0,0,0,.05)}
-.aopr-hd{margin-bottom:16px}
-.aopr-title{font-size:14px;font-weight:800;color:var(--tx)}
-.aopr-sub{font-size:11px;color:var(--t3);margin-top:3px;line-height:1.5}
-.aopr-row{margin-bottom:16px}
-.aopr-lbl{display:block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--t2);margin-bottom:5px}
-.aopr-sel{width:100%;padding:7px 10px;border:1.5px solid var(--bm);border-radius:6px;background:var(--sf);color:var(--tx);font:600 12px/1.4 inherit;outline:none}
-.aopr-sel:focus{border-color:var(--ac);background:var(--ac-l)}
-.aopr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
-.aopr-field{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px 12px}
-.aopr-inp{width:100%;padding:6px 8px;text-align:right;border:1.5px solid var(--bm);border-radius:5px;background:var(--sf);color:var(--tx);font:700 13px/1.4 var(--mono);outline:none;-moz-appearance:textfield}
-.aopr-inp::-webkit-inner-spin-button,.aopr-inp::-webkit-outer-spin-button{-webkit-appearance:none}
-.aopr-inp:focus{border-color:var(--ac);background:var(--ac-l)}
-.aopr-hint{font-size:10px;color:var(--t3);margin-top:4px;font-style:italic}
-.aopr-ly{font-size:10px;color:var(--t3);margin-top:6px}
-.aopr-actions{display:flex;align-items:center;gap:10px}
-.aopr-msg{font-size:11px;font-weight:700;color:var(--po);margin-right:auto}
 
 /* GRAND TOTAL BAR */
 .gtbar{flex-shrink:0;background:var(--sf);border-top:2px solid var(--bm);padding:9px 16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
@@ -450,6 +430,116 @@ tr:hover .mag-trig{display:inline}
 .empty .eico{font-size:36px;margin-bottom:4px}
 .empty .emsg{font-size:13px;font-weight:700;color:var(--t3)}
 .empty .esub{font-size:11px;text-align:center}
+
+/* ── INDIGO & WHITE REDESIGN ─────────────────────── */
+
+/* Typography layer */
+body{letter-spacing:0}
+.tb-title,.snav-brand-nm,.kv,.gtv{letter-spacing:-0.02em}
+.dtbl tbody td{font-family:'Plus Jakarta Sans',-apple-system,sans-serif;font-size:11px;font-weight:500}
+.dtbl tbody td.l{font-weight:600;font-size:12px}
+.mu,.t3,.kl,.gtl,.snav-brand-fy,.cs-lbl,.fp-hl,.fp-sec-lbl{color:var(--mu);font-weight:400}
+
+/* Topbar: deep indigo */
+.tbar{background:var(--topbar-bg);border-bottom:none;box-shadow:0 1px 2px rgba(79,70,229,.06),0 4px 14px rgba(79,70,229,.1);height:var(--TH);flex-wrap:nowrap}
+.tb-title{color:var(--topbar-tx);font-size:13px;font-weight:700;letter-spacing:-0.02em;white-space:nowrap;overflow:hidden;min-width:0;flex-shrink:1}
+#rptTitle{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tb-crumb{color:rgba(238,242,255,.65);white-space:nowrap}
+.tbar .tbtn{background:rgba(255,255,255,.11);border-color:rgba(255,255,255,.2);color:#fff;font-size:11px;font-weight:600;border-radius:7px;flex-shrink:0}
+.tbar .tbtn:hover{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.32);color:#fff;box-shadow:none}
+.tbar .tbtn.pri{background:#fff;color:#4F46E5;border-color:transparent;box-shadow:0 1px 4px rgba(255,255,255,.18)}
+.tbar .tbtn.pri:hover{background:#EEF2FF;color:#3730A3;box-shadow:none}
+.tbar .tbtn.dng{background:rgba(220,38,38,.18);border-color:rgba(220,38,38,.4);color:#FCA5A5}
+.tbar .tbtn.dng:hover{background:rgba(220,38,38,.3);border-color:rgba(220,38,38,.55);color:#fff;box-shadow:none}
+.tbar .aop-lock-tag{background:rgba(252,211,77,.18);border-color:rgba(252,211,77,.4);color:#FCD34D}
+.saved-tag{color:rgba(167,243,208,.9)}
+
+/* Sidebar: white panel, 220px, indigo brand strip */
+.snav{background:var(--nav);border-right:1.5px solid var(--nav2);width:var(--NW)}
+.snav-brand{background:var(--topbar-bg);border-bottom:1px solid rgba(255,255,255,.1);padding:0 14px}
+.snav-brand-nm{color:#EEF2FF !important;font-size:12px;font-weight:700;letter-spacing:-0.02em}
+.snav-brand-fy{color:rgba(199,210,254,.65) !important;font-size:9px}
+.snav-sec{padding:10px 14px 3px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#94A3B8;border-top:1px solid var(--nav2)}
+.snav-sec:first-of-type{border-top:none}
+.ni{padding:5px 10px;margin:1px 6px;border-radius:6px;font-size:12px;font-weight:500;color:var(--nav-t)}
+.ni.act{background:var(--nav-ab);color:var(--ac);font-weight:600}
+.snav-foot{border-top:1.5px solid var(--nav2)}
+
+/* Control strip: light background */
+.cstrip{background:var(--sf);border-bottom:1.5px solid var(--bd)}
+.fpbtn{border-radius:7px;font-size:11px;font-weight:600;height:32px;padding:0 12px}
+.qb{height:28px;padding:0 10px;border-radius:20px;font-size:11px;font-weight:600}
+
+/* Filter panel: breathing room */
+.fpanel{border-right:1.5px solid var(--bd)}
+.fp-head{padding:10px 14px 8px;border-bottom:1.5px solid var(--bd)}
+.fp-hl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#94A3B8}
+.fg-hd{padding:8px 14px;font-size:11px;font-weight:600;color:var(--nav-t)}
+.fg-body{padding:4px 14px 10px}
+.fitem{font-size:11px;padding:4px 0}
+
+/* Division tabs: signature element */
+.divtabs{background:var(--sf);border-bottom:1.5px solid var(--bd);padding:10px 16px;gap:10px}
+.dtab{padding:0 22px;height:48px;border-radius:24px;border:1.5px solid var(--bd);background:var(--sf);color:var(--t3);font-size:13px;font-weight:600;letter-spacing:-0.01em;transition:all 150ms ease;box-shadow:none}
+.dtab:hover:not(.on){border-color:var(--dtab-c);background:color-mix(in srgb,var(--dtab-c) 6%,var(--sf));color:var(--dtab-c)}
+.dtab.on{background:#4F46E5;color:#fff;border-color:#4F46E5;box-shadow:0 4px 14px rgba(79,70,229,.28)}
+.dtab-cnt{font-size:10px;font-weight:700;background:rgba(255,255,255,.25);color:#fff;padding:2px 8px;border-radius:12px;margin-left:8px;min-width:20px;text-align:center;vertical-align:middle;display:inline-block;line-height:1.6}
+.dtab:not(.on) .dtab-cnt{background:color-mix(in srgb,var(--dtab-c) 10%,var(--s2));color:var(--t3)}
+
+/* Table headers: indigo */
+.dtbl .hr0 th,.dtbl .hr1 th,.dtbl .hr2 th{background:var(--th-bg) !important;border-bottom:1px solid rgba(255,255,255,.12) !important}
+.dtbl .hr0 th,.dtbl .hr1 th{color:var(--th-mu) !important}
+.dtbl .hr2 th{color:rgba(255,255,255,.7) !important;font-size:9px;font-weight:700}
+.dtbl .hr2 th.sc{background:rgba(79,70,229,.35) !important;color:#EEF2FF !important}
+.hmon{color:#C7D2FE !important;border-right:1px solid rgba(255,255,255,.1) !important}
+.hdim{color:rgba(255,255,255,.6) !important}
+.hsum{color:#EEF2FF !important;background:rgba(79,70,229,.3) !important;border-right:1px solid rgba(255,255,255,.1) !important}
+thead .c0,thead .c1{background:var(--th-bg) !important;color:var(--th-tx) !important;border-right:1px solid rgba(255,255,255,.12) !important}
+/* Table body */
+.dtbl tbody tr{min-height:36px}
+.dtbl tbody td{padding:8px 8px;border-bottom:1px solid var(--bd);border-right:1px solid var(--bd)}
+.dtbl tbody td.l{font-weight:600;color:var(--tx);font-size:12px}
+.dtbl tbody tr:nth-child(odd) td{background:#FAFBFF}
+.dtbl tbody tr:nth-child(even) td{background:var(--sf)}
+.dtbl tbody tr:nth-child(even) td.sc,.dtbl tbody tr:nth-child(odd) td.sc{background:var(--ac-l);opacity:1}
+.dtbl tbody tr:nth-child(even) .c0,.dtbl tbody tr:nth-child(even) .c1{background:var(--sf)}
+.dtbl tbody tr:nth-child(odd) .c0,.dtbl tbody tr:nth-child(odd) .c1{background:#FAFBFF}
+.dtbl tbody tr:hover td{background:var(--ac-l) !important}
+.grandtot td{background:var(--ac-l) !important;border-top:2px solid var(--ac-b) !important}
+/* KPI strip */
+.ktile{border:1.5px solid var(--bd);border-radius:10px;box-shadow:0 1px 2px rgba(79,70,229,.04),0 4px 14px rgba(79,70,229,.06)}
+/* Cards: consistent shadow */
+.aop-modal,.mag-card{box-shadow:0 4px 14px rgba(79,70,229,.1),0 24px 64px rgba(0,0,0,.2)}
+/* Month filter chips */
+.mp{border-radius:20px;height:28px;display:inline-flex;align-items:center;padding:0 12px;font-size:11px;font-weight:600}
+/* Buttons: 32px toolbar, 28px secondary */
+.tbtn{height:32px;padding:0 14px;border-radius:7px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:5px}
+.fpbtn{height:32px}
+/* Separator blocks in table */
+.st-sep-th{border-left:2px solid rgba(245,158,11,.5) !important}
+.hist-sep-th{border-left:2px solid rgba(99,102,241,.5) !important}
+.plan-sep-th{border-left:2px solid rgba(16,185,129,.5) !important}
+
+/* ── VERSION LOG PANEL ────────────────────────────── */
+.vlog-overlay{position:fixed;inset:0;z-index:900;background:rgba(30,27,75,.45);backdrop-filter:blur(3px);display:none;justify-content:flex-end}
+.vlog-overlay.vis{display:flex}
+.vlog-panel{width:400px;max-width:96vw;background:var(--sf);border-left:1.5px solid var(--bd);display:flex;flex-direction:column;box-shadow:-8px 0 32px rgba(79,70,229,.12);animation:vlog-slide .18s ease}
+@keyframes vlog-slide{from{transform:translateX(100%)}to{transform:translateX(0)}}
+.vlog-hd{padding:16px 18px 14px;border-bottom:1.5px solid var(--bd);display:flex;align-items:center;gap:10px;flex-shrink:0;background:var(--topbar-bg)}
+.vlog-title{font-size:15px;font-weight:700;color:#EEF2FF;letter-spacing:-0.02em;flex:1}
+.vlog-close{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;transition:.12s}
+.vlog-close:hover{background:rgba(255,255,255,.22)}
+.vlog-body{flex:1;overflow-y:auto;padding:12px}
+.vlog-empty{padding:32px;text-align:center;color:var(--mu);font-size:12px;line-height:1.6}
+.vlog-entry{border:1.5px solid var(--bd);border-radius:10px;padding:13px 15px;margin-bottom:10px;background:var(--sf);transition:.12s}
+.vlog-entry:hover{border-color:var(--ac-b);background:var(--ac-l)}
+.vlog-label{font-size:13px;font-weight:700;color:var(--tx);margin-bottom:6px;letter-spacing:-0.01em}
+.vlog-divs{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.vlog-div{font-size:11px;font-weight:600;color:var(--t3);background:var(--s3);border:1px solid var(--bd);border-radius:20px;padding:3px 10px;white-space:nowrap}
+.vlog-load{padding:5px 14px;border-radius:6px;border:1.5px solid var(--ac-b);background:var(--ac-l);color:var(--ac);font-size:11px;font-weight:700;cursor:pointer;transition:.12s}
+.vlog-load:hover{background:var(--ac);color:#fff;border-color:var(--ac)}
+.vlog-row-ft{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.vlog-hint{font-size:10px;color:var(--mu);font-style:italic;padding:8px 12px;background:var(--s2);border-radius:6px;margin-top:4px;line-height:1.5}
 </style>
 
 <!-- ─── APP ─────────────────────────────────────── -->
@@ -482,9 +572,6 @@ tr:hover .mag-trig{display:inline}
     <div class="ni" draggable="true" onclick="setReport('inactive')" id="ni-inactive">
       <span class="ni-dh">⠿</span><span class="lbl">Inactive Depts</span><span class="nbdg" id="ni-inactive-cnt" style="display:none;background:var(--wa);color:#000">0</span>
     </div>
-    <div class="ni" draggable="true" onclick="setReport('aopreview')" id="ni-aopreview">
-      <span class="ni-dh">⠿</span><span class="lbl">AOP Review</span><span class="nbdg" style="background:var(--cy);color:#fff">Buyer</span>
-    </div>
     </div>
 
     <div class="snav-foot">
@@ -509,15 +596,16 @@ tr:hover .mag-trig{display:inline}
     <!-- TOPBAR -->
     <div class="tbar">
       <div class="tb-title">
-        <span id="rptTitle">Buyer's Plan</span>
+        <span id="rptTitle">CK | Buyer's Input Sheet FY 27-28</span>
         <span class="tb-crumb" id="rptCrumb"></span>
       </div>
       <div class="tbtn" onclick="exportCSV()">Export</div>
       <div class="tbtn" onclick="seedPlanDefaults(true);refresh();toast('Plan reset to LFL defaults')">Reset</div>
       <div class="tbtn dng" onclick="if(confirm('Clear all plan inputs?')){S.inputs={};refresh();toast('Plan cleared')}">Clear Plan</div>
-      <div class="tbtn" id="aop-btn" onclick="openAopModal()">Import AOP</div>
+      <div class="tbtn" id="aop-btn" onclick="openAopModal()">Re-import AOP</div>
       <div class="aop-lock-tag" id="aop-lock-tag" style="display:none" onclick="openAopModal()">&#x1F512; AOP Locked</div>
       <div class="tbtn" id="aop-seed-btn" style="display:none" onclick="seedPlanFromAop()">&#x21BA; Seed from AOP</div>
+      <div class="tbtn" onclick="openVersionLog()" id="history-btn" title="Plan version history">&#x1F553; History</div>
       <div class="tbtn pri" onclick="saveState()">Save</div>
     </div>
 
@@ -550,15 +638,6 @@ tr:hover .mag-trig{display:inline}
       </div>
     </div>
 
-    <!-- AOP LIVE CONSTRAINT BAR — auto-populated from AOP Forecaster -->
-    <div id="aop-live-bar">
-      <span class="alb-badge">⚡ Live AOP</span>
-      <span id="aop-live-mens" class="aop-div-chip"></span>
-      <span id="aop-live-ladies" class="aop-div-chip"></span>
-      <span id="aop-live-kids" class="aop-div-chip"></span>
-      <span id="aop-live-at"></span>
-    </div>
-
     <!-- CONTENT AREA -->
     <div class="content">
 
@@ -572,7 +651,7 @@ tr:hover .mag-trig{display:inline}
       </div>
 
       <!-- REPORT AREA -->
-      <div class="rarea" id="rarea">
+      <div class="rarea">
         <!-- DIVISION TABS (buyers/summary only) -->
         <div class="divtabs" id="divtabs">
           <button class="dtab on" data-div="all" style="--dtab-c:#1D63E8" onclick="setDivTab('all')">ALL<span class="dtab-cnt" id="dtab-cnt-all"></span></button>
@@ -599,45 +678,19 @@ tr:hover .mag-trig{display:inline}
         <div class="gtbar" id="gtbar"></div>
       </div>
 
-      <!-- AOP REVIEW PANEL (buyer review workflow) -->
-      <div class="aopr-panel" id="aop-review-panel" style="display:none">
-        <div class="aopr-card">
-          <div class="aopr-hd">
-            <div class="aopr-title">AOP Review — Buyer Totals</div>
-            <div class="aopr-sub">Review the forecasted division totals for a cycle awaiting buyer input, adjust if needed, then Save or Submit for Review.</div>
-          </div>
-          <div class="aopr-row">
-            <label class="aopr-lbl" for="aop-review-cycle-picker">Plan Cycle (pending buyer input)</label>
-            <select class="aopr-sel" id="aop-review-cycle-picker"></select>
-          </div>
-          <div class="aopr-grid">
-            <div class="aopr-field">
-              <label class="aopr-lbl">Mens Total (Rs. Lakhs)</label>
-              <input class="aopr-inp" id="aop-review-mens" type="number" step="0.01">
-              <div class="aopr-hint" id="aop-review-cr-mens"></div>
-              <div class="aopr-ly" id="aop-review-ly-mens">LY reference unavailable</div>
-            </div>
-            <div class="aopr-field">
-              <label class="aopr-lbl">Ladies Total (Rs. Lakhs)</label>
-              <input class="aopr-inp" id="aop-review-ladies" type="number" step="0.01">
-              <div class="aopr-hint" id="aop-review-cr-ladies"></div>
-              <div class="aopr-ly" id="aop-review-ly-ladies">LY reference unavailable</div>
-            </div>
-            <div class="aopr-field">
-              <label class="aopr-lbl">Kids Total (Rs. Lakhs)</label>
-              <input class="aopr-inp" id="aop-review-kids" type="number" step="0.01">
-              <div class="aopr-hint" id="aop-review-cr-kids"></div>
-              <div class="aopr-ly" id="aop-review-ly-kids">LY reference unavailable</div>
-            </div>
-          </div>
-          <div class="aopr-actions">
-            <span class="aopr-msg" id="aop-review-msg"></span>
-            <button class="tbtn" id="aop-review-save-btn">Save</button>
-            <button class="tbtn pri" id="aop-review-submit-btn">Submit for Review</button>
-          </div>
-        </div>
-      </div>
+    </div>
+  </div>
+</div>
 
+<!-- VERSION LOG PANEL -->
+<div class="vlog-overlay" id="vlogOverlay" onclick="if(event.target===this)closeVersionLog()">
+  <div class="vlog-panel">
+    <div class="vlog-hd">
+      <span class="vlog-title">&#x1F553; Plan History</span>
+      <button class="vlog-close" onclick="closeVersionLog()">&#x2715; Close</button>
+    </div>
+    <div class="vlog-body" id="vlogBody">
+      <div class="vlog-empty">No saved versions yet.<br>Save the plan to create the first version.</div>
     </div>
   </div>
 </div>
@@ -1614,7 +1667,6 @@ let S = {
   aop: {mens:{},ladies:{},kids:{}}, // Division AOP: {divId:{mi:Rs.Cr}}
   aopUnit: 'lakhs', // 'lakhs' or 'crore' — unit user enters in modal
   aopLocked: false,
-  aopLiveAt: null, // ISO timestamp of last live AOP fetch from Forecaster (null = manual/embedded)
   aqp: 0,         // active quick preset
   storeLflOnly: false,
   filters: {
@@ -1639,12 +1691,11 @@ let S = {
 const REPORT_META = {
   attr: {title:'Attribute Summary', crumb:'Analytics'},
   dept: {title:'Department Summary', crumb:'Analytics'},
-  buyers: {title:"Buyer's Plan", crumb:'Planning | Input'},
+  buyers: {title:"CK | Buyer's Input Sheet FY 27-28", crumb:'Planning | Input'},
   summary: {title:'Division Summary', crumb:'Planning | Summary'},
   store: {title:'Store Summary', crumb:'Analytics'},
   division: {title:'Division Detail', crumb:'Plan | Results'},
   inactive: {title:'Inactive Departments', crumb:'Management'},
-  aopreview: {title:'AOP Review', crumb:'Planning | Buyer Review'},
 };
 
 /* ── HELPERS ───────────────────────────────────── */
@@ -2240,11 +2291,6 @@ function setReport(id){
   document.getElementById('lfl-tog').style.display=id==='store'?'flex':'none';
   const divTabsEl=document.getElementById('divtabs');
   if(divTabsEl)divTabsEl.classList.toggle('vis',id==='buyers'||id==='summary'||id==='division'||id==='attr');
-  const isAopReview=id==='aopreview';
-  document.getElementById('fpanel').style.display=isAopReview?'none':'';
-  document.getElementById('rarea').style.display=isAopReview?'none':'';
-  document.getElementById('aop-review-panel').style.display=isAopReview?'flex':'none';
-  if(isAopReview)loadAopReviewCycles().catch(err=>{const m=document.getElementById('aop-review-msg');if(m)m.textContent=err.message;});
   refresh();
 }
 function setStoreLfl(v){
@@ -3740,25 +3786,6 @@ function toggleLockAllMAMJ(){
   anyLocked?unlockAllMAMJ():lockAllMAMJ();
 }
 function lockAllMAMJ(){
-  // Hard constraint: when live AOP targets are loaded, each division's MAMJ plan
-  // total must be within ±0.5 Cr of the AOP target before locking is allowed.
-  if(S.aopLocked&&S.aopLiveAt){
-    const TOL=0.5;
-    const bad=[];
-    ['mens','ladies','kids'].forEach(divId=>{
-      const tgt=AOP_MIS.reduce((a,mi)=>a+(S.aop[divId]?.[mi]||0),0);
-      if(tgt<=0)return;
-      const plan=_divPlanMAMJTotal(divId);
-      const gap=plan-tgt;
-      if(Math.abs(gap)>TOL)
-        bad.push(`${divId.toUpperCase()}: Plan ₹${fCr(plan)} Cr vs AOP ₹${fCr(tgt)} Cr (${gap>0?'+':''}${fCr(gap)} Cr)`);
-    });
-    if(bad.length){
-      toast('Cannot lock — AOP mismatch:\n'+bad.join('\n'),6000);
-      _renderAopLiveBar(S.aopLiveAt); // refresh bar to highlight red gaps
-      return;
-    }
-  }
   DVDATA.forEach(dv=>{
     if(S.divLocked.has(dv.id))return;
     dv.secs.forEach(sec=>{
@@ -4147,8 +4174,9 @@ function revertToAop(dvId,attr){
 /* ── SAVE & EXPORT ─────────────────────────────── */
 function saveState(){
   const now=new Date();
-  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopUnit:S.aopUnit,aopLiveAt:S.aopLiveAt||null,locked:[...S.locked],aopSeeds:S.aopSeeds,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],at:now.toISOString()}))}catch(e){}
+  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopUnit:S.aopUnit,locked:[...S.locked],aopSeeds:S.aopSeeds,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],at:now.toISOString()}))}catch(e){}
   _updateSaveLabel(now);
+  _maybeSaveVersion(now);
   toast('State saved ✓');
 }
 function _updateSaveLabel(d){
@@ -4228,7 +4256,6 @@ function loadState(){
     if(p.aop)S.aop=p.aop;
     if(p.aopLocked!=null)S.aopLocked=p.aopLocked;
     if(p.aopUnit)S.aopUnit=p.aopUnit;
-    if(p.aopLiveAt)S.aopLiveAt=p.aopLiveAt;
     if(p.locked)S.locked=new Set(p.locked);
     if(p.aopSeeds)S.aopSeeds=p.aopSeeds;
     if(p.divTab!=null)S.divTab=p.divTab;
@@ -4284,7 +4311,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   const w=document.querySelector('.sync-wrap');
   if(w){w.addEventListener('mouseenter',_placeSyncTip);window.addEventListener('resize',_placeSyncTip);}
 });
-function _syncUI(key,status,timeStr,progress){
+function _syncUI(key,status,timeStr){
   _syncState[key]={s:status,t:timeStr};
   const icons={ok:'<span style="color:var(--po)">✓</span>',err:'<span style="color:var(--ne)">✗</span>',syncing:'<span style="color:var(--wa)">⟳</span>',idle:'<span style="color:var(--mu)">○</span>'};
   const bdgLbls={ok:'Synced',err:'Error',syncing:'Syncing…',idle:'Pending'};
@@ -4293,14 +4320,7 @@ function _syncUI(key,status,timeStr,progress){
   const bdg=document.getElementById('sync-'+key+'-bdg');
   if(icon)icon.innerHTML=icons[status]||icons.idle;
   if(timeEl)timeEl.textContent=timeStr||'—';
-  if(bdg){
-    bdg.className='stbdg '+status;
-    // Append a live % while syncing (progress is undefined until the job's
-    // first poll reports one) - keeps the same compact badge rather than
-    // adding new layout just for this.
-    bdg.textContent=(status==='syncing'&&typeof progress==='number')
-      ? `Syncing… ${progress}%` : (bdgLbls[status]||'Pending');
-  }
+  if(bdg){bdg.className='stbdg '+status;bdg.textContent=bdgLbls[status]||'Pending';}
   const vals=Object.values(_syncState);
   const anySyncing=vals.some(v=>v.s==='syncing');
   const anyErr=vals.some(v=>v.s==='err');
@@ -4379,34 +4399,20 @@ function applyTheme(mode){
 
 // Shared polling helper: polls pollUrl every 5 s until status==='done', rejects on error.
 // maxMs defaults to 10 minutes; a page reload starts fresh polling from the current job state.
-// onProgress, if given, is called with each poll's numeric `progress` (0-100) while running.
-// A single poll can transiently fail (the job's own background work can briefly
-// starve the server) - that's retried a few times rather than aborting the whole
-// sync on one dropped request.
-async function _pollUntilDone(pollUrl,maxMs=600000,onProgress){
+async function _pollUntilDone(pollUrl,maxMs=600000){
   const deadline=Date.now()+maxMs;
-  let misses=0;
   while(Date.now()<deadline){
     await new Promise(r=>setTimeout(r,5000));
-    let pd;
-    try{
-      const pr=await fetch(pollUrl,{signal:AbortSignal.timeout(60000)});
-      pd=await pr.json();
-      misses=0;
-    }catch(e){
-      misses++;
-      if(misses>=5)throw new Error('Lost contact with the sync job: '+e.message);
-      continue;
-    }
+    const pr=await fetch(pollUrl,{signal:AbortSignal.timeout(60000)});
+    const pd=await pr.json();
     if(pd.status==='done') return pd;
     if(pd.status==='error') throw new Error(pd.error||'Job failed');
-    if(onProgress&&typeof pd.progress==='number')onProgress(pd.progress);
   }
   throw new Error('Sync timed out');
 }
 
 async function syncSalesData(){
-  _syncUI('sales','syncing','...',0);
+  _syncUI('sales','syncing','...');
   try{
     // Kick off background job (returns immediately with status running or done)
     const r=await fetch(SYNC_BASE+'/api/sync/sales',{signal:AbortSignal.timeout(15000)});
@@ -4415,7 +4421,7 @@ async function syncSalesData(){
     // If already done from a previous run, fetch the result directly
     const data = d.status==='done'
       ? await fetch(SYNC_BASE+'/api/sync/sales/poll',{signal:AbortSignal.timeout(60000)}).then(r=>r.json())
-      : await _pollUntilDone(SYNC_BASE+'/api/sync/sales/poll',600000,pct=>_syncUI('sales','syncing','...',pct));
+      : await _pollUntilDone(SYNC_BASE+'/api/sync/sales/poll');
     // Populate DEPT_ACTUAL_LY with live AOP-month actuals
     Object.entries(data.dept_actual_ly||{}).forEach(([divId,months])=>{
       if(!DEPT_ACTUAL_LY[divId])DEPT_ACTUAL_LY[divId]={};
@@ -4478,6 +4484,7 @@ async function syncSTData(){
     const r=await fetch(SYNC_BASE+'/api/sync/sellthru',{signal:AbortSignal.timeout(15000)});
     if(r.status===404){_syncUI('st','idle','Not configured');return;}
     const d=await r.json();
+    if(d.status==='not_configured'){_syncUI('st','idle','Not configured');return;}
     if(!d.ok)throw new Error(d.error||'Server error');
     const data=d.status==='done'
       ?await fetch(SYNC_BASE+'/api/sync/sellthru/poll',{signal:AbortSignal.timeout(60000)}).then(r=>r.json())
@@ -4534,12 +4541,10 @@ function refresh(){
     divTabsEl.classList.toggle('vis',showTabs);
     if(showTabs)_syncDivTabs(divTabsEl);
   }
-  if(S.report==='aopreview')return; // AOP Review has its own render/load path — see loadAopReviewCycles()
   _syncInactiveBadge();
   _syncLockAllBtns();
   buildFP(); // keep sidebar counts in sync with divTab + filters
   renderTable();
-  if(S.aopLiveAt)_renderAopLiveBar(S.aopLiveAt); // keep constraint bar in sync
 }
 
 /* ── INIT ──────────────────────────────────────── */
@@ -4882,6 +4887,126 @@ function importFromFile(input){
   };
   reader.readAsText(file);
 }
+/* ── VERSION LOG ────────────────────────────────── */
+const _VL_KEY='bis.plan_versions';
+const _VL_MAX=10;
+function _vlLoad(){try{return JSON.parse(localStorage.getItem(_VL_KEY)||'[]');}catch(e){return [];}}
+function _vlSave(arr){try{localStorage.setItem(_VL_KEY,JSON.stringify(arr));}catch(e){}}
+function _divPlanMAMJTotal(divId){
+  const dv=DVDATA.find(d=>d.id===divId);
+  if(!dv)return 0;
+  const divAnn=dv.secs.reduce((a,s)=>a+s.ly,0);
+  let total=0;
+  AOP_MIS.forEach(mi=>{
+    dv.secs.filter(s=>!S.hiddenSecs.has(s.id)).forEach(sec=>{
+      const ly=_secMonLY(sec,dv,mi,divAnn);
+      const g=S.inputs[sec.id+'__'+mi]??0;
+      total+=ly*(1+g/100);
+    });
+  });
+  return +total.toFixed(3);
+}
+function _vlCurrentTotals(){
+  return {
+    MENS:_divPlanMAMJTotal('mens'),
+    LADIES:_divPlanMAMJTotal('ladies'),
+    KIDS:_divPlanMAMJTotal('kids')
+  };
+}
+function _vlTotalSum(t){return(t.MENS||0)+(t.LADIES||0)+(t.KIDS||0);}
+function _vlFmtDate(now){
+  const dd=String(now.getDate()).padStart(2,'0');
+  const mmm=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()];
+  const yyyy=now.getFullYear();
+  let h=now.getHours(),ampm=h>=12?'pm':'am';
+  h=h%12||12;
+  const mm=String(now.getMinutes()).padStart(2,'0');
+  return `${dd} ${mmm} ${yyyy}, ${h}:${mm} ${ampm}`;
+}
+function _maybeSaveVersion(now){
+  const vers=_vlLoad();
+  const cur=_vlCurrentTotals();
+  const curSum=_vlTotalSum(cur);
+  if(vers.length>0){
+    const last=vers[0];
+    const diff=Math.abs(curSum-_vlTotalSum(last.divisionTotals));
+    if(diff<=0.5){
+      // minor drift — just update savedAt
+      last.savedAt=now.toISOString();
+      _vlSave(vers);
+      return;
+    }
+  }
+  // new version — store summary totals + full state snapshot for Load
+  const n=vers.length+1;
+  const label=`Version ${n} — ${_vlFmtDate(now)}`;
+  const snapshot={
+    inputs:{...S.inputs},
+    locked:[...S.locked],
+    hiddenSecs:[...S.hiddenSecs],
+    aop:JSON.parse(JSON.stringify(S.aop)),
+    aopLocked:S.aopLocked,
+    aopUnit:S.aopUnit,
+    aopSeeds:{...S.aopSeeds}
+  };
+  vers.unshift({id:Date.now(),label,savedAt:now.toISOString(),divisionTotals:cur,snapshot});
+  if(vers.length>_VL_MAX)vers.length=_VL_MAX;
+  _vlSave(vers);
+}
+function openVersionLog(){
+  _renderVersionLog();
+  document.getElementById('vlogOverlay').classList.add('vis');
+}
+function closeVersionLog(){
+  document.getElementById('vlogOverlay').classList.remove('vis');
+}
+function _renderVersionLog(){
+  const body=document.getElementById('vlogBody');
+  if(!body)return;
+  const vers=_vlLoad();
+  if(!vers.length){
+    body.innerHTML='<div class="vlog-empty">No saved versions yet.<br>Save the plan to create the first version.</div>';
+    return;
+  }
+  const fCrV=v=>'Rs. '+v.toFixed(1)+' Cr';
+  body.innerHTML=vers.map((v,i)=>{
+    const t=v.divisionTotals||{};
+    const isLatest=i===0;
+    const hasSnap=!!v.snapshot;
+    return `<div class="vlog-entry">
+      <div class="vlog-label">${v.label||'Version '+(vers.length-i)}${isLatest?' <span style="font-size:9px;font-weight:800;padding:1px 7px;border-radius:10px;background:var(--ac);color:#fff;vertical-align:middle;letter-spacing:.04em;margin-left:6px">LATEST</span>':''}</div>
+      <div class="vlog-divs">
+        <span class="vlog-div">MENS: ${fCrV(t.MENS||0)}</span>
+        <span class="vlog-div">LADIES: ${fCrV(t.LADIES||0)}</span>
+        <span class="vlog-div">KIDS: ${fCrV(t.KIDS||0)}</span>
+      </div>
+      <div class="vlog-row-ft">
+        <span style="font-size:10px;color:var(--mu)">Total: ${fCrV((t.MENS||0)+(t.LADIES||0)+(t.KIDS||0))}</span>
+        ${hasSnap?`<button class="vlog-load" onclick="loadVersion(${i})">&#x21A9; Load</button>`:'<span style="font-size:10px;color:var(--mu);font-style:italic">No snapshot</span>'}
+      </div>
+    </div>`;
+  }).join('')+'<div class="vlog-hint">Loading a version replaces your current plan inputs. Save first if you want to preserve the current state.</div>';
+}
+function loadVersion(idx){
+  const vers=_vlLoad();
+  if(idx<0||idx>=vers.length)return;
+  const v=vers[idx];
+  if(!v.snapshot){toast('No snapshot stored for this version');return;}
+  if(!confirm(`Load "${v.label}"?\n\nThis will replace ALL current plan inputs, locks, and AOP data.\nYou cannot undo this unless you save first.`))return;
+  const snap=v.snapshot;
+  S.inputs=snap.inputs||{};
+  S.locked=new Set(snap.locked||[]);
+  S.hiddenSecs=new Set(snap.hiddenSecs||[]);
+  if(snap.aop)S.aop=snap.aop;
+  if(snap.aopLocked!=null)S.aopLocked=snap.aopLocked;
+  if(snap.aopUnit)S.aopUnit=snap.aopUnit;
+  if(snap.aopSeeds)S.aopSeeds=snap.aopSeeds;
+  syncAopLockUI();
+  refresh();
+  closeVersionLog();
+  toast(`Loaded: ${v.label}`);
+}
+
 function parseAopCSV(text,fname){
   const lines=text.trim().split(/\r?\n/).filter(l=>l.trim());
   if(!lines.length){toast('File is empty');return;}
@@ -4945,201 +5070,6 @@ function parseAopCSV(text,fname){
   buildAopGrid();
   toast(`Loaded ${loaded} divisions from "${fname}" ✓`);
 }
-
-/* ── LIVE AOP FROM FORECASTER ──────────────────────── */
-const AOP_LIVE_BASE = 'http://localhost:8000';
-const _AOP_LIVE_PID_MI = {202703:11,202704:0,202705:1,202706:2};
-const _AOP_LIVE_DIV = {MENS:'mens',LADIES:'ladies',KIDS:'kids'};
-
-async function fetchLiveAopTargets(){
-  try{
-    const r=await fetch(AOP_LIVE_BASE+'/api/config/aop-division-targets');
-    if(!r.ok)return;
-    const data=await r.json();
-    if(!data.targets)return;
-
-    // Build new S.aop in Rs Cr (API gives Rs Lakhs)
-    const nAop={mens:{},ladies:{},kids:{}};
-    let hasData=false;
-    for(const[apiDiv,months] of Object.entries(data.targets)){
-      const dk=_AOP_LIVE_DIV[apiDiv];
-      if(!dk)continue;
-      for(const[pid,lakhs] of Object.entries(months)){
-        const mi=_AOP_LIVE_PID_MI[parseInt(pid)];
-        if(mi==null)continue;
-        nAop[dk][mi]=lakhs/100; // Lakhs → Cr (S.aop is always Cr)
-        hasData=true;
-      }
-    }
-    if(!hasData)return;
-
-    S.aop=nAop;
-    S.aopUnit='crore';
-    S.aopLiveAt=data.published_at;
-
-    if(!S.aopLocked){
-      S.aopLocked=true;
-      const aopMs=new Set(AOP_MIS.filter(mi=>['mens','ladies','kids'].some(d=>(nAop[d][mi]||0)>0)));
-      if(aopMs.size>0)S.selM=aopMs;
-      seedPlanFromAop();
-      syncAopLockUI();
-      buildAopGrid();
-      syncAopLockStatus();
-      buildPills();
-    } else {
-      buildAopGrid();
-    }
-
-    _renderAopLiveBar(data.published_at);
-    saveState();
-  }catch(e){console.warn('fetchLiveAopTargets:',e);}
-}
-
-function _divPlanMAMJTotal(divId){
-  const dv=DVDATA.find(d=>d.id===divId);
-  if(!dv)return 0;
-  const divAnnual=dv.secs.reduce((a,s)=>a+s.ly,0);
-  let tot=0;
-  dv.secs.forEach(sec=>{
-    if(S.hiddenSecs.has(sec.id))return;
-    AOP_MIS.forEach(mi=>{
-      const ly=_secMonLY(sec,dv,mi,divAnnual);
-      const g=S.inputs[sec.id+'__'+mi]??0;
-      tot+=ly*(1+g/100);
-    });
-  });
-  return tot;
-}
-
-function _renderAopLiveBar(publishedAt){
-  const bar=document.getElementById('aop-live-bar');
-  if(!bar)return;
-  const divs=[{id:'mens',nm:'MENS'},{id:'ladies',nm:'LADIES'},{id:'kids',nm:'KIDS'}];
-  divs.forEach(dv=>{
-    const el=document.getElementById('aop-live-'+dv.id);
-    if(!el)return;
-    const target=AOP_MIS.reduce((a,mi)=>a+(S.aop[dv.id]?.[mi]||0),0);
-    const plan=_divPlanMAMJTotal(dv.id);
-    const gap=plan-target;
-    const ok=target<=0||Math.abs(gap)<=0.5;
-    const tgtStr=target>0?` / Tgt ₹${fCr(target)} Cr`:'';
-    const gapStr=target>0&&!ok?` <b>(${gap>0?'+':''}${fCr(gap)})</b> ✗`:target>0?' ✓':'';
-    el.innerHTML=`<b>${dv.nm}</b> <span class="${ok?'aop-ok':'aop-gap'}">Plan ₹${fCr(plan)} Cr${tgtStr}${gapStr}</span>`;
-  });
-  const atEl=document.getElementById('aop-live-at');
-  if(atEl&&publishedAt)atEl.textContent='Last synced: '+new Date(publishedAt).toLocaleString();
-  bar.style.display='flex';
-}
-
-// Poll every 2 min for changes in AOP Forecaster
-(function _startAopLivePoll(){
-  fetchLiveAopTargets();
-  setInterval(fetchLiveAopTargets,120000);
-})();
-
-/* ── AOP REVIEW TAB (buyer review workflow) ──────── */
-const PLATFORM_BASE = 'http://localhost:8010';
-
-async function platformApi(path, opts) {
-  const res = await fetch(PLATFORM_BASE + path, { credentials: 'include', ...opts });
-  if (res.status === 401) {
-    document.getElementById('aop-review-panel').innerHTML =
-      '<p>Sign in to the platform first — <a href="' + PLATFORM_BASE + '/login" target="_blank">open login</a>, then reload this tab.</p>';
-    throw new Error('not authenticated to platform');
-  }
-  if (res.status === 403) {
-    let role = 'unknown role';
-    try {
-      const meRes = await fetch(PLATFORM_BASE + '/api/auth/me', { credentials: 'include' });
-      if (meRes.ok) { const me = await meRes.json(); role = me.role || role; }
-    } catch (_) { /* best-effort role lookup only */ }
-    const msg = `Signed in as ${role} — this tab requires the buyer role.`;
-    const m = document.getElementById('aop-review-msg');
-    if (m) m.textContent = msg;
-    throw new Error(msg);
-  }
-  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || `HTTP ${res.status}`); }
-  return res.json();
-}
-
-let aopReviewCycle = null;
-
-async function loadAopReviewCycles() {
-  const cycles = await platformApi('/api/aop/plan-cycles');
-  const pending = cycles.filter(c => c.status === 'pending_buyer');
-  const sel = document.getElementById('aop-review-cycle-picker');
-  sel.innerHTML = pending.map(c => `<option value="${c.id}">${c.id.slice(0, 8)} — created ${c.created_at.slice(0, 16)}</option>`).join('')
-    || '<option value="">No cycles awaiting review</option>';
-  if (pending.length) await loadCycleTotals(pending[0].id);
-}
-
-async function loadCycleTotals(cycleId) {
-  aopReviewCycle = await platformApi(`/api/aop/plan-cycles/${cycleId}`);
-  if (!aopReviewCycle.current_run_id) return;
-  const { division_totals } = await platformApi(`/api/aop/api/config/runs/${aopReviewCycle.current_run_id}/division-totals`);
-  document.getElementById('aop-review-mens').value = division_totals.mens ?? '';
-  document.getElementById('aop-review-ladies').value = division_totals.ladies ?? '';
-  document.getElementById('aop-review-kids').value = division_totals.kids ?? '';
-  AOP_REVIEW_FIELDS.forEach(updateAopCrHint);
-}
-
-function readAopReviewTotals() {
-  return {
-    mens: parseFloat(document.getElementById('aop-review-mens').value),
-    ladies: parseFloat(document.getElementById('aop-review-ladies').value),
-    kids: parseFloat(document.getElementById('aop-review-kids').value),
-  };
-}
-
-// Buyer totals are stored/consumed as Rs Lakhs throughout the pipeline
-// (set_buyer_totals, division-aop-summary, SalesPlan's department_plan.py),
-// but this app is otherwise Crore-native — show a live Crore-equivalent
-// hint next to each Lakhs input so a raw 4-digit number doesn't look wrong.
-const AOP_REVIEW_FIELDS = ['mens', 'ladies', 'kids'];
-function updateAopCrHint(field) {
-  const el = document.getElementById(`aop-review-${field}`);
-  const hint = document.getElementById(`aop-review-cr-${field}`);
-  if (!el || !hint) return;
-  const v = parseFloat(el.value);
-  hint.textContent = Number.isFinite(v) ? `≈ ${(v / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })} Cr` : '';
-}
-AOP_REVIEW_FIELDS.forEach(f => {
-  document.getElementById(`aop-review-${f}`)?.addEventListener('input', () => updateAopCrHint(f));
-});
-
-document.getElementById('aop-review-save-btn').addEventListener('click', async () => {
-  if (!aopReviewCycle) return;
-  try {
-    await platformApi(`/api/aop/plan-cycles/${aopReviewCycle.id}/buyer-totals`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ totals: readAopReviewTotals() }),
-    });
-    document.getElementById('aop-review-msg').textContent = 'Saved.';
-  } catch (err) {
-    const m = document.getElementById('aop-review-msg');
-    if (m) m.textContent = err.message;
-  }
-});
-
-document.getElementById('aop-review-submit-btn').addEventListener('click', async () => {
-  if (!aopReviewCycle) return;
-  try {
-    await platformApi(`/api/aop/plan-cycles/${aopReviewCycle.id}/buyer-totals`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ totals: readAopReviewTotals() }),
-    });
-    await platformApi(`/api/aop/plan-cycles/${aopReviewCycle.id}/submit`, { method: 'POST' });
-    document.getElementById('aop-review-msg').textContent = 'Submitted for review.';
-    loadAopReviewCycles();
-  } catch (err) {
-    const m = document.getElementById('aop-review-msg');
-    if (m) m.textContent = err.message;
-  }
-});
-
-document.getElementById('aop-review-cycle-picker').addEventListener('change', e => {
-  if (e.target.value) loadCycleTotals(e.target.value);
-});
 </script>
 <!-- AOP IMPORT MODAL -->
 <div class="aop-ov" id="aopOv" style="display:none" onclick="if(event.target===this)closeAopModal()">
