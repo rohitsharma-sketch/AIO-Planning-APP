@@ -2,11 +2,12 @@ import { useState, useRef, useEffect } from 'react'
 import './ThemeSelector.css'
 
 const THEMES = [
-  { id: 'classic', label: 'Classic Navy',       primary: '#1F3864', accent: '#4472C4' },
-  { id: 'emerald', label: 'Slate & Emerald',     primary: '#1E293B', accent: '#10B981' },
-  { id: 'amber',   label: 'Midnight & Amber',    primary: '#0F172A', accent: '#F59E0B' },
-  { id: 'coral',   label: 'Deep Purple & Coral', primary: '#3B1F6A', accent: '#F4845F' },
-  { id: 'forest',  label: 'Forest & Gold',       primary: '#14532D', accent: '#D97706' },
+  { id: 'indigo',  label: 'Indigo & White',      primary: '#312E81', accent: '#4F46E5' },
+  { id: 'classic', label: 'Classic Navy',         primary: '#1F3864', accent: '#4472C4' },
+  { id: 'emerald', label: 'Slate & Emerald',      primary: '#1E293B', accent: '#10B981' },
+  { id: 'amber',   label: 'Midnight & Amber',     primary: '#0F172A', accent: '#F59E0B' },
+  { id: 'coral',   label: 'Deep Purple & Coral',  primary: '#3B1F6A', accent: '#F4845F' },
+  { id: 'forest',  label: 'Forest & Gold',        primary: '#14532D', accent: '#D97706' },
 ]
 
 export default function ThemeSelector({ current, onChange }) {

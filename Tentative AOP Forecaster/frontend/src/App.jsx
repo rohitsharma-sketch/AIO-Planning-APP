@@ -36,7 +36,7 @@ export default function App() {
   const [results, setResults]     = useState(null)
   const [running, setRunning]     = useState(false)
   const [error, setError]         = useState(null)
-  const [theme, setTheme]         = useState(() => localStorage.getItem('aop-theme') || 'classic')
+  const [theme, setTheme]         = useState(() => localStorage.getItem('aop-theme') || 'indigo')
   const [runKey, setRunKey]       = useState(0)
   const [showEditor, setShowEditor] = useState(false)
 
