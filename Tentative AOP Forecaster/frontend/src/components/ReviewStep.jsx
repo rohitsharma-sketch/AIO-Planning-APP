@@ -8,7 +8,7 @@ const ALL_ROWS = [...DIVS, 'Overall']
 
 function initQuick() { return Object.fromEntries(ALL_ROWS.map(r => [r, ''])) }
 
-export default function ReviewStep({ session, running, onRun, rates, setRates, cellLocks, setCellLocks, onBack }) {
+export default function ReviewStep({ session, running, onRun, rates, setRates, cellLocks, setCellLocks, onBack, onGoToConfig }) {
   const { n_stores, n_lfl, n_ramp, n_nso, growth_rates, base_sales } = session
 
   const [includeDebug, setIncludeDebug] = useState(false)
@@ -262,7 +262,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
                 title={locked ? `Unlock ${row} ${m}` : `Lock ${row} ${m}`}
                 tabIndex={-1}
               >
-                {locked ? 'L' : 'U'}
+                {locked ? '🔒' : '🔓'}
               </button>
             </div>
           </td>
@@ -286,17 +286,18 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
 
       <div className="store-counts">
         {[
-          ['Total stores', n_stores, ''],
-          ['LfL',  n_lfl,  'tag-lfl'],
-          ['Ramp', n_ramp, 'tag-ramp'],
-          ['NSO',  n_nso,  'tag-nso'],
-        ].map(([label, val, cls]) => (
-          <div key={label} className="count-card card">
-            <div className="count-val num">{val}</div>
-            <div className="count-label">
-              {cls ? <span className={`tag ${cls}`}>{label}</span> : <span>{label}</span>}
+          { label: 'Total stores', val: n_stores, mod: '' },
+          { label: 'LfL',  val: n_lfl,  mod: 'lfl' },
+          { label: 'Ramp', val: n_ramp, mod: 'ramp' },
+          { label: 'NSO',  val: n_nso,  mod: 'nso' },
+        ].map(({ label, val, mod }, i) => (
+          <React.Fragment key={label}>
+            {i > 0 && <div className="count-divider" />}
+            <div className="count-item">
+              <span className={`count-num ${mod ? `count-num--${mod}` : ''}`}>{val ?? '—'}</span>
+              <span className="count-lbl">{label}</span>
             </div>
-          </div>
+          </React.Fragment>
         ))}
       </div>
 
@@ -451,6 +452,11 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
 
       <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:16, flexWrap:'wrap'}}>
         <div style={{display:'flex', alignItems:'center', gap:12}}>
+          {onGoToConfig && (
+            <button className="btn-sm-outline" onClick={onGoToConfig} style={{fontSize:13}}>
+              ← Configure
+            </button>
+          )}
           {onBack && (
             <button className="btn-sm-outline" onClick={onBack} style={{fontSize:13}}>
               View last results

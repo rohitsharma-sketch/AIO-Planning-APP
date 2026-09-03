@@ -339,6 +339,7 @@ export default function App() {
             cellLocks={cellLocks}
             setCellLocks={setCellLocks}
             onBack={results ? () => setStep(2) : null}
+            onGoToConfig={() => setStep(0)}
           />
         )}
 
