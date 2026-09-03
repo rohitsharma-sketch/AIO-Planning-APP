@@ -18,6 +18,17 @@ from datetime import datetime
 app = Flask(__name__)
 CORS(app)
 
+@app.after_request
+def strip_cache_headers(resp):
+    """Remove ETag/Last-Modified AFTER Werkzeug finalize_request() adds them, so the
+    browser can never serve a 304 and always fetches the latest HTML."""
+    resp.headers.discard("ETag")
+    resp.headers.discard("Last-Modified")
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
+
 # ── CONFIGURE PATHS HERE ─────────────────────────────────────────────────────
 SALES_DIR = r"\\10.0.1.85\Users\Administrator\Desktop\AI SOLUTION\INVENTORY AUTOMATION\data_lake\raw\rs_sales_19-_till_date"
 SELLTHRU_DIR = r"\\10.0.1.85\Users\Administrator\Desktop\AI SOLUTION\INVENTORY AUTOMATION\data_lake\raw\rs_weekly_sell_ths_apps"
@@ -182,14 +193,16 @@ def parse_date_col(series: "pd.Series") -> "pd.Series":
 
 @app.route("/")
 def serve_app():
-    """Serve the OTB app HTML so it runs same-origin as the API (avoids CORS/data-URL blocks)."""
+    """Serve the OTB app HTML — always reads fresh from disk, no caching."""
+    import time
     html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "otb-plan-app.html")
-    from flask import send_file, make_response
-    resp = make_response(send_file(html_path, mimetype="text/html"))
-    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-    resp.headers["Pragma"] = "no-cache"
-    resp.headers["Expires"] = "0"
-    return resp
+    from flask import Response
+    with open(html_path, "r", encoding="utf-8") as f:
+        content = f.read()
+    # Append a unique nonce so the ETag (computed from body) is always different,
+    # preventing any browser or proxy from serving a cached copy.
+    content += f"\n<!-- served:{int(time.time() * 1000)} -->"
+    return Response(content, mimetype="text/html; charset=utf-8")
 
 
 @app.route("/demo")
