@@ -69,7 +69,16 @@ function _avgGrowth(fp) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function PlanLanding({ onNewPlan, onResume }) {
+const THEMES = [
+  { id: 'indigo',  label: 'Indigo',    primary: '#312E81', accent: '#4F46E5' },
+  { id: 'classic', label: 'Classic',   primary: '#1F3864', accent: '#4472C4' },
+  { id: 'emerald', label: 'Emerald',   primary: '#1E293B', accent: '#10B981' },
+  { id: 'amber',   label: 'Amber',     primary: '#0F172A', accent: '#F59E0B' },
+  { id: 'coral',   label: 'Coral',     primary: '#3B1F6A', accent: '#F4845F' },
+  { id: 'forest',  label: 'Forest',    primary: '#14532D', accent: '#D97706' },
+]
+
+export default function PlanLanding({ onNewPlan, onResume, theme, onThemeChange }) {
   const [showSaved, setShowSaved] = useState(false)
   const versions = loadPlanVersions()
 
@@ -107,6 +116,27 @@ export default function PlanLanding({ onNewPlan, onResume }) {
           {versions.length > 0 && <span className="pl-tile-arrow">{showSaved ? '↑' : '↓'}</span>}
         </div>
       </div>
+
+      {/* ── THEME PICKER ── */}
+      {onThemeChange && (
+        <div className="pl-theme-section">
+          <div className="pl-theme-label">Appearance</div>
+          <div className="pl-theme-swatches">
+            {THEMES.map(t => (
+              <button
+                key={t.id}
+                className={`pl-theme-swatch ${t.id === theme ? 'active' : ''}`}
+                title={t.label}
+                onClick={() => onThemeChange(t.id)}
+                style={{ '--sw-primary': t.primary, '--sw-accent': t.accent }}
+              >
+                <span className="pl-sw-1" />
+                <span className="pl-sw-2" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── VERSION LOG ── */}
       {showSaved && versions.length > 0 && (

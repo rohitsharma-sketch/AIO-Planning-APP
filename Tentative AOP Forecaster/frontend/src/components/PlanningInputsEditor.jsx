@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { fetchJson } from './DbSyncPanel'
 import './PlanningInputsEditor.css'
 
@@ -9,31 +9,23 @@ const MONTHS = ["Apr'27", "May'27", "Jun'27", "Jul'27", "Aug'27", "Sep'27",
 const AOP_MONTHS = ["Mar'27", ...MONTHS]
 
 const TABS = [
-  { key: 'growth', label: 'Growth %' },
-  { key: 'nso', label: 'NSO Opening Months' },
-  { key: 'aop', label: 'AOP Overrides' },
+  { key: 'growth',  label: 'Growth %' },
+  { key: 'nso',    label: 'NSO Opening Months' },
+  { key: 'aop',    label: 'AOP Overrides' },
+  { key: 'stores', label: 'Store Master' },
 ]
 
-// Same quoting ReindexOutputPanel.jsx's downloadCsv uses, so a store/division
-// name containing a comma or quote can't corrupt the file.
+const STORE_TAGS = ['LFL', 'NSO', 'Ramp']
+
 const csvField = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`
 
-// Template for the AOP Overrides Import button - exact column names/order
-// parse_aop_overrides_import() expects (db/editor.py), so a filled-in copy
-// of this always parses cleanly. The one data row is deliberately an
-// unreal store ("EXAMPLE") rather than a real one, so a user who imports
-// this file unedited gets a clear, self-explanatory "Unknown store" skip
-// reason instead of silently writing a real override they didn't intend.
 function downloadAopTemplate() {
   const text = [
     ['Store', 'Division', 'Month', 'Value'],
     ['EXAMPLE', DIVS[0], AOP_MONTHS[0], '12.5'],
   ].map(row => row.map(csvField).join(',')).join('\n')
   const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'aop_overrides_template.csv'
-  a.click()
+  const a = document.createElement('a'); a.href = url; a.download = 'aop_overrides_template.csv'; a.click()
   URL.revokeObjectURL(url)
 }
 
@@ -42,15 +34,6 @@ export default function PlanningInputsEditor({ onBack, onContinue }) {
   const [continuing, setContinuing] = useState(false)
   const [continueErr, setContinueErr] = useState(null)
 
-  // Builds a fresh session straight from Postgres (same call "Continue from
-  // database" makes on the Upload screen) and drops the user into Review
-  // with it - whatever was just saved on any of the three tabs above is
-  // already live in the DB by the time Save's own request resolves, so
-  // this always reflects the latest edits, not a stale snapshot. Previously
-  // the only way to see edited Growth%/NSO/AOP values in Review was to
-  // click Back, then separately click "Continue from database" again - two
-  // disconnected steps for what's really one action ("I'm done editing,
-  // now generate with these values").
   async function handleContinue() {
     setContinuing(true); setContinueErr(null)
     try { await onContinue() } catch (e) { setContinueErr(e.message) } finally { setContinuing(false) }
@@ -58,32 +41,275 @@ export default function PlanningInputsEditor({ onBack, onContinue }) {
 
   return (
     <div className="pie-wrap">
+      {/* ── Page header ─────────────────────────────────── */}
       <div className="pie-head">
-        <div>
+        <div className="pie-head-left">
+          <div className="pie-head-eyebrow">Configuration</div>
           <h1 className="pie-title">Planning Inputs</h1>
-          <p className="pie-sub">Growth %, NSO openings, and AOP overrides — writes directly to Postgres (rs_planning), read by every "Continue from database" session.</p>
+          <p className="pie-sub">Growth %, NSO openings, AOP overrides, and Store Master — all written to Postgres and read by every forecast session.</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {continueErr && <span className="pie-status err" style={{ maxWidth: 260 }}>{continueErr}</span>}
+        <div className="pie-head-actions">
+          {continueErr && <span className="pie-status err" style={{ maxWidth: 240 }}>{continueErr}</span>}
           <button className="btn-primary" onClick={handleContinue} disabled={continuing}>
-            {continuing ? 'Building from database…' : 'Continue to Review'}
+            {continuing ? 'Building…' : 'Continue to Review →'}
           </button>
-          <button className="btn-outline" onClick={onBack}>Back</button>
+          <button className="btn-outline" onClick={onBack}>← Back</button>
         </div>
       </div>
+
+      {/* ── Tabs ──────────────────────────────────────── */}
       <div className="pie-tabs">
         {TABS.map(t => (
-          <button key={t.key} className={`pie-tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>{t.label}</button>
+          <button key={t.key} className={`pie-tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
+            {t.label}
+          </button>
         ))}
       </div>
-      {tab === 'growth' && <GrowthTab />}
-      {tab === 'nso' && <NsoTab />}
-      {tab === 'aop' && <AopTab />}
+
+      {tab === 'growth'  && <GrowthTab />}
+      {tab === 'nso'     && <NsoTab />}
+      {tab === 'aop'     && <AopTab />}
+      {tab === 'stores'  && <StoreMasterTab />}
     </div>
   )
 }
 
-// ── Growth % — small, dense grid, save-all ──────────────────────────────────
+/* ── Count tile component ───────────────────────────────────────── */
+function CountTile({ label, value, variant }) {
+  return (
+    <div className={`sm-tile sm-tile-${variant}`}>
+      <span className="sm-tile-val">{value ?? '—'}</span>
+      <span className="sm-tile-lbl">{label}</span>
+    </div>
+  )
+}
+
+/* ── Multi-select filter dropdown ────────────────────────────────── */
+function MultiSelect({ label, options, selected, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    function onClickOutside(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [])
+
+  function toggle(v) {
+    onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v])
+  }
+
+  const displayLabel = selected.length === 0
+    ? label
+    : selected.length === 1 ? `${label}: ${selected[0]}` : `${label}: ${selected.length} selected`
+
+  return (
+    <div className="ms-root" ref={ref}>
+      <button className={`ms-btn ${selected.length ? 'ms-btn-active' : ''}`} onClick={() => setOpen(o => !o)}>
+        {displayLabel}
+        <svg className="ms-caret" width="10" height="6" viewBox="0 0 10 6" fill="currentColor">
+          <path d="M0 0l5 6 5-6z"/>
+        </svg>
+      </button>
+      {open && (
+        <div className="ms-panel">
+          {options.length === 0
+            ? <div className="ms-empty">No options</div>
+            : options.map(v => (
+              <label key={v} className="ms-item">
+                <input type="checkbox" checked={selected.includes(v)} onChange={() => toggle(v)} />
+                <span>{v}</span>
+              </label>
+            ))
+          }
+          {selected.length > 0 && (
+            <button className="ms-clear" onClick={() => onChange([])}>Clear all</button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── Store Master Tab ────────────────────────────────────────────── */
+function StoreMasterTab() {
+  const [stores, setStores] = useState(null)
+  const [edits, setEdits]   = useState({})
+  const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState({ tag: [], cluster: [], region: [], grade: [] })
+  const [status, setStatus] = useState(null)
+  const [busy, setBusy]     = useState(false)
+
+  const load = () =>
+    fetchJson('/api/config/store-master')
+      .then(d => { setStores(d); setEdits({}) })
+      .catch(e => setStatus({ err: true, msg: e.message }))
+
+  useEffect(() => { load() }, [])
+
+  // Unique filter options derived from all loaded data
+  const opts = useMemo(() => {
+    if (!stores) return { tag: [], cluster: [], region: [], grade: [] }
+    const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort()
+    return {
+      tag:     uniq(stores.map(s => s.tag)),
+      cluster: uniq(stores.map(s => s.cluster_key)),
+      region:  uniq(stores.map(s => s.region_type)),
+      grade:   uniq(stores.map(s => s.store_grade)),
+    }
+  }, [stores])
+
+  // Merge edits into stores, then apply filters + search
+  const filtered = useMemo(() => {
+    if (!stores) return []
+    return stores
+      .map(s => ({ ...s, ...(edits[s.store_id] || {}) }))
+      .filter(s => {
+        if (search) {
+          const q = search.toLowerCase()
+          if (!s.store_id.toLowerCase().includes(q) && !(s.store_name || '').toLowerCase().includes(q)) return false
+        }
+        if (filters.tag.length     && !filters.tag.includes(s.tag))          return false
+        if (filters.cluster.length && !filters.cluster.includes(s.cluster_key)) return false
+        if (filters.region.length  && !filters.region.includes(s.region_type))  return false
+        if (filters.grade.length   && !filters.grade.includes(s.store_grade))   return false
+        return true
+      })
+  }, [stores, edits, filters, search])
+
+  // Count tiles — always computed from filtered view
+  const counts = useMemo(() => ({
+    total: filtered.length,
+    lfl:   filtered.filter(s => s.tag?.toUpperCase() === 'LFL').length,
+    ramp:  filtered.filter(s => s.tag?.toUpperCase() === 'RAMP').length,
+    nso:   filtered.filter(s => s.tag?.toUpperCase() === 'NSO').length,
+  }), [filtered])
+
+  function setField(store_id, field, value) {
+    setEdits(e => ({ ...e, [store_id]: { ...(e[store_id] || {}), [field]: value } }))
+  }
+
+  async function save() {
+    const rows = Object.entries(edits).map(([store_id, fields]) => ({ store_id, ...fields }))
+    if (!rows.length) { setStatus({ err: false, msg: 'No changes to save.' }); return }
+    setBusy(true); setStatus(null)
+    try {
+      const r = await fetchJson('/api/config/store-master', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows }),
+      })
+      setStatus({ err: false, msg: `Saved ${r.updated} store(s).` })
+      load()
+    } catch (e) { setStatus({ err: true, msg: e.message }) }
+    finally { setBusy(false) }
+  }
+
+  const unsavedCount = Object.keys(edits).length
+
+  if (!stores) return <div className="card pie-card pie-loading">Loading store master…</div>
+
+  return (
+    <div className="card pie-card">
+      {/* Count tiles */}
+      <div className="sm-tiles">
+        <CountTile label="TOTAL STORES" value={counts.total} variant="total" />
+        <CountTile label="LFL"  value={counts.lfl}  variant="lfl"  />
+        <CountTile label="RAMP" value={counts.ramp} variant="ramp" />
+        <CountTile label="NSO"  value={counts.nso}  variant="nso"  />
+      </div>
+
+      {/* Toolbar */}
+      <div className="pie-toolbar">
+        <input
+          className="pie-search"
+          placeholder="Search store code or name…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        <MultiSelect label="Tag"     options={opts.tag}     selected={filters.tag}     onChange={v => setFilters(f => ({ ...f, tag: v }))} />
+        <MultiSelect label="Cluster" options={opts.cluster} selected={filters.cluster} onChange={v => setFilters(f => ({ ...f, cluster: v }))} />
+        <MultiSelect label="Region"  options={opts.region}  selected={filters.region}  onChange={v => setFilters(f => ({ ...f, region: v }))} />
+        <MultiSelect label="Grade"   options={opts.grade}   selected={filters.grade}   onChange={v => setFilters(f => ({ ...f, grade: v }))} />
+        <span className="pie-count-label">{filtered.length} stores{unsavedCount > 0 ? ` · ${unsavedCount} unsaved` : ''}</span>
+        <button className="btn-primary pie-save" onClick={save} disabled={busy || !unsavedCount}>
+          {busy ? 'Saving…' : 'Save changes'}
+        </button>
+      </div>
+
+      {status && <p className={`pie-status ${status.err ? 'err' : ''}`}>{status.msg}</p>}
+
+      {/* Table */}
+      <div className="pie-scroll">
+        <table className="pie-row-table sm-table">
+          <thead>
+            <tr>
+              <th>Store</th>
+              <th>Name</th>
+              <th>Tag</th>
+              <th>Cluster</th>
+              <th>Ref Store</th>
+              <th>Region</th>
+              <th>Grade</th>
+              <th>ERP Cluster</th>
+              <th>Festival Group</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(s => {
+              const edited = edits[s.store_id] || {}
+              return (
+                <tr key={s.store_id} className={Object.keys(edited).length ? 'sm-row-edited' : ''}>
+                  <td className="sm-code">{s.store_id}</td>
+                  <td className="sm-name">{s.store_name || <span className="sm-null">—</span>}</td>
+                  <td>
+                    <select
+                      className="sm-select"
+                      value={edited.tag !== undefined ? edited.tag : (s.tag || '')}
+                      onChange={e => setField(s.store_id, 'tag', e.target.value)}
+                    >
+                      <option value="">—</option>
+                      {STORE_TAGS.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </td>
+                  <td>
+                    <input
+                      className="sm-input"
+                      type="text"
+                      value={edited.cluster_key !== undefined ? edited.cluster_key : (s.cluster_key || '')}
+                      onChange={e => setField(s.store_id, 'cluster_key', e.target.value)}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="sm-input sm-input-sm"
+                      type="text"
+                      value={edited.ref_store !== undefined ? edited.ref_store : (s.ref_store || '')}
+                      onChange={e => setField(s.store_id, 'ref_store', e.target.value)}
+                    />
+                  </td>
+                  <td>{s.region_type || <span className="sm-null">—</span>}</td>
+                  <td>
+                    <span className={`sm-grade sm-grade-${(s.store_grade || '').toLowerCase()}`}>
+                      {s.store_grade || '—'}
+                    </span>
+                  </td>
+                  <td className="sm-muted">{s.erp_cluster_type || '—'}</td>
+                  <td className="sm-muted">{s.festival_grouping || '—'}</td>
+                </tr>
+              )
+            })}
+            {!filtered.length && (
+              <tr><td colSpan={9} className="sm-empty-row">No stores match the current filters.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+/* ── Growth % Tab ───────────────────────────────────────────────── */
 function GrowthTab() {
   const [rows, setRows]     = useState(null)
   const [status, setStatus] = useState(null)
@@ -110,12 +336,12 @@ function GrowthTab() {
     finally { setBusy(false) }
   }
 
-  if (!rows) return <div className="card pie-card">Loading…</div>
+  if (!rows) return <div className="card pie-card pie-loading">Loading…</div>
 
   return (
     <div className="card pie-card">
       <div className="pie-toolbar">
-        <span style={{ fontSize: 13, color: 'var(--muted)' }}>OVERALL is the fallback for any division cell left blank. Blank a division cell to inherit OVERALL for that month.</span>
+        <span className="pie-hint">OVERALL is the fallback for any division cell left blank.</span>
         <button className="btn-primary pie-save" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save growth rates'}</button>
       </div>
       {status && <p className={`pie-status ${status.err ? 'err' : ''}`}>{status.msg}</p>}
@@ -128,8 +354,8 @@ function GrowthTab() {
             {ROW_KEYS.map(rk => {
               const row = rows.find(r => r.row_key === rk) || { row_key: rk, values: {} }
               return (
-                <tr key={rk}>
-                  <td>{rk}</td>
+                <tr key={rk} className={rk === 'OVERALL' ? 'pie-row-overall' : ''}>
+                  <td className="pie-row-label">{rk}</td>
                   {MONTHS.map(m => (
                     <td key={m}>
                       <input type="number" step="0.1" placeholder={rk === 'OVERALL' ? '' : '—'}
@@ -147,7 +373,7 @@ function GrowthTab() {
   )
 }
 
-// ── NSO Opening Months — full-table editor (add/edit/delete rows) ──────────
+/* ── NSO Opening Months Tab ──────────────────────────────────────── */
 function NsoTab() {
   const [rows, setRows]     = useState(null)
   const [status, setStatus] = useState(null)
@@ -157,37 +383,31 @@ function NsoTab() {
   const load = () => fetchJson('/api/config/nso').then(setRows).catch(e => setStatus({ err: true, msg: e.message }))
   useEffect(() => { load() }, [])
 
-  function updateRow(i, patch) {
-    setRows(rs => rs.map((r, idx) => idx === i ? { ...r, ...patch } : r))
-  }
-  function removeRow(i) {
-    setRows(rs => rs.filter((_, idx) => idx !== i))
-  }
+  function updateRow(i, patch) { setRows(rs => rs.map((r, idx) => idx === i ? { ...r, ...patch } : r)) }
+  function removeRow(i)        { setRows(rs => rs.filter((_, idx) => idx !== i)) }
   function addRow() {
     if (!draft.store_id.trim() || !/^[A-Za-z]{3}'\d{2}$/.test(draft.opening_month)) {
       setStatus({ err: true, msg: "Store and Opening Month (e.g. Apr'27) are required." }); return
     }
     setRows(rs => [...rs, { ...draft, store_id: draft.store_id.trim().toUpperCase() }])
-    setDraft({ store_id: '', opening_month: '', is_named: false })
-    setStatus(null)
+    setDraft({ store_id: '', opening_month: '', is_named: false }); setStatus(null)
   }
 
   async function save() {
     setBusy(true); setStatus(null)
     try {
       await fetchJson('/api/config/nso', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows }) })
-      setStatus({ err: false, msg: 'Saved.' })
-      load()
+      setStatus({ err: false, msg: 'Saved.' }); load()
     } catch (e) { setStatus({ err: true, msg: e.message }) }
     finally { setBusy(false) }
   }
 
-  if (!rows) return <div className="card pie-card">Loading…</div>
+  if (!rows) return <div className="card pie-card pie-loading">Loading…</div>
 
   return (
     <div className="card pie-card">
       <div className="pie-toolbar">
-        <span style={{ fontSize: 13, color: 'var(--muted)' }}>{rows.length} stores. This is the full list — removing a row here deletes it on Save.</span>
+        <span className="pie-hint">{rows.length} stores — removing a row here deletes it on Save.</span>
         <button className="btn-primary pie-save" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save NSO openings'}</button>
       </div>
       {status && <p className={`pie-status ${status.err ? 'err' : ''}`}>{status.msg}</p>}
@@ -197,11 +417,13 @@ function NsoTab() {
           <tbody>
             {rows.map((r, i) => (
               <tr key={r.store_id}>
-                <td>{r.store_id}</td>
+                <td className="pie-row-label">{r.store_id}</td>
                 <td><input type="text" value={r.opening_month} placeholder="Apr'27"
                   onChange={e => updateRow(i, { opening_month: e.target.value })} /></td>
-                <td><input type="checkbox" checked={r.is_named} onChange={e => updateRow(i, { is_named: e.target.checked })} /></td>
-                <td><button className="pie-del" onClick={() => removeRow(i)} title="Remove">Remove</button></td>
+                <td style={{ textAlign: 'center' }}>
+                  <input type="checkbox" checked={r.is_named} onChange={e => updateRow(i, { is_named: e.target.checked })} />
+                </td>
+                <td><button className="pie-del" onClick={() => removeRow(i)}>Remove</button></td>
               </tr>
             ))}
           </tbody>
@@ -210,7 +432,7 @@ function NsoTab() {
       <div className="pie-add-row">
         <input type="text" placeholder="Store code" value={draft.store_id} onChange={e => setDraft(d => ({ ...d, store_id: e.target.value }))} />
         <input type="text" placeholder="Opening month, e.g. Apr'27" value={draft.opening_month} onChange={e => setDraft(d => ({ ...d, opening_month: e.target.value }))} />
-        <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}>
+        <label className="pie-check-label">
           <input type="checkbox" checked={draft.is_named} onChange={e => setDraft(d => ({ ...d, is_named: e.target.checked }))} /> Named
         </label>
         <button className="btn-outline" onClick={addRow}>+ Add store</button>
@@ -219,16 +441,16 @@ function NsoTab() {
   )
 }
 
-// ── AOP Overrides — sparse delta editor, searchable ─────────────────────────
+/* ── AOP Overrides Tab ───────────────────────────────────────────── */
 function AopTab() {
-  const [rows, setRows]       = useState(null)      // as loaded from the server
-  const [edits, setEdits]     = useState({})        // key -> value ('' meaning delete) for edited/new rows
-  const [search, setSearch]   = useState('')
-  const [status, setStatus]   = useState(null)
-  const [busy, setBusy]       = useState(false)
-  const [draft, setDraft]     = useState({ store_id: '', division: DIVS[0], month: AOP_MONTHS[0], value: '' })
+  const [rows, setRows]           = useState(null)
+  const [edits, setEdits]         = useState({})
+  const [search, setSearch]       = useState('')
+  const [status, setStatus]       = useState(null)
+  const [busy, setBusy]           = useState(false)
+  const [draft, setDraft]         = useState({ store_id: '', division: DIVS[0], month: AOP_MONTHS[0], value: '' })
   const [importing, setImporting] = useState(false)
-  const [importSkipped, setImportSkipped] = useState(null) // [{row, reason}] from the last import, or null
+  const [importSkipped, setImportSkipped] = useState(null)
 
   const load = () => fetchJson('/api/config/aop-overrides').then(d => { setRows(d); setEdits({}) }).catch(e => setStatus({ err: true, msg: e.message }))
   useEffect(() => { load() }, [])
@@ -247,34 +469,22 @@ function AopTab() {
     return out.filter(r => !r._deleted).sort((a, b) => a.store_id.localeCompare(b.store_id) || a.division.localeCompare(b.division))
   }, [rows, edits])
 
-  const filtered = search
-    ? merged.filter(r => r.store_id.toLowerCase().includes(search.toLowerCase()))
-    : merged
+  const filtered = search ? merged.filter(r => r.store_id.toLowerCase().includes(search.toLowerCase())) : merged
 
   function setValue(r, val) { setEdits(e => ({ ...e, [key(r)]: val })) }
-  function deleteRow(r) { setEdits(e => ({ ...e, [key(r)]: '' })) }
+  function deleteRow(r)     { setEdits(e => ({ ...e, [key(r)]: '' })) }
   function addDraft() {
     if (!draft.store_id.trim() || draft.value === '') { setStatus({ err: true, msg: 'Store and Value are required.' }); return }
     setEdits(e => ({ ...e, [`${draft.store_id.trim().toUpperCase()}|${draft.division}|${draft.month}`]: draft.value }))
-    setDraft({ store_id: '', division: DIVS[0], month: AOP_MONTHS[0], value: '' })
-    setStatus(null)
+    setDraft({ store_id: '', division: DIVS[0], month: AOP_MONTHS[0], value: '' }); setStatus(null)
   }
 
-  // Import from CSV/XLSX (Store, Division, Month, Value columns) — parse-only
-  // on the server (see db/editor.py's parse_aop_overrides_import), so this
-  // only stages rows into `edits` the same way a manual edit does. Nothing
-  // reaches Postgres until the user reviews the grid below and clicks
-  // "Save changes" — a bulk import silently overwriting 1000+ live overrides
-  // with no review step is exactly what every other editor in this tab
-  // already avoids.
   async function importFile(e) {
-    const file = e.target.files?.[0]
-    e.target.value = '' // so picking the same file again still fires onChange
+    const file = e.target.files?.[0]; e.target.value = ''
     if (!file) return
     setImporting(true); setStatus(null); setImportSkipped(null)
     try {
-      const form = new FormData()
-      form.append('file', file)
+      const form = new FormData(); form.append('file', file)
       const result = await fetchJson('/api/config/aop-overrides/import', { method: 'POST', body: form })
       if (result.rows.length) {
         setEdits(prev => {
@@ -285,13 +495,10 @@ function AopTab() {
       }
       setImportSkipped(result.skipped)
       const parts = [`Staged ${result.rows.length} row(s) as pending changes`]
-      if (result.skipped.length) parts.push(`${result.skipped.length} row(s) skipped — see below`)
+      if (result.skipped.length) parts.push(`${result.skipped.length} row(s) skipped`)
       setStatus({ err: !result.rows.length && !!result.skipped.length, msg: parts.join(' · ') + '. Review below, then Save changes.' })
-    } catch (err) {
-      setStatus({ err: true, msg: `Import failed: ${err.message}` })
-    } finally {
-      setImporting(false)
-    }
+    } catch (err) { setStatus({ err: true, msg: `Import failed: ${err.message}` }) }
+    finally { setImporting(false) }
   }
 
   async function save() {
@@ -304,34 +511,33 @@ function AopTab() {
         return { store_id, division, month, value: v === '' ? null : Number(v) }
       })
       await fetchJson('/api/config/aop-overrides', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows: payload }) })
-      setStatus({ err: false, msg: `Saved ${payload.length} change(s).` })
-      load()
+      setStatus({ err: false, msg: `Saved ${payload.length} change(s).` }); load()
     } catch (e) { setStatus({ err: true, msg: e.message }) }
     finally { setBusy(false) }
   }
 
-  if (!rows) return <div className="card pie-card">Loading…</div>
+  if (!rows) return <div className="card pie-card pie-loading">Loading…</div>
 
   return (
     <div className="card pie-card">
       <div className="pie-toolbar">
         <input className="pie-search" placeholder="Search by store code…" value={search} onChange={e => setSearch(e.target.value)} />
-        <span style={{ fontSize: 13, color: 'var(--muted)' }}>{rows.length} overrides · {Object.keys(edits).length} unsaved change(s)</span>
-        <button className="btn-outline" onClick={downloadAopTemplate} title="Download a blank CSV with the right columns">
-          Download Template
-        </button>
-        <label className="btn-outline pie-import-btn" title="Import Store, Division, Month, Value from a .csv or .xlsx">
+        <span className="pie-count-label">{rows.length} overrides · {Object.keys(edits).length} unsaved change(s)</span>
+        <button className="btn-outline" onClick={downloadAopTemplate}>Download Template</button>
+        <label className="btn-outline pie-import-btn">
           {importing ? 'Importing…' : 'Import'}
           <input type="file" accept=".csv,.xlsx,.xlsm" onChange={importFile} disabled={importing} style={{ display: 'none' }} />
         </label>
-        <button className="btn-primary pie-save" onClick={save} disabled={busy || !Object.keys(edits).length}>{busy ? 'Saving…' : 'Save changes'}</button>
+        <button className="btn-primary pie-save" onClick={save} disabled={busy || !Object.keys(edits).length}>
+          {busy ? 'Saving…' : 'Save changes'}
+        </button>
       </div>
       {status && <p className={`pie-status ${status.err ? 'err' : ''}`}>{status.msg}</p>}
       {importSkipped && importSkipped.length > 0 && (
         <div className="pie-import-skipped">
           <div className="pie-import-skipped-head">
             {importSkipped.length} row{importSkipped.length === 1 ? '' : 's'} skipped on import
-            <button className="pie-del" onClick={() => setImportSkipped(null)} title="Dismiss">Dismiss</button>
+            <button className="pie-del" onClick={() => setImportSkipped(null)}>Dismiss</button>
           </div>
           <ul>
             {importSkipped.slice(0, 20).map((s, i) => <li key={i}>Row {s.row}: {s.reason}</li>)}
@@ -344,15 +550,15 @@ function AopTab() {
           <thead><tr><th>Store</th><th>Division</th><th>Month</th><th>Value (₹ L)</th><th></th></tr></thead>
           <tbody>
             {filtered.map(r => (
-              <tr key={r._key}>
-                <td>{r.store_id}</td>
+              <tr key={r._key} className={r._new ? 'pie-row-new' : ''}>
+                <td className="pie-row-label">{r.store_id}</td>
                 <td>{r.division}</td>
                 <td>{r.month}</td>
                 <td><input type="number" step="0.01" value={edits[r._key] ?? r.value} onChange={e => setValue(r, e.target.value)} /></td>
-                <td><button className="pie-del" onClick={() => deleteRow(r)} title="Remove">Remove</button></td>
+                <td><button className="pie-del" onClick={() => deleteRow(r)}>Remove</button></td>
               </tr>
             ))}
-            {!filtered.length && <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--muted)', padding: 16 }}>No overrides match.</td></tr>}
+            {!filtered.length && <tr><td colSpan={5} className="sm-empty-row">No overrides match.</td></tr>}
           </tbody>
         </table>
       </div>

@@ -428,6 +428,61 @@ async def import_aop_overrides_config(file: UploadFile = File(...)):
             raise HTTPException(422, f"Could not parse file: {e}")
 
 
+@router.get("/api/config/store-master")
+def get_store_master_config():
+    """Current store records with planning attributes (tag, cluster, ref_store etc.)."""
+    from sqlalchemy import select
+    from db.base import SessionLocal
+    from db.models.masterdata import Store
+
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(Store).where(Store.valid_to.is_(None)).order_by(Store.store_id)
+        ).scalars().all()
+        return [
+            {
+                "store_id": r.store_id,
+                "store_name": r.store_name,
+                "tag": r.tag,
+                "cluster_key": r.cluster_key,
+                "ref_store": r.ref_store,
+                "region_type": r.region_type,
+                "store_grade": r.store_grade,
+                "gm_grade": r.gm_grade,
+                "erp_cluster_type": r.erp_cluster_type,
+                "store_status": r.store_current_status,
+                "festival_grouping": r.festival_grouping,
+            }
+            for r in rows
+        ]
+
+
+@router.put("/api/config/store-master")
+def put_store_master_config(body: dict = Body(...)):
+    """Update editable planning fields (tag, cluster_key, ref_store) on current store rows."""
+    from sqlalchemy import select
+    from db.base import SessionLocal
+    from db.models.masterdata import Store
+
+    rows = body.get("rows") or []
+    with SessionLocal() as session:
+        updated = 0
+        for row in rows:
+            store_id = row.get("store_id")
+            if not store_id:
+                continue
+            current = session.execute(
+                select(Store).where(Store.store_id == store_id, Store.valid_to.is_(None))
+            ).scalar_one_or_none()
+            if current:
+                for field in ("tag", "cluster_key", "ref_store"):
+                    if field in row:
+                        setattr(current, field, row[field] if row[field] != "" else None)
+                updated += 1
+        session.commit()
+        return {"updated": updated}
+
+
 @router.get("/api/config/division-aop-summary")
 def division_aop_summary():
     """Latest persisted run's division-level annual AOP target (Rs Lakhs),

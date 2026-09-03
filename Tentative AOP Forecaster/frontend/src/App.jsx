@@ -304,7 +304,6 @@ export default function App() {
                 ← Plans
               </button>
             )}
-            <ThemeSelector current={theme} onChange={setTheme} />
           </div>
         </div>
       </header>
@@ -322,6 +321,8 @@ export default function App() {
           <PlanLanding
             onNewPlan={() => { setShowLanding(false); setStep(0) }}
             onResume={handleResumeSaved}
+            theme={theme}
+            onThemeChange={setTheme}
           />
         )}
 
