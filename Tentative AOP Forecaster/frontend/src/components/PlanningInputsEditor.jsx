@@ -164,9 +164,13 @@ function downloadStoreMasterTemplate() {
   URL.revokeObjectURL(url)
 }
 
+const SM_CACHE_KEY = 'aop-store-master-cache'
+
 /* ── Store Master Tab ────────────────────────────────────────────── */
 function StoreMasterTab({ stores, setStores, loadErr, reload }) {
-  const [edits, setEdits]   = useState({})
+  const [edits, setEdits] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(SM_CACHE_KEY) || '{}') } catch { return {} }
+  })
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState({ tag: [], cluster: [], region: [], grade: [] })
   const [status, setStatus] = useState(null)
@@ -174,6 +178,11 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
   const [importing, setImporting] = useState(false)
   // Use empty array when DB load failed so import tools still render
   const safeStores = stores || []
+
+  // Persist imports in localStorage so they survive page reloads
+  useEffect(() => {
+    try { localStorage.setItem(SM_CACHE_KEY, JSON.stringify(edits)) } catch {}
+  }, [edits])
 
   async function importCsv(e) {
     const file = e.target.files?.[0]; e.target.value = ''
@@ -225,10 +234,14 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
     finally { setImporting(false) }
   }
 
-  // Tag sets matching actual DB values from Store Master xlsx
-  const LFL_TAGS  = useMemo(() => new Set(['LFL']), [])
-  const RAMP_TAGS = useMemo(() => new Set(['Ramp', 'RAMP', 'ramp']), [])
-  const NSO_TAGS  = useMemo(() => new Set(['NSO', 'MAMJ-NSO']), [])
+  // Map a tag string to a tile colour variant — adapts to any tag values
+  function tileVariant(tag) {
+    const t = (tag || '').trim()
+    if (t === 'LFL') return 'lfl'
+    if (['Ramp','RAMP','ramp'].includes(t)) return 'ramp'
+    if (['NSO','MAMJ-NSO'].includes(t)) return 'nso'
+    return 'other'
+  }
 
   // Full merged view: DB stores with edits overlaid + CSV-import-only rows
   const mergedStores = useMemo(() => {
@@ -266,13 +279,15 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
     })
   }, [mergedStores, filters, search])
 
-  // Count tiles — always computed from filtered view; uses engine_v3.py tag sets
-  const counts = useMemo(() => {
-    const lfl  = filtered.filter(s => LFL_TAGS.has(s.tag || '')).length
-    const ramp = filtered.filter(s => RAMP_TAGS.has(s.tag || '')).length
-    const nso  = filtered.filter(s => NSO_TAGS.has(s.tag || '')).length
-    return { total: filtered.length, lfl, ramp, nso, other: filtered.length - lfl - ramp - nso }
-  }, [filtered, LFL_TAGS, RAMP_TAGS, NSO_TAGS])
+  // Dynamic tag groups — derived entirely from whatever tags are in the current data
+  const tagGroups = useMemo(() => {
+    const groups = {}
+    filtered.forEach(s => {
+      const t = (s.tag || '').trim() || '(untagged)'
+      groups[t] = (groups[t] || 0) + 1
+    })
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b))
+  }, [filtered])
 
   function setField(store_id, field, value) {
     setEdits(e => ({ ...e, [store_id]: { ...(e[store_id] || {}), [field]: value } }))
@@ -311,13 +326,12 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
           </p>
         </div>
       )}
-      {/* Count tiles */}
+      {/* Count tiles — dynamic: one tile per unique tag in the current data */}
       <div className="sm-tiles">
-        <CountTile label="TOTAL STORES" value={counts.total} variant="total" />
-        <CountTile label="LFL"   value={counts.lfl}   variant="lfl"   />
-        <CountTile label="RAMP"  value={counts.ramp}  variant="ramp"  />
-        <CountTile label="NSO"   value={counts.nso}   variant="nso"   />
-        {counts.other > 0 && <CountTile label="OTHER" value={counts.other} variant="other" />}
+        <CountTile label="TOTAL STORES" value={filtered.length} variant="total" />
+        {tagGroups.map(([tag, count]) => (
+          <CountTile key={tag} label={tag} value={count} variant={tileVariant(tag)} />
+        ))}
       </div>
 
       {/* Toolbar */}
