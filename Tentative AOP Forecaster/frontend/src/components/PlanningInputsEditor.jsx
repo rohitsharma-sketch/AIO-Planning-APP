@@ -15,7 +15,13 @@ const TABS = [
   { key: 'stores', label: 'Store Master' },
 ]
 
-const STORE_TAGS = ['LFL', 'NSO', 'Ramp']
+// Tag values matching engine_v3.py — ordered: LFL → RAMP → NSO
+const STORE_TAGS = [
+  '032 - Stores','080 - Stores','095 - Stores','125 - Stores','3 - Stores',
+  'FY26 - Q1','FY26 - Q2','FY26 - Q3',
+  'FY26 - Q4','FY27 - Q1','FY27 - Q2',
+  'NSO','MAMJ-NSO',
+]
 
 const csvField = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`
 
@@ -153,10 +159,11 @@ function MultiSelect({ label, options, selected, onChange }) {
 
 /* ── Store Master CSV template ───────────────────────────────────── */
 function downloadStoreMasterTemplate() {
-  const text = [
-    ['store_code', 'tag', 'cluster_key', 'ref_store'],
-    ['EXAMPLE', 'LFL', 'NORTH-1', ''],
-  ].map(row => row.map(csvField).join(',')).join('\n')
+  const HEADERS = ['store_code','store_name','tag','cluster_key','ref_store','region_type','store_grade','erp_cluster_type','festival_grouping']
+  const EXAMPLE1 = ['STORE001','Example Store LFL','FY26 - Q1','NORTH-1','REF001','North','A','','']
+  const EXAMPLE2 = ['STORE002','Example Store RAMP','FY26 - Q4','SOUTH-2','','South','B','','']
+  const EXAMPLE3 = ['STORE003','Example NSO Store','NSO','EAST-3','','East','C','','']
+  const text = [HEADERS, EXAMPLE1, EXAMPLE2, EXAMPLE3].map(row => row.map(csvField).join(',')).join('\n')
   const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }))
   const a = document.createElement('a'); a.href = url; a.download = 'store_master_template.csv'; a.click()
   URL.revokeObjectURL(url)
@@ -181,13 +188,18 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
       const text = await file.text()
       const lines = text.split(/\r?\n/).filter(l => l.trim())
       if (!lines.length) throw new Error('Empty file')
-      // Auto-detect header by looking for known column names
-      const raw = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim().toLowerCase())
+      // Auto-detect header by looking for known column names (normalised to lowercase)
+      const raw = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim().toLowerCase().replace(/\s+/g,'_'))
       const colIdx = {
-        store:   raw.findIndex(h => ['store_code','store_id','store','storeid','code'].includes(h)),
-        tag:     raw.findIndex(h => h === 'tag'),
-        cluster: raw.findIndex(h => ['cluster_key','cluster','clusterkey'].includes(h)),
-        ref:     raw.findIndex(h => ['ref_store','ref','refstore','reference_store'].includes(h)),
+        store:    raw.findIndex(h => ['store_code','store_id','store','storeid','code'].includes(h)),
+        name:     raw.findIndex(h => ['store_name','storename','name','store name'].includes(h)),
+        tag:      raw.findIndex(h => ['tag','store_tag','storetag','store_type','storetype'].includes(h)),
+        cluster:  raw.findIndex(h => ['cluster_key','cluster','clusterkey'].includes(h)),
+        ref:      raw.findIndex(h => ['ref_store','ref','refstore','reference_store'].includes(h)),
+        region:   raw.findIndex(h => ['region_type','region','regiontype'].includes(h)),
+        grade:    raw.findIndex(h => ['store_grade','grade','storegrade'].includes(h)),
+        erp:      raw.findIndex(h => ['erp_cluster_type','erp_cluster','erp','erpcluster'].includes(h)),
+        festival: raw.findIndex(h => ['festival_grouping','festival','festival_group'].includes(h)),
       }
       if (colIdx.store === -1) throw new Error('Column "store_code" not found in file')
       let staged = 0, skipped = 0
@@ -197,9 +209,14 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
         const sid = cols[colIdx.store]?.toUpperCase()
         if (!sid) { skipped++; continue }
         const patch = {}
-        if (colIdx.tag     >= 0) patch.tag         = cols[colIdx.tag]     ?? ''
-        if (colIdx.cluster >= 0) patch.cluster_key = cols[colIdx.cluster] ?? ''
-        if (colIdx.ref     >= 0) patch.ref_store   = cols[colIdx.ref]     ?? ''
+        if (colIdx.name     >= 0) patch.store_name        = cols[colIdx.name]     ?? ''
+        if (colIdx.tag      >= 0) patch.tag               = cols[colIdx.tag]      ?? ''
+        if (colIdx.cluster  >= 0) patch.cluster_key       = cols[colIdx.cluster]  ?? ''
+        if (colIdx.ref      >= 0) patch.ref_store         = cols[colIdx.ref]      ?? ''
+        if (colIdx.region   >= 0) patch.region_type       = cols[colIdx.region]   ?? ''
+        if (colIdx.grade    >= 0) patch.store_grade       = cols[colIdx.grade]    ?? ''
+        if (colIdx.erp      >= 0) patch.erp_cluster_type  = cols[colIdx.erp]      ?? ''
+        if (colIdx.festival >= 0) patch.festival_grouping = cols[colIdx.festival] ?? ''
         if (Object.keys(patch).length) { next[sid] = { ...(next[sid] || {}), ...patch }; staged++ }
         else skipped++
       }
