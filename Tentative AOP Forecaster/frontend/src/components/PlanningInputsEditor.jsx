@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { fetchJson } from './DbSyncPanel'
+import * as XLSX from 'xlsx'
 import './PlanningInputsEditor.css'
 
 const DIVS = ['GM', 'KIDS', 'LADIES', 'MENS', 'RETAIL']
@@ -30,6 +31,24 @@ const RAMP_TAG_SET = new Set(['Ramp','RAMP','ramp','FY26 - Q4','FY27 - Q1','FY27
 const NSO_TAG_SET  = new Set(['NSO','MAMJ-NSO'])
 
 const csvField = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`
+
+function parseCSVRow(line) {
+  const fields = []; let cur = ''; let inQ = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (inQ) {
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++ }
+      else if (ch === '"') { inQ = false }
+      else { cur += ch }
+    } else {
+      if (ch === '"') { inQ = true }
+      else if (ch === ',') { fields.push(cur.trim()); cur = '' }
+      else { cur += ch }
+    }
+  }
+  fields.push(cur.trim())
+  return fields
+}
 
 function downloadAopTemplate() {
   const text = [
@@ -163,16 +182,16 @@ function MultiSelect({ label, options, selected, onChange }) {
   )
 }
 
-/* ── Store Master CSV template ───────────────────────────────────── */
+/* ── Store Master XLSX template ──────────────────────────────────── */
 function downloadStoreMasterTemplate() {
-  const HEADERS = ['store_code','store_name','tag','cluster_key','ref_store','region_type','store_grade','erp_cluster_type','festival_grouping']
+  const HEADERS  = ['store_code','store_name','tag','cluster_key','ref_store','region_type','store_grade','erp_cluster_type','festival_grouping']
   const EXAMPLE1 = ['STORE001','Example LFL Store','LFL','NORTH-1','REF001','North','A','','']
   const EXAMPLE2 = ['STORE002','Example Ramp Store','Ramp','SOUTH-2','','South','B','','']
   const EXAMPLE3 = ['STORE003','Example NSO Store','NSO','EAST-3','','East','C','','']
-  const text = [HEADERS, EXAMPLE1, EXAMPLE2, EXAMPLE3].map(row => row.map(csvField).join(',')).join('\n')
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }))
-  const a = document.createElement('a'); a.href = url; a.download = 'store_master_template.csv'; a.click()
-  URL.revokeObjectURL(url)
+  const ws = XLSX.utils.aoa_to_sheet([HEADERS, EXAMPLE1, EXAMPLE2, EXAMPLE3])
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Store Master')
+  XLSX.writeFile(wb, 'store_master_template.xlsx')
 }
 
 const SM_CACHE_KEY = 'aop-store-master-cache'
@@ -195,16 +214,26 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
     try { localStorage.setItem(SM_CACHE_KEY, JSON.stringify(edits)) } catch {}
   }, [edits])
 
-  async function importCsv(e) {
+  async function importFile(e) {
     const file = e.target.files?.[0]; e.target.value = ''
     if (!file) return
     setImporting(true); setStatus(null)
     try {
-      const text = await file.text()
-      const lines = text.split(/\r?\n/).filter(l => l.trim())
-      if (!lines.length) throw new Error('Empty file')
-      // Auto-detect header by looking for known column names (normalised to lowercase)
-      const raw = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim().toLowerCase().replace(/\s+/g,'_'))
+      // Parse rows — XLSX/XLS via SheetJS, CSV via RFC 4180 parser
+      let allRows = []
+      const ext = file.name.split('.').pop().toLowerCase()
+      if (ext === 'xlsx' || ext === 'xls') {
+        const buf = await file.arrayBuffer()
+        const wb  = XLSX.read(buf, { type: 'array' })
+        const ws  = wb.Sheets[wb.SheetNames[0]]
+        allRows   = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+      } else {
+        const text = await file.text()
+        allRows = text.split(/\r?\n/).filter(l => l.trim()).map(parseCSVRow)
+      }
+      if (!allRows.length) throw new Error('Empty file')
+      // Auto-detect header
+      const raw = allRows[0].map(h => String(h).toLowerCase().replace(/\s+/g,'_'))
       const colIdx = {
         store:    raw.findIndex(h => ['store_code','store_id','store','storeid','code'].includes(h)),
         name:     raw.findIndex(h => ['store_name','storename','name','store name'].includes(h)),
@@ -219,8 +248,8 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
       if (colIdx.store === -1) throw new Error('Column "store_code" not found in file')
       let staged = 0, skipped = 0
       const next = {}
-      for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].split(',').map(c => c.replace(/^"|"$/g, '').trim())
+      for (let i = 1; i < allRows.length; i++) {
+        const cols = allRows[i].map(c => String(c ?? '').trim())
         const sid = cols[colIdx.store]?.toUpperCase()
         if (!sid) { skipped++; continue }
         const patch = {}
@@ -332,7 +361,7 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
             <span>Could not load store data from database — {loadErr}</span>
           </div>
           <p style={{marginTop:6,fontSize:12,color:'var(--char)'}}>
-            You can still import from a CSV file. Download the template, fill in store codes with tag / cluster / ref-store, and use Import CSV below.
+            You can still import from a file. Download the template (XLSX), fill in store codes with tag / cluster / ref-store, and use Import below.
           </p>
         </div>
       )}
@@ -359,8 +388,8 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
         <span className="pie-count-label">{filtered.length} stores{unsavedCount > 0 ? ` · ${unsavedCount} unsaved` : ''}</span>
         <button className="btn-outline" onClick={downloadStoreMasterTemplate}>Template</button>
         <label className="btn-outline pie-import-btn">
-          {importing ? 'Importing…' : 'Import CSV'}
-          <input type="file" accept=".csv" onChange={importCsv} disabled={importing} style={{ display: 'none' }} />
+          {importing ? 'Importing…' : 'Import'}
+          <input type="file" accept=".xlsx,.xls,.csv" onChange={importFile} disabled={importing} style={{ display: 'none' }} />
         </label>
         <button className="btn-primary pie-save" onClick={save} disabled={busy || !unsavedCount}>
           {busy ? 'Saving…' : 'Save changes'}
