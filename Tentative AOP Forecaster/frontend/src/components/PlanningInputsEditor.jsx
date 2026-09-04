@@ -15,13 +15,8 @@ const TABS = [
   { key: 'stores', label: 'Store Master' },
 ]
 
-// Tag values matching engine_v3.py — ordered: LFL → RAMP → NSO
-const STORE_TAGS = [
-  '032 - Stores','080 - Stores','095 - Stores','125 - Stores','3 - Stores',
-  'FY26 - Q1','FY26 - Q2','FY26 - Q3',
-  'FY26 - Q4','FY27 - Q1','FY27 - Q2',
-  'NSO','MAMJ-NSO',
-]
+// Tag values as stored in the DB / Store Master xlsx
+const STORE_TAGS = ['LFL', 'Ramp', 'NSO']
 
 const csvField = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`
 
@@ -160,8 +155,8 @@ function MultiSelect({ label, options, selected, onChange }) {
 /* ── Store Master CSV template ───────────────────────────────────── */
 function downloadStoreMasterTemplate() {
   const HEADERS = ['store_code','store_name','tag','cluster_key','ref_store','region_type','store_grade','erp_cluster_type','festival_grouping']
-  const EXAMPLE1 = ['STORE001','Example Store LFL','FY26 - Q1','NORTH-1','REF001','North','A','','']
-  const EXAMPLE2 = ['STORE002','Example Store RAMP','FY26 - Q4','SOUTH-2','','South','B','','']
+  const EXAMPLE1 = ['STORE001','Example LFL Store','LFL','NORTH-1','REF001','North','A','','']
+  const EXAMPLE2 = ['STORE002','Example Ramp Store','Ramp','SOUTH-2','','South','B','','']
   const EXAMPLE3 = ['STORE003','Example NSO Store','NSO','EAST-3','','East','C','','']
   const text = [HEADERS, EXAMPLE1, EXAMPLE2, EXAMPLE3].map(row => row.map(csvField).join(',')).join('\n')
   const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }))
@@ -230,10 +225,10 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
     finally { setImporting(false) }
   }
 
-  // Tag sets matching engine_v3.py — vintage-based, not simple strings
-  const LFL_TAGS  = useMemo(() => new Set(['032 - Stores','080 - Stores','095 - Stores','125 - Stores','3 - Stores','FY26 - Q1','FY26 - Q2','FY26 - Q3']), [])
-  const RAMP_TAGS = useMemo(() => new Set(['FY26 - Q4','FY27 - Q1','FY27 - Q2']), [])
-  const NSO_TAGS  = useMemo(() => new Set(['NSO','MAMJ-NSO']), [])
+  // Tag sets matching actual DB values from Store Master xlsx
+  const LFL_TAGS  = useMemo(() => new Set(['LFL']), [])
+  const RAMP_TAGS = useMemo(() => new Set(['Ramp', 'RAMP', 'ramp']), [])
+  const NSO_TAGS  = useMemo(() => new Set(['NSO', 'MAMJ-NSO']), [])
 
   // Full merged view: DB stores with edits overlaid + CSV-import-only rows
   const mergedStores = useMemo(() => {
@@ -272,12 +267,12 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
   }, [mergedStores, filters, search])
 
   // Count tiles — always computed from filtered view; uses engine_v3.py tag sets
-  const counts = useMemo(() => ({
-    total: filtered.length,
-    lfl:   filtered.filter(s => LFL_TAGS.has(s.tag || '')).length,
-    ramp:  filtered.filter(s => RAMP_TAGS.has(s.tag || '')).length,
-    nso:   filtered.filter(s => NSO_TAGS.has(s.tag || '')).length,
-  }), [filtered, LFL_TAGS, RAMP_TAGS, NSO_TAGS])
+  const counts = useMemo(() => {
+    const lfl  = filtered.filter(s => LFL_TAGS.has(s.tag || '')).length
+    const ramp = filtered.filter(s => RAMP_TAGS.has(s.tag || '')).length
+    const nso  = filtered.filter(s => NSO_TAGS.has(s.tag || '')).length
+    return { total: filtered.length, lfl, ramp, nso, other: filtered.length - lfl - ramp - nso }
+  }, [filtered, LFL_TAGS, RAMP_TAGS, NSO_TAGS])
 
   function setField(store_id, field, value) {
     setEdits(e => ({ ...e, [store_id]: { ...(e[store_id] || {}), [field]: value } }))
@@ -319,9 +314,10 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
       {/* Count tiles */}
       <div className="sm-tiles">
         <CountTile label="TOTAL STORES" value={counts.total} variant="total" />
-        <CountTile label="LFL"  value={counts.lfl}  variant="lfl"  />
-        <CountTile label="RAMP" value={counts.ramp} variant="ramp" />
-        <CountTile label="NSO"  value={counts.nso}  variant="nso"  />
+        <CountTile label="LFL"   value={counts.lfl}   variant="lfl"   />
+        <CountTile label="RAMP"  value={counts.ramp}  variant="ramp"  />
+        <CountTile label="NSO"   value={counts.nso}   variant="nso"   />
+        {counts.other > 0 && <CountTile label="OTHER" value={counts.other} variant="other" />}
       </div>
 
       {/* Toolbar */}

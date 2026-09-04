@@ -365,6 +365,8 @@
 .sm-tile-ramp .sm-tile-val  { color: #8B4A00; }
 .sm-tile-nso   { border-color: #6EE7B7; background: #ECFDF5; }
 .sm-tile-nso .sm-tile-val   { color: #0F6E56; }
+.sm-tile-other { border-color: #D1D5DB; background: #F9FAFB; }
+.sm-tile-other .sm-tile-val { color: #6B7280; }
 
 /* Store table */
 .sm-table th { min-width: 80px; }
