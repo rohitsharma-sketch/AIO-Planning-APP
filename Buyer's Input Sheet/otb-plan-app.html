@@ -608,6 +608,232 @@ thead .c0,thead .c1{background:var(--th-bg) !important;color:var(--th-tx) !impor
 .gn{color:#b91c1c!important;font-weight:600!important}
 /* ── Department name column ── */
 .dtbl tbody td.l{font-size:11.5px;font-weight:600;color:var(--tx)}
+
+/* ══════════════════════════════════════════════════════════════
+   FULL UI MAKEOVER — 2026-09-04
+   Indigo × Deep Navy platform — light & dark
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Dark-mode token upgrade ────────────────────────────────── */
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#060B18;--sf:#0C1422;--s2:#101C34;--s3:#162038;
+    --bd:#1C2A42;--bm:#243350;--bh:#2C3E5E;
+    --tx:#E6EEFF;--t2:#8BA6C8;--t3:#56789A;--mu:#263C58;
+    --ac:#6366F1;--ac-h:#4F46E5;--ac-tint:11%;--ac-bord:32%;
+    --nav:#080E1C;--nav2:#142030;--nav3:#192840;
+    --nav-t:#C0D4EE;--nav-m:#426080;--nav-ab-pct:18%;
+    --topbar-bg:#080E1C;--topbar-tx:#C0D4EE;
+    --th-bg:#0F1A30;--th-tx:#9AB4D0;--th-mu:rgba(154,180,208,.5);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#060B18;--sf:#0C1422;--s2:#101C34;--s3:#162038;
+  --bd:#1C2A42;--bm:#243350;--bh:#2C3E5E;
+  --tx:#E6EEFF;--t2:#8BA6C8;--t3:#56789A;--mu:#263C58;
+  --ac:#6366F1;--ac-h:#4F46E5;--ac-tint:11%;--ac-bord:32%;
+  --nav:#080E1C;--nav2:#142030;--nav3:#192840;
+  --nav-t:#C0D4EE;--nav-m:#426080;--nav-ab-pct:18%;
+  --topbar-bg:#080E1C;--topbar-tx:#C0D4EE;
+  --th-bg:#0F1A30;--th-tx:#9AB4D0;--th-mu:rgba(154,180,208,.5);
+}
+
+/* ── SIDEBAR ───────────────────────────────────────────────── */
+.snav{background:var(--nav)!important;border-right:1px solid var(--nav2)!important}
+.snav-brand{
+  background:linear-gradient(145deg,#1A1660 0%,#132040 100%)!important;
+  border-bottom:1px solid rgba(99,102,241,.28)!important;
+  padding:0 12px!important;
+}
+.snav-brand-ico{
+  display:inline-flex!important;align-items:center!important;
+  justify-content:center!important;width:26px!important;height:26px!important;
+  background:var(--ac)!important;border-radius:7px!important;
+  font-size:10.5px!important;font-weight:900!important;color:#fff!important;
+  letter-spacing:-.5px!important;flex-shrink:0!important;
+}
+.snav-brand-nm{color:#E8EEFF!important;font-size:11.5px!important;letter-spacing:-.2px!important}
+.snav-brand-fy{color:rgba(150,180,220,.65)!important}
+.snav-sec{
+  color:var(--ac)!important;font-size:8.5px!important;
+  letter-spacing:.14em!important;opacity:.75;
+  padding:14px 12px 4px!important;
+}
+.ni{
+  border-radius:6px!important;margin:1px 6px!important;
+  font-size:11.5px!important;padding:6px 9px!important;
+  border:none!important;transition:all .12s!important;
+  position:relative;
+}
+.ni:hover{background:rgba(99,102,241,.09)!important;color:var(--ac)!important}
+.ni.act{
+  background:rgba(99,102,241,.16)!important;
+  color:var(--ac)!important;font-weight:700!important;
+}
+.ni.act::before{
+  content:'';position:absolute;left:-6px;top:6px;bottom:6px;
+  width:3px;background:var(--ac);border-radius:0 2px 2px 0;
+}
+.nbdg{font-size:8px!important;padding:1px 5px!important;border-radius:8px!important}
+
+/* ── DIVISION TABS (pill style) ────────────────────────────── */
+.dtab{
+  border-radius:20px!important;padding:5px 16px!important;
+  border:1.5px solid var(--bd)!important;font-size:11.5px!important;
+  background:transparent!important;color:var(--t2)!important;
+  letter-spacing:.03em!important;transition:all .15s!important;
+  box-shadow:none!important;
+}
+.dtab:hover:not(.on){
+  border-color:var(--dtab-c,var(--ac))!important;
+  background:color-mix(in srgb,var(--dtab-c,var(--ac)) 10%,transparent)!important;
+  color:var(--dtab-c,var(--ac))!important;
+  transform:translateY(-1px)!important;
+}
+.dtab.on{
+  border-color:var(--dtab-c,var(--ac))!important;
+  background:var(--dtab-c,var(--ac))!important;
+  color:#fff!important;
+  box-shadow:0 3px 10px color-mix(in srgb,var(--dtab-c,var(--ac)) 38%,transparent)!important;
+}
+.divtabs{gap:6px!important;padding:10px 0!important;align-items:center!important}
+
+/* ── TABLE SUPER-GROUP HEADER (ST% | HISTORICAL | PLAN) ────── */
+.dtbl .hr-sg .hblk{
+  padding:7px 12px!important;font-size:9.5px!important;
+  font-weight:900!important;letter-spacing:.1em!important;
+  border-bottom:2px solid currentColor!important;
+}
+.dtbl .hr-sg .hblk-st{
+  background:rgba(251,146,60,.07)!important;
+  color:#FB923C!important;border-bottom-color:#FB923C!important;
+}
+.dtbl .hr-sg .hblk-hist{
+  background:rgba(99,102,241,.09)!important;
+  color:#818CF8!important;border-bottom-color:#818CF8!important;
+}
+.dtbl .hr-sg .hblk-plan{
+  background:rgba(16,185,129,.07)!important;
+  color:#34D399!important;border-bottom-color:#34D399!important;
+}
+.htoggle{
+  background:rgba(255,255,255,.10)!important;border-radius:10px!important;
+  padding:2px 9px!important;font-size:8.5px!important;
+  letter-spacing:.05em!important;transition:all .15s!important;
+}
+.htoggle:hover{background:rgba(255,255,255,.22)!important}
+
+/* ── TABLE HEADER ROWS (month group + sub-label) ───────────── */
+.dtbl .hr0 th{background:var(--s2)!important;border-bottom:1px solid var(--bm)!important}
+.hmon{
+  color:var(--ac)!important;font-size:9px!important;font-weight:900!important;
+  letter-spacing:.08em!important;border-right:1px solid var(--bd)!important;
+}
+.hsum{
+  background:color-mix(in srgb,var(--ac) 8%,var(--s2))!important;
+  color:var(--ac)!important;font-weight:900!important;
+}
+.dtbl .hr1 th{background:var(--s2)!important;border-bottom:1px solid var(--bd)!important}
+.dtbl .hr2 th{
+  background:#101930!important;color:#7A92B6!important;
+  font-size:9px!important;letter-spacing:.05em!important;
+  border-bottom:1.5px solid rgba(99,102,241,.18)!important;
+}
+.dtbl .hr2 th.sc{background:rgba(99,102,241,.16)!important;color:#818CF8!important}
+
+/* hrow1/2/3 — deeper indigo, cooler tone */
+.dtbl thead tr.hrow1 th,
+.dtbl thead tr.hrow2 th,
+.dtbl thead tr.hrow3 th{
+  background:#131E42!important;color:#9AB4D0!important;
+  border-bottom:1px solid rgba(99,102,241,.2)!important;
+  font-size:9px!important;letter-spacing:.06em!important;
+}
+.dtbl thead tr.hrow1 th.sc,
+.dtbl thead tr.hrow2 th.sc,
+.dtbl thead tr.hrow3 th.sc{
+  background:rgba(99,102,241,.17)!important;color:#818CF8!important;
+}
+thead .c0,thead .c1{background:#101930!important}
+
+/* ── GROUP HEADER ROWS (MENS / LADIES / KIDS in table) ─────── */
+.grphd td{
+  background:rgba(99,102,241,.06)!important;
+  color:#9AB4D0!important;font-weight:700!important;
+  font-size:11px!important;letter-spacing:.04em!important;
+  border-bottom:1px solid rgba(99,102,241,.14)!important;
+  border-top:1px solid rgba(99,102,241,.12)!important;
+}
+.grphd td.dept-metric{background:rgba(99,102,241,.06)!important}
+
+/* ── GRAND TOTAL ──────────────────────────────────────────── */
+.grandtot td,.grandtot .c0,.grandtot .c1{
+  background:linear-gradient(90deg,rgba(99,102,241,.20),rgba(99,102,241,.13))!important;
+  color:#C7D2FE!important;font-weight:800!important;
+  border-top:1.5px solid rgba(99,102,241,.38)!important;
+}
+.grandtot td.l{color:#E0E7FF!important;font-size:11.5px!important}
+
+/* ── COLUMN SEPARATORS ────────────────────────────────────── */
+.st-sep-th{border-left:2px solid rgba(251,146,60,.55)!important}
+.st-sep{border-left:1px solid rgba(251,146,60,.18)!important}
+.hist-sep-th{border-left:2px solid rgba(129,140,248,.55)!important}
+.hist-sep{border-left:1px solid rgba(129,140,248,.18)!important}
+.plan-sep-th{border-left:2px solid rgba(52,211,153,.55)!important}
+.plan-sep{border-left:1px solid rgba(52,211,153,.18)!important}
+
+/* ── AOP MONTH HIGHLIGHT ──────────────────────────────────── */
+.aop-month-hl{
+  background:color-mix(in srgb,var(--ac) 10%,var(--s2))!important;
+  color:#818CF8!important;
+  border-bottom:2px solid rgba(99,102,241,.38)!important;
+}
+
+/* ── TRAFFIC LIGHTS — brighter for dark ─────────────────────  */
+.st-hi{color:#4ADE80!important;font-weight:600!important}
+.st-mid{color:#818CF8!important;font-weight:600!important}
+.st-lo{color:#F87171!important;font-weight:600!important}
+.gp{color:#4ADE80!important;font-weight:600!important}
+.gn{color:#F87171!important;font-weight:600!important}
+.aop-ref-cell{color:#818CF8!important;font-weight:600!important}
+
+/* ── TABLE ROW HOVER ──────────────────────────────────────── */
+.dtbl tbody tr:hover td{background:rgba(99,102,241,.04)!important}
+
+/* ── TOPBAR BUTTONS ───────────────────────────────────────── */
+.tbtn{
+  border-radius:7px!important;padding:5px 12px!important;
+  border:1.5px solid var(--bm)!important;background:var(--sf)!important;
+  color:var(--t2)!important;font-size:11px!important;font-weight:600!important;
+  transition:all .15s!important;
+}
+.tbtn:hover{
+  border-color:var(--ac)!important;color:var(--ac)!important;
+  background:color-mix(in srgb,var(--ac) 7%,var(--sf))!important;
+}
+.tbtn.pri{
+  background:var(--ac)!important;border-color:var(--ac)!important;
+  color:#fff!important;
+  box-shadow:0 2px 8px color-mix(in srgb,var(--ac) 40%,transparent)!important;
+}
+.tbtn.pri:hover{background:var(--ac-h)!important;border-color:var(--ac-h)!important}
+
+/* ── FILTER PANEL ─────────────────────────────────────────── */
+.fpanel{
+  border:1px solid var(--bd)!important;border-radius:10px!important;
+  box-shadow:0 8px 28px rgba(0,0,0,.22)!important;
+}
+.fgroup{border-bottom:1px solid var(--bd)!important}
+.fitem:hover{background:rgba(99,102,241,.08)!important}
+.fitem.sel{color:var(--ac)!important}
+
+/* ── AOP LOCK/BADGE ───────────────────────────────────────── */
+.aop-lock-tag{
+  background:rgba(99,102,241,.14)!important;
+  border-color:rgba(99,102,241,.32)!important;
+  color:#818CF8!important;
+}
+
 </style>
 
 <!-- ─── APP ─────────────────────────────────────── -->
