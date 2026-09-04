@@ -15,8 +15,19 @@ const TABS = [
   { key: 'stores', label: 'Store Master' },
 ]
 
-// Tag values as stored in the DB / Store Master xlsx
-const STORE_TAGS = ['LFL', 'Ramp', 'NSO']
+// Valid tag values — vintage-based (DB / engine) + simple aliases (CSV imports)
+const STORE_TAGS = [
+  '032 - Stores','080 - Stores','095 - Stores','125 - Stores','3 - Stores',
+  'FY26 - Q1','FY26 - Q2','FY26 - Q3',
+  'FY26 - Q4','FY27 - Q1','FY27 - Q2',
+  'NSO','MAMJ-NSO',
+  'LFL','Ramp',
+]
+
+// Tag → colour sets covering both vintage DB values and simple CSV labels
+const LFL_TAG_SET  = new Set(['LFL','032 - Stores','080 - Stores','095 - Stores','125 - Stores','3 - Stores','FY26 - Q1','FY26 - Q2','FY26 - Q3'])
+const RAMP_TAG_SET = new Set(['Ramp','RAMP','ramp','FY26 - Q4','FY27 - Q1','FY27 - Q2'])
+const NSO_TAG_SET  = new Set(['NSO','MAMJ-NSO'])
 
 const csvField = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`
 
@@ -234,12 +245,11 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
     finally { setImporting(false) }
   }
 
-  // Map a tag string to a tile colour variant — adapts to any tag values
   function tileVariant(tag) {
     const t = (tag || '').trim()
-    if (t === 'LFL') return 'lfl'
-    if (['Ramp','RAMP','ramp'].includes(t)) return 'ramp'
-    if (['NSO','MAMJ-NSO'].includes(t)) return 'nso'
+    if (LFL_TAG_SET.has(t))  return 'lfl'
+    if (RAMP_TAG_SET.has(t)) return 'ramp'
+    if (NSO_TAG_SET.has(t))  return 'nso'
     return 'other'
   }
 
