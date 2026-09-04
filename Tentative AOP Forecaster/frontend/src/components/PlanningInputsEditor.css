@@ -368,6 +368,13 @@
 .sm-tile-other { border-color: #D1D5DB; background: #F9FAFB; }
 .sm-tile-other .sm-tile-val { color: #6B7280; }
 
+/* Clickable tile states */
+.sm-tile-clickable { cursor: pointer; transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease; }
+.sm-tile-clickable:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,0.10); opacity: 0.92; }
+.sm-tile-clickable:active { transform: translateY(0); opacity: 0.8; }
+.sm-tile-active { outline: 2.5px solid currentColor; outline-offset: 2px; box-shadow: 0 0 0 4px rgba(99,102,241,0.12); }
+.sm-tile-total.sm-tile-active { box-shadow: 0 0 0 4px rgba(79,70,229,0.15); }
+
 /* Store table */
 .sm-table th { min-width: 80px; }
 .sm-table .sm-code { font-weight: 700; color: var(--navy); font-size: 12.5px; min-width: 70px; }

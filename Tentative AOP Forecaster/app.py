@@ -483,6 +483,28 @@ def put_store_master_config(body: dict = Body(...)):
         return {"updated": updated}
 
 
+@router.delete("/api/config/store-master/untagged")
+def delete_untagged_stores():
+    """Remove all active store rows that have no tag (closed / unused system records)."""
+    from sqlalchemy import select
+    from db.base import SessionLocal
+    from db.models.masterdata import Store
+    from datetime import datetime, timezone
+
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(Store).where(
+                Store.valid_to.is_(None),
+                (Store.tag.is_(None) | (Store.tag == ""))
+            )
+        ).scalars().all()
+        now = datetime.now(timezone.utc)
+        for store in rows:
+            store.valid_to = now
+        session.commit()
+        return {"deleted": len(rows)}
+
+
 @router.get("/api/config/division-aop-summary")
 def division_aop_summary():
     """Latest persisted run's division-level annual AOP target (Rs Lakhs),

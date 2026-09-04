@@ -126,9 +126,13 @@ export default function PlanningInputsEditor({ onBack, onContinue }) {
 }
 
 /* ── Count tile component ───────────────────────────────────────── */
-function CountTile({ label, value, variant }) {
+function CountTile({ label, value, variant, onClick, active }) {
   return (
-    <div className={`sm-tile sm-tile-${variant}`}>
+    <div
+      className={`sm-tile sm-tile-${variant}${onClick ? ' sm-tile-clickable' : ''}${active ? ' sm-tile-active' : ''}`}
+      onClick={onClick}
+      title={onClick ? (active ? `Clear filter` : `Filter by ${label}`) : undefined}
+    >
       <span className="sm-tile-val">{value ?? '—'}</span>
       <span className="sm-tile-lbl">{label}</span>
     </div>
@@ -318,15 +322,45 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
     })
   }, [mergedStores, filters, search])
 
-  // Dynamic tag groups — derived entirely from whatever tags are in the current data
+  // Tag groups always from the FULL merged view so tile counts stay stable
+  // while the table below is filtered. Untagged sorted last.
   const tagGroups = useMemo(() => {
     const groups = {}
-    filtered.forEach(s => {
+    mergedStores.forEach(s => {
       const t = (s.tag || '').trim() || '(untagged)'
       groups[t] = (groups[t] || 0) + 1
     })
-    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b))
-  }, [filtered])
+    return Object.entries(groups).sort(([a], [b]) => {
+      if (a === '(untagged)') return 1
+      if (b === '(untagged)') return -1
+      return a.localeCompare(b)
+    })
+  }, [mergedStores])
+
+  // Total for the TOTAL tile = tagged stores only (the active planning universe)
+  const taggedTotal = useMemo(() =>
+    mergedStores.filter(s => (s.tag || '').trim()).length
+  , [mergedStores])
+
+  // Tile click: toggle tag filter on the table. Clicking TOTAL clears tag filter.
+  function handleTileClick(tag) {
+    if (tag === null) {
+      setFilters(f => ({ ...f, tag: [] }))
+    } else {
+      const filterVal = tag === '(untagged)' ? '' : tag
+      setFilters(f => {
+        const already = f.tag.length === 1 && f.tag[0] === filterVal
+        return { ...f, tag: already ? [] : [filterVal] }
+      })
+    }
+  }
+
+  // Whether a tile is currently the active filter
+  function tileActive(tag) {
+    if (tag === null) return filters.tag.length === 0
+    const filterVal = tag === '(untagged)' ? '' : tag
+    return filters.tag.length === 1 && filters.tag[0] === filterVal
+  }
 
   function setField(store_id, field, value) {
     setEdits(e => ({ ...e, [store_id]: { ...(e[store_id] || {}), [field]: value } }))
@@ -365,11 +399,25 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
           </p>
         </div>
       )}
-      {/* Count tiles — dynamic: one tile per unique tag in the current data */}
+      {/* Count tiles — click any tile to filter the table; click again to clear.
+          TOTAL shows tagged stores only. Untagged DB records appear last in grey. */}
       <div className="sm-tiles">
-        <CountTile label="TOTAL STORES" value={filtered.length} variant="total" />
+        <CountTile
+          label="TOTAL STORES"
+          value={taggedTotal}
+          variant="total"
+          onClick={() => handleTileClick(null)}
+          active={tileActive(null)}
+        />
         {tagGroups.map(([tag, count]) => (
-          <CountTile key={tag} label={tag} value={count} variant={tileVariant(tag)} />
+          <CountTile
+            key={tag}
+            label={tag}
+            value={count}
+            variant={tileVariant(tag)}
+            onClick={() => handleTileClick(tag)}
+            active={tileActive(tag)}
+          />
         ))}
       </div>
 

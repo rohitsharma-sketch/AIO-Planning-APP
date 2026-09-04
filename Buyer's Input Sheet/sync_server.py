@@ -22,8 +22,8 @@ CORS(app)
 def strip_cache_headers(resp):
     """Remove ETag/Last-Modified AFTER Werkzeug finalize_request() adds them, so the
     browser can never serve a 304 and always fetches the latest HTML."""
-    resp.headers.discard("ETag")
-    resp.headers.discard("Last-Modified")
+    resp.headers.remove("ETag")
+    resp.headers.remove("Last-Modified")
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
