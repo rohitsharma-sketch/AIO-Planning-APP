@@ -213,13 +213,18 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
     finally { setImporting(false) }
   }
 
+  // Tag sets matching engine_v3.py — vintage-based, not simple strings
+  const LFL_TAGS  = useMemo(() => new Set(['032 - Stores','080 - Stores','095 - Stores','125 - Stores','3 - Stores','FY26 - Q1','FY26 - Q2','FY26 - Q3']), [])
+  const RAMP_TAGS = useMemo(() => new Set(['FY26 - Q4','FY27 - Q1','FY27 - Q2']), [])
+  const NSO_TAGS  = useMemo(() => new Set(['NSO','MAMJ-NSO']), [])
+
   // Full merged view: DB stores with edits overlaid + CSV-import-only rows
   const mergedStores = useMemo(() => {
     const inDb = new Set(safeStores.map(s => s.store_id))
     const dbRows = safeStores.map(s => ({ ...s, ...(edits[s.store_id] || {}) }))
     const importOnly = Object.entries(edits)
       .filter(([id]) => !inDb.has(id))
-      .map(([, edit]) => edit)
+      .map(([id, edit]) => ({ store_id: id, ...edit }))
     return [...dbRows, ...importOnly]
   }, [safeStores, edits])
 
@@ -249,13 +254,13 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
     })
   }, [mergedStores, filters, search])
 
-  // Count tiles — always computed from filtered view
+  // Count tiles — always computed from filtered view; uses engine_v3.py tag sets
   const counts = useMemo(() => ({
     total: filtered.length,
-    lfl:   filtered.filter(s => s.tag?.toUpperCase() === 'LFL').length,
-    ramp:  filtered.filter(s => s.tag?.toUpperCase() === 'RAMP').length,
-    nso:   filtered.filter(s => s.tag?.toUpperCase() === 'NSO').length,
-  }), [filtered])
+    lfl:   filtered.filter(s => LFL_TAGS.has(s.tag || '')).length,
+    ramp:  filtered.filter(s => RAMP_TAGS.has(s.tag || '')).length,
+    nso:   filtered.filter(s => NSO_TAGS.has(s.tag || '')).length,
+  }), [filtered, LFL_TAGS, RAMP_TAGS, NSO_TAGS])
 
   function setField(store_id, field, value) {
     setEdits(e => ({ ...e, [store_id]: { ...(e[store_id] || {}), [field]: value } }))
