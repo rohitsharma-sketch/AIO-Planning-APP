@@ -592,10 +592,8 @@ thead .c0,thead .c1{background:var(--th-bg) !important;color:var(--th-tx) !impor
 /* ── Group header rows: neutral gray, no indigo tint ── */
 .grphd td{background:var(--s2)!important;color:var(--tx)!important;font-weight:700!important}
 .grphd td.dept-metric{background:var(--s2)!important}
-/* ── Table headers: unified deep indigo ── */
-.dtbl thead tr.hrow1 th,.dtbl thead tr.hrow2 th,.dtbl thead tr.hrow3 th{background:#312E81!important;color:#fff!important}
-/* ── Grand total: solid indigo, white text ── */
-.grandtot td,.grandtot .c0,.grandtot .c1{background:#312E81!important;color:#fff!important;font-weight:700!important}
+/* ── Table headers: light indigo tint (light mode), overridden dark below ── */
+.dtbl thead tr.hrow1 th,.dtbl thead tr.hrow2 th,.dtbl thead tr.hrow3 th{background:rgba(99,102,241,.07)!important;color:#4338CA!important}
 .grandtot td.l{color:#fff!important}
 /* ── AOP reference amounts: indigo text ── */
 .aop-ref-cell{color:var(--ac)!important;font-weight:600!important}
@@ -733,28 +731,26 @@ thead .c0,thead .c1{background:var(--th-bg) !important;color:var(--th-tx) !impor
   background:color-mix(in srgb,var(--ac) 8%,var(--s2))!important;
   color:var(--ac)!important;font-weight:900!important;
 }
-/* hr1 base — but hsum Period cells must match the dark hrow scheme */
+/* ── Table header rows: light-mode defaults (indigo tints) ── */
 .dtbl .hr1 th{background:var(--s2)!important;border-bottom:1px solid var(--bd)!important}
-.dtbl thead tr.hr1 th.hsum{background:#131E42!important;color:#818CF8!important;border-right:1px solid rgba(99,102,241,.2)!important}
-.dtbl .hr2 th{
-  background:#101930!important;color:#7A92B6!important;
-  font-size:9px!important;letter-spacing:.05em!important;
-  border-bottom:1.5px solid rgba(99,102,241,.18)!important;
-}
-.dtbl .hr2 th.sc{background:rgba(99,102,241,.16)!important;color:#818CF8!important}
+.dtbl thead tr.hr1 th.hsum{background:rgba(99,102,241,.08)!important;color:#4338CA!important;border-right:1px solid rgba(99,102,241,.2)!important}
+.dtbl .hr2 th{background:rgba(99,102,241,.05)!important;color:#4338CA!important;font-size:9px!important;letter-spacing:.05em!important;border-bottom:1.5px solid rgba(99,102,241,.12)!important}
+.dtbl .hr2 th.sc{background:rgba(99,102,241,.12)!important;color:#4338CA!important}
+.dtbl thead tr.hrow1 th,.dtbl thead tr.hrow2 th,.dtbl thead tr.hrow3 th{background:rgba(99,102,241,.07)!important;color:#4338CA!important;border-bottom:1px solid rgba(99,102,241,.15)!important;font-size:9px!important;letter-spacing:.06em!important}
+.dtbl thead tr.hrow1 th.sc,.dtbl thead tr.hrow2 th.sc,.dtbl thead tr.hrow3 th.sc{background:rgba(99,102,241,.14)!important;color:#4338CA!important}
 
-/* hrow1/2/3 — deeper indigo, cooler tone */
-.dtbl thead tr.hrow1 th,
-.dtbl thead tr.hrow2 th,
-.dtbl thead tr.hrow3 th{
-  background:#131E42!important;color:#9AB4D0!important;
-  border-bottom:1px solid rgba(99,102,241,.2)!important;
-  font-size:9px!important;letter-spacing:.06em!important;
-}
-.dtbl thead tr.hrow1 th.sc,
-.dtbl thead tr.hrow2 th.sc,
-.dtbl thead tr.hrow3 th.sc{
-  background:rgba(99,102,241,.17)!important;color:#818CF8!important;
+/* ── Dark-mode header overrides ── */
+:root[data-theme="dark"] .dtbl thead tr.hr1 th.hsum{background:#131E42!important;color:#818CF8!important}
+:root[data-theme="dark"] .dtbl .hr2 th{background:#101930!important;color:#7A92B6!important}
+:root[data-theme="dark"] .dtbl .hr2 th.sc{background:rgba(99,102,241,.16)!important;color:#818CF8!important}
+:root[data-theme="dark"] .dtbl thead tr.hrow1 th,:root[data-theme="dark"] .dtbl thead tr.hrow2 th,:root[data-theme="dark"] .dtbl thead tr.hrow3 th{background:#131E42!important;color:#9AB4D0!important;border-bottom:1px solid rgba(99,102,241,.2)!important}
+:root[data-theme="dark"] .dtbl thead tr.hrow1 th.sc,:root[data-theme="dark"] .dtbl thead tr.hrow2 th.sc,:root[data-theme="dark"] .dtbl thead tr.hrow3 th.sc{background:rgba(99,102,241,.17)!important;color:#818CF8!important}
+@media(prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .dtbl thead tr.hr1 th.hsum{background:#131E42!important;color:#818CF8!important}
+  :root:not([data-theme="light"]) .dtbl .hr2 th{background:#101930!important;color:#7A92B6!important}
+  :root:not([data-theme="light"]) .dtbl .hr2 th.sc{background:rgba(99,102,241,.16)!important;color:#818CF8!important}
+  :root:not([data-theme="light"]) .dtbl thead tr.hrow1 th,:root:not([data-theme="light"]) .dtbl thead tr.hrow2 th,:root:not([data-theme="light"]) .dtbl thead tr.hrow3 th{background:#131E42!important;color:#9AB4D0!important;border-bottom:1px solid rgba(99,102,241,.2)!important}
+  :root:not([data-theme="light"]) .dtbl thead tr.hrow1 th.sc,:root:not([data-theme="light"]) .dtbl thead tr.hrow2 th.sc,:root:not([data-theme="light"]) .dtbl thead tr.hrow3 th.sc{background:rgba(99,102,241,.17)!important;color:#818CF8!important}
 }
 thead .c0,thead .c1{background:#101930!important}
 
@@ -768,13 +764,20 @@ thead .c0,thead .c1{background:#101930!important}
 }
 .grphd td.dept-metric{background:rgba(99,102,241,.06)!important}
 
-/* ── GRAND TOTAL ──────────────────────────────────────────── */
+/* ── GRAND TOTAL: light mode (dark indigo text on subtle tint) ── */
 .grandtot td,.grandtot .c0,.grandtot .c1{
-  background:linear-gradient(90deg,rgba(99,102,241,.20),rgba(99,102,241,.13))!important;
-  color:#C7D2FE!important;font-weight:800!important;
-  border-top:1.5px solid rgba(99,102,241,.38)!important;
+  background:linear-gradient(90deg,rgba(99,102,241,.12),rgba(99,102,241,.07))!important;
+  color:#4338CA!important;font-weight:800!important;
+  border-top:1.5px solid rgba(99,102,241,.25)!important;
 }
-.grandtot td.l{color:#E0E7FF!important;font-size:11.5px!important}
+.grandtot td.l{color:#4338CA!important;font-size:11.5px!important}
+/* dark mode: light text on deep tint */
+:root[data-theme="dark"] .grandtot td,:root[data-theme="dark"] .grandtot .c0,:root[data-theme="dark"] .grandtot .c1{background:linear-gradient(90deg,rgba(99,102,241,.25),rgba(99,102,241,.16))!important;color:#C7D2FE!important}
+:root[data-theme="dark"] .grandtot td.l{color:#E0E7FF!important}
+@media(prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .grandtot td,:root:not([data-theme="light"]) .grandtot .c0,:root:not([data-theme="light"]) .grandtot .c1{background:linear-gradient(90deg,rgba(99,102,241,.25),rgba(99,102,241,.16))!important;color:#C7D2FE!important}
+  :root:not([data-theme="light"]) .grandtot td.l{color:#E0E7FF!important}
+}
 
 /* ── COLUMN SEPARATORS ────────────────────────────────────── */
 .st-sep-th{border-left:2px solid rgba(251,146,60,.55)!important}
