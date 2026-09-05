@@ -779,6 +779,43 @@ thead .c0,thead .c1{background:#101930!important}
   :root:not([data-theme="light"]) .grandtot td.l{color:#E0E7FF!important}
 }
 
+/* ── ENTERPRISE REFINEMENTS ──────────────────────────────── */
+
+/* Topbar wordmark */
+.tbar-wordmark{display:flex;flex-direction:column;gap:1px;justify-content:center;flex-shrink:0}
+.tbar-wm-app{font-size:12px;font-weight:700;color:var(--topbar-tx);letter-spacing:-.01em;opacity:.95;white-space:nowrap}
+.tbar-wm-section{font-size:8.5px;font-weight:600;color:var(--topbar-tx);letter-spacing:.06em;text-transform:uppercase;opacity:.45;white-space:nowrap}
+.tbar-flex-fill{flex:1}
+.tbar-sep{width:1px;height:18px;background:rgba(255,255,255,.15);flex-shrink:0}
+/* Refined action buttons — less visual weight */
+.tbtn{font-size:10.5px;padding:4px 11px;border-radius:5px;border-width:1px;letter-spacing:.02em}
+.tbtn.pri{font-size:10.5px;padding:4px 14px;border-radius:5px;letter-spacing:.02em}
+/* No emoji in buttons: clean labels only */
+.aop-lock-tag{font-size:10px;font-weight:600;padding:3px 10px;border-radius:5px;border:1px solid var(--wa-br);background:var(--wa-b);color:var(--wa);cursor:pointer}
+
+/* Sidebar theme row */
+.snav-foot-tool-row{display:flex;align-items:center;padding:8px 12px;gap:6px;border-bottom:1px solid var(--nav2)}
+.snav-foot-theme-lbl{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--nav-m);flex:1}
+.mode-btn-sb{padding:3px 10px;border-radius:4px;border:1px solid var(--nav2);background:transparent;color:var(--nav-m);font-size:9px;font-weight:600;cursor:pointer;transition:.12s;white-space:nowrap}
+.mode-btn-sb:hover{background:var(--nav2);color:var(--nav-t)}
+.mode-btn-sb.on{background:rgba(99,102,241,.12);border-color:var(--ac);color:var(--ac);font-weight:700}
+
+/* Nav items: hide drag handle, clean up */
+.ni-dh{display:none}
+.ni{padding:5px 12px;font-size:11.5px}
+.ni .lbl{flex:1}
+
+/* Division tabs: flatter, more refined */
+.dtab{border-radius:6px!important;padding:4px 14px!important;font-size:10.5px!important;font-weight:600!important;letter-spacing:.01em!important}
+.dtab.on{box-shadow:none!important;font-weight:700!important}
+
+/* Live badge: subtle */
+.live-badge{font-size:8px!important;padding:1px 5px!important;border-radius:3px!important;letter-spacing:.04em!important}
+
+/* snav-brand: tighter */
+.snav-brand-nm{font-size:11px!important;font-weight:700!important;letter-spacing:-.01em!important}
+.snav-brand-fy{font-size:8px!important;letter-spacing:.03em!important}
+
 /* ── COLUMN SEPARATORS ────────────────────────────────────── */
 .st-sep-th{border-left:2px solid rgba(251,146,60,.55)!important}
 .st-sep{border-left:1px solid rgba(251,146,60,.18)!important}
@@ -874,14 +911,12 @@ thead .c0,thead .c1{background:#101930!important}
     </div>
 
     <div class="snav-foot">
-      <div style="padding:8px 10px 6px;border-bottom:1px solid var(--nav2)">
-        <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.12em;color:var(--nav-m);margin-bottom:6px">Theme</div>
-        <div class="mode-row-sb">
-          <button class="mode-btn-sb" id="mode-light" onclick="applyTheme('light')">☀️ Light</button>
-          <button class="mode-btn-sb" id="mode-dark" onclick="applyTheme('dark')">🌙 Dark</button>
-        </div>
-        <div id="paletteSwatches" style="display:flex;flex-wrap:wrap;gap:6px;padding:2px 0"></div>
+      <div class="snav-foot-tool-row">
+        <span class="snav-foot-theme-lbl">Theme</span>
+        <button class="mode-btn-sb" id="mode-light" onclick="applyTheme('light')" title="Light mode">Light</button>
+        <button class="mode-btn-sb" id="mode-dark" onclick="applyTheme('dark')" title="Dark mode">Dark</button>
       </div>
+      <div id="paletteSwatches" style="display:none"></div>
       <div class="snav-status">
         <span class="status-dot"></span><span id="autosave-lbl">Not saved</span>
       </div>
@@ -895,18 +930,20 @@ thead .c0,thead .c1{background:#101930!important}
     <!-- TOPBAR -->
     <div class="tbar">
       <div class="tbar-spacer"></div>
-      <div class="tb-title">
-        <span id="rptTitle">CK | Buyer's Input Sheet FY 27-28</span>
-        <span class="tb-crumb" id="rptCrumb"></span>
+      <div class="tbar-wordmark">
+        <span class="tbar-wm-app">Buyer's Input Sheet</span>
+        <span class="tbar-wm-section" id="rptTitle"></span>
       </div>
+      <div class="tbar-flex-fill"></div>
       <div class="tbar-actions">
+        <span id="rptCrumb" style="display:none"></span>
         <div class="tbtn" onclick="exportCSV()">Export</div>
         <div class="tbtn" onclick="seedPlanDefaults(true);refresh();toast('Plan reset to LFL defaults')">Reset</div>
-        <div class="tbtn dng" onclick="if(confirm('Clear all plan inputs?')){S.inputs={};refresh();toast('Plan cleared')}">Clear Plan</div>
-        <div class="tbtn" id="aop-btn" onclick="openAopModal()">Re-import AOP</div>
-        <div class="aop-lock-tag" id="aop-lock-tag" style="display:none" onclick="openAopModal()">&#x1F512; AOP Locked</div>
-        <div class="tbtn" id="aop-seed-btn" style="display:none" onclick="seedPlanFromAop()">&#x21BA; Seed from AOP</div>
-        <div class="tbtn" onclick="openVersionLog()" id="history-btn" title="Plan version history">&#x1F553; History</div>
+        <div class="tbtn dng" onclick="if(confirm('Clear all plan inputs?')){S.inputs={};refresh();toast('Plan cleared')}">Clear</div>
+        <div class="tbtn" id="aop-btn" onclick="openAopModal()">AOP Import</div>
+        <div class="aop-lock-tag" id="aop-lock-tag" style="display:none" onclick="openAopModal()">AOP Locked</div>
+        <div class="tbtn" id="aop-seed-btn" style="display:none" onclick="seedPlanFromAop()">Seed AOP</div>
+        <div class="tbtn" onclick="openVersionLog()" id="history-btn">History</div>
         <div class="tbtn pri" onclick="saveState()">Save</div>
       </div>
     </div>
@@ -1993,10 +2030,10 @@ let S = {
 const REPORT_META = {
   attr: {title:'Attribute Summary', crumb:'Analytics'},
   dept: {title:'Department Summary', crumb:'Analytics'},
-  buyers: {title:"CK | Buyer's Input Sheet FY 27-28", crumb:'Planning | Input'},
-  summary: {title:'Division Summary', crumb:'Planning | Summary'},
+  buyers: {title:"Buyer's Plan", crumb:'Planning'},
+  summary: {title:'Division Summary', crumb:'Planning'},
   store: {title:'Store Summary', crumb:'Analytics'},
-  division: {title:'Division Detail', crumb:'Plan | Results'},
+  division: {title:'Division Detail', crumb:'Planning'},
   inactive: {title:'Inactive Departments', crumb:'Management'},
 };
 
