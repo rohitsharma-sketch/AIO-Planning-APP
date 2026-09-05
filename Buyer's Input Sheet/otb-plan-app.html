@@ -910,6 +910,10 @@ thead .c0,thead .c1{background:#101930!important}
     </div>
     </div>
 
+    <div class="ni add-dept-ni" onclick="openAddDeptModal()" title="Add a new department to the plan">
+      <span style="font-size:14px;line-height:1;margin-right:6px;opacity:.8">+</span><span class="lbl">Add Department</span>
+    </div>
+
     <div class="snav-foot">
       <div class="snav-foot-tool-row">
         <span class="snav-foot-theme-lbl">Theme</span>
@@ -2025,6 +2029,7 @@ let S = {
   sortAsc: true,   // true = ascending
   colWidths:  {},  // keyed as "report:ci" → px
   rowHeights: {},  // keyed as "report:rowKey" → px
+  customDepts: [], // [{id,nm,attr,divId,ly}] — user-added departments
 };
 
 const REPORT_META = {
@@ -2036,6 +2041,61 @@ const REPORT_META = {
   division: {title:'Division Detail', crumb:'Planning'},
   inactive: {title:'Inactive Departments', crumb:'Management'},
 };
+
+/* ── CUSTOM DEPT MANAGEMENT ────────────────────── */
+function _applyCustomDepts(){
+  // Strip any previously applied custom secs, then re-inject from S.customDepts
+  DVDATA.forEach(dv=>{ dv.secs=dv.secs.filter(s=>!s._custom); });
+  S.customDepts.forEach(cd=>{
+    const dv=DVDATA.find(d=>d.id===cd.divId);
+    if(!dv)return;
+    dv.secs.push({id:cd.id,nm:cd.nm,attr:cd.attr,ly:cd.ly||0,_custom:true});
+    DEPT_TO_SEC[cd.id]=cd.nm;
+  });
+}
+function openAddDeptModal(){
+  _renderCustomDeptList();
+  document.getElementById('adm-div').value=DVDATA[0].id;
+  document.getElementById('adm-nm').value='';
+  document.getElementById('adm-attr').value=ATTR_OPTS[5].id;
+  document.getElementById('adm-ly').value='';
+  document.getElementById('addDeptOv').style.display='flex';
+}
+function closeAddDeptModal(){document.getElementById('addDeptOv').style.display='none';}
+function _renderCustomDeptList(){
+  const el=document.getElementById('adm-list');
+  if(!S.customDepts.length){el.innerHTML='<div style="color:var(--mu);font-size:11px;padding:6px 0">No custom departments added yet.</div>';return;}
+  el.innerHTML=S.customDepts.map((cd,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--bd)">
+      <div style="flex:1">
+        <div style="font-size:11px;font-weight:700;color:var(--tx)">${cd.nm}</div>
+        <div style="font-size:9.5px;color:var(--mu)">${cd.divId.toUpperCase()} · ${cd.attr} · LY ${cd.ly||0} Cr</div>
+      </div>
+      <button onclick="deleteCustomDept(${i})" style="padding:2px 8px;border-radius:4px;border:1px solid var(--wa-br);background:transparent;color:var(--wa);font-size:9px;font-weight:700;cursor:pointer">Remove</button>
+    </div>`).join('');
+}
+function addCustomDept(){
+  const nm=document.getElementById('adm-nm').value.trim();
+  if(!nm){toast('Enter a department name');return;}
+  const divId=document.getElementById('adm-div').value;
+  const attr=document.getElementById('adm-attr').value;
+  const ly=parseFloat(document.getElementById('adm-ly').value)||0;
+  const id=nm.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'')+'_custom';
+  if(S.customDepts.some(c=>c.id===id)){toast('A department with this name already exists');return;}
+  S.customDepts.push({id,nm:nm.toUpperCase(),attr,divId,ly});
+  _applyCustomDepts();
+  _renderCustomDeptList();
+  document.getElementById('adm-nm').value='';
+  saveState();refresh();
+  toast('Department added ✓');
+}
+function deleteCustomDept(i){
+  S.customDepts.splice(i,1);
+  _applyCustomDepts();
+  _renderCustomDeptList();
+  saveState();refresh();
+  toast('Department removed');
+}
 
 /* ── HELPERS ───────────────────────────────────── */
 function fCr(v){return v==null?'-':'Rs.'+v.toFixed(1)}
@@ -2211,6 +2271,7 @@ function applyAutoInactive(){
   // Auto-mark depts with no LY sales as inactive — missing ST% alone is not enough (dept may still need planning)
   let changed=false;
   DVDATA.forEach(dv=>dv.secs.forEach(sec=>{
+    if(sec._custom)return; // user-added depts are always kept active
     if(S.hiddenSecs.has(sec.id))return; // already inactive; respect it
     const noLY=!sec.ly||sec.ly<=0;
     if(noLY){S.hiddenSecs.add(sec.id);changed=true;}
@@ -4513,7 +4574,7 @@ function revertToAop(dvId,attr){
 /* ── SAVE & EXPORT ─────────────────────────────── */
 function saveState(){
   const now=new Date();
-  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopUnit:S.aopUnit,locked:[...S.locked],aopSeeds:S.aopSeeds,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],at:now.toISOString()}))}catch(e){}
+  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopUnit:S.aopUnit,locked:[...S.locked],aopSeeds:S.aopSeeds,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],customDepts:S.customDepts,at:now.toISOString()}))}catch(e){}
   _updateSaveLabel(now);
   _maybeSaveVersion(now);
   toast('State saved ✓');
@@ -4600,6 +4661,8 @@ function loadState(){
     if(p.divTab!=null)S.divTab=p.divTab;
     if(p.hiddenSecs)S.hiddenSecs=new Set(p.hiddenSecs);
     if(p.manualInactive)S.manualInactive=new Set(p.manualInactive);
+    if(p.customDepts)S.customDepts=p.customDepts;
+    _applyCustomDepts();
     // Fresh load (no saved state): auto-apply embedded AOP so plan starts correctly
     if(!S.aopLocked&&Object.keys(S.inputs).length===0){
       S.aop=JSON.parse(JSON.stringify(DEFAULT_AOP));
@@ -5505,6 +5568,60 @@ function parseAopCSV(text,fname){
         <div class="mag-ftval" id="mag-fy-ty">—</div>
       </div>
       <div class="mag-note" id="mag-note"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD DEPARTMENT MODAL -->
+<div class="aop-ov" id="addDeptOv" style="display:none" onclick="if(event.target===this)closeAddDeptModal()">
+  <div class="aop-modal" style="width:480px">
+    <div class="aop-mhd">
+      <div>
+        <div class="aop-mtitle">Add New Department</div>
+        <div class="aop-msub">Create a custom department for planning. It will appear in the Buyer's Plan table.</div>
+      </div>
+      <button class="tbtn" onclick="closeAddDeptModal()">&#x2715; Close</button>
+    </div>
+    <div class="aop-mbody" style="padding:16px 18px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <label style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--mu);display:block;margin-bottom:4px">Division</label>
+          <select id="adm-div" style="width:100%;padding:6px 8px;border-radius:6px;border:1px solid var(--bm);background:var(--s2);color:var(--tx);font-size:12px">
+            <option value="mens">MENS</option>
+            <option value="ladies">LADIES</option>
+            <option value="kids">KIDS</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--mu);display:block;margin-bottom:4px">Attribute</label>
+          <select id="adm-attr" style="width:100%;padding:6px 8px;border-radius:6px;border:1px solid var(--bm);background:var(--s2);color:var(--tx);font-size:12px">
+            <option value="HVY WINTER">HVY WINTER</option>
+            <option value="LT WINTER">LT WINTER</option>
+            <option value="OCCASIONAL">OCCASIONAL</option>
+            <option value="PEAK SUMMER">PEAK SUMMER</option>
+            <option value="PREWINTER">PREWINTER</option>
+            <option value="REGULAR" selected>REGULAR</option>
+            <option value="SUMMER">SUMMER</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--mu);display:block;margin-bottom:4px">Department Name</label>
+        <input id="adm-nm" type="text" placeholder="e.g. M_ATHLEISURE" onkeydown="if(event.key==='Enter')addCustomDept()"
+          style="width:100%;box-sizing:border-box;padding:7px 10px;border-radius:6px;border:1px solid var(--bm);background:var(--s2);color:var(--tx);font-size:12px;font-family:inherit">
+      </div>
+      <div>
+        <label style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--mu);display:block;margin-bottom:4px">LY Sales (Rs. Cr) <span style="font-weight:400;opacity:.6">— optional, used for LFL growth reference</span></label>
+        <input id="adm-ly" type="number" min="0" step="0.01" placeholder="0.00"
+          style="width:160px;padding:7px 10px;border-radius:6px;border:1px solid var(--bm);background:var(--s2);color:var(--tx);font-size:12px;font-family:inherit">
+      </div>
+      <div style="display:flex;justify-content:flex-end">
+        <button onclick="addCustomDept()" class="tbtn pri" style="font-size:11.5px;padding:6px 18px">+ Add Department</button>
+      </div>
+      <div style="border-top:1px solid var(--bd);padding-top:12px">
+        <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--mu);margin-bottom:8px">Custom Departments</div>
+        <div id="adm-list"></div>
+      </div>
     </div>
   </div>
 </div>
