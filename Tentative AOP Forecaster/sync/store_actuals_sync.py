@@ -84,22 +84,20 @@ def _month_bounds(months):
 
 
 def _fetch_raw_monthwise(folder, months):
+    # Full re-exports: the newest file always contains all historical data.
+    # Read only it instead of every file to avoid OOM on accumulated snapshots.
+    from sync.common import latest_file
     months_set = set(months)
     lo, hi = _month_bounds(months)
-    files = sorted(os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(".parquet"))
-    frames, total_read = [], 0
-    for fp in files:
-        tbl = pq.read_table(fp, columns=["BILLMONTH", "DIVISION", "STORE_NAME", "SL_V", "ATTRIBUTE1"],
-                             filters=[("BILLMONTH", ">=", lo), ("BILLMONTH", "<", hi)])
-        if tbl.num_rows == 0:
-            continue
-        df = tbl.to_pandas()
-        total_read += len(df)
-        df["ym"] = df["BILLMONTH"].dt.strftime("%Y-%m")
-        df = df[df["ym"].isin(months_set)]
-        if not df.empty:
-            frames.append(df)
-    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["BILLMONTH", "DIVISION", "STORE_NAME", "SL_V", "ATTRIBUTE1", "ym"])
+    tbl = pq.read_table(
+        latest_file(folder),
+        columns=["BILLMONTH", "DIVISION", "STORE_NAME", "SL_V", "ATTRIBUTE1"],
+        filters=[("BILLMONTH", ">=", lo), ("BILLMONTH", "<", hi)],
+    )
+    df = tbl.to_pandas()
+    total_read = len(df)
+    df["ym"] = df["BILLMONTH"].dt.strftime("%Y-%m")
+    df = df[df["ym"].isin(months_set)]
     return df, total_read
 
 
@@ -143,11 +141,10 @@ def run(include_partial=False):
         source = session.get(SyncSource, SOURCE_KEY)
         path = source.config["path"]
         ref_months_all = [_label_to_ym(m) for m in FY27_M]
-        # max-month probe across the whole dataset (BILLMONTH only, cheap column read)
-        all_months = set()
-        for fp in sorted(os.path.join(path, f) for f in os.listdir(path) if f.endswith(".parquet")):
-            bm = pq.read_table(fp, columns=["BILLMONTH"]).column("BILLMONTH").to_pandas()
-            all_months.update(bm.dropna().dt.strftime("%Y-%m").unique().tolist())
+        # max-month probe — only the latest file (full re-export contains all history)
+        from sync.common import latest_file
+        bm = pq.read_table(latest_file(path), columns=["BILLMONTH"]).column("BILLMONTH").to_pandas()
+        all_months = set(bm.dropna().dt.strftime("%Y-%m").unique().tolist())
         latest_month_in_data = max(all_months) if all_months else None
 
         ref_months, partial_months = _complete_months(ref_months_all, latest_month_in_data, include_partial)
