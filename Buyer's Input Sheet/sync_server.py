@@ -30,8 +30,8 @@ def strip_cache_headers(resp):
     return resp
 
 # ── CONFIGURE PATHS HERE ─────────────────────────────────────────────────────
-SALES_DIR = r"\\10.0.1.85\Users\Administrator\Desktop\AI SOLUTION\INVENTORY AUTOMATION\data_lake\raw\rs_sales_19-_till_date"
-SELLTHRU_DIR = r"\\10.0.1.85\Users\Administrator\Desktop\AI SOLUTION\INVENTORY AUTOMATION\data_lake\raw\rs_weekly_sell_ths_apps"
+SALES_DIR = r"\\10.0.1.85\Users\Citykart\Desktop\AI_WORK\INVENTORY AUTOMATION\data_lake\raw\rs_sales_19-_till_date"
+SELLTHRU_DIR = r"\\10.0.1.85\Users\Citykart\Desktop\AI_WORK\INVENTORY AUTOMATION\data_lake\raw\rs_weekly_sell_ths_apps"
 LOCAL_CACHE = os.path.join(tempfile.gettempdir(), "citykart_otb_cache")
 
 # ── SALES PIN ────────────────────────────────────────────────────────────────

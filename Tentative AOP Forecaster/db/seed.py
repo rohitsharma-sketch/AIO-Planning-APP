@@ -36,7 +36,7 @@ PERIODS.append({"period_id": 0, "label": ""})
 # machine itself, so a local path only ever resolves there. Buyer's Input
 # Sheet's sync_server.py (SALES_DIR, same data lake) already uses this exact
 # network path successfully - matching it here instead of reinventing it.
-DATA_LAKE_RAW = r"\\10.0.1.85\Users\Administrator\Desktop\AI SOLUTION\INVENTORY AUTOMATION\data_lake\raw"
+DATA_LAKE_RAW = r"\\10.0.1.85\Users\Citykart\Desktop\AI_WORK\INVENTORY AUTOMATION\data_lake\raw"
 
 DIVISIONS = [
     ("GM", "General Merchandise (rolled up from 8 GM departments)"),

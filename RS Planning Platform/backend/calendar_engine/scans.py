@@ -18,7 +18,7 @@ STATE_KEYS = {"period_log", "app_state", "calendar_library", "store_cluster_map"
               "salesdata_link_selection", "salesdata_link_selection_daywise"}
 
 # ─── Sales data lake link (read-only; no data is imported/processed in this step) ─
-PARQUET_DIR = (r"\\10.0.1.85\Users\Administrator\Desktop\AI SOLUTION\INVENTORY AUTOMATION"
+PARQUET_DIR = (r"\\10.0.1.85\Users\Citykart\Desktop\AI_WORK\INVENTORY AUTOMATION"
                r"\data_lake\raw\rs_sales_19-_till_date")
 _LINK_CACHE = {"data": None, "at": 0}
 LINK_CACHE_TTL = 600  # seconds
@@ -148,7 +148,7 @@ def get_salesdata_link(force_refresh=False, progress=None):
 # bill_wise_fy20--23 / billwise_fy-24-26 / billwise_fy26-27 split) - fixes the
 # extra-header and attribute mismatches those separately-exported folders had.
 DAYWISE_DIRS = [
-    (r"\\10.0.1.85\Users\Administrator\Desktop\AI SOLUTION\INVENTORY AUTOMATION"
+    (r"\\10.0.1.85\Users\Citykart\Desktop\AI_WORK\INVENTORY AUTOMATION"
      r"\data_lake\raw\rs_19_to_26_day_wise_sales_data_compiled"),
 ]
 _LINK_CACHE_DW = {"data": None, "at": 0}

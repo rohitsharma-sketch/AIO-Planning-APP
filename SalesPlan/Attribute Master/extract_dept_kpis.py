@@ -22,8 +22,8 @@ from datetime import date
 warnings.filterwarnings("ignore")
 
 # ── PATHS ───────────────────────────────────────────────────────────────────
-ST_PATH    = r"\\10.0.1.85\Users\Administrator\Desktop\AI SOLUTION\INVENTORY AUTOMATION\data_lake\raw\rs_weekly_sell_ths_apps"
-SALES_PATH = r"\\10.0.1.85\Users\Administrator\Desktop\AI SOLUTION\INVENTORY AUTOMATION\data_lake\raw\rs_sales_19-_till_date"
+ST_PATH    = r"\\10.0.1.85\Users\Citykart\Desktop\AI_WORK\INVENTORY AUTOMATION\data_lake\raw\rs_weekly_sell_ths_apps"
+SALES_PATH = r"\\10.0.1.85\Users\Citykart\Desktop\AI_WORK\INVENTORY AUTOMATION\data_lake\raw\rs_sales_19-_till_date"
 OUT_PATH   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dept_monthly_kpis.json")
 
 # ── CONSTANTS ────────────────────────────────────────────────────────────────
