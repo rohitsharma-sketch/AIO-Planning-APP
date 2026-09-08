@@ -94,7 +94,7 @@ def reload_store_master():
     return {"ok": True, "stores": len(list(_sm.load_store_master())), "clusters": _sm.get_clusters()}
 
 
-LANDING_PAGE_URL = "http://localhost:7800/"
+LANDING_PAGE_URL = "/"
 
 
 # No-cache HTML entry points — every page below is either an auth screen or
