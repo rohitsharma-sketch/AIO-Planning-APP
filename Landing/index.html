@@ -391,6 +391,20 @@
   </div>
 
 <script>
+  // Network-portable host: uses the serving machine's hostname so links and
+  // fetch calls work whether opened on localhost or a LAN IP like 10.0.0.122.
+  var H = window.location.hostname || 'localhost';
+  (function rewriteHostnames() {
+    document.querySelectorAll('.card[data-check]').forEach(function (card) {
+      var href = card.getAttribute('href');
+      var check = card.getAttribute('data-check');
+      if (href)  card.setAttribute('href',       href.replace('localhost', H));
+      if (check) card.setAttribute('data-check', check.replace('localhost', H));
+      var portEl = card.querySelector('.port');
+      if (portEl) portEl.textContent = portEl.textContent.replace('localhost', H);
+    });
+  })();
+
   // Returns a promise so the Master Switch can wait for every card's real
   // status before deciding whether it should show "on" - a plain top-level
   // await-free forEach(fetch) has no way to know when they've all settled.
@@ -504,7 +518,7 @@
                 // if they want to.
                 if (reached && !turningOff) {
                   msg.textContent = 'All servers online — syncing data lake…';
-                  fetch('http://localhost:8000/api/config/db-sync', { method: 'POST' })
+                  fetch('http://' + H + ':8000/api/config/db-sync', { method: 'POST' })
                     .then(function () { return loadExtractionStatus(); })
                     .then(function () { msg.textContent = 'All servers online — data lake synced (see Data Sync & Flow below).'; })
                     .catch(function () { msg.textContent = 'All servers online — data lake sync failed (see Data Sync & Flow below).'; });
@@ -587,7 +601,7 @@
   // right after it triggers a fresh sync, instead of the card only ever
   // reflecting whatever was true at the moment the page first loaded.
   function loadExtractionStatus() {
-    return fetch('http://localhost:8000/api/config/db-sync/status', { cache: 'no-store' })
+    return fetch('http://' + H + ':8000/api/config/db-sync/status', { cache: 'no-store' })
     .then(function (r) { return r.json(); })
     .then(function (data) {
       var el = document.getElementById('extraction-rows');
@@ -602,7 +616,7 @@
       }).join('');
     })
     .catch(function () {
-      document.getElementById('extraction-rows').innerHTML = '<div class="sync-error">AOP Forecaster (localhost:8000) unreachable.</div>';
+      document.getElementById('extraction-rows').innerHTML = '<div class="sync-error">AOP Forecaster (' + H + ':8000) unreachable.</div>';
     })
     .then(function () { updateSyncSummary('extraction'); });
   }
@@ -625,9 +639,9 @@
   // resuming this cycle (plan-cycles.html's own Resubmit button already
   // covers the one real draft-resume case: a rejected cycle).
   const STAGE_RESUME = {
-    pending_buyer:    { who: 'Buyer',     url: 'http://localhost:5050/',           label: 'Resume as Buyer →' },
-    pending_review:   { who: 'Reviewer',  url: 'http://localhost:8010/plan-cycles', label: 'Resume as Reviewer →' },
-    pending_approval: { who: 'Approver',  url: 'http://localhost:8010/plan-cycles', label: 'Resume as Approver →' },
+    pending_buyer:    { who: 'Buyer',     url: 'http://' + H + ':5050/',           label: 'Resume as Buyer →' },
+    pending_review:   { who: 'Reviewer',  url: 'http://' + H + ':8010/plan-cycles', label: 'Resume as Reviewer →' },
+    pending_approval: { who: 'Approver',  url: 'http://' + H + ':8010/plan-cycles', label: 'Resume as Approver →' },
   };
 
   async function checkPlanCycleFlow() {
@@ -640,7 +654,7 @@
   }
   async function _checkPlanCycleFlowInner(el) {
     try {
-      const res = await fetch('http://localhost:8010/api/aop/plan-cycles', { credentials: 'include', cache: 'no-store' });
+      const res = await fetch('http://' + H + ':8010/api/aop/plan-cycles', { credentials: 'include', cache: 'no-store' });
       if (res.status === 401) { el.innerHTML = '<div class="sync-empty">Sign in to the platform to see live cycle status.</div>'; return; }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const cycles = await res.json();
@@ -661,7 +675,7 @@
           ${resume ? `<a class="flow-resume-btn" href="${resume.url}" target="_blank">${resume.label}</a>` : ''}
         </div>`;
     } catch (e) {
-      el.innerHTML = `<div class="sync-error">Platform (localhost:8010) unreachable.</div>`;
+      el.innerHTML = `<div class="sync-error">Platform (${H}:8010) unreachable.</div>`;
     }
   }
   checkPlanCycleFlow();
