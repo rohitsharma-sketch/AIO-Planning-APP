@@ -179,15 +179,21 @@ if os.path.isdir(_calendar_dist):
 
 
 @app.get("/aop/{full_path:path}", include_in_schema=False)
-def aop_spa(full_path: str):
+def aop_spa(full_path: str, request: Request):
+    if get_session_user(request) is None:
+        return RedirectResponse(f"/login?next=/aop/")
     return _html_no_cache(os.path.join(_aop_dist, "index.html"))
 
 
 @app.get("/planning/{full_path:path}", include_in_schema=False)
-def planning_spa(full_path: str):
+def planning_spa(full_path: str, request: Request):
+    if get_session_user(request) is None:
+        return RedirectResponse(f"/login?next=/planning/")
     return _html_no_cache(os.path.join(_planning_dist, "index.html"))
 
 
 @app.get("/calendar/{full_path:path}", include_in_schema=False)
-def calendar_spa(full_path: str):
+def calendar_spa(full_path: str, request: Request):
+    if get_session_user(request) is None:
+        return RedirectResponse(f"/login?next=/calendar/")
     return _html_no_cache(os.path.join(_calendar_dist, "index.html"))
