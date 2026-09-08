@@ -312,42 +312,42 @@
   </header>
 
   <div class="grid">
-    <a class="card" href="http://localhost:8010/calendar/" target="_blank" data-check="http://localhost:8010/docs">
+    <a class="card" href="/calendar/" target="_blank" data-check="/api/port-status/8010">
       <div class="card-icon">📅</div>
       <h2>Calendar</h2>
       <p class="desc">Calendarisation Suite — builds the locked, festival-aligned day-shift calendar per cluster, used to reindex last year's sales onto this year's dates.</p>
       <div class="meta">
-        <span class="port">localhost:8010/calendar</span>
+        <span class="port">7800/calendar</span>
         <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
       </div>
     </a>
 
-    <a class="card" href="http://localhost:8010/aop/" target="_blank" data-check="http://localhost:8010/docs">
+    <a class="card" href="/aop/" target="_blank" data-check="/api/port-status/8010">
       <div class="card-icon">📊</div>
       <h2>AOP Forecaster</h2>
       <p class="desc">Annual Operating Plan forecaster — planning inputs (Store Master, Growth %, NSO openings) and the store×division×month forecast engine.</p>
       <div class="meta">
-        <span class="port">localhost:8010/aop</span>
+        <span class="port">7800/aop</span>
         <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
       </div>
     </a>
 
-    <a class="card" href="http://localhost:5050/" target="_blank" data-check="http://localhost:5050/api/status">
+    <a class="card" href="/buyer/" target="_blank" data-check="/api/port-status/5050">
       <div class="card-icon">🛒</div>
       <h2>Buyer's Input</h2>
       <p class="desc">OTB buyer's plan — division/section-level growth% editing against the AOP seed, with per-cell locking and re-apportioning.</p>
       <div class="meta">
-        <span class="port">localhost:5050</span>
+        <span class="port">7800/buyer</span>
         <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
       </div>
     </a>
 
-    <a class="card" href="http://localhost:8010/planning/" target="_blank" data-check="http://localhost:8010/docs">
+    <a class="card" href="/planning/" target="_blank" data-check="/api/port-status/8010">
       <div class="card-icon">🧮</div>
       <h2>Planning Engine</h2>
       <p class="desc">Sales Plan — Division/Department plans, MRP reapportionment, PW-W &amp; SOR deviation, and display-type planning engines.</p>
       <div class="meta">
-        <span class="port">localhost:8010/planning</span>
+        <span class="port">7800/planning</span>
         <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
       </div>
     </a>
@@ -366,9 +366,8 @@
   </div>
 
   <footer>
-    Calendar, AOP Forecaster, and Planning Engine now run from one unified server
-    on <code>localhost:8010</code> — start it once and all three come up together.
-    A grey dot means that server isn't running yet.
+    Calendar, AOP Forecaster, and Planning Engine run from one unified server — all accessible
+    through this page. A grey dot means that server isn't running yet — use the Master Switch to start it.
   </footer>
 
   <div class="sync-modal-overlay" id="sync-modal-overlay">
@@ -391,19 +390,9 @@
   </div>
 
 <script>
-  // Network-portable host: uses the serving machine's hostname so links and
-  // fetch calls work whether opened on localhost or a LAN IP like 10.0.0.122.
+  // All sub-app links and API fetches use relative paths — the Landing server
+  // proxies them to the correct backend.  H is kept only for error messages.
   var H = window.location.hostname || 'localhost';
-  (function rewriteHostnames() {
-    document.querySelectorAll('.card[data-check]').forEach(function (card) {
-      var href = card.getAttribute('href');
-      var check = card.getAttribute('data-check');
-      if (href)  card.setAttribute('href',       href.replace('localhost', H));
-      if (check) card.setAttribute('data-check', check.replace('localhost', H));
-      var portEl = card.querySelector('.port');
-      if (portEl) portEl.textContent = portEl.textContent.replace('localhost', H);
-    });
-  })();
 
   // Returns a promise so the Master Switch can wait for every card's real
   // status before deciding whether it should show "on" - a plain top-level
@@ -421,8 +410,8 @@
         else { label.classList.add('checking'); label.textContent = 'checking…'; }
         return state;
       }
-      return fetch(url, { mode: 'no-cors', cache: 'no-store' })
-        .then(function () { return setStatus('up'); })
+      return fetch(url, { cache: 'no-store' })
+        .then(function (r) { return setStatus(r.ok ? 'up' : 'down'); })
         .catch(function () { return setStatus('down'); });
     });
     return Promise.all(checks).then(function (states) {
@@ -518,7 +507,7 @@
                 // if they want to.
                 if (reached && !turningOff) {
                   msg.textContent = 'All servers online — syncing data lake…';
-                  fetch('http://' + H + ':8000/api/config/db-sync', { method: 'POST' })
+                  fetch('/api/config/db-sync', { method: 'POST' })
                     .then(function () { return loadExtractionStatus(); })
                     .then(function () { msg.textContent = 'All servers online — data lake synced (see Data Sync & Flow below).'; })
                     .catch(function () { msg.textContent = 'All servers online — data lake sync failed (see Data Sync & Flow below).'; });
@@ -601,7 +590,7 @@
   // right after it triggers a fresh sync, instead of the card only ever
   // reflecting whatever was true at the moment the page first loaded.
   function loadExtractionStatus() {
-    return fetch('http://' + H + ':8000/api/config/db-sync/status', { cache: 'no-store' })
+    return fetch('/api/config/db-sync/status', { cache: 'no-store' })
     .then(function (r) { return r.json(); })
     .then(function (data) {
       var el = document.getElementById('extraction-rows');
@@ -639,9 +628,9 @@
   // resuming this cycle (plan-cycles.html's own Resubmit button already
   // covers the one real draft-resume case: a rejected cycle).
   const STAGE_RESUME = {
-    pending_buyer:    { who: 'Buyer',     url: 'http://' + H + ':5050/',           label: 'Resume as Buyer →' },
-    pending_review:   { who: 'Reviewer',  url: 'http://' + H + ':8010/plan-cycles', label: 'Resume as Reviewer →' },
-    pending_approval: { who: 'Approver',  url: 'http://' + H + ':8010/plan-cycles', label: 'Resume as Approver →' },
+    pending_buyer:    { who: 'Buyer',     url: '/buyer/',       label: 'Resume as Buyer →' },
+    pending_review:   { who: 'Reviewer',  url: '/plan-cycles',  label: 'Resume as Reviewer →' },
+    pending_approval: { who: 'Approver',  url: '/plan-cycles',  label: 'Resume as Approver →' },
   };
 
   async function checkPlanCycleFlow() {
@@ -654,7 +643,7 @@
   }
   async function _checkPlanCycleFlowInner(el) {
     try {
-      const res = await fetch('http://' + H + ':8010/api/aop/plan-cycles', { credentials: 'include', cache: 'no-store' });
+      const res = await fetch('/api/aop/plan-cycles', { credentials: 'include', cache: 'no-store' });
       if (res.status === 401) { el.innerHTML = '<div class="sync-empty">Sign in to the platform to see live cycle status.</div>'; return; }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const cycles = await res.json();

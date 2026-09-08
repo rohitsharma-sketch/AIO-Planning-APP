@@ -1,12 +1,30 @@
 """
-RS Planning landing page — static file server, port 7800.
+RS Planning landing page — static file server + reverse proxy, port 7800.
 Run: python landing_server.py
+
+All sub-apps are exposed through this single port so the whole platform
+is reachable at http://<host>:7800 from anywhere on the LAN.  Only port
+7800 needs a firewall rule; the sub-app ports (5050, 8000, 8010) stay
+loopback-only.
+
+Proxy routing (first match wins):
+  /buyer/*                       → http://127.0.0.1:5050  (BIS, prefix stripped)
+  /api/otb/*, /api/status,
+    /api/config/aop-div-targets  → http://127.0.0.1:5050  (BIS API, same path)
+  /api/config/db-sync*           → http://127.0.0.1:8000  (AOP standalone, no auth)
+  /calendar/, /aop/, /planning/,
+    /plan-cycles, /auth/, /api/,
+    /docs, /openapi.json         → http://127.0.0.1:8010  (unified platform)
+  /api/launch-all, /api/shutdown-all, /api/port-status/* → handled here
+  everything else                → serve Landing page files from this directory
 """
 import json
 import os
 import socket
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 import webbrowser
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 
@@ -17,23 +35,13 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_HERE)
 
 # One-click "bring online": the exact commands/working directories this
-# session already uses to start each app by hand. Landing itself (7800) is
-# never included here — if this endpoint is being hit at all, it's already
-# running. Each entry launches detached (its own process group) so it
-# outlives landing_server.py, exactly like starting it from its own terminal.
+# session already uses to start each app by hand.  Landing itself (7800)
+# is never included here — if this endpoint is being hit at all, it's
+# already running.  Each entry launches detached so it outlives landing_server.py.
 #
 # Calendar Engine and Planning Engine do NOT get their own standalone entries
 # here (they did once, on ports 7822/8002) - both are served by the unified
-# RS Planning Platform on 8010 (see index.html's own footer: "Calendar, AOP
-# Forecaster, and Planning Engine now run from one unified server"), so a
-# standalone launch is pure duplication, not a fallback. It's worse than
-# idle waste for Calendar Engine specifically: its standalone
-# `local_server.py` persists to local JSON files under `Calendar Engine/
-# Local DB/`, a completely different store from the unified server's Postgres
-# `calendar.*` tables - a Master Switch click could silently start the user
-# on stale/disconnected data with no visible difference in the UI. Found and
-# removed 2026-08-26 after the Master Switch click launched both and left
-# them running.
+# RS Planning Platform on 8010, so a standalone launch is pure duplication.
 APPS = [
     {"name": "Buyer's Input", "port": 5050,
      "cmd": [sys.executable, "sync_server.py"],
@@ -41,8 +49,7 @@ APPS = [
     # Deliberately kept standalone (unlike Calendar/Planning above) - the
     # unified :8010 route needs a login session, and this landing page's own
     # anonymous status checks and "sync data lake" trigger both need an
-    # unauthenticated port. See the fetch calls against :8000 further down in
-    # index.html for exactly why.
+    # unauthenticated port.
     {"name": "AOP Forecaster (standalone)", "port": 8000,
      "cmd": [sys.executable, "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"],
      "cwd": os.path.join(_REPO_ROOT, "Tentative AOP Forecaster")},
@@ -50,6 +57,43 @@ APPS = [
      "cmd": [sys.executable, "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8010"],
      "cwd": os.path.join(_REPO_ROOT, "RS Planning Platform", "backend")},
 ]
+
+# Proxy route table — (path_prefix, target_base, strip_prefix).
+# strip_prefix is removed from the request path before forwarding.
+# An empty strip means the path is forwarded unchanged.
+PROXY_ROUTES = [
+    # BIS HTML — /buyer/* maps to / at 5050 (strip the /buyer prefix)
+    ('/buyer',                           'http://127.0.0.1:5050', '/buyer'),
+    # BIS API routes — same path at 5050
+    ('/api/otb/',                        'http://127.0.0.1:5050', ''),
+    ('/api/status',                      'http://127.0.0.1:5050', ''),
+    ('/api/config/aop-division-targets', 'http://127.0.0.1:5050', ''),
+    # AOP standalone — sync endpoints (no auth required)
+    ('/api/config/db-sync',              'http://127.0.0.1:8000', ''),
+    # Unified RS Planning Platform
+    ('/calendar/',                       'http://127.0.0.1:8010', ''),
+    ('/aop/',                            'http://127.0.0.1:8010', ''),
+    ('/planning/',                       'http://127.0.0.1:8010', ''),
+    ('/plan-cycles',                     'http://127.0.0.1:8010', ''),
+    ('/auth/',                           'http://127.0.0.1:8010', ''),
+    ('/api/',                            'http://127.0.0.1:8010', ''),
+    ('/docs',                            'http://127.0.0.1:8010', ''),
+    ('/openapi.json',                    'http://127.0.0.1:8010', ''),
+]
+
+_SKIP_REQ_HEADERS  = {'host', 'content-length'}
+_SKIP_RESP_HEADERS = {'transfer-encoding', 'connection', 'content-length'}
+
+
+def _find_proxy(path):
+    """Return (target_base, rewritten_path) or (None, None). path must have no query string."""
+    for prefix, target, strip in PROXY_ROUTES:
+        if path == prefix or path.startswith(prefix if prefix.endswith('/') else prefix + '/'):
+            new_path = path[len(strip):] if strip else path
+            if not new_path or not new_path.startswith('/'):
+                new_path = '/' + (new_path or '')
+            return target, new_path
+    return None, None
 
 
 def _is_online(port, timeout=0.5):
@@ -70,12 +114,7 @@ def _pid_listening_on(port):
 
 
 def _shutdown_many(ports_and_names):
-    # terminate() every listening app FIRST - each call is near-instant, it
-    # only sends the signal - then wait for all of them together. Doing
-    # terminate-then-wait one app at a time meant a slow-to-exit app blocked
-    # the NEXT app's terminate() from even being sent, so worst case stacked
-    # up to len(apps) x one grace period sequentially. Waiting concurrently
-    # instead bounds total wall time by the single slowest app, not their sum.
+    # terminate() every listening app FIRST then wait for all of them together.
     procs, missing = {}, []
     for port, name in ports_and_names:
         pid = _pid_listening_on(port)
@@ -97,9 +136,6 @@ def _shutdown_many(ports_and_names):
 
 
 def _launch(app):
-    # DETACHED_PROCESS + CREATE_NEW_PROCESS_GROUP: fully independent of this
-    # server's own process, matching how starting it from a separate terminal
-    # behaves - it must keep running even if landing_server.py is later closed.
     creationflags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
     subprocess.Popen(
         app["cmd"], cwd=app["cwd"], creationflags=creationflags,
@@ -112,16 +148,87 @@ class Handler(SimpleHTTPRequestHandler):
         pass
 
     def end_headers(self):
-        # This page's whole job is to show live, just-checked server status
-        # and drive the Master Switch - a browser-cached copy from an old
-        # visit defeats that even on a plain reload/revisit (e.g. clicking a
-        # saved shortcut back to it), and index.html itself carries no
-        # cache-busting of its own the way a hashed JS bundle would. Force
-        # a real fetch every time instead of relying on the visitor
-        # remembering to hard-reload or append a cache-busting query string.
+        # Force a fresh load for the Landing page itself — sub-app responses
+        # bypass this via _send_proxy_response → SimpleHTTPRequestHandler.end_headers.
         self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
         self.send_header("Pragma", "no-cache")
         SimpleHTTPRequestHandler.end_headers(self)
+
+    # ── proxy helpers ──────────────────────────────────────────────────────────
+
+    def _proxy_target(self):
+        """Compute full proxy URL from self.path, or None if no route matches."""
+        full = self.path
+        path = full.split('?')[0]
+        target, new_path = _find_proxy(path)
+        if target is None:
+            return None
+        q = full[full.index('?'):] if '?' in full else ''
+        return target + new_path + q
+
+    def _proxy(self, target_url):
+        body = None
+        cl = self.headers.get('Content-Length')
+        if cl:
+            body = self.rfile.read(int(cl))
+
+        req = urllib.request.Request(target_url, data=body, method=self.command)
+        for k, v in self.headers.items():
+            if k.lower() not in _SKIP_REQ_HEADERS:
+                req.add_header(k, v)
+
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                self._send_proxy_response(resp.status, resp.headers, resp.read())
+        except urllib.error.HTTPError as e:
+            self._send_proxy_response(e.code, e.headers, e.read())
+        except Exception as e:
+            self.send_error(502, f'Proxy error: {e}')
+
+    def _send_proxy_response(self, status, headers, body):
+        self.send_response(status)
+        for k, v in headers.items():
+            if k.lower() not in _SKIP_RESP_HEADERS:
+                self.send_header(k, v)
+        self.send_header('Content-Length', str(len(body)))
+        # Bypass the no-cache injection — sub-apps control their own caching.
+        SimpleHTTPRequestHandler.end_headers(self)
+        self.wfile.write(body)
+
+    def _proxy_or_404(self):
+        url = self._proxy_target()
+        if url:
+            self._proxy(url)
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    # ── verb handlers ──────────────────────────────────────────────────────────
+
+    def do_GET(self):
+        # Local port-status endpoint: /api/port-status/<port>
+        # Returns HTTP 200 (online) or 503 (offline) so the JS can distinguish
+        # without mode:'no-cors' opacity.
+        if self.path.startswith('/api/port-status/'):
+            try:
+                port = int(self.path.rsplit('/', 1)[-1].split('?')[0])
+            except (ValueError, IndexError):
+                self.send_error(400)
+                return
+            online = _is_online(port)
+            body = json.dumps({"online": online}).encode()
+            self.send_response(200 if online else 503)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            SimpleHTTPRequestHandler.end_headers(self)
+            self.wfile.write(body)
+            return
+
+        url = self._proxy_target()
+        if url:
+            self._proxy(url)
+        else:
+            super().do_GET()
 
     def do_POST(self):
         if self.path == "/api/launch-all":
@@ -129,8 +236,14 @@ class Handler(SimpleHTTPRequestHandler):
         elif self.path == "/api/shutdown-all":
             self._shutdown_all()
         else:
-            self.send_response(404)
-            self.end_headers()
+            self._proxy_or_404()
+
+    def do_PUT(self):     self._proxy_or_404()
+    def do_PATCH(self):   self._proxy_or_404()
+    def do_DELETE(self):  self._proxy_or_404()
+    def do_OPTIONS(self): self._proxy_or_404()
+
+    # ── Landing-only API ───────────────────────────────────────────────────────
 
     def _json(self, payload):
         body = json.dumps(payload).encode("utf-8")
