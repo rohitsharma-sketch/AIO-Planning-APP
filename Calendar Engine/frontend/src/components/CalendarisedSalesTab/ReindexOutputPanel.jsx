@@ -269,6 +269,64 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
       .map(([cluster, vals]) => ({ cluster, vals }))
   }, [ok, result, storeCluster, visibleColumns])
 
+  // Division × Month comparison: actual vs reindexed summed to division level.
+  // Actual rows use reference-year month strings (e.g. 2026-04); reindexed use
+  // future-year strings (e.g. 2027-04). Match by MM only, same rule as p1p2.
+  const divMonthComp = useMemo(() => {
+    if (!ok || !result.actualRows) return null
+    const DIVS_ORDER = ['GM', 'KIDS', 'LADIES', 'MENS', 'RETAIL']
+    // actual: keyed by {div -> {mm -> total}}
+    const actualByDivMM = {}
+    for (const row of result.actualRows) {
+      const div = row.division || '(none)'
+      const mm = row.col.slice(5, 7)
+      if (!actualByDivMM[div]) actualByDivMM[div] = {}
+      actualByDivMM[div][mm] = (actualByDivMM[div][mm] || 0) + row.value
+    }
+    // reindexed: keyed by {div -> {ym -> total}}
+    const cols = new Set(visibleColumns)
+    const rxByDivYM = {}
+    for (const row of result.rows) {
+      if (!cols.has(row.col)) continue
+      const div = row.division || '(none)'
+      const ym = row.col.slice(0, 7)
+      if (!rxByDivYM[div]) rxByDivYM[div] = {}
+      rxByDivYM[div][ym] = (rxByDivYM[div][ym] || 0) + row.value
+    }
+    const allDivs = [...new Set([
+      ...Object.keys(actualByDivMM),
+      ...Object.keys(rxByDivYM),
+    ])].sort((a, b) => {
+      const ia = DIVS_ORDER.indexOf(a), ib = DIVS_ORDER.indexOf(b)
+      return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a.localeCompare(b)
+    })
+    // Grand total row
+    const grandActualMM = {}, grandRxYM = {}
+    for (const [, byMM] of Object.entries(actualByDivMM))
+      for (const [mm, v] of Object.entries(byMM)) grandActualMM[mm] = (grandActualMM[mm] || 0) + v
+    for (const [, byYM] of Object.entries(rxByDivYM))
+      for (const [ym, v] of Object.entries(byYM)) grandRxYM[ym] = (grandRxYM[ym] || 0) + v
+    return { allDivs, actualByDivMM, rxByDivYM, grandActualMM, grandRxYM }
+  }, [ok, result, visibleColumns])
+
+  function downloadDivMonth() {
+    if (!divMonthComp) return
+    const { allDivs, actualByDivMM, rxByDivYM, grandActualMM, grandRxYM } = divMonthComp
+    const hdr = visibleMonthCols.flatMap(ym => [`${ym} Actual`, `${ym} Reindexed`, `${ym} Diff`, `${ym} Diff %`])
+    const makeRow = (label, aByMM, rByYM) => [
+      label,
+      ...visibleMonthCols.flatMap(ym => {
+        const a = aByMM[ym.slice(5, 7)] || 0, r = rByYM[ym] || 0
+        return [round2(a), round2(r), round2(r - a), fmtPct(pctDiff(a, r))]
+      }),
+    ]
+    downloadCsv([
+      ['Division', ...hdr],
+      ...allDivs.map(d => makeRow(d, actualByDivMM[d] || {}, rxByDivYM[d] || {})),
+      makeRow('Grand Total', grandActualMM, grandRxYM),
+    ], `${fileStem}_div_month_comparison.csv`)
+  }
+
   // P1/P2: day 1-15 vs day 16-end of month, actual vs reindexed. The two
   // sides use DIFFERENT date columns by design - `result.rows` (reindexed)
   // are keyed by FUTURE dates (e.g. 2027), `result.actualRows` are keyed by
@@ -457,6 +515,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
             all, so its P1/P2 here is an even half-and-half of the month total
             (isEven, see p1p2Rows) - shown either way for a consistent shape
             across sources, but clearly labeled below when it's the even case. */}
+        {ok && result.actualRows && <button className={activeSub === 'divmonth' ? 'active' : ''} onClick={() => setActiveSub('divmonth')}>MW Comparison</button>}
         {ok && result.actualRows && <button className={activeSub === 'p1p2' ? 'active' : ''} onClick={() => setActiveSub('p1p2')}>P1 / P2 Comparison</button>}
         <button className={activeSub === 'raw' ? 'active' : ''} onClick={() => setActiveSub('raw')}>Run Details</button>
       </div>
@@ -706,6 +765,82 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                     {visibleColumns.map(c => <td key={c} style={num}>{round2(r.vals[c])}</td>)}
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {activeSub === 'divmonth' && divMonthComp && (
+        <>
+          <div className="scm-toolbar">
+            <button className="btn" onClick={downloadDivMonth}>Download CSV</button>
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
+            Division × month totals. Actual = reference-year sales; Reindexed = calendar-shifted future-year sales.
+            {isEven && ' Month-wise source has no day-of-month field.'}
+          </div>
+          <div className="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th rowSpan={2} style={{ textAlign: 'left' }}>Division</th>
+                  {visibleMonthCols.map(ym => (
+                    <th key={ym} colSpan={4} style={num}>{ym}</th>
+                  ))}
+                  <th colSpan={4} style={num}>Grand Total</th>
+                </tr>
+                <tr>
+                  {[...visibleMonthCols, '__grand__'].map(ym => (
+                    <Fragment key={ym}>
+                      <th style={num}>Actual</th>
+                      <th style={num}>Reindexed</th>
+                      <th style={num}>Diff</th>
+                      <th style={num}>Diff %</th>
+                    </Fragment>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const { allDivs, actualByDivMM, rxByDivYM, grandActualMM, grandRxYM } = divMonthComp
+                  const renderDataCells = (aByMM, rByYM) => {
+                    let sumA = 0, sumR = 0
+                    const cells = visibleMonthCols.map(ym => {
+                      const a = aByMM[ym.slice(5, 7)] || 0, r = rByYM[ym] || 0
+                      sumA += a; sumR += r
+                      return (
+                        <Fragment key={ym}>
+                          <td style={num}>{round2(a)}</td>
+                          <td style={num}>{round2(r)}</td>
+                          <td style={{ ...num, color: r >= a ? 'var(--navy2)' : 'var(--red)' }}>{round2(r - a)}</td>
+                          <td style={{ ...num, color: r >= a ? 'var(--navy2)' : 'var(--red)', fontWeight: 600 }}>{fmtPct(pctDiff(a, r))}</td>
+                        </Fragment>
+                      )
+                    })
+                    cells.push(
+                      <Fragment key="__grand__">
+                        <td style={num}>{round2(sumA)}</td>
+                        <td style={num}>{round2(sumR)}</td>
+                        <td style={{ ...num, color: sumR >= sumA ? 'var(--navy2)' : 'var(--red)' }}>{round2(sumR - sumA)}</td>
+                        <td style={{ ...num, color: sumR >= sumA ? 'var(--navy2)' : 'var(--red)', fontWeight: 600 }}>{fmtPct(pctDiff(sumA, sumR))}</td>
+                      </Fragment>
+                    )
+                    return cells
+                  }
+                  return [
+                    ...allDivs.map(div => (
+                      <tr key={div}>
+                        <td style={{ fontWeight: 600 }}>{div}</td>
+                        {renderDataCells(actualByDivMM[div] || {}, rxByDivYM[div] || {})}
+                      </tr>
+                    )),
+                    <tr key="__grand__" style={{ borderTop: '2px solid var(--border)', fontWeight: 700 }}>
+                      <td>Grand Total</td>
+                      {renderDataCells(grandActualMM, grandRxYM)}
+                    </tr>,
+                  ]
+                })()}
               </tbody>
             </table>
           </div>
