@@ -375,6 +375,44 @@
 .sm-tile-active { outline: 2.5px solid currentColor; outline-offset: 2px; box-shadow: 0 0 0 4px rgba(99,102,241,0.12); }
 .sm-tile-total.sm-tile-active { box-shadow: 0 0 0 4px rgba(79,70,229,0.15); }
 
+/* AOP Overrides — tag summary tiles */
+.aop-tag-tiles {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.aop-tag-tile {
+  flex: 1;
+  min-width: 120px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--white);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.aop-tag-tile-val {
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  margin-bottom: 3px;
+}
+.aop-tag-tile-lbl {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.aop-tag-tile-lfl  { border-color: #93C5FD; background: #EFF6FF; }
+.aop-tag-tile-lfl  .aop-tag-tile-val { color: #1558A8; }
+.aop-tag-tile-nso  { border-color: #6EE7B7; background: #ECFDF5; }
+.aop-tag-tile-nso  .aop-tag-tile-val { color: #0F6E56; }
+.aop-tag-tile-ramp { border-color: #FCD34D; background: #FFFBEB; }
+.aop-tag-tile-ramp .aop-tag-tile-val { color: #8B4A00; }
+
 /* Store table */
 .sm-table th { min-width: 80px; }
 .sm-table .sm-code { font-weight: 700; color: var(--navy); font-size: 12.5px; min-width: 70px; }

@@ -658,9 +658,19 @@ function AopTab() {
   const [draft, setDraft]         = useState({ store_id: '', division: DIVS[0], month: AOP_MONTHS[0], value: '' })
   const [importing, setImporting] = useState(false)
   const [importSkipped, setImportSkipped] = useState(null)
+  const [storeTagMap, setStoreTagMap] = useState(null)
 
   const load = () => fetchJson('/api/config/aop-overrides').then(d => { setRows(d); setEdits({}) }).catch(e => setStatus({ err: true, msg: e.message }))
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    fetchJson('/api/config/store-master')
+      .then(stores => {
+        const m = new Map()
+        for (const s of stores) m.set((s.store_id || s.store_code || '').toUpperCase(), (s.tag || '').trim())
+        setStoreTagMap(m)
+      })
+      .catch(() => setStoreTagMap(new Map()))
+  }, [])
 
   const key = r => `${r.store_id}|${r.division}|${r.month}`
 
@@ -677,6 +687,23 @@ function AopTab() {
   }, [rows, edits])
 
   const filtered = search ? merged.filter(r => r.store_id.toLowerCase().includes(search.toLowerCase())) : merged
+
+  const aopTiles = useMemo(() => {
+    const totals = { lfl: 0, nso: 0, ramp: 0 }
+    for (const r of merged) {
+      const v = Number(r.value) || 0
+      const tag = storeTagMap?.get((r.store_id || '').toUpperCase()) ?? ''
+      if (LFL_TAG_SET.has(tag))       totals.lfl  += v
+      else if (NSO_TAG_SET.has(tag))  totals.nso  += v
+      else if (RAMP_TAG_SET.has(tag)) totals.ramp += v
+    }
+    const fmt = v => (v / 100).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+    return [
+      { key: 'lfl',  label: 'LFL',  value: fmt(totals.lfl),  cls: 'lfl'  },
+      { key: 'nso',  label: 'NSO',  value: fmt(totals.nso),  cls: 'nso'  },
+      { key: 'ramp', label: 'Ramp', value: fmt(totals.ramp), cls: 'ramp' },
+    ]
+  }, [merged, storeTagMap])
 
   function setValue(r, val) { setEdits(e => ({ ...e, [key(r)]: val })) }
   function deleteRow(r)     { setEdits(e => ({ ...e, [key(r)]: '' })) }
@@ -727,6 +754,14 @@ function AopTab() {
 
   return (
     <div className="card pie-card">
+      <div className="aop-tag-tiles">
+        {aopTiles.map(t => (
+          <div key={t.key} className={`aop-tag-tile aop-tag-tile-${t.cls}`}>
+            <div className="aop-tag-tile-val">₹ {t.value} Cr</div>
+            <div className="aop-tag-tile-lbl">{t.label}</div>
+          </div>
+        ))}
+      </div>
       <div className="pie-toolbar">
         <input className="pie-search" placeholder="Search by store code…" value={search} onChange={e => setSearch(e.target.value)} />
         <span className="pie-count-label">{rows.length} overrides · {Object.keys(edits).length} unsaved change(s)</span>
