@@ -1286,7 +1286,7 @@ def _build_results(df, store_info):
     }
 
 
-def run_engine(input_file, output_file, palette="classic", detail_file=None, include_debug=False, growth_overrides=None, overall_override=None):
+def run_engine(input_file, output_file, palette="classic", detail_file=None, include_debug=False, growth_overrides=None, overall_override=None, open_months=None):
     """Called by the web API. Returns results dict and writes Excel.
     growth_overrides: optional {division: {month: rate_pct}} — overrides gmap values
       before forecasting.  Rates are in percent (e.g. 8.5 means 8.5 %, not 0.085).
@@ -1308,7 +1308,7 @@ def run_engine(input_file, output_file, palette="classic", detail_file=None, inc
 
     nso_open      = {str(r["Store"]).strip(): str(r["Opening Month"]).strip()
                      for _, r in nso_df.iterrows()}
-    actuals_pivot, mar27_anchor = pivot_actuals(actuals_df, aop_df)
+    actuals_pivot, mar27_anchor = pivot_actuals(actuals_df, aop_df, open_months=open_months)
     aop_overrides = build_aop_overrides(aop_df)
     gmap          = build_growth_map(growth_df)
     if growth_overrides:
@@ -1318,7 +1318,7 @@ def run_engine(input_file, output_file, palette="classic", detail_file=None, inc
                     if month in gmap[div]:
                         gmap[div][month] = float(rate_pct) / 100.0
     lfl_fc        = pass1_forecasts(store_info, actuals_pivot, gmap)
-    ramp_fc       = pass1b_ramp_forecasts(store_info, actuals_pivot, lfl_fc, gmap, mar27_anchor=mar27_anchor)
+    ramp_fc       = pass1b_ramp_forecasts(store_info, actuals_pivot, lfl_fc, gmap, open_months=open_months, mar27_anchor=mar27_anchor)
     ref_fc        = {**lfl_fc, **ramp_fc}
     nso_fc        = pass2_forecasts(store_info, nso_open, ref_fc, actuals_pivot, gmap, mar27_anchor=mar27_anchor)
     all_fc        = {**ref_fc, **nso_fc}

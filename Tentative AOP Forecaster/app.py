@@ -97,12 +97,19 @@ async def run(session_id: str, body: RunRequest = RunRequest()):
     if not os.path.exists(inp):
         raise HTTPException(404, "Session not found — upload inputs.xlsx first")
     palette = body.palette if body.palette in EXCEL_PALETTES else "classic"
+    # DB-built sessions include estimates for months not yet closed (source='import').
+    # Pass open_months=set() so the engine uses all available data instead of
+    # filtering out the current/future months — the sync already guards what
+    # gets written as real actuals; these are deliberately loaded planning estimates.
+    from_db = os.path.exists(os.path.join(_session_dir(session_id), ".from_db"))
+    engine_open_months = set() if from_db else None
     try:
         results = run_engine(inp, _output_path(session_id), palette=palette,
                              detail_file=_detail_path(session_id),
                              include_debug=body.include_debug,
                              growth_overrides=body.growth_overrides,
-                             overall_override=body.overall_override)
+                             overall_override=body.overall_override,
+                             open_months=engine_open_months)
     except Exception as e:
         raise HTTPException(500, str(e))
     with open(_results_path(session_id), "w", encoding="utf-8") as f:

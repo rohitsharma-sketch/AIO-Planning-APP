@@ -1,8 +1,8 @@
 // Single source of truth for store-tag → type classification.
 // MUST mirror LFL_TAGS / RAMP_TAGS / NSO_TAGS in engine_v3.py.
 export const LFL_TAGS  = new Set(['032 - Stores', '080 - Stores', '095 - Stores', '125 - Stores', '3 - Stores',
-                                  'FY26 - Q1', 'FY26 - Q2', 'FY26 - Q3'])
-export const RAMP_TAGS = new Set(['FY26 - Q4', 'FY27 - Q1', 'FY27 - Q2'])
+                                  'FY26 - Q1', 'FY26 - Q2', 'FY26 - Q3', 'LFL', 'lfl'])
+export const RAMP_TAGS = new Set(['FY26 - Q4', 'FY27 - Q1', 'FY27 - Q2', 'Ramp', 'RAMP', 'ramp'])
 export const NSO_TAGS  = new Set(['NSO', 'MAMJ-NSO'])
 
 export const TYPES = ['LfL', 'Ramp', 'NSO']
