@@ -1,44 +1,53 @@
-:root {
-  --navy: #1F3864;
-  --navy2: #2F5597;
-  --navy3: #4472C4;
-  --light: #EEF3FB;
-  --bg: #F4F6FB;
-  --white: #FFFFFF;
-  --char: #1A2332;
-  --muted: #6B7A99;
-  --border: #D0D9ED;
-  --green: #1A6B3C;
-  --red: #C0392B;
-  --radius: 10px;
-  --shadow: 0 1px 3px rgba(31,56,100,0.08), 0 4px 16px rgba(31,56,100,0.06);
+@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;600&display=swap');
 
-  /* New tokens with no AOP Forecaster equivalent — ported from the old
-     app's :root block (Calendar Engine/calendar_engine.html lines 21-39) */
-  --warn: #C87500;
-  /* Old app's --primary-light (#B2CFEA): the pale tint used for badge/pill
-     borders and the info-validation icon. --navy3 (#4472C4) is far too
-     saturated to stand in for it on a pale background, so it is carried over
-     verbatim rather than re-mapped. */
+:root {
+  /* ── Brand palette ─────────────────────────────────────────── */
+  --navy:       #1F3864;
+  --navy2:      #2F5597;
+  --navy3:      #4472C4;
   --navy-light: #B2CFEA;
-  /* Pale-yellow wash marking a table cell as directly editable — ported
-     verbatim from the old app's --cell-edit-bg (calendar_engine.html line 17),
-     which has no AOP Forecaster equivalent to re-map onto. */
+  --accent:     #3B82F6;
+  --accent-bg:  #EFF6FF;
+
+  /* ── Surfaces & text ───────────────────────────────────────── */
+  --light:  #EEF3FB;
+  --bg:     #F8FAFC;
+  --white:  #FFFFFF;
+  --char:   #0F172A;
+  --muted:  #64748B;
+  --border: #E2E8F0;
+
+  /* ── Semantic ───────────────────────────────────────────────── */
+  --green: #16A34A;
+  --red:   #DC2626;
+  --warn:  #D97706;
+
+  /* ── Effects ────────────────────────────────────────────────── */
+  --radius:    12px;
+  --shadow-sm: 0 1px 2px rgba(15,23,42,0.05), 0 1px 4px rgba(15,23,42,0.04);
+  --shadow:    0 1px 3px rgba(15,23,42,0.07), 0 4px 14px rgba(15,23,42,0.05);
+  --shadow-md: 0 4px 8px rgba(15,23,42,0.08), 0 12px 28px rgba(15,23,42,0.07);
+
+  /* ── Editable cell ──────────────────────────────────────────── */
   --cell-edit-bg: #FFFDE7;
-  --pre-bg: #FFF1DC;   --pre-row: #FFF8ED;   --pre-text: #7C3A00;   --pre-border: #F5C878;
-  --core-bg: #FFEA80;  --core-row: #FFFBE0;  --core-text: #5C3A00;  --core-border: #F0D000;
-  --post-bg: #D6ECFF;  --post-row: #EBF5FF;  --post-text: #0E3A70;  --post-border: #90C4F0;
+
+  /* ── Phase tints (unchanged — meaningful business indicators) ─ */
+  --pre-bg:    #FFF1DC; --pre-row:  #FFF8ED; --pre-text:  #7C3A00; --pre-border:  #F5C878;
+  --core-bg:   #FFEA80; --core-row: #FFFCE0; --core-text: #5C3A00; --core-border: #F0D000;
+  --post-bg:   #DBEAFE; --post-row: #EFF6FF; --post-text: #1E40AF; --post-border: #93C5FD;
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 14px;
   line-height: 1.5;
   background: var(--bg);
   color: var(--char);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .app-shell {
@@ -47,32 +56,120 @@ body {
   flex-direction: column;
 }
 
+/* ── App header: branded top bar ─────────────────────────────── */
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 24px;
+  height: 54px;
+  flex-shrink: 0;
+  background: var(--navy);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.18), 0 2px 10px rgba(0,0,0,0.15);
+  position: relative;
+  z-index: 10;
+}
+.app-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex-shrink: 0;
+}
+.app-header-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: rgba(255,255,255,0.13);
+  border: 1px solid rgba(255,255,255,0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+  flex-shrink: 0;
+}
+.app-header-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.app-header-sub {
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 1px;
+}
+.app-header-spacer { flex: 1; }
+.app-header-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.15);
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.9);
+}
+.app-header-user::before {
+  content: '';
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.25);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* ── Module tabs ──────────────────────────────────────────────── */
 .mod-nav {
   display: flex;
-  gap: 4px;
-  padding: 12px 20px 0;
+  align-items: flex-end;
+  gap: 0;
+  padding: 0 20px;
   background: var(--white);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1.5px solid var(--border);
+  flex-shrink: 0;
+  overflow-x: auto;
+  box-shadow: 0 1px 4px rgba(15,23,42,0.04);
 }
 
 .mod-tab {
-  padding: 10px 18px;
+  padding: 13px 20px;
   border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13.5px;
+  font-weight: 500;
   cursor: pointer;
-  border-radius: var(--radius) var(--radius) 0 0;
+  border-bottom: 2.5px solid transparent;
+  border-radius: 0;
+  margin-bottom: -1.5px;
+  white-space: nowrap;
+  transition: color .13s, border-color .13s;
 }
 
 .mod-tab.active {
   color: var(--navy);
-  background: var(--light);
+  font-weight: 700;
+  border-bottom-color: var(--navy);
+  background: transparent;
+}
+
+.mod-tab:hover:not(.active) {
+  color: var(--char);
+  background: transparent;
 }
 
 .mod-tab:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: default;
 }
 
@@ -86,9 +183,11 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 16px;
+  padding: 20px;
   margin-bottom: 16px;
+  transition: box-shadow .15s;
 }
+.card:hover { box-shadow: var(--shadow-md); }
 
 /* ═══ Form controls ═══════════════════════════════════════════════════
    Ported from the old app's global input/select rule (calendar_engine.html
@@ -96,19 +195,20 @@ body {
    wrapper classes), so this applies directly to the element types in use:
    number, date, and untyped (defaults to text) inputs, plus <select>. */
 input[type=number], input[type=date], input:not([type]), select {
-  padding: 5px 9px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
+  padding: 6px 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 7px;
   background: var(--white);
   color: var(--char);
   font-size: 13px;
   font-family: inherit;
   outline: none;
-  transition: border-color .15s;
+  transition: border-color .15s, box-shadow .15s;
+  box-shadow: 0 1px 2px rgba(15,23,42,0.04);
 }
 input[type=number]:focus, input[type=date]:focus, input:not([type]):focus, select:focus {
   border-color: var(--navy3);
-  box-shadow: 0 0 0 2px var(--light);
+  box-shadow: 0 0 0 3px rgba(68,114,196,0.15);
 }
 input[type=number] { font-variant-numeric: tabular-nums; width: 70px; }
 input[type=checkbox], input[type=radio] { accent-color: var(--navy); }
@@ -124,36 +224,49 @@ input[type=checkbox], input[type=radio] { accent-color: var(--navy); }
 button {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 13px;
+  gap: 6px;
+  padding: 7px 14px;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: 8px;
   background: var(--white);
   color: var(--muted);
   font-size: 13px;
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
-  transition: opacity .15s, transform .08s, background .15s;
+  transition: background .12s, color .12s, border-color .12s, box-shadow .12s, transform .08s;
   white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+  letter-spacing: -0.005em;
 }
-button:hover { background: var(--light); }
-button:active { transform: scale(.97); }
-button:disabled { opacity: .5; cursor: default; }
+button:hover {
+  background: var(--light);
+  color: var(--char);
+  border-color: var(--navy-light);
+}
+button:active { transform: scale(.97); box-shadow: none; }
+button:disabled { opacity: .45; cursor: default; box-shadow: none; }
 
-/* Primary action button (e.g. "Create Calendar" in CalendarisationTab),
-   ported from .btn + .btn-generate (calendar_engine.html lines 196-207). */
+/* Primary action button */
 .btn {
-  padding: 8px 16px;
+  padding: 9px 20px;
   border: none;
-  border-radius: var(--radius);
+  border-radius: 9px;
   background: var(--navy);
   color: #fff;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 700;
-  letter-spacing: .02em;
+  letter-spacing: .01em;
+  box-shadow: 0 1px 2px rgba(31,56,100,0.25), 0 3px 8px rgba(31,56,100,0.18);
 }
-.btn:hover { opacity: .88; background: var(--navy); }
+.btn:hover {
+  background: var(--navy2);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 2px 4px rgba(31,56,100,0.28), 0 5px 14px rgba(31,56,100,0.22);
+  opacity: 1;
+}
+.btn:active { transform: scale(.97); box-shadow: 0 1px 2px rgba(31,56,100,0.2); }
 
 /* ═══ Cluster tabs (CalendarisationTab/ClusterTabs.jsx) ═══════════════════
    Ported from calendar_engine.html lines 179-193. */
@@ -252,25 +365,28 @@ table th {
   position: sticky;
   top: 0;
   z-index: 2;
-  padding: 7px 10px;
+  padding: 9px 12px;
   background: var(--navy);
   color: #fff;
-  border-bottom: 2px solid rgba(255,255,255,.12);
+  border-bottom: 2px solid rgba(255,255,255,.1);
   text-align: left;
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: .05em;
+  letter-spacing: .06em;
   white-space: nowrap;
+  font-family: inherit;
 }
 table td {
-  padding: 5px 10px;
+  padding: 6px 12px;
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
   font-variant-numeric: tabular-nums;
+  line-height: 1.45;
 }
 table tr:last-child td { border-bottom: none; }
-table tr:hover td { background: var(--light); }
+table tr:nth-child(even) td { background: rgba(248,250,252,0.6); }
+table tr:hover td { background: var(--accent-bg) !important; }
 
 /* Reindexed Sales' extra Reference Date row (ReindexOutputPanel.jsx) sits
    directly above the normal Cluster/date header row - both stick while

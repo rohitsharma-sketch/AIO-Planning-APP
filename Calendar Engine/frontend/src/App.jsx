@@ -23,8 +23,21 @@ export default function App() {
   const isPlanner = me?.role === 'planner'
   const ActiveComponent = TABS.find(t => t.id === activeModule)?.Component
 
+  const displayName = me?.name || me?.email?.split('@')[0] || null
+
   return (
     <div className="app-shell">
+      <header className="app-header">
+        <div className="app-header-brand">
+          <div className="app-header-icon">CE</div>
+          <div>
+            <div className="app-header-title">Calendar Engine</div>
+            <div className="app-header-sub">Citykart RS Planning</div>
+          </div>
+        </div>
+        <div className="app-header-spacer" />
+        {displayName && <div className="app-header-user">{displayName}</div>}
+      </header>
       <nav className="mod-nav">
         {TABS.map(t => (
           <button
@@ -36,10 +49,7 @@ export default function App() {
           </button>
         ))}
       </nav>
-      {/* onNavigate lets a tab hand control to another tab by id — used by
-          VersionSettingTab's "Create Calendar", which re-syncs festival dates and
-          then drops the user on Calendarisation, the way the old app's
-          createCalendar() called switchModule('calendarisation'). */}
+      {/* onNavigate lets a tab hand control to another tab by id */}
       {ActiveComponent && <ActiveComponent isPlanner={isPlanner} onNavigate={setActiveModule} />}
     </div>
   )

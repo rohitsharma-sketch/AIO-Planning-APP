@@ -5,69 +5,103 @@
 <title>RS Planning · CityKart</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap');
+
   :root {
-    --bg: #0f1b2d;
-    --bg-grad-a: #1488cc;
-    --bg-grad-b: #020966;
-    --card-bg: rgba(255,255,255,0.06);
-    --card-border: rgba(255,255,255,0.12);
-    --text: #eef3f8;
-    --text-dim: rgba(238,243,248,0.65);
-    --teal: #026478;
-    --up: #2ecc71;
-    --down: #e74c3c;
-    --checking: #f1c40f;
+    --bg: #080f1e;
+    --bg-grad-a: #1064cc;
+    --bg-grad-b: #031570;
+    --card-bg: rgba(255,255,255,0.055);
+    --card-border: rgba(255,255,255,0.10);
+    --card-border-hover: rgba(255,255,255,0.25);
+    --text: #e8f0fb;
+    --text-dim: rgba(232,240,251,0.55);
+    --teal: #0e7490;
+    --up: #22c55e;
+    --down: #ef4444;
+    --checking: #f59e0b;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     min-height: 100vh;
-    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'Inter', -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
     background:
-      radial-gradient(1200px 600px at 10% -10%, rgba(20,136,204,0.35), transparent),
-      radial-gradient(1000px 500px at 100% 0%, rgba(2,100,120,0.30), transparent),
+      radial-gradient(ellipse 1400px 700px at 15% -5%, rgba(16,100,204,0.40), transparent),
+      radial-gradient(ellipse 1000px 600px at 95% 5%, rgba(3,21,112,0.38), transparent),
+      radial-gradient(ellipse 800px 500px at 50% 100%, rgba(8,20,50,0.6), transparent),
       var(--bg);
     color: var(--text);
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 48px 24px 80px;
+    padding: 56px 24px 80px;
   }
   header { text-align: center; margin-bottom: 12px; }
   header .brand {
-    font-size: 13px;
-    letter-spacing: 0.18em;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11.5px;
+    letter-spacing: 0.2em;
     text-transform: uppercase;
     color: var(--text-dim);
-    margin-bottom: 10px;
+    margin-bottom: 18px;
+    padding: 5px 14px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 999px;
+    background: rgba(255,255,255,0.04);
+  }
+  header .brand::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--up);
+    box-shadow: 0 0 6px rgba(34,197,94,0.6);
+    display: inline-block;
+    animation: pulse-up 2.5s ease-in-out infinite;
   }
   header h1 {
     margin: 0;
-    font-size: 34px;
-    font-weight: 700;
-    background: linear-gradient(90deg, #ffffff, #bfe3ff);
+    font-size: 38px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    background: linear-gradient(120deg, #ffffff 0%, #c4dcff 45%, #8fc8ff 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+    line-height: 1.15;
   }
   header p {
     color: var(--text-dim);
-    margin-top: 10px;
+    margin-top: 14px;
     font-size: 15px;
+    font-weight: 400;
+    letter-spacing: -0.005em;
   }
   .breaker {
-    margin-top: 18px;
+    margin-top: 22px;
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    padding: 6px 14px 6px 8px;
+    padding: 8px 18px 8px 10px;
     border-radius: 999px;
-    border: 1px solid rgba(255,255,255,0.18);
-    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.06);
+    backdrop-filter: blur(8px);
     cursor: pointer;
     user-select: none;
+    transition: border-color .15s, background .15s, box-shadow .15s;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
   }
-  .breaker:disabled { opacity: 0.6; cursor: default; }
+  .breaker:hover:not(:disabled) {
+    border-color: rgba(255,255,255,0.28);
+    background: rgba(255,255,255,0.1);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  }
+  .breaker:disabled { opacity: 0.5; cursor: default; }
   .breaker-track {
     position: relative;
     width: 40px;
@@ -119,73 +153,95 @@
     color: inherit;
     background: var(--card-bg);
     border: 1px solid var(--card-border);
-    border-radius: 16px;
-    padding: 20px 18px 16px;
-    backdrop-filter: blur(6px);
-    transition: transform .15s ease, border-color .15s ease, background .15s ease;
+    border-radius: 18px;
+    padding: 22px 20px 18px;
+    backdrop-filter: blur(12px) saturate(1.5);
+    -webkit-backdrop-filter: blur(12px) saturate(1.5);
+    transition: transform .2s ease, border-color .2s ease, background .2s ease, box-shadow .2s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.03) inset;
   }
   a.card:hover {
-    transform: translateY(-4px);
-    border-color: rgba(255,255,255,0.28);
-    background: rgba(255,255,255,0.10);
+    transform: translateY(-5px);
+    border-color: var(--card-border-hover);
+    background: rgba(255,255,255,0.09);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06) inset;
   }
   .card { cursor: grab; }
   .card:active { cursor: grabbing; }
   .card-icon {
-    width: 40px; height: 40px;
-    border-radius: 11px;
+    width: 42px; height: 42px;
+    border-radius: 12px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 19px;
-    margin-bottom: 12px;
-    background: linear-gradient(135deg, var(--bg-grad-a), var(--bg-grad-b));
+    font-size: 20px;
+    margin-bottom: 14px;
+    background: linear-gradient(145deg, rgba(16,100,204,0.6), rgba(3,21,112,0.8));
+    border: 1px solid rgba(255,255,255,0.14);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   }
   .card h2 {
-    margin: 0 0 5px;
+    margin: 0 0 6px;
     font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
   }
   .card p.desc {
-    margin: 0 0 14px;
+    margin: 0 0 16px;
     font-size: 12.5px;
     color: var(--text-dim);
-    line-height: 1.45;
+    line-height: 1.55;
+    font-weight: 400;
   }
   .card .meta {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 12px;
+    font-size: 11.5px;
     color: var(--text-dim);
     border-top: 1px solid var(--card-border);
-    padding-top: 10px;
+    padding-top: 12px;
+    font-weight: 500;
   }
   .status { display: flex; align-items: center; gap: 6px; font-weight: 600; }
   .dot {
-    width: 8px; height: 8px; border-radius: 50%;
+    width: 7px; height: 7px; border-radius: 50%;
     background: var(--checking);
-    box-shadow: 0 0 0 3px rgba(241,196,15,0.18);
+    box-shadow: 0 0 0 3px rgba(245,158,11,0.2);
+    animation: pulse-check 1.5s ease-in-out infinite;
   }
-  .dot.up { background: var(--up); box-shadow: 0 0 0 3px rgba(46,204,113,0.18); }
-  .dot.down { background: var(--down); box-shadow: 0 0 0 3px rgba(231,76,60,0.18); }
+  .dot.up {
+    background: var(--up);
+    box-shadow: 0 0 0 3px rgba(34,197,94,0.2);
+    animation: pulse-up 2.5s ease-in-out infinite;
+  }
+  .dot.down { background: var(--down); box-shadow: 0 0 0 2px rgba(239,68,68,0.2); animation: none; }
   .status-label.up { color: var(--up); }
   .status-label.down { color: var(--down); }
   .status-label.checking { color: var(--checking); }
-  .port { font-variant-numeric: tabular-nums; opacity: 0.8; }
+  .port { font-variant-numeric: tabular-nums; opacity: 0.65; font-size: 11px; }
+
+  @keyframes pulse-up {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(34,197,94,0.2); }
+    50% { box-shadow: 0 0 0 5px rgba(34,197,94,0.08); }
+  }
+  @keyframes pulse-check {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(245,158,11,0.25); }
+    50% { box-shadow: 0 0 0 5px rgba(245,158,11,0.08); }
+  }
   .sync-card {
     background: var(--card-bg);
     border: 1px solid var(--card-border);
-    border-radius: 16px;
-    padding: 20px 18px 16px;
-    backdrop-filter: blur(6px);
-    /* Same lift/brighten as a.card:hover below - this tile is a <div>, not
-       an <a>, so that rule's selector never matched it and hovering felt
-       inert next to every other tile. Confirmed with the user: "i want the
-       effect to be similar with the other tiles." */
-    transition: transform .15s ease, border-color .15s ease, background .15s ease;
+    border-radius: 18px;
+    padding: 22px 20px 18px;
+    backdrop-filter: blur(12px) saturate(1.5);
+    -webkit-backdrop-filter: blur(12px) saturate(1.5);
+    transition: transform .2s ease, border-color .2s ease, background .2s ease, box-shadow .2s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.03) inset;
   }
   .sync-card:hover {
-    transform: translateY(-4px);
-    border-color: rgba(255,255,255,0.28);
-    background: rgba(255,255,255,0.10);
+    transform: translateY(-5px);
+    border-color: var(--card-border-hover);
+    background: rgba(255,255,255,0.09);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06) inset;
   }
   .sync-section + .sync-section { margin-top: 20px; }
   .sync-section-title {
