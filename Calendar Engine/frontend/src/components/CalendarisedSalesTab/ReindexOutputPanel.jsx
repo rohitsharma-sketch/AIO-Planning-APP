@@ -415,16 +415,24 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
       })
       csvRows.push(['', ...keyFields.map((_, i) => i === 0 ? 'Grand Total' : ''), ...ga])
     } else {
-      // Stacked: two rows per store (Actual then Reindexed)
-      const hdr = ['Cluster', ...kfHeaders, 'Type', ...dlCols]
+      // Stacked (transposed): one row per (store, date) — dates in rows,
+      // Actual and Reindexed as column headers. Long/tall format.
+      const hdr = ['Cluster', ...kfHeaders, 'Date', 'Actual', 'Reindexed', 'Diff']
       csvRows = [hdr]
       for (const { meta, actualByMMDD, rxByDate } of rows) {
         const cluster = clusterOf(meta.store)
-        csvRows.push([cluster, ...keyFields.map(f => meta[f]), 'Actual',    ...dlCols.map(c => round2(actualByMMDD[c.slice(5)]))])
-        csvRows.push([cluster, ...keyFields.map(f => meta[f]), 'Reindexed', ...dlCols.map(c => round2(rxByDate[c]))])
+        for (const c of dlCols) {
+          const a = actualByMMDD[c.slice(5)] ?? null
+          const r = rxByDate[c] ?? null
+          csvRows.push([cluster, ...keyFields.map(f => meta[f]), c, round2(a), round2(r),
+            (a != null && r != null) ? round2(r - a) : ''])
+        }
       }
-      csvRows.push(['', ...keyFields.map((_, i) => i === 0 ? 'Grand Total' : ''), 'Actual',    ...dlCols.map(c => round2(grandActualMMDD[c.slice(5)]))])
-      csvRows.push(['', ...keyFields.map((_, i) => i === 0 ? '' : ''),            'Reindexed', ...dlCols.map(c => round2(grandRxDate[c]))])
+      // Grand total row per date
+      for (const c of dlCols) {
+        const a = grandActualMMDD[c.slice(5)] || 0, r = grandRxDate[c] || 0
+        csvRows.push(['', ...keyFields.map((_, i) => i === 0 ? 'Grand Total' : ''), c, round2(a), round2(r), round2(r - a)])
+      }
     }
     downloadCsv(csvRows, `${fileStem}_day_comparison_${fmt}.csv`)
     setShowDayDlMenu(false)
@@ -997,8 +1005,8 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                     </div>
                     <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '8px' }}>
                       {dayDlFmt === 'stacked'
-                        ? 'Two rows per store: Actual row then Reindexed row'
-                        : 'One row per store; each date → Actual, Reindexed, Diff columns'}
+                        ? 'One row per (store, date) — Date | Actual | Reindexed | Diff'
+                        : 'One row per store — each date expands to Actual, Reindexed, Diff columns'}
                     </div>
                     {/* Month picker */}
                     <div style={{ fontWeight: 600, fontSize: '11px', marginBottom: '5px' }}>Months to export</div>
