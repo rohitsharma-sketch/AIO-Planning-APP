@@ -409,7 +409,7 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
           onClick={() => handleTileClick(null)}
           active={tileActive(null)}
         />
-        {tagGroups.map(([tag, count]) => (
+        {tagGroups.filter(([tag]) => tag !== '(untagged)').map(([tag, count]) => (
           <CountTile
             key={tag}
             label={tag}
