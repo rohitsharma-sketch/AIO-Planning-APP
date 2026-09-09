@@ -232,6 +232,35 @@
   color: #fff;
 }
 
+.pl-row-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.pl-del-btn {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1.5px solid #fca5a5;
+  background: #fff1f1;
+  color: #dc2626;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s;
+  font-family: inherit;
+}
+.pl-del-btn:hover {
+  background: #dc2626;
+  color: #fff;
+  border-color: #dc2626;
+}
+
 /* Save-changes dialog overlay */
 .pl-save-dialog-backdrop {
   position: fixed;

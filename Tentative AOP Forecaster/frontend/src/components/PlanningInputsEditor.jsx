@@ -322,19 +322,17 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
     })
   }, [mergedStores, filters, search])
 
-  // Tag groups always from the FULL merged view so tile counts stay stable
-  // while the table below is filtered. Untagged sorted last.
-  const tagGroups = useMemo(() => {
-    const groups = {}
+  // Consolidated group counts — LFL / NSO / Ramp from the full merged view
+  // so tile counts stay stable while the table below is filtered.
+  const groupCounts = useMemo(() => {
+    const c = { lfl: 0, nso: 0, ramp: 0 }
     mergedStores.forEach(s => {
-      const t = (s.tag || '').trim() || '(untagged)'
-      groups[t] = (groups[t] || 0) + 1
+      const t = (s.tag || '').trim()
+      if      (LFL_TAG_SET.has(t))  c.lfl++
+      else if (NSO_TAG_SET.has(t))  c.nso++
+      else if (RAMP_TAG_SET.has(t)) c.ramp++
     })
-    return Object.entries(groups).sort(([a], [b]) => {
-      if (a === '(untagged)') return 1
-      if (b === '(untagged)') return -1
-      return a.localeCompare(b)
-    })
+    return c
   }, [mergedStores])
 
   // Total for the TOTAL tile = tagged stores only (the active planning universe)
@@ -342,24 +340,26 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
     mergedStores.filter(s => (s.tag || '').trim()).length
   , [mergedStores])
 
-  // Tile click: toggle tag filter on the table. Clicking TOTAL clears tag filter.
-  function handleTileClick(tag) {
-    if (tag === null) {
-      setFilters(f => ({ ...f, tag: [] }))
-    } else {
-      const filterVal = tag === '(untagged)' ? '' : tag
-      setFilters(f => {
-        const already = f.tag.length === 1 && f.tag[0] === filterVal
-        return { ...f, tag: already ? [] : [filterVal] }
-      })
-    }
+  // Tile click: toggle group filter on the table. TOTAL clears all tag filters.
+  const GROUP_TAGS = {
+    lfl:  [...LFL_TAG_SET],
+    nso:  [...NSO_TAG_SET],
+    ramp: [...RAMP_TAG_SET],
+  }
+  function handleTileClick(group) {
+    if (group === null) { setFilters(f => ({ ...f, tag: [] })); return }
+    const tags = GROUP_TAGS[group] || []
+    setFilters(f => {
+      const alreadyActive = tags.length > 0 && tags.every(t => f.tag.includes(t)) && f.tag.length === tags.length
+      return { ...f, tag: alreadyActive ? [] : tags }
+    })
   }
 
   // Whether a tile is currently the active filter
-  function tileActive(tag) {
-    if (tag === null) return filters.tag.length === 0
-    const filterVal = tag === '(untagged)' ? '' : tag
-    return filters.tag.length === 1 && filters.tag[0] === filterVal
+  function tileActive(group) {
+    if (group === null) return filters.tag.length === 0
+    const tags = GROUP_TAGS[group] || []
+    return tags.length > 0 && tags.every(t => filters.tag.includes(t)) && filters.tag.length === tags.length
   }
 
   function setField(store_id, field, value) {
@@ -409,14 +409,18 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
           onClick={() => handleTileClick(null)}
           active={tileActive(null)}
         />
-        {tagGroups.filter(([tag]) => tag !== '(untagged)').map(([tag, count]) => (
+        {[
+          { group: 'lfl',  label: 'LFL',  variant: 'lfl'  },
+          { group: 'nso',  label: 'NSO',  variant: 'nso'  },
+          { group: 'ramp', label: 'Ramp', variant: 'ramp' },
+        ].map(({ group, label, variant }) => (
           <CountTile
-            key={tag}
-            label={tag}
-            value={count}
-            variant={tileVariant(tag)}
-            onClick={() => handleTileClick(tag)}
-            active={tileActive(tag)}
+            key={group}
+            label={label}
+            value={groupCounts[group]}
+            variant={variant}
+            onClick={() => handleTileClick(group)}
+            active={tileActive(group)}
           />
         ))}
       </div>
@@ -691,7 +695,7 @@ function AopTab() {
   const aopTiles = useMemo(() => {
     const totals = { lfl: 0, nso: 0, ramp: 0 }
     for (const r of merged) {
-      const v = Number(r.value) || 0
+      const v = Number(edits[r._key] != null ? edits[r._key] : r.value) || 0
       const tag = storeTagMap?.get((r.store_id || '').toUpperCase()) ?? ''
       if (LFL_TAG_SET.has(tag))       totals.lfl  += v
       else if (NSO_TAG_SET.has(tag))  totals.nso  += v
@@ -703,7 +707,7 @@ function AopTab() {
       { key: 'nso',  label: 'NSO',  value: fmt(totals.nso),  cls: 'nso'  },
       { key: 'ramp', label: 'Ramp', value: fmt(totals.ramp), cls: 'ramp' },
     ]
-  }, [merged, storeTagMap])
+  }, [merged, storeTagMap, edits])
 
   function setValue(r, val) { setEdits(e => ({ ...e, [key(r)]: val })) }
   function deleteRow(r)     { setEdits(e => ({ ...e, [key(r)]: '' })) }

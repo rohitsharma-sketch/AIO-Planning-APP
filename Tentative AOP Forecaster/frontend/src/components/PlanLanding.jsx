@@ -35,6 +35,13 @@ export function savePlanVersion(sessionId, rates, baseSource, labelOverride = nu
   return isMajor
 }
 
+export function deletePlanVersion(id) {
+  try {
+    const versions = loadPlanVersions().filter(v => v.id !== id)
+    localStorage.setItem(PLAN_LOG_KEY, JSON.stringify(versions))
+  } catch {}
+}
+
 export function isMajorChangeVsLog(rates) {
   const versions = loadPlanVersions()
   if (!versions.length) return false
@@ -80,7 +87,15 @@ const THEMES = [
 
 export default function PlanLanding({ onNewPlan, onResume, theme, onThemeChange }) {
   const [showSaved, setShowSaved] = useState(false)
-  const versions = loadPlanVersions()
+  const [versionList, setVersionList] = useState(() => loadPlanVersions())
+  const versions = versionList
+
+  function handleDelete(id) {
+    deletePlanVersion(id)
+    const updated = loadPlanVersions()
+    setVersionList(updated)
+    if (updated.length === 0) setShowSaved(false)
+  }
 
   return (
     <div className="pl-root">
@@ -157,9 +172,18 @@ export default function PlanLanding({ onNewPlan, onResume, theme, onThemeChange 
                     <span className="pl-log-date">{date}</span>
                   </span>
                 </div>
-                <button className="pl-load-btn" onClick={() => onResume(v.sessionId)}>
-                  Load →
-                </button>
+                <div className="pl-row-actions">
+                  <button className="pl-load-btn" onClick={() => onResume(v.sessionId)}>
+                    Load →
+                  </button>
+                  <button
+                    className="pl-del-btn"
+                    title="Delete this version"
+                    onClick={e => { e.stopPropagation(); handleDelete(v.id) }}
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
             )
           })}
