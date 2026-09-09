@@ -781,10 +781,9 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
       )}
 
       {activeSub === 'divmonth' && storeMonthComp && (() => {
-        // Actual months = reference-year YYYY-MM strings from actualRows
-        const actualMonthCols = ok && result.actualRows
-          ? [...new Set(result.actualRows.map(r => r.col.slice(0, 7)))].sort()
-          : []
+        // Actual reference-year label — first actual row's col gives the year (e.g. "2026")
+        const actualYear = result.actualRows?.[0]?.col?.slice(0, 4) ?? 'Actual'
+        const rxYear = visibleMonthCols[0]?.slice(0, 4) ?? 'Reindexed'
         const { rows: smRows, grandActualMM, grandRxYM } = storeMonthComp
         const displayRows = filteredStoreMonthComp || smRows
         return (
@@ -799,24 +798,27 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
               <button className="btn" onClick={downloadStoreMonth} disabled={!smRows.length}>Download CSV</button>
             </div>
             <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
-              {countText(displayRows.length)} · Actual = reference-year sales · Reindexed = calendar-shifted sales
+              {countText(displayRows.length)} · Each month: <strong>{actualYear} Actual</strong> vs <strong>{rxYear} Reindexed</strong> (matched by month number — difference reflects festival/calendar shifts)
             </div>
             <div className="tbl-wrap">
               <table>
                 <thead>
+                  {/* Row 1: month group headers */}
                   <tr>
                     <th rowSpan={2}>Cluster</th>
                     {kfHeaders.map(h => <th key={h} rowSpan={2}>{h}</th>)}
-                    <th colSpan={actualMonthCols.length} style={{ ...num, background: 'var(--light)', borderBottom: '1px solid var(--border)' }}>
-                      Actual
-                    </th>
-                    <th colSpan={visibleMonthCols.length} style={{ ...num, background: 'var(--light)', borderBottom: '1px solid var(--border)' }}>
-                      Reindexed
-                    </th>
+                    {visibleMonthCols.map(ym => (
+                      <th key={ym} colSpan={2} style={{ ...num, borderLeft: '2px solid var(--border)' }}>{ym}</th>
+                    ))}
                   </tr>
+                  {/* Row 2: Actual / Reindexed sub-headers */}
                   <tr>
-                    {actualMonthCols.map(m => <th key={`a-${m}`} style={num}>{m}</th>)}
-                    {visibleMonthCols.map(m => <th key={`r-${m}`} style={num}>{m}</th>)}
+                    {visibleMonthCols.map(ym => (
+                      <Fragment key={ym}>
+                        <th style={{ ...num, borderLeft: '2px solid var(--border)', fontSize: '10px', color: 'var(--muted)' }}>{actualYear}</th>
+                        <th style={{ ...num, fontSize: '10px', color: 'var(--navy2)' }}>{rxYear}</th>
+                      </Fragment>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -824,15 +826,33 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                     <tr key={keyFields.map(f => meta[f]).join(KEY_SEP)}>
                       <td>{clusterOf(meta.store)}</td>
                       {keyFields.map(f => <td key={f} style={{ fontWeight: f === 'store' ? 600 : 400 }}>{meta[f]}</td>)}
-                      {actualMonthCols.map(m => <td key={`a-${m}`} style={num}>{round2(actualByMM[m.slice(5, 7)])}</td>)}
-                      {visibleMonthCols.map(m => <td key={`r-${m}`} style={num}>{round2(rxByYM[m])}</td>)}
+                      {visibleMonthCols.map(ym => {
+                        const mm = ym.slice(5, 7)
+                        const a = actualByMM[mm] ?? null
+                        const r = rxByYM[ym] ?? null
+                        const diff = (a != null && r != null) ? r - a : null
+                        return (
+                          <Fragment key={ym}>
+                            <td style={{ ...num, borderLeft: '2px solid var(--border)' }}>{round2(a)}</td>
+                            <td style={{ ...num, color: diff == null ? undefined : diff > 0.005 ? 'var(--navy2)' : diff < -0.005 ? 'var(--red)' : undefined }}>{round2(r)}</td>
+                          </Fragment>
+                        )
+                      })}
                     </tr>
                   ))}
                   <tr style={{ borderTop: '2px solid var(--border)', fontWeight: 700 }}>
                     <td />
                     {keyFields.map((f, i) => <td key={f}>{i === 0 ? 'Grand Total' : ''}</td>)}
-                    {actualMonthCols.map(m => <td key={`ga-${m}`} style={num}>{round2(grandActualMM[m.slice(5, 7)])}</td>)}
-                    {visibleMonthCols.map(m => <td key={`gr-${m}`} style={num}>{round2(grandRxYM[m])}</td>)}
+                    {visibleMonthCols.map(ym => {
+                      const mm = ym.slice(5, 7)
+                      const a = grandActualMM[mm] || 0, r = grandRxYM[ym] || 0
+                      return (
+                        <Fragment key={ym}>
+                          <td style={{ ...num, borderLeft: '2px solid var(--border)' }}>{round2(a)}</td>
+                          <td style={{ ...num, color: r > a + 0.005 ? 'var(--navy2)' : r < a - 0.005 ? 'var(--red)' : undefined }}>{round2(r)}</td>
+                        </Fragment>
+                      )
+                    })}
                   </tr>
                 </tbody>
               </table>
