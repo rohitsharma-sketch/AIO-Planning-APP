@@ -207,6 +207,28 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
+    # BIS routes that require an active 8010 session before proxying through.
+    _BIS_AUTH_PREFIXES = ('/buyer', '/api/otb/', '/api/status')
+
+    def _is_bis_route(self):
+        path = self.path.split('?')[0]
+        return any(
+            path == p or path.startswith(p if p.endswith('/') else p + '/')
+            for p in self._BIS_AUTH_PREFIXES
+        )
+
+    def _is_authenticated(self):
+        """Forward the incoming cookies to 8010's /api/auth/me; return True if 200."""
+        try:
+            req = urllib.request.Request('http://127.0.0.1:8010/api/auth/me')
+            cookie = self.headers.get('Cookie', '')
+            if cookie:
+                req.add_header('Cookie', cookie)
+            with urllib.request.urlopen(req, timeout=2) as resp:
+                return resp.status == 200
+        except Exception:
+            return False
+
     # ── verb handlers ──────────────────────────────────────────────────────────
 
     def do_GET(self):
@@ -228,23 +250,54 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.write(body)
             return
 
+        # Auth gate for BIS — redirect to login if no valid 8010 session.
+        if self._is_bis_route() and not self._is_authenticated():
+            dest = '/login?next=' + self.path
+            self.send_response(302)
+            self.send_header('Location', dest)
+            self.end_headers()
+            return
+
         url = self._proxy_target()
         if url:
             self._proxy(url)
         else:
             super().do_GET()
 
+    def _auth_guard_api(self):
+        """For mutating BIS API routes: return 401 JSON if not authenticated."""
+        if self._is_bis_route() and not self._is_authenticated():
+            body = json.dumps({"detail": "Not authenticated"}).encode()
+            self.send_response(401)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            SimpleHTTPRequestHandler.end_headers(self)
+            self.wfile.write(body)
+            return True
+        return False
+
     def do_POST(self):
         if self.path == "/api/launch-all":
             self._launch_all()
         elif self.path == "/api/shutdown-all":
             self._shutdown_all()
+        elif self._auth_guard_api():
+            return
         else:
             self._proxy_or_404()
 
-    def do_PUT(self):     self._proxy_or_404()
-    def do_PATCH(self):   self._proxy_or_404()
-    def do_DELETE(self):  self._proxy_or_404()
+    def do_PUT(self):
+        if not self._auth_guard_api():
+            self._proxy_or_404()
+
+    def do_PATCH(self):
+        if not self._auth_guard_api():
+            self._proxy_or_404()
+
+    def do_DELETE(self):
+        if not self._auth_guard_api():
+            self._proxy_or_404()
+
     def do_OPTIONS(self): self._proxy_or_404()
 
     # ── Landing-only API ───────────────────────────────────────────────────────
