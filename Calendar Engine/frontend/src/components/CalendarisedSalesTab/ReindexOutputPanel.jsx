@@ -74,6 +74,11 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
   // store -> cluster map fetched separately (the same GET the Date Shift
   // Preview panel and CalendarisedSalesTab/index.jsx already use).
   const [storeCluster, setStoreCluster] = useState(null)
+  // Day-wise comparison download: shows a month-picker popover before generating
+  // the CSV, since a full year at day-level (365 cols × 223 stores × 2 rows) is
+  // too large to produce without knowing which months the planner actually wants.
+  const [showDayDlMenu, setShowDayDlMenu] = useState(false)
+  const [dayDlSel, setDayDlSel] = useState(null)
 
   useEffect(() => {
     let alive = true
@@ -320,6 +325,55 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
       clusterOf(r.meta.store).toLowerCase().includes(q))
   }, [storeMonthComp, search, storeCluster])
 
+  // Day-wise Comparison: stacked two rows per store (Actual + Reindexed).
+  // DW only — MW has no day-of-month field, so date columns don't exist there.
+  // Actual side: reference-year dates (e.g. 2026-04-15) → keyed by MM-DD so
+  //   they can be matched against future-year column headers (e.g. 2027-04-15).
+  // Reindexed side: future-year dates — exact column match, no year adjustment.
+  const storeDayComp = useMemo(() => {
+    if (!ok || !result.actualRows || result.source !== 'dw') return null
+    // Actual: grain-key -> {MMDD ('04-15') -> value}
+    const actualByKey = new Map()
+    for (const row of result.actualRows) {
+      const k = keyFields.map(f => row[f] ?? '').join(KEY_SEP)
+      const mmdd = row.col.slice(5)  // '2026-04-15' → '04-15'
+      let e = actualByKey.get(k)
+      if (!e) { e = { meta: {}, byMMDD: {} }; for (const f of keyFields) e.meta[f] = row[f] ?? ''; actualByKey.set(k, e) }
+      e.byMMDD[mmdd] = (e.byMMDD[mmdd] || 0) + row.value
+    }
+    // Reindexed: grain-key -> {futureDate ('2027-04-15') -> value}; only visible cols
+    const cols = new Set(visibleColumns)
+    const rxByKey = new Map()
+    for (const row of result.rows) {
+      if (!cols.has(row.col)) continue
+      const k = keyFields.map(f => row[f] ?? '').join(KEY_SEP)
+      let e = rxByKey.get(k)
+      if (!e) { e = { meta: {}, byDate: {} }; for (const f of keyFields) e.meta[f] = row[f] ?? ''; rxByKey.set(k, e) }
+      e.byDate[row.col] = (e.byDate[row.col] || 0) + row.value
+    }
+    const allKeys = [...new Set([...actualByKey.keys(), ...rxByKey.keys()])].sort((a, b) => a.localeCompare(b))
+    const rows = allKeys.map(k => ({
+      meta: (actualByKey.get(k) || rxByKey.get(k)).meta,
+      actualByMMDD: actualByKey.get(k)?.byMMDD || {},
+      rxByDate: rxByKey.get(k)?.byDate || {},
+    }))
+    const grandActualMMDD = {}, grandRxDate = {}
+    for (const { actualByMMDD, rxByDate } of rows) {
+      for (const [mmdd, v] of Object.entries(actualByMMDD)) grandActualMMDD[mmdd] = (grandActualMMDD[mmdd] || 0) + v
+      for (const [d, v] of Object.entries(rxByDate)) grandRxDate[d] = (grandRxDate[d] || 0) + v
+    }
+    return { rows, grandActualMMDD, grandRxDate }
+  }, [ok, result, visibleColumns, keyFields])
+
+  const filteredStoreDayComp = useMemo(() => {
+    if (!storeDayComp) return null
+    const q = search.toLowerCase().trim()
+    if (!q) return storeDayComp.rows
+    return storeDayComp.rows.filter(r =>
+      keyFields.some(f => String(r.meta[f] ?? '').toLowerCase().includes(q)) ||
+      clusterOf(r.meta.store).toLowerCase().includes(q))
+  }, [storeDayComp, search, storeCluster])
+
   function downloadStoreMonth() {
     if (!storeMonthComp) return
     const hdr = visibleMonthCols.flatMap(ym => [`${ym} Actual`, `${ym} Reindexed`, `${ym} Diff`, `${ym} Diff %`])
@@ -334,6 +388,23 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
         [clusterOf(meta.store), ...keyFields.map(f => meta[f]), ...makeDataCells(actualByMM, rxByYM)]),
       ['', ...keyFields.map((_, i) => i === 0 ? 'Grand Total' : ''), ...makeDataCells(grandActualMM, grandRxYM)],
     ], `${fileStem}_store_month_comparison.csv`)
+  }
+
+  function downloadStoreDayComp(dlMonths) {
+    if (!storeDayComp) return
+    const dlCols = visibleColumns.filter(c => dlMonths.has(c.slice(0, 7)))
+    const { rows, grandActualMMDD, grandRxDate } = storeDayComp
+    const hdr = ['Cluster', ...kfHeaders, 'Type', ...dlCols]
+    const csvRows = [hdr]
+    for (const { meta, actualByMMDD, rxByDate } of rows) {
+      const cluster = clusterOf(meta.store)
+      csvRows.push([cluster, ...keyFields.map(f => meta[f]), 'Actual',     ...dlCols.map(c => round2(actualByMMDD[c.slice(5)]))])
+      csvRows.push([cluster, ...keyFields.map(f => meta[f]), 'Reindexed',  ...dlCols.map(c => round2(rxByDate[c]))])
+    }
+    csvRows.push(['', ...keyFields.map((_, i) => i === 0 ? 'Grand Total' : ''), 'Actual',    ...dlCols.map(c => round2(grandActualMMDD[c.slice(5)]))])
+    csvRows.push(['', ...keyFields.map((_, i) => i === 0 ? '' : ''),           'Reindexed', ...dlCols.map(c => round2(grandRxDate[c]))])
+    downloadCsv(csvRows, `${fileStem}_day_comparison.csv`)
+    setShowDayDlMenu(false)
   }
 
   // P1/P2: day 1-15 vs day 16-end of month, actual vs reindexed. The two
@@ -525,6 +596,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
             (isEven, see p1p2Rows) - shown either way for a consistent shape
             across sources, but clearly labeled below when it's the even case. */}
         {ok && result.actualRows && <button className={activeSub === 'divmonth' ? 'active' : ''} onClick={() => setActiveSub('divmonth')}>MW Comparison</button>}
+        {ok && result.actualRows && result.source === 'dw' && <button className={activeSub === 'daycomp' ? 'active' : ''} onClick={() => setActiveSub('daycomp')}>DW Comparison</button>}
         {ok && result.actualRows && <button className={activeSub === 'p1p2' ? 'active' : ''} onClick={() => setActiveSub('p1p2')}>P1 / P2 Comparison</button>}
         <button className={activeSub === 'raw' ? 'active' : ''} onClick={() => setActiveSub('raw')}>Run Details</button>
       </div>
@@ -853,6 +925,117 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                         </Fragment>
                       )
                     })}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </>
+        )
+      })()}
+
+      {activeSub === 'daycomp' && storeDayComp && (() => {
+        // Each store = 2 DOM rows; cap at half RX_CAP stores to keep the DOM lean.
+        const DW_STORE_CAP = Math.ceil(RX_CAP / 2)
+        const sdcRows = filteredStoreDayComp || storeDayComp.rows
+        const { grandActualMMDD, grandRxDate } = storeDayComp
+        const effectiveSel = dayDlSel || activeMonths
+        return (
+          <>
+            <div className="scm-toolbar">
+              <div className="field">
+                <label htmlFor="rx-daycomp-search">Search</label>
+                <input id="rx-daycomp-search" type="text" style={{ width: '240px' }}
+                  placeholder="store, division, cluster"
+                  value={search} onChange={e => setSearch(e.target.value)} />
+              </div>
+              {/* Download button with month-picker popover — DW date columns can
+                  run to 365 per year; the popover lets the planner pick which
+                  months to export before the (potentially very wide) CSV is built. */}
+              <div style={{ position: 'relative' }}>
+                <button className="btn" disabled={!sdcRows.length}
+                  onClick={() => { setDayDlSel(new Set(activeMonths)); setShowDayDlMenu(v => !v) }}>
+                  Download CSV ▾
+                </button>
+                {showDayDlMenu && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 120,
+                    background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '6px',
+                    padding: '10px 12px', minWidth: '180px', boxShadow: '0 4px 16px rgba(0,0,0,0.18)' }}>
+                    <div style={{ fontWeight: 600, fontSize: '11px', marginBottom: '6px' }}>Months to export</div>
+                    {monthCols.map(m => (
+                      <label key={m} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer', padding: '2px 0' }}>
+                        <input type="checkbox"
+                          checked={effectiveSel.has(m)}
+                          onChange={() => setDayDlSel(prev => {
+                            const s = new Set(prev || activeMonths)
+                            s.has(m) ? s.delete(m) : s.add(m)
+                            return s
+                          })} />
+                        {m}
+                      </label>
+                    ))}
+                    <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                      <button onClick={() => downloadStoreDayComp(effectiveSel)} disabled={!effectiveSel.size}>Download</button>
+                      <button onClick={() => setShowDayDlMenu(false)}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
+              {countText(sdcRows.length)} stores · 2 rows each (Actual / Reindexed) ·
+              Actual = reference-year day keyed by MM-DD · Reindexed = calendar-shifted future-year day
+            </div>
+            <div className="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cluster</th>
+                    {kfHeaders.map(h => <th key={h}>{h}</th>)}
+                    <th>Type</th>
+                    {visibleColumns.map(c => <th key={c} style={num}>{c}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sdcRows.slice(0, DW_STORE_CAP).map(({ meta, actualByMMDD, rxByDate }) => {
+                    const cluster = clusterOf(meta.store)
+                    const rowKey = keyFields.map(f => meta[f]).join(KEY_SEP)
+                    return (
+                      <Fragment key={rowKey}>
+                        {/* Actual row — muted background so the pair is visually grouped */}
+                        <tr style={{ background: 'var(--light)' }}>
+                          <td>{cluster}</td>
+                          {keyFields.map(f => <td key={f} style={{ fontWeight: f === 'store' ? 600 : 400 }}>{meta[f]}</td>)}
+                          <td style={{ fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic' }}>Actual</td>
+                          {visibleColumns.map(c => <td key={`a-${c}`} style={num}>{round2(actualByMMDD[c.slice(5)])}</td>)}
+                        </tr>
+                        {/* Reindexed row — colour-coded vs actual */}
+                        <tr>
+                          <td />
+                          {keyFields.map(f => <td key={f} />)}
+                          <td style={{ fontSize: '10px', color: 'var(--navy2)', fontStyle: 'italic' }}>Reindexed</td>
+                          {visibleColumns.map(c => {
+                            const a = actualByMMDD[c.slice(5)] ?? null
+                            const r = rxByDate[c] ?? null
+                            const diff = (a != null && r != null) ? r - a : null
+                            return (
+                              <td key={`r-${c}`} style={{ ...num, color: diff == null ? undefined : diff > 0.005 ? 'var(--navy2)' : diff < -0.005 ? 'var(--red)' : undefined }}>
+                                {round2(r)}
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      </Fragment>
+                    )
+                  })}
+                  <tr style={{ borderTop: '2px solid var(--border)', fontWeight: 700, background: 'var(--light)' }}>
+                    <td />{keyFields.map((f, i) => <td key={f}>{i === 0 ? 'Grand Total' : ''}</td>)}
+                    <td style={{ fontSize: '10px', fontStyle: 'italic' }}>Actual</td>
+                    {visibleColumns.map(c => <td key={`ga-${c}`} style={num}>{round2(grandActualMMDD[c.slice(5)])}</td>)}
+                  </tr>
+                  <tr style={{ fontWeight: 700 }}>
+                    <td />{keyFields.map(f => <td key={f} />)}
+                    <td style={{ fontSize: '10px', color: 'var(--navy2)', fontStyle: 'italic' }}>Reindexed</td>
+                    {visibleColumns.map(c => <td key={`gr-${c}`} style={num}>{round2(grandRxDate[c])}</td>)}
                   </tr>
                 </tbody>
               </table>
