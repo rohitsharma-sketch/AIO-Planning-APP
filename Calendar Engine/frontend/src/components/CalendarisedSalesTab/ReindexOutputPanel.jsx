@@ -334,7 +334,10 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
   //   they can be matched against future-year column headers (e.g. 2027-04-15).
   // Reindexed side: future-year dates — exact column match, no year adjustment.
   const storeDayComp = useMemo(() => {
-    if (!ok || !result.actualRows || result.source !== 'dw') return null
+    // Snapshots collapse DW columns to YYYY-MM — no day-level data available.
+    if (!ok || !result.actualRows || result.source !== 'dw' || result.isSnapshot) return null
+    // Also bail if columns are already month-strings (7 chars) not day-strings (10 chars)
+    if (!result.columns?.[0] || result.columns[0].length < 10) return null
     // Actual: grain-key -> {MMDD ('04-15') -> value}
     const actualByKey = new Map()
     for (const row of result.actualRows) {
@@ -627,7 +630,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
             (isEven, see p1p2Rows) - shown either way for a consistent shape
             across sources, but clearly labeled below when it's the even case. */}
         {ok && result.actualRows && <button className={activeSub === 'divmonth' ? 'active' : ''} onClick={() => setActiveSub('divmonth')}>MW Comparison</button>}
-        {ok && result.actualRows && result.source === 'dw' && <button className={activeSub === 'daycomp' ? 'active' : ''} onClick={() => setActiveSub('daycomp')}>DW Comparison</button>}
+        {ok && result.actualRows && result.source === 'dw' && !result.isSnapshot && result.columns?.[0]?.length >= 10 && <button className={activeSub === 'daycomp' ? 'active' : ''} onClick={() => setActiveSub('daycomp')}>DW Comparison</button>}
         {ok && result.actualRows && <button className={activeSub === 'p1p2' ? 'active' : ''} onClick={() => setActiveSub('p1p2')}>P1 / P2 Comparison</button>}
         <button className={activeSub === 'raw' ? 'active' : ''} onClick={() => setActiveSub('raw')}>Run Details</button>
       </div>
