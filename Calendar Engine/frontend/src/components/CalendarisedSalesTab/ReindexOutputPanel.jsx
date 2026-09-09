@@ -989,10 +989,11 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                 </button>
                 {showDayDlMenu && (
                   <div style={{
-                    position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 200,
-                    background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '8px',
-                    padding: '12px 14px', minWidth: '220px',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.22)',
+                    position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 300,
+                    background: 'var(--white, #fff)', border: '1.5px solid var(--border)',
+                    borderRadius: '10px', padding: '14px 16px', minWidth: '230px',
+                    boxShadow: '0 12px 36px rgba(0,0,0,0.28), 0 2px 6px rgba(0,0,0,0.12)',
+                    backdropFilter: 'none',
                   }}>
                     {/* Format toggle */}
                     <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Format</div>
