@@ -988,43 +988,58 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                   Download CSV ▾
                 </button>
                 {showDayDlMenu && (
-                  <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 120,
-                    background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '6px',
-                    padding: '10px 12px', minWidth: '210px', boxShadow: '0 4px 16px rgba(0,0,0,0.18)' }}>
-                    {/* Format picker */}
-                    <div style={{ fontWeight: 600, fontSize: '11px', marginBottom: '5px' }}>Format</div>
-                    <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
-                      {[['stacked', 'Stacked'], ['wide', 'Wide']].map(([val, label]) => (
-                        <button key={val}
-                          className={dayDlFmt === val ? 'active' : ''}
-                          style={{ flex: 1, fontSize: '11px', padding: '3px 0' }}
-                          onClick={() => setDayDlFmt(val)}>
-                          {label}
-                        </button>
-                      ))}
+                  <div style={{
+                    position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 200,
+                    background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '8px',
+                    padding: '12px 14px', minWidth: '220px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.22)',
+                  }}>
+                    {/* Format toggle */}
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Format</div>
+                    <div style={{ display: 'flex', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border)', marginBottom: '6px' }}>
+                      {[['stacked', 'Stacked'], ['wide', 'Wide']].map(([val, label]) => {
+                        const isActive = dayDlFmt === val
+                        return (
+                          <button key={val} onClick={() => setDayDlFmt(val)} style={{
+                            flex: 1, border: 'none', outline: 'none', cursor: 'pointer',
+                            padding: '5px 0', fontSize: '12px', fontWeight: isActive ? 700 : 400,
+                            background: isActive ? 'var(--navy2)' : 'transparent',
+                            color: isActive ? '#fff' : 'var(--text)',
+                            transition: 'background 0.15s, color 0.15s',
+                          }}>
+                            {label}
+                          </button>
+                        )
+                      })}
                     </div>
-                    <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '8px' }}>
+                    <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '12px', lineHeight: 1.4 }}>
                       {dayDlFmt === 'stacked'
                         ? 'One row per (store, date) — Date | Actual | Reindexed | Diff'
-                        : 'One row per store — each date expands to Actual, Reindexed, Diff columns'}
+                        : 'One row per store — each date expands to Actual, Reindexed, Diff'}
                     </div>
                     {/* Month picker */}
-                    <div style={{ fontWeight: 600, fontSize: '11px', marginBottom: '5px' }}>Months to export</div>
-                    {monthCols.map(m => (
-                      <label key={m} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer', padding: '2px 0' }}>
-                        <input type="checkbox"
-                          checked={effectiveSel.has(m)}
-                          onChange={() => setDayDlSel(prev => {
-                            const s = new Set(prev || activeMonths)
-                            s.has(m) ? s.delete(m) : s.add(m)
-                            return s
-                          })} />
-                        {m}
-                      </label>
-                    ))}
-                    <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
-                      <button onClick={() => downloadStoreDayComp(effectiveSel, dayDlFmt)} disabled={!effectiveSel.size}>Download</button>
-                      <button onClick={() => setShowDayDlMenu(false)}>Cancel</button>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Months to export</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 8px', marginBottom: '10px' }}>
+                      {monthCols.map(m => (
+                        <label key={m} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', cursor: 'pointer', padding: '2px 0' }}>
+                          <input type="checkbox"
+                            checked={effectiveSel.has(m)}
+                            onChange={() => setDayDlSel(prev => {
+                              const s = new Set(prev || activeMonths)
+                              s.has(m) ? s.delete(m) : s.add(m)
+                              return s
+                            })} />
+                          {m}
+                        </label>
+                      ))}
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button className="btn" style={{ flex: 1 }}
+                        onClick={() => downloadStoreDayComp(effectiveSel, dayDlFmt)}
+                        disabled={!effectiveSel.size}>
+                        Download
+                      </button>
+                      <button style={{ padding: '4px 10px' }} onClick={() => setShowDayDlMenu(false)}>Cancel</button>
                     </div>
                   </div>
                 )}
