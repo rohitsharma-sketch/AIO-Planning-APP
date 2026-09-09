@@ -79,6 +79,9 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
   // too large to produce without knowing which months the planner actually wants.
   const [showDayDlMenu, setShowDayDlMenu] = useState(false)
   const [dayDlSel, setDayDlSel] = useState(null)
+  // 'stacked' = two rows per store (Actual / Reindexed); 'wide' = one row per
+  // store with paired date-columns ({date} Actual, {date} Reindexed, {date} Diff)
+  const [dayDlFmt, setDayDlFmt] = useState('stacked')
 
   useEffect(() => {
     let alive = true
@@ -390,20 +393,40 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
     ], `${fileStem}_store_month_comparison.csv`)
   }
 
-  function downloadStoreDayComp(dlMonths) {
+  function downloadStoreDayComp(dlMonths, fmt) {
     if (!storeDayComp) return
     const dlCols = visibleColumns.filter(c => dlMonths.has(c.slice(0, 7)))
     const { rows, grandActualMMDD, grandRxDate } = storeDayComp
-    const hdr = ['Cluster', ...kfHeaders, 'Type', ...dlCols]
-    const csvRows = [hdr]
-    for (const { meta, actualByMMDD, rxByDate } of rows) {
-      const cluster = clusterOf(meta.store)
-      csvRows.push([cluster, ...keyFields.map(f => meta[f]), 'Actual',     ...dlCols.map(c => round2(actualByMMDD[c.slice(5)]))])
-      csvRows.push([cluster, ...keyFields.map(f => meta[f]), 'Reindexed',  ...dlCols.map(c => round2(rxByDate[c]))])
+    let csvRows
+    if (fmt === 'wide') {
+      // One row per store; each date = three columns: Actual, Reindexed, Diff
+      const hdr = ['Cluster', ...kfHeaders, ...dlCols.flatMap(c => [`${c} Actual`, `${c} Reindexed`, `${c} Diff`])]
+      csvRows = [hdr]
+      for (const { meta, actualByMMDD, rxByDate } of rows) {
+        const cluster = clusterOf(meta.store)
+        csvRows.push([cluster, ...keyFields.map(f => meta[f]), ...dlCols.flatMap(c => {
+          const a = actualByMMDD[c.slice(5)] ?? null, r = rxByDate[c] ?? null
+          return [round2(a), round2(r), (a != null && r != null) ? round2(r - a) : '']
+        })])
+      }
+      const ga = dlCols.flatMap(c => {
+        const a = grandActualMMDD[c.slice(5)] || 0, r = grandRxDate[c] || 0
+        return [round2(a), round2(r), round2(r - a)]
+      })
+      csvRows.push(['', ...keyFields.map((_, i) => i === 0 ? 'Grand Total' : ''), ...ga])
+    } else {
+      // Stacked: two rows per store (Actual then Reindexed)
+      const hdr = ['Cluster', ...kfHeaders, 'Type', ...dlCols]
+      csvRows = [hdr]
+      for (const { meta, actualByMMDD, rxByDate } of rows) {
+        const cluster = clusterOf(meta.store)
+        csvRows.push([cluster, ...keyFields.map(f => meta[f]), 'Actual',    ...dlCols.map(c => round2(actualByMMDD[c.slice(5)]))])
+        csvRows.push([cluster, ...keyFields.map(f => meta[f]), 'Reindexed', ...dlCols.map(c => round2(rxByDate[c]))])
+      }
+      csvRows.push(['', ...keyFields.map((_, i) => i === 0 ? 'Grand Total' : ''), 'Actual',    ...dlCols.map(c => round2(grandActualMMDD[c.slice(5)]))])
+      csvRows.push(['', ...keyFields.map((_, i) => i === 0 ? '' : ''),            'Reindexed', ...dlCols.map(c => round2(grandRxDate[c]))])
     }
-    csvRows.push(['', ...keyFields.map((_, i) => i === 0 ? 'Grand Total' : ''), 'Actual',    ...dlCols.map(c => round2(grandActualMMDD[c.slice(5)]))])
-    csvRows.push(['', ...keyFields.map((_, i) => i === 0 ? '' : ''),           'Reindexed', ...dlCols.map(c => round2(grandRxDate[c]))])
-    downloadCsv(csvRows, `${fileStem}_day_comparison.csv`)
+    downloadCsv(csvRows, `${fileStem}_day_comparison_${fmt}.csv`)
     setShowDayDlMenu(false)
   }
 
@@ -959,8 +982,26 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                 {showDayDlMenu && (
                   <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 120,
                     background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '6px',
-                    padding: '10px 12px', minWidth: '180px', boxShadow: '0 4px 16px rgba(0,0,0,0.18)' }}>
-                    <div style={{ fontWeight: 600, fontSize: '11px', marginBottom: '6px' }}>Months to export</div>
+                    padding: '10px 12px', minWidth: '210px', boxShadow: '0 4px 16px rgba(0,0,0,0.18)' }}>
+                    {/* Format picker */}
+                    <div style={{ fontWeight: 600, fontSize: '11px', marginBottom: '5px' }}>Format</div>
+                    <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+                      {[['stacked', 'Stacked'], ['wide', 'Wide']].map(([val, label]) => (
+                        <button key={val}
+                          className={dayDlFmt === val ? 'active' : ''}
+                          style={{ flex: 1, fontSize: '11px', padding: '3px 0' }}
+                          onClick={() => setDayDlFmt(val)}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '8px' }}>
+                      {dayDlFmt === 'stacked'
+                        ? 'Two rows per store: Actual row then Reindexed row'
+                        : 'One row per store; each date → Actual, Reindexed, Diff columns'}
+                    </div>
+                    {/* Month picker */}
+                    <div style={{ fontWeight: 600, fontSize: '11px', marginBottom: '5px' }}>Months to export</div>
                     {monthCols.map(m => (
                       <label key={m} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer', padding: '2px 0' }}>
                         <input type="checkbox"
@@ -974,7 +1015,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                       </label>
                     ))}
                     <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
-                      <button onClick={() => downloadStoreDayComp(effectiveSel)} disabled={!effectiveSel.size}>Download</button>
+                      <button onClick={() => downloadStoreDayComp(effectiveSel, dayDlFmt)} disabled={!effectiveSel.size}>Download</button>
                       <button onClick={() => setShowDayDlMenu(false)}>Cancel</button>
                     </div>
                   </div>
