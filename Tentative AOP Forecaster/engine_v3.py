@@ -63,7 +63,8 @@ LFL_TAGS  = {"032 - Stores","080 - Stores","095 - Stores","125 - Stores","3 - St
              "FY26 - Q1","FY26 - Q2","FY26 - Q3",
              "LFL","lfl"}                                    # simple labels from DB-backed flow
 RAMP_TAGS = {"FY26 - Q4","FY27 - Q1","FY27 - Q2",
-             "Ramp","RAMP","ramp"}                           # simple labels from DB-backed flow
+             "Ramp","RAMP","ramp",
+             "10 NSO"}                                       # '10 NSO' = 10th-batch upcoming stores (DB tag: 'Ramp')
 NSO_TAGS  = {"NSO","MAMJ-NSO"}   # 750L ramp formula
 
 # Q1's base sales (Apr'27/May'27/Jun'27 forecast columns, i.e. the Apr'26/

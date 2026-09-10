@@ -27,7 +27,7 @@ const STORE_TAGS = [
 
 // Tag → colour sets covering both vintage DB values and simple CSV labels
 const LFL_TAG_SET  = new Set(['LFL','032 - Stores','080 - Stores','095 - Stores','125 - Stores','3 - Stores','FY26 - Q1','FY26 - Q2','FY26 - Q3'])
-const RAMP_TAG_SET = new Set(['Ramp','RAMP','ramp','FY26 - Q4','FY27 - Q1','FY27 - Q2'])
+const RAMP_TAG_SET = new Set(['Ramp','RAMP','ramp','FY26 - Q4','FY27 - Q1','FY27 - Q2','10 NSO'])
 const NSO_TAG_SET  = new Set(['NSO','MAMJ-NSO'])
 
 const csvField = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`

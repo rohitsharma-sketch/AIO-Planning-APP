@@ -17,6 +17,11 @@
   background: var(--white);
 }
 
+.cfg-sync.warn {
+  border-color: #fbbf24;
+  background: color-mix(in srgb, #fbbf24 6%, var(--white));
+}
+
 .cfg-sync-main {
   display: flex;
   align-items: center;
@@ -37,6 +42,11 @@
 .cfg-sync.off .cfg-sync-dot {
   background: var(--muted);
   box-shadow: 0 0 0 3px rgba(107,122,153,0.12);
+}
+
+.cfg-sync.warn .cfg-sync-dot {
+  background: #d97706;
+  box-shadow: 0 0 0 3px rgba(217,119,6,0.18);
 }
 
 .cfg-sync-text {

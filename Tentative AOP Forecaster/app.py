@@ -330,11 +330,30 @@ def db_sync_status():
         if not latest_ids:
             return {"runs": []}
         runs = session.execute(select(SyncRun).where(SyncRun.sync_run_id.in_(latest_ids))).scalars().all()
+
+        # For offline runs, also fetch the last successful run timestamp so the UI
+        # can show "last synced X ago" even when the most recent attempt was offline.
+        offline_keys = [r.source_key for r in runs if r.status == "offline"]
+        last_success = {}
+        if offline_keys:
+            success_ids = session.execute(
+                select(func.max(SyncRun.sync_run_id))
+                .where(SyncRun.source_key.in_(offline_keys), SyncRun.status == "success")
+                .group_by(SyncRun.source_key)
+            ).scalars().all()
+            if success_ids:
+                success_runs = session.execute(
+                    select(SyncRun).where(SyncRun.sync_run_id.in_(success_ids))
+                ).scalars().all()
+                last_success = {r.source_key: r.completed_at.isoformat() if r.completed_at else None
+                                for r in success_runs}
+
         return {"runs": [
             {"source_key": r.source_key, "status": r.status, "started_at": r.started_at.isoformat(),
              "completed_at": r.completed_at.isoformat() if r.completed_at else None,
              "rows_read": r.rows_read, "rows_updated": r.rows_updated, "rows_added": r.rows_added,
-             "error_message": r.error_message, "detail": r.detail}
+             "error_message": r.error_message, "detail": r.detail,
+             "last_success_at": last_success.get(r.source_key)}
             for r in sorted(runs, key=lambda r: r.source_key)
         ]}
 

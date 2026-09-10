@@ -46,11 +46,29 @@ export default function DbSyncPanel({ onSynced }) {
     finally { setBusy(false) }
   }
 
-  const anyFailed = runs?.some(r => r.status === 'failed')
+  const anyFailed  = runs?.some(r => r.status === 'failed')
+  const anyOffline = runs?.some(r => r.status === 'offline')
   const lastAt = runs?.length ? runs.map(r => r.completed_at || r.started_at).sort().at(-1) : null
 
+  const statusClass = anyFailed ? ' off' : anyOffline ? ' warn' : ''
+
+  function rowLabel(r) {
+    if (r.status === 'success')  return 'OK'
+    if (r.status === 'failed')   return 'Failed'
+    if (r.status === 'offline')  return 'Offline'
+    return '…'
+  }
+  function rowHint(r) {
+    if (r.status === 'failed')  return r.error_message
+    if (r.status === 'offline') {
+      const lastOk = r.last_success_at ? `Last synced ${fmtStamp(r.last_success_at)}` : 'Never successfully synced'
+      return `Source machine offline — data still valid. ${lastOk}`
+    }
+    return `${r.rows_updated ?? r.rows_read ?? 0} rows · ${fmtStamp(r.completed_at || r.started_at)}`
+  }
+
   return (
-    <div className={`cfg-sync${anyFailed ? ' off' : ''}`}>
+    <div className={`cfg-sync${statusClass}`}>
       <div className="cfg-sync-main">
         <span className="cfg-sync-dot" />
         <div className="cfg-sync-text">
@@ -58,7 +76,8 @@ export default function DbSyncPanel({ onSynced }) {
           <span className="cfg-sync-sub">
             {!runs ? 'Checking…'
               : !runs.length ? 'Never synced into Postgres yet.'
-              : anyFailed ? 'Last sync had failures — see Details.'
+              : anyFailed  ? 'Last sync had failures — see Details.'
+              : anyOffline ? 'Some sources were offline — existing data still active.'
               : <>All {runs.length} sources synced · last {fmtStamp(lastAt)}</>}
           </span>
         </div>
@@ -72,10 +91,10 @@ export default function DbSyncPanel({ onSynced }) {
         <div className="cfg-sync-details">
           {runs.map(r => (
             <div key={r.source_key} className="cfg-sync-row" style={{ justifyContent: 'space-between' }}>
-              <span>{r.status === 'success' ? 'OK' : r.status === 'failed' ? 'Failed' : '…'} {DB_SYNC_LABELS[r.source_key] || r.source_key}</span>
-              <span className="cfg-sync-hint">
-                {r.status === 'failed' ? r.error_message : `${r.rows_updated ?? r.rows_read ?? 0} rows · ${fmtStamp(r.completed_at || r.started_at)}`}
+              <span style={r.status === 'offline' ? { color: 'var(--amber, #d97706)' } : undefined}>
+                {rowLabel(r)} {DB_SYNC_LABELS[r.source_key] || r.source_key}
               </span>
+              <span className="cfg-sync-hint">{rowHint(r)}</span>
             </div>
           ))}
         </div>
