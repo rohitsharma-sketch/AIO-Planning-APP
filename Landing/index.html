@@ -341,6 +341,17 @@
   }
   .sync-modal-close:hover { color: var(--text); background: rgba(255,255,255,0.08); }
   .sync-modal .sync-section:first-of-type { margin-top: 18px; }
+  .sync-section-title {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .sync-now-btn {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
+    padding: 3px 9px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.18);
+    background: rgba(255,255,255,0.07); color: var(--text-dim); cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .sync-now-btn:hover:not(:disabled) { background: rgba(255,255,255,0.14); color: var(--text); border-color: rgba(255,255,255,0.32); }
+  .sync-now-btn:disabled { opacity: 0.45; cursor: default; }
   footer {
     margin-top: 56px;
     font-size: 12px;
@@ -434,7 +445,10 @@
       </div>
 
       <div class="sync-section">
-        <div class="sync-section-title">Extraction — Calendar Engine → Postgres</div>
+        <div class="sync-section-title">
+          <span>Extraction — Calendar Engine → Postgres</span>
+          <button class="sync-now-btn" id="sync-now-btn" type="button">Sync Now</button>
+        </div>
         <div class="sync-rows" id="extraction-rows"><div class="sync-row sync-loading">Checking…</div></div>
       </div>
 
@@ -482,6 +496,8 @@
     });
   }
   checkAllStatuses();
+  // Poll card statuses every 8 s so status dots reflect reality without a reload.
+  setInterval(checkAllStatuses, 8000);
 
   // Master Switch — one flip in either direction. If everything's currently
   // off (or mixed), a click starts whichever backend servers aren't already
@@ -628,7 +644,12 @@
     var card = document.getElementById('sync-card');
     var overlay = document.getElementById('sync-modal-overlay');
     var closeBtn = document.getElementById('sync-modal-close');
-    function open() { overlay.classList.add('open'); closeBtn.focus(); }
+    function open() {
+      overlay.classList.add('open'); closeBtn.focus();
+      // Refresh both sections every time the modal opens — never show stale data.
+      loadExtractionStatus();
+      checkPlanCycleFlow();
+    }
     function close() { overlay.classList.remove('open'); card.focus(); }
     card.addEventListener('click', open);
     card.addEventListener('keydown', function (e) {
@@ -647,7 +668,10 @@
   // reflecting whatever was true at the moment the page first loaded.
   function loadExtractionStatus() {
     return fetch('/api/config/db-sync/status', { cache: 'no-store' })
-    .then(function (r) { return r.json(); })
+    .then(function (r) {
+      if (!r.ok) throw new Error('http_' + r.status);
+      return r.json();
+    })
     .then(function (data) {
       var el = document.getElementById('extraction-rows');
       var runs = data.runs || [];
@@ -660,12 +684,17 @@
         '</div>';
       }).join('');
     })
-    .catch(function () {
-      document.getElementById('extraction-rows').innerHTML = '<div class="sync-error">AOP Forecaster (' + H + ':8000) unreachable.</div>';
+    .catch(function (e) {
+      var msg = (e && e.message && e.message.startsWith('http_'))
+        ? 'Sync service error (' + e.message.slice(5) + ') — try Sync Now'
+        : 'AOP Forecaster (' + H + ':8000) unreachable.';
+      document.getElementById('extraction-rows').innerHTML = '<div class="sync-error">' + msg + '</div>';
     })
     .then(function () { updateSyncSummary('extraction'); });
   }
   loadExtractionStatus();
+  // Background refresh every 90 s so the tile summary dot stays current.
+  setInterval(loadExtractionStatus, 90000);
 
   // Inter-module flow status — live plan-cycle stage, polled straight from
   // the unified :8010 platform (cross-origin, with session credentials) so
@@ -725,6 +754,24 @@
   }
   checkPlanCycleFlow();
   setInterval(checkPlanCycleFlow, 10000); // live - reflects new transitions without a manual reload
+
+  // Sync Now button — triggers a fresh data-lake sync and reloads the extraction rows.
+  (function () {
+    var btn = document.getElementById('sync-now-btn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      btn.textContent = 'Syncing…';
+      document.getElementById('extraction-rows').innerHTML = '<div class="sync-loading">Syncing data lake…</div>';
+      fetch('/api/config/db-sync', { method: 'POST' })
+        .then(function () { return loadExtractionStatus(); })
+        .then(function () { btn.textContent = 'Sync Now'; btn.disabled = false; })
+        .catch(function () {
+          document.getElementById('extraction-rows').innerHTML = '<div class="sync-error">Sync failed — AOP Forecaster unreachable.</div>';
+          btn.textContent = 'Sync Now'; btn.disabled = false;
+        });
+    });
+  })();
 
   // Drag-and-drop card reordering — a personal browser preference, persisted
   // to localStorage only (not synced anywhere else). Isolated in its own
