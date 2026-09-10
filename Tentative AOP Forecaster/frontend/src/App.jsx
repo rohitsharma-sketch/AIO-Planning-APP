@@ -202,42 +202,16 @@ export default function App() {
   }
 
   // Resume a saved plan version from the landing page — always lands on Results (step 3).
-  // Priority chain:
-  //   1. GET /api/results/{old_id}       — cached results still on server
-  //   2. POST /api/run/{old_id}          — session files still exist, just re-run
-  //   3. POST /api/config/session-from-db + run — server was restarted; create fresh session
-  async function handleResumeSaved(sessionId) {
-    if (!sessionId) return
+  // Always creates a FRESH session from the current DB so base values reflect
+  // clean actuals regardless of when the original session was created. Old
+  // session files are intentionally bypassed because their inputs.xlsx was
+  // snapshotted at creation time and may contain stale actuals.
+  async function handleResumeSaved(_sessionId) {
     setError(null)
     setShowLanding(false)
     setRunning(true)
     try {
-      // 1. Cached results?
-      const r = await fetch(apiUrl(`/api/results/${sessionId}`))
-      if (r.ok) {
-        const data = await r.json()
-        setSession({ session_id: sessionId, from_db: true })
-        setResults(data)
-        setStep(2)
-        return
-      }
-
-      // 2. Re-run stale session
-      const runRes = await fetch(apiUrl(`/api/run/${sessionId}`), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ palette: 'classic' }),
-      })
-      if (runRes.ok) {
-        const data = await runRes.json()
-        setSession({ session_id: sessionId, from_db: true })
-        setResults(data)
-        setRunKey(k => k + 1)
-        setStep(2)
-        return
-      }
-
-      // 3. Server restarted — create a fresh DB session and run it
+      // Always build a fresh session from current DB actuals + planning_inputs rates.
       const sessionRes = await fetch(apiUrl('/api/config/session-from-db'), { method: 'POST' })
       if (!sessionRes.ok) {
         const err = await sessionRes.json()
@@ -254,7 +228,7 @@ export default function App() {
         throw new Error(typeof err.detail === 'string' ? err.detail : 'Engine run failed')
       }
       const data = await freshRun.json()
-      // Update version log so future loads use the fresh session_id
+      // Update version log to point at the new session so future loads stay fresh
       if (rates) savePlanVersion(newSession.session_id, rates, 'db')
       setSession({ ...newSession })
       setResults(data)
