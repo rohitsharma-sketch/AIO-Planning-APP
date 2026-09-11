@@ -4653,27 +4653,15 @@ function loadState(){
     const p=JSON.parse(localStorage.getItem('ck_otb_state')||'{}');
     if(p.inputs)S.inputs=p.inputs;
     if(p.selM)S.selM=new Set(p.selM);
-    if(p.aop)S.aop=p.aop;
-    if(p.aopLocked!=null)S.aopLocked=p.aopLocked;
+    // S.aop / S.aopLocked / S.aopSeeds are NOT restored from localStorage —
+    // they are always overwritten by fresh data from the AOP Forecaster API on startup
     if(p.aopUnit)S.aopUnit=p.aopUnit;
     if(p.locked)S.locked=new Set(p.locked);
-    if(p.aopSeeds)S.aopSeeds=p.aopSeeds;
     if(p.divTab!=null)S.divTab=p.divTab;
     if(p.hiddenSecs)S.hiddenSecs=new Set(p.hiddenSecs);
     if(p.manualInactive)S.manualInactive=new Set(p.manualInactive);
     if(p.customDepts)S.customDepts=p.customDepts;
     _applyCustomDepts();
-    // Fresh load (no saved state): auto-apply embedded AOP so plan starts correctly
-    if(!S.aopLocked&&Object.keys(S.inputs).length===0){
-      S.aop=JSON.parse(JSON.stringify(DEFAULT_AOP));
-      S.aopLocked=true;
-    }
-    // Always re-derive selM from AOP data when locked
-    if(S.aopLocked){
-      const aopMonths=new Set();
-      ['mens','ladies','kids'].forEach(id=>{for(let mi=0;mi<12;mi++){if((S.aop[id]?.[mi]||0)>0)aopMonths.add(mi);}});
-      if(aopMonths.size>0)S.selM=aopMonths;
-    }
   }catch(e){}
 }
 function exportCSV(){
@@ -5096,21 +5084,10 @@ _loadNavOrder();
 _buildPaletteSwatches();
 _initNavDnD();
 loadSyncCache();
-// Pre-fetch AOP targets from Forecaster into cache (silent, no UI side-effects)
-fetchAopTargets().catch(()=>{});
-// Auto-seed plan from AOP on first run (inputs empty = genuinely fresh load)
-if(S.aopLocked&&Object.keys(S.inputs).length===0){
-  DVDATA.forEach(dv=>{
-    for(let mi=0;mi<12;mi++){
-      const aopCr=S.aop[dv.id]?.[mi];
-      if(aopCr==null||aopCr<=0)continue;
-      const divLYMon=DEPT_ACTUAL_LY?.[dv.id]?.[mi]??dv.secs.reduce((a,sec)=>a+monLY(sec.ly,mi,sec.lyMo),0);
-      if(!divLYMon)continue;
-      const gr=parseFloat(((aopCr/divLYMon-1)*100).toFixed(1));
-      dv.secs.filter(s=>!S.hiddenSecs.has(s.id)).forEach(sec=>{const k=sec.id+'__'+mi;S.inputs[k]=gr;S.aopSeeds[k]=gr;});
-    }
-  });
-}
+// Fetch live AOP targets from Forecaster and auto-apply — always overrides stale state
+fetchAopTargets().then(()=>{
+  if(_aopCache&&_aopCache.targets)_autoApplyAop();
+}).catch(()=>{});
 seedPlanDefaults(false);
 setTimeout(syncAopLockUI, 0); // fill any un-saved slots with division LFL YoY growth
 buildPills();
@@ -5286,6 +5263,40 @@ function syncFromAop(){
   toast('AOP synced from Forecaster ✓ ('+applied+' cells)');
 }
 function importAndLockAop(){syncFromAop();}
+
+// Silent version of syncFromAop() — called automatically on every page load.
+// Always applies all MAMJ months regardless of S.selM, never shows a toast.
+function _autoApplyAop(){
+  if(!_aopCache||!_aopCache.targets)return;
+  const t=_aopCache.targets;
+  const periodOf={11:202703,0:202704,1:202705,2:202706};
+  const mamjMIs=[11,0,1,2];
+  let applied=0;
+  S.aop={mens:{},ladies:{},kids:{}};
+  AOP_DIVS.forEach(dv=>{
+    const divKey=dv.id.toUpperCase();
+    const divData=t[divKey];
+    if(!divData)return;
+    mamjMIs.forEach(mi=>{
+      const lkh=divData[periodOf[mi]];
+      if(lkh==null||lkh<=0)return;
+      if(!S.aop[dv.id])S.aop[dv.id]={};
+      S.aop[dv.id][mi]=lkh/100; // Rs Lakhs → Rs Crore
+      applied++;
+    });
+  });
+  if(!applied)return;
+  S.aopLocked=true;
+  const aopMonths=new Set();
+  AOP_DIVS.forEach(d=>{for(let mi=0;mi<12;mi++){if((S.aop[d.id]?.[mi]||0)>0)aopMonths.add(mi);}});
+  if(aopMonths.size>0)S.selM=aopMonths;
+  saveState();
+  seedPlanFromAop();
+  syncAopLockUI();
+  syncAopLockStatus();
+  buildPills();
+  refresh();
+}
 function clearAop(){
   if(S.aopLocked&&!confirm('AOP is locked. Clear and unlock it?'))return;
   S.aop={mens:{},ladies:{},kids:{}};
