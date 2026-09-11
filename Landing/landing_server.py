@@ -189,10 +189,30 @@ class Handler(SimpleHTTPRequestHandler):
         except Exception as e:
             self.send_error(502, f'Proxy error: {e}')
 
+    # Internal backend origins that must never appear in a response sent to the
+    # browser — any absolute URL pointing at these would break a remote client
+    # (another machine) because its browser would follow the redirect to its own
+    # localhost, where nothing is listening.
+    _BACKEND_ORIGINS = [
+        'http://127.0.0.1:8010', 'http://localhost:8010',
+        'http://127.0.0.1:5050', 'http://localhost:5050',
+        'http://127.0.0.1:8000', 'http://localhost:8000',
+    ]
+
+    def _rewrite_location(self, value):
+        """Replace an internal backend origin with the public Landing origin."""
+        public = 'http://' + self.headers.get('Host', f'localhost:{PORT}')
+        for origin in self._BACKEND_ORIGINS:
+            if value.startswith(origin):
+                return public + value[len(origin):]
+        return value
+
     def _send_proxy_response(self, status, headers, body):
         self.send_response(status)
         for k, v in headers.items():
             if k.lower() not in _SKIP_RESP_HEADERS:
+                if k.lower() == 'location':
+                    v = self._rewrite_location(v)
                 self.send_header(k, v)
         self.send_header('Content-Length', str(len(body)))
         # Bypass the no-cache injection — sub-apps control their own caching.
