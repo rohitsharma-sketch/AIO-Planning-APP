@@ -299,21 +299,27 @@ DB_SYNC_JOBS = [
 
 @router.post("/api/config/db-sync")
 def db_sync_all():
-    """Runs every data-lake sync job into Postgres (rs_planning). Each job
-    manages its own DB session and logs to sync.sync_runs regardless of how
-    it's invoked. The import is inside the try/except so one missing/broken
-    module can't abort the rest of the loop."""
-    import importlib
-
-    results = {}
-    for module_name, source_key in DB_SYNC_JOBS:
-        try:
-            mod = importlib.import_module(f"sync.{module_name}_sync")
-            mod.run()
-            results[source_key] = {"ok": True}
-        except Exception as e:
-            results[source_key] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
-    return {"results": results}
+    """Spawns sync/run_all.py as a detached subprocess and returns immediately.
+    Running the sync in-process blocked uvicorn's request thread for 2+ minutes
+    (store_actuals reads a large parquet file) making the server appear hung.
+    Progress is logged to sync.sync_runs — poll GET /api/config/db-sync/status."""
+    import subprocess
+    import sys
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sync", "run_all.py")
+    # DETACHED_PROCESS + CREATE_NO_WINDOW on Windows: subprocess runs without
+    # inheriting our console and doesn't die when uvicorn restarts.
+    kwargs: dict = {}
+    if os.name == "nt":
+        kwargs["creationflags"] = 0x00000008 | 0x08000000  # DETACHED_PROCESS | CREATE_NO_WINDOW
+    else:
+        kwargs["start_new_session"] = True
+    subprocess.Popen(
+        [sys.executable, script],
+        cwd=os.path.dirname(os.path.abspath(__file__)),
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        **kwargs,
+    )
+    return {"status": "started", "message": "Sync running in background — poll /api/config/db-sync/status for progress"}
 
 
 @router.get("/api/config/db-sync/status")
