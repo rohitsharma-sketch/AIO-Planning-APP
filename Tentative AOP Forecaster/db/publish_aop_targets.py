@@ -1,7 +1,10 @@
 """
 After every AOP forecast run, publish MENS/LADIES/KIDS MAMJ (Mar–Jun'27)
-division-level totals to planning_inputs.input_values so the Buyer's Input
-Sheet can auto-populate its AOP targets without any manual import.
+LFL-only division-level totals to planning_inputs.input_values so the
+Buyer's Input Sheet can auto-populate its AOP targets.
+
+Only LFL stores are included — BIS LY actuals are also LFL-only (148
+stores), so comparing AOP vs LY in BIS is apples-to-apples.
 
 Keying convention (avoids FK issues on masterdata.divisions):
   lever_key  = 'aop_division_target'
@@ -23,9 +26,17 @@ MAMJ = {
     "Jun'27": 202706,
 }
 
+# Must match engine_v3.LFL_TAGS exactly so the published totals agree
+# with what the AOP Results dashboard shows as the LfL sub-total.
+LFL_TAGS = {
+    "032 - Stores", "080 - Stores", "095 - Stores", "125 - Stores",
+    "3 - Stores", "FY26 - Q1", "FY26 - Q2", "FY26 - Q3",
+    "LFL", "lfl",
+}
+
 
 def publish_aop_targets(session, detail_records: list[dict]) -> None:
-    """Upsert MENS/LADIES/KIDS × MAMJ forecast totals to planning_inputs.input_values.
+    """Upsert MENS/LADIES/KIDS × MAMJ LFL forecast totals to planning_inputs.input_values.
     Idempotent: safe to call after every run."""
     # Ensure the lever definition row exists (FK parent for input_values.lever_key)
     session.execute(text("""
@@ -34,9 +45,11 @@ def publish_aop_targets(session, detail_records: list[dict]) -> None:
         ON CONFLICT (lever_key) DO NOTHING
     """), {"k": LEVER_KEY})
 
-    # Aggregate forecast totals: {(row_key, period_id): total_lakhs}
+    # Aggregate LFL-only forecast totals: {(row_key, period_id): total_lakhs}
     totals: dict[tuple[str, int], float] = {}
     for rec in detail_records:
+        if rec.get("Tag") not in LFL_TAGS:
+            continue  # skip NSO and Ramp stores
         div = (rec.get("Division") or "").strip().upper()
         if div not in PUBLISH_DIVS:
             continue
