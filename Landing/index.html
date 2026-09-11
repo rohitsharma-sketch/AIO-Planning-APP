@@ -27,11 +27,7 @@
     min-height: 100vh;
     font-family: 'Inter', -apple-system, "Segoe UI", sans-serif;
     -webkit-font-smoothing: antialiased;
-    background:
-      radial-gradient(ellipse 1400px 700px at 15% -5%, rgba(16,100,204,0.40), transparent),
-      radial-gradient(ellipse 1000px 600px at 95% 5%, rgba(3,21,112,0.38), transparent),
-      radial-gradient(ellipse 800px 500px at 50% 100%, rgba(8,20,50,0.6), transparent),
-      var(--bg);
+    background: linear-gradient(160deg, #0d1628 0%, #080f1e 55%);
     color: var(--text);
     display: flex;
     flex-direction: column;
@@ -59,19 +55,14 @@
     height: 6px;
     border-radius: 50%;
     background: var(--up);
-    box-shadow: 0 0 6px rgba(34,197,94,0.6);
     display: inline-block;
-    animation: pulse-up 2.5s ease-in-out infinite;
   }
   header h1 {
     margin: 0;
-    font-size: 38px;
-    font-weight: 800;
+    font-size: 32px;
+    font-weight: 700;
     letter-spacing: -0.02em;
-    background: linear-gradient(120deg, #ffffff 0%, #c4dcff 45%, #8fc8ff 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    color: var(--text);
     line-height: 1.15;
   }
   header p {
@@ -81,11 +72,23 @@
     font-weight: 400;
     letter-spacing: -0.005em;
   }
-  .master-card { cursor: default; }
-  .master-controls {
-    margin-top: 14px;
-    border-top: 1px solid var(--card-border);
-    padding-top: 14px;
+  /* ── Corner Master Switch ── */
+  .corner-switch {
+    position: fixed;
+    top: 20px;
+    right: 24px;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 5px;
+  }
+  .corner-msg {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: right;
+    max-width: 200px;
+    line-height: 1.4;
   }
   .breaker {
     display: inline-flex;
@@ -130,13 +133,6 @@
     color: var(--text);
     white-space: nowrap;
   }
-  .master-msg {
-    margin-top: 10px;
-    font-size: 12px;
-    color: var(--text-dim);
-    min-height: 1.2em;
-    line-height: 1.5;
-  }
   .grid {
     display: grid;
     /* Narrower cards + a wider cap than the old 3-up layout: with the flow
@@ -157,30 +153,26 @@
     color: inherit;
     background: var(--card-bg);
     border: 1px solid var(--card-border);
-    border-radius: 18px;
-    padding: 22px 20px 18px;
-    backdrop-filter: blur(12px) saturate(1.5);
-    -webkit-backdrop-filter: blur(12px) saturate(1.5);
-    transition: transform .2s ease, border-color .2s ease, background .2s ease, box-shadow .2s ease;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.03) inset;
+    border-radius: 14px;
+    padding: 20px 18px 16px;
+    transition: transform .18s ease, border-color .18s ease, background .18s ease;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.25);
   }
   a.card:hover {
-    transform: translateY(-5px);
+    transform: translateY(-3px);
     border-color: var(--card-border-hover);
-    background: rgba(255,255,255,0.09);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06) inset;
+    background: rgba(255,255,255,0.08);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
   }
-  .card { cursor: grab; }
-  .card:active { cursor: grabbing; }
+  .card { cursor: default; }
   .card-icon {
-    width: 42px; height: 42px;
-    border-radius: 12px;
+    width: 38px; height: 38px;
+    border-radius: 10px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 20px;
-    margin-bottom: 14px;
-    background: linear-gradient(145deg, rgba(16,100,204,0.6), rgba(3,21,112,0.8));
-    border: 1px solid rgba(255,255,255,0.14);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    font-size: 18px;
+    margin-bottom: 12px;
+    background: rgba(16,100,204,0.25);
+    border: 1px solid rgba(255,255,255,0.1);
   }
   .card h2 {
     margin: 0 0 6px;
@@ -209,43 +201,28 @@
   .dot {
     width: 7px; height: 7px; border-radius: 50%;
     background: var(--checking);
-    box-shadow: 0 0 0 3px rgba(245,158,11,0.2);
-    animation: pulse-check 1.5s ease-in-out infinite;
+    flex-shrink: 0;
   }
-  .dot.up {
-    background: var(--up);
-    box-shadow: 0 0 0 3px rgba(34,197,94,0.2);
-    animation: pulse-up 2.5s ease-in-out infinite;
-  }
-  .dot.down { background: var(--down); box-shadow: 0 0 0 2px rgba(239,68,68,0.2); animation: none; }
+  .dot.up { background: var(--up); }
+  .dot.down { background: var(--down); }
   .status-label.up { color: var(--up); }
   .status-label.down { color: var(--down); }
   .status-label.checking { color: var(--checking); }
   .port { font-variant-numeric: tabular-nums; opacity: 0.65; font-size: 11px; }
 
-  @keyframes pulse-up {
-    0%, 100% { box-shadow: 0 0 0 3px rgba(34,197,94,0.2); }
-    50% { box-shadow: 0 0 0 5px rgba(34,197,94,0.08); }
-  }
-  @keyframes pulse-check {
-    0%, 100% { box-shadow: 0 0 0 3px rgba(245,158,11,0.25); }
-    50% { box-shadow: 0 0 0 5px rgba(245,158,11,0.08); }
-  }
   .sync-card {
     background: var(--card-bg);
     border: 1px solid var(--card-border);
-    border-radius: 18px;
-    padding: 22px 20px 18px;
-    backdrop-filter: blur(12px) saturate(1.5);
-    -webkit-backdrop-filter: blur(12px) saturate(1.5);
-    transition: transform .2s ease, border-color .2s ease, background .2s ease, box-shadow .2s ease;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.03) inset;
+    border-radius: 14px;
+    padding: 20px 18px 16px;
+    transition: transform .18s ease, border-color .18s ease, background .18s ease;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.25);
   }
   .sync-card:hover {
-    transform: translateY(-5px);
+    transform: translateY(-3px);
     border-color: var(--card-border-hover);
-    background: rgba(255,255,255,0.09);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.06) inset;
+    background: rgba(255,255,255,0.08);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
   }
   .sync-section + .sync-section { margin-top: 20px; }
   .sync-section-title {
@@ -371,6 +348,15 @@
 </style>
 </head>
 <body>
+  <!-- Master Switch — fixed top-right corner, non-intrusive -->
+  <div class="corner-switch">
+    <button id="launch-all-btn" class="breaker" type="button" title="Start or stop all planning servers">
+      <span class="breaker-track"><span class="breaker-knob"></span></span>
+      <span class="breaker-label">Servers</span>
+    </button>
+    <div id="launch-all-msg" class="corner-msg"></div>
+  </div>
+
   <header>
     <div class="brand">CityKart · RS Planning</div>
     <h1>Planning Modules</h1>
@@ -378,19 +364,6 @@
   </header>
 
   <div class="grid">
-    <div class="card master-card" id="master-card">
-      <div class="card-icon">⚡</div>
-      <h2>Master Switch</h2>
-      <p class="desc">Start or stop all planning servers in one click. Switching on also triggers a fresh data-lake sync automatically.</p>
-      <div class="master-controls">
-        <button id="launch-all-btn" class="breaker" type="button">
-          <span class="breaker-track"><span class="breaker-knob"></span></span>
-          <span class="breaker-label">All Servers</span>
-        </button>
-        <div id="launch-all-msg" class="master-msg"></div>
-      </div>
-    </div>
-
     <a class="card" href="/calendar/" target="_blank" data-check="/api/port-status/8010">
       <div class="card-icon">📅</div>
       <h2>Calendar</h2>
