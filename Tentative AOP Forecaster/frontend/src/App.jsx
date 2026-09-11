@@ -43,6 +43,7 @@ export default function App() {
 
   // Landing page: shown initially and after reset; bypassed when a session auto-resumes
   const [showLanding, setShowLanding] = useState(true)
+  const [saveMsg, setSaveMsg]         = useState(null)  // {text, ok} | null
   // Save-before-leave dialog state
   const [saveDialog, setSaveDialog]   = useState(null) // {action, rates} | null
 
@@ -190,13 +191,22 @@ export default function App() {
   // If no results yet (on Config step), runs the engine first.
   async function handleSaveVersion() {
     if (!session) return
+    let savedLabel = null
+    if (rates) {
+      try {
+        const isMajor = await savePlanVersion(session.session_id, rates, session.from_db ? 'db' : 'upload')
+        const versions = await loadPlanVersions()
+        savedLabel = versions[0]?.label || 'Plan saved'
+        setSaveMsg({ text: `✓ ${savedLabel}`, ok: true })
+        setTimeout(() => setSaveMsg(null), 3000)
+      } catch {
+        setSaveMsg({ text: 'Save failed — check console', ok: false })
+        setTimeout(() => setSaveMsg(null), 4000)
+      }
+    }
     if (results) {
-      // Already have results — just record the version and show Results
-      if (rates) await savePlanVersion(session.session_id, rates, session.from_db ? 'db' : 'upload')
       setStep(2)
     } else {
-      // On Config step — save + run → Results
-      if (rates) await savePlanVersion(session.session_id, rates, session.from_db ? 'db' : 'upload')
       await handleRun()
     }
   }
@@ -266,6 +276,11 @@ export default function App() {
             </nav>
           )}
           <div style={{display:'flex', alignItems:'center', gap:8, flexShrink:0}}>
+            {saveMsg && (
+              <span style={{fontSize:12, color: saveMsg.ok ? '#22c55e' : '#ef4444', fontWeight:500}}>
+                {saveMsg.text}
+              </span>
+            )}
             {!showLanding && session && (
               <button
                 className="btn-outline"

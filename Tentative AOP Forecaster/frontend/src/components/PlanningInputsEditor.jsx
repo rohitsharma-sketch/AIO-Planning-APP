@@ -10,7 +10,6 @@ const MONTHS = ["Apr'27", "May'27", "Jun'27", "Jul'27", "Aug'27", "Sep'27",
 const AOP_MONTHS = ["Mar'27", ...MONTHS]
 
 const TABS = [
-  { key: 'growth',  label: 'Growth %' },
   { key: 'nso',    label: 'NSO Opening Months' },
   { key: 'aop',    label: 'AOP Overrides' },
   { key: 'stores', label: 'Store Master' },
@@ -61,7 +60,7 @@ function downloadAopTemplate() {
 }
 
 export default function PlanningInputsEditor({ onBack, onContinue }) {
-  const [tab, setTab] = useState('growth')
+  const [tab, setTab] = useState('nso')
   const [continuing, setContinuing] = useState(false)
   const [continueErr, setContinueErr] = useState(null)
 
@@ -87,7 +86,7 @@ export default function PlanningInputsEditor({ onBack, onContinue }) {
         <div className="pie-head-left">
           <div className="pie-head-eyebrow">Configuration</div>
           <h1 className="pie-title">Planning Inputs</h1>
-          <p className="pie-sub">Growth %, NSO openings, AOP overrides, and Store Master — all written to Postgres and read by every forecast session.</p>
+          <p className="pie-sub">NSO openings, AOP overrides, and Store Master — all written to Postgres and read by every forecast session.</p>
         </div>
         <div className="pie-head-actions">
           {continueErr && <span className="pie-status err" style={{ maxWidth: 240 }}>{continueErr}</span>}
@@ -107,7 +106,6 @@ export default function PlanningInputsEditor({ onBack, onContinue }) {
         ))}
       </div>
 
-      {tab === 'growth'  && <GrowthTab />}
       {tab === 'nso'     && <NsoTab />}
       {tab === 'aop'     && <AopTab />}
       {tab === 'stores'  && (
