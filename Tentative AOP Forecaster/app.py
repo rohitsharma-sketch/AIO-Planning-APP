@@ -643,6 +643,74 @@ def run_division_totals(run_id: str):
         return {"run_id": run_id, "division_totals": _division_totals_for_run(session, run.run_id)}
 
 
+# ── Plan Version Log (cross-machine, persisted in DB) ────────────────────────
+# Versions were previously in localStorage — machine-local only. Storing them
+# here means every machine that reaches this server sees the same version list.
+
+_plan_versions_ready = False
+
+def _ensure_plan_versions_table():
+    global _plan_versions_ready
+    if _plan_versions_ready:
+        return
+    from sqlalchemy import text
+    from db.base import SessionLocal
+    with SessionLocal() as db:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS planning_inputs.plan_versions (
+                id TEXT PRIMARY KEY,
+                data JSONB NOT NULL,
+                last_modified_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """))
+        db.commit()
+    _plan_versions_ready = True
+
+
+@router.get("/api/plan-versions")
+def get_plan_versions():
+    _ensure_plan_versions_table()
+    from sqlalchemy import text
+    from db.base import SessionLocal
+    with SessionLocal() as db:
+        rows = db.execute(text(
+            "SELECT data FROM planning_inputs.plan_versions "
+            "ORDER BY last_modified_at DESC LIMIT 10"
+        )).fetchall()
+    return [row[0] for row in rows]
+
+
+@router.post("/api/plan-versions")
+def upsert_plan_version(body: dict = Body(...)):
+    _ensure_plan_versions_table()
+    if "id" not in body:
+        raise HTTPException(400, "id required")
+    from sqlalchemy import text
+    from db.base import SessionLocal
+    with SessionLocal() as db:
+        db.execute(text("""
+            INSERT INTO planning_inputs.plan_versions (id, data, last_modified_at)
+            VALUES (:id, :data::jsonb, NOW())
+            ON CONFLICT (id) DO UPDATE SET
+                data = :data::jsonb, last_modified_at = NOW()
+        """), {"id": body["id"], "data": json.dumps(body)})
+        db.commit()
+    return {"ok": True}
+
+
+@router.delete("/api/plan-versions/{version_id}")
+def delete_plan_version(version_id: str):
+    _ensure_plan_versions_table()
+    from sqlalchemy import text
+    from db.base import SessionLocal
+    with SessionLocal() as db:
+        db.execute(text(
+            "DELETE FROM planning_inputs.plan_versions WHERE id = :id"
+        ), {"id": version_id})
+        db.commit()
+    return {"ok": True}
+
+
 # Mount the extracted router onto this standalone app too — same routes,
 # same paths, as before the extraction. The unified platform (RS Planning
 # Platform/backend/app.py) imports `router` directly instead and mounts it

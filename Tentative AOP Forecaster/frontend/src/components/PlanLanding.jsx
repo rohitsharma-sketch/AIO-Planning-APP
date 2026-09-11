@@ -1,51 +1,62 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './PlanLanding.css'
+import { apiUrl } from '../lib/apiBase'
 
-// Plan version log is stored in localStorage under this key
-const PLAN_LOG_KEY = 'aop.autosave.plan_versions'
-const MAMJ_KEYS   = ["Mar'27","Apr'27","May'27","Jun'27"]
-const PLAN_DIVS   = ['MENS','LADIES','KIDS']
+// Version list lives in the DB — visible on every machine that shares the DB.
+// A fingerprint cache stays in localStorage for the sync isMajorChangeVsLog check.
+const PLAN_LOG_FP_KEY = 'aop.autosave.plan_fp'
+const MAMJ_KEYS       = ["Mar'27","Apr'27","May'27","Jun'27"]
+const PLAN_DIVS       = ['MENS','LADIES','KIDS']
 
-export function loadPlanVersions() {
-  try { return JSON.parse(localStorage.getItem(PLAN_LOG_KEY) || '[]') } catch { return [] }
+export async function loadPlanVersions() {
+  try {
+    const r = await fetch(apiUrl('/api/plan-versions'), { cache: 'no-store' })
+    if (!r.ok) throw new Error('api')
+    return await r.json()
+  } catch {
+    return []
+  }
 }
 
-export function savePlanVersion(sessionId, rates, baseSource, labelOverride = null) {
-  const versions = loadPlanVersions()
+export async function savePlanVersion(sessionId, rates, baseSource, labelOverride = null) {
+  const versions = await loadPlanVersions()
   const fp  = _fingerprint(rates)
   const now = new Date().toISOString()
 
   const existing = versions[0]
   const isMajor  = !existing || _isMajorChange(existing.fingerprint, fp)
 
+  let entry
   if (existing && !isMajor) {
-    // Minor change — just update the existing entry in place
-    existing.lastModifiedAt = now
-    existing.sessionId      = sessionId
-    existing.fingerprint    = fp
+    entry = { ...existing, sessionId, fingerprint: fp, lastModifiedAt: now }
   } else {
     const n = versions.length + 1
     const label = labelOverride ||
       `Version ${n} — ${new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })}`
-    versions.unshift({ id: crypto.randomUUID(), label, sessionId, baseSource, fingerprint: fp, createdAt: now, lastModifiedAt: now })
-    // Keep at most 10 versions
-    versions.splice(10)
+    entry = { id: crypto.randomUUID(), label, sessionId, baseSource, fingerprint: fp, createdAt: now, lastModifiedAt: now }
   }
-  try { localStorage.setItem(PLAN_LOG_KEY, JSON.stringify(versions)) } catch {}
+
+  await fetch(apiUrl('/api/plan-versions'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(entry),
+  }).catch(() => {})
+
+  try { localStorage.setItem(PLAN_LOG_FP_KEY, JSON.stringify(fp)) } catch {}
   return isMajor
 }
 
-export function deletePlanVersion(id) {
-  try {
-    const versions = loadPlanVersions().filter(v => v.id !== id)
-    localStorage.setItem(PLAN_LOG_KEY, JSON.stringify(versions))
-  } catch {}
+export async function deletePlanVersion(id) {
+  await fetch(apiUrl(`/api/plan-versions/${id}`), { method: 'DELETE' }).catch(() => {})
 }
 
 export function isMajorChangeVsLog(rates) {
-  const versions = loadPlanVersions()
-  if (!versions.length) return false
-  return _isMajorChange(versions[0].fingerprint, _fingerprint(rates))
+  // Sync — reads local fp cache only (used for save-before-leave dialog)
+  try {
+    const fp = JSON.parse(localStorage.getItem(PLAN_LOG_FP_KEY) || 'null')
+    if (!fp) return false
+    return _isMajorChange(fp, _fingerprint(rates))
+  } catch { return false }
 }
 
 function _fingerprint(rates) {
@@ -87,12 +98,16 @@ const THEMES = [
 
 export default function PlanLanding({ onNewPlan, onResume, theme, onThemeChange }) {
   const [showSaved, setShowSaved] = useState(false)
-  const [versionList, setVersionList] = useState(() => loadPlanVersions())
+  const [versionList, setVersionList] = useState([])
   const versions = versionList
 
-  function handleDelete(id) {
-    deletePlanVersion(id)
-    const updated = loadPlanVersions()
+  useEffect(() => {
+    loadPlanVersions().then(v => setVersionList(v))
+  }, [])
+
+  async function handleDelete(id) {
+    await deletePlanVersion(id)
+    const updated = await loadPlanVersions()
     setVersionList(updated)
     if (updated.length === 0) setShowSaved(false)
   }

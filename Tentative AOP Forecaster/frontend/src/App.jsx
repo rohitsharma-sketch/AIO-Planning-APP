@@ -147,7 +147,7 @@ export default function App() {
       setRunKey(k => k + 1)
       setStep(2)
       // Record this run in the plan version log (only if rates are ready)
-      if (rates) savePlanVersion(session.session_id, rates, session.from_db ? 'db' : 'upload')
+      if (rates) await savePlanVersion(session.session_id, rates, session.from_db ? 'db' : 'upload')
     } catch (e) {
       setError(e.message)
     } finally {
@@ -178,9 +178,9 @@ export default function App() {
     }
   }
 
-  function handleSaveDialogSave() {
+  async function handleSaveDialogSave() {
     const { rates: r } = saveDialog
-    if (session && r) savePlanVersion(session.session_id, r, session.from_db ? 'db' : 'upload')
+    if (session && r) await savePlanVersion(session.session_id, r, session.from_db ? 'db' : 'upload')
     setSaveDialog(null)
     _doReset()
   }
@@ -192,11 +192,11 @@ export default function App() {
     if (!session) return
     if (results) {
       // Already have results — just record the version and show Results
-      if (rates) savePlanVersion(session.session_id, rates, session.from_db ? 'db' : 'upload')
+      if (rates) await savePlanVersion(session.session_id, rates, session.from_db ? 'db' : 'upload')
       setStep(2)
     } else {
       // On Config step — save + run → Results
-      if (rates) savePlanVersion(session.session_id, rates, session.from_db ? 'db' : 'upload')
+      if (rates) await savePlanVersion(session.session_id, rates, session.from_db ? 'db' : 'upload')
       await handleRun()
     }
   }
@@ -229,7 +229,7 @@ export default function App() {
       }
       const data = await freshRun.json()
       // Update version log to point at the new session so future loads stay fresh
-      if (rates) savePlanVersion(newSession.session_id, rates, 'db')
+      if (rates) await savePlanVersion(newSession.session_id, rates, 'db')
       setSession({ ...newSession })
       setResults(data)
       setRunKey(k => k + 1)
