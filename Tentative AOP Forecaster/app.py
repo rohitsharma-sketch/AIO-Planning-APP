@@ -690,9 +690,9 @@ def upsert_plan_version(body: dict = Body(...)):
     with SessionLocal() as db:
         db.execute(text("""
             INSERT INTO planning_inputs.plan_versions (id, data, last_modified_at)
-            VALUES (:id, :data::jsonb, NOW())
+            VALUES (:id, CAST(:data AS jsonb), NOW())
             ON CONFLICT (id) DO UPDATE SET
-                data = :data::jsonb, last_modified_at = NOW()
+                data = CAST(:data AS jsonb), last_modified_at = NOW()
         """), {"id": body["id"], "data": json.dumps(body)})
         db.commit()
     return {"ok": True}
