@@ -944,7 +944,7 @@ thead .c0,thead .c1{background:#101930!important}
         <div class="tbtn" onclick="exportCSV()">Export</div>
         <div class="tbtn" onclick="seedPlanDefaults(true);refresh();toast('Plan reset to LFL defaults')">Reset</div>
         <div class="tbtn dng" onclick="if(confirm('Clear all plan inputs?')){S.inputs={};refresh();toast('Plan cleared')}">Clear</div>
-        <div class="tbtn" id="aop-btn" onclick="openAopModal()">AOP Import</div>
+        <div class="tbtn" id="aop-btn" onclick="openAopModal()">Sync AOP</div>
         <div class="aop-lock-tag" id="aop-lock-tag" style="display:none" onclick="openAopModal()">AOP Locked</div>
         <div class="tbtn" id="aop-seed-btn" style="display:none" onclick="seedPlanFromAop()">Seed AOP</div>
         <div class="tbtn" onclick="openVersionLog()" id="history-btn">History</div>
@@ -5096,6 +5096,8 @@ _loadNavOrder();
 _buildPaletteSwatches();
 _initNavDnD();
 loadSyncCache();
+// Pre-fetch AOP targets from Forecaster into cache (silent, no UI side-effects)
+fetchAopTargets().catch(()=>{});
 // Auto-seed plan from AOP on first run (inputs empty = genuinely fresh load)
 if(S.aopLocked&&Object.keys(S.inputs).length===0){
   DVDATA.forEach(dv=>{
@@ -5124,36 +5126,87 @@ function buildAopKpiTile(planTotal){
   const cls=Math.abs(v)<2?'':v>0?' n':' p';
   return `<div class="ktile${cls}"><div class="kl">vs AOP Target</div><div class="kv">${fP(v)}</div><div class="ks">Plan ${fCr(planTotal)} Cr vs AOP ${fCr(aopTotal)} Cr</div></div>`;
 }
+/* ── AOP LIVE SYNC ──────────────────────────────────────────────────────── */
+// {targets:{MENS:{202703:lkh,…},…}, published_at:iso, note:str|null}
+let _aopCache=null;
+
+async function fetchAopTargets(){
+  try{
+    const r=await fetch('/api/config/aop-division-targets',{cache:'no-store'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    _aopCache=await r.json();
+  }catch(e){
+    _aopCache={targets:null,published_at:null,note:'Could not reach AOP Forecaster: '+e.message};
+  }
+}
+
 function openAopModal(){
   buildAopGrid();
   syncAopLockStatus();
   document.getElementById('aopOv').style.display='flex';
   document.getElementById('aopModalFY').textContent=window.FY_PLAN||'';
+  // Refresh live data in background then redraw
+  fetchAopTargets().then(()=>buildAopGrid());
 }
 function closeAopModal(){document.getElementById('aopOv').style.display='none';}
+
+// AOP months in the plan: period_id → mi
+const _PERIOD_TO_MI={202703:11,202704:0,202705:1,202706:2};
+
 function buildAopGrid(){
-  // Sync unit radio buttons
-  const df=S.aopUnit==='lakhs'?100:1; // display factor: stored Cr → display Lakhs
-  const ulEl=document.getElementById('aopUnitLakhs');
-  const ucEl=document.getElementById('aopUnitCrore');
-  if(ulEl)ulEl.checked=(S.aopUnit==='lakhs');
-  if(ucEl)ucEl.checked=(S.aopUnit==='crore');
-  const hCols=CAL_ORDER.map(mi=>`<th>${MO[mi]}</th>`).join('');
-  const thead=`<thead><tr><th style="text-align:left;min-width:72px">Division</th>${hCols}<th>FY Total</th></tr></thead>`;
-  const rows=AOP_DIVS.map(dv=>{
-    const lcls=S.aopLocked?' aop-locked-row':'';
-    const cells=CAL_ORDER.map(mi=>{
-      const stored=S.aop[dv.id]?.[mi]; // in Crore
-      const disp=stored!=null&&stored>0?+(stored*df).toFixed(2):null;
-      const has=disp!=null&&disp>0;
-      return `<td><input class="aop-inp${has?' has':''}" data-div="${dv.id}" data-mi="${mi}" type="number" step="0.01" min="0" value="${has?disp:''}" oninput="onAopInput(this)" ${S.aopLocked?'readonly':''}></td>`;
+  const el=document.getElementById('aopGrid');
+  if(!el)return;
+
+  const t=_aopCache?.targets;
+  const pub=_aopCache?.published_at;
+  const note=_aopCache?.note;
+
+  // Header
+  const pubStr=pub?new Date(pub).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'—';
+  const srcBanner=t
+    ?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:var(--ac-l);border-radius:6px;border:1px solid var(--ac-b)">
+        <span style="font-size:18px">🔗</span>
+        <span style="font-size:11px;color:var(--ac);font-weight:700">Live from AOP Forecaster</span>
+        <span style="font-size:10px;color:var(--t3);margin-left:4px">Published ${pubStr}</span>
+       </div>`
+    :`<div style="padding:8px 12px;background:var(--wa-b);border-radius:6px;border:1px solid var(--wa-br);font-size:11px;color:var(--wa);margin-bottom:10px">
+        ${note||'No AOP forecast run yet — run AOP Forecaster first.'}
+       </div>`;
+
+  // MAMJ months only (Mar, Apr, May, Jun)
+  const mamjMIs=[11,0,1,2];
+  const mamjLabels={'11':"Mar'27",'0':"Apr'27",'1':"May'27",'2':"Jun'27"};
+  const periodOf={11:202703,0:202704,1:202705,2:202706};
+
+  const activeAopMIs=mamjMIs.filter(mi=>S.selM.has(mi));
+  const selInfo=activeAopMIs.length>0
+    ?`<div style="font-size:10px;color:var(--t3);margin-bottom:10px">Syncing months: <strong style="color:var(--tx)">${activeAopMIs.map(mi=>mamjLabels[mi]).join(', ')}</strong> (based on your current month selection)</div>`
+    :`<div style="font-size:10px;color:var(--wa);margin-bottom:10px">No MAMJ months selected — select Mar/Apr/May/Jun in the top filter first</div>`;
+
+  // Build read-only preview table
+  let tblHtml='';
+  if(t){
+    const hCols=mamjMIs.map(mi=>`<th>${mamjLabels[mi]}</th>`).join('');
+    const thead=`<thead><tr><th style="text-align:left;min-width:80px">Division</th>${hCols}<th>MAMJ Total</th></tr></thead>`;
+    const rows=AOP_DIVS.map(dv=>{
+      const divKey=dv.id.toUpperCase();
+      const divData=t[divKey]||{};
+      let totCr=0;
+      const cells=mamjMIs.map(mi=>{
+        const pid=periodOf[mi];
+        const lkh=divData[pid]||0;
+        const cr=lkh/100;
+        totCr+=cr;
+        const inSel=activeAopMIs.includes(mi);
+        return `<td class="${inSel?'aop-rtot':''}" style="font-size:11px;font-weight:${inSel?700:400};font-family:var(--mono);padding:5px 8px;text-align:right">${cr>0?cr.toFixed(2):'—'}</td>`;
+      }).join('');
+      return `<tr><td style="font-weight:700;padding:5px 10px">${dv.nm}</td>${cells}<td class="aop-rtot">${totCr>0?totCr.toFixed(2):'—'}</td></tr>`;
     }).join('');
-    const totCr=CAL_ORDER.reduce((a,mi)=>a+(S.aop[dv.id]?.[mi]||0),0);
-    const totDisp=(totCr*df).toFixed(2);
-    return `<tr class="${lcls}"><td>${dv.nm}</td>${cells}<td class="aop-rtot" id="aop-rtot-${dv.id}">${totCr>0?totDisp:'—'}</td></tr>`;
-  }).join('');
-  document.getElementById('aopGrid').innerHTML=thead+'<tbody>'+rows+'</tbody>';
-  document.getElementById('aopModal').onpaste=onAopPaste;
+    tblHtml=`<div style="overflow-x:auto"><table class="aop-tbl">${thead}<tbody>${rows}</tbody></table></div>
+      <div style="font-size:10px;color:var(--mu);margin-top:6px;text-align:right">Values in Rs Crore</div>`;
+  }
+
+  el.innerHTML=srcBanner+selInfo+tblHtml;
 }
 function onAopInput(el){
   const div=el.dataset.div,mi=parseInt(el.dataset.mi);
@@ -5196,24 +5249,43 @@ function onAopPaste(e){
   buildAopGrid();
   toast('Pasted '+loaded+' divisions ✓');
 }
-function importAndLockAop(){
-  const hasData=AOP_DIVS.some(d=>CAL_ORDER.some(mi=>(S.aop[d.id]?.[mi]||0)>0));
-  if(!hasData){toast('Enter at least one AOP value first');return;}
+function syncFromAop(){
+  if(!_aopCache||!_aopCache.targets){
+    toast('No AOP data available — run AOP Forecaster first');return;
+  }
+  const t=_aopCache.targets;
+  const periodOf={11:202703,0:202704,1:202705,2:202706};
+  const mamjMIs=[11,0,1,2];
+  let applied=0;
+  AOP_DIVS.forEach(dv=>{
+    const divKey=dv.id.toUpperCase();
+    const divData=t[divKey];
+    if(!divData)return;
+    mamjMIs.forEach(mi=>{
+      if(!S.selM.has(mi))return; // only user-selected months
+      const lkh=divData[periodOf[mi]];
+      if(lkh==null||lkh<=0)return;
+      if(!S.aop[dv.id])S.aop[dv.id]={};
+      S.aop[dv.id][mi]=lkh/100; // Rs Lakhs → Rs Crore
+      applied++;
+    });
+  });
+  if(!applied){toast('No AOP data for the selected months — select Mar/Apr/May/Jun');return;}
   S.aopLocked=true;
-  // Restrict month selection to only months that have AOP data
   const aopMonths=new Set();
   AOP_DIVS.forEach(d=>{for(let mi=0;mi<12;mi++){if((S.aop[d.id]?.[mi]||0)>0)aopMonths.add(mi);}});
   if(aopMonths.size>0)S.selM=aopMonths;
   saveState();
-  seedPlanFromAop(); // auto-distribute AOP to department growth%
+  seedPlanFromAop();
   syncAopLockUI();
   buildAopGrid();
   syncAopLockStatus();
   buildPills();
   closeAopModal();
   refresh();
-  toast('AOP locked ✓  Re-import to change');
+  toast('AOP synced from Forecaster ✓ ('+applied+' cells)');
 }
+function importAndLockAop(){syncFromAop();}
 function clearAop(){
   if(S.aopLocked&&!confirm('AOP is locked. Clear and unlock it?'))return;
   S.aop={mens:{},ladies:{},kids:{}};
@@ -5232,7 +5304,7 @@ function syncAopLockUI(){
   const tag=document.getElementById('aop-lock-tag');
   const seedBtn=document.getElementById('aop-seed-btn');
   if(!btn||!tag)return;
-  btn.textContent=S.aopLocked?'Re-import AOP':'Import AOP';
+  btn.textContent='Sync AOP';
   tag.style.display=S.aopLocked?'flex':'none';
   if(seedBtn)seedBtn.style.display=S.aopLocked?'':'none';
 }
@@ -5261,7 +5333,7 @@ function seedPlanFromAop(){
 }
 function syncAopLockStatus(){
   const el=document.getElementById('aopLockStatus');
-  if(el)el.textContent=S.aopLocked?'🔒 AOP locked — click Re-import AOP to change':'Not locked — enter values, browse CSV, or paste from Excel';
+  if(el)el.textContent=S.aopLocked?'🔒 AOP locked — click Sync AOP to re-sync':'Select MAMJ months then click Sync &amp; Lock';
 }
 function downloadAopTemplate(){
   const df=S.aopUnit==='lakhs'?100:1;
@@ -5473,50 +5545,26 @@ function parseAopCSV(text,fname){
   toast(`Loaded ${loaded} divisions from "${fname}" ✓`);
 }
 </script>
-<!-- AOP IMPORT MODAL -->
+<!-- AOP SYNC MODAL -->
 <div class="aop-ov" id="aopOv" style="display:none" onclick="if(event.target===this)closeAopModal()">
   <div class="aop-modal" id="aopModal">
     <div class="aop-mhd">
       <div>
-        <div class="aop-mtitle">Import Division AOP &mdash; <span id="aopModalFY"></span></div>
-        <div class="aop-msub" id="aopLockStatus">Not locked &mdash; enter values and click Import &amp; Lock</div>
+        <div class="aop-mtitle">AOP Division Sync &mdash; <span id="aopModalFY"></span></div>
+        <div class="aop-msub" id="aopLockStatus">Synced live from AOP Forecaster</div>
       </div>
       <button class="tbtn" onclick="closeAopModal()">&#x2715; Close</button>
     </div>
     <div class="aop-mbody">
-      <div class="aop-hint">
-        <strong>Paste from Excel:</strong> Copy a <strong>3&nbsp;rows &times; 12&nbsp;columns</strong> range
-        (rows: Mens, Ladies, Kids &mdash; columns: Jan&rarr;Dec) from Excel then press
-        <kbd>Ctrl+V</kbd> anywhere in this dialog.<br>
-        <strong>Or type directly</strong> in each cell. Select your input unit above (default: Rs.&nbsp;Lakhs).
-        Once locked, the plan is auto-seeded to match AOP targets &mdash; only re-importing changes it.
-      </div>
-      <div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;padding:8px 12px;background:var(--s2);border-radius:6px;border:1px solid var(--bd)">
-        <span style="font-size:11px;font-weight:800;color:var(--t2);white-space:nowrap">Import Unit:</span>
-        <label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;cursor:pointer;color:var(--tx)">
-          <input type="radio" name="aop-unit" value="lakhs" id="aopUnitLakhs" onchange="S.aopUnit='lakhs';buildAopGrid()"> Rs. Lakhs <span style="color:var(--mu);font-size:10px">(values like 4,815)</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;cursor:pointer;color:var(--tx)">
-          <input type="radio" name="aop-unit" value="crore" id="aopUnitCrore" onchange="S.aopUnit='crore';buildAopGrid()"> Rs. Crore <span style="color:var(--mu);font-size:10px">(values like 48.16)</span>
-        </label>
-        <span style="font-size:10px;color:var(--mu);margin-left:auto" id="aopUnitNote">Stored internally as Rs. Crore</span>
-      </div>
-      <div style="overflow-x:auto">
-        <table class="aop-tbl" id="aopGrid"></table>
-      </div>
+      <div id="aopGrid"></div>
     </div>
     <div class="aop-mft">
       <div style="display:flex;gap:8px;align-items:center">
         <button class="tbtn" onclick="clearAop()">Clear &amp; Unlock</button>
-        <button class="tbtn" onclick="downloadAopTemplate()">&#x2B07; Template CSV</button>
-        <label class="tbtn" style="cursor:pointer;margin:0">
-          &#x1F4C2; Browse CSV
-          <input type="file" id="aopFileInput" accept=".csv,.txt" style="display:none" onchange="importFromFile(this)">
-        </label>
       </div>
       <div style="display:flex;gap:8px">
         <button class="tbtn" onclick="closeAopModal()">Cancel</button>
-        <button class="tbtn pri" onclick="importAndLockAop()">&#x1F512; Import &amp; Lock</button>
+        <button class="tbtn pri" onclick="syncFromAop()">&#x21BB; Sync &amp; Lock</button>
       </div>
     </div>
   </div>

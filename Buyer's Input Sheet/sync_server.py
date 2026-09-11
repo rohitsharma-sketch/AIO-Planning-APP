@@ -218,6 +218,21 @@ def api_status():
     return jsonify({"ok": True, "last_sync": _last_sync, "server": "CityKart OTB Sync v1.0", "data_version": _data_version()})
 
 
+@app.route("/api/config/aop-division-targets")
+def aop_division_targets():
+    """Proxy to AOP Forecaster (port 8000) for live MAMJ division targets.
+    Returns the same JSON shape so BIS works whether accessed at 5050 or via
+    the 7800 proxy."""
+    import urllib.request as _ur
+    from flask import Response
+    try:
+        with _ur.urlopen("http://127.0.0.1:8000/api/config/aop-division-targets", timeout=5) as r:
+            return Response(r.read(), status=r.status, content_type="application/json")
+    except Exception as e:
+        return jsonify({"targets": None, "published_at": None,
+                        "note": f"AOP Forecaster unreachable: {e}"})
+
+
 def _run_sales_job(src: str):
     """Background worker: aggregate FY26 AOP-month actuals and store in _sales_job."""
     global _sales_job, _last_sync
