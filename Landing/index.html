@@ -81,31 +81,34 @@
     font-weight: 400;
     letter-spacing: -0.005em;
   }
+  .master-card { cursor: default; }
+  .master-controls {
+    margin-top: 14px;
+    border-top: 1px solid var(--card-border);
+    padding-top: 14px;
+  }
   .breaker {
-    margin-top: 22px;
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    padding: 8px 18px 8px 10px;
+    padding: 7px 14px 7px 8px;
     border-radius: 999px;
     border: 1px solid rgba(255,255,255,0.15);
     background: rgba(255,255,255,0.06);
-    backdrop-filter: blur(8px);
     cursor: pointer;
     user-select: none;
     transition: border-color .15s, background .15s, box-shadow .15s;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
   }
   .breaker:hover:not(:disabled) {
     border-color: rgba(255,255,255,0.28);
     background: rgba(255,255,255,0.1);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
   }
   .breaker:disabled { opacity: 0.5; cursor: default; }
   .breaker-track {
     position: relative;
-    width: 40px;
-    height: 22px;
+    width: 38px;
+    height: 21px;
     border-radius: 999px;
     background: rgba(255,255,255,0.15);
     transition: background 0.25s ease;
@@ -115,23 +118,24 @@
   .breaker-knob {
     position: absolute;
     top: 2px; left: 2px;
-    width: 18px; height: 18px;
+    width: 17px; height: 17px;
     border-radius: 50%;
     background: var(--text);
     transition: transform 0.25s ease;
   }
-  .breaker.on .breaker-knob { transform: translateX(18px); }
+  .breaker.on .breaker-knob { transform: translateX(17px); }
   .breaker-label {
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 600;
     color: var(--text);
     white-space: nowrap;
   }
-  #launch-all-msg {
+  .master-msg {
     margin-top: 10px;
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-dim);
     min-height: 1.2em;
+    line-height: 1.5;
   }
   .grid {
     display: grid;
@@ -371,14 +375,22 @@
     <div class="brand">CityKart · RS Planning</div>
     <h1>Planning Modules</h1>
     <p>Pick a module below. Each opens its own app in a new tab.</p>
-    <button id="launch-all-btn" class="breaker" type="button" title="Start any offline module servers">
-      <span class="breaker-track"><span class="breaker-knob"></span></span>
-      <span class="breaker-label">⚡ Master Switch</span>
-    </button>
-    <div id="launch-all-msg"></div>
   </header>
 
   <div class="grid">
+    <div class="card master-card" id="master-card">
+      <div class="card-icon">⚡</div>
+      <h2>Master Switch</h2>
+      <p class="desc">Start or stop all planning servers in one click. Switching on also triggers a fresh data-lake sync automatically.</p>
+      <div class="master-controls">
+        <button id="launch-all-btn" class="breaker" type="button">
+          <span class="breaker-track"><span class="breaker-knob"></span></span>
+          <span class="breaker-label">All Servers</span>
+        </button>
+        <div id="launch-all-msg" class="master-msg"></div>
+      </div>
+    </div>
+
     <a class="card" href="/calendar/" target="_blank" data-check="/api/port-status/8010">
       <div class="card-icon">📅</div>
       <h2>Calendar</h2>
