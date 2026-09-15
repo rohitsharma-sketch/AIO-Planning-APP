@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import Header from '../components/Header'
@@ -42,7 +42,6 @@ export default function DivisionPlan() {
   const [activeVersionId, setActiveVersionId] = useState(() => {
     try { return localStorage.getItem('aop_active_version_id') || null } catch { return null }
   })
-  const lyMamjBase = useRef({}) // {DIV: ly_mamj_lakhs} — fixed denominator for growth derivation
   useEffect(() => { loadConfig() }, [])
 
   const persistActiveVersion = (id) => {
@@ -53,12 +52,17 @@ export default function DivisionPlan() {
     } catch {}
   }
 
-  // When versions load, authoritative DB match overrides localStorage
+  // When versions load, authoritative DB match overrides localStorage; also show correct growth %
   useEffect(() => {
     if (!versions || !configMeta || !configMeta.totalMamj) return
     if (configMeta.aopLever === 'locked') {
       const match = versions.find(v => Math.abs(v.total_mamj_lakhs - configMeta.totalMamj) < 1)
-      if (match) persistActiveVersion(match.id)
+      if (match) {
+        persistActiveVersion(match.id)
+        if (match.growth_pct != null) {
+          setRows(prev => prev.map(r => ({ ...r, growth_pct: match.growth_pct })))
+        }
+      }
     }
   }, [versions, configMeta])
 
@@ -68,12 +72,6 @@ export default function DivisionPlan() {
       const cfgRes = await axios.get('/api/planning/division-plan/config')
       const divs = cfgRes.data.divisions.map(d => ({ ...d }))
       setRows(divs)
-      // Compute and cache the LY MAMJ base so version switches can derive growth %
-      lyMamjBase.current = Object.fromEntries(
-        divs
-          .filter(d => d.mamj_lakhs > 0 && d.growth_pct != null)
-          .map(d => [d.division_name, d.mamj_lakhs / (1 + d.growth_pct / 100)])
-      )
       setConfigMeta({
         totalStores: cfgRes.data.total_stores,
         nDivisions: cfgRes.data.n_divisions || cfgRes.data.divisions.length,
@@ -112,10 +110,7 @@ export default function DivisionPlan() {
     setRows(prev => prev.map(r => {
       const newMamj = divMamj[r.division_name]
       if (newMamj == null) return r
-      const base = lyMamjBase.current[r.division_name]
-      const newGrowth = base > 0
-        ? parseFloat(((newMamj / base - 1) * 100).toFixed(1))
-        : r.growth_pct
+      const newGrowth = version.growth_pct != null ? version.growth_pct : r.growth_pct
       return { ...r, mamj_lakhs: parseFloat(newMamj.toFixed(1)), growth_pct: newGrowth }
     }))
     persistActiveVersion(versionId)
