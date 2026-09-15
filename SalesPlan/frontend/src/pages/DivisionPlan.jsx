@@ -81,27 +81,39 @@ export default function DivisionPlan() {
 
   const promoteVersion = async (version) => {
     const versionId = version.id
+
+    // Optimistic update: apply this version's numbers immediately, before any API call
+    const dt = version.division_totals || {}
+    const divMamj = {
+      KIDS:   Object.values(dt.KIDS   || {}).reduce((s, x) => s + x, 0),
+      LADIES: Object.values(dt.LADIES || {}).reduce((s, x) => s + x, 0),
+      MENS:   Object.values(dt.MENS   || {}).reduce((s, x) => s + x, 0),
+    }
+    setRows(prev => prev.map(r => {
+      const newMamj = divMamj[r.division_name]
+      return newMamj != null ? { ...r, mamj_lakhs: parseFloat(newMamj.toFixed(1)) } : r
+    }))
+    setActiveVersionId(versionId)
     setPromoteState(s => ({ ...s, [versionId]: 'loading' }))
+
     try {
       await axios.post(`/api/aop/api/promote-aop-version/${versionId}`)
       setPromoteState(s => ({ ...s, [versionId]: 'done' }))
-      setActiveVersionId(versionId)
-      // Immediately update Division Inputs with this version's AOP MAMJ values
-      const dt = version.division_totals || {}
-      const divMamj = {
-        KIDS:   Object.values(dt.KIDS   || {}).reduce((s, x) => s + x, 0),
-        LADIES: Object.values(dt.LADIES || {}).reduce((s, x) => s + x, 0),
-        MENS:   Object.values(dt.MENS   || {}).reduce((s, x) => s + x, 0),
-      }
-      setRows(prev => prev.map(r => {
-        const newMamj = divMamj[r.division_name]
-        if (newMamj == null) return r
-        return { ...r, mamj_lakhs: parseFloat(newMamj.toFixed(1)) }
-      }))
-      // Reload config to sync banner + growth rates
-      await loadConfig()
+      // Refresh banner only — do NOT call loadConfig() which would overwrite rows
+      const cfgRes = await axios.get('/api/planning/division-plan/config')
+      setConfigMeta({
+        totalStores: cfgRes.data.total_stores,
+        nDivisions: cfgRes.data.n_divisions || cfgRes.data.divisions.length,
+        source: cfgRes.data.source,
+        aopSource: cfgRes.data.aop_source,
+        totalMamj: cfgRes.data.total_mamj_lakhs,
+        aopLever: cfgRes.data.aop_lever,
+      })
     } catch {
       setPromoteState(s => ({ ...s, [versionId]: 'error' }))
+      // Revert optimistic update on error
+      setActiveVersionId(null)
+      await loadConfig()
     }
   }
 
