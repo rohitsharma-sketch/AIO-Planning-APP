@@ -49,6 +49,7 @@ export default function DivisionPlan() {
         source: cfgRes.data.source,
         aopSource: cfgRes.data.aop_source,
         totalMamj: cfgRes.data.total_mamj_lakhs,
+        aopLever: cfgRes.data.aop_lever,  // 'locked' | 'staging' | null
       })
     } catch {
       setError('Failed to load config from backend.')
@@ -143,6 +144,16 @@ export default function DivisionPlan() {
               {configMeta.totalMamj > 0 && (
                 <span style={{ color: theme.primary, fontWeight: 600, marginLeft: 8 }}>
                   · AOP MAMJ: ₹{(configMeta.totalMamj / 100).toFixed(1)} Cr
+                </span>
+              )}
+              {configMeta.aopLever && (
+                <span style={{
+                  background: configMeta.aopLever === 'locked' ? '#D1FAE5' : '#FEF3C7',
+                  color:      configMeta.aopLever === 'locked' ? '#065F46' : '#92400E',
+                  borderRadius: 4, padding: '2px 8px', fontSize: 11,
+                  fontWeight: 700, marginLeft: 8, letterSpacing: 0.3,
+                }}>
+                  {configMeta.aopLever === 'locked' ? '🔒 Locked' : '⚡ Staging'}
                 </span>
               )}
               {configMeta.aopSource && <span style={{ color: theme.textMuted, marginLeft: 8 }}>· {configMeta.aopSource}</span>}

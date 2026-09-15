@@ -281,6 +281,65 @@ def aop_division_targets():
         db.close()
 
 
+@router.post("/api/promote-aop-targets")
+def promote_aop_targets_endpoint():
+    """Promote current staging AOP targets → locked, making them visible to the
+    Planning Engine as the approved version."""
+    from db.base import SessionLocal
+    from db.publish_aop_targets import promote_aop_targets
+    from fastapi import HTTPException
+    db = SessionLocal()
+    try:
+        result = promote_aop_targets(db)
+        if not result.get("ok"):
+            raise HTTPException(status_code=400, detail=result.get("reason", "Promote failed"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@router.get("/api/aop-lock-status")
+def aop_lock_status():
+    """Returns whether staging AOP targets have been promoted (locked) for the
+    Planning Engine, and when."""
+    from db.base import SessionLocal
+    from sqlalchemy import text
+    db = SessionLocal()
+    try:
+        locked_rows = db.execute(text("""
+            SELECT row_key, period_id, value, updated_at
+            FROM planning_inputs.input_values
+            WHERE lever_key = 'aop_locked_target'
+              AND row_key   IN ('MENS','LADIES','KIDS')
+              AND period_id IN (202703,202704,202705,202706)
+            ORDER BY row_key, period_id
+        """)).all()
+
+        if not locked_rows:
+            return {"locked": False, "locked_at": None,
+                    "total_mamj_lakhs": 0, "divisions": {}}
+
+        locked_at = None
+        by_div: dict[str, float] = {}
+        for div, _pid, value, updated_at in locked_rows:
+            by_div[div] = by_div.get(div, 0.0) + float(value or 0)
+            if locked_at is None or updated_at > locked_at:
+                locked_at = updated_at
+
+        return {
+            "locked": True,
+            "locked_at": locked_at.isoformat() if locked_at else None,
+            "total_mamj_lakhs": round(sum(by_div.values()), 2),
+            "divisions": {d: round(v, 2) for d, v in by_div.items()},
+        }
+    finally:
+        db.close()
+
+
 DB_SYNC_JOBS = [
     ("site_master", "data_lake_site_master"),
     ("store_master_xlsx", "store_master_xlsx"),

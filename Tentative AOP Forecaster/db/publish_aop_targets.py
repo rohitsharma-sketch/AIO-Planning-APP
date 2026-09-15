@@ -73,3 +73,46 @@ def publish_aop_targets(session, detail_records: list[dict]) -> None:
         """), {"lk": LEVER_KEY, "pid": period_id, "rk": div, "val": total})
 
     session.commit()
+
+
+LOCKED_LEVER_KEY = "aop_locked_target"
+
+
+def promote_aop_targets(session) -> dict:
+    """Copy current staging AOP targets (aop_division_target) → locked
+    (aop_locked_target) so the Planning Engine sees a stable, user-approved
+    version even if subsequent forecast runs overwrite staging.
+    Idempotent — safe to call multiple times.
+    """
+    session.execute(text("""
+        INSERT INTO planning_inputs.lever_definitions (lever_key, label, required, shape)
+        VALUES (:k, 'AOP Division Target (locked for Planning Engine)', false, 'named_row')
+        ON CONFLICT (lever_key) DO NOTHING
+    """), {"k": LOCKED_LEVER_KEY})
+
+    staging_rows = session.execute(text("""
+        SELECT row_key, period_id, value, source
+        FROM planning_inputs.input_values
+        WHERE lever_key = :lk
+          AND row_key   IN ('MENS','LADIES','KIDS')
+          AND period_id IN (202703,202704,202705,202706)
+        ORDER BY row_key, period_id
+    """), {"lk": LEVER_KEY}).fetchall()
+
+    if not staging_rows:
+        return {"ok": False, "reason": "No staged AOP targets found — run a forecast first."}
+
+    for row_key, period_id, value, source in staging_rows:
+        session.execute(text("""
+            INSERT INTO planning_inputs.input_values
+                (lever_key, store_id, division_code, period_id, row_key, value, source)
+            VALUES (:lk, '', '', :pid, :rk, :val, :src)
+            ON CONFLICT ON CONSTRAINT uq_input_values_identity
+            DO UPDATE SET value      = EXCLUDED.value,
+                          source     = EXCLUDED.source,
+                          updated_at = now()
+        """), {"lk": LOCKED_LEVER_KEY, "pid": period_id,
+               "rk": row_key, "val": value, "src": source})
+
+    session.commit()
+    return {"ok": True, "locked_rows": len(staging_rows)}

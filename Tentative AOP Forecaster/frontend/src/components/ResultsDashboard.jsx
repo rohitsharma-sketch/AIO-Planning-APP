@@ -66,6 +66,18 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
   const [reindexed, setReindexed] = useState(null)
   const [reindexedLoading, setReindexedLoading] = useState(false)
   const [reindexedError, setReindexedError] = useState(null)
+  const [promoteState, setPromoteState] = useState(null)  // null | 'loading' | 'done' | 'error'
+
+  const handlePromote = async () => {
+    setPromoteState('loading')
+    try {
+      const res = await fetch(apiUrl('/api/promote-aop-targets'), { method: 'POST' })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Failed') }
+      setPromoteState('done')
+    } catch {
+      setPromoteState('error')
+    }
+  }
 
   useEffect(() => {
     if (baseSource !== 'reindexed' || reindexed || reindexedLoading) return
@@ -205,6 +217,22 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
         </div>
         <div className="dash-actions">
           <button className="btn-secondary" onClick={onRunAgain}>Back</button>
+          <button
+            className="btn-secondary"
+            onClick={handlePromote}
+            disabled={promoteState === 'loading' || promoteState === 'done'}
+            title="Lock this forecast as the approved AOP for the Planning Engine"
+            style={{
+              background: promoteState === 'done' ? '#D1FAE5' : promoteState === 'error' ? '#FEE2E2' : undefined,
+              color: promoteState === 'done' ? '#065F46' : promoteState === 'error' ? '#991B1B' : undefined,
+              borderColor: promoteState === 'done' ? '#6EE7B7' : promoteState === 'error' ? '#FCA5A5' : undefined,
+            }}
+          >
+            {promoteState === 'loading' ? 'Locking…'
+              : promoteState === 'done'  ? '🔒 Locked to Planning'
+              : promoteState === 'error' ? '⚠ Lock failed'
+              : '🔒 Promote to Planning'}
+          </button>
           <button className="btn-primary"   onClick={onDownload}>Download Excel</button>
         </div>
       </div>

@@ -82,26 +82,29 @@ def _load_store_master():
 
 
 def _load_aop_targets():
-    """
-    Read MAMJ AOP targets from planning_inputs.input_values (lever_key='aop_division_target').
-    Returns {div: {period_id: value_lakhs}} for KIDS/LADIES/MENS only.
-    Falls back to {} if DB is unavailable.
+    """Read MAMJ AOP targets. Prefers locked (aop_locked_target) over staging
+    (aop_division_target) — locked is set by the explicit Promote action in
+    the AOP Forecaster after a run is approved.
+    Returns ({div: {period_id: lakhs}}, lever_key_used | None).
     """
     try:
         from db.base import SessionLocal
         from sqlalchemy import text
         with SessionLocal() as db:
-            rows = db.execute(text(
-                "SELECT row_key, period_id, value FROM planning_inputs.input_values "
-                "WHERE lever_key='aop_division_target' AND row_key = ANY(:divs) "
-                "ORDER BY row_key, period_id"
-            ), {"divs": list(DIVISIONS)}).fetchall()
-        result = {}
-        for row_key, period_id, value in rows:
-            result.setdefault(row_key, {})[period_id] = float(value)
-        return result
+            for lever in ("aop_locked_target", "aop_division_target"):
+                rows = db.execute(text(
+                    "SELECT row_key, period_id, value FROM planning_inputs.input_values "
+                    "WHERE lever_key=:lk AND row_key = ANY(:divs) "
+                    "ORDER BY row_key, period_id"
+                ), {"lk": lever, "divs": list(DIVISIONS)}).fetchall()
+                if rows:
+                    result = {}
+                    for row_key, period_id, value in rows:
+                        result.setdefault(row_key, {})[period_id] = float(value)
+                    return result, lever
+        return {}, None
     except Exception:
-        return {}
+        return {}, None
 
 
 def _aop_mamj_total(aop_by_div: dict) -> dict:
@@ -166,7 +169,7 @@ class DivisionPlanOutput(BaseModel):
 @router.get("/aop-targets")
 def get_aop_targets():
     """Return MAMJ AOP targets per division from the shared DB, with AOP growth from inputs.xlsx."""
-    aop_by_div = _load_aop_targets()
+    aop_by_div, _lever = _load_aop_targets()
     mamj = _aop_mamj_total(aop_by_div)
     # Growth rates from the AOP Forecaster's Growth % sheet — the actual forecast rates
     growth_rates = _load_growth_rates()
@@ -190,14 +193,13 @@ def get_aop_targets():
 @router.get("/config")
 def get_config():
     store_master = _load_store_master()
-    aop_by_div = _load_aop_targets()
+    aop_by_div, aop_lever = _load_aop_targets()
     mamj = _aop_mamj_total(aop_by_div)
-    # Growth rates from AOP Forecaster inputs.xlsx — the proper per-division AOP growth targets
     divisions_data = _build_default_divisions()
-    # Attach MAMJ reference values for display
     for d in divisions_data:
         d["mamj_lakhs"] = round(mamj.get(d["division_name"], 0.0), 2)
     has_mamj = any(d["mamj_lakhs"] for d in divisions_data)
+    lever_label = "locked" if aop_lever == "aop_locked_target" else ("staging" if aop_lever else None)
     return {
         "divisions": divisions_data,
         "store_master": store_master,
@@ -205,6 +207,7 @@ def get_config():
         "n_divisions": len(DIVISIONS),
         "source": "AOP Forecaster — inputs.xlsx (KLM)",
         "aop_source": "planning_inputs.input_values (MAMJ ref)" if has_mamj else "inputs.xlsx",
+        "aop_lever": lever_label,
         "total_mamj_lakhs": round(sum(d["mamj_lakhs"] for d in divisions_data), 2),
     }
 
