@@ -62,6 +62,10 @@ export default function DepartmentGrowthMatrix() {
   const [uploading, setUploading]       = useState(false)
   const [uploadResult, setUploadResult] = useState(null)
   const [buyerMeta, setBuyerMeta]       = useState({})
+
+  // Buyer sync state
+  const [buyerSyncing, setBuyerSyncing] = useState(false)
+  const [buyerSyncResult, setBuyerSyncResult] = useState(null)
   const fileInputRef = useRef(null)
 
   const pendingRef  = useRef({})
@@ -303,11 +307,49 @@ export default function DepartmentGrowthMatrix() {
         </div>
       )}
 
+      <style>{`@keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
+
       {/* Header */}
-      <div style={{ marginBottom: 22 }}>
-        <div style={{ fontSize: 22, fontWeight: 700, color: theme.textPrimary }}>Department Growth Matrix</div>
-        <div style={{ fontSize: 13, color: theme.textSecondary, marginTop: 4 }}>
-          P1 / P2 growth index per department per month — baseline 100. Buyer inputs can be uploaded below.
+      <div style={{ marginBottom: 22, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: theme.textPrimary }}>Department Growth Matrix</div>
+          <div style={{ fontSize: 13, color: theme.textSecondary, marginTop: 4 }}>
+            P1 / P2 growth index per department per month — baseline 100. Buyer inputs can be uploaded below.
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+          <button
+            onClick={async () => {
+              setBuyerSyncing(true); setBuyerSyncResult(null)
+              try {
+                const r = await fetch('/api/planning/department-plan/sync-from-buyer', { method: 'POST' })
+                const d = await r.json()
+                setBuyerSyncResult({ ok: r.ok, msg: r.ok ? d.message : (d.detail || 'Error') })
+                if (r.ok) { await fetchMatrix(activeDiv); await fetchBuyerMeta() }
+              } catch (e) { setBuyerSyncResult({ ok: false, msg: String(e) }) }
+              finally { setBuyerSyncing(false) }
+            }}
+            disabled={buyerSyncing}
+            style={{
+              padding: '8px 18px', borderRadius: 8, border: `1.5px solid ${theme.success}`,
+              background: buyerSyncing ? 'transparent' : `${theme.success}12`,
+              color: theme.success, fontWeight: 700, fontSize: 12, cursor: buyerSyncing ? 'default' : 'pointer',
+              display: 'flex', alignItems: 'center', gap: 7,
+            }}
+          >
+            <span style={buyerSyncing ? { animation: 'spin 0.9s linear infinite', display: 'inline-block' } : {}}>↺</span>
+            {buyerSyncing ? 'Syncing…' : 'Sync from Buyer\'s Input Sheet'}
+          </button>
+          {buyerSyncResult && (
+            <div style={{
+              fontSize: 11, padding: '4px 10px', borderRadius: 5,
+              background: buyerSyncResult.ok ? `${theme.success}14` : '#FEE2E2',
+              color: buyerSyncResult.ok ? theme.success : '#991B1B',
+              border: `1px solid ${buyerSyncResult.ok ? theme.success + '44' : '#FCA5A5'}`,
+            }}>
+              {buyerSyncResult.msg}
+            </div>
+          )}
         </div>
       </div>
 

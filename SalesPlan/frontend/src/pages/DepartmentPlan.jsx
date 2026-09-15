@@ -57,8 +57,6 @@ export default function DepartmentPlan() {
   const [addError, setAddError] = useState('')
   const [search, setSearch] = useState('')
   const [attrFilter, setAttrFilter] = useState(null) // null = All
-  const [buyerSyncing, setBuyerSyncing] = useState(false)
-  const [buyerSyncResult, setBuyerSyncResult] = useState(null)
   const [aopSyncing, setAopSyncing] = useState(false)
   const [aopSyncResult, setAopSyncResult] = useState(null)
   const [aopDivisionAops, setAopDivisionAops] = useState(null)   // [{division, annual_target}] from AOP Forecaster
@@ -177,41 +175,7 @@ export default function DepartmentPlan() {
               Department hierarchy, active/inactive status &amp; contribution % per division
             </div>
           </div>
-          {/* Sync from Buyer's Input */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-            <button
-              onClick={async () => {
-                setBuyerSyncing(true); setBuyerSyncResult(null)
-                try {
-                  const r = await fetch('/api/planning/department-plan/sync-from-buyer', { method: 'POST' })
-                  const d = await r.json()
-                  setBuyerSyncResult({ ok: r.ok, msg: r.ok ? d.message : (d.detail || 'Error') })
-                  if (r.ok) await fetchConfig()
-                } catch (e) { setBuyerSyncResult({ ok: false, msg: String(e) }) }
-                finally { setBuyerSyncing(false) }
-              }}
-              disabled={buyerSyncing}
-              style={{
-                padding: '8px 18px', borderRadius: 8, border: `1.5px solid ${theme.success}`,
-                background: buyerSyncing ? 'transparent' : `${theme.success}12`,
-                color: theme.success, fontWeight: 700, fontSize: 12, cursor: buyerSyncing ? 'default' : 'pointer',
-                display: 'flex', alignItems: 'center', gap: 7,
-              }}
-            >
-              <span style={buyerSyncing ? { animation: 'spin 0.9s linear infinite', display: 'inline-block' } : {}}>↺</span>
-              {buyerSyncing ? 'Syncing…' : 'Sync from Integrated Buyer\'s Input'}
-            </button>
-            {buyerSyncResult && (
-              <div style={{
-                fontSize: 11, padding: '4px 10px', borderRadius: 5,
-                background: buyerSyncResult.ok ? `${theme.success}14` : '#FEE2E2',
-                color: buyerSyncResult.ok ? theme.success : '#991B1B',
-                border: `1px solid ${buyerSyncResult.ok ? theme.success + '44' : '#FCA5A5'}`,
-              }}>
-                {buyerSyncResult.msg}
-              </div>
-            )}
-
             {/* Sync from AOP Forecaster — real pipeline link, not just navigation */}
             <button
               onClick={syncFromAop}
