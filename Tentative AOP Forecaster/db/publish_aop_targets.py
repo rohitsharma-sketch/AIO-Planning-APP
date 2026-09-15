@@ -184,28 +184,30 @@ def _seed_history_from_staging(session) -> bool:
 
 
 def list_aop_history(session, limit: int = 15) -> list[dict]:
-    """Return deduplicated AOP publish history, newest-first per unique
-    (total_mamj_lakhs, growth_pct) combination so the version picker shows
-    meaningfully distinct runs rather than near-identical duplicates.
-    On first call (empty table), auto-seeds from staging."""
+    """Return only explicitly saved AOP plan versions, joined to publish history.
+    Only sessions that appear in planning_inputs.plan_versions are shown — i.e.
+    the versions the user deliberately saved in the AOP Forecaster."""
     try:
         _ensure_history_table(session)
         rows = session.execute(text("""
-            SELECT DISTINCT ON (total_mamj_lakhs, growth_pct)
-                id, session_id, published_at, division_totals, total_mamj_lakhs, growth_pct
-            FROM planning_inputs.aop_publish_history
-            ORDER BY total_mamj_lakhs DESC, growth_pct DESC NULLS LAST, published_at DESC
+            SELECT DISTINCT ON (h.session_id)
+                h.id,
+                h.session_id,
+                h.published_at,
+                h.division_totals,
+                h.total_mamj_lakhs,
+                h.growth_pct,
+                pv.data->>'label' AS version_label,
+                pv.last_modified_at AS version_saved_at
+            FROM planning_inputs.aop_publish_history h
+            JOIN planning_inputs.plan_versions pv
+                ON pv.data->>'sessionId' = h.session_id
+            ORDER BY h.session_id, h.published_at DESC
             LIMIT :lim
         """), {"lim": limit}).fetchall()
 
-        if not rows:
-            if _seed_history_from_staging(session):
-                rows = session.execute(text("""
-                    SELECT id, session_id, published_at, division_totals, total_mamj_lakhs, growth_pct
-                    FROM planning_inputs.aop_publish_history
-                    ORDER BY published_at DESC
-                    LIMIT :lim
-                """), {"lim": limit}).fetchall()
+        # Order by version saved_at DESC (newest plan version first)
+        rows = sorted(rows, key=lambda r: r[7] if r[7] else r[2], reverse=True)
 
         return [
             {
@@ -215,6 +217,7 @@ def list_aop_history(session, limit: int = 15) -> list[dict]:
                 "division_totals": r[3],
                 "total_mamj_lakhs": float(r[4]) if r[4] is not None else 0.0,
                 "growth_pct": float(r[5]) if r[5] is not None else None,
+                "version_label": r[6],
             }
             for r in rows
         ]

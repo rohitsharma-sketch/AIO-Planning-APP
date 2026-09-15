@@ -235,7 +235,7 @@ export default function DivisionPlan() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: theme.surfaceAlt }}>
-                      {['#', 'Published', 'KIDS (₹ L)', 'LADIES (₹ L)', 'MENS (₹ L)', 'Total MAMJ (₹ Cr)', 'MAMJ Growth', 'Session', ''].map(h => (
+                      {['Version', 'Published', 'KIDS (₹ L)', 'LADIES (₹ L)', 'MENS (₹ L)', 'Total MAMJ (₹ Cr)', 'MAMJ Growth', ''].map(h => (
                         <th key={h} style={{
                           padding: '8px 14px', textAlign: 'left', fontWeight: 600,
                           color: theme.textSecondary, fontSize: 11, letterSpacing: 0.4,
@@ -256,7 +256,9 @@ export default function DivisionPlan() {
                       const ps = promoteState[v.id]
                       return (
                         <tr key={v.id} style={{ background: idx % 2 === 0 ? theme.surface : theme.surfaceAlt }}>
-                          <td style={{ padding: '8px 14px', color: theme.textMuted, fontWeight: 600 }}>#{v.id}</td>
+                          <td style={{ padding: '8px 14px', color: theme.text, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            {v.version_label || `Version ${versions.length - idx}`}
+                          </td>
                           <td style={{ padding: '8px 14px', color: theme.textSecondary, whiteSpace: 'nowrap' }}>{pubDate}</td>
                           <td style={{ padding: '8px 14px', fontVariantNumeric: 'tabular-nums' }}>
                             {kidsTotal > 0 ? kidsTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '—'}
@@ -282,9 +284,6 @@ export default function DivisionPlan() {
                                 {v.growth_pct >= 0 ? '+' : ''}{v.growth_pct.toFixed(1)}%
                               </span>
                             ) : <span style={{ color: theme.textMuted, fontSize: 11 }}>—</span>}
-                          </td>
-                          <td style={{ padding: '8px 14px', color: theme.textMuted, fontSize: 11, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {v.session_id ? v.session_id.slice(0, 8) + '…' : 'auto'}
                           </td>
                           <td style={{ padding: '8px 14px' }}>
                             <button
