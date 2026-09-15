@@ -39,7 +39,15 @@ export default function DivisionPlan() {
   const [versions, setVersions] = useState(null)       // null = not loaded yet
   const [versionsLoading, setVersionsLoading] = useState(false)
   const [promoteState, setPromoteState] = useState({}) // {[id]: 'loading'|'done'|'error'}
+  const [activeVersionId, setActiveVersionId] = useState(null)
   useEffect(() => { loadConfig() }, [])
+
+  // When versions load, match the locked version by total MAMJ
+  useEffect(() => {
+    if (!versions || !configMeta || configMeta.aopLever !== 'locked' || !configMeta.totalMamj) return
+    const match = versions.find(v => Math.abs(v.total_mamj_lakhs - configMeta.totalMamj) < 1)
+    if (match) setActiveVersionId(match.id)
+  }, [versions, configMeta])
 
   const loadConfig = async () => {
     setError(null)
@@ -71,12 +79,26 @@ export default function DivisionPlan() {
     }
   }
 
-  const promoteVersion = async (versionId) => {
+  const promoteVersion = async (version) => {
+    const versionId = version.id
     setPromoteState(s => ({ ...s, [versionId]: 'loading' }))
     try {
       await axios.post(`/api/aop/api/promote-aop-version/${versionId}`)
       setPromoteState(s => ({ ...s, [versionId]: 'done' }))
-      // Reload config so the banner reflects the newly locked version
+      setActiveVersionId(versionId)
+      // Immediately update Division Inputs with this version's AOP MAMJ values
+      const dt = version.division_totals || {}
+      const divMamj = {
+        KIDS:   Object.values(dt.KIDS   || {}).reduce((s, x) => s + x, 0),
+        LADIES: Object.values(dt.LADIES || {}).reduce((s, x) => s + x, 0),
+        MENS:   Object.values(dt.MENS   || {}).reduce((s, x) => s + x, 0),
+      }
+      setRows(prev => prev.map(r => {
+        const newMamj = divMamj[r.division_name]
+        if (newMamj == null) return r
+        return { ...r, mamj_lakhs: parseFloat(newMamj.toFixed(1)) }
+      }))
+      // Reload config to sync banner + growth rates
       await loadConfig()
     } catch {
       setPromoteState(s => ({ ...s, [versionId]: 'error' }))
@@ -286,19 +308,27 @@ export default function DivisionPlan() {
                             ) : <span style={{ color: theme.textMuted, fontSize: 11 }}>—</span>}
                           </td>
                           <td style={{ padding: '8px 14px' }}>
-                            <button
-                              style={{
-                                ...btnStyle(
-                                  ps === 'done' ? '#D1FAE5' : ps === 'error' ? '#FEF2F2' : theme.accent,
-                                  ps === 'done' ? '#065F46' : ps === 'error' ? theme.danger : '#fff'
-                                ),
+                            {activeVersionId === v.id ? (
+                              <span style={{
+                                ...btnStyle('#D1FAE5', '#065F46'),
                                 fontSize: 11, padding: '4px 12px', whiteSpace: 'nowrap',
-                              }}
-                              disabled={ps === 'loading' || ps === 'done'}
-                              onClick={() => promoteVersion(v.id)}
-                            >
-                              {ps === 'loading' ? 'Locking…' : ps === 'done' ? '🔒 Locked' : ps === 'error' ? '⚠ Failed' : '🔒 Use This Version'}
-                            </button>
+                                display: 'inline-block', cursor: 'default',
+                              }}>🔒 Locked</span>
+                            ) : (
+                              <button
+                                style={{
+                                  ...btnStyle(
+                                    ps === 'loading' ? theme.surfaceAlt : ps === 'error' ? '#FEF2F2' : theme.accent,
+                                    ps === 'loading' ? theme.textSecondary : ps === 'error' ? theme.danger : '#fff'
+                                  ),
+                                  fontSize: 11, padding: '4px 12px', whiteSpace: 'nowrap',
+                                }}
+                                disabled={ps === 'loading'}
+                                onClick={() => promoteVersion(v)}
+                              >
+                                {ps === 'loading' ? 'Locking…' : ps === 'error' ? '⚠ Failed' : '🔒 Use This Version'}
+                              </button>
+                            )}
                           </td>
                         </tr>
                       )
