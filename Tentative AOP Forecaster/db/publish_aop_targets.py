@@ -14,7 +14,11 @@ Keying convention (avoids FK issues on masterdata.divisions):
   row_key    = 'MENS' / 'LADIES' / 'KIDS'
   value      = Rs Lakhs       (system-wide unit; frontend converts ÷100 → Rs Cr)
   source     = 'aop_forecaster'
+
+Every publish is recorded in planning_inputs.aop_publish_history so the
+Planning Engine can show a version picker and promote any past run.
 """
+import json
 from sqlalchemy import text
 
 LEVER_KEY = "aop_division_target"
@@ -35,9 +39,23 @@ LFL_TAGS = {
 }
 
 
-def publish_aop_targets(session, detail_records: list[dict]) -> None:
+def _ensure_history_table(session) -> None:
+    """Create aop_publish_history if it doesn't exist yet (auto-migration)."""
+    session.execute(text("""
+        CREATE TABLE IF NOT EXISTS planning_inputs.aop_publish_history (
+            id              SERIAL PRIMARY KEY,
+            session_id      TEXT,
+            published_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+            division_totals JSONB       NOT NULL,
+            total_mamj_lakhs NUMERIC(12,2)
+        )
+    """))
+
+
+def publish_aop_targets(session, detail_records: list[dict], session_id: str = None) -> None:
     """Upsert MENS/LADIES/KIDS × MAMJ LFL forecast totals to planning_inputs.input_values.
-    Idempotent: safe to call after every run."""
+    Also records a row in aop_publish_history so the Planning Engine can pick
+    any past version to promote.  Idempotent: safe to call after every run."""
     # Ensure the lever definition row exists (FK parent for input_values.lever_key)
     session.execute(text("""
         INSERT INTO planning_inputs.lever_definitions (lever_key, label, required, shape)
@@ -74,8 +92,98 @@ def publish_aop_targets(session, detail_records: list[dict]) -> None:
 
     session.commit()
 
+    # Record this publish in the history table (non-fatal if it fails)
+    try:
+        _ensure_history_table(session)
+        # Build {div: {period_id_str: lakhs}} for JSONB storage
+        div_totals: dict[str, dict[str, float]] = {}
+        for (div, pid), val in totals.items():
+            div_totals.setdefault(div, {})[str(pid)] = round(val, 2)
+        total_mamj = round(sum(totals.values()), 2)
+        session.execute(text("""
+            INSERT INTO planning_inputs.aop_publish_history
+                (session_id, division_totals, total_mamj_lakhs)
+            VALUES (:sid, :dt::jsonb, :total)
+        """), {"sid": session_id, "dt": json.dumps(div_totals), "total": total_mamj})
+        session.commit()
+    except Exception:
+        session.rollback()
+
 
 LOCKED_LEVER_KEY = "aop_locked_target"
+
+
+def list_aop_history(session, limit: int = 20) -> list[dict]:
+    """Return the most recent AOP publish history entries, newest first."""
+    try:
+        _ensure_history_table(session)
+        rows = session.execute(text("""
+            SELECT id, session_id, published_at, division_totals, total_mamj_lakhs
+            FROM planning_inputs.aop_publish_history
+            ORDER BY published_at DESC
+            LIMIT :lim
+        """), {"lim": limit}).fetchall()
+        return [
+            {
+                "id": r[0],
+                "session_id": r[1],
+                "published_at": r[2].isoformat() if r[2] else None,
+                "division_totals": r[3],
+                "total_mamj_lakhs": float(r[4]) if r[4] is not None else 0.0,
+            }
+            for r in rows
+        ]
+    except Exception:
+        return []
+
+
+def promote_from_history(session, version_id: int) -> dict:
+    """Promote a specific historical AOP publish to aop_locked_target.
+    The Planning Engine reads aop_locked_target as its stable approved version."""
+    try:
+        _ensure_history_table(session)
+    except Exception:
+        pass
+
+    row = session.execute(text("""
+        SELECT division_totals, total_mamj_lakhs, published_at
+        FROM planning_inputs.aop_publish_history
+        WHERE id = :id
+    """), {"id": version_id}).fetchone()
+
+    if not row:
+        return {"ok": False, "reason": f"Version {version_id} not found in publish history."}
+
+    division_totals, total_mamj, published_at = row
+
+    session.execute(text("""
+        INSERT INTO planning_inputs.lever_definitions (lever_key, label, required, shape)
+        VALUES (:k, 'AOP Division Target (locked for Planning Engine)', false, 'named_row')
+        ON CONFLICT (lever_key) DO NOTHING
+    """), {"k": LOCKED_LEVER_KEY})
+
+    locked_count = 0
+    for div, periods in division_totals.items():
+        for pid_str, value in periods.items():
+            session.execute(text("""
+                INSERT INTO planning_inputs.input_values
+                    (lever_key, store_id, division_code, period_id, row_key, value, source)
+                VALUES (:lk, '', '', :pid, :rk, :val, 'aop_history')
+                ON CONFLICT ON CONSTRAINT uq_input_values_identity
+                DO UPDATE SET value = EXCLUDED.value,
+                              source = EXCLUDED.source,
+                              updated_at = now()
+            """), {"lk": LOCKED_LEVER_KEY, "pid": int(pid_str), "rk": div, "val": float(value)})
+            locked_count += 1
+
+    session.commit()
+    return {
+        "ok": True,
+        "version_id": version_id,
+        "locked_rows": locked_count,
+        "total_mamj_lakhs": float(total_mamj) if total_mamj is not None else 0.0,
+        "original_published_at": published_at.isoformat() if published_at else None,
+    }
 
 
 def promote_aop_targets(session) -> dict:

@@ -140,7 +140,7 @@ async def run(session_id: str, body: RunRequest = RunRequest()):
         from db.publish_aop_targets import publish_aop_targets
         _pub = SessionLocal()
         try:
-            publish_aop_targets(_pub, detail_records)
+            publish_aop_targets(_pub, detail_records, session_id=session_id)
         except Exception:
             pass  # non-fatal: Buyer's Input Sheet falls back to previous values
         finally:
@@ -293,6 +293,40 @@ def promote_aop_targets_endpoint():
         result = promote_aop_targets(db)
         if not result.get("ok"):
             raise HTTPException(status_code=400, detail=result.get("reason", "Promote failed"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@router.get("/api/aop-publish-history")
+def aop_publish_history(limit: int = 20):
+    """List available AOP publish history so the Planning Engine can show a
+    version picker.  Returns newest-first; includes division MAMJ totals so
+    the UI can display ₹Cr without a second call."""
+    from db.base import SessionLocal
+    from db.publish_aop_targets import list_aop_history
+    db = SessionLocal()
+    try:
+        return {"versions": list_aop_history(db, limit=limit)}
+    finally:
+        db.close()
+
+
+@router.post("/api/promote-aop-version/{version_id}")
+def promote_aop_version(version_id: int):
+    """Promote a specific historical AOP publish (by id) to aop_locked_target.
+    The Planning Engine reads aop_locked_target as its stable approved version."""
+    from db.base import SessionLocal
+    from db.publish_aop_targets import promote_from_history
+    db = SessionLocal()
+    try:
+        result = promote_from_history(db, version_id)
+        if not result.get("ok"):
+            raise HTTPException(status_code=404, detail=result.get("reason", "Version not found"))
         return result
     except HTTPException:
         raise

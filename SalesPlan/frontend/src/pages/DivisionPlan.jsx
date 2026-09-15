@@ -36,6 +36,9 @@ export default function DivisionPlan() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [configMeta, setConfigMeta] = useState(null)
+  const [versions, setVersions] = useState(null)       // null = not loaded yet
+  const [versionsLoading, setVersionsLoading] = useState(false)
+  const [promoteState, setPromoteState] = useState({}) // {[id]: 'loading'|'done'|'error'}
   useEffect(() => { loadConfig() }, [])
 
   const loadConfig = async () => {
@@ -53,6 +56,30 @@ export default function DivisionPlan() {
       })
     } catch {
       setError('Failed to load config from backend.')
+    }
+  }
+
+  const loadVersions = async () => {
+    setVersionsLoading(true)
+    try {
+      const res = await axios.get('/api/aop/api/aop-publish-history?limit=15')
+      setVersions(res.data.versions || [])
+    } catch {
+      setVersions([])
+    } finally {
+      setVersionsLoading(false)
+    }
+  }
+
+  const promoteVersion = async (versionId) => {
+    setPromoteState(s => ({ ...s, [versionId]: 'loading' }))
+    try {
+      await axios.post(`/api/aop/api/promote-aop-version/${versionId}`)
+      setPromoteState(s => ({ ...s, [versionId]: 'done' }))
+      // Reload config so the banner reflects the newly locked version
+      await loadConfig()
+    } catch {
+      setPromoteState(s => ({ ...s, [versionId]: 'error' }))
     }
   }
 
@@ -160,6 +187,116 @@ export default function DivisionPlan() {
             </span>
           </div>
         )}
+
+        {/* AOP Version Selector */}
+        <div style={{
+          background: theme.surface,
+          border: `1px solid ${theme.border}`,
+          borderRadius: 8,
+          marginBottom: 18,
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            padding: '10px 16px',
+            borderBottom: versions !== null ? `1px solid ${theme.border}` : 'none',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+          }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: theme.textPrimary, flex: 1 }}>
+              🗂 AOP Version History
+            </span>
+            {versions === null ? (
+              <button
+                style={{ ...btnStyle(theme.primaryLight, theme.primary), fontSize: 12, padding: '5px 14px' }}
+                onClick={loadVersions}
+                disabled={versionsLoading}
+              >
+                {versionsLoading ? 'Loading…' : 'Load Available Versions'}
+              </button>
+            ) : (
+              <button
+                style={{ ...btnStyle(theme.surfaceAlt, theme.textSecondary), fontSize: 12, padding: '5px 14px' }}
+                onClick={loadVersions}
+                disabled={versionsLoading}
+              >
+                ↺ Refresh
+              </button>
+            )}
+          </div>
+
+          {versions !== null && (
+            <div style={{ overflowX: 'auto' }}>
+              {versions.length === 0 ? (
+                <div style={{ padding: '14px 16px', fontSize: 13, color: theme.textMuted }}>
+                  No published versions found. Run the AOP Forecaster to create one.
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: theme.surfaceAlt }}>
+                      {['#', 'Published', 'KIDS (₹ L)', 'LADIES (₹ L)', 'MENS (₹ L)', 'Total MAMJ (₹ Cr)', 'Session', ''].map(h => (
+                        <th key={h} style={{
+                          padding: '8px 14px', textAlign: 'left', fontWeight: 600,
+                          color: theme.textSecondary, fontSize: 11, letterSpacing: 0.4,
+                          borderBottom: `1px solid ${theme.border}`, whiteSpace: 'nowrap',
+                        }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {versions.map((v, idx) => {
+                      const dt = v.division_totals || {}
+                      const kidsTotal = Object.values(dt.KIDS || {}).reduce((s, x) => s + x, 0)
+                      const ladiesTotal = Object.values(dt.LADIES || {}).reduce((s, x) => s + x, 0)
+                      const mensTotal = Object.values(dt.MENS || {}).reduce((s, x) => s + x, 0)
+                      const pubDate = v.published_at
+                        ? new Date(v.published_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+                        : '—'
+                      const ps = promoteState[v.id]
+                      return (
+                        <tr key={v.id} style={{ background: idx % 2 === 0 ? theme.surface : theme.surfaceAlt }}>
+                          <td style={{ padding: '8px 14px', color: theme.textMuted, fontWeight: 600 }}>#{v.id}</td>
+                          <td style={{ padding: '8px 14px', color: theme.textSecondary, whiteSpace: 'nowrap' }}>{pubDate}</td>
+                          <td style={{ padding: '8px 14px', fontVariantNumeric: 'tabular-nums' }}>
+                            {kidsTotal > 0 ? kidsTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '—'}
+                          </td>
+                          <td style={{ padding: '8px 14px', fontVariantNumeric: 'tabular-nums' }}>
+                            {ladiesTotal > 0 ? ladiesTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '—'}
+                          </td>
+                          <td style={{ padding: '8px 14px', fontVariantNumeric: 'tabular-nums' }}>
+                            {mensTotal > 0 ? mensTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '—'}
+                          </td>
+                          <td style={{ padding: '8px 14px', color: theme.primary, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                            ₹{(v.total_mamj_lakhs / 100).toFixed(1)} Cr
+                          </td>
+                          <td style={{ padding: '8px 14px', color: theme.textMuted, fontSize: 11, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {v.session_id ? v.session_id.slice(0, 8) + '…' : 'auto'}
+                          </td>
+                          <td style={{ padding: '8px 14px' }}>
+                            <button
+                              style={{
+                                ...btnStyle(
+                                  ps === 'done' ? '#D1FAE5' : ps === 'error' ? '#FEF2F2' : theme.accent,
+                                  ps === 'done' ? '#065F46' : ps === 'error' ? theme.danger : '#fff'
+                                ),
+                                fontSize: 11, padding: '4px 12px', whiteSpace: 'nowrap',
+                              }}
+                              disabled={ps === 'loading' || ps === 'done'}
+                              onClick={() => promoteVersion(v.id)}
+                            >
+                              {ps === 'loading' ? 'Locking…' : ps === 'done' ? '🔒 Locked' : ps === 'error' ? '⚠ Failed' : '🔒 Use This Version'}
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </div>
 
         {error && (
           <div style={{
