@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import Header from '../components/Header'
@@ -42,6 +42,7 @@ export default function DivisionPlan() {
   const [activeVersionId, setActiveVersionId] = useState(() => {
     try { return localStorage.getItem('aop_active_version_id') || null } catch { return null }
   })
+  const lyMamjBase = useRef({}) // {DIV: ly_mamj_lakhs} — fixed denominator for growth derivation
   useEffect(() => { loadConfig() }, [])
 
   const persistActiveVersion = (id) => {
@@ -65,7 +66,14 @@ export default function DivisionPlan() {
     setError(null)
     try {
       const cfgRes = await axios.get('/api/planning/division-plan/config')
-      setRows(cfgRes.data.divisions.map(d => ({ ...d })))
+      const divs = cfgRes.data.divisions.map(d => ({ ...d }))
+      setRows(divs)
+      // Compute and cache the LY MAMJ base so version switches can derive growth %
+      lyMamjBase.current = Object.fromEntries(
+        divs
+          .filter(d => d.mamj_lakhs > 0 && d.growth_pct != null)
+          .map(d => [d.division_name, d.mamj_lakhs / (1 + d.growth_pct / 100)])
+      )
       setConfigMeta({
         totalStores: cfgRes.data.total_stores,
         nDivisions: cfgRes.data.n_divisions || cfgRes.data.divisions.length,
@@ -103,7 +111,12 @@ export default function DivisionPlan() {
     }
     setRows(prev => prev.map(r => {
       const newMamj = divMamj[r.division_name]
-      return newMamj != null ? { ...r, mamj_lakhs: parseFloat(newMamj.toFixed(1)) } : r
+      if (newMamj == null) return r
+      const base = lyMamjBase.current[r.division_name]
+      const newGrowth = base > 0
+        ? parseFloat(((newMamj / base - 1) * 100).toFixed(1))
+        : r.growth_pct
+      return { ...r, mamj_lakhs: parseFloat(newMamj.toFixed(1)), growth_pct: newGrowth }
     }))
     persistActiveVersion(versionId)
     setPromoteState(s => ({ ...s, [versionId]: 'loading' }))
