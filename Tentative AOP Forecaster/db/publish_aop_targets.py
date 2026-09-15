@@ -103,7 +103,7 @@ def publish_aop_targets(session, detail_records: list[dict], session_id: str = N
         session.execute(text("""
             INSERT INTO planning_inputs.aop_publish_history
                 (session_id, division_totals, total_mamj_lakhs)
-            VALUES (:sid, :dt::jsonb, :total)
+            VALUES (:sid, CAST(:dt AS jsonb), :total)
         """), {"sid": session_id, "dt": json.dumps(div_totals), "total": total_mamj})
         session.commit()
     except Exception:
@@ -142,7 +142,7 @@ def _seed_history_from_staging(session) -> bool:
     session.execute(text("""
         INSERT INTO planning_inputs.aop_publish_history
             (session_id, published_at, division_totals, total_mamj_lakhs)
-        VALUES ('backfill', :ts, :dt::jsonb, :total)
+        VALUES ('backfill', :ts, CAST(:dt AS jsonb), :total)
     """), {
         "ts": latest_ts,
         "dt": json.dumps(div_totals),
