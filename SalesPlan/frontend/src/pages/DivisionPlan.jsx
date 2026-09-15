@@ -461,7 +461,7 @@ export default function DivisionPlan() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: theme.surfaceAlt }}>
-                  {['Division', 'LY Base (₹ L)', 'AOP MAMJ (₹ L)', 'AOP Growth %', 'Plan Growth %', 'Seasonality Index', 'FY Start Month', ''].map(h => (
+                  {['Division', 'LY Base (₹ L)', 'AOP MAMJ (₹ L)', 'AOP Growth %', 'Plan Growth %', 'FY Start Month', ''].map(h => (
                     <th key={h} style={{
                       padding: '10px 14px',
                       textAlign: 'left',
@@ -518,15 +518,6 @@ export default function DivisionPlan() {
                         step="0.1"
                         value={row.growth_pct}
                         onChange={e => updateRow(idx, 'growth_pct', e.target.value)}
-                      />
-                    </td>
-                    <td style={{ padding: '8px 14px' }}>
-                      <input
-                        style={{ ...inputStyle, width: 110 }}
-                        type="number"
-                        step="0.01"
-                        value={row.seasonality_index}
-                        onChange={e => updateRow(idx, 'seasonality_index', e.target.value)}
                       />
                     </td>
                     <td style={{ padding: '8px 14px' }}>
