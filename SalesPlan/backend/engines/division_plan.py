@@ -6,6 +6,7 @@ import os
 import sys
 import pandas as pd
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "Tentative AOP Forecaster"))
 from store_master import load_store_master as _universal_store_master, is_ssg as _universal_is_ssg
 
 router = APIRouter()
@@ -18,23 +19,20 @@ AOP_INPUTS = os.path.join(
     "..", "..", "..", "Tentative AOP Forecaster", "inputs.xlsx"
 )
 
-DIVISIONS = ["GM", "KIDS", "LADIES", "MENS", "RETAIL"]
+# KLM only — GM and RETAIL excluded until expanded
+DIVISIONS = ["KIDS", "LADIES", "MENS"]
 
-# FY27 actuals by division (in Lakhs) — used as default base_sales
+# FY27 LFL actuals by division (Lakhs) — base for growth rate calculation
 FY27_BASE = {
-    "GM":     41014.06,
     "KIDS":   54237.27,
     "LADIES": 51264.55,
     "MENS":   68427.08,
-    "RETAIL":  2335.11,
 }
 
 DIVISION_SEASONALITY = {
-    "GM":     1.05,
     "KIDS":   1.10,
     "LADIES": 1.08,
     "MENS":   1.06,
-    "RETAIL": 1.00,
 }
 
 FY28_MONTHS = [
@@ -83,8 +81,43 @@ def _load_store_master():
     return list(_universal_store_master())
 
 
-def _build_default_divisions():
+def _load_aop_targets():
+    """
+    Read MAMJ AOP targets from planning_inputs.input_values (lever_key='aop_division_target').
+    Returns {div: {period_id: value_lakhs}} for KIDS/LADIES/MENS only.
+    Falls back to {} if DB is unavailable.
+    """
+    try:
+        from db.base import SessionLocal
+        from sqlalchemy import text
+        with SessionLocal() as db:
+            rows = db.execute(text(
+                "SELECT row_key, period_id, value FROM planning_inputs.input_values "
+                "WHERE lever_key='aop_division_target' AND row_key = ANY(:divs) "
+                "ORDER BY row_key, period_id"
+            ), {"divs": list(DIVISIONS)}).fetchall()
+        result = {}
+        for row_key, period_id, value in rows:
+            result.setdefault(row_key, {})[period_id] = float(value)
+        return result
+    except Exception:
+        return {}
+
+
+def _aop_mamj_total(aop_by_div: dict) -> dict:
+    """Sum MAMJ (period_ids 202703..202706) per division → Lakhs."""
+    MAMJ = {202703, 202704, 202705, 202706}
+    return {
+        div: sum(v for pid, v in periods.items() if pid in MAMJ)
+        for div, periods in aop_by_div.items()
+    }
+
+
+def _build_default_divisions(aop_growth: dict | None = None):
     growth_rates = _load_growth_rates()
+    # If AOP-derived growth is available, prefer it over inputs.xlsx
+    if aop_growth:
+        growth_rates.update(aop_growth)
     return [
         {
             "division_name": div,
@@ -130,14 +163,49 @@ class DivisionPlanOutput(BaseModel):
     divisions: list[DivisionResult]
 
 
+@router.get("/aop-targets")
+def get_aop_targets():
+    """Return MAMJ AOP targets per division from the shared DB, with AOP growth from inputs.xlsx."""
+    aop_by_div = _load_aop_targets()
+    mamj = _aop_mamj_total(aop_by_div)
+    # Growth rates from the AOP Forecaster's Growth % sheet — the actual forecast rates
+    growth_rates = _load_growth_rates()
+    out = []
+    for div in DIVISIONS:
+        mamj_val = mamj.get(div, 0.0)
+        out.append({
+            "division": div,
+            "mamj_lakhs": round(mamj_val, 2),
+            "fy27_base_lakhs": FY27_BASE.get(div, 0.0),
+            "aop_growth_pct": round(growth_rates.get(div, 6.0), 2),
+        })
+    return {
+        "source": "planning_inputs.input_values (aop_division_target)",
+        "growth_source": "AOP Forecaster — inputs.xlsx",
+        "divisions": out,
+        "total_mamj_lakhs": round(sum(r["mamj_lakhs"] for r in out), 2),
+    }
+
+
 @router.get("/config")
 def get_config():
     store_master = _load_store_master()
+    aop_by_div = _load_aop_targets()
+    mamj = _aop_mamj_total(aop_by_div)
+    # Growth rates from AOP Forecaster inputs.xlsx — the proper per-division AOP growth targets
+    divisions_data = _build_default_divisions()
+    # Attach MAMJ reference values for display
+    for d in divisions_data:
+        d["mamj_lakhs"] = round(mamj.get(d["division_name"], 0.0), 2)
+    has_mamj = any(d["mamj_lakhs"] for d in divisions_data)
     return {
-        "divisions": _build_default_divisions(),
+        "divisions": divisions_data,
         "store_master": store_master,
         "total_stores": len(store_master),
-        "source": "AOP Forecaster — inputs.xlsx" if store_master else "default",
+        "n_divisions": len(DIVISIONS),
+        "source": "AOP Forecaster — inputs.xlsx (KLM)",
+        "aop_source": "planning_inputs.input_values (MAMJ ref)" if has_mamj else "inputs.xlsx",
+        "total_mamj_lakhs": round(sum(d["mamj_lakhs"] for d in divisions_data), 2),
     }
 
 
@@ -295,7 +363,7 @@ def _build_growth_structure(growth_matrix: dict) -> dict:
     total_forecast = 0.0
 
     for div in DIVISIONS:
-        base = FY27_BASE[div]
+        base = FY27_BASE.get(div, 0.0)
         raw_growth = growth_matrix.get(div, [])
         # Ensure exactly 12 entries — pad with None if shorter
         div_growth = list(raw_growth) + [None] * (12 - len(raw_growth))

@@ -28,7 +28,9 @@ app.add_middleware(
 )
 
 app.include_router(division_plan_router,   prefix="/api/division-plan")
+app.include_router(division_plan_router,   prefix="/api/planning/division-plan")
 app.include_router(department_plan_router, prefix="/api/department-plan")
+app.include_router(department_plan_router, prefix="/api/planning/department-plan")
 app.include_router(dept_sales_router,      prefix="/api/dept-sales")
 app.include_router(attr_correction_router, prefix="/api/attr-correction")
 app.include_router(base_correction_router, prefix="/api/base-correction")

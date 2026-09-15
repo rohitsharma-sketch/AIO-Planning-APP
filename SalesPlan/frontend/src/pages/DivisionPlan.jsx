@@ -36,17 +36,20 @@ export default function DivisionPlan() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [configMeta, setConfigMeta] = useState(null)
-
-  useEffect(() => {
-    loadConfig()
-  }, [])
+  useEffect(() => { loadConfig() }, [])
 
   const loadConfig = async () => {
     setError(null)
     try {
-      const res = await axios.get('/api/planning/division-plan/config')
-      setRows(res.data.divisions.map(d => ({ ...d })))
-      setConfigMeta({ totalStores: res.data.total_stores, source: res.data.source })
+      const cfgRes = await axios.get('/api/planning/division-plan/config')
+      setRows(cfgRes.data.divisions.map(d => ({ ...d })))
+      setConfigMeta({
+        totalStores: cfgRes.data.total_stores,
+        nDivisions: cfgRes.data.n_divisions || cfgRes.data.divisions.length,
+        source: cfgRes.data.source,
+        aopSource: cfgRes.data.aop_source,
+        totalMamj: cfgRes.data.total_mamj_lakhs,
+      })
     } catch {
       setError('Failed to load config from backend.')
     }
@@ -136,7 +139,13 @@ export default function DivisionPlan() {
           }}>
             <span style={{ fontSize: 16 }}>📂</span>
             <span>
-              Loaded from <strong>{configMeta.source}</strong> — <strong>{configMeta.totalStores} stores</strong> × 5 divisions
+              Loaded from <strong>{configMeta.source}</strong> — <strong>{configMeta.totalStores} stores</strong> × <strong>{configMeta.nDivisions || 3} divisions (KLM)</strong>
+              {configMeta.totalMamj > 0 && (
+                <span style={{ color: theme.primary, fontWeight: 600, marginLeft: 8 }}>
+                  · AOP MAMJ: ₹{(configMeta.totalMamj / 100).toFixed(1)} Cr
+                </span>
+              )}
+              {configMeta.aopSource && <span style={{ color: theme.textMuted, marginLeft: 8 }}>· {configMeta.aopSource}</span>}
             </span>
           </div>
         )}
@@ -221,7 +230,7 @@ export default function DivisionPlan() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ background: theme.surfaceAlt }}>
-                  {['Division Name', 'Base Sales (₹ Lakhs)', 'Growth %', 'Seasonality Index', 'FY Start Month', ''].map(h => (
+                  {['Division', 'LY Base (₹ L)', 'AOP MAMJ (₹ L)', 'AOP Growth %', 'Plan Growth %', 'Seasonality Index', 'FY Start Month', ''].map(h => (
                     <th key={h} style={{
                       padding: '10px 14px',
                       textAlign: 'left',
@@ -241,22 +250,36 @@ export default function DivisionPlan() {
                     key={idx}
                     style={{ background: idx % 2 === 0 ? theme.surface : theme.surfaceAlt }}
                   >
-                    <td style={{ padding: '8px 14px' }}>
-                      <input
-                        style={inputStyle}
-                        value={row.division_name}
-                        onChange={e => updateRow(idx, 'division_name', e.target.value)}
-                        placeholder="Division name"
-                      />
+                    <td style={{ padding: '8px 14px', fontWeight: 600, color: theme.textPrimary }}>
+                      {row.division_name || (
+                        <input
+                          style={inputStyle}
+                          value={row.division_name}
+                          onChange={e => updateRow(idx, 'division_name', e.target.value)}
+                          placeholder="Division name"
+                        />
+                      )}
                     </td>
                     <td style={{ padding: '8px 14px' }}>
                       <input
-                        style={{ ...inputStyle, width: 130 }}
+                        style={{ ...inputStyle, width: 120 }}
                         type="number"
                         value={row.base_sales}
                         onChange={e => updateRow(idx, 'base_sales', e.target.value)}
                       />
                     </td>
+                    {/* AOP MAMJ — reference from DB, read-only */}
+                    <td style={{ padding: '8px 14px', color: theme.primary, fontWeight: 600, fontSize: 13 }}>
+                      {row.mamj_lakhs != null ? row.mamj_lakhs.toLocaleString('en-IN', { maximumFractionDigits: 1 }) : '—'}
+                    </td>
+                    {/* AOP Growth % — from inputs.xlsx, read-only reference */}
+                    <td style={{ padding: '8px 14px' }}>
+                      <span style={{
+                        background: theme.accentLight, color: theme.accent,
+                        borderRadius: 5, padding: '2px 7px', fontWeight: 600, fontSize: 12,
+                      }}>+{parseFloat(row.growth_pct || 0).toFixed(1)}%</span>
+                    </td>
+                    {/* Plan Growth % — editable, defaults to AOP growth */}
                     <td style={{ padding: '8px 14px' }}>
                       <input
                         style={{ ...inputStyle, width: 90 }}
