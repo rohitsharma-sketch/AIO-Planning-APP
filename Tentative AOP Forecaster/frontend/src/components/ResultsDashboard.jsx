@@ -53,6 +53,7 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
   const [dataErr, setDataErr]     = useState(null)
   const [typeFilter, setTypeFilter] = useState([])      // [] = all types
   const [monthFilter, setMonthFilter] = useState([])    // [] = all months
+  const [divFilter, setDivFilter]     = useState([])    // [] = all divisions
   const [showLabels, setShowLabels] = useState(true)
 
   // Base source for the charts below: 'actual' is the DB's own actuals (what
@@ -80,7 +81,7 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
   useEffect(() => {
     const sid = session?.session_id
     if (!sid) return
-    setLeaves(null); setDataErr(null); setTypeFilter([]); setMonthFilter([])
+    setLeaves(null); setDataErr(null); setTypeFilter([]); setMonthFilter([]); setDivFilter([])
     fetch(apiUrl(`/api/data/${sid}`))
       .then(r => r.ok ? r.json() : r.json().then(e => { throw new Error(e.detail || 'Failed to load detail data') }))
       // NOT rows.map(toLeaf) - Array.map calls its callback as (element, index,
@@ -101,6 +102,13 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
     return next.length === TYPES.length ? [] : next.length ? next : [t]
   })
 
+  const divOn = d => divFilter.length === 0 || divFilter.includes(d)
+  const toggleDiv = d => setDivFilter(f => {
+    const cur = f.length ? f : DIVS
+    const next = cur.includes(d) ? cur.filter(x => x !== d) : [...cur, d]
+    return next.length === DIVS.length ? [] : next.length ? next : [d]
+  })
+
   const monthOn = m => monthFilter.length === 0 || monthFilter.includes(m)
   const toggleMonth = m => setMonthFilter(f => {
     const cur = f.length ? f : MONTHS
@@ -119,7 +127,7 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
   // showing the grand total regardless of which chips are toggled off.
   const charts = useMemo(() => {
     if (!leaves) return { monthly: results.monthly, divisions: results.divisions, store_types: results.store_types, summary }
-    const sel = leaves.filter(r => typeOn(r.Type))
+    const sel = leaves.filter(r => typeOn(r.Type) && divOn(r.Division))
     const monthIdx = MONTHS.map((m, i) => i).filter(i => monthOn(MONTHS[i]))
     // Sum only the selected months' base/forecast for one row — the Monthly
     // chart shows just the selected months, everything else (KPIs, division
@@ -136,11 +144,11 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
     const monthly = monthIdx.map(i => {
       const nonLfl = sel.filter(r => r.Type !== 'LfL').reduce((s, r) => s + r.mb[i], 0)
       const lfl = reindexedOn && typeOn('LfL')
-        ? DIVS.reduce((s, d) => s + rBase(d, i), 0)
+        ? DIVS.filter(divOn).reduce((s, d) => s + rBase(d, i), 0)
         : sel.filter(r => r.Type === 'LfL').reduce((s, r) => s + r.mb[i], 0)
       return { month: MONTHS[i], base: +(nonLfl + lfl).toFixed(2), forecast: +sel.reduce((s, r) => s + r.m[i], 0).toFixed(2) }
     })
-    const divisions = DIVS.map(division => {
+    const divisions = DIVS.filter(divOn).map(division => {
       const rs = sel.filter(r => r.Division === division)
       const nonLfl = rs.filter(r => r.Type !== 'LfL').reduce((s, r) => s + sumSel(r, r.mb), 0)
       const lfl = reindexedOn && typeOn('LfL')
@@ -152,7 +160,7 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
     const store_types = TYPES.filter(typeOn).map(type => {
       const rs = leaves.filter(r => r.Type === type)
       const base = reindexedOn && type === 'LfL'
-        ? DIVS.reduce((s, d) => s + monthIdx.reduce((ss, i) => ss + rBase(d, i), 0), 0)
+        ? DIVS.filter(divOn).reduce((s, d) => s + monthIdx.reduce((ss, i) => ss + rBase(d, i), 0), 0)
         : rs.reduce((s, r) => s + sumSel(r, r.mb), 0)
       return { type, base: +base.toFixed(2), forecast: +rs.reduce((s, r) => s + sumSel(r, r.m), 0).toFixed(2), count: new Set(rs.map(r => r.Store)).size }
     })
@@ -171,7 +179,7 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
       n_nso:  new Set(leaves.filter(r => r.Type === 'NSO'  && typeOn(r.Type)).map(r => r.Store)).size,
     }
     return { monthly, divisions, store_types, summary: filteredSummary }
-  }, [leaves, typeFilter, monthFilter, results, summary, baseSource, reindexed])
+  }, [leaves, typeFilter, monthFilter, divFilter, results, summary, baseSource, reindexed])
 
   const { monthly, divisions, store_types, summary: kpiSummary } = charts
   const filterLabel = typeFilter.length ? typeFilter.join(' + ') : 'All store types'
@@ -253,6 +261,21 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
         <span className="chart-filter-note">
           {dataErr ? `Detail unavailable — ${dataErr}` : !leaves ? 'Loading store detail…' : `Charts: ${filterLabel} · ${monthLabel}`}
         </span>
+      </div>
+
+      {/* ── Division filter ── */}
+      <div className="chart-filter-bar">
+        <span className="sdt-tb-label">Division</span>
+        {DIVS.map(d => (
+          <button key={d} className={`sdt-chip${divOn(d) ? ' on' : ''}`} onClick={() => toggleDiv(d)} disabled={!leaves && !dataErr}
+                  title={`${divOn(d) ? 'Hide' : 'Show'} ${d}`}>
+            {d}
+          </button>
+        ))}
+        {divFilter.length > 0 && <button className="sdt-reset" onClick={() => setDivFilter([])}>All divisions</button>}
+        {divFilter.length > 0 && (
+          <span className="chart-filter-note">Showing: {divFilter.join(' + ')}</span>
+        )}
       </div>
 
       {/* ── Base source toggle: Actual vs Calendar Engine's reindexed sales.
