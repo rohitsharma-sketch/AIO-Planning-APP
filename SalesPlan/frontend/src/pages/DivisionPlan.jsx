@@ -39,14 +39,26 @@ export default function DivisionPlan() {
   const [versions, setVersions] = useState(null)       // null = not loaded yet
   const [versionsLoading, setVersionsLoading] = useState(false)
   const [promoteState, setPromoteState] = useState({}) // {[id]: 'loading'|'done'|'error'}
-  const [activeVersionId, setActiveVersionId] = useState(null)
+  const [activeVersionId, setActiveVersionId] = useState(() => {
+    try { return localStorage.getItem('aop_active_version_id') || null } catch { return null }
+  })
   useEffect(() => { loadConfig() }, [])
 
-  // When versions load, match the locked version by total MAMJ
+  const persistActiveVersion = (id) => {
+    setActiveVersionId(id)
+    try {
+      if (id != null) localStorage.setItem('aop_active_version_id', String(id))
+      else localStorage.removeItem('aop_active_version_id')
+    } catch {}
+  }
+
+  // When versions load, authoritative DB match overrides localStorage
   useEffect(() => {
-    if (!versions || !configMeta || configMeta.aopLever !== 'locked' || !configMeta.totalMamj) return
-    const match = versions.find(v => Math.abs(v.total_mamj_lakhs - configMeta.totalMamj) < 1)
-    if (match) setActiveVersionId(match.id)
+    if (!versions || !configMeta || !configMeta.totalMamj) return
+    if (configMeta.aopLever === 'locked') {
+      const match = versions.find(v => Math.abs(v.total_mamj_lakhs - configMeta.totalMamj) < 1)
+      if (match) persistActiveVersion(match.id)
+    }
   }, [versions, configMeta])
 
   const loadConfig = async () => {
@@ -93,7 +105,7 @@ export default function DivisionPlan() {
       const newMamj = divMamj[r.division_name]
       return newMamj != null ? { ...r, mamj_lakhs: parseFloat(newMamj.toFixed(1)) } : r
     }))
-    setActiveVersionId(versionId)
+    persistActiveVersion(versionId)
     setPromoteState(s => ({ ...s, [versionId]: 'loading' }))
 
     try {
@@ -112,7 +124,7 @@ export default function DivisionPlan() {
     } catch {
       setPromoteState(s => ({ ...s, [versionId]: 'error' }))
       // Revert optimistic update on error
-      setActiveVersionId(null)
+      persistActiveVersion(null)
       await loadConfig()
     }
   }
@@ -319,27 +331,31 @@ export default function DivisionPlan() {
                               </span>
                             ) : <span style={{ color: theme.textMuted, fontSize: 11 }}>—</span>}
                           </td>
-                          <td style={{ padding: '8px 14px' }}>
+                          <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>
                             {activeVersionId === v.id ? (
                               <span style={{
-                                ...btnStyle('#D1FAE5', '#065F46'),
-                                fontSize: 11, padding: '4px 12px', whiteSpace: 'nowrap',
-                                display: 'inline-block', cursor: 'default',
-                              }}>🔒 Locked</span>
+                                display: 'inline-flex', alignItems: 'center', gap: 5,
+                                background: '#D1FAE5', color: '#065F46',
+                                borderRadius: 6, padding: '4px 12px',
+                                fontSize: 11, fontWeight: 700, letterSpacing: 0.2,
+                              }}>🔒 Active</span>
                             ) : (
-                              <button
-                                style={{
-                                  ...btnStyle(
-                                    ps === 'loading' ? theme.surfaceAlt : ps === 'error' ? '#FEF2F2' : theme.accent,
-                                    ps === 'loading' ? theme.textSecondary : ps === 'error' ? theme.danger : '#fff'
-                                  ),
-                                  fontSize: 11, padding: '4px 12px', whiteSpace: 'nowrap',
-                                }}
-                                disabled={ps === 'loading'}
-                                onClick={() => promoteVersion(v)}
-                              >
-                                {ps === 'loading' ? 'Locking…' : ps === 'error' ? '⚠ Failed' : '🔒 Use This Version'}
-                              </button>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 11, color: theme.textMuted }}>🔓</span>
+                                <button
+                                  style={{
+                                    ...btnStyle(
+                                      ps === 'loading' ? theme.surfaceAlt : ps === 'error' ? '#FEF2F2' : theme.accent,
+                                      ps === 'loading' ? theme.textSecondary : ps === 'error' ? theme.danger : '#fff'
+                                    ),
+                                    fontSize: 11, padding: '4px 12px',
+                                  }}
+                                  disabled={ps === 'loading'}
+                                  onClick={() => promoteVersion(v)}
+                                >
+                                  {ps === 'loading' ? 'Switching…' : ps === 'error' ? '⚠ Retry' : 'Use This Version'}
+                                </button>
+                              </div>
                             )}
                           </td>
                         </tr>
