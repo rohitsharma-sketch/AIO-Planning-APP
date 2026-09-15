@@ -235,7 +235,7 @@ export default function DivisionPlan() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: theme.surfaceAlt }}>
-                      {['#', 'Published', 'KIDS (₹ L)', 'LADIES (₹ L)', 'MENS (₹ L)', 'Total MAMJ (₹ Cr)', 'Session', ''].map(h => (
+                      {['#', 'Published', 'KIDS (₹ L)', 'LADIES (₹ L)', 'MENS (₹ L)', 'Total MAMJ (₹ Cr)', 'MAMJ Growth', 'Session', ''].map(h => (
                         <th key={h} style={{
                           padding: '8px 14px', textAlign: 'left', fontWeight: 600,
                           color: theme.textSecondary, fontSize: 11, letterSpacing: 0.4,
@@ -269,6 +269,19 @@ export default function DivisionPlan() {
                           </td>
                           <td style={{ padding: '8px 14px', color: theme.primary, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
                             ₹{(v.total_mamj_lakhs / 100).toFixed(1)} Cr
+                          </td>
+                          <td style={{ padding: '8px 14px' }}>
+                            {v.growth_pct != null ? (
+                              <span style={{
+                                background: v.growth_pct >= 0 ? theme.accentLight : '#FEF2F2',
+                                color: v.growth_pct >= 0 ? theme.accent : theme.danger,
+                                borderRadius: 5, padding: '3px 8px',
+                                fontWeight: 700, fontSize: 12,
+                                fontVariantNumeric: 'tabular-nums',
+                              }}>
+                                {v.growth_pct >= 0 ? '+' : ''}{v.growth_pct.toFixed(1)}%
+                              </span>
+                            ) : <span style={{ color: theme.textMuted, fontSize: 11 }}>—</span>}
                           </td>
                           <td style={{ padding: '8px 14px', color: theme.textMuted, fontSize: 11, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {v.session_id ? v.session_id.slice(0, 8) + '…' : 'auto'}

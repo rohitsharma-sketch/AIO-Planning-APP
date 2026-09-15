@@ -39,16 +39,42 @@ LFL_TAGS = {
 }
 
 
+MAMJ_BASE_MONTHS = ["Mar'27", "Apr'27", "May'27", "Jun'27"]
+
+
+def _compute_mamj_growth(detail_records: list[dict]) -> float | None:
+    """MAMJ LFL KLM: (sum Forecast / sum Base - 1) × 100. Returns None if no base data."""
+    base_total = fc_total = 0.0
+    for rec in detail_records:
+        if rec.get("Tag") not in LFL_TAGS:
+            continue
+        div = (rec.get("Division") or "").strip().upper()
+        if div not in PUBLISH_DIVS:
+            continue
+        for m in MAMJ_BASE_MONTHS:
+            base_total += float(rec.get(f"{m} | Base") or 0)
+            fc_total   += float(rec.get(f"{m} | Forecast") or 0)
+    if base_total == 0:
+        return None
+    return round((fc_total / base_total - 1) * 100, 1)
+
+
 def _ensure_history_table(session) -> None:
-    """Create aop_publish_history if it doesn't exist yet (auto-migration)."""
+    """Create aop_publish_history if it doesn't exist yet, and add growth_pct column."""
     session.execute(text("""
         CREATE TABLE IF NOT EXISTS planning_inputs.aop_publish_history (
-            id              SERIAL PRIMARY KEY,
-            session_id      TEXT,
-            published_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-            division_totals JSONB       NOT NULL,
-            total_mamj_lakhs NUMERIC(12,2)
+            id               SERIAL PRIMARY KEY,
+            session_id       TEXT,
+            published_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+            division_totals  JSONB       NOT NULL,
+            total_mamj_lakhs NUMERIC(12,2),
+            growth_pct       NUMERIC(8,2)
         )
+    """))
+    # Add growth_pct to tables created before this column existed
+    session.execute(text("""
+        ALTER TABLE planning_inputs.aop_publish_history
+        ADD COLUMN IF NOT EXISTS growth_pct NUMERIC(8,2)
     """))
 
 
@@ -95,16 +121,21 @@ def publish_aop_targets(session, detail_records: list[dict], session_id: str = N
     # Record this publish in the history table (non-fatal if it fails)
     try:
         _ensure_history_table(session)
-        # Build {div: {period_id_str: lakhs}} for JSONB storage
         div_totals: dict[str, dict[str, float]] = {}
         for (div, pid), val in totals.items():
             div_totals.setdefault(div, {})[str(pid)] = round(val, 2)
         total_mamj = round(sum(totals.values()), 2)
+        growth_pct = _compute_mamj_growth(detail_records)
         session.execute(text("""
             INSERT INTO planning_inputs.aop_publish_history
-                (session_id, division_totals, total_mamj_lakhs)
-            VALUES (:sid, CAST(:dt AS jsonb), :total)
-        """), {"sid": session_id, "dt": json.dumps(div_totals), "total": total_mamj})
+                (session_id, division_totals, total_mamj_lakhs, growth_pct)
+            VALUES (:sid, CAST(:dt AS jsonb), :total, :gpct)
+        """), {
+            "sid": session_id,
+            "dt": json.dumps(div_totals),
+            "total": total_mamj,
+            "gpct": growth_pct,
+        })
         session.commit()
     except Exception:
         session.rollback()
@@ -152,24 +183,25 @@ def _seed_history_from_staging(session) -> bool:
     return True
 
 
-def list_aop_history(session, limit: int = 20) -> list[dict]:
-    """Return the most recent AOP publish history entries, newest first.
-    On first call (empty table), auto-seeds from current staging data so the
-    version picker is immediately useful without requiring a new forecast run."""
+def list_aop_history(session, limit: int = 15) -> list[dict]:
+    """Return deduplicated AOP publish history, newest-first per unique
+    (total_mamj_lakhs, growth_pct) combination so the version picker shows
+    meaningfully distinct runs rather than near-identical duplicates.
+    On first call (empty table), auto-seeds from staging."""
     try:
         _ensure_history_table(session)
         rows = session.execute(text("""
-            SELECT id, session_id, published_at, division_totals, total_mamj_lakhs
+            SELECT DISTINCT ON (total_mamj_lakhs, growth_pct)
+                id, session_id, published_at, division_totals, total_mamj_lakhs, growth_pct
             FROM planning_inputs.aop_publish_history
-            ORDER BY published_at DESC
+            ORDER BY total_mamj_lakhs DESC, growth_pct DESC NULLS LAST, published_at DESC
             LIMIT :lim
         """), {"lim": limit}).fetchall()
 
         if not rows:
-            # Auto-seed from staging if history is empty (one-time backfill)
             if _seed_history_from_staging(session):
                 rows = session.execute(text("""
-                    SELECT id, session_id, published_at, division_totals, total_mamj_lakhs
+                    SELECT id, session_id, published_at, division_totals, total_mamj_lakhs, growth_pct
                     FROM planning_inputs.aop_publish_history
                     ORDER BY published_at DESC
                     LIMIT :lim
@@ -182,6 +214,7 @@ def list_aop_history(session, limit: int = 20) -> list[dict]:
                 "published_at": r[2].isoformat() if r[2] else None,
                 "division_totals": r[3],
                 "total_mamj_lakhs": float(r[4]) if r[4] is not None else 0.0,
+                "growth_pct": float(r[5]) if r[5] is not None else None,
             }
             for r in rows
         ]
