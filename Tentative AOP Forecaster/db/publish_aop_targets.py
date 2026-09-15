@@ -113,8 +113,49 @@ def publish_aop_targets(session, detail_records: list[dict], session_id: str = N
 LOCKED_LEVER_KEY = "aop_locked_target"
 
 
+def _seed_history_from_staging(session) -> bool:
+    """One-time backfill: read the current aop_division_target rows from
+    input_values and write them into aop_publish_history so the version picker
+    has something to show before the next forecast run.
+    Returns True if a row was inserted."""
+    rows = session.execute(text("""
+        SELECT row_key, period_id, value, updated_at
+        FROM planning_inputs.input_values
+        WHERE lever_key = :lk
+          AND row_key   IN ('MENS','LADIES','KIDS')
+          AND period_id IN (202703,202704,202705,202706)
+        ORDER BY row_key, period_id
+    """), {"lk": LEVER_KEY}).fetchall()
+
+    if not rows:
+        return False
+
+    div_totals: dict[str, dict[str, float]] = {}
+    latest_ts = None
+    for div, pid, value, updated_at in rows:
+        div_totals.setdefault(div, {})[str(pid)] = round(float(value or 0), 2)
+        if latest_ts is None or (updated_at and updated_at > latest_ts):
+            latest_ts = updated_at
+
+    total_mamj = round(sum(v for d in div_totals.values() for v in d.values()), 2)
+
+    session.execute(text("""
+        INSERT INTO planning_inputs.aop_publish_history
+            (session_id, published_at, division_totals, total_mamj_lakhs)
+        VALUES ('backfill', :ts, :dt::jsonb, :total)
+    """), {
+        "ts": latest_ts,
+        "dt": json.dumps(div_totals),
+        "total": total_mamj,
+    })
+    session.commit()
+    return True
+
+
 def list_aop_history(session, limit: int = 20) -> list[dict]:
-    """Return the most recent AOP publish history entries, newest first."""
+    """Return the most recent AOP publish history entries, newest first.
+    On first call (empty table), auto-seeds from current staging data so the
+    version picker is immediately useful without requiring a new forecast run."""
     try:
         _ensure_history_table(session)
         rows = session.execute(text("""
@@ -123,6 +164,17 @@ def list_aop_history(session, limit: int = 20) -> list[dict]:
             ORDER BY published_at DESC
             LIMIT :lim
         """), {"lim": limit}).fetchall()
+
+        if not rows:
+            # Auto-seed from staging if history is empty (one-time backfill)
+            if _seed_history_from_staging(session):
+                rows = session.execute(text("""
+                    SELECT id, session_id, published_at, division_totals, total_mamj_lakhs
+                    FROM planning_inputs.aop_publish_history
+                    ORDER BY published_at DESC
+                    LIMIT :lim
+                """), {"lim": limit}).fetchall()
+
         return [
             {
                 "id": r[0],
