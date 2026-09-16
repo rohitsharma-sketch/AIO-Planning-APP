@@ -154,10 +154,18 @@ def load_attr_grid(file_bytes):
     _clean_xa0(df)
     if 'Cont %' in df.columns:
         df['Cont %'] = pd.to_numeric(df['Cont %'], errors='coerce').fillna(0)
-    # Normalize Month column to uppercase string for reliable matching
+    # Normalize Month column to 3-letter uppercase abbreviation for reliable matching
+    _MONTH_ABBREV = {
+        'SEPTEMBER': 'SEP', 'OCTOBER': 'OCT', 'NOVEMBER': 'NOV',
+        'DECEMBER': 'DEC', 'JANUARY': 'JAN', 'FEBRUARY': 'FEB',
+        'MARCH': 'MAR', 'APRIL': 'APR', 'JUNE': 'JUN',
+        'JULY': 'JUL', 'AUGUST': 'AUG',
+    }
     for col in df.columns:
         if col.strip().lower() == 'month':
-            df[col] = df[col].astype(str).str.strip().str.upper()
+            df[col] = df[col].astype(str).str.strip().str.upper().map(
+                lambda x: _MONTH_ABBREV.get(x, x)
+            )
             break
     return df
 
@@ -177,6 +185,11 @@ def _build_attr_weight_fn(attr_df, zone, division, opening_month):
         return None, False
 
     def _find_col(keywords):
+        # Prefer exact match to avoid 'Month 2' matching before 'Month'
+        for c in attr_df.columns:
+            if c.strip().lower() in keywords:
+                return c
+        # Substring fallback
         for c in attr_df.columns:
             cl = c.strip().lower()
             if any(k in cl for k in keywords):
@@ -219,7 +232,7 @@ def _build_attr_weight_fn(attr_df, zone, division, opening_month):
         for pattern, cont in entries:
             if pattern in d or d in pattern:
                 return cont
-        return 0.0  # not listed in grid = not in season
+        return 1.0  # not listed in grid = in season, include at full weight
 
     return weight_fn, True
 
