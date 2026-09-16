@@ -247,7 +247,7 @@ code{background:rgba(79,70,229,.12);padding:1px 5px;border-radius:3px;font-size:
 const S = {
   folder: '',
   found: {},    // {nso_details:'NSO Details.xlsx', ...}
-  nsoRows: [],  // [{storeCode,refCode,grade,nov,dec,jan,feb}]
+  nsoRows: [],  // [{storeCode,refCode,grade,sep,oct,nov,dec,jan,feb}]
   jobId: null,
   jobSrc: null,
   jobStart: 0,  // Date.now() when job starts
@@ -378,6 +378,7 @@ async function loadNSOFromFolder(folder, fname) {
     S.nsoRows = d.stores.map(s => ({
       storeCode: s.storeCode,
       refCode:   s.refCode,
+      sep: s.sep||0, oct: s.oct||0,
       grade:     s.grade || s.type || '',
       nov: s.nov, dec: s.dec, jan: s.jan, feb: s.feb,
     }));
@@ -399,26 +400,30 @@ function clean(v) {
 function buildAOPTable() {
   const wrap = document.getElementById('aop-table-wrap');
   if (!S.nsoRows.length) { wrap.innerHTML = '<p style="color:var(--mu);font-size:12px">No stores found.</p>'; return; }
-  const tot = {nov:0,dec:0,jan:0,feb:0};
+  // Show SEP/OCT columns only if at least one store has a non-zero value
+  const hasSep = S.nsoRows.some(r => r.sep > 0);
+  const hasOct = S.nsoRows.some(r => r.oct > 0);
+  const allMonths = [...(hasSep?['sep']:[]), ...(hasOct?['oct']:[]), 'nov','dec','jan','feb'];
+  const tot = {}; allMonths.forEach(m => tot[m] = 0);
+  const LABELS = {sep:'SEP',oct:'OCT',nov:'NOV',dec:'DEC',jan:'JAN',feb:'FEB'};
   let html = `<table class="aop-table"><thead><tr>
     <th>Store Code</th><th>Ref Store</th><th>Grade</th>
-    <th class="num">NOV (Cr)</th><th class="num">DEC (Cr)</th>
-    <th class="num">JAN (Cr)</th><th class="num">FEB (Cr)</th>
+    ${allMonths.map(m=>`<th class="num">${LABELS[m]} (L)</th>`).join('')}
     <th class="num">Total</th></tr></thead><tbody>`;
   S.nsoRows.forEach((r, i) => {
-    const total = r.nov+r.dec+r.jan+r.feb;
-    ['nov','dec','jan','feb'].forEach(m => tot[m] += r[m]);
+    const total = allMonths.reduce((s,m)=>s+r[m],0);
+    allMonths.forEach(m => tot[m] += r[m]);
     html += `<tr>
       <td><strong>${r.storeCode}</strong></td>
       <td style="color:var(--mu)">${r.refCode}</td>
       <td><span class="grade-badge">${r.grade||'—'}</span></td>
-      ${['nov','dec','jan','feb'].map(m=>`<td class="num"><input class="aop-input" type="number" step="0.01" value="${r[m]}" data-i="${i}" data-m="${m}" onchange="updAOP(this)"></td>`).join('')}
+      ${allMonths.map(m=>`<td class="num"><input class="aop-input" type="number" step="0.01" value="${r[m]}" data-i="${i}" data-m="${m}" onchange="updAOP(this)"></td>`).join('')}
       <td class="num" id="arow-${i}" style="font-weight:600">${fmt(total)}</td></tr>`;
   });
-  const grand = tot.nov+tot.dec+tot.jan+tot.feb;
+  const grand = allMonths.reduce((s,m)=>s+tot[m],0);
   html += `<tr class="aop-total">
     <td colspan="3"><strong>Total</strong></td>
-    ${['nov','dec','jan','feb'].map(m=>`<td class="num" id="atot-${m}"><strong>${fmt(tot[m])}</strong></td>`).join('')}
+    ${allMonths.map(m=>`<td class="num" id="atot-${m}"><strong>${fmt(tot[m])}</strong></td>`).join('')}
     <td class="num" id="atot-grand"><strong>${fmt(grand)}</strong></td>
   </tr></tbody></table>`;
   wrap.innerHTML = html;
@@ -427,13 +432,14 @@ function buildAOPTable() {
 function updAOP(inp) {
   const i = +inp.dataset.i, m = inp.dataset.m;
   S.nsoRows[i][m] = parseFloat(inp.value) || 0;
+  const allMonths = ['sep','oct','nov','dec','jan','feb'].filter(mm => document.getElementById(`atot-${mm}`));
   const r = S.nsoRows[i];
-  const rc = document.getElementById(`arow-${i}`); if (rc) rc.textContent = fmt(r.nov+r.dec+r.jan+r.feb);
-  ['nov','dec','jan','feb'].forEach(mm => {
-    const ct = S.nsoRows.reduce((s,x) => s+x[mm], 0);
+  const rc = document.getElementById(`arow-${i}`); if (rc) rc.textContent = fmt(allMonths.reduce((s,mm)=>s+r[mm],0));
+  allMonths.forEach(mm => {
+    const ct = S.nsoRows.reduce((s,x) => s+(x[mm]||0), 0);
     const el = document.getElementById(`atot-${mm}`); if (el) el.innerHTML = `<strong>${fmt(ct)}</strong>`;
   });
-  const gt = S.nsoRows.reduce((s,r2) => s+r2.nov+r2.dec+r2.jan+r2.feb, 0);
+  const gt = S.nsoRows.reduce((s,r2) => allMonths.reduce((a,mm)=>a+(r2[mm]||0),s), 0);
   const ge = document.getElementById('atot-grand'); if (ge) ge.innerHTML = `<strong>${fmt(gt)}</strong>`;
 }
 
@@ -473,7 +479,7 @@ async function generate() {
   setProgress(0, 'Starting…'); resetStages();
 
   const overrides = {};
-  S.nsoRows.forEach(r => { overrides[r.storeCode] = {NOV:r.nov||0,DEC:r.dec||0,JAN:r.jan||0,FEB:r.feb||0}; });
+  S.nsoRows.forEach(r => { overrides[r.storeCode] = {SEP:r.sep||0,OCT:r.oct||0,NOV:r.nov||0,DEC:r.dec||0,JAN:r.jan||0,FEB:r.feb||0}; });
 
   const fd = new FormData();
   fd.append('folder', S.folder);

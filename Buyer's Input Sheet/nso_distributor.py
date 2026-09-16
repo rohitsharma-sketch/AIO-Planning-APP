@@ -256,7 +256,7 @@ def generate_plan(nso_df, div_df, plan_df, attr_df=None, gm_excl_df=None, apps_e
     Returns (output_rows list, log list).
     output_rows: list of dicts matching Sales Plan column structure.
     """
-    TARGET_MONTHS = ['NOV', 'DEC', 'JAN', 'FEB']  # plan overlap with NSO window
+    TARGET_MONTHS = ['SEP', 'OCT', 'NOV', 'DEC', 'JAN', 'FEB']
     log = []
     all_rows = []
 
@@ -268,9 +268,16 @@ def generate_plan(nso_df, div_df, plan_df, attr_df=None, gm_excl_df=None, apps_e
         # Store type drives GM exclusion (T1+/T1/T2/T3/T4); try 'Store Type', then 'Type', then 'Grade'
         nso_grade = str(nso.get('Store Type', nso.get('Type', nso.get('Grade', '')))).strip()
 
-        # Month total targets (Rs Lakh)
+        # Month total targets (Rs Lakh) — all 6 plan months
         month_targets = {m: float(nso.get(m, 0) or 0) for m in TARGET_MONTHS}
-        log.append(f"NSO: {store}  Ref: {ref}  StoreType: {nso_grade}  Targets: {month_targets}")
+
+        # Determine opening month (first month with a non-zero target)
+        opening_month = next((m for m in TARGET_MONTHS if month_targets.get(m, 0) > 0), 'NOV')
+
+        log.append(f"NSO: {store}  Ref: {ref}  StoreType: {nso_grade}  Opens: {opening_month}  Targets: {month_targets}")
+
+        if attr_df is not None and not attr_df.empty and opening_month in ('SEP', 'OCT'):
+            log.append(f"  Attribute Grid: provided for {opening_month} opener — seasonal mix from ref store's {opening_month} values")
 
         # Reference store's Division Cont % rows
         ref_div_rows = div_df[div_df['Store Name'] == ref]
@@ -382,15 +389,15 @@ def generate_plan(nso_df, div_df, plan_df, attr_df=None, gm_excl_df=None, apps_e
                 'MRP':          mrp,
                 'Display Type': disp,
                 '.':            None,
-                'SEP - Val':    0.0,
-                'OCT - Val':    0.0,
+                'SEP - Val':    round(vals.get('SEP-Val', 0), 4),
+                'OCT - Val':    round(vals.get('OCT-Val', 0), 4),
                 'NOV - Val':    round(vals.get('NOV-Val', 0), 4),
                 'DEC - Val':    round(vals.get('DEC-Val', 0), 4),
                 'JAN - Val':    round(vals.get('JAN-Val', 0), 4),
                 'FEB - Val':    round(vals.get('FEB-Val', 0), 4),
                 '..1':          None,
-                'SEP - Qty':    0.0,
-                'OCT - Qty':    0.0,
+                'SEP - Qty':    round(vals.get('SEP-Qty', 0), 4),
+                'OCT - Qty':    round(vals.get('OCT-Qty', 0), 4),
                 'NOV - Qty':    round(vals.get('NOV-Qty', 0), 4),
                 'DEC - Qty':    round(vals.get('DEC-Qty', 0), 4),
                 'JAN - Qty':    round(vals.get('JAN-Qty', 0), 4),
@@ -414,7 +421,8 @@ def build_xlsx(rows, log, nso_df=None):
     ws0 = wb.active
     ws0.title = 'NSO AOP Targets'
     if nso_df is not None and not nso_df.empty:
-        aop_show = ['Store Code', 'Ref Code', 'Grade', 'Type', 'NOV', 'DEC', 'JAN', 'FEB']
+        aop_show = ['Store Code', 'Ref Code', 'Grade', 'Type', 'SEP', 'OCT', 'NOV', 'DEC', 'JAN', 'FEB']
+        aop_month_cols = {'SEP', 'OCT', 'NOV', 'DEC', 'JAN', 'FEB'}
         aop_cols = [c for c in aop_show if c in nso_df.columns]
         for ci, col in enumerate(aop_cols, 1):
             cell = ws0.cell(row=1, column=ci, value=col)
@@ -427,7 +435,7 @@ def build_xlsx(rows, log, nso_df=None):
                 if hasattr(v, 'item'):
                     v = v.item()
                 cell = ws0.cell(row=ri, column=ci, value=v)
-                if isinstance(v, (int, float)) and col in ('NOV', 'DEC', 'JAN', 'FEB'):
+                if isinstance(v, (int, float)) and col in aop_month_cols:
                     cell.number_format = '#,##0.00'
         ws0.freeze_panes = 'A2'
         for ci in range(1, len(aop_cols) + 1):
@@ -887,6 +895,8 @@ def api_parse_nso():
                 'refCode':   str(row.get('Ref Code', '')).strip(),
                 'grade':     str(row.get('Grade', '')).strip(),
                 'type':      str(row.get('Type', row.get('Store Type', ''))).strip(),
+                'sep': float(row.get('SEP', 0) or 0),
+                'oct': float(row.get('OCT', 0) or 0),
                 'nov': float(row.get('NOV', 0) or 0),
                 'dec': float(row.get('DEC', 0) or 0),
                 'jan': float(row.get('JAN', 0) or 0),
