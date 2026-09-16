@@ -51,10 +51,10 @@ APPS = [
     # anonymous status checks and "sync data lake" trigger both need an
     # unauthenticated port.
     {"name": "AOP Forecaster (standalone)", "port": 8000,
-     "cmd": [sys.executable, "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"],
+     "cmd": [sys.executable, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", "8000"],
      "cwd": os.path.join(_REPO_ROOT, "Tentative AOP Forecaster")},
     {"name": "RS Planning Platform", "port": 8010,
-     "cmd": [sys.executable, "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8010"],
+     "cmd": [sys.executable, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", "8010"],
      "cwd": os.path.join(_REPO_ROOT, "RS Planning Platform", "backend")},
 ]
 
