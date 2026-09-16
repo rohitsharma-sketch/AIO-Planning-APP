@@ -3,12 +3,12 @@ import { useState, useEffect } from 'react'
 // The old app's cluster Region dropdown, ported verbatim (all 11 options, same
 // values and labels) from calendar_engine.html lines 775-787. The value is
 // persisted to cluster_profiles.region through the normal putClusterProfiles
-// path — the same column the seeded data already uses (north/east/bengal).
+// path - the same column the seeded data already uses (north/east/bengal).
 //
 // NOTE: the old app's setClusterRegion() also called autoApplyRegionalFestivals()
 // (calendar_engine.html lines 2156-2195), which appended every region-tagged
 // festival from FESTIVAL_DB that the cluster didn't already have. That is
-// deliberately NOT ported here — it silently mutates a real cluster's festival
+// deliberately NOT ported here - it silently mutates a real cluster's festival
 // list (and therefore the generated calendar) as a side effect of picking a
 // region, which is a much bigger behaviour change than restoring the control
 // itself. The dropdown here only sets cp.region.
@@ -94,7 +94,7 @@ export default function ClusterTabs({ profiles, activeIdx, onSwitch, onReorder, 
         )}
       </div>
 
-      {/* Rename / Region / Copy-from rows — ported from calendar_engine.html
+      {/* Rename / Region / Copy-from rows - ported from calendar_engine.html
           lines 770-795. Planner-only: these all write through persist(). */}
       {isPlanner && (
         <>
@@ -126,7 +126,7 @@ export default function ClusterTabs({ profiles, activeIdx, onSwitch, onReorder, 
           {profiles.length > 1 && (
             <div className="cluster-rename-row">
               <label htmlFor="copyFromSelect">Copy from:</label>
-              {/* Always rendered with value="" — picking an option fires the copy
+              {/* Always rendered with value="" - picking an option fires the copy
                   and the select snaps straight back to the placeholder, exactly
                   as renderCopyFromDropdown()/copyFromCluster() did by assigning
                   sel.value = '' (calendar_engine.html lines 2098-2121). */}
@@ -136,7 +136,7 @@ export default function ClusterTabs({ profiles, activeIdx, onSwitch, onReorder, 
                 title="Replace this cluster's festival list with another cluster's"
                 onChange={e => { if (e.target.value !== '') onCopyFrom(Number(e.target.value)) }}
               >
-                <option value="">— copy festivals from… —</option>
+                <option value="">- copy festivals from... -</option>
                 {profiles.map((cp, i) => i === activeIdx ? null : (
                   <option key={i} value={i}>{cp.name}</option>
                 ))}

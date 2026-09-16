@@ -9,7 +9,7 @@ import {
 // per-row cluster <select> that persists on change, add/remove one store, and an
 // import flow that shows the added/removed/reassigned diff BEFORE it replaces
 // anything. PUT /store-cluster-map is a full replace, so every single-row edit
-// sends the whole `stores` array back — always carrying the stored `aliases` and
+// sends the whole `stores` array back - always carrying the stored `aliases` and
 // `source` through, since the endpoint overwrites both unconditionally.
 
 // Quote every CSV field the way the old app's _scmCsv() did, so a store or
@@ -26,7 +26,7 @@ function downloadCsv(text, filename) {
 }
 
 function fmtDate(iso) {
-  if (!iso) return '—'
+  if (!iso) return '-'
   const d = new Date(iso)
   return isNaN(d) ? iso : d.toLocaleString('en-IN', {
     day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -144,7 +144,7 @@ export default function StoreMappingPanel({ isPlanner }) {
       const diff = computeDiff(mapping.stores, result.rows)
       if (!diff.added.length && !diff.removed.length && !diff.reassigned.length) {
         setImportPreview(null)
-        setStatus({ ok: false, msg: `This template is identical to the current mapping (${mapping.stores.length} stores) — nothing to import.` })
+        setStatus({ ok: false, msg: `This template is identical to the current mapping (${mapping.stores.length} stores) - nothing to import.` })
         return
       }
       setStatus(null)
@@ -187,7 +187,7 @@ export default function StoreMappingPanel({ isPlanner }) {
     setShowLog(!showLog)
   }
 
-  if (!mapping || !clustersLoaded) return <p>Loading…</p>
+  if (!mapping || !clustersLoaded) return <p>Loading...</p>
 
   const known = new Set(clusterNames)
   const counts = {}
@@ -215,7 +215,7 @@ export default function StoreMappingPanel({ isPlanner }) {
             {mapping.locked ? 'Locked' : 'Not locked'}
           </span>
           <span style={{ fontSize: '12px' }}>
-            {mapping.stores.length} stores · imported {fmtDate(mapping.lockedAt)} from <strong>{mapping.source || '—'}</strong>
+            {mapping.stores.length} stores · imported {fmtDate(mapping.lockedAt)} from <strong>{mapping.source || '-'}</strong>
             {mapping.editedAt ? ` · last edited ${fmtDate(mapping.editedAt)}` : ''}
           </span>
           {unassigned > 0 && (
@@ -235,7 +235,7 @@ export default function StoreMappingPanel({ isPlanner }) {
           </span>
         </div>
         <p style={{ color: 'var(--muted)', fontSize: '12px', margin: 0 }}>
-          Edit a single store with the Calendar Cluster dropdown in the table below — it saves immediately and is
+          Edit a single store with the Calendar Cluster dropdown in the table below - it saves immediately and is
           recorded in the change log. For a bulk change, import a template (columns: <strong>Store Name</strong>,{' '}
           <strong>CALENDAR CLUSTER</strong>) and review the differences before it replaces the mapping.
         </p>
@@ -261,9 +261,9 @@ export default function StoreMappingPanel({ isPlanner }) {
             <table className="scm-mini">
               <thead><tr><th>Change</th><th>Store</th><th>From</th><th>To</th></tr></thead>
               <tbody>
-                {d.added.map((x) => <tr key={`a-${x.store}`}><td>Added</td><td style={{ fontWeight: 600 }}>{x.store}</td><td>—</td><td>{x.to}</td></tr>)}
+                {d.added.map((x) => <tr key={`a-${x.store}`}><td>Added</td><td style={{ fontWeight: 600 }}>{x.store}</td><td>-</td><td>{x.to}</td></tr>)}
                 {d.reassigned.map((x) => <tr key={`r-${x.store}`}><td>Reassigned</td><td style={{ fontWeight: 600 }}>{x.store}</td><td>{x.from}</td><td>{x.to}</td></tr>)}
-                {d.removed.map((x) => <tr key={`d-${x.store}`}><td>Removed</td><td style={{ fontWeight: 600 }}>{x.store}</td><td>{x.from}</td><td>—</td></tr>)}
+                {d.removed.map((x) => <tr key={`d-${x.store}`}><td>Removed</td><td style={{ fontWeight: 600 }}>{x.store}</td><td>{x.from}</td><td>-</td></tr>)}
               </tbody>
             </table>
           </div>
@@ -297,7 +297,7 @@ export default function StoreMappingPanel({ isPlanner }) {
 
       <div className="card">
         <div className="scm-toolbar">
-          <input placeholder="Search store or cluster…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: '200px' }} />
+          <input placeholder="Search store or cluster..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ width: '200px' }} />
           <select value={filter} onChange={(e) => setFilter(e.target.value)}>
             <option value="">All clusters</option>
             {clusterNames.map((n) => <option key={n} value={n}>{n}</option>)}
@@ -332,7 +332,7 @@ export default function StoreMappingPanel({ isPlanner }) {
                   <tr key={s.store}>
                     <td style={{ color: 'var(--muted)' }}>{i + 1}</td>
                     <td style={{ fontWeight: 600 }}>{s.store}</td>
-                    <td>{s.cluster || '—'}</td>
+                    <td>{s.cluster || '-'}</td>
                     <td>
                       <select
                         className={`scm-sel${missing ? ' scm-sel-miss' : ''}`}
@@ -347,7 +347,7 @@ export default function StoreMappingPanel({ isPlanner }) {
                     {isPlanner && (
                       <td>
                         <button className="scm-remove-btn" title="Remove store" disabled={busy}
-                          onClick={() => handleRemoveStore(s.store)}>×</button>
+                          onClick={() => handleRemoveStore(s.store)}>x</button>
                       </td>
                     )}
                   </tr>
@@ -369,7 +369,7 @@ export default function StoreMappingPanel({ isPlanner }) {
               <div className="scm-log-entry" key={`${entry.at}-${i}`}>
                 <div className="scm-log-head" onClick={() => setOpenEntries((o) => ({ ...o, [i]: !o[i] }))}>
                   <strong>{fmtDate(entry.at)}</strong>
-                  <span>· {entry.source || '—'}</span>
+                  <span>· {entry.source || '-'}</span>
                   <span>· {entry.summary}</span>
                   <span className="scm-log-toggle">{open ? 'hide' : 'details'} ({details.length})</span>
                 </div>
@@ -383,8 +383,8 @@ export default function StoreMappingPanel({ isPlanner }) {
                             <tr key={j}>
                               <td>{x.type}</td>
                               <td style={{ fontWeight: 600 }}>{x.store}</td>
-                              <td>{x.from || '—'}</td>
-                              <td>{x.to || '—'}</td>
+                              <td>{x.from || '-'}</td>
+                              <td>{x.to || '-'}</td>
                             </tr>
                           ))}
                         </tbody>

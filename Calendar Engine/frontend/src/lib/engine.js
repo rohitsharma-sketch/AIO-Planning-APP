@@ -1,5 +1,5 @@
 // Ported from `Calendar Engine/calendar_engine.html` lines 1376-1732
-// (─── Festive Map ─── through ─── Monthly Summary ───).
+// (--- Festive Map --- through --- Monthly Summary ---).
 //
 // Deviation from a strict verbatim copy: the source functions read
 // configuration (refYear/futYear/maxShift/moPri) directly off the DOM via
@@ -17,7 +17,7 @@ import { parseDate, fmtISO, fmtDisp, addDays, calDiff, yearDays } from './dateUt
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-// ─── Festive Map ─────────────────────────────────────────────────────────────
+// --- Festive Map ---
 export function buildFestMap(yr, fests, refYear) {
   // Returns { dateStr: { festival, festObj, position, category, priority } }
   const map = {};
@@ -40,7 +40,7 @@ export function buildFestMap(yr, fests, refYear) {
   return map;
 }
 
-// ─── Scoring ─────────────────────────────────────────────────────────────────
+// --- Scoring ---
 export function getWeights() {
   return { festival: 1000, position: 500, month: 200, weekday: 100, prox: 1 };
 }
@@ -77,7 +77,7 @@ export function scoreMapping(rDay, fDay, rInfo, fInfo, W, maxShift, moPri) {
   return { score, mtype, mpri, monthMatch, weekdayMatch, diff };
 }
 
-// ─── Engine ───────────────────────────────────────────────────────────────────
+// --- Engine ---
 // coreNames: per-cluster list of festival NAMES allowed to anchor the shift
 // (Phase 1) or exempt a mapping from the same-month containment rule below -
 // see CORE_FESTIVALS_BY_CLUSTER in festivalData.js. null/undefined = no
@@ -113,7 +113,7 @@ export function generateMappings(fests, refYr, futYr, maxShift, moPri, coreNames
   const assignments = new Map(); // futDateStr -> mapping obj
   const usedRef = new Set();
 
-  // ── Phase 1: Core festival anchor assignments (iterate FUT festive days) ──
+  // -- Phase 1: Core festival anchor assignments (iterate FUT festive days) --
   const festFutDays = fDays.filter(d => fMap[fmtISO(d)]);
   // Sort: core days first (position=0), then pre/post by absolute position
   festFutDays.sort((a, b) => Math.abs(fMap[fmtISO(a)].position) - Math.abs(fMap[fmtISO(b)].position));
@@ -135,13 +135,13 @@ export function generateMappings(fests, refYr, futYr, maxShift, moPri, coreNames
     usedRef.add(rs);
   }
 
-  // ── Phase 2: Remaining days - SAME MONTH ONLY ─────────────────────────────
+  // -- Phase 2: Remaining days - SAME MONTH ONLY (V1) or ADJACENT MONTH (V2) --
   // Once core festivals are anchored, every other day (including non-core
   // festival days - Good Friday etc. are ordinary days for this purpose)
   // must be re-shuffled strictly within its own calendar month, never into
   // an adjacent one. Bucketing candidates by month NUMBER (0-11, ignoring
   // year since ref/fut are different years) enforces this directly - it
-  // replaces the old ±(maxShift + 14) day search window, which only
+  // replaces the old +/-(maxShift + 14) day search window, which only
   // preferred same-month via scoring and could still cross a boundary.
   const remFut = fDays.filter(d => !assignments.has(fmtISO(d)));
   const remRef = rDays.filter(d => !usedRef.has(fmtISO(d)));
@@ -157,7 +157,7 @@ export function generateMappings(fests, refYr, futYr, maxShift, moPri, coreNames
   for (const fd of remFut) {
     const fs = fmtISO(fd), fi = fMap[fs];
     // V2: non-festive TY days are matched against one adjacent-month LY pool
-    // instead of the same month — e.g. March TY pulls from Feb LY (moPri='prev')
+    // instead of the same month -- e.g. March TY pulls from Feb LY (moPri='prev')
     // or Apr LY (moPri='next'). Using moPri gives the planner control over which
     // direction, and keeps each LY month owned by exactly one TY month (no pool
     // sharing that would push half the days back to same-month fallback).
@@ -194,7 +194,7 @@ export function generateMappings(fests, refYr, futYr, maxShift, moPri, coreNames
     localUsedFut.add(p.fs); localUsedRef.add(p.rs);
   }
 
-  // ── Phase 3: Fallback for any still-unassigned fut days - same month first ─
+  // -- Phase 3: Fallback for any still-unassigned fut days - same month first --
   const stillUnassigned = fDays.filter(d => !assignments.has(fmtISO(d)));
   const stillAvailRef   = rDays.filter(d => !usedRef.has(fmtISO(d)) && !localUsedRef.has(fmtISO(d)));
   for (const fd of stillUnassigned) {
@@ -208,6 +208,17 @@ export function generateMappings(fests, refYr, futYr, maxShift, moPri, coreNames
       rd = sameMonthAvail[0];
       stillAvailRef.splice(stillAvailRef.indexOf(rd), 1);
       mappingLabel = 'Nearest Available Date';
+    } else if (version === 2 && stillAvailRef.length) {
+      // V2: before sharing (reusing) a ref date, exhaust all still-available
+      // ref days from other months. Adjacent-month Phase 2 can leave surplus
+      // days in months where LY has more days than the paired TY month (e.g.
+      // LY January has 31 days but TY February only needs 28). Using those
+      // surplus days here prevents two TY dates sharing the same LY ref date,
+      // which V2 callers rely on never happening.
+      stillAvailRef.sort((a, b) => Math.abs(calDiff(fd, a)) - Math.abs(calDiff(fd, b)));
+      rd = stillAvailRef[0];
+      stillAvailRef.splice(0, 1);
+      mappingLabel = 'Nearest Available Date (Cross-Month)';
     } else {
       // This month's own reference days are completely exhausted - a real
       // imbalance (e.g. a core festival's true date fell in a different
@@ -249,14 +260,14 @@ export function generateMappings(fests, refYr, futYr, maxShift, moPri, coreNames
     });
   }
 
-  // ── Phase 4: repair excessive shifts by swapping reference days ──────────
+  // -- Phase 4: repair excessive shifts by swapping reference days --
   // (same-month constrained too - see repairExcessiveShifts)
   // V2 skips repair: adjacent-month assignments are intentional, not errors.
   if (version === 1) repairExcessiveShifts(assignments, rMap, fMap, W, maxShift, moPri);
 
   const mappings = fDays.map(d => assignments.get(fmtISO(d))).filter(Boolean);
 
-  // ── Labeling pass: attach the FULL festival identity for display ─────────
+  // -- Labeling pass: attach the FULL festival identity for display --
   // Phases 1-4 above only ever see core festivals, so every non-core day's
   // festival/festivePosition/festiveCategory is still null/Non-Festive at
   // this point. Fill those in from the full map now - purely cosmetic, runs
@@ -345,7 +356,7 @@ export function repairExcessiveShifts(assignments, rMap, fMap, W, maxShift, moPr
   }
 }
 
-// ─── Validation ───────────────────────────────────────────────────────────────
+// --- Validation ---
 // coreNames: same per-cluster core-festival list generateMappings takes -
 // check C below only makes sense for festivals that are actually allowed to
 // anchor the shift; flagging a non-core festival (Good Friday etc.) as
@@ -384,14 +395,14 @@ export function validate(mappings, refYr, futYr, maxShift, fests, coreNames, ver
     if (futs.length > 1) {
       const shared = mappings.some(m => fmtISO(m.refDate) === rd && m.sharedRef);
       if (shared) {
-        issues.push({ type:'info', icon:'INFO', title:'Shared Reference Date', desc:`Reference ${rd} is reused for ${futs.join(', ')} — that month (or ${futYr} overall, if it's a leap year) has more future days needing a match than it has spare reference days.` });
+        issues.push({ type:'info', icon:'INFO', title:'Shared Reference Date', desc:`Reference ${rd} is reused for ${futs.join(', ')} - that month (or ${futYr} overall, if it's a leap year) has more future days needing a match than it has spare reference days.` });
       } else {
         issues.push({ type:'error', icon:'ERR', title:'Duplicate Reference Date', desc:`${rd} is used by ${futs.length} future dates: ${futs.join(', ')}` });
       }
     }
   }
 
-  // C: Festival mismatch (festive ref → non-festive future when festive future available)
+  // C: Festival mismatch (festive ref -> non-festive future when festive future available)
   for (const m of mappings) {
     if (!m.festival) continue;
     if (coreNames && !coreNames.includes(m.festival)) continue; // non-core - not supposed to anchor, not a mismatch
@@ -411,7 +422,7 @@ export function validate(mappings, refYr, futYr, maxShift, fests, coreNames, ver
     }
   }
 
-  // E: Month leakage — skipped for V2 where adjacent-month matching is intentional
+  // E: Month leakage - skipped for V2 where adjacent-month matching is intentional
   if (version === 2) return issues;
   const futByMonthWday = {};
   const allFutDays = yearDays(futYr);
@@ -440,14 +451,14 @@ export function validate(mappings, refYr, futYr, maxShift, fests, coreNames, ver
     if (m.festival) continue;
     if (!m.monthMatch) continue;
     if (!m.weekdayMatch) {
-      issues.push({ type:'info', icon:'INFO', title:'Weekday Mismatch', desc:`Non-festive ${fmtDisp(m.refDate)} (${DAYS[m.refDate.getDay()]}) mapped to ${fmtDisp(m.futureDate)} (${DAYS[m.futureDate.getDay()]}) — different weekday within same month. Same-month ${DAYS[m.refDate.getDay()]}s may have been consumed.` });
+      issues.push({ type:'info', icon:'INFO', title:'Weekday Mismatch', desc:`Non-festive ${fmtDisp(m.refDate)} (${DAYS[m.refDate.getDay()]}) mapped to ${fmtDisp(m.futureDate)} (${DAYS[m.futureDate.getDay()]}) - different weekday within same month. Same-month ${DAYS[m.refDate.getDay()]}s may have been consumed.` });
     }
   }
 
   return issues;
 }
 
-// ─── Monthly Summary ──────────────────────────────────────────────────────────
+// --- Monthly Summary ---
 export function computeMonthly(mappings) {
   // byRefMonth[m] = { total, sameMonth, prevMonth, nextMonth, other, pre, core, post, non }
   const byRef = Array.from({length:12}, () => ({ total:0, sameMonth:0, prevMonth:0, nextMonth:0, other:0, pre:0, core:0, post:0, non:0, daysToFut:{} }));

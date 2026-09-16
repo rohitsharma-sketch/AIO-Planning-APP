@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 
 // NOTE: `validationIssues` are the actual objects returned by `lib/engine.js`'s
-// `validate()` — `{ type: 'error'|'warn'|'info', icon, title, desc }` — not
+// `validate()` - `{ type: 'error'|'warn'|'info', icon, title, desc }` - not
 // plain strings as the task-8 brief's illustrative snippet assumed. Rendered
 // accordingly below (title + desc, colour keyed off `type`).
 //
@@ -18,7 +18,7 @@ const CAT_ROW = { 'Pre-Festive': 'r-pre', 'Core Festive': 'r-core', 'Post-Festiv
 const VAL_CLASS = { error: 'val-error', warn: 'val-warn', info: 'val-info' }
 
 // Full month names, matching the old app's own MONTHS const (calendar_engine.html
-// line 1336) that renderMonthly() indexes by month number — and the same local
+// line 1336) that renderMonthly() indexes by month number - and the same local
 // convention DateShiftPreviewPanel.jsx already uses. The By-Future-Month
 // contribution pills slice these to 3 chars exactly as the old app does.
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -30,7 +30,7 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
 // populateFilters() (line ~1811), so they're built with useMemo below instead.
 //
 // CATEGORY_OPTIONS deliberately reuses the exact strings CAT_BADGE/CAT_ROW key
-// off — i.e. engine.js's own festiveCategory values, which toRow() copies into
+// off - i.e. engine.js's own festiveCategory values, which toRow() copies into
 // row.category verbatim. MAP_TYPE_OPTIONS is the same 7-value list now shown in
 // VersionSettingTab.jsx's Mapping Type Reference card and is what row.mappingType
 // actually contains. Note the old app's <option> *labels* were abbreviated
@@ -90,8 +90,8 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
   const [fFest, setFFest] = useState('')
   const [fMoMatch, setFMoMatch] = useState('')   // '' | 'yes' | 'no'
 
-  // A new allDayMap means a different data set — a regenerated calendar or a
-  // snapshot loaded from the library (NOT a ClusterTabs switch — allDayMap is
+  // A new allDayMap means a different data set - a regenerated calendar or a
+  // snapshot loaded from the library (NOT a ClusterTabs switch - allDayMap is
   // cluster-independent, see index.jsx). Cluster/Festival/Month options are
   // derived from that set, so a stale selection (a cluster/festival the new set
   // doesn't have) would silently render an empty table. Clearing on identity
@@ -103,7 +103,7 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
 
   // The base row set for the Day-by-Day tab: every cluster's rows, narrowed to
   // one if fCluster is set. This is deliberately its own step (not folded into
-  // the filter chain below) because `stats` also needs it — the stat tiles
+  // the filter chain below) because `stats` also needs it - the stat tiles
   // reflect the cluster filter (selecting one cluster shows that cluster's own
   // totals) but, matching the existing "stat tiles always cover all N days"
   // convention, never reflect the OTHER filters (Month/Category/etc).
@@ -113,7 +113,7 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
   }, [allDayMap, fCluster])
 
   // Stats row (old app's renderStats(), calendar_engine.html lines 1762-1775).
-  // Every figure is a count over data this component is already handed — no
+  // Every figure is a count over data this component is already handed - no
   // extra fetching. `festival` is '' for non-festive rows (see toRow()).
   const stats = useMemo(() => {
     if (!allDayMap) return null
@@ -130,7 +130,7 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
   }, [allDayMap, clusterScopedDayMap, validationIssues])
 
   // Cluster/Festival/Month dropdown options, built from whatever is actually in
-  // the current combined mapping set — the old app's populateFilters()
+  // the current combined mapping set - the old app's populateFilters()
   // (calendar_engine.html lines 1811-1817), extended with clusters since the old
   // app never had more than one cluster in view at once. Festivals/months are
   // deliberately drawn from the FULL set (not clusterScopedDayMap) so switching
@@ -153,7 +153,7 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
     }
   }, [allDayMap])
 
-  // The filter chain itself — a direct port of renderDayTable()'s (line 1829-1836),
+  // The filter chain itself - a direct port of renderDayTable()'s (line 1829-1836),
   // with the new app's row shape substituted for the raw mapping objects:
   //   m.futureDate.getMonth() -> row.futMonthIdx   (added by index.jsx's toRow)
   //   m.festiveCategory       -> row.category
@@ -175,7 +175,7 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
   const anyFilterActive = !!fCluster || fMonth !== '' || !!fCat || !!fMapType || !!fFest || !!fMoMatch
 
   // Exports exactly what's currently on screen (every active filter, cluster
-  // included) — "download the calendar to understand the gist" reads as "give
+  // included) - "download the calendar to understand the gist" reads as "give
   // me what I'm looking at", not a separate full-set export. Column order
   // matches the visible table (see the <thead> below), with Cluster prepended.
   function downloadCalendar() {
@@ -189,7 +189,7 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
     downloadCsv([header, ...rows], `calendar_day_by_day_${stamp}.csv`)
   }
 
-  // Monthly Summary derivations — ported 1:1 from the old app's renderMonthly()
+  // Monthly Summary derivations - ported 1:1 from the old app's renderMonthly()
   // (calendar_engine.html lines 1870-1941). Both loops walk months 0-11 and
   // `continue` past any month whose total is 0, so empty months are skipped
   // rather than rendered as blank rows; the TOTAL row therefore sums only the
@@ -357,14 +357,14 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
                     <td className="date-mono">{row.refDate}</td>
                     <td>{row.refDay}</td>
                     <td style={{ color: 'var(--muted)' }}>{row.refWeek}</td>
-                    <td>{row.festival || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
+                    <td>{row.festival || <span style={{ color: 'var(--muted)' }}>-</span>}</td>
                     <td><span className={`badge ${CAT_BADGE[row.category] || 'b-non'}`}>{row.category}</span></td>
                     <td style={{ color: 'var(--muted)' }}>{row.position}</td>
                     <td className="arrow-sep">-&gt;</td>
                     <td className="date-mono">{row.futDate}</td>
                     <td>{row.futDay}</td>
                     <td style={{ color: 'var(--muted)' }}>{row.futWeek}</td>
-                    <td style={{ color: 'var(--muted)' }}>{row.futFestival || '—'}</td>
+                    <td style={{ color: 'var(--muted)' }}>{row.futFestival || '-'}</td>
                     <td><span className="b-map">{row.mappingType}</span></td>
                     <td style={{ textAlign: 'right', color: 'var(--muted)' }}>{row.score}</td>
                     <td><span className={row.monthDelta === 'Yes' ? 'check' : 'cross'}>{row.monthDelta}</span></td>
@@ -384,7 +384,7 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(520px, 1fr))', gap: '20px' }}>
           {/* ── By Reference Month ─────────────────────────────────────── */}
           <div>
-            <div className="section-heading"><h4>By Reference Month — Where did each month map to?</h4></div>
+            <div className="section-heading"><h4>By Reference Month - Where did each month map to?</h4></div>
             <div className="tbl-wrap">
               <table>
                 <thead>
@@ -407,11 +407,11 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
                       <td className="month-nm">{MONTHS[m]}</td>
                       <td className="num">{r.total}</td>
                       <td className="num">{r.sameMonth}</td>
-                      <td className="num" style={{ color: r.prevMonth > 0 ? 'var(--warn)' : 'var(--muted)' }}>{r.prevMonth || '—'}</td>
-                      <td className="num" style={{ color: r.nextMonth > 0 ? 'var(--warn)' : 'var(--muted)' }}>{r.nextMonth || '—'}</td>
-                      <td className="num" style={{ color: 'var(--pre-text)' }}>{r.pre || '—'}</td>
-                      <td className="num" style={{ color: 'var(--core-text)', fontWeight: 700 }}>{r.core || '—'}</td>
-                      <td className="num" style={{ color: 'var(--post-text)' }}>{r.post || '—'}</td>
+                      <td className="num" style={{ color: r.prevMonth > 0 ? 'var(--warn)' : 'var(--muted)' }}>{r.prevMonth || '-'}</td>
+                      <td className="num" style={{ color: r.nextMonth > 0 ? 'var(--warn)' : 'var(--muted)' }}>{r.nextMonth || '-'}</td>
+                      <td className="num" style={{ color: 'var(--pre-text)' }}>{r.pre || '-'}</td>
+                      <td className="num" style={{ color: 'var(--core-text)', fontWeight: 700 }}>{r.core || '-'}</td>
+                      <td className="num" style={{ color: 'var(--post-text)' }}>{r.post || '-'}</td>
                       <td className="num" style={{ color: 'var(--muted)' }}>{r.non}</td>
                       <td>
                         {lost === 0
@@ -439,7 +439,7 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
 
           {/* ── By Future Month ────────────────────────────────────────── */}
           <div>
-            <div className="section-heading"><h4>By Future Month — Which reference months feed each future month?</h4></div>
+            <div className="section-heading"><h4>By Future Month - Which reference months feed each future month?</h4></div>
             <div className="tbl-wrap">
               <table>
                 <thead>
@@ -519,7 +519,7 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
 // The Month filter is a single <select>. calendar_engine.html additionally carried a
 // checkbox multi-select with a search box (.mo-ms-* markup at lines 615-631, backed by
 // window._calMonths), whose Set took priority over the plain #filterMonth <select> when
-// non-empty — the two coexisted, filtering the same futureDate month. Only the plain
+// non-empty - the two coexisted, filtering the same futureDate month. Only the plain
 // select is ported: the multi-select is a UX affordance, not extra filtering power, and
 // the single control covers the same behaviour with none of the dropdown/outside-click/
 // search plumbing. If multi-month selection is wanted later, `fMonth` becomes a Set and

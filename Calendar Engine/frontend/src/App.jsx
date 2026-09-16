@@ -57,8 +57,8 @@ export default function App() {
               cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
-            <option value={1}>V1 — LY Same Month</option>
-            <option value={2}>V2 — Adjacent Month (±1)</option>
+            <option value={1}>V1 - LY Same Month</option>
+            <option value={2}>V2 - Adjacent Month (+/-1)</option>
           </select>
         </div>
         {displayName && <div className="app-header-user">{displayName}</div>}

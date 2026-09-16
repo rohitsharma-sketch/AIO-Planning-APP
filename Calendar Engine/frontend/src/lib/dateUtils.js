@@ -24,7 +24,7 @@ export function dayOfYear(d) {
   const s = new Date(d.getFullYear(), 0, 1);
   return Math.round((d - s) / 86400000) + 1;
 }
-export function calDiff(ref, fut) { // day-of-year diff, wrapping ±182
+export function calDiff(ref, fut) { // day-of-year diff, wrapping +/-182
   let diff = dayOfYear(fut) - dayOfYear(ref);
   if (diff > 182) diff -= 365;
   if (diff < -182) diff += 365;

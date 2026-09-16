@@ -3,13 +3,13 @@ import { getAppState, putAppState, getClusterProfiles, putClusterProfiles } from
 import { applyYearToProfiles, yearSyncMessage } from '../lib/festivalData'
 
 // The seven mapping-type strings `lib/engine.js`'s scoreMapping() actually
-// assigns to `mappingType` (see its `mtype = ...` branches) — these are the
+// assigns to `mappingType` (see its `mtype = ...` branches) - these are the
 // exact values the Day-by-Day table's "Mapping Type" column renders, so the
 // legend has to list them verbatim to be useful.
 //
 // This replaces an earlier invented list ('Exact Match', 'Nearest Weekday',
 // 'Cross-Month Shift', 'Regional Override', 'Fallback Assignment', 'Manual
-// Override', 'Repaired (Excessive Shift)') — none of which the engine has ever
+// Override', 'Repaired (Excessive Shift)') - none of which the engine has ever
 // emitted, making the legend actively misleading. Descriptions are ported from
 // the old app's Mapping Type Reference card (calendar_engine.html lines
 // 581-591).
@@ -61,20 +61,20 @@ export default function VersionSettingTab({ isPlanner, onNavigate }) {
     }
   }
 
-  // "Create Calendar" — the old app had this button on this tab
+  // "Create Calendar" - the old app had this button on this tab
   // (calendar_engine.html lines 2922-2938, createCalendar()); the React port
   // dropped it, leaving this tab with no way to act on a year change at all.
   //
   // VersionSettingTab does not own the cluster profiles (CalendarisationTab
   // does), so this fetches them, re-syncs every cluster's every festival to the
   // configured years via applyYearToProfiles(), writes them back, and then hands
-  // over to the Calendarisation tab — which remounts and re-fetches, so it opens
+  // over to the Calendarisation tab - which remounts and re-fetches, so it opens
   // showing the freshly re-synced dates.
   //
   // Deviation from the old app: it does NOT auto-run the engine on arrival. The
   // engine lives in CalendarisationTab's own state and isn't reachable from here
   // without lifting that whole state up. The user lands on Calendarisation with
-  // correct dates already applied and clicks its "Create Calendar" — one extra
+  // correct dates already applied and clicks its "Create Calendar" - one extra
   // click, no correctness difference.
   async function createCalendar() {
     if (!isPlanner || busy) return
@@ -135,7 +135,7 @@ export default function VersionSettingTab({ isPlanner, onNavigate }) {
         </div>
         <div style={{ marginTop: '12px' }}>
           <button className="btn" onClick={createCalendar} disabled={!isPlanner || busy}>
-            {busy ? 'Updating dates…' : 'Create Calendar'}
+            {busy ? 'Updating dates...' : 'Create Calendar'}
           </button>
           <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '6px' }}>
             Re-syncs every cluster's festival dates to the years above using the multi-year
@@ -154,7 +154,7 @@ export default function VersionSettingTab({ isPlanner, onNavigate }) {
             <div className="radio-tip">
               <strong>Shift backward first.</strong> When a non-festive day has no same-month match in
               the future year, it tries the <code>previous</code> month before the next. Good when your
-              year runs Jan–Dec.
+              year runs Jan-Dec.
             </div>
           </label>
           <label className="radio-opt">
@@ -164,7 +164,7 @@ export default function VersionSettingTab({ isPlanner, onNavigate }) {
             <div className="radio-tip">
               <strong>Shift forward first.</strong> When a non-festive day has no same-month match, it
               tries the <code>next</code> month before the previous. Good for fiscal years running
-              April–March.
+              April-March.
             </div>
           </label>
         </div>
@@ -176,7 +176,7 @@ export default function VersionSettingTab({ isPlanner, onNavigate }) {
           {CATEGORY_LEGEND.map(([bg, border, name, desc]) => (
             <div className="leg-item" key={name}>
               <div className="leg-dot" style={{ background: bg, border: `1px solid ${border}` }} />
-              <span>{name} — {desc}</span>
+              <span>{name} - {desc}</span>
             </div>
           ))}
         </div>

@@ -17,9 +17,9 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
   // null = idle; otherwise {pct, filesDone, filesTotal, elapsedSeconds, etaSeconds}
   // while a background scan job is running. Day-wise reads real columns across
   // 86M+ rows - the old code just called the scan endpoint directly and showed
-  // a bare "Loading…" with no feedback and, worse, no error handling at all: a
+  // a bare "Loading..." with no feedback and, worse, no error handling at all: a
   // network failure (not just a "not linked" response) left it stuck on
-  // "Loading…" forever with no way to recover short of a full page reload.
+  // "Loading..." forever with no way to recover short of a full page reload.
   const [progress, setProgress] = useState(null)
   const [fetchError, setFetchError] = useState(null)
   const pollTimer = useRef(null)
@@ -151,10 +151,10 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
           }} />
         </div>
         <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>
-          {progress.pct}%{progress.filesTotal > 0 && ` — ${progress.filesDone} of ${progress.filesTotal} files`}
+          {progress.pct}%{progress.filesTotal > 0 && ` - ${progress.filesDone} of ${progress.filesTotal} files`}
           {progress.etaSeconds != null
-            ? ` — about ${fmtDuration(progress.etaSeconds)} remaining`
-            : (progress.filesDone > 0 ? '' : ' — estimating time remaining…')}
+            ? ` - about ${fmtDuration(progress.etaSeconds)} remaining`
+            : (progress.filesDone > 0 ? '' : ' - estimating time remaining...')}
         </div>
       </div>
     )
@@ -180,14 +180,14 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
           {link.offline && (
             <p>
               <span className="scm-pill scm-pill-warn">Offline</span>{' '}
-              Source unreachable right now — showing last known data as of{' '}
+              Source unreachable right now - showing last known data as of{' '}
               <span className="date-mono">{link.scannedAt}</span>.
             </p>
           )}
           <p>
             <span className="scm-pill scm-pill-ok">Linked</span>{' '}
             {link.rowCount?.toLocaleString()} rows across {link.months?.length} months.
-            {' '}Range: <span className="date-mono">{link.dateRange?.min}</span> – <span className="date-mono">{link.dateRange?.max}</span>.
+            {' '}Range: <span className="date-mono">{link.dateRange?.min}</span> - <span className="date-mono">{link.dateRange?.max}</span>.
           </p>
           <p>
             Stores: <span className="scm-pill scm-pill-ok">{link.stores?.matched?.length} matched</span>{' '}
@@ -198,11 +198,11 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
           {hintCalendarName && (
             hintYearStr && byYear[hintYearStr] ? (
               <p style={{ fontSize: '11px', color: 'var(--muted)' }}>
-                "{hintCalendarName}" reindexes <strong>{hintYear}</strong> sales — set To Year to {hintYear} below to sync it.
+                "{hintCalendarName}" reindexes <strong>{hintYear}</strong> sales - set To Year to {hintYear} below to sync it.
               </p>
             ) : hintYearStr ? (
               <p style={{ fontSize: '11px', color: 'var(--warn)' }}>
-                "{hintCalendarName}" reindexes <strong>{hintYear}</strong> sales, but no {hintYear} data is linked for {LABELS[sourceType]} here — Run Reindex will return nothing until that year is available.
+                "{hintCalendarName}" reindexes <strong>{hintYear}</strong> sales, but no {hintYear} data is linked for {LABELS[sourceType]} here - Run Reindex will return nothing until that year is available.
               </p>
             ) : null
           )}
@@ -224,7 +224,7 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
                 <label>&nbsp;</label>
                 <button className="btn" onClick={syncRange} disabled={syncing}
                         title={`Sync every month from ${Math.min(+effRangeFrom, +effRangeTo)} to ${Math.max(+effRangeFrom, +effRangeTo)}`}>
-                  {syncing ? 'Syncing…' : 'Sync Selected Range'}
+                  {syncing ? 'Syncing...' : 'Sync Selected Range'}
                 </button>
               </div>
             </div>

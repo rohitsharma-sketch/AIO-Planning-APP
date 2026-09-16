@@ -9,12 +9,12 @@ import { parseDate, fmtDisp, calDiff } from '../../lib/dateUtils'
 // filters, click-to-sort headers, the DS_CAP render cap and the CSV export of
 // the *filtered* (not the capped/visible) set.
 //
-// NOTE: the "Cluster × Day" level toggle below is intentionally not wired up yet.
+// NOTE: the "Cluster x Day" level toggle below is intentionally not wired up yet.
 // The table always shows store-level rows regardless of which radio is selected.
 // Aggregating to one row per cluster (and CSV download) is a deliberate follow-up,
 // out of scope for this task.
 
-// calendar_engine.html line 3247. A real calendar is ~223 stores × 365 day
+// calendar_engine.html line 3247. A real calendar is ~223 stores x 365 day
 // pairs ≈ 81,000 rows; rendering that many <tr> synchronously locks the tab for
 // ~30s, so only the first DS_CAP are ever put in the DOM. Filtering, sorting
 // and the CSV export all still run over the full set.
@@ -89,7 +89,7 @@ export default function DateShiftPreviewPanel() {
   useEffect(() => { setFCluster(''); setFMonth(''); setFFestival(''); setFCategory('') }, [calendarId])
 
   // Festival / category / days-moved / month-match are not stored on the saved
-  // calendar — the backend's CalendarDayPair rows are bare (ref_date, fut_date)
+  // calendar - the backend's CalendarDayPair rows are bare (ref_date, fut_date)
   // pairs (router.py get_calendar, lines 127-134). They are reconstructed here
   // the same way CalendarisationTab/index.jsx's mappingsFromSavedPairs() does
   // it: buildFestMap() over the *cluster's own* saved festival list, which the
@@ -97,7 +97,7 @@ export default function DateShiftPreviewPanel() {
   //
   // Every store in a cluster shares that cluster's day pairs, so the per-day
   // derivation (date parsing, weekday, festive lookup, shift) is done once per
-  // cluster (10 × 365 rows) and then fanned out across the cluster's stores,
+  // cluster (10 x 365 rows) and then fanned out across the cluster's stores,
   // instead of ~81,000 times.
   const rows = useMemo(() => {
     if (!detail || !storeMap) return []
@@ -137,7 +137,7 @@ export default function DateShiftPreviewPanel() {
   }, [detail, storeMap])
 
   // Clusters this calendar actually carries a day mapping for that at least one
-  // store is assigned to — i.e. exactly the clusters present in `rows`.
+  // store is assigned to - i.e. exactly the clusters present in `rows`.
   const clusterOptions = useMemo(
     () => [...new Set(rows.map(r => r.cluster))].sort(),
     [rows])
@@ -145,7 +145,7 @@ export default function DateShiftPreviewPanel() {
   // Cascading options, ported from dsSyncFilters() (calendar_engine.html
   // ~3324-3362): each dropdown only offers values that actually occur once the
   // filters above it are applied, because every cluster has its own Festival
-  // Master. Ref Month is derived from the loaded calendar for the same reason —
+  // Master. Ref Month is derived from the loaded calendar for the same reason -
   // never a hardcoded Jan-Dec list.
   const ctxCluster = useMemo(
     () => (fCluster ? rows.filter(r => r.cluster === fCluster) : rows),
@@ -219,13 +219,13 @@ export default function DateShiftPreviewPanel() {
   const countText = !calendarId
     ? 'Pick a calendar to preview its store-level date shift.'
     : filtered.length > DS_CAP
-      ? `Showing first ${DS_CAP} of ${filtered.length.toLocaleString()} rows — refine your search/filters to see more (Download CSV exports all ${filtered.length.toLocaleString()})`
+      ? `Showing first ${DS_CAP} of ${filtered.length.toLocaleString()} rows - refine your search/filters to see more (Download CSV exports all ${filtered.length.toLocaleString()})`
       : `${filtered.length.toLocaleString()} rows`
 
   return (
     <>
       <div className="card" style={{ marginBottom: '12px' }}>
-        <div className="card-label">Store-Cluster × Date Shift</div>
+        <div className="card-label">Store-Cluster x Date Shift</div>
         <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
           Every store inherits the day-by-day date mapping of its calendar cluster. Pick a calendar
           and a level, then search, sort (click a column) and filter to preview the shift at any depth.
@@ -235,7 +235,7 @@ export default function DateShiftPreviewPanel() {
             <label htmlFor="ds-calendar">Calendar</label>
             <select id="ds-calendar" style={{ maxWidth: '380px' }}
               value={calendarId || ''} onChange={e => setCalendarId(e.target.value)}>
-              <option value="">Select a calendar…</option>
+              <option value="">Select a calendar...</option>
               {calendars.map(c => (
                 <option key={c.id} value={c.id}>{c.name} ({c.refYear} -&gt; {c.futYear}, locked)</option>
               ))}
@@ -244,8 +244,8 @@ export default function DateShiftPreviewPanel() {
           <div className="field">
             <label>Level</label>
             <div className="ds-level">
-              <label><input type="radio" checked={level === 'store'} onChange={() => setLevel('store')} /> Store × Day</label>
-              <label><input type="radio" checked={level === 'cluster'} onChange={() => setLevel('cluster')} /> Cluster × Day</label>
+              <label><input type="radio" checked={level === 'store'} onChange={() => setLevel('store')} /> Store x Day</label>
+              <label><input type="radio" checked={level === 'cluster'} onChange={() => setLevel('cluster')} /> Cluster x Day</label>
             </div>
           </div>
           <div className="field">
@@ -310,7 +310,7 @@ export default function DateShiftPreviewPanel() {
                   <td>{r.cluster}</td>
                   <td className="date-mono">{r.refDisp}</td>
                   <td>{r.refDay}</td>
-                  <td>{r.festival || <span className="cross">—</span>}</td>
+                  <td>{r.festival || <span className="cross">-</span>}</td>
                   <td><span className={`badge ${CAT_BADGE[r.category] || 'b-non'}`}>{r.category}</span></td>
                   <td className="date-mono">{r.futDisp}</td>
                   <td>{r.futDay}</td>

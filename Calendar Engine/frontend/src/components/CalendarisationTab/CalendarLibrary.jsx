@@ -5,9 +5,9 @@ import { listCalendarLibrary, getCalendar, saveCalendar, deleteCalendar, renameC
 // renderCalendarLibrary() (calendar_engine.html line ~3849:
 // toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'})).
 function fmtSavedAt(iso) {
-  if (!iso) return '—'
+  if (!iso) return '-'
   const d = new Date(iso)
-  if (isNaN(d)) return '—'
+  if (isNaN(d)) return '-'
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
@@ -22,7 +22,7 @@ export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSaveP
 
   useEffect(refresh, [])
 
-  // "Lock & Save Calendar" — ported from the old app's saveCalendarToLibrary()
+  // "Lock & Save Calendar" - ported from the old app's saveCalendarToLibrary()
   // (calendar_engine.html lines 3756-3817). Two behaviours are restored here:
   //   1. It prompts for a template name (defaulting to the auto-generated one,
   //      so a plain click-through behaves exactly as it did before), and
@@ -124,7 +124,7 @@ export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSaveP
           <div className="lib-empty-icon">LK</div>
           <div className="lib-empty-title">No saved calendars yet</div>
           <div className="lib-empty-desc">
-            Generate a comparative calendar, then click “Lock &amp; Save” to create a locked snapshot here.
+            Generate a comparative calendar, then click "Lock &amp; Save" to create a locked snapshot here.
           </div>
         </div>
       ) : (

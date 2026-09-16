@@ -128,13 +128,13 @@ export const FESTIVAL_DB = [
   { name:'Kali Puja',          cat:'r', aliases:['shyama puja','deepannwita kali puja'], ref:'2026-10-20', fut:'2027-10-08', pre:2, core:1, post:1, regions:['east','bengal'] },
 ];
 
-// ─── Multi-Year Festival Date Lookup (2025–2028) ──────────────────────────────
+// ─── Multi-Year Festival Date Lookup (2025-2028) ──────────────────────────────
 // Ported verbatim from `Calendar Engine/calendar_engine.html` lines 1160-1206
 // (the table body is byte-identical to the source; only `export` was added).
 // Dates for 2026/2027 match FESTIVAL_DB ref/fut. 2025/2028 are best estimates.
-// Users can override per year-pair — stored in Local DB/festival_changelog.json.
+// Users can override per year-pair - stored in Local DB/festival_changelog.json.
 // 2020-2024 are historical actuals; 2025-2028 as before. Years outside this
-// range fall back to same month/day estimates — flagged in the sync indicator.
+// range fall back to same month/day estimates - flagged in the sync indicator.
 export const FESTIVAL_DATES = {
   'Lohri':             {'2020':'2020-01-13','2021':'2021-01-13','2022':'2022-01-13','2023':'2023-01-13','2024':'2024-01-13','2025':'2025-01-13','2026':'2026-01-13','2027':'2027-01-13','2028':'2028-01-13'},
   'Makar Sankranti':   {'2020':'2020-01-15','2021':'2021-01-14','2022':'2022-01-14','2023':'2023-01-15','2024':'2024-01-15','2025':'2025-01-14','2026':'2026-01-14','2027':'2027-01-14','2028':'2028-01-15'},
@@ -240,7 +240,7 @@ export function resolveFestivalDefaults(name, refYear, futYear) {
 // ─── Year Re-sync ─────────────────────────────────────────────────────────────
 // Port of the old app's `autoUpdateFestivalDates(refYr, futYr)`
 // (calendar_engine.html lines 2691-2721), minus its DOM re-render / saveState()
-// tail — this is a pure function returning a new profiles array, so callers
+// tail - this is a pure function returning a new profiles array, so callers
 // decide how to persist and re-render.
 //
 // Scope matches the original exactly: EVERY cluster's EVERY festival is
@@ -257,7 +257,7 @@ export function resolveFestivalDefaults(name, refYear, futYear) {
 // NOT ported (deliberate): the old app followed this with `applyYearDates()`
 // (lines 2827-2860), which re-applied user per-year-pair overrides from the
 // festival changelog on top of these DB dates. Nothing in the new app writes to
-// /festival-changelog yet (it is read-only — see ChangeLogViewer.jsx), so there
+// /festival-changelog yet (it is read-only - see ChangeLogViewer.jsx), so there
 // are no overrides to re-apply and that step is currently a no-op. When
 // changelog writes are wired up, override re-application belongs right here,
 // after the DB dates are applied.
@@ -313,12 +313,12 @@ export function applyYearToProfiles(profiles, refYr, futYr) {
 
 // The status line the old app showed in #savedIndicator after a re-sync
 // (calendar_engine.html line 2855), minus the overrides clause (no overrides
-// exist yet — see applyYearToProfiles). `updated` is added here because it is
+// exist yet - see applyYearToProfiles). `updated` is added here because it is
 // real information the old inline table re-render conveyed visually and a
 // tab-switching flow does not.
 export function yearSyncMessage(refYr, futYr, updated, estimated) {
   const est = estimated
-    ? ` · ${estimated} festival${estimated > 1 ? 's' : ''} estimated — verify dates`
+    ? ` · ${estimated} festival${estimated > 1 ? 's' : ''} estimated - verify dates`
     : ''
   return `Dates updated for ${refYr} -> ${futYr} · ${updated} festival date${updated === 1 ? '' : 's'} changed${est}`
 }

@@ -81,7 +81,7 @@ export default function FestivalTable({ festivals, onChange, onAdd, onReset, onB
     onDayFieldChange(idx, field, value)
   }
 
-  // +/- buttons flanking each Pre/Core/Post box — ported from stepFest()
+  // +/- buttons flanking each Pre/Core/Post box - ported from stepFest()
   // (calendar_engine.html lines 2001-2008), including its per-field minimum
   // (core can't go below 1, pre/post can't go below 0).
   function step(idx, field, min, delta) {
@@ -90,8 +90,8 @@ export default function FestivalTable({ festivals, onChange, onAdd, onReset, onB
   }
 
   // Removal persists to the shared DB immediately and there is no undo (a deleted
-  // festival can only be recreated by hand), so a stray click on the narrow × must
-  // be cancellable. Plain browser confirm() — the codebase has no other
+  // festival can only be recreated by hand), so a stray click on the narrow x must
+  // be cancellable. Plain browser confirm() - the codebase has no other
   // destructive-action confirmation pattern to follow.
   function removeRow(idx) {
     const label = festivals[idx]?.name || 'this festival'
@@ -99,7 +99,7 @@ export default function FestivalTable({ festivals, onChange, onAdd, onReset, onB
     onChange(festivals.filter((_, i) => i !== idx))
   }
 
-  // Header bulk-set — ported from applyHeaderBulk() (calendar_engine.html lines
+  // Header bulk-set - ported from applyHeaderBulk() (calendar_engine.html lines
   // 1977-2000). Scope is deliberately the same as the original's: EVERY festival
   // in EVERY cluster, not just the active one (the old code's own comment says
   // "active cluster" but its body loops clusterProfiles.forEach). The confirm()
@@ -185,14 +185,14 @@ export default function FestivalTable({ festivals, onChange, onAdd, onReset, onB
                     </div>
                   </td>
                 ))}
-                <td>{isPlanner && <button onClick={() => removeRow(idx)} title="Remove">×</button>}</td>
+                <td>{isPlanner && <button onClick={() => removeRow(idx)} title="Remove">x</button>}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* Footer action bar — ported from calendar_engine.html lines 821-824.
+      {/* Footer action bar - ported from calendar_engine.html lines 821-824.
           "Save Settings" is deliberately not ported: this app persists every
           edit immediately through persist(), so an explicit save button would
           be a no-op. "Change Log" already has its own viewer in the sidebar. */}

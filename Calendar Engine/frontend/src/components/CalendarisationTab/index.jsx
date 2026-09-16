@@ -12,7 +12,7 @@ import { DEFAULT_FESTIVALS, applyYearToProfiles, yearSyncMessage, resolveFestiva
 let _nextFestivalId = 1000
 
 // Ported from `Calendar Engine/calendar_engine.html` line ~1332 (defined alongside
-// MONTHS, just above the Date Utilities section there) — not exported by lib/dateUtils.js
+// MONTHS, just above the Date Utilities section there) - not exported by lib/dateUtils.js
 // or lib/engine.js, so redefined here for building display rows.
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -45,7 +45,7 @@ function toRow(m, clusterName) {
     refWeek: weekNum(m.refDate),
     festival: m.festival || '',
     category: m.festiveCategory,
-    position: m.festivePosition != null ? (m.festivePosition >= 0 ? '+' : '') + m.festivePosition : '—',
+    position: m.festivePosition != null ? (m.festivePosition >= 0 ? '+' : '') + m.festivePosition : '-',
     futDate: fmtDisp(m.futureDate),
     // Raw 0-11 future-month index, carried alongside the formatted futDate so
     // OutputSection's Month filter can match on it directly. The old app filtered
@@ -96,7 +96,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
   const [activeIdx, setActiveIdx] = useState(0)
   const [status, setStatus] = useState(null)
   // Festival Master collapse state (old app: toggleFestMaster(), which started
-  // expanded — .fest-body had no inline display:none and #festToggle carried
+  // expanded - .fest-body had no inline display:none and #festToggle carried
   // the "open" class in the markup).
   const [festOpen, setFestOpen] = useState(true)
   // "Redact festival from all clusters" input - the draft name typed before
@@ -108,7 +108,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
   const [redactName, setRedactName] = useState('')
 
   // Engine run state. refYear/futYear/maxShift/moPri come from Task 4's
-  // /app-state endpoint (owned/edited by VersionSettingTab) — read once on
+  // /app-state endpoint (owned/edited by VersionSettingTab) - read once on
   // mount, same as VersionSettingTab does. generateMappings/validate need
   // refYear/futYear/maxShift as actual numbers (they do `yr === refYear`
   // comparisons internally), so these are coerced with Number(...) wherever used.
@@ -117,8 +117,8 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
   const [maxShift, setMaxShift] = useState(45)
   const [moPri, setMoPri] = useState('prev')
 
-  // Raw per-cluster mappings from the last "Create Calendar" run — Date-object
-  // based, keyed to profiles by index — used to build the save payload (needs
+  // Raw per-cluster mappings from the last "Create Calendar" run - Date-object
+  // based, keyed to profiles by index - used to build the save payload (needs
   // every cluster's day map, not just the one currently being viewed). Cleared
   // after loading a calendar from the library, since a loaded snapshot isn't a
   // fresh generation and shouldn't be re-saved as though it were.
@@ -143,11 +143,11 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
   const [monthlySummary, setMonthlySummary] = useState(null)
   const [engineStatus, setEngineStatus] = useState(null)
   // Every cluster's day-by-day rows combined, each tagged with its own cluster
-  // name — feeds OutputSection's Day-by-Day preview, which defaults to showing
+  // name - feeds OutputSection's Day-by-Day preview, which defaults to showing
   // every cluster (not just whichever one ClusterTabs has "active" for editing
   // purposes). Rebuilt whenever a full set of per-cluster mappings becomes
   // available (a fresh "Create Calendar" run, or a calendar loaded from the
-  // library) — NOT on every activeIdx switch, since it doesn't depend on which
+  // library) - NOT on every activeIdx switch, since it doesn't depend on which
   // cluster tab is being edited.
   const [allDayMap, setAllDayMap] = useState(null)
 
@@ -163,7 +163,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
     }).catch(() => {})
   }, [])
 
-  // "Create Calendar" — ports the old app's createCalendar() (calendar_engine.html
+  // "Create Calendar" - ports the old app's createCalendar() (calendar_engine.html
   // lines 2922-2938), whose first real step was autoUpdateFestivalDates(): every
   // cluster's every festival date is re-synced to the configured Reference/Future
   // years BEFORE the engine runs. Without that step, changing the years on the
@@ -205,7 +205,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
       workingProfiles = sync.profiles
       if (sync.updated) {
         // persist() also does setProfiles(), so the festival table on screen
-        // re-renders with the new dates — the old app's renderFestivalTable().
+        // re-renders with the new dates - the old app's renderFestivalTable().
         await persist(workingProfiles)
         syncMsg = yearSyncMessage(ry, fy, sync.updated, sync.estimated) + ' · '
       }
@@ -319,7 +319,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
     }
   }
 
-  // "Load" from the Calendar Library — ported from the old app's
+  // "Load" from the Calendar Library - ported from the old app's
   // loadSavedCalendar() (calendar_engine.html lines 3827-3842), which replaced
   // the whole working cluster-profiles state with the snapshot's clusters before
   // re-rendering. That is the important half: without setProfiles(...) this only
@@ -339,7 +339,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
       return
     }
 
-    // Snapshot clusters carry {name, region, festivals} only — nextId isn't
+    // Snapshot clusters carry {name, region, festivals} only - nextId isn't
     // stored, so derive it from the highest festival id in the snapshot (same
     // rule handleAddFestival uses) rather than from festivals.length, which
     // would hand out ids that already exist.
@@ -365,7 +365,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
     setPreviewCalendarName(full.name)
 
     // Every cluster's saved pairs, reconstructed the same way the active
-    // cluster's are below — feeds the Day-by-Day preview's "all clusters"
+    // cluster's are below - feeds the Day-by-Day preview's "all clusters"
     // default. A cluster with no saved pairs of its own just contributes
     // nothing here rather than blocking the others.
     setAllDayMap(
@@ -388,7 +388,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
     setDayMap(mappings.map(m => toRow(m, cluster.name)))
     setValidationIssues(validate(mappings, ry, fy, Number(maxShift) || 45, cluster.festivals, coreFestivalNamesFor(cluster.name), engineVersion))
     setMonthlySummary(computeMonthly(mappings))
-    setEngineStatus({ ok: true, msg: `Loaded "${full.name}" (${full.refYear} -> ${full.futYear}) — ${nextProfiles.length} cluster${nextProfiles.length === 1 ? '' : 's'} restored, showing "${cluster.name}".` })
+    setEngineStatus({ ok: true, msg: `Loaded "${full.name}" (${full.refYear} -> ${full.futYear}) - ${nextProfiles.length} cluster${nextProfiles.length === 1 ? '' : 's'} restored, showing "${cluster.name}".` })
   }
 
   // Returns whether the working-set save itself succeeded, so a caller with
@@ -450,7 +450,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
 
   // Remove a festival BY NAME from every cluster that has it, in one action -
   // the manual alternative is switching to each of up to 10 cluster tabs and
-  // clicking that row's × individually. Exact match after trim + lowercase
+  // clicking that row's x individually. Exact match after trim + lowercase
   // (a festival name is free text per cluster, so this is the only reliable
   // way to find "the same festival" across clusters - there's no shared id).
   // Goes through the same persist() every other Festival Master edit does,
@@ -480,7 +480,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
     }
   }
 
-  // Rename the active cluster — old app: renameCluster() (calendar_engine.html
+  // Rename the active cluster - old app: renameCluster() (calendar_engine.html
   // lines 2197-2206). The trim/"Cluster N" fallback and the uniqueness check
   // live in ClusterTabs (which owns the draft input); by the time this runs the
   // name is already validated.
@@ -488,7 +488,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
   // IMPORTANT: cluster name is a join key elsewhere in this system
   // (calendar.store_calendar_clusters.cluster_name and a saved calendar's
   // per-cluster dayMap are both keyed by it), so this has to go through the same
-  // persist() -> putClusterProfiles write path as every other profile edit —
+  // persist() -> putClusterProfiles write path as every other profile edit -
   // which it does. Renaming does NOT retro-rewrite those other tables, exactly
   // as in the old app; a renamed cluster loses its store mapping until the
   // Store-Cluster Mapping tab is re-pointed at the new name.
@@ -496,7 +496,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
     persist(profiles.map((cp, i) => i === activeIdx ? { ...cp, name } : cp))
   }
 
-  // Region selector — old app: setClusterRegion() (calendar_engine.html lines
+  // Region selector - old app: setClusterRegion() (calendar_engine.html lines
   // 2151-2154). Only cp.region is written here; the old app's
   // autoApplyRegionalFestivals() side effect is intentionally not ported (see
   // the note in ClusterTabs.jsx).
@@ -504,7 +504,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
     persist(profiles.map((cp, i) => i === activeIdx ? { ...cp, region } : cp))
   }
 
-  // "Copy from" — old app: copyFromCluster() (calendar_engine.html lines
+  // "Copy from" - old app: copyFromCluster() (calendar_engine.html lines
   // 2107-2121), including its confirm() before the destructive replace. The
   // festival objects are deep-copied ({...f}) so the two clusters don't end up
   // sharing row objects, same as handleAdd does with DEFAULT_FESTIVALS; nextId
@@ -520,11 +520,11 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
       : cp))
   }
 
-  // "Reset to Defaults" — old app: resetFestivals() (calendar_engine.html lines
+  // "Reset to Defaults" - old app: resetFestivals() (calendar_engine.html lines
   // 2067-2074), which also reset the cluster's nextId to 20 (the DEFAULT_FESTIVALS
   // ids top out at 15). The old app did NOT confirm first; a confirm is added
   // here because this writes straight through to the shared database instead of
-  // localStorage, with no undo — the same reasoning FestivalTable's row delete
+  // localStorage, with no undo - the same reasoning FestivalTable's row delete
   // already uses.
   function handleResetFestivals() {
     const dest = profiles[activeIdx]
@@ -553,7 +553,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
     })))
   }
 
-  // Header Pre/Core/Post bulk set — old app: applyHeaderBulk()
+  // Header Pre/Core/Post bulk set - old app: applyHeaderBulk()
   // (calendar_engine.html lines 1977-2000). Cross-cluster by design: the
   // original loops `clusterProfiles.forEach`, so it sets the column for every
   // festival of every cluster, not just the active one. FestivalTable clamps
@@ -630,7 +630,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
       const parts = []
       if (updated) parts.push(`copied into ${updated} other saved template${updated === 1 ? '' : 's'}`)
       if (failed) parts.push(`${failed} failed`)
-      setStatus({ ok: failed === 0, msg: `"${name}" added to "${clusterName}" — ${parts.join(', ')}.` })
+      setStatus({ ok: failed === 0, msg: `"${name}" added to "${clusterName}" - ${parts.join(', ')}.` })
     }
   }
 
@@ -705,15 +705,15 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
     }
   }
 
-  if (!profiles.length) return <div className="module-panel">Loading…</div>
+  if (!profiles.length) return <div className="module-panel">Loading...</div>
 
   return (
     <div className="module-panel" style={{ display: 'flex', gap: '16px' }}>
       <main style={{ flex: 1 }}>
-        {/* Festival Master card chrome — ported from calendar_engine.html lines
+        {/* Festival Master card chrome - ported from calendar_engine.html lines
             760-826. The header (title + count pill + caret) collapses .fest-body,
             which spans the cluster tabs, the rename/region/copy rows, the
-            festival table and the footer action bar — the same scope
+            festival table and the footer action bar - the same scope
             toggleFestMaster() had (calendar_engine.html lines 2075-2080). */}
         <div className="fest-wrap">
           <div className="fest-header" onClick={() => setFestOpen(o => !o)}
@@ -757,7 +757,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
                 <div className="scm-toolbar" style={{ margin: '10px 0' }}>
                   <button className="btn" onClick={handleSyncStructureToAllTemplates} disabled={syncingStructure}
                     title="Replace every other saved template's festival list per cluster with the current structure, dates resolved for each template's own year">
-                    {syncingStructure ? 'Syncing…' : 'Sync Festival Structure to All Templates'}
+                    {syncingStructure ? 'Syncing...' : 'Sync Festival Structure to All Templates'}
                   </button>
                 </div>
               )}
@@ -771,7 +771,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
 
         <div className="card">
           <div style={{ fontSize: '11px', color: 'var(--muted)', margin: '0 0 12px' }}>
-            Reference Year {refYear ?? '—'} -&gt; Future Year {futYear ?? '—'} (set on the Version Setting tab)
+            Reference Year {refYear ?? '-'} -&gt; Future Year {futYear ?? '-'} (set on the Version Setting tab)
           </div>
           <button className="btn" onClick={runEngine}>Create Calendar</button>
           {/* One-click overwrite of whichever locked template is currently
@@ -780,7 +780,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
           {isPlanner && previewCalendarId != null && (
             <button className="btn" onClick={handleSaveToLoadedTemplate} disabled={savingToTemplate}
               style={{ marginLeft: '8px' }} title={`Regenerate and overwrite "${previewCalendarName}" with your current festival changes`}>
-              {savingToTemplate ? 'Saving…' : `Save Changes to "${previewCalendarName}"`}
+              {savingToTemplate ? 'Saving...' : `Save Changes to "${previewCalendarName}"`}
             </button>
           )}
           {engineStatus && <p style={{ color: engineStatus.ok ? 'var(--green)' : 'var(--red)' }}>{engineStatus.msg}</p>}

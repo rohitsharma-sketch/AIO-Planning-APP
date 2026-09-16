@@ -403,12 +403,12 @@ export default function CalendarisedSalesTab({ isPlanner }) {
           <option value="mw">Month-wise Sales Value</option>
         </select>
         <select value={calendarId || ''} onChange={e => setCalendarId(e.target.value)}>
-          <option value="">Select a locked calendar…</option>
+          <option value="">Select a locked calendar...</option>
           {calendars.map(c => <option key={c.id} value={c.id}>{c.name} ({c.refYear} -&gt; {c.futYear})</option>)}
         </select>
         {selectedCalendar && (
           <p style={{ fontSize: '11px', color: 'var(--muted)', margin: '6px 0 0' }}>
-            Reindexes <strong>{selectedCalendar.refYear}</strong> sales onto <strong>{selectedCalendar.futYear}</strong> dates —
+            Reindexes <strong>{selectedCalendar.refYear}</strong> sales onto <strong>{selectedCalendar.futYear}</strong> dates -
             sync {selectedCalendar.refYear} months above (for {source === 'dw' ? 'Day-wise' : 'Month-wise'}) to use it.
           </p>
         )}
@@ -426,7 +426,7 @@ export default function CalendarisedSalesTab({ isPlanner }) {
             be. */}
         {selectedCalendar && syncedMonths.length === 0 && (
           <p style={{ fontSize: '11px', color: 'var(--warn)', margin: '6px 0 0', fontWeight: 600 }}>
-            No {selectedCalendar.refYear} months are synced yet for {source === 'dw' ? 'Day-wise' : 'Month-wise'} —
+            No {selectedCalendar.refYear} months are synced yet for {source === 'dw' ? 'Day-wise' : 'Month-wise'} -
             set the {source === 'dw' ? 'Day-wise' : 'Month-wise'} panel's year range above to include {selectedCalendar.refYear}
             and click "Sync Selected Range" before this calendar can be reindexed.
           </p>
@@ -442,7 +442,7 @@ export default function CalendarisedSalesTab({ isPlanner }) {
               MONTHS TO REINDEX
             </div>
             <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '6px' }}>
-              A closed month reindexed once under this calendar and these output fields is cached —
+              A closed month reindexed once under this calendar and these output fields is cached -
               Run Reindex reuses it instead of re-reading its sales. Only Open (the current month, still
               accumulating sales) and Pending (closed, not cached yet) do real work.
             </div>
@@ -477,7 +477,7 @@ export default function CalendarisedSalesTab({ isPlanner }) {
               CUSTOMISE OUTPUT FIELDS
             </div>
             <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '6px' }}>
-              Saved automatically — picked once here, every later Run Reindex for this source reuses it.
+              Saved automatically - picked once here, every later Run Reindex for this source reuses it.
             </div>
             {schema.metrics.length > 1 && (
               <div className="field" style={{ marginBottom: '8px' }}>
@@ -514,7 +514,7 @@ export default function CalendarisedSalesTab({ isPlanner }) {
 
         {isPlanner && (
           <button className="btn" onClick={runRx} disabled={!!progress || activeRunMonths.size === 0} style={{ marginTop: '12px' }}>
-            {progress ? 'Reindexing…' : 'Run Reindex'}
+            {progress ? 'Reindexing...' : 'Run Reindex'}
           </button>
         )}
         {progress && (
@@ -526,16 +526,16 @@ export default function CalendarisedSalesTab({ isPlanner }) {
               }} />
             </div>
             <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>
-              {displayPct}%{progress.filesTotal > 0 && ` — ${progress.filesDone} of ${progress.filesTotal} files`}
-              {progress.elapsedSeconds != null && ` — elapsed ${fmtDuration(progress.elapsedSeconds)}`}
+              {displayPct}%{progress.filesTotal > 0 && ` - ${progress.filesDone} of ${progress.filesTotal} files`}
+              {progress.elapsedSeconds != null && ` - elapsed ${fmtDuration(progress.elapsedSeconds)}`}
               {progress.etaSeconds != null
-                ? ` — about ${fmtDuration(progress.etaSeconds)} remaining`
-                : ' — estimating remaining time…'}
+                ? ` - about ${fmtDuration(progress.etaSeconds)} remaining`
+                : ' - estimating remaining time...'}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--muted)' }}>
               The read/aggregate step has no sub-progress signal of its own, so the remaining-time
-              estimate is projected from how long past runs of this size took — it firms up as more
-              runs complete, and reads "estimating…" until the first one finishes.
+              estimate is projected from how long past runs of this size took - it firms up as more
+              runs complete, and reads "estimating..." until the first one finishes.
             </div>
           </div>
         )}
@@ -544,10 +544,10 @@ export default function CalendarisedSalesTab({ isPlanner }) {
 
       {largeResult && (
         <div className="card">
-          <h4>Reindex Complete — Result Too Large to Preview</h4>
+          <h4>Reindex Complete - Result Too Large to Preview</h4>
           <p style={{ fontSize: '12px', color: 'var(--muted)' }}>
             This run finished successfully ({(largeResult.contentLength / (1024 * 1024)).toFixed(0)} MB combined
-            across the selected months) — too large to load into this page without risking the browser tab
+            across the selected months) - too large to load into this page without risking the browser tab
             crashing. Download the CSV below (same Wide/Stacked choice as the interactive table would offer),
             or narrow the month/field selection above and run again for an interactive preview.
           </p>

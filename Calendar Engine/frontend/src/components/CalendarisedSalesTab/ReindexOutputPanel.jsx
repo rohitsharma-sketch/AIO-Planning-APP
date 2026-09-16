@@ -30,12 +30,12 @@ function downloadCsv(rows, filename) {
 }
 
 // calendar_engine.html renders a missing (store, column) cell as '' rather than
-// 0 — a store with no sales that day genuinely has no row in the source, which
+// 0 - a store with no sales that day genuinely has no row in the source, which
 // is not the same claim as "sold zero".
 const cell = (v) => (v == null ? '' : v)
 // Deliberately `== null` rather than the old app's falsy test (`v ? ... : ''`):
 // a month whose rows genuinely sum to 0 is a real, different fact from one with
-// no rows at all, and the live data does contain such totals — 49 of them in
+// no rows at all, and the live data does contain such totals - 49 of them in
 // the month-wise run (ANG/CDIT, BKR/CDIT and other CDIT divisions carry
 // explicit 0.00 values), which the old app silently rendered as blank. Blank
 // here means only "nothing contributed to this cell".
@@ -69,13 +69,13 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
   // default" effect below can tell "not initialised" apart from "user
   // unchecked everything".
   const [selectedMonths, setSelectedMonths] = useState(null)
-  // The reindex response carries only {store, division?, col, value} — no
-  // cluster — so the Cluster column and the whole By Cluster tab need the
+  // The reindex response carries only {store, division?, col, value} - no
+  // cluster - so the Cluster column and the whole By Cluster tab need the
   // store -> cluster map fetched separately (the same GET the Date Shift
   // Preview panel and CalendarisedSalesTab/index.jsx already use).
   const [storeCluster, setStoreCluster] = useState(null)
   // Day-wise comparison download: shows a month-picker popover before generating
-  // the CSV, since a full year at day-level (365 cols × 223 stores × 2 rows) is
+  // the CSV, since a full year at day-level (365 cols x 223 stores x 2 rows) is
   // too large to produce without knowing which months the planner actually wants.
   const [showDayDlMenu, setShowDayDlMenu] = useState(false)
   const [dayDlSel, setDayDlSel] = useState(null)
@@ -101,7 +101,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
 
   // rxWideRows(): group the long-form rows by the grain key, then hang each
   // row's {col: value} off that key. Deliberately does NOT depend on
-  // storeCluster — the cluster is looked up per-cell below so that the map
+  // storeCluster - the cluster is looked up per-cell below so that the map
   // arriving late does not re-pivot 15k+ rows.
   const wide = useMemo(() => {
     if (!ok) return []
@@ -329,12 +329,12 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
   }, [storeMonthComp, search, storeCluster])
 
   // Day-wise Comparison: stacked two rows per store (Actual + Reindexed).
-  // DW only — MW has no day-of-month field, so date columns don't exist there.
+  // DW only - MW has no day-of-month field, so date columns don't exist there.
   // Actual side: reference-year dates (e.g. 2026-04-15) → keyed by MM-DD so
   //   they can be matched against future-year column headers (e.g. 2027-04-15).
-  // Reindexed side: future-year dates — exact column match, no year adjustment.
+  // Reindexed side: future-year dates - exact column match, no year adjustment.
   const storeDayComp = useMemo(() => {
-    // Snapshots collapse DW columns to YYYY-MM — no day-level data available.
+    // Snapshots collapse DW columns to YYYY-MM - no day-level data available.
     if (!ok || !result.actualRows || result.source !== 'dw' || result.isSnapshot) return null
     // Also bail if columns are already month-strings (7 chars) not day-strings (10 chars)
     if (!result.columns?.[0] || result.columns[0].length < 10) return null
@@ -418,7 +418,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
       })
       csvRows.push(['', ...keyFields.map((_, i) => i === 0 ? 'Grand Total' : ''), ...ga])
     } else {
-      // Stacked (transposed): one row per (store, date) — dates in rows,
+      // Stacked (transposed): one row per (store, date) - dates in rows,
       // Actual and Reindexed as column headers. Long/tall format.
       const actualYear = result.actualRows?.[0]?.col?.slice(0, 4) ?? ''
       const hdr = ['Cluster', ...kfHeaders, 'Date', 'Actual Ref Date', 'Actual', 'Reindexed Ref Date', 'Reindexed', 'Diff']
@@ -508,10 +508,10 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
     })
   }, [ok, result, visibleColumns, visibleMonthCols, isEven])
 
-  // Shared by Monthly Summary and P1/P2: null (rendered as "—") when actual is
+  // Shared by Monthly Summary and P1/P2: null (rendered as "-") when actual is
   // zero/missing rather than a misleading 0% or a divide-by-zero Infinity.
   const pctDiff = (actual, reindexed) => (actual ? ((reindexed - actual) / actual) * 100 : null)
-  const fmtPct = (v) => (v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`)
+  const fmtPct = (v) => (v == null ? '-' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`)
   const hasActual = ok && !!result.actualRows
 
   if (!result || !result.ok) return null
@@ -543,7 +543,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
   function countText(n) {
     if (!n) return 'No rows to show.'
     return n > RX_CAP
-      ? `Showing first ${RX_CAP} of ${n.toLocaleString()} rows — refine your search to see more (Download CSV exports all ${n.toLocaleString()})`
+      ? `Showing first ${RX_CAP} of ${n.toLocaleString()} rows - refine your search to see more (Download CSV exports all ${n.toLocaleString()})`
       : `${n.toLocaleString()} rows`
   }
 
@@ -619,7 +619,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
     <div className="card">
       {result.isSnapshot && (
         <div style={{ background: 'var(--navy2)', color: '#fff', borderRadius: '4px', padding: '6px 10px', marginBottom: '10px', fontSize: '11px' }}>
-          Showing last run's monthly summary — computed {new Date(result.computedAt).toLocaleString()}.
+          Showing last run's monthly summary - computed {new Date(result.computedAt).toLocaleString()}.
           Run Reindex above to refresh. Festival labels are not available in cached snapshots.
         </div>
       )}
@@ -662,7 +662,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
           mismatched calendar. */}
       {result.rows.length === 0 && activeSub !== 'raw' && (
         <p style={{ color: 'var(--warn)', fontWeight: 600, fontSize: '12px' }}>
-          No rows mapped for this run — the synced period likely falls outside the chosen
+          No rows mapped for this run - the synced period likely falls outside the chosen
           calendar's reference year, so the tables below are empty. See Run Details.
         </p>
       )}
@@ -726,7 +726,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                       if (shown >= RX_CAP) break
                       out.push(
                         <tr className="rx-ref-date-row" key={`ref-${cluster}`}>
-                          <th style={{ textAlign: 'left' }}>{cluster} — Reference Date</th>
+                          <th style={{ textAlign: 'left' }}>{cluster} - Reference Date</th>
                           {kfHeaders.map(h => <th key={`ref-${cluster}-${h}`} />)}
                           {visibleColumns.map(c => <th key={`ref-${cluster}-${c}`} style={num}>{refDateOf(cluster, c)}</th>)}
                         </tr>
@@ -734,7 +734,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                       if (hasFestivalRowFor(cluster)) {
                         out.push(
                           <tr className="rx-ref-date-row" key={`fest-${cluster}`}>
-                            <th style={{ textAlign: 'left' }}>{cluster} — Festival</th>
+                            <th style={{ textAlign: 'left' }}>{cluster} - Festival</th>
                             {kfHeaders.map(h => <th key={`fest-${cluster}-${h}`} />)}
                             {visibleColumns.map(c => <th key={`fest-${cluster}-${c}`} style={{ ...num, color: 'var(--warn)' }}>{festivalOf(cluster, c)}</th>)}
                           </tr>
@@ -865,8 +865,8 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
             </button>
           </div>
           <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
-            {clusterRows.length} cluster(s) × {visibleColumns.length} column(s)
-            {storeCluster === null && ' — loading store-cluster map…'}
+            {clusterRows.length} cluster(s) x {visibleColumns.length} column(s)
+            {storeCluster === null && ' - loading store-cluster map...'}
           </div>
           <div className="tbl-wrap">
             <table>
@@ -890,7 +890,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
       )}
 
       {activeSub === 'divmonth' && storeMonthComp && (() => {
-        // Actual reference-year label — first actual row's col gives the year (e.g. "2026")
+        // Actual reference-year label - first actual row's col gives the year (e.g. "2026")
         const actualYear = result.actualRows?.[0]?.col?.slice(0, 4) ?? 'Actual'
         const rxYear = visibleMonthCols[0]?.slice(0, 4) ?? 'Reindexed'
         const { rows: smRows, grandActualMM, grandRxYM } = storeMonthComp
@@ -907,7 +907,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
               <button className="btn" onClick={downloadStoreMonth} disabled={!smRows.length}>Download CSV</button>
             </div>
             <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
-              {countText(displayRows.length)} · Each month: <strong>{actualYear} Actual</strong> vs <strong>{rxYear} Reindexed</strong> (matched by month number — difference reflects festival/calendar shifts)
+              {countText(displayRows.length)} · Each month: <strong>{actualYear} Actual</strong> vs <strong>{rxYear} Reindexed</strong> (matched by month number - difference reflects festival/calendar shifts)
             </div>
             <div className="tbl-wrap">
               <table>
@@ -985,7 +985,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                   placeholder="store, division, cluster"
                   value={search} onChange={e => setSearch(e.target.value)} />
               </div>
-              {/* Download button with month-picker popover — DW date columns can
+              {/* Download button with month-picker popover - DW date columns can
                   run to 365 per year; the popover lets the planner pick which
                   months to export before the (potentially very wide) CSV is built. */}
               <div style={{ position: 'relative' }}>
@@ -1021,8 +1021,8 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                     </div>
                     <div style={{ fontSize: '10px', color: 'var(--muted)', marginBottom: '12px', lineHeight: 1.4 }}>
                       {dayDlFmt === 'stacked'
-                        ? 'One row per (store, date) — Date | Actual Ref Date | Actual | Reindexed Ref Date | Reindexed | Diff'
-                        : 'One row per store — each date expands to Actual, Reindexed, Diff'}
+                        ? 'One row per (store, date) - Date | Actual Ref Date | Actual | Reindexed Ref Date | Reindexed | Diff'
+                        : 'One row per store - each date expands to Actual, Reindexed, Diff'}
                     </div>
                     {/* Month picker */}
                     <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Months to export</div>
@@ -1072,14 +1072,14 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                     const rowKey = keyFields.map(f => meta[f]).join(KEY_SEP)
                     return (
                       <Fragment key={rowKey}>
-                        {/* Actual row — muted background so the pair is visually grouped */}
+                        {/* Actual row - muted background so the pair is visually grouped */}
                         <tr style={{ background: 'var(--light)' }}>
                           <td>{cluster}</td>
                           {keyFields.map(f => <td key={f} style={{ fontWeight: f === 'store' ? 600 : 400 }}>{meta[f]}</td>)}
                           <td style={{ fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic' }}>Actual</td>
                           {visibleColumns.map(c => <td key={`a-${c}`} style={num}>{round2(actualByMMDD[c.slice(5)])}</td>)}
                         </tr>
-                        {/* Reindexed row — colour-coded vs actual */}
+                        {/* Reindexed row - colour-coded vs actual */}
                         <tr>
                           <td />
                           {keyFields.map(f => <td key={f} />)}
@@ -1123,11 +1123,11 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
             </button>
           </div>
           <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
-            P1 = day 1–15, P2 = day 16–end of month. Actual is that month's own reference-year
+            P1 = day 1-15, P2 = day 16-end of month. Actual is that month's own reference-year
             sales; Reindexed is the calendar-shifted future-year sales for the same month.
             {isEven && (
               <>
-                {' '}<strong style={{ color: 'var(--warn)' }}>Month-wise source has no day-of-month field —
+                {' '}<strong style={{ color: 'var(--warn)' }}>Month-wise source has no day-of-month field -
                 P1/P2 here is an even half-and-half of each month's total, not a measured
                 intra-month pattern.</strong>
               </>
@@ -1138,8 +1138,8 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
               <thead>
                 <tr>
                   <th rowSpan={2}>Month</th>
-                  <th colSpan={4} style={num}>P1 (1–15)</th>
-                  <th colSpan={4} style={num}>P2 (16–end)</th>
+                  <th colSpan={4} style={num}>P1 (1-15)</th>
+                  <th colSpan={4} style={num}>P2 (16-end)</th>
                 </tr>
                 <tr>
                   <th style={num}>Actual</th>
@@ -1200,7 +1200,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
           {/* Distinct from "unmapped dates": these stores' calendar cluster has no entry
               at all in the selected calendar's day map (usually a cluster-name mismatch
               between the store/cluster map and the calendar), so EVERY one of their rows
-              is dropped — not just a few dates. */}
+              is dropped - not just a few dates. */}
           {result.unmappedClusters?.length > 0 && (
             <p style={{ color: 'var(--red)' }}>
               Clusters missing from this calendar: {result.unmappedClusters.join(', ')}
