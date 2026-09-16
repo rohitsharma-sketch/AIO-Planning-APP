@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NSO Plan Distributor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --top:#312E81; --ac:#4F46E5; --ac-h:#4338CA;
+  --al:#EEF2FF; --am:#C7D2FE;
+  --bg:#F5F5FA; --card:#FFFFFF;
+  --bdr:#E5E7EB; --bdr2:#D1D5DB;
+  --txt:#111827; --sub:#374151; --mu:#6B7280;
+  --ok:#059669; --ok-l:#D1FAE5;
+  --warn:#D97706; --warn-l:#FEF3C7;
+  --err:#DC2626; --err-l:#FEE2E2;
+  --r:10px; --r2:6px;
+  --shadow:0 1px 4px rgba(0,0,0,.08),0 0 0 1px rgba(0,0,0,.04);
+}
+@media(prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F0E1A;--card:#1A1933;--bdr:#2D2B4E;--bdr2:#3D3B5E;
+    --txt:#F3F4F6;--sub:#D1D5DB;--mu:#9CA3AF;
+    --al:#1E1B4B;--am:#3730A3;
+    --ok-l:#065F46;--warn-l:#78350F;--err-l:#7F1D1D;
+    --shadow:0 1px 4px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.2);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F0E1A;--card:#1A1933;--bdr:#2D2B4E;--bdr2:#3D3B5E;
+  --txt:#F3F4F6;--sub:#D1D5DB;--mu:#9CA3AF;
+  --al:#1E1B4B;--am:#3730A3;
+  --ok-l:#065F46;--warn-l:#78350F;--err-l:#7F1D1D;
+  --shadow:0 1px 4px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.2);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;padding-inline:16px}
+
+/* top bar */
+.topbar{background:var(--top);color:#fff;padding:0 24px;display:flex;align-items:center;gap:12px;height:52px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.25);margin-inline:-16px}
+.topbar h1{font-size:15px;font-weight:700;letter-spacing:.02em}
+.topbar .badge{background:rgba(255,255,255,.18);font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px}
+.topbar .spacer{flex:1}
+.topbar .hint{font-size:12px;opacity:.65}
+
+/* layout */
+.wrap{max-width:960px;margin:0 auto;padding:24px 0 60px}
+.section{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}
+.sec-head{padding:16px 20px 14px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:10px}
+.sec-num{width:24px;height:24px;border-radius:50%;background:var(--ac);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sec-title{font-size:14px;font-weight:700}
+.sec-sub{font-size:12px;color:var(--mu);margin-left:auto}
+.sec-body{padding:20px}
+
+/* folder row */
+.folder-row{display:flex;gap:8px;align-items:center}
+.folder-input{flex:1;height:40px;padding:0 14px;border:1.5px solid var(--bdr2);border-radius:var(--r2);font-size:13px;font-family:inherit;background:var(--card);color:var(--txt);outline:none;transition:.15s}
+.folder-input:focus{border-color:var(--ac);box-shadow:0 0 0 3px rgba(79,70,229,.12)}
+
+/* buttons */
+.btn{height:40px;padding:0 20px;border-radius:var(--r2);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:.15s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn-ac{background:var(--ac);color:#fff}
+.btn-ac:hover{background:var(--ac-h)}
+.btn-ac:disabled{opacity:.5;cursor:not-allowed}
+.btn-outline{background:transparent;border:1.5px solid var(--bdr2);color:var(--sub)}
+.btn-outline:hover{border-color:var(--ac);color:var(--ac)}
+.btn-lg{height:44px;padding:0 28px;font-size:14px;font-weight:700}
+
+/* file grid — 3 cols */
+.file-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}
+@media(max-width:640px){.file-grid{grid-template-columns:1fr 1fr}}
+
+/* file tile */
+.file-tile{border:2px solid var(--bdr);border-radius:var(--r2);padding:14px 14px;display:flex;align-items:center;gap:12px;transition:.2s;position:relative}
+.file-tile.state-found{border-color:var(--ok);background:var(--ok-l)}
+.file-tile.state-missing{border-color:var(--err);background:var(--err-l)}
+.file-tile.state-optional{border-color:var(--bdr2);opacity:.7}
+.tile-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;font-weight:700}
+.state-found  .tile-icon{background:var(--ok);color:#fff}
+.state-missing .tile-icon{background:var(--err);color:#fff}
+.state-optional .tile-icon{background:var(--bdr);color:var(--mu)}
+.tile-body{min-width:0}
+.tile-label{font-size:12px;font-weight:700;color:var(--sub)}
+.state-found  .tile-label{color:var(--ok)}
+.state-missing .tile-label{color:var(--err)}
+.tile-name{font-size:11px;color:var(--mu);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+.tile-badge{position:absolute;top:8px;right:8px;font-size:9px;font-weight:700;padding:1px 6px;border-radius:99px;text-transform:uppercase;letter-spacing:.04em}
+.state-found  .tile-badge{background:var(--ok);color:#fff}
+.state-missing .tile-badge{background:var(--err);color:#fff}
+.state-optional .tile-badge{background:var(--bdr2);color:var(--mu)}
+
+/* divider between required and optional tiles */
+.file-group-label{grid-column:1/-1;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--mu);padding-top:4px;border-top:1px solid var(--bdr);margin-top:4px}
+.file-group-label:first-child{border-top:none;margin-top:0;padding-top:0}
+
+/* folder message */
+.fmsg{margin-top:12px;font-size:12px;padding:9px 13px;border-radius:var(--r2);border:1px solid currentColor}
+.fmsg.ok{background:var(--ok-l);color:var(--ok)}
+.fmsg.warn{background:var(--warn-l);color:var(--warn)}
+.fmsg.err{background:var(--err-l);color:var(--err)}
+
+/* AOP table */
+.aop-wrap{overflow-x:auto}
+.aop-table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+.aop-table th{background:var(--top);color:#fff;font-weight:700;padding:8px 10px;text-align:left;white-space:nowrap}
+.aop-table th.num{text-align:right}
+.aop-table td{padding:6px 10px;border-bottom:1px solid var(--bdr);vertical-align:middle}
+.aop-table tr:last-child td{border-bottom:none}
+.aop-table tr:hover td{background:var(--al)}
+.aop-table td.num{text-align:right}
+.aop-input{width:80px;border:1.5px solid var(--bdr2);border-radius:4px;padding:3px 6px;font-size:12px;font-family:inherit;text-align:right;background:var(--card);color:var(--txt);outline:none}
+.aop-input:focus{border-color:var(--ac);box-shadow:0 0 0 2px rgba(79,70,229,.12)}
+.aop-total td{font-weight:700;background:var(--al)!important}
+.grade-badge{display:inline-block;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:700;background:var(--am);color:var(--ac)}
+
+/* progress */
+.progress-wrap{display:none;margin-top:20px}
+.progress-track{height:10px;background:var(--bdr);border-radius:99px;overflow:hidden;margin-bottom:8px}
+.progress-fill{height:100%;width:0%;background:linear-gradient(90deg,#4F46E5,#7C3AED);border-radius:99px;transition:width .4s ease;position:relative}
+.progress-fill.shim::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.3),transparent);background-size:200% 100%;animation:shim 1.5s infinite}
+@keyframes shim{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.prog-row{display:flex;justify-content:space-between;font-size:13px;color:var(--sub)}
+.prog-msg{font-size:12px;color:var(--mu);margin-top:4px}
+.stage-pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+.stage-pill{padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600;border:1px solid var(--bdr);color:var(--mu)}
+.stage-pill.active{background:var(--ac);border-color:var(--ac);color:#fff}
+.stage-pill.done-s{background:var(--ok);border-color:var(--ok);color:#fff}
+
+/* result / error */
+.result-box{display:none;margin-top:16px;padding:16px 20px;border-radius:var(--r2);background:var(--ok-l);border:1.5px solid var(--ok)}
+.result-box h3{font-size:14px;font-weight:700;color:var(--ok);margin-bottom:6px}
+.result-box p{font-size:12px;color:var(--sub);margin-bottom:12px}
+.error-box{display:none;margin-top:16px;padding:16px 20px;border-radius:var(--r2);background:var(--err-l);border:1.5px solid var(--err)}
+.error-box h3{font-size:13px;font-weight:700;color:var(--err);margin-bottom:6px}
+.error-box pre{font-size:11px;color:var(--err);white-space:pre-wrap;word-break:break-word;max-height:120px;overflow-y:auto}
+
+/* summary */
+.gen-summary{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:20px;font-size:12px}
+.gen-item{display:flex;align-items:center;gap:6px}
+.gen-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.gen-dot.ok{background:var(--ok)} .gen-dot.no{background:var(--bdr2)}
+.gen-actions{display:flex;gap:10px;align-items:center}
+.sep{height:1px;background:var(--bdr);margin:16px 0}
+.alert{font-size:12px;padding:10px 14px;border-radius:var(--r2);border:1px solid var(--am);background:var(--al);color:#3730A3;display:flex;align-items:flex-start;gap:8px}
+code{background:rgba(79,70,229,.12);padding:1px 5px;border-radius:3px;font-size:11px;color:var(--ac)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>NSO Plan Distributor</h1>
+  <span class="badge">v2</span>
+  <div class="spacer"></div>
+  <span class="hint">Port 8060</span>
+</div>
+
+<div class="wrap">
+
+<!-- ── 1. Import Source ── -->
+<div class="section">
+  <div class="sec-head">
+    <div class="sec-num">1</div>
+    <div><div class="sec-title">Import Source</div></div>
+    <div class="sec-sub">Point to a folder — engine detects all files automatically</div>
+  </div>
+  <div class="sec-body">
+    <div class="folder-row">
+      <input class="folder-input" id="folder-path" type="text"
+        placeholder="e.g. C:\Users\A9820\Downloads\NSO Distr" autocomplete="off"
+        onkeydown="if(event.key==='Enter')scanFolder()">
+      <button class="btn btn-ac" id="btn-scan" onclick="scanFolder()">Scan Folder</button>
+      <button class="btn btn-outline" id="btn-clr" onclick="clearFolder()" style="display:none">Reset</button>
+    </div>
+
+    <!-- File status tiles — hidden until scan -->
+    <div class="file-grid" id="file-tiles" style="display:none"></div>
+
+    <div id="folder-msg"></div>
+  </div>
+</div>
+
+<!-- ── 2. NSO AOP Targets ── -->
+<div class="section" id="sec-aop" style="display:none">
+  <div class="sec-head">
+    <div class="sec-num">2</div>
+    <div><div class="sec-title">NSO AOP Targets</div></div>
+    <div class="sec-sub">Edit monthly targets before generating</div>
+  </div>
+  <div class="sec-body">
+    <div class="alert" id="aop-loading" style="display:none">⏳ Parsing NSO Details…</div>
+    <div class="aop-wrap" id="aop-table-wrap"></div>
+  </div>
+</div>
+
+<!-- ── 3. Generate ── -->
+<div class="section">
+  <div class="sec-head">
+    <div class="sec-num">3</div>
+    <div><div class="sec-title">Generate Plan</div></div>
+  </div>
+  <div class="sec-body">
+    <div class="gen-summary" id="gen-summary"></div>
+    <div class="gen-actions">
+      <button class="btn btn-ac btn-lg" id="btn-gen" onclick="generate()">Generate Plan ↗</button>
+      <button class="btn btn-outline" onclick="resetAll()">Reset All</button>
+    </div>
+
+    <div class="progress-wrap" id="prog-wrap">
+      <div class="sep"></div>
+      <div class="progress-track">
+        <div class="progress-fill shim" id="prog-fill"></div>
+      </div>
+      <div class="prog-row">
+        <span id="prog-msg">Initialising…</span>
+        <span style="display:flex;align-items:center;gap:12px">
+          <span id="prog-eta" style="font-size:12px;color:var(--mu)"></span>
+          <span id="prog-pct">0%</span>
+        </span>
+      </div>
+      <div class="stage-pills" id="stage-pills">
+        <div class="stage-pill" data-s="0">Parse files</div>
+        <div class="stage-pill" data-s="1">Exclusion rules</div>
+        <div class="stage-pill" data-s="2">Sales Plan</div>
+        <div class="stage-pill" data-s="3">Algorithm</div>
+        <div class="stage-pill" data-s="4">Build XLSX</div>
+      </div>
+    </div>
+
+    <div class="result-box" id="result-box">
+      <h3>✅ Plan generated successfully</h3>
+      <p id="result-msg">Ready to download.</p>
+      <button class="btn btn-ac" onclick="downloadResult()">⬇ Download XLSX</button>
+    </div>
+    <div class="error-box" id="error-box">
+      <h3>❌ Generation failed</h3>
+      <pre id="error-msg"></pre>
+    </div>
+  </div>
+</div>
+
+</div><!-- /wrap -->
+<script>
+// ── State ──────────────────────────────────────────────────────────
+const S = {
+  folder: '',
+  found: {},    // {nso_details:'NSO Details.xlsx', ...}
+  nsoRows: [],  // [{storeCode,refCode,grade,nov,dec,jan,feb}]
+  jobId: null,
+  jobSrc: null,
+  jobStart: 0,  // Date.now() when job starts
+};
+
+// File definitions — order determines tile order
+const FILES = [
+  // Required
+  {key:'nso_details',   label:'NSO Details',       sub:'Store Code · Ref Code · Grade · AOP targets', req:true,  icon:'📊'},
+  {key:'sales_plan',    label:'Sales Plan',          sub:'Division × Dept × MRP × Display Type',        req:true,  icon:'📋'},
+  {key:'div_cont',      label:'Division Cont %',     sub:'Monthly % per division · J1/J2 · F1/F2',      req:true,  icon:'📈'},
+  // Optional
+  {key:'attr_grid',     label:'Attribute Grid',      sub:'Sep/Oct stores only',                          req:false, icon:'🗂️'},
+  {key:'apps_exclusion',label:'APPS Exclusion',      sub:'Store × Ref exclusion for APPS departments',   req:false, icon:'🚫'},
+];
+
+const MONTH_MAP = {'2026-11':'NOV','2026-12':'DEC',
+  '2027-1':'JAN','2027-01':'JAN','2027-2':'FEB','2027-02':'FEB'};
+const MONTHS = ['NOV','DEC','JAN','FEB'];
+const STAGES = [20, 30, 72, 92, 100];
+
+// ── Folder scan ────────────────────────────────────────────────────
+async function scanFolder() {
+  const path = document.getElementById('folder-path').value.trim();
+  if (!path) { showMsg('Enter a folder path first.','err'); return; }
+  S.folder = path;
+  const btn = document.getElementById('btn-scan');
+  btn.disabled = true; btn.textContent = 'Scanning…';
+  clearMsg();
+  try {
+    const r = await fetch('/api/scan-folder', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({path})
+    });
+    const d = await r.json();
+    if (!r.ok) { showMsg(d.error || 'Scan failed', 'err'); return; }
+    S.found = d.found;
+    renderTiles();
+    document.getElementById('btn-clr').style.display = '';
+    // Auto-parse NSO Details if found
+    if (d.found.nso_details) loadNSOFromFolder(path, d.found.nso_details);
+    updateSummary();
+  } catch(e) { showMsg('Network error: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.textContent = 'Scan Folder'; }
+}
+
+function renderTiles() {
+  const g = document.getElementById('file-tiles');
+  g.style.display = 'grid';
+  g.innerHTML = '';
+
+  const req = FILES.filter(f => f.req);
+  const opt = FILES.filter(f => !f.req);
+  const missing = req.filter(f => !S.found[f.key]);
+
+  // Group label — required
+  const rl = document.createElement('div');
+  rl.className = 'file-group-label';
+  rl.textContent = 'Required files';
+  g.appendChild(rl);
+
+  req.forEach(f => g.appendChild(makeTile(f)));
+
+  // Group label — optional
+  const ol = document.createElement('div');
+  ol.className = 'file-group-label';
+  ol.textContent = 'Optional files';
+  g.appendChild(ol);
+
+  opt.forEach(f => g.appendChild(makeTile(f)));
+
+  // Status message
+  if (missing.length) {
+    showMsg(`⚠️ Missing required: ${missing.map(f=>f.label).join(', ')}`, 'warn');
+  } else {
+    const optMissing = opt.filter(f => !S.found[f.key]);
+    if (optMissing.length) {
+      showMsg(`✓ All required files found. Optional not detected: ${optMissing.map(f=>f.label).join(', ')}`, 'ok');
+    } else {
+      showMsg('✓ All files detected — ready to generate.', 'ok');
+    }
+  }
+}
+
+function makeTile(f) {
+  const found = !!S.found[f.key];
+  const state = found ? 'found' : (f.req ? 'missing' : 'optional');
+  const icon  = found ? '✓' : (f.req ? '✕' : '—');
+  const badge = found ? 'Found' : (f.req ? 'Missing' : 'Optional');
+  const t = document.createElement('div');
+  t.className = `file-tile state-${state}`;
+  t.innerHTML = `
+    <div class="tile-icon">${icon}</div>
+    <div class="tile-body">
+      <div class="tile-label">${f.label}</div>
+      <div class="tile-name" title="${S.found[f.key]||f.sub}">${S.found[f.key] || f.sub}</div>
+    </div>
+    <span class="tile-badge">${badge}</span>`;
+  return t;
+}
+
+function showMsg(msg, type) {
+  const el = document.getElementById('folder-msg');
+  el.innerHTML = `<div class="fmsg ${type}" style="margin-top:12px">${msg}</div>`;
+}
+function clearMsg() { document.getElementById('folder-msg').innerHTML = ''; }
+
+function clearFolder() {
+  S.folder = ''; S.found = {}; S.nsoRows = [];
+  document.getElementById('folder-path').value = '';
+  document.getElementById('file-tiles').style.display = 'none';
+  document.getElementById('btn-clr').style.display = 'none';
+  clearMsg();
+  hideAOP();
+  updateSummary();
+}
+
+// ── NSO parse — backend API (avoids xlsx.js date off-by-one) ─────────────────
+async function loadNSOFromFolder(folder, fname) {
+  document.getElementById('sec-aop').style.display = '';
+  document.getElementById('aop-loading').style.display = '';
+  document.getElementById('aop-table-wrap').innerHTML = '';
+  try {
+    const r = await fetch(`/api/parse-nso?folder=${encodeURIComponent(folder)}&name=${encodeURIComponent(fname)}`);
+    if (!r.ok) throw new Error('Could not parse NSO Details');
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    S.nsoRows = d.stores.map(s => ({
+      storeCode: s.storeCode,
+      refCode:   s.refCode,
+      grade:     s.grade || s.type || '',
+      nov: s.nov, dec: s.dec, jan: s.jan, feb: s.feb,
+    }));
+    document.getElementById('aop-loading').style.display = 'none';
+    buildAOPTable();
+    updateSummary();
+  } catch(e) {
+    document.getElementById('aop-loading').style.display = 'none';
+    document.getElementById('aop-table-wrap').innerHTML =
+      `<div class="alert" style="color:var(--err)">⚠️ ${e.message}</div>`;
+  }
+}
+
+function clean(v) {
+  if (v == null) return '';
+  return String(v).replace(/ /g, '').trim();
+}
+
+function buildAOPTable() {
+  const wrap = document.getElementById('aop-table-wrap');
+  if (!S.nsoRows.length) { wrap.innerHTML = '<p style="color:var(--mu);font-size:12px">No stores found.</p>'; return; }
+  const tot = {nov:0,dec:0,jan:0,feb:0};
+  let html = `<table class="aop-table"><thead><tr>
+    <th>Store Code</th><th>Ref Store</th><th>Grade</th>
+    <th class="num">NOV (Cr)</th><th class="num">DEC (Cr)</th>
+    <th class="num">JAN (Cr)</th><th class="num">FEB (Cr)</th>
+    <th class="num">Total</th></tr></thead><tbody>`;
+  S.nsoRows.forEach((r, i) => {
+    const total = r.nov+r.dec+r.jan+r.feb;
+    ['nov','dec','jan','feb'].forEach(m => tot[m] += r[m]);
+    html += `<tr>
+      <td><strong>${r.storeCode}</strong></td>
+      <td style="color:var(--mu)">${r.refCode}</td>
+      <td><span class="grade-badge">${r.grade||'—'}</span></td>
+      ${['nov','dec','jan','feb'].map(m=>`<td class="num"><input class="aop-input" type="number" step="0.01" value="${r[m]}" data-i="${i}" data-m="${m}" onchange="updAOP(this)"></td>`).join('')}
+      <td class="num" id="arow-${i}" style="font-weight:600">${fmt(total)}</td></tr>`;
+  });
+  const grand = tot.nov+tot.dec+tot.jan+tot.feb;
+  html += `<tr class="aop-total">
+    <td colspan="3"><strong>Total</strong></td>
+    ${['nov','dec','jan','feb'].map(m=>`<td class="num" id="atot-${m}"><strong>${fmt(tot[m])}</strong></td>`).join('')}
+    <td class="num" id="atot-grand"><strong>${fmt(grand)}</strong></td>
+  </tr></tbody></table>`;
+  wrap.innerHTML = html;
+}
+
+function updAOP(inp) {
+  const i = +inp.dataset.i, m = inp.dataset.m;
+  S.nsoRows[i][m] = parseFloat(inp.value) || 0;
+  const r = S.nsoRows[i];
+  const rc = document.getElementById(`arow-${i}`); if (rc) rc.textContent = fmt(r.nov+r.dec+r.jan+r.feb);
+  ['nov','dec','jan','feb'].forEach(mm => {
+    const ct = S.nsoRows.reduce((s,x) => s+x[mm], 0);
+    const el = document.getElementById(`atot-${mm}`); if (el) el.innerHTML = `<strong>${fmt(ct)}</strong>`;
+  });
+  const gt = S.nsoRows.reduce((s,r2) => s+r2.nov+r2.dec+r2.jan+r2.feb, 0);
+  const ge = document.getElementById('atot-grand'); if (ge) ge.innerHTML = `<strong>${fmt(gt)}</strong>`;
+}
+
+function fmt(v) { return v.toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function hideAOP() { S.nsoRows = []; document.getElementById('sec-aop').style.display = 'none'; document.getElementById('aop-table-wrap').innerHTML = ''; }
+
+// ── Summary ────────────────────────────────────────────────────────
+function updateSummary() {
+  const req = FILES.filter(f => f.req);
+  const allReq = req.every(f => !!S.found[f.key]);
+  const items = [
+    {ok: allReq,              label: allReq ? 'Required files ready' : 'Required files missing'},
+    {ok: !!S.found.attr_grid, label: S.found.attr_grid ? 'Attribute Grid' : 'No Attribute Grid'},
+    {ok: S.nsoRows.length > 0,label: S.nsoRows.length > 0 ? `${S.nsoRows.length} NSO store(s)` : 'No stores parsed'},
+    {ok: true,                     label: 'GM Master (bundled)'},
+    {ok: !!S.found.apps_exclusion, label: S.found.apps_exclusion ? 'APPS Excl loaded' : 'No APPS Excl'},
+  ];
+  document.getElementById('gen-summary').innerHTML = items.map(it =>
+    `<div class="gen-item"><div class="gen-dot ${it.ok?'ok':'no'}"></div><span style="color:${it.ok?'var(--ok)':'var(--mu)'}">${it.label}</span></div>`
+  ).join('');
+}
+
+// ── Generate ───────────────────────────────────────────────────────
+async function generate() {
+  const req = FILES.filter(f => f.req);
+  if (!S.folder) { alert('Scan a folder first.'); return; }
+  const miss = req.filter(f => !S.found[f.key]).map(f => f.label);
+  if (miss.length) { alert('Missing required files: ' + miss.join(', ')); return; }
+
+  S.jobId = null;
+  document.getElementById('result-box').style.display = 'none';
+  document.getElementById('error-box').style.display = 'none';
+  document.getElementById('prog-wrap').style.display = 'block';
+  const btn = document.getElementById('btn-gen');
+  btn.disabled = true; btn.textContent = 'Running…';
+  S.jobStart = Date.now();
+  setProgress(0, 'Starting…'); resetStages();
+
+  const overrides = {};
+  S.nsoRows.forEach(r => { overrides[r.storeCode] = {NOV:r.nov||0,DEC:r.dec||0,JAN:r.jan||0,FEB:r.feb||0}; });
+
+  const fd = new FormData();
+  fd.append('folder', S.folder);
+  fd.append('files', JSON.stringify(S.found));
+  fd.append('aop_overrides', JSON.stringify(overrides));
+
+  try {
+    const r = await fetch('/api/start', {method:'POST', body:fd});
+    const d = await r.json();
+    if (!r.ok) { showErr(d.error || 'Failed to start'); return; }
+    S.jobId = d.job_id;
+    startSSE(d.job_id);
+  } catch(e) { showErr('Network error: ' + e.message); }
+}
+
+function startSSE(jobId) {
+  if (S.jobSrc) { try { S.jobSrc.close(); } catch(e){} }
+  const es = new EventSource(`/api/progress/${jobId}`);
+  S.jobSrc = es;
+  es.onmessage = e => {
+    try {
+      const ev = JSON.parse(e.data);
+      setProgress(ev.pct || 0, ev.msg || '');
+      updStages(ev.pct || 0);
+      if (ev.status === 'done')  { es.close(); onDone(ev); }
+      else if (ev.status === 'error') { es.close(); showErr(ev.msg); }
+    } catch(err) {}
+  };
+  es.onerror = () => { es.close(); pollJob(jobId); };
+}
+
+async function pollJob(jobId) {
+  for (let i = 0; i < 600; i++) {
+    await new Promise(r => setTimeout(r, 1000));
+    try {
+      const r = await fetch(`/api/job-status/${jobId}`);
+      const d = await r.json();
+      if (!r.ok) { showErr(d.error || 'Job not found'); return; }
+      setProgress(d.pct || 0, d.msg || ''); updStages(d.pct || 0);
+      if (d.status === 'done')  { onDone(d); return; }
+      if (d.status === 'error') { showErr(d.msg); return; }
+    } catch(e) {}
+  }
+  showErr('Timed out.');
+}
+
+function onDone(ev) {
+  setProgress(100, ev.msg || 'Done'); updStages(100);
+  document.getElementById('prog-fill').classList.remove('shim');
+  document.getElementById('result-box').style.display = 'block';
+  document.getElementById('result-msg').textContent =
+    (ev.row_count ? `${Number(ev.row_count).toLocaleString()} rows generated. ` : '') + 'Downloading automatically…';
+  const btn = document.getElementById('btn-gen');
+  btn.disabled = false; btn.textContent = 'Generate Plan ↗';
+  // Auto-trigger download
+  const a = document.createElement('a');
+  a.href = `/api/result/${S.jobId}`;
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function downloadResult() { if (S.jobId) window.location = `/api/result/${S.jobId}`; }
+
+function showErr(msg) {
+  document.getElementById('error-box').style.display = 'block';
+  document.getElementById('error-msg').textContent = msg;
+  document.getElementById('prog-wrap').style.display = 'none';
+  const btn = document.getElementById('btn-gen');
+  btn.disabled = false; btn.textContent = 'Generate Plan ↗';
+}
+
+// ── Progress helpers ───────────────────────────────────────────────
+function setProgress(pct, msg) {
+  document.getElementById('prog-fill').style.width = pct + '%';
+  document.getElementById('prog-pct').textContent  = pct + '%';
+  document.getElementById('prog-msg').textContent  = msg;
+  // Time remaining — proportional to progress
+  const eta = document.getElementById('prog-eta');
+  if (pct > 3 && pct < 100 && S.jobStart) {
+    const elapsed = (Date.now() - S.jobStart) / 1000;
+    const remaining = Math.max(0, elapsed * (100 - pct) / pct);
+    if (remaining >= 60) {
+      const m = Math.floor(remaining / 60), s = Math.round(remaining % 60);
+      eta.textContent = `~${m}m ${s}s left`;
+    } else {
+      eta.textContent = `~${Math.round(remaining)}s left`;
+    }
+  } else {
+    eta.textContent = '';
+  }
+}
+
+function updStages(pct) {
+  document.querySelectorAll('.stage-pill').forEach((el, i) => {
+    el.className = 'stage-pill' +
+      (pct >= STAGES[i] ? ' done-s' : pct >= (STAGES[i-1] || 0) ? ' active' : '');
+  });
+}
+function resetStages() { document.querySelectorAll('.stage-pill').forEach(el => el.className = 'stage-pill'); }
+
+// ── Reset all ──────────────────────────────────────────────────────
+function resetAll() {
+  if (!confirm('Reset everything?')) return;
+  S.folder = ''; S.found = {}; S.nsoRows = []; S.jobId = null;
+  document.getElementById('folder-path').value = '';
+  document.getElementById('file-tiles').style.display = 'none';
+  document.getElementById('btn-clr').style.display = 'none';
+  document.getElementById('prog-wrap').style.display = 'none';
+  document.getElementById('result-box').style.display = 'none';
+  document.getElementById('error-box').style.display = 'none';
+  clearMsg(); hideAOP(); updateSummary();
+}
+
+// ── Init ───────────────────────────────────────────────────────────
+updateSummary();
+</script>
+</body>
+</html>
