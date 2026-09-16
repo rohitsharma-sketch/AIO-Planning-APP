@@ -15,10 +15,19 @@ const TABS = [
 export default function App() {
   const [activeModule, setActiveModule] = useState('calendarisation')
   const [me, setMe] = useState(null)
+  const [engineVersion, setEngineVersion] = useState(() => {
+    try { return parseInt(localStorage.getItem('ce_engine_version') || '1', 10) || 1 }
+    catch { return 1 }
+  })
 
   useEffect(() => {
     getMe().then(setMe).catch(() => setMe(null))
   }, [])
+
+  function handleVersionChange(v) {
+    setEngineVersion(v)
+    try { localStorage.setItem('ce_engine_version', String(v)) } catch {}
+  }
 
   const isPlanner = me?.role === 'planner'
   const ActiveComponent = TABS.find(t => t.id === activeModule)?.Component
@@ -36,6 +45,22 @@ export default function App() {
           </div>
         </div>
         <div className="app-header-spacer" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginRight: '0.75rem' }}>
+          <span style={{ fontSize: '0.72rem', color: 'var(--muted)', fontWeight: 500, letterSpacing: '0.02em' }}>Engine:</span>
+          <select
+            value={engineVersion}
+            onChange={e => handleVersionChange(Number(e.target.value))}
+            style={{
+              fontSize: '0.75rem', padding: '0.25rem 0.5rem',
+              borderRadius: '5px', border: '1px solid var(--border)',
+              background: 'var(--light)', color: 'var(--text)',
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            <option value={1}>V1 — LY Same Month</option>
+            <option value={2}>V2 — Adjacent Month (±1)</option>
+          </select>
+        </div>
         {displayName && <div className="app-header-user">{displayName}</div>}
       </header>
       <nav className="mod-nav">
@@ -50,7 +75,7 @@ export default function App() {
         ))}
       </nav>
       {/* onNavigate lets a tab hand control to another tab by id */}
-      {ActiveComponent && <ActiveComponent isPlanner={isPlanner} onNavigate={setActiveModule} />}
+      {ActiveComponent && <ActiveComponent isPlanner={isPlanner} onNavigate={setActiveModule} engineVersion={engineVersion} />}
     </div>
   )
 }

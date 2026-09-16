@@ -84,7 +84,7 @@ export function scoreMapping(rDay, fDay, rInfo, fInfo, W, maxShift, moPri) {
 // restriction (every festival on the list is core) - kept only so any other
 // caller of this function that hasn't been updated to pass core names still
 // behaves exactly as before, rather than silently losing every anchor.
-export function generateMappings(fests, refYr, futYr, maxShift, moPri, coreNames) {
+export function generateMappings(fests, refYr, futYr, maxShift, moPri, coreNames, version = 1) {
   maxShift = +maxShift || 45;
   const W = getWeights();
   const rDays = yearDays(refYr), fDays = yearDays(futYr);
@@ -156,8 +156,22 @@ export function generateMappings(fests, refYr, futYr, maxShift, moPri, coreNames
   const allPairs = [];
   for (const fd of remFut) {
     const fs = fmtISO(fd), fi = fMap[fs];
-    const sameMonthRef = remRefByMonth.get(fd.getMonth()) || [];
-    for (const rd of sameMonthRef) {
+    // V2: non-festive TY days are matched against one adjacent-month LY pool
+    // instead of the same month — e.g. March TY pulls from Feb LY (moPri='prev')
+    // or Apr LY (moPri='next'). Using moPri gives the planner control over which
+    // direction, and keeps each LY month owned by exactly one TY month (no pool
+    // sharing that would push half the days back to same-month fallback).
+    // Festive days (in the full map) still use same-month matching in both versions.
+    const useAdjacentMonth = version === 2 && !fMapFull[fs];
+    let candidateRef;
+    if (useAdjacentMonth) {
+      const mo = fd.getMonth();
+      const adjMo = moPri === 'next' ? (mo + 1) % 12 : (mo - 1 + 12) % 12;
+      candidateRef = remRefByMonth.get(adjMo) || [];
+    } else {
+      candidateRef = remRefByMonth.get(fd.getMonth()) || [];
+    }
+    for (const rd of candidateRef) {
       const rs = fmtISO(rd), ri = rMap[rs];
       const s = scoreMapping(rd, fd, ri, fi, W, maxShift, moPri);
       allPairs.push({ rs, fs, rd, fd, ri, fi, ...s });
@@ -237,7 +251,8 @@ export function generateMappings(fests, refYr, futYr, maxShift, moPri, coreNames
 
   // ── Phase 4: repair excessive shifts by swapping reference days ──────────
   // (same-month constrained too - see repairExcessiveShifts)
-  repairExcessiveShifts(assignments, rMap, fMap, W, maxShift, moPri);
+  // V2 skips repair: adjacent-month assignments are intentional, not errors.
+  if (version === 1) repairExcessiveShifts(assignments, rMap, fMap, W, maxShift, moPri);
 
   const mappings = fDays.map(d => assignments.get(fmtISO(d))).filter(Boolean);
 
@@ -337,7 +352,7 @@ export function repairExcessiveShifts(assignments, rMap, fMap, W, maxShift, moPr
 // "mismatched" would just be re-describing the same-month containment rule
 // as if it were a bug. null/undefined = every festival treated as core
 // (matches generateMappings' own no-restriction default).
-export function validate(mappings, refYr, futYr, maxShift, fests, coreNames) {
+export function validate(mappings, refYr, futYr, maxShift, fests, coreNames, version = 1) {
   const issues = [];
   const usedFutDates = new Map(); // futDateStr -> [refDates]
   maxShift = +maxShift || 45;
@@ -396,7 +411,8 @@ export function validate(mappings, refYr, futYr, maxShift, fests, coreNames) {
     }
   }
 
-  // E: Month leakage (non-festive crossed month when same-month option existed)
+  // E: Month leakage — skipped for V2 where adjacent-month matching is intentional
+  if (version === 2) return issues;
   const futByMonthWday = {};
   const allFutDays = yearDays(futYr);
   for (const fd of allFutDays) {
