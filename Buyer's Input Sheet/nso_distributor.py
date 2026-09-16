@@ -58,6 +58,8 @@ FILE_PATTERNS = {
     'div_cont':       ['Division Cont*.xlsx', 'Division Cont*.xls'],
     'attr_grid':      ['Attribute Grid*.xlsx', 'Attribute Grid*.xls'],
     'apps_exclusion': ['APPS Exclusion*.xlsx', 'Apps Exclusion*.xlsx', 'APPS Exclusion*.xls'],
+    'attr_master':    ['Attribute Master*.xlsx', 'Att Master*.xlsx', 'att master*.xlsx',
+                       'ATT MASTER*.xlsx', 'ATTRIBUTE MASTER*.xlsx'],
 }
 
 # ── GM Listing Master (bundled, loaded once at startup) ──────────────────────────
@@ -170,7 +172,7 @@ def load_attr_grid(file_bytes):
     return df
 
 
-def _build_attr_weight_fn(attr_df, zone, division, opening_month):
+def _build_attr_weight_fn(attr_df, zone, division, opening_month, attr_master_df=None):
     """
     Builds a weight function dept_name → float [0, 1] from the Attribute Grid
     for the given zone + division + opening_month combination.
@@ -220,21 +222,53 @@ def _build_attr_weight_fn(attr_df, zone, division, opening_month):
     if grid_rows.empty:
         return None, False
 
-    # Build (pattern_upper, cont_pct) pairs for substring matching
+    # Build (attribute_group_upper, cont_pct) pairs from the grid rows
     entries = [
         (str(row[col_attr]).strip().upper(), float(row[col_cont] or 0))
         for _, row in grid_rows.iterrows()
         if str(row[col_attr]).strip() and str(row[col_attr]).strip().lower() not in ('nan', '')
     ]
 
+    # Build dept → attribute_group lookup from the master (if provided)
+    dept_to_attr = {}
+    if attr_master_df is not None and not attr_master_df.empty:
+        dept_col  = next((c for c in attr_master_df.columns if 'dept' in c.strip().lower()), None)
+        attr1_col = next((c for c in attr_master_df.columns if 'attr' in c.strip().lower()), None)
+        if dept_col and attr1_col:
+            for _, row in attr_master_df.iterrows():
+                d = str(row[dept_col]).strip()
+                a = str(row[attr1_col]).strip().upper()
+                if d and d.lower() not in ('nan', ''):
+                    dept_to_attr[d] = a
+
     def weight_fn(dept):
-        d = str(dept).strip().upper()
-        for pattern, cont in entries:
-            if pattern in d or d in pattern:
-                return cont
-        return 1.0  # not listed in grid = in season, include at full weight
+        d = str(dept).strip()
+        if dept_to_attr:
+            # Exact dept → attribute group → grid Cont%
+            attr_group = dept_to_attr.get(d) or dept_to_attr.get(d.upper())
+            if attr_group is not None:
+                for grid_attr, cont in entries:
+                    if grid_attr == attr_group:
+                        return cont
+                return 1.0  # dept's attribute not listed in grid = in season
+            return 1.0  # dept not in master = include at full weight
+        else:
+            # No master: substring match on attribute name in dept name (legacy fallback)
+            du = d.upper()
+            for pattern, cont in entries:
+                if pattern in du or du in pattern:
+                    return cont
+            return 1.0
 
     return weight_fn, True
+
+
+def load_attr_master(file_bytes):
+    """Dept → Attribute1 mapping. Columns: DIVISION, SECTION, DEPARTMENT, ATTRIBUTE1."""
+    df = pd.read_excel(BytesIO(file_bytes), header=0)
+    _clean_xa0(df)
+    df = df[df['DEPARTMENT'].notna() & (df['DEPARTMENT'].astype(str).str.strip() != '')].copy()
+    return df
 
 
 def load_gm_exclusion(file_bytes):
@@ -332,7 +366,7 @@ def _div_pct(div_row, month):
     return base
 
 
-def generate_plan(nso_df, div_df, plan_df, attr_df=None, gm_excl_df=None, apps_excl_df=None):
+def generate_plan(nso_df, div_df, plan_df, attr_df=None, gm_excl_df=None, apps_excl_df=None, attr_master_df=None):
     """
     Returns (output_rows list, log list).
     output_rows: list of dicts matching Sales Plan column structure.
@@ -411,7 +445,7 @@ def generate_plan(nso_df, div_df, plan_df, attr_df=None, gm_excl_df=None, apps_e
             # Build Attribute Grid weight function for Sep/Oct openers (KIDS/LADIES/MENS only)
             attr_weight_fn = None
             if opening_month in ('SEP', 'OCT') and div_cat in ('KIDS', 'LADIES', 'MENS'):
-                wfn, found = _build_attr_weight_fn(attr_df, nso_zone, div_cat, opening_month)
+                wfn, found = _build_attr_weight_fn(attr_df, nso_zone, div_cat, opening_month, attr_master_df)
                 if found:
                     attr_weight_fn = wfn
                     if nso_zone:
@@ -667,7 +701,7 @@ def _apply_overrides(nso_df, overrides):
 
 
 def _run_job(job_id, nso_bytes, div_bytes, plan_bytes, attr_bytes,
-             gm_excl_bytes, apps_excl_bytes, aop_overrides):
+             gm_excl_bytes, apps_excl_bytes, attr_master_bytes, aop_overrides):
     try:
         _job_set(job_id, pct=5, msg='Parsing NSO Details...')
         nso_df = load_nso_details(nso_bytes)
@@ -698,10 +732,11 @@ def _run_job(job_id, nso_bytes, div_bytes, plan_bytes, attr_bytes,
             _plan_done.set()
 
         _job_set(job_id, pct=72, msg='Parsing Attribute Grid...')
-        attr_df = load_attr_grid(attr_bytes) if attr_bytes else None
+        attr_df        = load_attr_grid(attr_bytes)     if attr_bytes         else None
+        attr_master_df = load_attr_master(attr_master_bytes) if attr_master_bytes else None
 
         _job_set(job_id, pct=76, msg='Running distribution algorithm...')
-        rows, log = generate_plan(nso_df, div_df, plan_df, attr_df, gm_excl_df, apps_excl_df)
+        rows, log = generate_plan(nso_df, div_df, plan_df, attr_df, gm_excl_df, apps_excl_df, attr_master_df)
 
         if not rows:
             _job_set(job_id, status='error', pct=0,
@@ -876,22 +911,24 @@ def api_start():
                         return f.read()
             return None
 
-        nso_bytes  = _read('nso_details')
-        div_bytes  = _read('div_cont')
-        plan_bytes = _read('sales_plan')
-        attr_bytes = _read('attr_grid')
+        nso_bytes         = _read('nso_details')
+        div_bytes         = _read('div_cont')
+        plan_bytes        = _read('sales_plan')
+        attr_bytes        = _read('attr_grid')
+        attr_master_bytes = _read('attr_master')
         gm_bytes   = request.files['gm_exclusion'].read()   if 'gm_exclusion'   in request.files else _read('gm_exclusion')
         apps_bytes = request.files['apps_exclusion'].read() if 'apps_exclusion'  in request.files else _read('apps_exclusion')
     else:
         for key in ('nso_details', 'div_cont', 'sales_plan'):
             if key not in request.files:
                 return jsonify({'error': f'Missing required file: {key}'}), 400
-        nso_bytes  = request.files['nso_details'].read()
-        div_bytes  = request.files['div_cont'].read()
-        plan_bytes = request.files['sales_plan'].read()
-        attr_bytes = request.files['attr_grid'].read()      if 'attr_grid'      in request.files else None
-        gm_bytes   = request.files['gm_exclusion'].read()  if 'gm_exclusion'   in request.files else None
-        apps_bytes = request.files['apps_exclusion'].read() if 'apps_exclusion' in request.files else None
+        nso_bytes         = request.files['nso_details'].read()
+        div_bytes         = request.files['div_cont'].read()
+        plan_bytes        = request.files['sales_plan'].read()
+        attr_bytes        = request.files['attr_grid'].read()        if 'attr_grid'      in request.files else None
+        attr_master_bytes = request.files['attr_master'].read()      if 'attr_master'    in request.files else None
+        gm_bytes          = request.files['gm_exclusion'].read()     if 'gm_exclusion'   in request.files else None
+        apps_bytes        = request.files['apps_exclusion'].read()   if 'apps_exclusion' in request.files else None
 
     if not nso_bytes or not div_bytes or not plan_bytes:
         return jsonify({'error': 'Required files (NSO Details, Sales Plan, Division Cont %) missing'}), 400
@@ -904,7 +941,7 @@ def api_start():
     t = threading.Thread(
         target=_run_job,
         args=(job_id, nso_bytes, div_bytes, plan_bytes, attr_bytes,
-              gm_bytes, apps_bytes, aop_overrides),
+              gm_bytes, apps_bytes, attr_master_bytes, aop_overrides),
         daemon=True
     )
     t.start()
