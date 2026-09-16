@@ -151,9 +151,77 @@ def load_sales_plan(file_bytes):
 
 def load_attr_grid(file_bytes):
     df = pd.read_excel(BytesIO(file_bytes), header=0)
+    _clean_xa0(df)
     if 'Cont %' in df.columns:
         df['Cont %'] = pd.to_numeric(df['Cont %'], errors='coerce').fillna(0)
+    # Normalize Month column to uppercase string for reliable matching
+    for col in df.columns:
+        if col.strip().lower() == 'month':
+            df[col] = df[col].astype(str).str.strip().str.upper()
+            break
     return df
+
+
+def _build_attr_weight_fn(attr_df, zone, division, opening_month):
+    """
+    Builds a weight function dept_name → float [0, 1] from the Attribute Grid
+    for the given zone + division + opening_month combination.
+
+    Returns (weight_fn, found):
+      found=False → no grid rows matched; caller should skip grid and use full ref plan
+      found=True  → weight_fn(dept) returns the Cont% multiplier for that department
+                    (0 = exclude, 0.5 = half weight, 1 = full weight)
+                    Departments not listed in the grid return 0 (not in season)
+    """
+    if attr_df is None or attr_df.empty:
+        return None, False
+
+    def _find_col(keywords):
+        for c in attr_df.columns:
+            cl = c.strip().lower()
+            if any(k in cl for k in keywords):
+                return c
+        return None
+
+    col_zone = _find_col(['zone'])
+    col_div  = _find_col(['division', 'div'])
+    col_attr = _find_col(['attribute', 'attr'])
+    col_cont = _find_col(['cont'])
+    col_mon  = _find_col(['month'])
+
+    if not all([col_zone, col_div, col_attr, col_cont]):
+        return None, False
+
+    zone_u = str(zone).strip().upper()
+    div_u  = division.strip().upper()
+    mon_u  = opening_month.strip().upper()
+
+    mask = (
+        (attr_df[col_zone].astype(str).str.strip().str.upper() == zone_u) &
+        (attr_df[col_div].astype(str).str.strip().str.upper() == div_u)
+    )
+    if col_mon:
+        mask &= (attr_df[col_mon].astype(str).str.strip().str.upper() == mon_u)
+
+    grid_rows = attr_df[mask]
+    if grid_rows.empty:
+        return None, False
+
+    # Build (pattern_upper, cont_pct) pairs for substring matching
+    entries = [
+        (str(row[col_attr]).strip().upper(), float(row[col_cont] or 0))
+        for _, row in grid_rows.iterrows()
+        if str(row[col_attr]).strip() and str(row[col_attr]).strip().lower() not in ('nan', '')
+    ]
+
+    def weight_fn(dept):
+        d = str(dept).strip().upper()
+        for pattern, cont in entries:
+            if pattern in d or d in pattern:
+                return cont
+        return 0.0  # not listed in grid = not in season
+
+    return weight_fn, True
 
 
 def load_gm_exclusion(file_bytes):
@@ -267,6 +335,7 @@ def generate_plan(nso_df, div_df, plan_df, attr_df=None, gm_excl_df=None, apps_e
 
         # Store type drives GM exclusion (T1+/T1/T2/T3/T4); try 'Store Type', then 'Type', then 'Grade'
         nso_grade = str(nso.get('Store Type', nso.get('Type', nso.get('Grade', '')))).strip()
+        nso_zone  = str(nso.get('Zone', '')).strip()
 
         # Month total targets (Rs Lakh) — all 6 plan months
         month_targets = {m: float(nso.get(m, 0) or 0) for m in TARGET_MONTHS}
@@ -326,6 +395,19 @@ def generate_plan(nso_df, div_df, plan_df, attr_df=None, gm_excl_df=None, apps_e
                 log.append(f"    No plan rows remain for {ref}/{div_cat} after exclusion")
                 continue
 
+            # Build Attribute Grid weight function for Sep/Oct openers (KIDS/LADIES/MENS only)
+            attr_weight_fn = None
+            if opening_month in ('SEP', 'OCT') and div_cat in ('KIDS', 'LADIES', 'MENS'):
+                wfn, found = _build_attr_weight_fn(attr_df, nso_zone, div_cat, opening_month)
+                if found:
+                    attr_weight_fn = wfn
+                    if nso_zone:
+                        log.append(f"    AttrGrid applied: zone={nso_zone} div={div_cat} open={opening_month}")
+                    else:
+                        log.append(f"    AttrGrid: no Zone on store {store} — skipping grid for {div_cat}")
+                else:
+                    log.append(f"    AttrGrid: no rows for zone={nso_zone!r} div={div_cat} open={opening_month} — full ref proportions")
+
             plan_cat, plan_div = PLAN_CAT_MAP[div_cat]
 
             for month in TARGET_MONTHS:
@@ -342,20 +424,32 @@ def generate_plan(nso_df, div_df, plan_df, attr_df=None, gm_excl_df=None, apps_e
                 if val_c not in dr.columns:
                     continue
 
-                ref_div_total_val = dr[val_c].sum()
+                # Weighted ref total for proportion denominator (grid weights applied when available)
+                if attr_weight_fn is not None:
+                    ref_div_total_val = sum(
+                        float(r2.get(val_c, 0) or 0) * attr_weight_fn(str(r2.get('Department', '')))
+                        for _, r2 in dr.iterrows()
+                    )
+                else:
+                    ref_div_total_val = dr[val_c].sum()
+
                 if ref_div_total_val == 0:
                     continue
 
                 for _, ref_row in dr.iterrows():
                     ref_val = float(ref_row.get(val_c, 0) or 0)
                     ref_qty = float(ref_row.get(qty_c, 0) or 0)
-                    if ref_val == 0:
+
+                    # Apply attribute weight (0 = exclude this dept entirely)
+                    w = attr_weight_fn(str(ref_row.get('Department', ''))) if attr_weight_fn else 1.0
+                    ref_val_w = ref_val * w
+                    if ref_val_w == 0:
                         continue
 
-                    row_pct = ref_val / ref_div_total_val
+                    row_pct = ref_val_w / ref_div_total_val
                     pdh_val = div_target * row_pct
 
-                    # ASP-based qty
+                    # ASP-based qty — use actual unweighted ASP from ref store
                     if ref_val > 0 and ref_qty > 0:
                         asp = ref_val / ref_qty
                         pdh_qty = pdh_val / asp
@@ -545,9 +639,17 @@ def _apply_overrides(nso_df, overrides):
     for idx, row in nso_df.iterrows():
         sc = row['Store Code']
         if sc in overrides:
+            zone_val = overrides[sc].get('zone', '')
+            if zone_val:
+                nso_df.at[idx, 'Zone'] = str(zone_val)
             for m, v in overrides[sc].items():
+                if m == 'zone':
+                    continue
                 if m in nso_df.columns:
-                    nso_df.at[idx, m] = float(v)
+                    try:
+                        nso_df.at[idx, m] = float(v)
+                    except (ValueError, TypeError):
+                        pass
     return nso_df
 
 
@@ -647,12 +749,7 @@ def api_generate():
         if 'aop_overrides' in request.form:
             try:
                 overrides = json.loads(request.form['aop_overrides'])
-                for idx, row in nso_df.iterrows():
-                    sc = row['Store Code']
-                    if sc in overrides:
-                        for m, v in overrides[sc].items():
-                            if m in nso_df.columns:
-                                nso_df.at[idx, m] = float(v)
+                nso_df = _apply_overrides(nso_df, overrides)
             except Exception:
                 pass
 
@@ -895,6 +992,7 @@ def api_parse_nso():
                 'refCode':   str(row.get('Ref Code', '')).strip(),
                 'grade':     str(row.get('Grade', '')).strip(),
                 'type':      str(row.get('Type', row.get('Store Type', ''))).strip(),
+                'zone':      str(row.get('Zone', '')).strip(),
                 'sep': float(row.get('SEP', 0) or 0),
                 'oct': float(row.get('OCT', 0) or 0),
                 'nov': float(row.get('NOV', 0) or 0),

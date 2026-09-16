@@ -247,7 +247,7 @@ code{background:rgba(79,70,229,.12);padding:1px 5px;border-radius:3px;font-size:
 const S = {
   folder: '',
   found: {},    // {nso_details:'NSO Details.xlsx', ...}
-  nsoRows: [],  // [{storeCode,refCode,grade,sep,oct,nov,dec,jan,feb}]
+  nsoRows: [],  // [{storeCode,refCode,grade,zone,sep,oct,nov,dec,jan,feb}]
   jobId: null,
   jobSrc: null,
   jobStart: 0,  // Date.now() when job starts
@@ -378,9 +378,10 @@ async function loadNSOFromFolder(folder, fname) {
     S.nsoRows = d.stores.map(s => ({
       storeCode: s.storeCode,
       refCode:   s.refCode,
-      sep: s.sep||0, oct: s.oct||0,
       grade:     s.grade || s.type || '',
-      nov: s.nov, dec: s.dec, jan: s.jan, feb: s.feb,
+      zone:      s.zone  || '',
+      sep: s.sep||0, oct: s.oct||0,
+      nov: s.nov||0, dec: s.dec||0, jan: s.jan||0, feb: s.feb||0,
     }));
     document.getElementById('aop-loading').style.display = 'none';
     buildAOPTable();
@@ -406,8 +407,10 @@ function buildAOPTable() {
   const allMonths = [...(hasSep?['sep']:[]), ...(hasOct?['oct']:[]), 'nov','dec','jan','feb'];
   const tot = {}; allMonths.forEach(m => tot[m] = 0);
   const LABELS = {sep:'SEP',oct:'OCT',nov:'NOV',dec:'DEC',jan:'JAN',feb:'FEB'};
+  const hasSepOct = hasSep || hasOct;
   let html = `<table class="aop-table"><thead><tr>
     <th>Store Code</th><th>Ref Store</th><th>Grade</th>
+    ${hasSepOct ? '<th>Zone</th>' : ''}
     ${allMonths.map(m=>`<th class="num">${LABELS[m]} (L)</th>`).join('')}
     <th class="num">Total</th></tr></thead><tbody>`;
   S.nsoRows.forEach((r, i) => {
@@ -417,12 +420,14 @@ function buildAOPTable() {
       <td><strong>${r.storeCode}</strong></td>
       <td style="color:var(--mu)">${r.refCode}</td>
       <td><span class="grade-badge">${r.grade||'—'}</span></td>
+      ${hasSepOct ? `<td><input class="aop-input zone-input" type="text" placeholder="e.g. NORTH" value="${r.zone||''}" data-i="${i}" onchange="updZone(this)" style="width:80px;text-transform:uppercase"></td>` : ''}
       ${allMonths.map(m=>`<td class="num"><input class="aop-input" type="number" step="0.01" value="${r[m]}" data-i="${i}" data-m="${m}" onchange="updAOP(this)"></td>`).join('')}
       <td class="num" id="arow-${i}" style="font-weight:600">${fmt(total)}</td></tr>`;
   });
   const grand = allMonths.reduce((s,m)=>s+tot[m],0);
+  const zoneCols = hasSepOct ? 1 : 0;
   html += `<tr class="aop-total">
-    <td colspan="3"><strong>Total</strong></td>
+    <td colspan="${3 + zoneCols}"><strong>Total</strong></td>
     ${allMonths.map(m=>`<td class="num" id="atot-${m}"><strong>${fmt(tot[m])}</strong></td>`).join('')}
     <td class="num" id="atot-grand"><strong>${fmt(grand)}</strong></td>
   </tr></tbody></table>`;
@@ -441,6 +446,12 @@ function updAOP(inp) {
   });
   const gt = S.nsoRows.reduce((s,r2) => allMonths.reduce((a,mm)=>a+(r2[mm]||0),s), 0);
   const ge = document.getElementById('atot-grand'); if (ge) ge.innerHTML = `<strong>${fmt(gt)}</strong>`;
+}
+
+function updZone(inp) {
+  const i = +inp.dataset.i;
+  S.nsoRows[i].zone = inp.value.trim().toUpperCase();
+  inp.value = S.nsoRows[i].zone;
 }
 
 function fmt(v) { return v.toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2}); }
@@ -479,7 +490,7 @@ async function generate() {
   setProgress(0, 'Starting…'); resetStages();
 
   const overrides = {};
-  S.nsoRows.forEach(r => { overrides[r.storeCode] = {SEP:r.sep||0,OCT:r.oct||0,NOV:r.nov||0,DEC:r.dec||0,JAN:r.jan||0,FEB:r.feb||0}; });
+  S.nsoRows.forEach(r => { overrides[r.storeCode] = {zone:r.zone||'',SEP:r.sep||0,OCT:r.oct||0,NOV:r.nov||0,DEC:r.dec||0,JAN:r.jan||0,FEB:r.feb||0}; });
 
   const fd = new FormData();
   fd.append('folder', S.folder);
