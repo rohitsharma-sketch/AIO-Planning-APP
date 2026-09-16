@@ -265,12 +265,15 @@ function _v1Core(fests, refYr, futYr, maxShift, moPri, coreNames) {
   return mappings;
 }
 
-// V2 post-processor: take V1's output and reassign non-festive ref dates to
-// the adjacent LY month. Festival anchors (Phase 1, priority <= 2) and
-// non-core festive TY days (in the full festival map but not anchored) keep
-// their V1 same-month assignments unchanged. Only truly non-festive TY days
-// get a new ref date from the month before (moPri='prev') or after
-// (moPri='next') in LY.
+// V2 post-processor: take V1's Phase 1 festival anchors, then redo Phase 2
+// for ALL remaining TY days using a split pool — non-festive TY days draw from
+// the adjacent LY month, non-core festive TY days draw from the same LY month
+// (matching the original V2 Phase 2 pool selection). This is why we can't just
+// carry V1's same-month assignments forward for non-core festive days: V1
+// competed all TY days for the same-month pool, causing sharedRef when the pool
+// ran short. V2 frees same-month LY days by routing non-festive TY days to the
+// adjacent month, giving non-core festive days a larger pool and eliminating
+// the shared-ref problem entirely.
 function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
   maxShift = +maxShift || 45;
   const W = getWeights();
@@ -279,36 +282,36 @@ function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
   const coreFests = coreNames ? fests.filter(f => coreNames.includes(f.name)) : fests;
   const rMap = buildFestMap(refYr, coreFests, refYr), fMap = buildFestMap(futYr, coreFests, refYr);
 
-  // Split V1 output into three categories:
-  //   anchors       - Phase 1 festival-to-festival / festive-relative (keep exactly)
-  //   sameMonthKeep - non-core festive TY days (keep V1 same-month assignment)
-  //   toRemap       - non-festive TY days (reassign to adjacent LY month)
-  const anchors       = v1.filter(m => m.mappingPriority <= 2);
-  const sameMonthKeep = v1.filter(m => m.mappingPriority > 2 &&  fMapFull[fmtISO(m.futureDate)]);
-  const toRemap       = v1.filter(m => m.mappingPriority > 2 && !fMapFull[fmtISO(m.futureDate)]);
+  // Phase 1 anchors come directly from V1 — festival-to-festival / festive-relative
+  // assignments are computed purely from the festival date lookup and don't depend
+  // on which month's pool non-festive days draw from.
+  const anchors    = v1.filter(m => m.mappingPriority <= 2);
+  const toReassign = v1.filter(m => m.mappingPriority > 2); // everything else gets a fresh assignment
 
-  // Mark all ref dates already committed by anchors and same-month-kept days
-  const committed = new Set([
-    ...anchors.map(m => fmtISO(m.refDate)),
-    ...sameMonthKeep.map(m => fmtISO(m.refDate)),
-  ]);
-
-  // Build adjacent-month LY pools from the remaining (uncommitted) ref days
-  const adjByMonth = new Map();
+  // Mark anchor ref dates committed; build per-month LY pools from the rest
+  const committed = new Set(anchors.map(m => fmtISO(m.refDate)));
+  const lyByMonth = new Map();
   for (const d of rDays) {
     if (committed.has(fmtISO(d))) continue;
     const mo = d.getMonth();
-    if (!adjByMonth.has(mo)) adjByMonth.set(mo, []);
-    adjByMonth.get(mo).push(d);
+    if (!lyByMonth.has(mo)) lyByMonth.set(mo, []);
+    lyByMonth.get(mo).push(d);
   }
 
-  // Score all (non-festive TY, adjacent-month LY) pairs and assign greedily
-  // (same greedy sort V1 uses in Phase 2, applied to adjacent-month candidates)
+  // Build all (TY non-anchor, LY candidate) pairs using the split pool rule:
+  //   - TY day in full festival map  → same-month LY pool (festive day stays local)
+  //   - TY day NOT in full fest map  → adjacent-month LY pool (moPri controls direction)
   const allPairs = [];
-  for (const m of toRemap) {
+  for (const m of toReassign) {
     const fd = m.futureDate, fs = fmtISO(fd), fi = fMap[fs];
-    const adjMo = moPri === 'next' ? (fd.getMonth() + 1) % 12 : (fd.getMonth() - 1 + 12) % 12;
-    for (const rd of adjByMonth.get(adjMo) || []) {
+    let pool;
+    if (fMapFull[fs]) {
+      pool = lyByMonth.get(fd.getMonth()) || [];
+    } else {
+      const adjMo = moPri === 'next' ? (fd.getMonth() + 1) % 12 : (fd.getMonth() - 1 + 12) % 12;
+      pool = lyByMonth.get(adjMo) || [];
+    }
+    for (const rd of pool) {
       const rs = fmtISO(rd), ri = rMap[rs];
       const s = scoreMapping(rd, fd, ri, fi, W, maxShift, moPri);
       allPairs.push({ rs, fs, rd, fd, ri, fi, ...s });
@@ -334,16 +337,15 @@ function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
     usedRef.add(p.rs);
   }
 
-  // Fallback: any non-festive TY dates whose adjacent month ran out of LY days
-  // (months where TY has more days than LY in the adjacent month). Use any
-  // still-available LY day from any month (nearest by day-of-year distance)
-  // rather than sharing a ref date.
+  // Fallback: TY dates whose preferred pool ran dry (rare — only when a month's
+  // adjacent LY has more TY days than it has LY days, or a festive window consumes
+  // the whole same-month pool). Use any still-available LY day, nearest first.
   const stillAvail = rDays.filter(d => !usedRef.has(fmtISO(d)));
-  for (const m of toRemap) {
+  for (const m of toReassign) {
     const fs = fmtISO(m.futureDate);
     if (assigned.has(fs)) continue;
     if (!stillAvail.length) {
-      // Absolute last resort: keep V1 assignment unchanged (shared ref)
+      // Absolute last resort: no LY days left at all — inherit V1's sharedRef
       assigned.set(fs, { ...m, sharedRef: true });
       continue;
     }
@@ -365,17 +367,14 @@ function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
     usedRef.add(rs);
   }
 
-  // Reassemble in calendar order: anchors and same-month-kept days from V1,
-  // non-festive days from the adjacent-month assignment above
-  const anchorMap  = new Map(anchors.map(m => [fmtISO(m.futureDate), m]));
-  const keepMap    = new Map(sameMonthKeep.map(m => [fmtISO(m.futureDate), m]));
+  // Reassemble in calendar order: Phase 1 anchors from V1, everything else freshly assigned
+  const anchorMap = new Map(anchors.map(m => [fmtISO(m.futureDate), m]));
   const result = fDays.map(d => {
     const fs = fmtISO(d);
-    return anchorMap.get(fs) || keepMap.get(fs) || assigned.get(fs);
+    return anchorMap.get(fs) || assigned.get(fs);
   }).filter(Boolean);
 
-  // Labeling pass: re-attach full festival identity on newly-assigned non-festive
-  // rows (anchors and same-month-kept rows are already correctly labeled by V1)
+  // Labeling pass: full festival identity for display on all non-anchor rows
   for (const m of result) {
     if (m.mappingPriority <= 2) continue;
     const fi = fMapFull[fmtISO(m.futureDate)];
