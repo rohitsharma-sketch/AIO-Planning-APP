@@ -5,7 +5,7 @@
 <title>RS Planning · CityKart</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,400&family=Outfit:wght@400;500;600;700&display=swap');
 
   :root {
     --bg: #080f1e;
@@ -418,108 +418,86 @@
     margin-top: 40px;
   }
 
-  /* ── Lagan modal ── */
-  .lagan-modal { max-width: 780px; }
-  /* Tabs */
-  .lagan-tabs {
-    display: flex; gap: 4px; margin: 14px 0 0;
-    border-bottom: 1px solid var(--card-border);
+  /* ── Lagan Calendar modal — reference redesign ─────────────────────────── */
+  .lagan-modal {
+    background: #1c0e04; border: 1px solid #3a2010; border-radius: 16px;
+    width: 100%; max-width: 960px; max-height: 88vh;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 24px 70px rgba(0,0,0,.7);
   }
-  .lagan-tab {
-    padding: 7px 16px 9px;
-    font-size: 13px; font-weight: 600; font-family: inherit;
-    background: none; border: none; border-bottom: 2px solid transparent;
-    color: var(--text-dim); cursor: pointer; margin-bottom: -1px;
-    transition: color .15s, border-color .15s;
-  }
-  .lagan-tab.active { color: #f0a825; border-bottom-color: #f0a825; }
-  .lagan-tab:hover:not(.active) { color: var(--text); }
-  .lagan-tab-pane { display: none; }
-  .lagan-tab-pane.active { display: block; }
-  /* Lookup — year row */
-  .lagan-year-row {
-    display: flex; align-items: center; gap: 10px; margin: 14px 0 14px;
-  }
-  .lagan-year-row label { font-size: 13px; color: var(--text-dim); font-weight: 500; flex-shrink: 0; }
-  .lagan-year-select {
-    background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.18);
-    border-radius: 8px; color: var(--text); font-size: 14px; font-weight: 600;
-    padding: 5px 10px; cursor: pointer; font-family: inherit;
-  }
-  .lagan-year-select:focus { outline: none; border-color: #f0a825; }
-  .lagan-total { font-size: 12px; color: var(--text-dim); margin-left: auto; font-variant-numeric: tabular-nums; }
-  /* Lookup — 12-month card grid */
-  .lagan-months {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 10px;
-  }
-  .lagan-month-card {
-    background: rgba(255,255,255,0.035);
-    border: 1px solid rgba(180,100,0,0.3);
-    border-radius: 10px;
-    padding: 11px 11px 9px;
-  }
-  .lagan-month-card.empty { border-color: rgba(255,255,255,0.07); }
-  .lagan-month-head {
-    display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
-  }
-  .lagan-month-name { font-size: 13px; font-weight: 700; color: var(--text); }
-  .lagan-month-badge {
-    width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 10.5px; font-weight: 800;
-    background: #b87200; color: #fff;
-  }
-  .lagan-month-badge.zero { background: rgba(255,255,255,0.1); color: var(--text-dim); }
-  .lagan-dates { display: flex; flex-wrap: wrap; gap: 4px; }
-  .lagan-date-chip {
-    font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
-    padding: 3px 8px; border-radius: 5px;
-    background: rgba(180,100,0,0.22);
-    border: 1px solid rgba(200,130,0,0.45);
-    color: #f5c842;
-    min-width: 30px; text-align: center; line-height: 1.3;
-  }
-  .lagan-date-chip.today {
-    background: rgba(34,197,94,0.25); border-color: rgba(34,197,94,0.55); color: #6ee7a0;
-  }
-  .lagan-no-dates { color: rgba(255,255,255,0.2); font-size: 11px; font-style: italic; }
-  /* Compare tab — year pill selector */
-  .lagan-compare-years {
-    display: flex; flex-wrap: wrap; gap: 5px; margin: 14px 0 12px; align-items: center;
-  }
-  .lagan-compare-years > span { font-size: 12px; color: var(--text-dim); font-weight: 500; margin-right: 4px; }
-  .lagan-yr-check {
-    padding: 3px 9px; border-radius: 6px;
-    border: 1px solid rgba(255,255,255,0.14);
-    background: rgba(255,255,255,0.05);
-    cursor: pointer; user-select: none; font-size: 12px; font-weight: 600; color: var(--text-dim);
-    transition: border-color .12s, background .12s, color .12s;
-  }
-  .lagan-yr-check input { display: none; }
-  .lagan-yr-check.selected { border-color: #b87200; background: rgba(180,100,0,0.22); color: #f5c842; }
-  .lagan-yr-check:hover:not(.selected) { border-color: rgba(255,255,255,0.28); color: var(--text); }
-  /* Compare tab — count table (Year × Month) */
-  .lagan-compare-wrap { overflow-x: auto; }
-  .lagan-cnt-table {
-    width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-  }
-  .lagan-cnt-table th {
-    padding: 6px 10px; text-align: center; font-weight: 700;
-    color: var(--text-dim); font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase;
-    border-bottom: 1px solid var(--card-border);
-  }
-  .lagan-cnt-table th.col-year { text-align: left; min-width: 58px; }
-  .lagan-cnt-table th.col-total { color: #f0a825; }
-  .lagan-cnt-table td { padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); text-align: center; }
-  .lagan-cnt-table td.col-year { text-align: left; font-weight: 700; font-size: 14px; color: var(--text); }
-  .lagan-cnt-table td.has-d { background: rgba(160,85,0,0.28); color: #f5c842; font-weight: 700; }
-  .lagan-cnt-table td.no-d { color: rgba(255,255,255,0.2); }
-  .lagan-cnt-table td.col-total { color: #f0a825; font-weight: 800; font-size: 13px; }
-  .lagan-compare-empty { color: var(--text-dim); font-size: 13px; font-style: italic; padding: 20px 0; text-align: center; }
-  .lagan-compare-hint { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+  .lm-hdr { background: #221208; border-bottom: 2px solid #c96b00; padding: 14px 20px 12px; flex-shrink: 0; }
+  .lm-hdr-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .lm-logo { font-family: 'Cormorant Garamond',Georgia,serif; font-size: 26px; font-weight: 600; color: #f8ede0; letter-spacing: -.01em; line-height: 1; margin: 0; }
+  .lm-logo em { color: #f0a040; font-style: italic; }
+  .lm-close { background: none; border: none; color: #8a6848; font-size: 20px; line-height: 1; cursor: pointer; padding: 4px 7px; border-radius: 6px; transition: color .15s, background .15s; }
+  .lm-close:hover { color: #f8ede0; background: rgba(255,255,255,.08); }
+  .lm-hdr-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .lm-sel-wrap { position: relative; flex-shrink: 0; }
+  .lm-sel-btn { display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: #180e08; border: 1.5px solid #5a3218; border-radius: 8px; color: #d4bca8; font-size: 13px; font-weight: 500; cursor: pointer; transition: border-color .15s; white-space: nowrap; min-width: 140px; justify-content: space-between; font-family: inherit; }
+  .lm-sel-btn:hover, .lm-sel-btn.open { border-color: #f0a040; outline: none; }
+  .lm-caret { font-size: 10px; opacity: .5; transition: transform .2s; }
+  .lm-sel-btn.open .lm-caret { transform: rotate(180deg); }
+  .lm-sel-dd { position: absolute; top: calc(100% + 4px); left: 0; min-width: 160px; background: #221208; border: 1.5px solid #5a3218; border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,.55); padding: 6px 0; max-height: 260px; overflow-y: auto; display: none; z-index: 200; }
+  .lm-sel-dd.open { display: block; }
+  .lm-dd-acts { display: flex; gap: 5px; padding: 5px 10px 7px; border-bottom: 1px solid #3a2010; margin-bottom: 3px; }
+  .lm-dd-act { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 5px; border: 1px solid #5a3218; background: transparent; color: #8a6848; cursor: pointer; letter-spacing: .04em; text-transform: uppercase; transition: all .15s; font-family: inherit; }
+  .lm-dd-act:hover { color: #f0a040; border-color: #f0a040; }
+  .lm-yr-opt { display: flex; align-items: center; gap: 9px; padding: 7px 13px; cursor: pointer; font-size: 13px; color: #d4bca8; user-select: none; transition: background .1s; }
+  .lm-yr-opt:hover { background: #2a1800; }
+  .lm-yr-opt.sel { color: #f0a040; font-weight: 600; }
+  .lm-yr-opt input[type=checkbox] { accent-color: #f0a040; width: 13px; height: 13px; pointer-events: none; flex-shrink: 0; }
+  .lm-chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; flex: 1; min-width: 0; }
+  .lm-chip { display: inline-flex; align-items: center; gap: 3px; padding: 3px 5px 3px 10px; background: #3a2010; border: 1px solid #5a3218; border-radius: 20px; font-size: 13px; font-weight: 600; color: #f8ede0; white-space: nowrap; }
+  .lm-chip-x { background: none; border: none; cursor: pointer; color: #8a6848; font-size: 16px; line-height: 1; padding: 0 3px; transition: color .15s; }
+  .lm-chip-x:hover { color: #f0a040; }
+  .lm-ctrl { display: flex; align-items: center; gap: 8px; padding: 10px 20px; border-bottom: 1px solid #3a2010; background: #180e08; flex-shrink: 0; flex-wrap: wrap; }
+  .lm-view-tog { display: flex; background: #1c0e04; border: 1.5px solid #5a3218; border-radius: 8px; overflow: hidden; }
+  .lm-vtb { padding: 6px 14px; border: none; background: transparent; font-size: 13px; font-weight: 500; color: #8a6848; cursor: pointer; transition: all .15s; font-family: inherit; }
+  .lm-vtb.active { background: #c96b00; color: #fff; font-weight: 600; }
+  .lm-vtb:not(.active):hover { background: #2a1800; color: #d4bca8; }
+  .lm-btn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s; white-space: nowrap; font-family: inherit; }
+  .lm-btn-pri { background: #c96b00; color: #fff; border: 1.5px solid #c96b00; }
+  .lm-btn-pri:hover { background: #e8830a; border-color: #e8830a; }
+  .lm-btn-sec { background: transparent; color: #d4bca8; border: 1.5px solid #5a3218; }
+  .lm-btn-sec:hover { border-color: #f0a040; color: #f0a040; }
+  .lm-res-count { margin-left: auto; font-size: 12px; color: #8a6848; font-variant-numeric: tabular-nums; }
+  .lm-res-count strong { color: #f0a040; font-weight: 700; }
+  .lm-content { flex: 1; overflow-y: auto; padding: 20px; }
+  .lm-method-note { margin-bottom: 18px; padding: 9px 14px; background: #221208; border-left: 3px solid #c96b00; border-radius: 0 6px 6px 0; font-size: 12px; color: #8a6848; line-height: 1.6; }
+  .lm-yr-sec { margin-bottom: 36px; }
+  .lm-yr-hdr { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #3a2010; }
+  .lm-yr-num { font-family: 'Cormorant Garamond',Georgia,serif; font-size: 34px; font-weight: 500; color: #f8ede0; line-height: 1; letter-spacing: -.02em; }
+  .lm-yr-meta { font-size: 13px; color: #8a6848; }
+  .lm-yr-meta strong { color: #f0a040; font-weight: 700; font-size: 14px; }
+  .lm-mo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(185px, 1fr)); gap: 10px; }
+  .lm-mo-card { background: #221208; border-radius: 9px; border: 1px solid #3a2010; overflow: hidden; }
+  .lm-mo-card.has { border-top: 3px solid #c96b00; }
+  .lm-mo-hdr { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; }
+  .lm-mo-name { font-family: 'Cormorant Garamond',Georgia,serif; font-size: 16px; font-weight: 600; color: #f8ede0; }
+  .lm-mo-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 11px; background: #d08030; color: #180e08; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .lm-mo-badge.z { background: #3a2010; color: #8a6848; }
+  .lm-mo-body { padding: 5px 12px 11px; min-height: 40px; }
+  .lm-d-grid { display: flex; flex-wrap: wrap; gap: 3px; }
+  .lm-d-chip { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 24px; background: #2e1806; border: 1px solid #5a3218; border-radius: 5px; font-size: 11px; font-weight: 700; color: #f8ede0; font-variant-numeric: tabular-nums; }
+  .lm-d-chip.today { background: rgba(34,197,94,.22); border-color: rgba(34,197,94,.45); color: #6ee7a0; }
+  .lm-no-d { font-size: 12px; color: #8a6848; font-style: italic; padding: 2px 0; }
+  .lm-tbl-wrap { overflow-x: auto; border-radius: 9px; border: 1px solid #3a2010; }
+  .lm-stbl { width: 100%; border-collapse: collapse; font-size: 13px; background: #221208; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .lm-stbl th, .lm-stbl td { padding: 10px 9px; text-align: center; border-bottom: 1px solid #3a2010; }
+  .lm-stbl th { font-weight: 600; color: #8a6848; font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; background: #180e08; }
+  .lm-stbl th:first-child, .lm-stbl td:first-child { text-align: left; padding-left: 16px; }
+  .lm-stbl td:first-child { font-family: 'Cormorant Garamond',Georgia,serif; font-size: 19px; font-weight: 500; color: #f8ede0; }
+  .lm-stbl tr:last-child td { border-bottom: none; }
+  .lm-stbl td.c0 { color: #5a3218; }
+  .lm-stbl td.cn { font-weight: 700; color: #d4bca8; }
+  .lm-stbl td.h1 { background: #2e1806; color: #d4bca8; font-weight: 700; }
+  .lm-stbl td.h2 { background: #4a2a0a; color: #f8ede0; font-weight: 700; }
+  .lm-stbl td.h3 { background: #6a3e10; color: #f8ede0; font-weight: 700; }
+  .lm-stbl td.ctot { font-weight: 800; color: #f0a040; font-size: 14px; }
+  .lm-stbl th.thot { color: #f0a040; }
+  .lm-empty { text-align: center; padding: 60px 24px; color: #8a6848; }
+  .lm-empty-icon { font-size: 38px; margin-bottom: 10px; line-height: 1; }
+  .lm-empty p { font-size: 14px; }
 </style>
 </head>
 <body>
@@ -708,37 +686,40 @@
        Lagan Calendar modal
        ══════════════════════════════════════════════════════════ -->
   <div class="sync-modal-overlay" id="lagan-modal-overlay">
-    <div class="sync-modal lagan-modal" id="lagan-modal" role="dialog" aria-modal="true" aria-label="Lagan Calendar">
-      <div class="sync-modal-header">
-        <h2>🪔 Lagan Calendar</h2>
-        <button class="sync-modal-close" id="lagan-modal-close" type="button" aria-label="Close">✕</button>
-      </div>
-
-      <!-- Tab bar -->
-      <div class="lagan-tabs" role="tablist">
-        <button class="lagan-tab active" data-tab="lookup" role="tab" aria-selected="true">Lookup</button>
-        <button class="lagan-tab" data-tab="compare" role="tab" aria-selected="false">Compare</button>
-      </div>
-
-      <!-- Lookup pane -->
-      <div class="lagan-tab-pane active" id="lagan-pane-lookup">
-        <div class="lagan-year-row">
-          <label for="lagan-year-sel">Year</label>
-          <select class="lagan-year-select" id="lagan-year-sel"></select>
-          <span class="lagan-total" id="lagan-total"></span>
+    <div class="lagan-modal" id="lagan-modal" role="dialog" aria-modal="true" aria-label="Lagan Calendar">
+      <div class="lm-hdr">
+        <div class="lm-hdr-top">
+          <h2 class="lm-logo">Lagan <em>Calendar</em></h2>
+          <button class="lm-close" id="lagan-modal-close" type="button" aria-label="Close">&#x2715;</button>
         </div>
-        <div class="lagan-months" id="lagan-months"></div>
+        <div class="lm-hdr-row">
+          <div class="lm-sel-wrap" id="lm-sel-wrap">
+            <button class="lm-sel-btn" id="lm-sel-btn" type="button">
+              <span id="lm-sel-label">Select Years</span>
+              <span class="lm-caret">&#x25BC;</span>
+            </button>
+            <div class="lm-sel-dd" id="lm-sel-dd">
+              <div class="lm-dd-acts">
+                <button class="lm-dd-act" id="lm-dd-all" type="button">All</button>
+                <button class="lm-dd-act" id="lm-dd-clear" type="button">Clear</button>
+              </div>
+              <div id="lm-dd-list"></div>
+            </div>
+          </div>
+          <div class="lm-chips" id="lm-chips"></div>
+        </div>
       </div>
-
-      <!-- Compare pane -->
-      <div class="lagan-tab-pane" id="lagan-pane-compare">
-        <div class="lagan-compare-years" id="lagan-compare-years">
-          <span>Years:</span>
+      <div class="lm-ctrl">
+        <div class="lm-view-tog" id="lm-view-tog">
+          <button class="lm-vtb active" data-v="cal" type="button">Calendar</button>
+          <button class="lm-vtb" data-v="tbl" type="button">Comparison Table</button>
         </div>
-        <p class="lagan-compare-hint" id="lagan-compare-hint"></p>
-        <div class="lagan-compare-wrap">
-          <div id="lagan-compare-table"></div>
-        </div>
+        <button class="lm-btn lm-btn-sec" id="lm-btn-summary" type="button">&#x2193; Monthly Summary</button>
+        <button class="lm-btn lm-btn-pri" id="lm-btn-dates" type="button">&#x2193; All Dates</button>
+        <div class="lm-res-count" id="lm-res-count"></div>
+      </div>
+      <div class="lm-content" id="lm-content">
+        <div class="lm-empty"><div class="lm-empty-icon">&#x1FA94;</div><p>Select one or more years to view Lagan dates</p></div>
       </div>
     </div>
   </div>
@@ -1059,188 +1040,254 @@
     });
   })();
 
-  // ── Lagan Calendar data (loaded from /lagan-dates.json on first open) ─────────
-  let LAGAN_DATA = null;
-
-  const MONTH_NAMES = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
-  const MONTH_SHORT  = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-  // ── Lookup tab — 12-month card grid ────────────────────────────────────────
-  function renderLaganYear(yr) {
-    var data = LAGAN_DATA[yr] || {};
-    var today = new Date();
-    var todayYr = today.getFullYear(), todayMon = today.getMonth()+1, todayDay = today.getDate();
-    var total = 0;
-    for (var m = 1; m <= 12; m++) { total += (data[m]||[]).length; }
-    document.getElementById('lagan-total').textContent = total + ' dates total';
-    var html = '';
-    for (var m = 1; m <= 12; m++) {
-      var days = data[m] || [];
-      var count = days.length;
-      var isEmpty = count === 0;
-      var badgeCls = isEmpty ? 'lagan-month-badge zero' : 'lagan-month-badge';
-      var cardCls = isEmpty ? 'lagan-month-card empty' : 'lagan-month-card';
-      var inner = isEmpty
-        ? '<div class="lagan-no-dates">No Lagan dates</div>'
-        : '<div class="lagan-dates">' + days.map(function(d) {
-            var isToday = (yr===todayYr && m===todayMon && d===todayDay);
-            return '<span class="lagan-date-chip' + (isToday?' today':'') + '">' + d + '</span>';
-          }).join('') + '</div>';
-      html += '<div class="' + cardCls + '">' +
-        '<div class="lagan-month-head">' +
-          '<span class="lagan-month-name">' + MONTH_NAMES[m] + '</span>' +
-          '<span class="' + badgeCls + '">' + count + '</span>' +
-        '</div>' + inner + '</div>';
+  // ── Lagan Calendar — Drik astronomical engine + UI ──────────────────────
+  (function() {
+    var PI = Math.PI, R = PI/180;
+    function nm(v){ return ((v%360)+360)%360; }
+    function jdn(y,m,d){ var a=Math.floor((14-m)/12),yr=y+4800-a,mo=m+12*a-3; return d+Math.floor((153*mo+2)/5)+365*yr+Math.floor(yr/4)-Math.floor(yr/100)+Math.floor(yr/400)-32045; }
+    function moonSun(jd){
+      var T=(jd-2451545)/36525,T2=T*T;
+      var D=nm(297.8501921+445267.1114034*T-0.0018819*T2);
+      var M=nm(357.5291092+35999.0502909*T-0.0001536*T2);
+      var Mp=nm(134.9633964+477198.8675055*T+0.0087414*T2);
+      var F=nm(93.2720950+483202.0175233*T-0.0036539*T2);
+      var Lp=nm(218.3164477+481267.88123421*T-0.0015786*T2);
+      var Dr=D*R,Mr=M*R,Mpr=Mp*R,Fr=F*R;
+      var dL=6288774*Math.sin(Mpr)+1274027*Math.sin(2*Dr-Mpr)+658314*Math.sin(2*Dr)
+        +213618*Math.sin(2*Mpr)-185116*Math.sin(Mr)-114332*Math.sin(2*Fr)
+        +58793*Math.sin(2*Dr-2*Mpr)+57066*Math.sin(2*Dr-Mr-Mpr)
+        +53322*Math.sin(2*Dr+Mpr)+45758*Math.sin(2*Dr-Mr)+41024*Math.sin(Mpr-Mr)
+        -34720*Math.sin(Dr)-30383*Math.sin(Mr+Mpr)+15327*Math.sin(2*Dr-2*Fr)
+        -12528*Math.sin(Mpr+2*Fr)+10980*Math.sin(Mpr-2*Fr)+10675*Math.sin(4*Dr-Mpr)
+        +10034*Math.sin(3*Mpr)+8548*Math.sin(4*Dr-2*Mpr)-7888*Math.sin(2*Dr+Mr-Mpr)
+        -6766*Math.sin(2*Dr+Mr)-5163*Math.sin(Dr-Mpr)+4987*Math.sin(Dr+Mr)
+        +4036*Math.sin(2*Dr-Mr+Mpr)+3994*Math.sin(2*Dr+2*Mpr)+3861*Math.sin(4*Dr)
+        +3665*Math.sin(2*Dr-3*Mpr)-2689*Math.sin(Mr-2*Mpr)-2602*Math.sin(2*Dr-Mpr+2*Fr)
+        +2390*Math.sin(2*Dr-Mr-2*Mpr)-2348*Math.sin(Dr+Mpr)+2236*Math.sin(2*Dr-2*Mr)
+        -2120*Math.sin(Mr+2*Mpr)-2069*Math.sin(2*Mr)+2048*Math.sin(2*Dr-2*Mr-Mpr);
+      var moon=nm(Lp+dL/1e6);
+      var Mc=(357.52911+35999.05029*T)*R;
+      var sun=nm(280.46646+36000.76983*T+(1.914602-0.004817*T)*Math.sin(Mc)+0.019993*Math.sin(2*Mc));
+      return{moon:moon,sun:sun};
     }
-    document.getElementById('lagan-months').innerHTML = html;
-  }
-
-  // ── Compare tab — Year × Month count table ────────────────────────────────
-  var _compareSelected = [];
-
-  function renderCompare() {
-    var hint = document.getElementById('lagan-compare-hint');
-    var container = document.getElementById('lagan-compare-table');
-
-    if (!_compareSelected.length) {
-      hint.textContent = 'Pick one or more years above to start comparing.';
-      container.innerHTML = '';
-      return;
+    function ayan(y){ return 23.85+0.013969*(y-2000); }
+    function ms6(y,m,d){ return moonSun(jdn(y,m,d)-0.479); }
+    function dim(y,m){ return new Date(y,m,0).getDate(); }
+    function ts(y,m,d){ return Date.UTC(y,m-1,d); }
+    function findEv(y,sm,em,tgt,rashis){
+      for(var m=sm;m<=em;m++){ for(var d=1;d<=dim(y,m);d++){
+        var ms=ms6(y,m,d),t=Math.floor(nm(ms.moon-ms.sun)/12)+1;
+        if(t===tgt){ var r=Math.floor(nm(ms.sun-ayan(y))/30); if(!rashis||rashis[r]) return{m:m,d:d}; }
+      }}
+      return null;
     }
-    var years = _compareSelected.slice().sort(function(a,b){return a-b;});
-    hint.textContent = years.length + (years.length === 1 ? ' year' : ' years') + ' selected.';
-
-    // Header: YEAR | JAN | FEB | ... | DEC | TOTAL
-    var thead = '<thead><tr><th class="col-year">YEAR</th>' +
-      MONTH_SHORT.slice(1).map(function(s){ return '<th>' + s.toUpperCase() + '</th>'; }).join('') +
-      '<th class="col-total">TOTAL</th></tr></thead>';
-
-    var tbody = '<tbody>' + years.map(function(yr) {
-      var data = LAGAN_DATA[yr] || {};
-      var rowTotal = 0;
-      var cells = '';
-      for (var m = 1; m <= 12; m++) {
-        var cnt = (data[m]||[]).length;
-        rowTotal += cnt;
-        if (cnt > 0) {
-          cells += '<td class="has-d">' + cnt + '</td>';
-        } else {
-          cells += '<td class="no-d">—</td>';
+    var evCache={};
+    function getEv(y){
+      if(evCache[y]) return evCache[y];
+      var holi=findEv(y,2,4,15,{10:1,11:1}),devs=findEv(y,6,8,11,{2:1,3:1}),
+          devuth=findEv(y,10,12,11,{6:1,7:1}),cn=findEv(y,3,5,1,{0:1}),sn=findEv(y,9,11,1,{5:1,6:1});
+      return(evCache[y]={holi:holi,devs:devs,devuth:devuth,cn:cn,sn:sn});
+    }
+    var MS=86400000;
+    function isBad(y,m,d,ev){
+      var t=ts(y,m,d);
+      if(ev.holi){var h=ts(y,ev.holi.m,ev.holi.d);if(t>=h-8*MS&&t<=h)return true;}
+      if(ev.devs&&ev.devuth){var s=ts(y,ev.devs.m,ev.devs.d),e=ts(y,ev.devuth.m,ev.devuth.d);if(t>=s&&t<=e)return true;}
+      if(ev.cn){var c=ts(y,ev.cn.m,ev.cn.d);if(t>=c&&t<c+9*MS)return true;}
+      if(ev.sn){var sv=ts(y,ev.sn.m,ev.sn.d);if(t>=sv-15*MS&&t<sv+10*MS)return true;}
+      return false;
+    }
+    var BAD_T={1:1,4:1,8:1,9:1,14:1,16:1,19:1,23:1,24:1,29:1,30:1};
+    var BAD_W={2:1,6:1};
+    var ldCache={};
+    function ld(y){
+      if(ldCache[y]) return ldCache[y];
+      var ev=getEv(y),res=[];
+      for(var m=0;m<12;m++) res.push([]);
+      for(var m=1;m<=12;m++){
+        var days=dim(y,m);
+        for(var d=1;d<=days;d++){
+          if(isBad(y,m,d,ev)) continue;
+          if(BAD_W[new Date(y,m-1,d).getDay()]) continue;
+          var ms2=ms6(y,m,d),t=Math.floor(nm(ms2.moon-ms2.sun)/12)+1;
+          if(BAD_T[t]) continue;
+          res[m-1].push(d);
         }
       }
-      return '<tr><td class="col-year">' + yr + '</td>' + cells +
-             '<td class="col-total">' + rowTotal + '</td></tr>';
-    }).join('') + '</tbody>';
-
-    container.innerHTML = '<table class="lagan-cnt-table">' + thead + tbody + '</table>';
-  }
-
-  function buildCompareYearPills() {
-    var container = document.getElementById('lagan-compare-years');
-    var curYr = new Date().getFullYear();
-    // Pre-select current year and next year as defaults
-    _compareSelected = [];
-    if (curYr >= 2000 && curYr <= 2030) _compareSelected.push(curYr);
-    if (curYr+1 <= 2030) _compareSelected.push(curYr+1);
-
-    for (var y = 2000; y <= 2030; y++) {
-      var label = document.createElement('label');
-      label.className = 'lagan-yr-check' + (_compareSelected.indexOf(y) >= 0 ? ' selected' : '');
-      label.dataset.year = y;
-      var cb = document.createElement('input');
-      cb.type = 'checkbox'; cb.value = y;
-      cb.checked = (_compareSelected.indexOf(y) >= 0);
-      label.appendChild(cb);
-      label.appendChild(document.createTextNode(y));
-      label.addEventListener('click', function(e) {
-        e.preventDefault();
-        var yr = parseInt(this.dataset.year);
-        var idx = _compareSelected.indexOf(yr);
-        if (idx >= 0) { _compareSelected.splice(idx, 1); this.classList.remove('selected'); this.querySelector('input').checked = false; }
-        else { _compareSelected.push(yr); this.classList.add('selected'); this.querySelector('input').checked = true; }
-        renderCompare();
-      });
-      container.appendChild(label);
+      return(ldCache[y]=res);
     }
-  }
 
-  // ── Tab switching & modal lifecycle ───────────────────────────────────────
-  (function() {
-    var overlay = document.getElementById('lagan-modal-overlay');
-    var closeBtn = document.getElementById('lagan-modal-close');
-    var card = document.getElementById('lagan-card');
-    var sel = document.getElementById('lagan-year-sel');
-    var tabs = document.querySelectorAll('.lagan-tab');
-    var panes = document.querySelectorAll('.lagan-tab-pane');
-    var compareBuilt = false;
+    var YEARS=[],MFULL=['January','February','March','April','May','June','July','August','September','October','November','December'],MSHORT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],DNAMES=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    for(var _y=2000;_y<=2030;_y++) YEARS.push(_y);
+    var cy=new Date().getFullYear();
+    var selYears=cy>=2000&&cy<=2030?[cy]:[2026];
+    var lmView='cal';
 
-    // Populate year selector (lookup)
-    var curYr = new Date().getFullYear();
-    for (var y = 2030; y >= 2000; y--) {
-      var opt = document.createElement('option');
-      opt.value = y; opt.textContent = y;
-      if (y === curYr) opt.selected = true;
-      sel.appendChild(opt);
-    }
-    if (curYr < 2000 || curYr > 2030) sel.value = 2026;
-    sel.addEventListener('change', function() { renderLaganYear(parseInt(sel.value)); });
+    var overlay=document.getElementById('lagan-modal-overlay');
+    var closeBtn=document.getElementById('lagan-modal-close');
+    var laganCard=document.getElementById('lagan-card');
+    var selWrap=document.getElementById('lm-sel-wrap');
+    var selBtn=document.getElementById('lm-sel-btn');
+    var selLabel=document.getElementById('lm-sel-label');
+    var selDd=document.getElementById('lm-sel-dd');
+    var ddList=document.getElementById('lm-dd-list');
+    var chipsEl=document.getElementById('lm-chips');
+    var viewTog=document.getElementById('lm-view-tog');
+    var content=document.getElementById('lm-content');
+    var resCount=document.getElementById('lm-res-count');
 
-    // Tab clicks
-    tabs.forEach(function(tab) {
-      tab.addEventListener('click', function() {
-        var target = this.dataset.tab;
-        tabs.forEach(function(t) { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
-        panes.forEach(function(p) { p.classList.remove('active'); });
-        this.classList.add('active'); this.setAttribute('aria-selected','true');
-        document.getElementById('lagan-pane-' + target).classList.add('active');
-        if (target === 'compare' && !compareBuilt) { buildCompareYearPills(); compareBuilt = true; renderCompare(); }
+    function buildOpts(){
+      ddList.innerHTML='';
+      YEARS.forEach(function(y){
+        var isSel=selYears.indexOf(y)>=0;
+        var d=document.createElement('div');
+        d.className='lm-yr-opt'+(isSel?' sel':'');
+        d.innerHTML='<input type="checkbox"'+(isSel?' checked':'')+' tabindex="-1"><span>'+y+'</span>';
+        d.addEventListener('click',function(){ toggleY(y); });
+        ddList.appendChild(d);
       });
+    }
+    function toggleY(y){
+      var idx=selYears.indexOf(y);
+      if(idx>=0) selYears.splice(idx,1); else { selYears.push(y); selYears.sort(function(a,b){return a-b;}); }
+      buildOpts(); renderChips(); renderContent(); updateLabel();
+    }
+    function updateLabel(){
+      if(!selYears.length) selLabel.textContent='Select Years';
+      else if(selYears.length===1) selLabel.textContent=String(selYears[0]);
+      else selLabel.textContent=selYears.length+' years';
+    }
+    function renderChips(){
+      chipsEl.innerHTML='';
+      selYears.forEach(function(y){
+        var c=document.createElement('div'); c.className='lm-chip';
+        c.innerHTML=y+'<button class="lm-chip-x" type="button" aria-label="Remove '+y+'">&#xD7;</button>';
+        c.querySelector('.lm-chip-x').addEventListener('click',function(e){ e.stopPropagation(); toggleY(y); });
+        chipsEl.appendChild(c);
+      });
+    }
+    selBtn.addEventListener('click',function(){
+      var o=selDd.classList.toggle('open'); selBtn.classList.toggle('open',o);
+    });
+    document.addEventListener('click',function(e){
+      if(overlay.classList.contains('open')&&!selWrap.contains(e.target)){
+        selDd.classList.remove('open'); selBtn.classList.remove('open');
+      }
+    });
+    document.getElementById('lm-dd-all').addEventListener('click',function(){
+      selYears=YEARS.slice(); buildOpts(); renderChips(); renderContent(); updateLabel();
+    });
+    document.getElementById('lm-dd-clear').addEventListener('click',function(){
+      selYears=[]; buildOpts(); renderChips(); renderContent(); updateLabel();
     });
 
-    function open() {
+    viewTog.addEventListener('click',function(e){
+      var b=e.target.closest('.lm-vtb'); if(!b) return;
+      lmView=b.dataset.v;
+      viewTog.querySelectorAll('.lm-vtb').forEach(function(x){ x.classList.toggle('active',x===b); });
+      renderContent();
+    });
+
+    var today=new Date(), todayYr=today.getFullYear(), todayMon=today.getMonth()+1, todayDay=today.getDate();
+    function emptyHtml(){ return '<div class="lm-empty"><div class="lm-empty-icon">&#x1FA94;</div><p>Select one or more years to view Lagan dates</p></div>'; }
+
+    function calHtml(){
+      if(!selYears.length) return emptyHtml();
+      return selYears.map(function(y){
+        var months=ld(y), total=months.reduce(function(s,m){return s+m.length;},0);
+        var cards=months.map(function(dates,i){
+          var n=dates.length, mn=i+1;
+          return '<div class="lm-mo-card'+(n?' has':'')+'">'+
+            '<div class="lm-mo-hdr"><span class="lm-mo-name">'+MFULL[i]+'</span><span class="lm-mo-badge'+(n?'':' z')+'">'+n+'</span></div>'+
+            '<div class="lm-mo-body">'+(n
+              ? '<div class="lm-d-grid">'+dates.map(function(d){
+                  var isTd=(y===todayYr&&mn===todayMon&&d===todayDay);
+                  return '<span class="lm-d-chip'+(isTd?' today':'')+'">'+d+'</span>';
+                }).join('')+'</div>'
+              : '<span class="lm-no-d">No Lagan dates</span>')+
+            '</div></div>';
+        }).join('');
+        return '<div class="lm-yr-sec"><div class="lm-yr-hdr"><span class="lm-yr-num">'+y+'</span><span class="lm-yr-meta"><strong>'+total+'</strong> Lagan dates</span></div><div class="lm-mo-grid">'+cards+'</div></div>';
+      }).join('');
+    }
+
+    function tblHtml(){
+      if(!selYears.length) return emptyHtml();
+      var allData=selYears.map(function(y){return ld(y);});
+      var mx=0; allData.forEach(function(ms){ms.forEach(function(m){if(m.length>mx)mx=m.length;});});
+      function hc(n){ return n===0?'c0':n<mx*.34?'cn h1':n<mx*.67?'cn h2':'cn h3'; }
+      var ths=MSHORT.map(function(m){return'<th>'+m+'</th>';}).join('');
+      var rows=selYears.map(function(y,i){
+        var ms=allData[i],tot=ms.reduce(function(s,m){return s+m.length;},0);
+        return'<tr><td>'+y+'</td>'+ms.map(function(m){return'<td class="'+hc(m.length)+'">'+(m.length||'&#x2014;')+'</td>';}).join('')+'<td class="ctot">'+tot+'</td></tr>';
+      }).join('');
+      return'<div class="lm-tbl-wrap"><table class="lm-stbl"><thead><tr><th>Year</th>'+ths+'<th class="thot">Total</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    }
+
+    function renderContent(){
+      if(!selYears.length){content.innerHTML=emptyHtml();resCount.innerHTML='';return;}
+      var note='<div class="lm-method-note">Drik astronomical method &#x2014; moon&#x2013;sun elongation for tithi, Lahiri ayanamsha, Holashtak / Chaturmas / Navratri / Pitru Paksha detected per year. Verify exact muhurtas with a local Panchang.</div>';
+      content.innerHTML=note+(lmView==='cal'?calHtml():tblHtml());
+      var total=selYears.reduce(function(s,y){return s+ld(y).reduce(function(a,m){return a+m.length;},0);},0);
+      resCount.innerHTML='<strong>'+total+'</strong> dates across <strong>'+selYears.length+'</strong> year'+(selYears.length===1?'':'s');
+    }
+
+    function genDatesCSV(){
+      if(!selYears.length) return 'No years selected';
+      var rows=['Year,Month,Date,Day'];
+      selYears.forEach(function(y){ ld(y).forEach(function(dates,mi){ dates.forEach(function(day){ rows.push(y+','+MFULL[mi]+','+day+','+DNAMES[new Date(y,mi,day).getDay()]); }); }); });
+      return rows.join('
+
+');
+    }
+    function genSummaryCSV(){
+      if(!selYears.length) return 'No years selected';
+      var rows=[['Year'].concat(MSHORT).concat(['Total']).join(',')];
+      selYears.forEach(function(y){ var ms=ld(y),tot=ms.reduce(function(s,m){return s+m.length;},0); rows.push([y].concat(ms.map(function(m){return m.length;})).concat([tot]).join(',')); });
+      return rows.join('
+
+');
+    }
+    function showExportModal(title,csv){
+      var ov=document.createElement('div'); ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px';
+      var safeTitle=title.replace(/</g,'&lt;');
+      ov.innerHTML='<div style="background:#221208;border:1px solid #5a3218;border-radius:12px;width:100%;max-width:540px;display:flex;flex-direction:column;overflow:hidden;max-height:80vh">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #3a2010"><span style="font-family:Cormorant Garamond,serif;font-size:18px;color:#f8ede0">'+safeTitle+'</span><button id="lm-exp-close" style="background:none;border:none;color:#8a6848;font-size:20px;cursor:pointer;padding:2px 6px">&#x2715;</button></div>'+
+        '<textarea readonly spellcheck="false" style="flex:1;margin:14px 18px;padding:10px;border:1.5px solid #5a3218;border-radius:7px;background:#180e08;color:#d4bca8;font-family:Courier New,monospace;font-size:11.5px;resize:none;outline:none;min-height:160px" id="lm-exp-ta"></textarea>'+
+        '<div style="padding:10px 18px 14px;border-top:1px solid #3a2010;display:flex;gap:10px;align-items:center"><span style="font-size:12px;color:#8a6848;flex:1">Copy and save as .csv</span><button id="lm-exp-copy" style="background:#c96b00;color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer">Copy to Clipboard</button></div>'+
+        '</div>';
+      document.body.appendChild(ov);
+      var ta=ov.querySelector('#lm-exp-ta'); ta.value=csv;
+      setTimeout(function(){ta.focus();ta.select();},60);
+      ov.querySelector('#lm-exp-copy').addEventListener('click',function(){
+        var btn=this;
+        if(navigator.clipboard){ navigator.clipboard.writeText(csv).then(function(){btn.textContent='Copied!';setTimeout(function(){btn.textContent='Copy to Clipboard';},2000);}); }
+        else{ ta.select(); document.execCommand('copy'); btn.textContent='Copied!'; setTimeout(function(){btn.textContent='Copy to Clipboard';},2000); }
+      });
+      var close=function(){ov.remove();};
+      ov.querySelector('#lm-exp-close').addEventListener('click',close);
+      ov.addEventListener('click',function(e){if(e.target===ov)close();});
+      document.addEventListener('keydown',function esc(e){if(e.key==='Escape'){close();document.removeEventListener('keydown',esc);}});
+    }
+    document.getElementById('lm-btn-dates').addEventListener('click',function(){ showExportModal('Lagan Dates — CSV Export',genDatesCSV()); });
+    document.getElementById('lm-btn-summary').addEventListener('click',function(){ showExportModal('Monthly Summary — CSV',genSummaryCSV()); });
+
+    function openModal(){
       overlay.classList.add('open');
       closeBtn.focus();
-      if (LAGAN_DATA) {
-        renderLaganYear(parseInt(sel.value));
-      } else {
-        document.getElementById('lagan-months').innerHTML = '<p style="color:var(--text-dim);padding:20px 0">Loading…</p>';
-        fetch('/lagan-dates.json')
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
-            // Keys come back as strings; convert to numeric for compatibility
-            var d = {};
-            Object.keys(data).forEach(function(yr) {
-              var mdata = {};
-              Object.keys(data[yr]).forEach(function(m) { mdata[+m] = data[yr][m]; });
-              d[+yr] = mdata;
-            });
-            LAGAN_DATA = d;
-            renderLaganYear(parseInt(sel.value));
-          })
-          .catch(function() {
-            document.getElementById('lagan-months').innerHTML = '<p style="color:#f87171;padding:20px 0">Could not load Lagan date data.</p>';
-          });
-      }
+      buildOpts(); renderChips(); updateLabel(); renderContent();
     }
-    function close() {
+    function closeModal(){
       overlay.classList.remove('open');
-      // Reset to Lookup tab
-      tabs.forEach(function(t) { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
-      panes.forEach(function(p) { p.classList.remove('active'); });
-      tabs[0].classList.add('active'); tabs[0].setAttribute('aria-selected','true');
-      document.getElementById('lagan-pane-lookup').classList.add('active');
-      card.focus();
+      if(laganCard) laganCard.focus();
     }
-
-    card.addEventListener('click', open);
-    card.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
-    });
-    closeBtn.addEventListener('click', close);
-    overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape' && overlay.classList.contains('open')) close();
-    });
+    if(laganCard){
+      laganCard.addEventListener('click', openModal);
+      laganCard.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();openModal();}});
+    }
+    closeBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click',function(e){if(e.target===overlay)closeModal();});
+    document.addEventListener('keydown',function(e){if(e.key==='Escape'&&overlay.classList.contains('open'))closeModal();});
   })();
 </script>
 </body>
