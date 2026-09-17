@@ -227,15 +227,20 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
-    # BIS routes that require an active 8010 session before proxying through.
-    _BIS_AUTH_PREFIXES = ('/buyer', '/api/otb/', '/api/status')
+    # Paths that bypass the auth gate — login flow, static assets, and the
+    # port-status probe (which the landing page JS calls from the login screen
+    # itself so the Master Switch pill renders correctly before login).
+    _NO_AUTH_PREFIXES = (
+        '/login', '/auth/', '/static/', '/api/auth/',
+        '/reset-password', '/change-password', '/api/port-status/',
+    )
 
-    def _is_bis_route(self):
+    def _requires_auth(self):
         path = self.path.split('?')[0]
-        return any(
-            path == p or path.startswith(p if p.endswith('/') else p + '/')
-            for p in self._BIS_AUTH_PREFIXES
-        )
+        for prefix in self._NO_AUTH_PREFIXES:
+            if path == prefix or path.startswith(prefix if prefix.endswith('/') else prefix + '/'):
+                return False
+        return True
 
     def _is_authenticated(self):
         """Forward the incoming cookies to 8010's /api/auth/me; return True if 200."""
@@ -270,8 +275,8 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        # Auth gate for BIS — redirect to login if no valid 8010 session.
-        if self._is_bis_route() and not self._is_authenticated():
+        # App-wide auth gate — redirect to login if no valid 8010 session.
+        if self._requires_auth() and not self._is_authenticated():
             dest = '/login?next=' + self.path
             self.send_response(302)
             self.send_header('Location', dest)
@@ -285,8 +290,8 @@ class Handler(SimpleHTTPRequestHandler):
             super().do_GET()
 
     def _auth_guard_api(self):
-        """For mutating BIS API routes: return 401 JSON if not authenticated."""
-        if self._is_bis_route() and not self._is_authenticated():
+        """For mutating API routes: return 401 JSON if not authenticated."""
+        if self._requires_auth() and not self._is_authenticated():
             body = json.dumps({"detail": "Not authenticated"}).encode()
             self.send_response(401)
             self.send_header('Content-Type', 'application/json')
@@ -297,12 +302,12 @@ class Handler(SimpleHTTPRequestHandler):
         return False
 
     def do_POST(self):
+        if self._auth_guard_api():
+            return
         if self.path == "/api/launch-all":
             self._launch_all()
         elif self.path == "/api/shutdown-all":
             self._shutdown_all()
-        elif self._auth_guard_api():
-            return
         else:
             self._proxy_or_404()
 

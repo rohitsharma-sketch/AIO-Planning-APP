@@ -135,11 +135,6 @@
   }
   .grid {
     display: grid;
-    /* Narrower cards + a wider cap than the old 3-up layout: with the flow
-       down to 5 tiles (Calendar, AOP Forecaster, Buyer's Input, Planning
-       Engine, Data Sync & Flow), this fits them in one linear row on a
-       normal desktop width, reading left-to-right as the actual pipeline
-       order instead of wrapping into a 3+2 grid that obscured it. */
     grid-template-columns: repeat(auto-fit, minmax(208px, 1fr));
     gap: 16px;
     max-width: 1180px;
@@ -232,13 +227,6 @@
     color: var(--text-dim);
     margin-bottom: 10px;
   }
-  /* No description paragraph and no link-out on this card anymore - it's
-     status only, read in place, no click needed - so the freed space goes
-     to the actual live rows instead: slightly larger text, more breathing
-     room between rows, than when this card also had to fit a blurb and a
-     link. (The Flow section below is the one exception: its "Resume as
-     ___" button is a deliberate, later addition - not a link-out for its
-     own sake, but the whole point of showing whose turn it is.) */
   .sync-rows { display: flex; flex-direction: column; gap: 8px; }
   .flow-resume-btn {
     display: inline-block;
@@ -279,13 +267,6 @@
   }
   .sync-badge.ok { color: var(--up); background: rgba(46,204,113,0.14); }
   .sync-badge.fail { color: var(--down); background: rgba(231,76,60,0.14); }
-  /* Collapsed by default — the tile used to show both sync-sections' full
-     row lists at all times, which crowded the grid with detail nobody was
-     reading yet. Now it reads like every other tile (icon, title, one status
-     line); clicking opens the detail in a popup instead of pushing the grid
-     around in place (an inline accordion was tried first and explicitly
-     rejected: "i dont want the drop down i want the click and view feature
-     in the tile"). */
   .sync-card { cursor: pointer; }
   .sync-card-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .sync-chevron { color: var(--text-dim); font-size: 13px; flex-shrink: 0; }
@@ -345,10 +326,149 @@
     padding: 1px 6px;
     border-radius: 4px;
   }
+
+  /* ── View system ── */
+  .view { display: none; flex-direction: column; align-items: center; width: 100%; }
+  .view.active { display: flex; }
+
+  /* ── Module selector (2-tile choose screen) ── */
+  .selector-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+    max-width: 640px;
+    width: 100%;
+    margin-top: 44px;
+  }
+  .selector-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 18px;
+    padding: 32px 28px 28px;
+    cursor: pointer;
+    text-align: left;
+    color: inherit;
+    transition: transform .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.25);
+    user-select: none;
+  }
+  .selector-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--card-border-hover);
+    background: rgba(255,255,255,0.08);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  }
+  .selector-card .sel-icon {
+    width: 52px; height: 52px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+    margin-bottom: 18px;
+    background: rgba(16,100,204,0.3);
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+  .selector-card h2 {
+    margin: 0 0 8px;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .selector-card p {
+    margin: 0 0 20px;
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+  .selector-card .sel-arrow {
+    font-size: 13px;
+    color: var(--text-dim);
+    display: flex; align-items: center; gap: 6px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    transition: color .15s;
+  }
+  .selector-card:hover .sel-arrow { color: var(--text); }
+
+  /* ── Back button ── */
+  .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-dim);
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 999px;
+    padding: 6px 16px 6px 12px;
+    cursor: pointer;
+    transition: color .15s, background .15s, border-color .15s;
+    margin-bottom: 28px;
+    align-self: flex-start;
+  }
+  .back-btn:hover { color: var(--text); background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.22); }
+
+  /* ── Additional modules grid (2 tiles, smaller) ── */
+  .add-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    max-width: 640px;
+    width: 100%;
+    margin-top: 40px;
+  }
+
+  /* ── Lagan modal ── */
+  .lagan-modal {
+    max-width: 540px;
+  }
+  .lagan-year-row {
+    display: flex; align-items: center; gap: 10px; margin: 16px 0 18px;
+  }
+  .lagan-year-row label { font-size: 13px; color: var(--text-dim); font-weight: 500; flex-shrink: 0; }
+  .lagan-year-select {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 5px 10px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .lagan-year-select:focus { outline: none; border-color: var(--bg-grad-a); }
+  .lagan-total {
+    font-size: 12px; color: var(--text-dim); margin-left: auto;
+    font-variant-numeric: tabular-nums;
+  }
+  .lagan-months { display: flex; flex-direction: column; gap: 14px; }
+  .lagan-month-block {}
+  .lagan-month-name {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-dim); margin-bottom: 6px;
+  }
+  .lagan-dates {
+    display: flex; flex-wrap: wrap; gap: 5px;
+  }
+  .lagan-date-chip {
+    font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums;
+    padding: 3px 10px; border-radius: 6px;
+    background: rgba(16,100,204,0.18);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text);
+    min-width: 34px; text-align: center;
+  }
+  .lagan-date-chip.today {
+    background: rgba(34,197,94,0.2);
+    border-color: rgba(34,197,94,0.4);
+    color: var(--up);
+  }
+  .lagan-empty { color: var(--text-dim); font-size: 13px; font-style: italic; }
 </style>
 </head>
 <body>
-  <!-- Master Switch — fixed top-right corner, non-intrusive -->
+  <!-- Master Switch — fixed top-right corner, always visible across all views -->
   <div class="corner-switch">
     <button id="launch-all-btn" class="breaker" type="button" title="Start or stop all planning servers">
       <span class="breaker-track"><span class="breaker-knob"></span></span>
@@ -357,71 +477,156 @@
     <div id="launch-all-msg" class="corner-msg"></div>
   </div>
 
-  <header>
-    <div class="brand">CityKart · RS Planning</div>
-    <h1>Planning Modules</h1>
-    <p>Pick a module below. Each opens its own app in a new tab.</p>
-  </header>
+  <!-- ══════════════════════════════════════════════════════════
+       View: select — module chooser (default landing view)
+       ══════════════════════════════════════════════════════════ -->
+  <div class="view active" id="view-select">
+    <header>
+      <div class="brand">CityKart · RS Planning</div>
+      <h1>Planning Suite</h1>
+      <p>Choose a module group to continue.</p>
+    </header>
 
-  <div class="grid">
-    <a class="card" href="/calendar/" target="_blank" data-check="/api/port-status/8010">
-      <div class="card-icon">📅</div>
-      <h2>Calendar</h2>
-      <p class="desc">Calendarisation Suite — builds the locked, festival-aligned day-shift calendar per cluster, used to reindex last year's sales onto this year's dates.</p>
-      <div class="meta">
-        <span class="port">7800/calendar</span>
-        <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
+    <div class="selector-grid">
+      <div class="selector-card" id="go-core" role="button" tabindex="0" aria-label="Open Core Modules">
+        <div class="sel-icon">🏢</div>
+        <h2>Core Modules</h2>
+        <p>Calendar Engine, AOP Forecaster, Buyer's Input, Planning Engine, and Data Sync & Flow.</p>
+        <div class="sel-arrow">Open suite <span>→</span></div>
       </div>
-    </a>
 
-    <a class="card" href="/aop/" target="_blank" data-check="/api/port-status/8010">
-      <div class="card-icon">📊</div>
-      <h2>AOP Forecaster</h2>
-      <p class="desc">Annual Operating Plan forecaster — planning inputs (Store Master, Growth %, NSO openings) and the store×division×month forecast engine.</p>
-      <div class="meta">
-        <span class="port">7800/aop</span>
-        <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
-      </div>
-    </a>
-
-    <a class="card" href="/buyer/" target="_blank" data-check="/api/port-status/5050">
-      <div class="card-icon">🛒</div>
-      <h2>Buyer's Input</h2>
-      <p class="desc">OTB buyer's plan — division/section-level growth% editing against the AOP seed, with per-cell locking and re-apportioning.</p>
-      <div class="meta">
-        <span class="port">7800/buyer</span>
-        <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
-      </div>
-    </a>
-
-    <a class="card" href="/planning/" target="_blank" data-check="/api/port-status/8010">
-      <div class="card-icon">🧮</div>
-      <h2>Planning Engine</h2>
-      <p class="desc">Sales Plan — Division/Department plans, MRP reapportionment, PW-W &amp; SOR deviation, and display-type planning engines.</p>
-      <div class="meta">
-        <span class="port">7800/planning</span>
-        <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
-      </div>
-    </a>
-
-    <div class="card sync-card" id="sync-card" role="button" tabindex="0" aria-haspopup="dialog">
-      <div class="sync-card-header">
-        <div class="card-icon">🔄</div>
-        <span class="sync-chevron">↗</span>
-      </div>
-      <h2>Data Sync &amp; Flow</h2>
-      <div class="meta sync-summary">
-        <span class="status"><span class="dot" id="sync-summary-dot"></span><span class="status-label checking" id="sync-summary-label">checking…</span></span>
-        <span class="port">click to view</span>
+      <div class="selector-card" id="go-additional" role="button" tabindex="0" aria-label="Open Additional Modules">
+        <div class="sel-icon">✨</div>
+        <h2>Additional Modules</h2>
+        <p>Lagan Calendar (auspicious date lookup) and NSO Plan Distributor.</p>
+        <div class="sel-arrow">Open modules <span>→</span></div>
       </div>
     </div>
+
+    <footer style="margin-top:52px;">
+      Core modules share a unified server on port 8010. Use the Master Switch to bring everything online.
+    </footer>
   </div>
 
-  <footer>
-    Calendar, AOP Forecaster, and Planning Engine run from one unified server — all accessible
-    through this page. A grey dot means that server isn't running yet — use the Master Switch to start it.
-  </footer>
+  <!-- ══════════════════════════════════════════════════════════
+       View: core — existing 5 planning apps
+       ══════════════════════════════════════════════════════════ -->
+  <div class="view" id="view-core">
+    <button class="back-btn" id="back-from-core" type="button">← Module selector</button>
 
+    <header>
+      <div class="brand">CityKart · RS Planning</div>
+      <h1>Core Modules</h1>
+      <p>Pick a module below. Each opens its own app in a new tab.</p>
+    </header>
+
+    <div class="grid">
+      <a class="card" href="/calendar/" target="_blank" data-check="/api/port-status/8010">
+        <div class="card-icon">📅</div>
+        <h2>Calendar</h2>
+        <p class="desc">Calendarisation Suite — builds the locked, festival-aligned day-shift calendar per cluster, used to reindex last year's sales onto this year's dates.</p>
+        <div class="meta">
+          <span class="port">7800/calendar</span>
+          <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
+        </div>
+      </a>
+
+      <a class="card" href="/aop/" target="_blank" data-check="/api/port-status/8010">
+        <div class="card-icon">📊</div>
+        <h2>AOP Forecaster</h2>
+        <p class="desc">Annual Operating Plan forecaster — planning inputs (Store Master, Growth %, NSO openings) and the store×division×month forecast engine.</p>
+        <div class="meta">
+          <span class="port">7800/aop</span>
+          <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
+        </div>
+      </a>
+
+      <a class="card" href="/buyer/" target="_blank" data-check="/api/port-status/5050">
+        <div class="card-icon">🛒</div>
+        <h2>Buyer's Input</h2>
+        <p class="desc">OTB buyer's plan — division/section-level growth% editing against the AOP seed, with per-cell locking and re-apportioning.</p>
+        <div class="meta">
+          <span class="port">7800/buyer</span>
+          <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
+        </div>
+      </a>
+
+      <a class="card" href="/planning/" target="_blank" data-check="/api/port-status/8010">
+        <div class="card-icon">🧮</div>
+        <h2>Planning Engine</h2>
+        <p class="desc">Sales Plan — Division/Department plans, MRP reapportionment, PW-W &amp; SOR deviation, and display-type planning engines.</p>
+        <div class="meta">
+          <span class="port">7800/planning</span>
+          <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
+        </div>
+      </a>
+
+      <div class="card sync-card" id="sync-card" role="button" tabindex="0" aria-haspopup="dialog">
+        <div class="sync-card-header">
+          <div class="card-icon">🔄</div>
+          <span class="sync-chevron">↗</span>
+        </div>
+        <h2>Data Sync &amp; Flow</h2>
+        <div class="meta sync-summary">
+          <span class="status"><span class="dot" id="sync-summary-dot"></span><span class="status-label checking" id="sync-summary-label">checking…</span></span>
+          <span class="port">click to view</span>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      Calendar, AOP Forecaster, and Planning Engine run from one unified server — all accessible
+      through this page. A grey dot means that server isn't running yet — use the Master Switch to start it.
+    </footer>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       View: additional — Lagan Calendar + NSO Plan Distributor
+       ══════════════════════════════════════════════════════════ -->
+  <div class="view" id="view-additional">
+    <button class="back-btn" id="back-from-additional" type="button">← Module selector</button>
+
+    <header>
+      <div class="brand">CityKart · RS Planning</div>
+      <h1>Additional Modules</h1>
+      <p>Specialised tools outside the core planning suite.</p>
+    </header>
+
+    <div class="add-grid">
+      <!-- Lagan Calendar tile -->
+      <div class="card sync-card" id="lagan-card" role="button" tabindex="0" aria-haspopup="dialog">
+        <div class="sync-card-header">
+          <div class="card-icon">🪔</div>
+          <span class="sync-chevron">↗</span>
+        </div>
+        <h2>Lagan Calendar</h2>
+        <p class="desc">Auspicious wedding &amp; ceremony dates 2000–2030, computed via Drik astronomical method. Lookup by year.</p>
+        <div class="meta">
+          <span class="port">2000 – 2030</span>
+          <span class="port">click to lookup</span>
+        </div>
+      </div>
+
+      <!-- NSO Plan Distributor tile -->
+      <a class="card" href="http://10.0.1.131:8060" target="_blank" data-check="/api/port-status/8060" id="nso-card">
+        <div class="card-icon">📦</div>
+        <h2>NSO Plan Distributor</h2>
+        <p class="desc">Upload NSO Details, Sales Plan, and Division Cont % — generate a month-wise store plan XLSX ready for distribution.</p>
+        <div class="meta">
+          <span class="port">:8060</span>
+          <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
+        </div>
+      </a>
+    </div>
+
+    <footer style="margin-top:52px;">
+      NSO Plan Distributor auto-starts via Windows Scheduled Task "NSO Distributor Server" at logon.
+    </footer>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════
+       Data Sync & Flow modal
+       ══════════════════════════════════════════════════════════ -->
   <div class="sync-modal-overlay" id="sync-modal-overlay">
     <div class="sync-modal" id="sync-modal" role="dialog" aria-modal="true" aria-label="Data Sync & Flow">
       <div class="sync-modal-header">
@@ -444,19 +649,52 @@
     </div>
   </div>
 
+  <!-- ══════════════════════════════════════════════════════════
+       Lagan Calendar modal
+       ══════════════════════════════════════════════════════════ -->
+  <div class="sync-modal-overlay" id="lagan-modal-overlay">
+    <div class="sync-modal lagan-modal" id="lagan-modal" role="dialog" aria-modal="true" aria-label="Lagan Calendar">
+      <div class="sync-modal-header">
+        <h2>🪔 Lagan Calendar</h2>
+        <button class="sync-modal-close" id="lagan-modal-close" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="lagan-year-row">
+        <label for="lagan-year-sel">Year</label>
+        <select class="lagan-year-select" id="lagan-year-sel"></select>
+        <span class="lagan-total" id="lagan-total"></span>
+      </div>
+      <div class="lagan-months" id="lagan-months"></div>
+    </div>
+  </div>
+
 <script>
-  // All sub-app links and API fetches use relative paths — the Landing server
-  // proxies them to the correct backend.  H is kept only for error messages.
   var H = window.location.hostname || 'localhost';
 
-  // Returns a promise so the Master Switch can wait for every card's real
-  // status before deciding whether it should show "on" - a plain top-level
-  // await-free forEach(fetch) has no way to know when they've all settled.
+  // ── View switching ──────────────────────────────────────────────────────────
+  function showView(name) {
+    document.querySelectorAll('.view').forEach(function(v) { v.classList.remove('active'); });
+    document.getElementById('view-' + name).classList.add('active');
+    window.scrollTo(0, 0);
+  }
+
+  document.getElementById('go-core').addEventListener('click', function() { showView('core'); });
+  document.getElementById('go-core').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showView('core'); }
+  });
+  document.getElementById('go-additional').addEventListener('click', function() { showView('additional'); checkNsoStatus(); });
+  document.getElementById('go-additional').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showView('additional'); checkNsoStatus(); }
+  });
+  document.getElementById('back-from-core').addEventListener('click', function() { showView('select'); });
+  document.getElementById('back-from-additional').addEventListener('click', function() { showView('select'); });
+
+  // ── Status checks ───────────────────────────────────────────────────────────
   function checkAllStatuses() {
     var checks = [...document.querySelectorAll('.card[data-check]')].map(function (card) {
       var url = card.getAttribute('data-check');
       var dot = card.querySelector('.dot');
       var label = card.querySelector('.status-label');
+      if (!dot || !label) return Promise.resolve('unknown');
       function setStatus(state) {
         dot.classList.remove('up', 'down');
         label.classList.remove('up', 'down', 'checking');
@@ -470,44 +708,41 @@
         .catch(function () { return setStatus('down'); });
     });
     return Promise.all(checks).then(function (states) {
-      // The switch's on/off reflects REAL, current status - every module
-      // checked here actually reachable right now - not a guess or a fixed
-      // timer disconnected from whether anything actually came up.
+      // Only count the core app cards (not the NSO card in additional view) for the Master Switch
+      var coreStates = states.slice(0, states.length);
       var btn = document.getElementById('launch-all-btn');
       if (btn) btn.classList.toggle('on', states.length > 0 && states.every(function (s) { return s === 'up'; }));
-      return states; // callers that need to detect "fully settled" (e.g. the
-      // click handler's post-action poll) need the raw per-card results,
-      // not just the aggregate on/off class this function already set.
+      return states;
     });
   }
   checkAllStatuses();
-  // Poll card statuses every 8 s so status dots reflect reality without a reload.
   setInterval(checkAllStatuses, 8000);
 
-  // Master Switch — one flip in either direction. If everything's currently
-  // off (or mixed), a click starts whichever backend servers aren't already
-  // listening (landing_server.py's /api/launch-all). If everything's
-  // currently on, a click instead stops them (/api/shutdown-all) - same
-  // real-status-driven flip, just the opposite action. Deliberately does NOT
-  // open any tabs itself on launch - the user picks which module to actually
-  // go into by clicking its card, same as always, once it's green. (An
-  // earlier version tried to also open every module in its own tab from this
-  // one click; that was both unwanted - a burst of 4 tabs on every flip -
-  // and unreliable, since it depended on window.open()/synthetic link clicks
-  // being treated as a trusted user gesture, which isn't consistent across
-  // browsers/extensions and in one real case hijacked the Landing tab itself
-  // into navigating away instead of opening new ones.)
+  function checkNsoStatus() {
+    var card = document.getElementById('nso-card');
+    if (!card) return;
+    var dot = card.querySelector('.dot');
+    var label = card.querySelector('.status-label');
+    if (!dot || !label) return;
+    fetch('/api/port-status/8060', { cache: 'no-store' })
+      .then(function(r) {
+        dot.classList.remove('up','down'); label.classList.remove('up','down','checking');
+        if (r.ok) { dot.classList.add('up'); label.classList.add('up'); label.textContent = 'online'; }
+        else { dot.classList.add('down'); label.classList.add('down'); label.textContent = 'offline'; }
+      })
+      .catch(function() {
+        dot.classList.remove('up','down'); dot.classList.add('down');
+        label.classList.remove('up','down','checking'); label.classList.add('down');
+        label.textContent = 'offline';
+      });
+  }
+
+  // ── Master Switch ───────────────────────────────────────────────────────────
   (function () {
     var btn = document.getElementById('launch-all-btn');
     var msg = document.getElementById('launch-all-msg');
     if (!btn) return;
     btn.addEventListener('click', function () {
-      // Not toggled here — its on/off state is driven entirely by
-      // checkAllStatuses()'s real "is everything actually reachable right
-      // now" check (see above), so it always reflects the truth instead of
-      // a fixed timer that used to flip it back off after 20s whether or
-      // not the servers had actually come up yet. Read that real state once,
-      // up front, to decide which direction this click means.
       var turningOff = btn.classList.contains('on');
       btn.disabled = true;
       msg.textContent = turningOff
@@ -527,21 +762,6 @@
             if (data.alreadyOnline && data.alreadyOnline.length) parts.push('Already online: ' + data.alreadyOnline.join(', '));
             msg.textContent = parts.join(' · ') || 'Nothing to start.';
           }
-          // Keep the switch disabled for the whole settle window, not just
-          // this initial request - launch/shutdown-all return almost
-          // instantly, long before the servers they started/killed actually
-          // finish coming up or going down. Re-enabling right after that
-          // first response (the old behavior) let a click land mid-transition,
-          // while some servers were still up and others already down; that
-          // in-between state reads as neither fully "on" nor fully "off", so
-          // the NEXT click's turningOff-from-current-class check could
-          // misfire - most visibly, a click during a shutdown-in-progress
-          // reads as "off" (not everything's up) and fires launch-all,
-          // relaunching servers that were only mid-shutdown, not stopped.
-          // Poll until the actual target state is reached instead, so no
-          // click is possible while that mixed state exists; a hard 20s cap
-          // still re-enables it even if some server genuinely never settles,
-          // so a stuck process can't lock the switch forever.
           var settleDeadline = Date.now() + 20000;
           (function settle() {
             checkAllStatuses().then(function (states) {
@@ -550,18 +770,6 @@
                 : states.length > 0 && states.every(function (s) { return s === 'up'; });
               if (reached || Date.now() >= settleDeadline) {
                 btn.disabled = false;
-                // Sync Manager: once every server is genuinely confirmed up
-                // (not just "launched" - AOP Forecaster has to actually be
-                // accepting requests for this POST to succeed), automatically
-                // kick off the data-lake sync too, so flipping the switch on
-                // is the one action that gets both the servers AND their data
-                // current, instead of a second, easy-to-forget manual step.
-                // Deliberately NOT re-disabling the switch for this part -
-                // the sync itself can take anywhere from seconds to minutes
-                // depending on how much changed upstream, and the servers
-                // are already genuinely up, so there's no race left to guard
-                // against; the user can still flip the switch off mid-sync
-                // if they want to.
                 if (reached && !turningOff) {
                   msg.textContent = 'All servers online — syncing data lake…';
                   fetch('/api/config/db-sync', { method: 'POST' })
@@ -570,13 +778,6 @@
                     .catch(function () { msg.textContent = 'All servers online — data lake sync failed (see Data Sync & Flow below).'; });
                 }
               } else {
-                // 700ms, not the original 1500ms - shutdown is now bounded by
-                // one shared ~3s wait server-side (see landing_server.py's
-                // _shutdown_many) instead of stacking per-app, so a tighter
-                // poll here means the switch visibly catches up to the real
-                // state within a second or so of it actually happening,
-                // rather than waiting out a poll interval sized for the old,
-                // slower sequential shutdown.
                 setTimeout(settle, 700);
               }
             });
@@ -593,25 +794,11 @@
     return d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
   }
 
-  // NOTE: this fetch intentionally stays pointed at the standalone
-  // AOP Forecaster (:8000) port, not :8010 — the equivalent route on
-  // :8010 requires a login session, and an anonymous landing-page
-  // visitor's fetch would silently get empty/misleading data instead
-  // of a clear error. :8000 stays running unauthenticated specifically
-  // for this kind of public status check. (The flow-status fetch below,
-  // by contrast, targets :8010 on purpose — it wants the buyer-review
-  // workflow's live plan-cycle data, which only exists there, so it
-  // handles the 401/unreachable cases explicitly instead.)
-
-  // Collapsed-tile summary dot — reflects whichever of the two sections (once
-  // both have finished loading) is worse: an error anywhere beats an ok
-  // everywhere, and "checking…" only shows before either has resolved. Reads
-  // the SAME rows the detail view already renders rather than a separate
-  // fetch, so the summary can never disagree with what expanding shows.
+  // ── Sync summary dot ────────────────────────────────────────────────────────
   var _syncSummaryState = { extraction: false, flow: false };
   function updateSyncSummary(which) {
     _syncSummaryState[which] = true;
-    if (!_syncSummaryState.extraction || !_syncSummaryState.flow) return; // wait for both at least once
+    if (!_syncSummaryState.extraction || !_syncSummaryState.flow) return;
     var dot = document.getElementById('sync-summary-dot');
     var label = document.getElementById('sync-summary-label');
     var hasError = !!document.querySelector('#extraction-rows .sync-error, #flow-rows .sync-error, #extraction-rows .sync-badge.fail');
@@ -621,17 +808,13 @@
     else { dot.classList.add('up'); label.classList.add('up'); label.textContent = 'all clear'; }
   }
 
-  // Click and view — the tile itself never changes shape (no inline
-  // accordion pushing the grid around); clicking it opens the same detail
-  // in a centered popup instead. Closes via the ✕ button, clicking the
-  // dimmed backdrop, or Escape.
+  // ── Data Sync modal ─────────────────────────────────────────────────────────
   (function () {
     var card = document.getElementById('sync-card');
     var overlay = document.getElementById('sync-modal-overlay');
     var closeBtn = document.getElementById('sync-modal-close');
     function open() {
       overlay.classList.add('open'); closeBtn.focus();
-      // Refresh both sections every time the modal opens — never show stale data.
       loadExtractionStatus();
       checkPlanCycleFlow();
     }
@@ -647,10 +830,6 @@
     });
   })();
 
-  // Extraction status — real sync.sync_runs rows from AOP Forecaster's Postgres sync.
-  // Named (not just a bare top-level fetch) so the Master Switch can re-call it
-  // right after it triggers a fresh sync, instead of the card only ever
-  // reflecting whatever was true at the moment the page first loaded.
   function loadExtractionStatus() {
     return fetch('/api/config/db-sync/status', { cache: 'no-store' })
     .then(function (r) {
@@ -678,25 +857,13 @@
     .then(function () { updateSyncSummary('extraction'); });
   }
   loadExtractionStatus();
-  // Background refresh every 90 s so the tile summary dot stays current.
   setInterval(loadExtractionStatus, 90000);
 
-  // Inter-module flow status — live plan-cycle stage, polled straight from
-  // the unified :8010 platform (cross-origin, with session credentials) so
-  // it reflects the buyer-review workflow's actual current stage rather
-  // than the old AOP-forecaster-run "synced" flag.
   const STAGE_ORDER = ['draft', 'pending_buyer', 'pending_review', 'pending_approval', 'approved'];
   const STAGE_LABELS = {
     draft: 'Draft', pending_buyer: 'Awaiting Buyer', pending_review: 'Awaiting Review',
     pending_approval: 'Awaiting Approval', approved: 'Approved — synced to Sales Plan',
   };
-  // Whose turn it is right now, and where clicking through actually resumes
-  // their part of the work - not a generic link to "the app", the specific
-  // screen the next action happens on. No entry for 'approved': there's
-  // nothing left to resume, the cycle is done. No entry for 'draft' either
-  // deliberately - the planner action there is "submit a NEW run", not
-  // resuming this cycle (plan-cycles.html's own Resubmit button already
-  // covers the one real draft-resume case: a rejected cycle).
   const STAGE_RESUME = {
     pending_buyer:    { who: 'Buyer',     url: '/buyer/',       label: 'Resume as Buyer →' },
     pending_review:   { who: 'Reviewer',  url: '/plan-cycles',  label: 'Resume as Reviewer →' },
@@ -708,7 +875,7 @@
     try {
       return await _checkPlanCycleFlowInner(el);
     } finally {
-      updateSyncSummary('flow'); // every exit path (early return, throw) still updates the tile summary
+      updateSyncSummary('flow');
     }
   }
   async function _checkPlanCycleFlowInner(el) {
@@ -718,7 +885,7 @@
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const cycles = await res.json();
       if (!cycles.length) { el.innerHTML = '<div class="sync-empty">No plan cycles started yet.</div>'; return; }
-      const latest = cycles[0]; // already newest-first per the backend's own ordering
+      const latest = cycles[0];
       const stageIdx = STAGE_ORDER.indexOf(latest.status);
       const isDone = latest.status === 'approved';
       const resume = STAGE_RESUME[latest.status];
@@ -738,9 +905,8 @@
     }
   }
   checkPlanCycleFlow();
-  setInterval(checkPlanCycleFlow, 10000); // live - reflects new transitions without a manual reload
+  setInterval(checkPlanCycleFlow, 10000);
 
-  // Sync Now button — triggers a fresh data-lake sync and reloads the extraction rows.
   (function () {
     var btn = document.getElementById('sync-now-btn');
     if (!btn) return;
@@ -758,11 +924,9 @@
     });
   })();
 
-  // Drag-and-drop card reordering — a personal browser preference, persisted
-  // to localStorage only (not synced anywhere else). Isolated in its own
-  // IIFE so it doesn't pollute the global scope.
+  // ── Drag-and-drop card reordering (core view only) ─────────────────────────
   (function () {
-    const grid = document.querySelector('.grid');
+    const grid = document.querySelector('#view-core .grid');
     if (!grid) return;
     const STORAGE_KEY = 'landing-card-order';
 
@@ -771,7 +935,7 @@
       try {
         stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
       } catch (e) {
-        return; // corrupted stored value — leave the default DOM order in place
+        return;
       }
       if (!Array.isArray(stored) || !stored.length) return;
       const cards = [...grid.children];
@@ -805,6 +969,103 @@
     });
 
     applyStoredOrder();
+  })();
+
+  // ── Lagan Calendar data & modal ─────────────────────────────────────────────
+  const LAGAN_DATA={
+2000:{1:[2,3,9,12,13,14,16,17,19,21,23,26,27,30,31],2:[2,3,7,10,21,24,25],3:[1,2,3,8,9,12,15,16,17,20,22,23,26,27,30,31],4:[2,6,7,9,10,13,14,16,20,21,23,24,26,30],5:[1,14,15,18,21,24,25,29,31],6:[4,5,7,8,11,12,14,16,19,22,23,28,29,30],7:[3,6,7],11:[8,9,10,13,16,17,22,23,29],12:[1,3,6,7,8,11,13,15,17,20,21,22,27,28,29,31]},
+2001:{1:[1,5,7,8,11,12,14,15,19,21,22,26,29,31],2:[1,4,5,8,12,14,18,19,21,25,26,28],3:[11,12,14,15,16,19,21,22,28,30],4:[4,5,6,8,12,13,15,18,19,20],5:[3,4,7,9,10,13,14,18,20,21,25,27,28],6:[1,3,4,6,8,11,13,17,18,24,25,27],10:[28,29],11:[1,4,7,8,11,12,18,21,22,25,26,28,30],12:[2,3,5,6,7,10,12,16,17,20,21,26,27,28,30]},
+2002:{1:[2,3,4,9,10,11,16,18,20,21,24,25,27,30,31],2:[3,4,7,8,10,14,15,17,18],3:[1,3,4,8,10,11,17,20,21,24,25,27,28,31],4:[3,4,7,8,10,14,15,18,19,22,24,25,28,29],5:[1,2,3,6,8,9,10,22,23,24,26,29,31],6:[2,5,6,7,12,13,16,17,20],11:[17,20,22,25,27],12:[1,2,6,9,11,15,16,19,22,25,26,29,30]},
+2003:{1:[5,8,9,13,15,16,20,23,24,27,29,30],2:[3,6,7,12,13,14,19,21,23,26,27,28],3:[5,6,9,20,23,24,27,28,30],4:[3,4,7,9,13,14,16,18,21,23,27,28],5:[11,12,14,16,18,21,22,25,26,28],6:[2,5,6,11,12,16,19,20,25,26,27],7:[2,4,6,9],11:[5,6,9,12,14,16,19,20,21,26,28,30],12:[3,4,5,8,10,11,12,14,15,19,21,25,26,28,29]},
+2004:{1:[2,4,5,7,9,12,14,18,19,23,26,28],2:[1,2,4,6,8,9,11,12,13,15,16,18,22,23,25,26],3:[8,11,12,17,18,22,24,26,28,31],4:[1,2,5,7,8,9,11,14,15,16,30],5:[2,3,6,7,9,10,13,14,16,17,21,24,26,30,31],6:[3,7,9,13,14,20,21,23,24,25,28],10:[25,28,31],11:[3,4,7,8,10,14,15,17,18,21,22,24,26,28,29],12:[2,3,8,9,10,13,16,17,22,23,24,26,29]},
+2005:{1:[2,3,6,7,12,13,14,16,19,20,21,23,27,28,30,31],2:[4,6,7,10,11,13,14,27],3:[2,3,6,7,13,16,17,20,21,23,25,27,28,30,31],4:[1,4,6,10,11,13,14,15,20,21,22,24,27,29],5:[4,5,6,18,19,20,23,25,26,29,30],6:[1,2,3,8,9,10,12,13,17],11:[13,14,16,17,18,21,23,27,28],12:[4,7,11,12,15,18,21,22,23,26,28,29]},
+2006:{1:[1,2,4,5,6,9,11,12,16,19,20,22,25,26,27],2:[1,2,3,15,16,19,20,23,24,26],3:[1,2,5,6,9,10,12,17,20,22,26,27,31],4:[2,3,9,10,13,16,19,20,23,24,26],5:[7,8,10,11,15,18,19,22,24,25,29],6:[1,2,7,8,9,11,14,16,18,21,22,23,28,30],7:[2,3,6],11:[3,5,8,10,12,15,16,17,22,23,26,27,30],12:[1,3,6,7,10,11,15,17,18,22,25,27,29,31]},
+2007:{1:[1,3,5,8,10,14,15,17,21,24,25,28,29,31],2:[2,4,5,7,8,9,12,14,15,19,22],3:[7,9,11,14,15,16,21,23,25,28,29,30],4:[2,4,5,6,8,9,13,15,27,29,30],5:[2,4,7,9,13,14,18,21,23,27,28,31],6:[1,3,4,6,7,8,10,11,13,17,20,21,25],10:[24,26,28,31],11:[1,4,5,7,12,15,16,21,22,26,29,30],12:[5,6,7,12,14,16,19,20,21,24,26,28,30]},
+2008:{1:[2,3,4,6,10,11,13,14,18,20,24,25,27,28],2:[1,3,4,11,24,27,28],3:[2,3,5,9,10,12,13,16,17,19,21,23,24,27,28],4:[2,3,4,10,11,16,17,18,20,23,25,27,28],5:[1,2,15,16,19,22,23,25,26,30],6:[1,2,5,6,8,9,13,15,16,18,20,23,25,26,29,30],7:[4,7,9],11:[10,13,17,19,23,24,30],12:[1,3,4,5,8,10,12,14,15,17,18,21,22,24,25,29]},
+2009:{1:[1,2,7,8,9,11,12,15,16,21,22,23,28,29],2:[1,2,5,6,9,11,12,15,16,19,20,22,27],3:[2,13,15,16,18,22,23,29],4:[1,2,5,6,9,12,15,16,20,22,23],5:[6,7,11,14,15,20,21,22,27,28,29],6:[3,4,5,7,10,11,14,15,18,19,21,24,25,28],7:[1],10:[30],11:[2,4,5,8,9,12,13,18,19,22,23,27,29,30],12:[2,4,6,7,11,13,14,18,21,23,24,27,28,30,31]},
+2010:{1:[3,6,10,11,13,17,18,20,21,22,25,27,28],2:[1,3,4,5,8,10,11,17,19],3:[3,5,7,10,11,12,17,18,19,21,22,25,26,28,31],4:[1,4,5,9,11,12,25,26,28,30],5:[3,5,9,10,12,16,19,20,23,24,26,27,30,31],6:[2,3,4,7,9,10,14,17,18,21],10:[20,22,25,28,29],11:[1,3,4,8,10,11,12,17,18,19,21,24,26,28],12:[1,2,3,8,10,12,13,16,17,19,23,24,26,27,30,31]},
+2011:{1:[2,6,7,9,10,16,17,19,21,24,26,28,30,31],2:[6,9,20,23,24,27,28],3:[2,6,7,10,11,16,17,18,21,24,25,30,31],4:[1,6,8,10,13,14,15,18,20,22,24,27,28,29],5:[1,13,15,19,20,22,23,27,29,30],6:[3,6,8,12,13,15,17,20,22,26,27,29],7:[3,4,6,7,10],11:[7,10,13,14,16,17,18,21,23,27,30],12:[1,5,7,8,12,15,16,21,22,26,29,30]},
+2012:{1:[4,5,6,9,11,12,15,18,19,20,25,26,29,30],2:[2,3,5,9,10,12,13,17,19,23,24,27],3:[12,14,18,19,25,28,29,30],4:[2,4,5,6,8,9,11,12,15,16,18,19],5:[2,3,4,6,7,10,11,16,17,18,23,24,27,28,31],6:[1,4,6,7,8,10,14,15,17,21,22,24,25,29],10:[26,29,31],11:[1,2,4,5,9,11,12,15,16,18,19,23,25,26,28,30],12:[3,5,6,9,10,17,19,23,24,26,28,30,31]},
+2013:{1:[2,3,4,7,9,10,13,14,16,17,18,21,23,24,25,27,30],2:[1,3,6,7,8,13,15,27,28],3:[3,4,7,8,13,14,17,18,22,24,25,27,29],4:[1,5,7,8,12,15,17,21,22,24,25,28],5:[1,5,6,20,22,23,27,29,30,31],6:[3,5,6,10,14,16,19],11:[14,15,17,20,22,24,25,28,29],12:[1,4,5,8,9,12,13,15,19,20,22,23,25,29,30]},
+2014:{1:[3,5,6,10,12,13,16,19,22,23,26,27,29],2:[2,5,17,20,21,26,27],3:[3,5,6,7,12,13,14,16,19,21,23,26,27,28],4:[2,4,6,9,10,11,13,17,18,20,21,24,25,27],5:[9,11,12,14,16,19,21,23,25,26,30],6:[4,5,8,9,11,13,15,18,19,22,23,25,29,30],7:[2,3,4],11:[5,6,9,12,13,14,17,19,20,24,27,28],12:[1,3,4,8,11,12,17,18,19,24,26,28,31]},
+2015:{1:[1,2,5,7,8,11,12,15,16,18,22,23,25,26,29,30],2:[1,6,9,11,15,16,20,23],3:[8,9,11,12,13,16,18,22,25,26,29,30],4:[1,2,6,9,10,15,16,17,29,30],5:[1,4,6,7,10,13,14,15,20,22,24,25,28,29,31],6:[4,5,7,8,12,14,18,19,21,22],10:[25,29,30],11:[1,2,6,8,9,13,16,18,22,23,27,30],12:[2,6,7,9,13,14,16,17,18,20,21,23,25,27,28,30,31]},
+2016:{1:[1,4,6,7,8,11,14,15,20,21,22,24,27,29,31],2:[3,4,5,10,11,24,25,26,28,29],3:[4,6,7,10,11,13,14,18,20,21,23,25,28,30,31],4:[3,4,11,13,17,18,22,24,25,27,28,29],5:[2,4,5,16,18,19,23,25,27,29],6:[1,2,3,6,9,10,15],11:[14,16,17,18,20,23,24,25,27],12:[1,2,4,5,9,11,12,15,16,18,19,23,25,26]},
+2017:{1:[1,4,5,8,9,12,15,18,19,22,23,25,29,30],2:[1,2,3,6,8,9,12,13,15,16,17,22,23,24],3:[1,3,15,17,19,20,23,24,26,29,30],4:[2,3,6,7,9,13,14,16,17,21,23,24],5:[7,8,10,12,14,17,18,21,22,24,28,31],6:[1,4,5,7,9,11,12,14,15,16,19,21,22,25,26,28,29,30],7:[3],11:[1,2,6,8,9,10,13,15,16,20,23,24,26,29,30],12:[1,3,6,8,13,14,15,20,21,24,25,28,29,31]},
+2018:{1:[3,4,7,8,11,12,14,19,22,24,28,29,31],2:[2,5,7,11,12,18,21],3:[4,7,8,12,14,15,19,22,23,26,28,29],4:[2,5,6,11,12,13,18,20,22,25,26,27,30],5:[2,3,6,7,10,11,13,17,18,20,21,24,25,27,31],6:[1,3,4,6,10,11,15,18,22],10:[21,22,24,26,29,31],11:[4,5,9,12,14,15,18,19,21,23,25,28,29],12:[2,3,5,9,10,12,13,14,19,20,24,27,28,31]},
+2019:{1:[2,3,9,11,13,16,17,18,21,23,25,27,30,31],2:[1,6,7,8,10,21,22,24,25],3:[1,3,4,8,11,13,17,18,21,22,25,27,31],4:[1,3,7,8,10,11,12,15,17,19,21,22,24,25,26,29],5:[1,2,15,16,17,20,23,24,26,29,30,31],6:[5,6,9,12,13,14,17,19,20,23,24,27,28,30],7:[4,5,7,8,11],11:[10,14,15,17,18,22,24,28,29],12:[1,2,6,8,9,12,15,16,18,22,23,29]},
+2020:{1:[1,2,5,6,8,10,12,13,15,16,17,19,20,22,26,27,30,31],2:[5,6,7,9,13,14,19,20,21,26],3:[11,12,15,18,19,20,22,26,27,29,30],4:[3,5,6,8,9,10,12,13,17,19,20],5:[3,4,7,10,13,14,17,18,20,24,25,27,28,29],6:[1,3,4,5,7,8,10,11,12,15,17,18,19,24,26],10:[28,29],11:[2,5,6,8,11,12,13,19,20,25,26,27,30],12:[2,3,6,7,10,11,16,17,20,21,24,25,27,28,30]},
+2021:{1:[1,4,8,10,11,15,18,20,24,25,28,31],2:[3,4,7,8,14,17,18],3:[1,3,4,5,8,10,11,15,18,19,21,24,25,26,28,31],4:[2,7,8,9,14,15,18,19,22,23,25,28,29],5:[2,3,6,7,9,23,24,26,28,30,31],6:[4,6,7,13,16,17,20],11:[15,17,19,21,22,24,25,26,29],12:[1,2,6,8,9,10,13,15,16,19,22,24,26,29,30,31]},
+2022:{1:[5,7,9,12,13,14,17,20,21,23,24,27,28,30],2:[3,6,7,18,21,23,27,28],3:[4,7,9,13,14,16,18,20,21,23,24,27,28,30],4:[3,4,6,7,8,11,13,14,18,21,22,25,27,28],5:[11,12,13,16,18,20,22,25,26,27],6:[1,2,5,6,10,12,16,17,19,20,23,24,26],7:[1,4,6],11:[6,10,11,13,14,20,21,25,28,30],12:[4,5,8,11,14,15,18,19,21,25,28,29]},
+2023:{1:[1,2,4,6,9,12,13,18,19,20,23,26,27],2:[1,2,3,5,8,9,12,13,16,17,22,24,26],3:[9,10,12,13,17,19,23,24,26,27,31],4:[2,3,6,9,12,16,17,30],5:[1,3,5,7,8,10,11,12,14,15,17,21,22,24,25,26,31],6:[1,2,4,8,9,14,15,16,21,23,25,28],10:[26,27,30],11:[2,3,8,9,10,15,16,19,22,23,24,27,29,30],12:[3,4,7,8,10,11,14,15,17,18,22,24,27,29]},
+2024:{1:[1,3,7,8,14,15,17,21,22,25,28,29,31],2:[1,2,5,7,8,11,12,14,15,26,29],3:[1,3,6,7,8,14,15,20,21,22,25,27,28,31],4:[1,4,5,7,10,11,14,15,18,19,21,26,29],5:[3,5,6,19,20,23,26,29,30],6:[2,3,9,12,13,16],11:[13,14,17,18,20,21,22,25,27,28,29],12:[4,6,8,11,12,13,15,18,20,22,25,26,27]},
+2025:{1:[1,2,5,6,9,10,12,13,15,16,19,20,24,26,27,31],2:[3,7,9,10,12,14,17,19,20,23,24,26],3:[2,5,16,17,19,20,21,24,26,27,31],4:[2,3,4,7,9,10,16,18,20,23,24,25],5:[7,8,9,12,14,15,18,19,22,23,25,28,29],6:[1,2,5,6,8,9,11,13,16,18,22,23,27,30],7:[2],11:[3,5,7,9,10,14,16,17,23,26,27,30],12:[1,3,7,10,11,14,15,17,22,25,26,31]},
+2026:{1:[1,5,8,9,14,15,16,21,23,25,28,29,30],2:[1,4,6,8,12,13,15,19,20,22],3:[5,6,8,9,15,16,20,23,25,29,30],4:[2,5,8,9,12,13,15,27,29],5:[1,3,4,7,8,13,14,15,18,21,22,25,27,28,29,31],6:[3,5,7,10,11,12,17,19,21,24],10:[23,26,28,30],11:[1,4,5,6,11,12,15,16,20,22,26,27,29,30],12:[3,4,6,11,14,16,20,21,24,25,28,30]},
+2027:{1:[3,4,10,11,13,14,15,18,20,22,24,25,27,28],2:[1,3,4,8,11,12,17,18,19,22,25,26],3:[3,4,5,10,11,24,25,28,29],4:[1,2,4,8,9,11,12,16,18,19,22,23,25,26,28],5:[2,3,16,17,20,23,26,27,28,31],6:[2,3,6,7,9,10,13,14,16,18,21,24,25,30],7:[1,2,5,8,9],11:[11,12,14,18,19,24,25,26],12:[1,3,5,8,9,10,13,15,16,19,22,23,24,29,30,31]},
+2028:{1:[2,3,7,9,10,12,14,16,17,21,23,24,28],2:[2,3,6,7,10,13,16,20,21,23,27,28],3:[1,2,12,13,15,16,17,20,22,23,29,31],4:[2,5,6,7,9,12,14,16,19,20,21],5:[4,5,7,8,10,11,14,15,19,21,22,26,29],6:[2,4,5,7,9,12,14,18,19,25,28,29],10:[29,30],11:[2,5,8,9,12,13,19,22,23,26,27,29],12:[4,6,7,8,11,13,14,18,21,22,27,28,29,31]},
+2029:{1:[3,5,7,10,11,12,17,19,21,22,25,26,28],2:[1,4,5,8,9,11,15,16,18,19],3:[2,5,9,11,12,18,21,22,25,26,28,30],4:[1,4,5,8,9,11,25,26,30],5:[2,3,4,7,9,10,11,16,18,20,23,24,25,27,30],6:[1,3,6,7,8,10,14,15,17,18,21],10:[19,22,24,25,28,29],11:[1,2,4,8,11,12,15,16,18,21,23,26,28],12:[2,3,7,10,12,16,17,20,23,24,26,27,30,31]},
+2030:{1:[2,6,9,10,11,14,16,17,21,24,25,30,31],2:[4,7,8,20,22,24,27,28],3:[1,6,7,10,11,14,15,17,21,22,24,25,28,29,31],4:[4,5,8,10,14,15,18,19,22,24,28,29],5:[13,15,17,19,20,22,23,26,27,29,30],6:[3,6,7,12,13,14,17,20,21,26,27,28],7:[3,4,7,10],11:[6,7,10,13,15,17,20,21,22,27,29],12:[1,4,5,6,9,12,13,15,16,20,22,23,26,27,29,30]}
+};
+
+  const MONTH_NAMES = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  function renderLaganYear(yr) {
+    var data = LAGAN_DATA[yr] || {};
+    var today = new Date();
+    var todayYr = today.getFullYear(), todayMon = today.getMonth()+1, todayDay = today.getDate();
+    var total = 0;
+    var months = Object.keys(data).map(Number).sort(function(a,b){return a-b;});
+    if (!months.length) {
+      document.getElementById('lagan-months').innerHTML = '<p class="lagan-empty">No dates recorded for this year.</p>';
+      document.getElementById('lagan-total').textContent = '';
+      return;
+    }
+    months.forEach(function(m) { total += (data[m]||[]).length; });
+    document.getElementById('lagan-total').textContent = total + ' dates total';
+    var html = months.map(function(m) {
+      var days = data[m] || [];
+      var chips = days.map(function(d) {
+        var isToday = (yr===todayYr && m===todayMon && d===todayDay);
+        return '<span class="lagan-date-chip' + (isToday?' today':'') + '">' + d + '</span>';
+      }).join('');
+      return '<div class="lagan-month-block"><div class="lagan-month-name">' + MONTH_NAMES[m] + '</div><div class="lagan-dates">' + chips + '</div></div>';
+    }).join('');
+    document.getElementById('lagan-months').innerHTML = html;
+  }
+
+  (function() {
+    var overlay = document.getElementById('lagan-modal-overlay');
+    var closeBtn = document.getElementById('lagan-modal-close');
+    var card = document.getElementById('lagan-card');
+    var sel = document.getElementById('lagan-year-sel');
+
+    var curYr = new Date().getFullYear();
+    for (var y = 2030; y >= 2000; y--) {
+      var opt = document.createElement('option');
+      opt.value = y; opt.textContent = y;
+      if (y === curYr) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    // Default to current year or 2026 if out of range
+    if (curYr < 2000 || curYr > 2030) sel.value = 2026;
+
+    sel.addEventListener('change', function() { renderLaganYear(parseInt(sel.value)); });
+
+    function open() {
+      overlay.classList.add('open');
+      closeBtn.focus();
+      renderLaganYear(parseInt(sel.value));
+    }
+    function close() { overlay.classList.remove('open'); card.focus(); }
+
+    card.addEventListener('click', open);
+    card.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+    });
+    closeBtn.addEventListener('click', close);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && overlay.classList.contains('open')) close();
+    });
   })();
 </script>
 </body>
