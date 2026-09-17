@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1236,17 +1236,13 @@
       if(!selYears.length) return 'No years selected';
       var rows=['Year,Month,Date,Day'];
       selYears.forEach(function(y){ ld(y).forEach(function(dates,mi){ dates.forEach(function(day){ rows.push(y+','+MFULL[mi]+','+day+','+DNAMES[new Date(y,mi,day).getDay()]); }); }); });
-      return rows.join('
-
-');
+      return rows.join('\r\n');
     }
     function genSummaryCSV(){
       if(!selYears.length) return 'No years selected';
       var rows=[['Year'].concat(MSHORT).concat(['Total']).join(',')];
       selYears.forEach(function(y){ var ms=ld(y),tot=ms.reduce(function(s,m){return s+m.length;},0); rows.push([y].concat(ms.map(function(m){return m.length;})).concat([tot]).join(',')); });
-      return rows.join('
-
-');
+      return rows.join('\r\n');
     }
     function showExportModal(title,csv){
       var ov=document.createElement('div'); ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px';
