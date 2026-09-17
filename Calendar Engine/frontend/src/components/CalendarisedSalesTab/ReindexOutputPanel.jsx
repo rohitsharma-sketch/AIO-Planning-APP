@@ -47,6 +47,8 @@ const KEY_SEP = '\u0001'
 
 const KEY_LABELS = { store: 'Store', division: 'Division' }
 
+const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
 export default function ReindexOutputPanel({ result, festivalByCluster, refDateByCluster }) {
   const [activeSub, setActiveSub] = useState('reindexed')
   const [search, setSearch] = useState('')
@@ -895,6 +897,19 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
         const rxYear = visibleMonthCols[0]?.slice(0, 4) ?? 'Reindexed'
         const { rows: smRows, grandActualMM, grandRxYM } = storeMonthComp
         const displayRows = filteredStoreMonthComp || smRows
+        // For each TY month column, collect the distinct LY months that clusters map into it.
+        // refDateByCluster[cluster][ym] gives the dominant LY month ("2026-02") for each TY month ym.
+        const lyMonthLabelByYM = {}
+        for (const ym of visibleMonthCols) {
+          const tyMonthIdx = parseInt(ym.slice(5, 7), 10) - 1
+          const lyMonths = new Set()
+          for (const cl of Object.keys(refDateByCluster || {})) {
+            const ly = refDateByCluster[cl]?.[ym]
+            if (ly) lyMonths.add(ly.slice(0, 7))
+          }
+          const parts = [...lyMonths].sort().map(m => MONTH_ABBR[parseInt(m.slice(5, 7), 10) - 1])
+          lyMonthLabelByYM[ym] = { label: parts.join('/'), isCross: parts.length > 0 && parts.some(p => p !== MONTH_ABBR[tyMonthIdx]) }
+        }
         return (
           <>
             <div className="scm-toolbar">
@@ -912,10 +927,29 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
             <div className="tbl-wrap">
               <table>
                 <thead>
-                  {/* Row 1: month group headers */}
+                  {/* Row 0: LY reference month labels – shows which LY month feeds each TY month column.
+                      Amber highlight when the LY month differs from the TY month (cross-month pull). */}
                   <tr>
-                    <th rowSpan={2}>Cluster</th>
-                    {kfHeaders.map(h => <th key={h} rowSpan={2}>{h}</th>)}
+                    <th rowSpan={3}>Cluster</th>
+                    {kfHeaders.map(h => <th key={h} rowSpan={3}>{h}</th>)}
+                    {visibleMonthCols.map(ym => {
+                      const { label, isCross } = lyMonthLabelByYM[ym] || { label: '', isCross: false }
+                      return (
+                        <th key={ym} colSpan={2} style={{
+                          ...num,
+                          borderLeft: '2px solid var(--border)',
+                          fontSize: '10px',
+                          background: isCross ? 'rgba(245,158,11,0.15)' : undefined,
+                          color: isCross ? '#d97706' : 'var(--muted)',
+                          fontWeight: isCross ? 600 : 400,
+                        }}>
+                          {label || ''}
+                        </th>
+                      )
+                    })}
+                  </tr>
+                  {/* Row 1: TY month group headers */}
+                  <tr>
                     {visibleMonthCols.map(ym => (
                       <th key={ym} colSpan={2} style={{ ...num, borderLeft: '2px solid var(--border)' }}>{ym}</th>
                     ))}
