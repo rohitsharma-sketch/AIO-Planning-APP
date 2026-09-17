@@ -83,7 +83,7 @@ function mappingsFromSavedPairs(pairs, festivals, refYr, futYr) {
       festivePosition: ri ? ri.position : null,
       festiveCategory: ri ? ri.category : (fi ? fi.category : 'Non-Festive'),
       futFestInfo: fi || null,
-      mappingType: '(loaded from library)', mappingPriority: null, score: 0,
+      mappingType: '', mappingPriority: null, score: 0,
       monthMatch: rd.getMonth() === fd.getMonth(),
       weekdayMatch: rd.getDay() === fd.getDay(),
       dateDiff: calDiff(rd, fd),
