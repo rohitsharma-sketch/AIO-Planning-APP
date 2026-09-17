@@ -401,13 +401,21 @@ def generate_plan(nso_df, div_df, plan_df, attr_df=None, gm_excl_df=None, apps_e
             log.append(f"  SKIP: {ref} not in Division Cont %")
             continue
 
-        # Reference store's plan rows (exclude Saree TANT)
-        ref_plan = plan_df[plan_df['Store Name'] == ref].copy()
-        ref_plan = ref_plan[
-            ~ref_plan['Department'].astype(str).str.contains('Saree TANT', case=False, na=False)
-        ]
+        # Use NSO's own plan rows when they exist — dept listing and proportions
+        # are then correct for this specific store (zeros in the plan = dept not stocked).
+        # Fall back to ref store's plan when the NSO has no own rows.
+        own_plan = plan_df[plan_df['Store Name'] == store]
+        if not own_plan.empty:
+            ref_plan = own_plan.copy()
+            log.append(f"  Own plan rows found: {len(ref_plan)} — using NSO's own dept mix")
+        else:
+            ref_plan = plan_df[plan_df['Store Name'] == ref].copy()
+            # Exclude SAREE_TANT from ref store proportions (underscore-safe)
+            ref_plan = ref_plan[
+                ~ref_plan['Department'].astype(str).str.upper().str.contains('SAREE_TANT', na=False)
+            ]
         if ref_plan.empty:
-            log.append(f"  SKIP: {ref} not in Sales Plan")
+            log.append(f"  SKIP: neither {store} nor {ref} found in Sales Plan")
             continue
 
         log.append(f"  Ref plan rows: {len(ref_plan)}")
