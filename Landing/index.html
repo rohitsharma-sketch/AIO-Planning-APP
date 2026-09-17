@@ -640,13 +640,13 @@
         </div>
       </div>
 
-      <!-- NSO Plan Distributor tile — href set dynamically so IP always matches the landing server -->
-      <a class="card" href="#" target="_blank" rel="noopener" data-check="/api/port-status/8060" id="nso-card">
+      <!-- NSO Plan Distributor tile — fixed LAN IP so link works from any device on the network -->
+      <a class="card" href="http://10.0.1.131:8060" target="_blank" rel="noopener" data-check="/api/port-status/8060" id="nso-card">
         <div class="card-icon">📦</div>
         <h2>NSO Plan Distributor</h2>
         <p class="desc">Upload NSO Details, Sales Plan, and Division Cont % — generate a month-wise store plan XLSX ready for distribution.</p>
         <div class="meta">
-          <span class="port">:8060</span>
+          <span class="port">10.0.1.131:8060</span>
           <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
         </div>
       </a>
@@ -1028,17 +1028,7 @@
     applyStoredOrder();
   })();
 
-  // ── NSO Plan Distributor — dynamic link (same hostname as landing page) ────
-  (function() {
-    var card = document.getElementById('nso-card');
-    if (!card) return;
-    var host = window.location.hostname || '10.0.1.131';
-    card.href = 'http://' + host + ':8060';
-    card.addEventListener('click', function(e) {
-      e.preventDefault();
-      window.open('http://' + (window.location.hostname || '10.0.1.131') + ':8060', '_blank', 'noopener');
-    });
-  })();
+  // NSO Plan Distributor link is fixed to LAN IP in HTML — no JS needed.
 
   // ── Lagan Calendar — Drik astronomical engine + UI ──────────────────────
   (function() {
