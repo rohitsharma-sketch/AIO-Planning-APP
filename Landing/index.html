@@ -420,8 +420,26 @@
 
   /* ── Lagan modal ── */
   .lagan-modal {
-    max-width: 540px;
+    max-width: 680px;
   }
+  /* Tabs */
+  .lagan-tabs {
+    display: flex; gap: 4px; margin: 14px 0 0;
+    border-bottom: 1px solid var(--card-border);
+    padding-bottom: 0;
+  }
+  .lagan-tab {
+    padding: 7px 16px 9px;
+    font-size: 13px; font-weight: 600; font-family: inherit;
+    background: none; border: none; border-bottom: 2px solid transparent;
+    color: var(--text-dim); cursor: pointer; margin-bottom: -1px;
+    transition: color .15s, border-color .15s;
+  }
+  .lagan-tab.active { color: var(--text); border-bottom-color: var(--bg-grad-a); }
+  .lagan-tab:hover:not(.active) { color: var(--text); }
+  .lagan-tab-pane { display: none; }
+  .lagan-tab-pane.active { display: block; }
+  /* Lookup tab */
   .lagan-year-row {
     display: flex; align-items: center; gap: 10px; margin: 16px 0 18px;
   }
@@ -448,23 +466,73 @@
     font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
     color: var(--text-dim); margin-bottom: 6px;
   }
-  .lagan-dates {
-    display: flex; flex-wrap: wrap; gap: 5px;
-  }
+  .lagan-dates { display: flex; flex-wrap: wrap; gap: 5px; }
   .lagan-date-chip {
-    font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums;
-    padding: 3px 10px; border-radius: 6px;
-    background: rgba(16,100,204,0.18);
-    border: 1px solid rgba(255,255,255,0.1);
-    color: var(--text);
-    min-width: 34px; text-align: center;
+    font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+    padding: 4px 11px; border-radius: 6px;
+    background: #1a3f80;
+    border: 1px solid #2e5bb8;
+    color: #d6e8ff;
+    min-width: 36px; text-align: center;
+    line-height: 1.3;
   }
   .lagan-date-chip.today {
-    background: rgba(34,197,94,0.2);
-    border-color: rgba(34,197,94,0.4);
-    color: var(--up);
+    background: rgba(34,197,94,0.25);
+    border-color: rgba(34,197,94,0.55);
+    color: #6ee7a0;
   }
   .lagan-empty { color: var(--text-dim); font-size: 13px; font-style: italic; }
+  /* Compare tab */
+  .lagan-compare-years {
+    display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 16px;
+    align-items: center;
+  }
+  .lagan-compare-years label { font-size: 12px; color: var(--text-dim); font-weight: 500; margin-right: 4px; }
+  .lagan-yr-check {
+    display: flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.05);
+    cursor: pointer; user-select: none; font-size: 12.5px; font-weight: 600; color: var(--text-dim);
+    transition: border-color .12s, background .12s, color .12s;
+  }
+  .lagan-yr-check input { display: none; }
+  .lagan-yr-check.selected {
+    border-color: #2e5bb8; background: #1a3f80; color: #d6e8ff;
+  }
+  .lagan-yr-check:hover:not(.selected) { border-color: rgba(255,255,255,0.28); color: var(--text); }
+  .lagan-compare-wrap { overflow-x: auto; }
+  .lagan-compare-table {
+    width: 100%; border-collapse: collapse; font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .lagan-compare-table th {
+    padding: 6px 10px; text-align: center; font-weight: 700;
+    color: var(--text-dim); font-size: 11px; letter-spacing: 0.06em;
+    text-transform: uppercase; border-bottom: 1px solid var(--card-border);
+    white-space: nowrap;
+  }
+  .lagan-compare-table th.col-month { text-align: left; }
+  .lagan-compare-table td {
+    padding: 7px 8px; border-bottom: 1px solid rgba(255,255,255,0.05);
+    vertical-align: top;
+  }
+  .lagan-compare-table td.col-month {
+    font-weight: 700; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--text-dim); white-space: nowrap; padding-right: 12px; min-width: 70px;
+  }
+  .lagan-compare-table td.col-dates { text-align: center; }
+  .lagan-compare-table .chip-row { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; }
+  .lagan-compare-table .chip {
+    font-size: 11.5px; font-weight: 700; padding: 2px 7px; border-radius: 5px;
+    background: #1a3f80; border: 1px solid #2e5bb8; color: #d6e8ff; min-width: 28px; text-align: center;
+  }
+  .lagan-compare-table .chip.today {
+    background: rgba(34,197,94,0.25); border-color: rgba(34,197,94,0.55); color: #6ee7a0;
+  }
+  .lagan-compare-table .no-dates { color: rgba(255,255,255,0.15); font-size: 11px; }
+  .lagan-compare-empty { color: var(--text-dim); font-size: 13px; font-style: italic; padding: 20px 0; text-align: center; }
+  .lagan-compare-hint { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
 </style>
 </head>
 <body>
@@ -658,12 +726,33 @@
         <h2>🪔 Lagan Calendar</h2>
         <button class="sync-modal-close" id="lagan-modal-close" type="button" aria-label="Close">✕</button>
       </div>
-      <div class="lagan-year-row">
-        <label for="lagan-year-sel">Year</label>
-        <select class="lagan-year-select" id="lagan-year-sel"></select>
-        <span class="lagan-total" id="lagan-total"></span>
+
+      <!-- Tab bar -->
+      <div class="lagan-tabs" role="tablist">
+        <button class="lagan-tab active" data-tab="lookup" role="tab" aria-selected="true">Lookup</button>
+        <button class="lagan-tab" data-tab="compare" role="tab" aria-selected="false">Compare</button>
       </div>
-      <div class="lagan-months" id="lagan-months"></div>
+
+      <!-- Lookup pane -->
+      <div class="lagan-tab-pane active" id="lagan-pane-lookup">
+        <div class="lagan-year-row">
+          <label for="lagan-year-sel">Year</label>
+          <select class="lagan-year-select" id="lagan-year-sel"></select>
+          <span class="lagan-total" id="lagan-total"></span>
+        </div>
+        <div class="lagan-months" id="lagan-months"></div>
+      </div>
+
+      <!-- Compare pane -->
+      <div class="lagan-tab-pane" id="lagan-pane-compare">
+        <div class="lagan-compare-years" id="lagan-compare-years">
+          <label>Years:</label>
+        </div>
+        <p class="lagan-compare-hint" id="lagan-compare-hint"></p>
+        <div class="lagan-compare-wrap">
+          <div id="lagan-compare-table"></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1007,7 +1096,9 @@
 };
 
   const MONTH_NAMES = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+  const MONTH_SHORT  = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+  // ── Lookup tab ────────────────────────────────────────────────────────────
   function renderLaganYear(yr) {
     var data = LAGAN_DATA[yr] || {};
     var today = new Date();
@@ -1032,12 +1123,100 @@
     document.getElementById('lagan-months').innerHTML = html;
   }
 
+  // ── Compare tab ───────────────────────────────────────────────────────────
+  var _compareSelected = [];
+
+  function renderCompare() {
+    var today = new Date();
+    var todayYr = today.getFullYear(), todayMon = today.getMonth()+1, todayDay = today.getDate();
+    var hint = document.getElementById('lagan-compare-hint');
+    var container = document.getElementById('lagan-compare-table');
+
+    if (!_compareSelected.length) {
+      hint.textContent = 'Pick one or more years above to start comparing.';
+      container.innerHTML = '';
+      return;
+    }
+    if (_compareSelected.length > 6) {
+      hint.textContent = 'Showing first 6 selected years.';
+    } else {
+      hint.textContent = _compareSelected.length === 1 ? '1 year selected.' : _compareSelected.length + ' years selected.';
+    }
+
+    var years = _compareSelected.slice(0, 6).sort(function(a,b){return a-b;});
+
+    // Collect all months that have data in at least one selected year
+    var monthSet = new Set();
+    years.forEach(function(yr) {
+      Object.keys(LAGAN_DATA[yr]||{}).forEach(function(m){ monthSet.add(Number(m)); });
+    });
+    var allMonths = Array.from(monthSet).sort(function(a,b){return a-b;});
+
+    if (!allMonths.length) {
+      container.innerHTML = '<div class="lagan-compare-empty">No auspicious dates found for the selected years.</div>';
+      return;
+    }
+
+    var thead = '<thead><tr><th class="col-month">Month</th>' +
+      years.map(function(yr) { return '<th>' + yr + '</th>'; }).join('') +
+      '</tr></thead>';
+
+    var tbody = '<tbody>' + allMonths.map(function(m) {
+      var cells = years.map(function(yr) {
+        var days = (LAGAN_DATA[yr]||{})[m] || [];
+        if (!days.length) return '<td class="col-dates"><span class="no-dates">—</span></td>';
+        var chips = days.map(function(d) {
+          var isToday = (yr===todayYr && m===todayMon && d===todayDay);
+          return '<span class="chip' + (isToday?' today':'') + '">' + d + '</span>';
+        }).join('');
+        return '<td class="col-dates"><div class="chip-row">' + chips + '</div></td>';
+      }).join('');
+      return '<tr><td class="col-month">' + MONTH_SHORT[m] + '</td>' + cells + '</tr>';
+    }).join('') + '</tbody>';
+
+    container.innerHTML = '<table class="lagan-compare-table">' + thead + tbody + '</table>';
+  }
+
+  function buildCompareYearPills() {
+    var container = document.getElementById('lagan-compare-years');
+    var curYr = new Date().getFullYear();
+    // Pre-select current year and next year as defaults
+    _compareSelected = [];
+    if (curYr >= 2000 && curYr <= 2030) _compareSelected.push(curYr);
+    if (curYr+1 <= 2030) _compareSelected.push(curYr+1);
+
+    for (var y = 2000; y <= 2030; y++) {
+      var label = document.createElement('label');
+      label.className = 'lagan-yr-check' + (_compareSelected.indexOf(y) >= 0 ? ' selected' : '');
+      label.dataset.year = y;
+      var cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.value = y;
+      cb.checked = (_compareSelected.indexOf(y) >= 0);
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(y));
+      label.addEventListener('click', function(e) {
+        e.preventDefault();
+        var yr = parseInt(this.dataset.year);
+        var idx = _compareSelected.indexOf(yr);
+        if (idx >= 0) { _compareSelected.splice(idx, 1); this.classList.remove('selected'); this.querySelector('input').checked = false; }
+        else { _compareSelected.push(yr); this.classList.add('selected'); this.querySelector('input').checked = true; }
+        renderCompare();
+      });
+      container.appendChild(label);
+    }
+  }
+
+  // ── Tab switching & modal lifecycle ───────────────────────────────────────
   (function() {
     var overlay = document.getElementById('lagan-modal-overlay');
     var closeBtn = document.getElementById('lagan-modal-close');
     var card = document.getElementById('lagan-card');
     var sel = document.getElementById('lagan-year-sel');
+    var tabs = document.querySelectorAll('.lagan-tab');
+    var panes = document.querySelectorAll('.lagan-tab-pane');
+    var compareBuilt = false;
 
+    // Populate year selector (lookup)
     var curYr = new Date().getFullYear();
     for (var y = 2030; y >= 2000; y--) {
       var opt = document.createElement('option');
@@ -1045,17 +1224,35 @@
       if (y === curYr) opt.selected = true;
       sel.appendChild(opt);
     }
-    // Default to current year or 2026 if out of range
     if (curYr < 2000 || curYr > 2030) sel.value = 2026;
-
     sel.addEventListener('change', function() { renderLaganYear(parseInt(sel.value)); });
+
+    // Tab clicks
+    tabs.forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        var target = this.dataset.tab;
+        tabs.forEach(function(t) { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+        panes.forEach(function(p) { p.classList.remove('active'); });
+        this.classList.add('active'); this.setAttribute('aria-selected','true');
+        document.getElementById('lagan-pane-' + target).classList.add('active');
+        if (target === 'compare' && !compareBuilt) { buildCompareYearPills(); compareBuilt = true; renderCompare(); }
+      });
+    });
 
     function open() {
       overlay.classList.add('open');
       closeBtn.focus();
       renderLaganYear(parseInt(sel.value));
     }
-    function close() { overlay.classList.remove('open'); card.focus(); }
+    function close() {
+      overlay.classList.remove('open');
+      // Reset to Lookup tab
+      tabs.forEach(function(t) { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+      panes.forEach(function(p) { p.classList.remove('active'); });
+      tabs[0].classList.add('active'); tabs[0].setAttribute('aria-selected','true');
+      document.getElementById('lagan-pane-lookup').classList.add('active');
+      card.focus();
+    }
 
     card.addEventListener('click', open);
     card.addEventListener('keydown', function(e) {
