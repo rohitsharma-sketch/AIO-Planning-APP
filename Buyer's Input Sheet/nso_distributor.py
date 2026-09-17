@@ -723,15 +723,15 @@ def _run_job(job_id, nso_bytes, div_bytes, plan_bytes, attr_bytes,
         gm_excl_df   = load_gm_exclusion(gm_excl_bytes)    if gm_excl_bytes   else None
         apps_excl_df = load_apps_exclusion(apps_excl_bytes) if apps_excl_bytes else None
 
-        _job_set(job_id, pct=22, msg='Reading Sales Plan (calamine engine)...')
-        # Ticker thread: moves bar 22→70 proportionally while calamine reads
+        _job_set(job_id, pct=22, msg='Reading Sales Plan (large file — ~30s)...')
+        # Ticker thread: animates bar 22→70 over ~30s while calamine reads
         _plan_done = threading.Event()
         def _ticker():
             t0 = time.time()
             while not _plan_done.wait(timeout=1.5):
                 elapsed = time.time() - t0
-                pct = min(69, int(22 + (elapsed / 40) * 48))
-                _job_set(job_id, pct=pct, msg='Reading Sales Plan (calamine engine)...')
+                pct = min(69, int(22 + (elapsed / 30) * 48))
+                _job_set(job_id, pct=pct, msg='Reading Sales Plan (large file — ~30s)...')
         _tick_t = threading.Thread(target=_ticker, daemon=True)
         _tick_t.start()
         try:

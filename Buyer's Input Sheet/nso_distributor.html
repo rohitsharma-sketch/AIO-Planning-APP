@@ -569,9 +569,12 @@ function setProgress(pct, msg) {
   document.getElementById('prog-fill').style.width = pct + '%';
   document.getElementById('prog-pct').textContent  = pct + '%';
   document.getElementById('prog-msg').textContent  = msg;
-  // Time remaining — proportional to progress
+  // Time remaining — suppressed during animated file-loading phase (22-70%)
+  // where pct is a ticker animation, not real progress
   const eta = document.getElementById('prog-eta');
-  if (pct > 3 && pct < 100 && S.jobStart) {
+  if (pct >= 22 && pct < 70) {
+    eta.textContent = 'loading large file…';
+  } else if (pct > 3 && pct < 100 && S.jobStart) {
     const elapsed = (Date.now() - S.jobStart) / 1000;
     const remaining = Math.max(0, elapsed * (100 - pct) / pct);
     if (remaining >= 60) {
