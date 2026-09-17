@@ -419,14 +419,11 @@
   }
 
   /* ── Lagan modal ── */
-  .lagan-modal {
-    max-width: 680px;
-  }
+  .lagan-modal { max-width: 780px; }
   /* Tabs */
   .lagan-tabs {
     display: flex; gap: 4px; margin: 14px 0 0;
     border-bottom: 1px solid var(--card-border);
-    padding-bottom: 0;
   }
   .lagan-tab {
     padding: 7px 16px 9px;
@@ -435,104 +432,94 @@
     color: var(--text-dim); cursor: pointer; margin-bottom: -1px;
     transition: color .15s, border-color .15s;
   }
-  .lagan-tab.active { color: var(--text); border-bottom-color: var(--bg-grad-a); }
+  .lagan-tab.active { color: #f0a825; border-bottom-color: #f0a825; }
   .lagan-tab:hover:not(.active) { color: var(--text); }
   .lagan-tab-pane { display: none; }
   .lagan-tab-pane.active { display: block; }
-  /* Lookup tab */
+  /* Lookup — year row */
   .lagan-year-row {
-    display: flex; align-items: center; gap: 10px; margin: 16px 0 18px;
+    display: flex; align-items: center; gap: 10px; margin: 14px 0 14px;
   }
   .lagan-year-row label { font-size: 13px; color: var(--text-dim); font-weight: 500; flex-shrink: 0; }
   .lagan-year-select {
-    background: rgba(255,255,255,0.07);
-    border: 1px solid rgba(255,255,255,0.18);
-    border-radius: 8px;
-    color: var(--text);
-    font-size: 14px;
-    font-weight: 600;
-    padding: 5px 10px;
-    cursor: pointer;
-    font-family: inherit;
+    background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 8px; color: var(--text); font-size: 14px; font-weight: 600;
+    padding: 5px 10px; cursor: pointer; font-family: inherit;
   }
-  .lagan-year-select:focus { outline: none; border-color: var(--bg-grad-a); }
-  .lagan-total {
-    font-size: 12px; color: var(--text-dim); margin-left: auto;
-    font-variant-numeric: tabular-nums;
+  .lagan-year-select:focus { outline: none; border-color: #f0a825; }
+  .lagan-total { font-size: 12px; color: var(--text-dim); margin-left: auto; font-variant-numeric: tabular-nums; }
+  /* Lookup — 12-month card grid */
+  .lagan-months {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
   }
-  .lagan-months { display: flex; flex-direction: column; gap: 14px; }
-  .lagan-month-block {}
-  .lagan-month-name {
-    font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
-    color: var(--text-dim); margin-bottom: 6px;
+  .lagan-month-card {
+    background: rgba(255,255,255,0.035);
+    border: 1px solid rgba(180,100,0,0.3);
+    border-radius: 10px;
+    padding: 11px 11px 9px;
   }
-  .lagan-dates { display: flex; flex-wrap: wrap; gap: 5px; }
+  .lagan-month-card.empty { border-color: rgba(255,255,255,0.07); }
+  .lagan-month-head {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+  }
+  .lagan-month-name { font-size: 13px; font-weight: 700; color: var(--text); }
+  .lagan-month-badge {
+    width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10.5px; font-weight: 800;
+    background: #b87200; color: #fff;
+  }
+  .lagan-month-badge.zero { background: rgba(255,255,255,0.1); color: var(--text-dim); }
+  .lagan-dates { display: flex; flex-wrap: wrap; gap: 4px; }
   .lagan-date-chip {
-    font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
-    padding: 4px 11px; border-radius: 6px;
-    background: #1a3f80;
-    border: 1px solid #2e5bb8;
-    color: #d6e8ff;
-    min-width: 36px; text-align: center;
-    line-height: 1.3;
+    font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+    padding: 3px 8px; border-radius: 5px;
+    background: rgba(180,100,0,0.22);
+    border: 1px solid rgba(200,130,0,0.45);
+    color: #f5c842;
+    min-width: 30px; text-align: center; line-height: 1.3;
   }
   .lagan-date-chip.today {
-    background: rgba(34,197,94,0.25);
-    border-color: rgba(34,197,94,0.55);
-    color: #6ee7a0;
+    background: rgba(34,197,94,0.25); border-color: rgba(34,197,94,0.55); color: #6ee7a0;
   }
-  .lagan-empty { color: var(--text-dim); font-size: 13px; font-style: italic; }
-  /* Compare tab */
+  .lagan-no-dates { color: rgba(255,255,255,0.2); font-size: 11px; font-style: italic; }
+  /* Compare tab — year pill selector */
   .lagan-compare-years {
-    display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 16px;
-    align-items: center;
+    display: flex; flex-wrap: wrap; gap: 5px; margin: 14px 0 12px; align-items: center;
   }
-  .lagan-compare-years label { font-size: 12px; color: var(--text-dim); font-weight: 500; margin-right: 4px; }
+  .lagan-compare-years > span { font-size: 12px; color: var(--text-dim); font-weight: 500; margin-right: 4px; }
   .lagan-yr-check {
-    display: flex; align-items: center; gap: 5px;
-    padding: 4px 10px; border-radius: 6px;
+    padding: 3px 9px; border-radius: 6px;
     border: 1px solid rgba(255,255,255,0.14);
     background: rgba(255,255,255,0.05);
-    cursor: pointer; user-select: none; font-size: 12.5px; font-weight: 600; color: var(--text-dim);
+    cursor: pointer; user-select: none; font-size: 12px; font-weight: 600; color: var(--text-dim);
     transition: border-color .12s, background .12s, color .12s;
   }
   .lagan-yr-check input { display: none; }
-  .lagan-yr-check.selected {
-    border-color: #2e5bb8; background: #1a3f80; color: #d6e8ff;
-  }
+  .lagan-yr-check.selected { border-color: #b87200; background: rgba(180,100,0,0.22); color: #f5c842; }
   .lagan-yr-check:hover:not(.selected) { border-color: rgba(255,255,255,0.28); color: var(--text); }
+  /* Compare tab — count table (Year × Month) */
   .lagan-compare-wrap { overflow-x: auto; }
-  .lagan-compare-table {
-    width: 100%; border-collapse: collapse; font-size: 12.5px;
-    font-variant-numeric: tabular-nums;
-  }
-  .lagan-compare-table th {
-    padding: 6px 10px; text-align: center; font-weight: 700;
-    color: var(--text-dim); font-size: 11px; letter-spacing: 0.06em;
-    text-transform: uppercase; border-bottom: 1px solid var(--card-border);
+  .lagan-cnt-table {
+    width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
-  .lagan-compare-table th.col-month { text-align: left; }
-  .lagan-compare-table td {
-    padding: 7px 8px; border-bottom: 1px solid rgba(255,255,255,0.05);
-    vertical-align: top;
+  .lagan-cnt-table th {
+    padding: 6px 10px; text-align: center; font-weight: 700;
+    color: var(--text-dim); font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase;
+    border-bottom: 1px solid var(--card-border);
   }
-  .lagan-compare-table td.col-month {
-    font-weight: 700; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
-    color: var(--text-dim); white-space: nowrap; padding-right: 12px; min-width: 70px;
-  }
-  .lagan-compare-table td.col-dates { text-align: center; }
-  .lagan-compare-table .chip-row { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; }
-  .lagan-compare-table .chip {
-    font-size: 11.5px; font-weight: 700; padding: 2px 7px; border-radius: 5px;
-    background: #1a3f80; border: 1px solid #2e5bb8; color: #d6e8ff; min-width: 28px; text-align: center;
-  }
-  .lagan-compare-table .chip.today {
-    background: rgba(34,197,94,0.25); border-color: rgba(34,197,94,0.55); color: #6ee7a0;
-  }
-  .lagan-compare-table .no-dates { color: rgba(255,255,255,0.15); font-size: 11px; }
+  .lagan-cnt-table th.col-year { text-align: left; min-width: 58px; }
+  .lagan-cnt-table th.col-total { color: #f0a825; }
+  .lagan-cnt-table td { padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); text-align: center; }
+  .lagan-cnt-table td.col-year { text-align: left; font-weight: 700; font-size: 14px; color: var(--text); }
+  .lagan-cnt-table td.has-d { background: rgba(160,85,0,0.28); color: #f5c842; font-weight: 700; }
+  .lagan-cnt-table td.no-d { color: rgba(255,255,255,0.2); }
+  .lagan-cnt-table td.col-total { color: #f0a825; font-weight: 800; font-size: 13px; }
   .lagan-compare-empty { color: var(--text-dim); font-size: 13px; font-style: italic; padding: 20px 0; text-align: center; }
-  .lagan-compare-hint { font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
+  .lagan-compare-hint { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
 </style>
 </head>
 <body>
@@ -675,8 +662,8 @@
         </div>
       </div>
 
-      <!-- NSO Plan Distributor tile -->
-      <a class="card" href="http://10.0.1.131:8060" target="_blank" data-check="/api/port-status/8060" id="nso-card">
+      <!-- NSO Plan Distributor tile — href set dynamically so IP always matches the landing server -->
+      <a class="card" href="#" target="_blank" rel="noopener" data-check="/api/port-status/8060" id="nso-card">
         <div class="card-icon">📦</div>
         <h2>NSO Plan Distributor</h2>
         <p class="desc">Upload NSO Details, Sales Plan, and Division Cont % — generate a month-wise store plan XLSX ready for distribution.</p>
@@ -746,7 +733,7 @@
       <!-- Compare pane -->
       <div class="lagan-tab-pane" id="lagan-pane-compare">
         <div class="lagan-compare-years" id="lagan-compare-years">
-          <label>Years:</label>
+          <span>Years:</span>
         </div>
         <p class="lagan-compare-hint" id="lagan-compare-hint"></p>
         <div class="lagan-compare-wrap">
@@ -1060,6 +1047,18 @@
     applyStoredOrder();
   })();
 
+  // ── NSO Plan Distributor — dynamic link (same hostname as landing page) ────
+  (function() {
+    var card = document.getElementById('nso-card');
+    if (!card) return;
+    var host = window.location.hostname || '10.0.1.131';
+    card.href = 'http://' + host + ':8060';
+    card.addEventListener('click', function(e) {
+      e.preventDefault();
+      window.open('http://' + (window.location.hostname || '10.0.1.131') + ':8060', '_blank', 'noopener');
+    });
+  })();
+
   // ── Lagan Calendar data & modal ─────────────────────────────────────────────
   const LAGAN_DATA={
 2000:{1:[2,3,9,12,13,14,16,17,19,21,23,26,27,30,31],2:[2,3,7,10,21,24,25],3:[1,2,3,8,9,12,15,16,17,20,22,23,26,27,30,31],4:[2,6,7,9,10,13,14,16,20,21,23,24,26,30],5:[1,14,15,18,21,24,25,29,31],6:[4,5,7,8,11,12,14,16,19,22,23,28,29,30],7:[3,6,7],11:[8,9,10,13,16,17,22,23,29],12:[1,3,6,7,8,11,13,15,17,20,21,22,27,28,29,31]},
@@ -1098,37 +1097,40 @@
   const MONTH_NAMES = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
   const MONTH_SHORT  = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-  // ── Lookup tab ────────────────────────────────────────────────────────────
+  // ── Lookup tab — 12-month card grid ────────────────────────────────────────
   function renderLaganYear(yr) {
     var data = LAGAN_DATA[yr] || {};
     var today = new Date();
     var todayYr = today.getFullYear(), todayMon = today.getMonth()+1, todayDay = today.getDate();
     var total = 0;
-    var months = Object.keys(data).map(Number).sort(function(a,b){return a-b;});
-    if (!months.length) {
-      document.getElementById('lagan-months').innerHTML = '<p class="lagan-empty">No dates recorded for this year.</p>';
-      document.getElementById('lagan-total').textContent = '';
-      return;
-    }
-    months.forEach(function(m) { total += (data[m]||[]).length; });
+    for (var m = 1; m <= 12; m++) { total += (data[m]||[]).length; }
     document.getElementById('lagan-total').textContent = total + ' dates total';
-    var html = months.map(function(m) {
+    var html = '';
+    for (var m = 1; m <= 12; m++) {
       var days = data[m] || [];
-      var chips = days.map(function(d) {
-        var isToday = (yr===todayYr && m===todayMon && d===todayDay);
-        return '<span class="lagan-date-chip' + (isToday?' today':'') + '">' + d + '</span>';
-      }).join('');
-      return '<div class="lagan-month-block"><div class="lagan-month-name">' + MONTH_NAMES[m] + '</div><div class="lagan-dates">' + chips + '</div></div>';
-    }).join('');
+      var count = days.length;
+      var isEmpty = count === 0;
+      var badgeCls = isEmpty ? 'lagan-month-badge zero' : 'lagan-month-badge';
+      var cardCls = isEmpty ? 'lagan-month-card empty' : 'lagan-month-card';
+      var inner = isEmpty
+        ? '<div class="lagan-no-dates">No Lagan dates</div>'
+        : '<div class="lagan-dates">' + days.map(function(d) {
+            var isToday = (yr===todayYr && m===todayMon && d===todayDay);
+            return '<span class="lagan-date-chip' + (isToday?' today':'') + '">' + d + '</span>';
+          }).join('') + '</div>';
+      html += '<div class="' + cardCls + '">' +
+        '<div class="lagan-month-head">' +
+          '<span class="lagan-month-name">' + MONTH_NAMES[m] + '</span>' +
+          '<span class="' + badgeCls + '">' + count + '</span>' +
+        '</div>' + inner + '</div>';
+    }
     document.getElementById('lagan-months').innerHTML = html;
   }
 
-  // ── Compare tab ───────────────────────────────────────────────────────────
+  // ── Compare tab — Year × Month count table ────────────────────────────────
   var _compareSelected = [];
 
   function renderCompare() {
-    var today = new Date();
-    var todayYr = today.getFullYear(), todayMon = today.getMonth()+1, todayDay = today.getDate();
     var hint = document.getElementById('lagan-compare-hint');
     var container = document.getElementById('lagan-compare-table');
 
@@ -1137,44 +1139,32 @@
       container.innerHTML = '';
       return;
     }
-    if (_compareSelected.length > 6) {
-      hint.textContent = 'Showing first 6 selected years.';
-    } else {
-      hint.textContent = _compareSelected.length === 1 ? '1 year selected.' : _compareSelected.length + ' years selected.';
-    }
+    var years = _compareSelected.slice().sort(function(a,b){return a-b;});
+    hint.textContent = years.length + (years.length === 1 ? ' year' : ' years') + ' selected.';
 
-    var years = _compareSelected.slice(0, 6).sort(function(a,b){return a-b;});
+    // Header: YEAR | JAN | FEB | ... | DEC | TOTAL
+    var thead = '<thead><tr><th class="col-year">YEAR</th>' +
+      MONTH_SHORT.slice(1).map(function(s){ return '<th>' + s.toUpperCase() + '</th>'; }).join('') +
+      '<th class="col-total">TOTAL</th></tr></thead>';
 
-    // Collect all months that have data in at least one selected year
-    var monthSet = new Set();
-    years.forEach(function(yr) {
-      Object.keys(LAGAN_DATA[yr]||{}).forEach(function(m){ monthSet.add(Number(m)); });
-    });
-    var allMonths = Array.from(monthSet).sort(function(a,b){return a-b;});
-
-    if (!allMonths.length) {
-      container.innerHTML = '<div class="lagan-compare-empty">No auspicious dates found for the selected years.</div>';
-      return;
-    }
-
-    var thead = '<thead><tr><th class="col-month">Month</th>' +
-      years.map(function(yr) { return '<th>' + yr + '</th>'; }).join('') +
-      '</tr></thead>';
-
-    var tbody = '<tbody>' + allMonths.map(function(m) {
-      var cells = years.map(function(yr) {
-        var days = (LAGAN_DATA[yr]||{})[m] || [];
-        if (!days.length) return '<td class="col-dates"><span class="no-dates">—</span></td>';
-        var chips = days.map(function(d) {
-          var isToday = (yr===todayYr && m===todayMon && d===todayDay);
-          return '<span class="chip' + (isToday?' today':'') + '">' + d + '</span>';
-        }).join('');
-        return '<td class="col-dates"><div class="chip-row">' + chips + '</div></td>';
-      }).join('');
-      return '<tr><td class="col-month">' + MONTH_SHORT[m] + '</td>' + cells + '</tr>';
+    var tbody = '<tbody>' + years.map(function(yr) {
+      var data = LAGAN_DATA[yr] || {};
+      var rowTotal = 0;
+      var cells = '';
+      for (var m = 1; m <= 12; m++) {
+        var cnt = (data[m]||[]).length;
+        rowTotal += cnt;
+        if (cnt > 0) {
+          cells += '<td class="has-d">' + cnt + '</td>';
+        } else {
+          cells += '<td class="no-d">—</td>';
+        }
+      }
+      return '<tr><td class="col-year">' + yr + '</td>' + cells +
+             '<td class="col-total">' + rowTotal + '</td></tr>';
     }).join('') + '</tbody>';
 
-    container.innerHTML = '<table class="lagan-compare-table">' + thead + tbody + '</table>';
+    container.innerHTML = '<table class="lagan-cnt-table">' + thead + tbody + '</table>';
   }
 
   function buildCompareYearPills() {
