@@ -19,7 +19,7 @@ import pandas as pd
 
 from db.models.sync import SyncSource
 from db.upsert import upsert_store_fields
-from sync.common import latest_file, sync_run
+from sync.common import call_with_timeout, latest_file, sync_run
 
 SOURCE_KEY = "data_lake_site_master"
 
@@ -38,7 +38,7 @@ def run():
         source = session.get(SyncSource, SOURCE_KEY)
         path = latest_file(source.config["path"])
 
-        df = pd.read_parquet(path, columns=COLUMNS)
+        df = call_with_timeout(pd.read_parquet, path, columns=COLUMNS)
         df = df.dropna(subset=["STORE_NAME"])
         result["rows_read"] = len(df)
 

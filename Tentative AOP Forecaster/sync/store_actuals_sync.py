@@ -86,10 +86,11 @@ def _month_bounds(months):
 def _fetch_raw_monthwise(folder, months):
     # Full re-exports: the newest file always contains all historical data.
     # Read only it instead of every file to avoid OOM on accumulated snapshots.
-    from sync.common import latest_file
+    from sync.common import call_with_timeout, latest_file
     months_set = set(months)
     lo, hi = _month_bounds(months)
-    tbl = pq.read_table(
+    tbl = call_with_timeout(
+        pq.read_table,
         latest_file(folder),
         columns=["BILLMONTH", "DIVISION", "STORE_NAME", "SL_V", "ATTRIBUTE1"],
         filters=[("BILLMONTH", ">=", lo), ("BILLMONTH", "<", hi)],
@@ -142,8 +143,8 @@ def run(include_partial=False):
         path = source.config["path"]
         ref_months_all = [_label_to_ym(m) for m in FY27_M]
         # max-month probe — only the latest file (full re-export contains all history)
-        from sync.common import latest_file
-        bm = pq.read_table(latest_file(path), columns=["BILLMONTH"]).column("BILLMONTH").to_pandas()
+        from sync.common import call_with_timeout, latest_file
+        bm = call_with_timeout(pq.read_table, latest_file(path), columns=["BILLMONTH"]).column("BILLMONTH").to_pandas()
         all_months = set(bm.dropna().dt.strftime("%Y-%m").unique().tolist())
         latest_month_in_data = max(all_months) if all_months else None
 

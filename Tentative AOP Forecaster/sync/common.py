@@ -4,15 +4,53 @@ status/rows/error), never silent."""
 import contextlib
 import datetime
 import os
+import threading
+import time
 
 from db.base import SessionLocal
 from db.models.sync import SyncRun
+
+NETWORK_TIMEOUT_SECONDS = 90
+NETWORK_RETRIES = 2
+NETWORK_RETRY_DELAY_SECONDS = 10
+
+
+def call_with_timeout(fn, *args, timeout=NETWORK_TIMEOUT_SECONDS, retries=NETWORK_RETRIES,
+                       delay=NETWORK_RETRY_DELAY_SECONDS, **kwargs):
+    """Run a blocking call (a network file read) with a hard wall-clock timeout
+    and a few retries with a short delay - the data-lake share (\\\\10.0.1.85\\...)
+    is known to intermittently STALL rather than fail fast, and a stalled
+    os.listdir/pq.read_table over SMB blocks forever with no exception to
+    catch. `fn` runs in a daemon thread so a genuinely wedged syscall can't
+    block this process from exiting even if a retry attempt never returns -
+    daemon threads are hard-killed at interpreter shutdown, unlike the
+    non-daemon workers a ThreadPoolExecutor uses by default."""
+    last_exc = None
+    for attempt in range(retries + 1):
+        box = {}
+        def _target():
+            try:
+                box["result"] = fn(*args, **kwargs)
+            except Exception as e:  # noqa: BLE001 - re-raised on the calling thread below
+                box["error"] = e
+        t = threading.Thread(target=_target, daemon=True)
+        t.start()
+        t.join(timeout)
+        if t.is_alive():
+            last_exc = TimeoutError(f"{getattr(fn, '__name__', fn)} did not return within {timeout}s (attempt {attempt + 1}/{retries + 1}) - data-lake share may be stalled")
+        elif "error" in box:
+            last_exc = box["error"]
+        else:
+            return box["result"]
+        if attempt < retries:
+            time.sleep(delay)
+    raise last_exc
 
 
 def latest_file(folder: str) -> str:
     """Data-lake folders hold one or more `<uuid>_<YYYYMMDDTHHMMSS>.parquet`
     snapshots; the lexicographically-last timestamp is the newest."""
-    files = sorted(f for f in os.listdir(folder) if f.endswith(".parquet"))
+    files = sorted(f for f in call_with_timeout(os.listdir, folder) if f.endswith(".parquet"))
     if not files:
         raise FileNotFoundError(f"No parquet snapshot found in {folder}")
     return os.path.join(folder, files[-1])
@@ -20,7 +58,11 @@ def latest_file(folder: str) -> str:
 
 def _is_network_offline(e: Exception) -> bool:
     """WinError 53 = network path not found (UNC share unreachable).
-    Also catches WinError 67 (bad net name) and similar UNC errors."""
+    Also catches WinError 67 (bad net name) and similar UNC errors, and a
+    call_with_timeout give-up (the share stalled rather than failing fast -
+    same practical outcome as being offline)."""
+    if isinstance(e, TimeoutError):
+        return True
     winerror = getattr(e, "winerror", None)
     if winerror in (53, 67, 1203, 1231):
         return True

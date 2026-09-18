@@ -17,7 +17,7 @@ from sqlalchemy import delete
 
 from db.models.calendar import DayShiftMap
 from db.models.sync import SyncSource
-from sync.common import latest_file, sync_run
+from sync.common import call_with_timeout, latest_file, sync_run
 
 SOURCE_KEY = "data_lake_day_shift"
 
@@ -27,7 +27,7 @@ def run():
         source = session.get(SyncSource, SOURCE_KEY)
         path = latest_file(source.config["path"])
 
-        df = pd.read_parquet(path, columns=["CURRENT_DATE", "LY_MAPPED_DATE"])
+        df = call_with_timeout(pd.read_parquet, path, columns=["CURRENT_DATE", "LY_MAPPED_DATE"])
         df = df.dropna(subset=["CURRENT_DATE", "LY_MAPPED_DATE"])
         result["rows_read"] = len(df)
 
