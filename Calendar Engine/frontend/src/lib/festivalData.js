@@ -49,25 +49,26 @@ export const DEFAULT_FESTIVALS = [
 // Matched by exact festival NAME against whatever a cluster's festival list
 // actually contains - a cluster missing one of its listed core names (e.g. no
 // Navratri configured yet) just has one fewer anchor, not an error.
-// Shraad, Raksha Bandhan, Basant Panchami, Milad-un-Nabi, and Makar Sankranti
-// are all core wherever they're configured (2026-09-18) - every one of them
-// showed the same symptom under QA: dates were correct in the profile, but
-// since they weren't core, Phase 1 never anchored them, so Round A/Phase 2
-// just filled their TY window with whatever nearby LY dates scored best,
-// not the real festival period. Kept in sync with each cluster's actual
-// festival list - a cluster missing one of these names just has one fewer
-// anchor, not an error.
+// Every festival is core in every cluster that actually carries it in its
+// profile (2026-09-18, explicit rule: no two clusters may shift the same
+// festival by different amounts) - a non-core festival's Phase 1 anchor
+// never fires, so Round A/Phase 2 fills its TY window with whatever nearby
+// LY date scores best independently per cluster, which drifts even when
+// every cluster stores the exact same ref/fut date. Kept in sync with each
+// cluster's actual festival list - a cluster missing one of these names
+// just has one fewer anchor, not an error. Rath Yatra now core for WB too
+// (previously ODISHA-only by an earlier, now-superseded design choice).
 export const CORE_FESTIVALS_BY_CLUSTER = {
   'Kashmir':           ['Diwali', 'Eid al-Fitr', 'Eid al-Adha', 'Milad-un-Nabi'],
-  'UP + NCR':          ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Shraad', 'Raksha Bandhan'],
-  'UP + BIHAR - PUJA': ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja', 'Shraad', 'Raksha Bandhan', 'Basant Panchami', 'Milad-un-Nabi', 'Makar Sankranti'],
-  'BIHAR':             ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja', 'Shraad', 'Raksha Bandhan', 'Basant Panchami', 'Milad-un-Nabi', 'Makar Sankranti'],
-  'JAMMU + RJ':        ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Shraad', 'Raksha Bandhan'],
-  'ODISHA':            ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Rath Yatra', 'Nuakhai', 'Shraad', 'Raksha Bandhan'],
-  'N. EAST - PUJA':    ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Durga Puja', 'Shraad', 'Raksha Bandhan'],
-  'N. EAST':           ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Bihu', 'Shraad', 'Raksha Bandhan'],
-  'JH + MP + CG':      ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja', 'Shraad', 'Raksha Bandhan', 'Basant Panchami', 'Milad-un-Nabi', 'Makar Sankranti'],
-  'WB':                ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Durga Puja', 'Shraad', 'Raksha Bandhan', 'Basant Panchami', 'Milad-un-Nabi', 'Makar Sankranti'],
+  'UP + NCR':          ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Shraad', 'Raksha Bandhan', 'Eid al-Fitr', 'Christmas'],
+  'UP + BIHAR - PUJA': ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja', 'Shraad', 'Raksha Bandhan', 'Basant Panchami', 'Milad-un-Nabi', 'Makar Sankranti', 'Eid al-Fitr', 'Eid al-Adha', 'Christmas'],
+  'BIHAR':             ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja', 'Shraad', 'Raksha Bandhan', 'Basant Panchami', 'Milad-un-Nabi', 'Makar Sankranti', 'Eid al-Fitr', 'Eid al-Adha', 'Christmas'],
+  'JAMMU + RJ':        ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Shraad', 'Raksha Bandhan', 'Eid al-Fitr', 'Christmas'],
+  'ODISHA':            ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Rath Yatra', 'Nuakhai', 'Shraad', 'Raksha Bandhan', 'Eid al-Fitr'],
+  'N. EAST - PUJA':    ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Durga Puja', 'Shraad', 'Raksha Bandhan', 'Eid al-Fitr', 'Bihu'],
+  'N. EAST':           ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Bihu', 'Shraad', 'Raksha Bandhan', 'Eid al-Fitr'],
+  'JH + MP + CG':      ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja', 'Shraad', 'Raksha Bandhan', 'Basant Panchami', 'Milad-un-Nabi', 'Makar Sankranti', 'Eid al-Fitr', 'Eid al-Adha', 'Christmas'],
+  'WB':                ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Durga Puja', 'Shraad', 'Raksha Bandhan', 'Basant Panchami', 'Milad-un-Nabi', 'Makar Sankranti', 'Eid al-Fitr', 'Eid al-Adha', 'Christmas', 'Rath Yatra'],
 }
 
 // Any cluster not named above (a new cluster added later, or renamed) falls
