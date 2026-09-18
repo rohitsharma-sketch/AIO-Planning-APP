@@ -49,24 +49,26 @@ export const DEFAULT_FESTIVALS = [
 // Matched by exact festival NAME against whatever a cluster's festival list
 // actually contains - a cluster missing one of its listed core names (e.g. no
 // Navratri configured yet) just has one fewer anchor, not an error.
-// Shraad (Pitru Paksha) is a pan-India lunar-calendar mourning period - same
-// dates in every cluster's profile except Kashmir (which has no Shraad entry
-// at all - see the live data). It's core everywhere it's configured so Phase 1
-// anchors its own LY window to its own TY window, the same as any other
-// national major - otherwise its wide window still claims TY dates in
-// fMapFull for display but gets filled by whatever nearby LY dates score
-// best, not the real Shraad period.
+// Shraad (Pitru Paksha) and Raksha Bandhan are both pan-India lunar-calendar
+// occasions with the same dates in every cluster's profile except Kashmir
+// (which has neither - see the live data). Both are core everywhere they're
+// configured so Phase 1 anchors their own LY window to their own TY window,
+// the same as any other national major - otherwise a wide window still
+// claims TY dates in fMapFull for display but gets filled by whatever nearby
+// LY dates score best under Round A, not the real festival period (this is
+// exactly what was happening to Raksha Bandhan before this fix - confirmed
+// 2026-09-18 via day-pair inspection, same symptom Shraad had).
 export const CORE_FESTIVALS_BY_CLUSTER = {
   'Kashmir':           ['Diwali', 'Eid al-Fitr', 'Eid al-Adha'],
-  'UP + NCR':          ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Shraad'],
-  'UP + BIHAR - PUJA': ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja', 'Shraad'],
-  'BIHAR':             ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja', 'Shraad'],
-  'JAMMU + RJ':        ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Shraad'],
-  'ODISHA':            ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Rath Yatra', 'Nuakhai', 'Shraad'],
-  'N. EAST - PUJA':    ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Durga Puja', 'Shraad'],
-  'N. EAST':           ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Bihu', 'Shraad'],
-  'JH + MP + CG':      ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja', 'Shraad'],
-  'WB':                ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Durga Puja', 'Shraad'],
+  'UP + NCR':          ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Shraad', 'Raksha Bandhan'],
+  'UP + BIHAR - PUJA': ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja', 'Shraad', 'Raksha Bandhan'],
+  'BIHAR':             ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja', 'Shraad', 'Raksha Bandhan'],
+  'JAMMU + RJ':        ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Shraad', 'Raksha Bandhan'],
+  'ODISHA':            ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Rath Yatra', 'Nuakhai', 'Shraad', 'Raksha Bandhan'],
+  'N. EAST - PUJA':    ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Durga Puja', 'Shraad', 'Raksha Bandhan'],
+  'N. EAST':           ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Bihu', 'Shraad', 'Raksha Bandhan'],
+  'JH + MP + CG':      ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja', 'Shraad', 'Raksha Bandhan'],
+  'WB':                ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Durga Puja', 'Shraad', 'Raksha Bandhan'],
 }
 
 // Any cluster not named above (a new cluster added later, or renamed) falls
@@ -102,18 +104,18 @@ export const FESTIVAL_DB = [
   { name:'Akshaya Tritiya',    cat:'r', aliases:['akha teej','akshaya triteeya'],   ref:'2026-04-21', fut:'2027-05-09', pre:5, core:1, post:2,  regions:['all'] },
   { name:'Buddha Purnima',     cat:'r', aliases:['buddha jayanti','vesak'],         ref:'2026-05-03', fut:'2027-05-20', pre:2, core:1, post:1,  regions:['all'] },
   { name:'Eid al-Adha',        cat:'r', aliases:['eid ul adha','bakrid','bakra eid'],ref:'2026-05-27',fut:'2027-05-17', pre:5, core:3, post:3, regions:['all'] },
-  { name:'Rath Yatra',         cat:'r', aliases:['jagannath rath yatra','ratha yatra'], ref:'2026-06-27', fut:'2027-07-16', pre:3, core:2, post:2, regions:['east','south'] },
+  { name:'Rath Yatra',         cat:'r', aliases:['jagannath rath yatra','ratha yatra'], ref:'2026-07-16', fut:'2027-07-05', pre:3, core:2, post:2, regions:['east','south'] },
   { name:'Independence Day',   cat:'n', aliases:['august 15'],                      ref:'2026-08-15', fut:'2027-08-15', pre:2, core:1, post:1,  regions:['all'] },
-  { name:'Raksha Bandhan',     cat:'r', aliases:['rakshabandhan','rakhi'],          ref:'2026-08-09', fut:'2027-08-29', pre:5, core:1, post:3,  regions:['all'] },
+  { name:'Raksha Bandhan',     cat:'r', aliases:['rakshabandhan','rakhi'],          ref:'2026-08-28', fut:'2027-08-17', pre:5, core:1, post:3,  regions:['all'] },
   { name:'Janmashtami',        cat:'r', aliases:['krishna janmashtami','gokulashtami'], ref:'2026-08-14', fut:'2027-08-04', pre:3, core:1, post:2, regions:['all'] },
   { name:'Ganesh Chaturthi',   cat:'r', aliases:['ganesh festival','vinayaka chaturthi'], ref:'2026-08-22', fut:'2027-09-10', pre:5, core:10,post:5, regions:['west','maharashtra','south'], regionalWindows:{'maharashtra':{pre:7,core:10,post:7}} },
   { name:'Onam',               cat:'r', aliases:['thiruvonam'],                     ref:'2026-09-07', fut:'2027-08-27', pre:10,core:2, post:4,  regions:['south','kerala'] },
-  { name:'Milad-un-Nabi',      cat:'r', aliases:['milad','prophet birthday','eid milad'], ref:'2026-09-04', fut:'2027-08-25', pre:2, core:1, post:1, regions:['all'] },
+  { name:'Milad-un-Nabi',      cat:'r', aliases:['milad','prophet birthday','eid milad'], ref:'2026-08-26', fut:'2027-08-15', pre:2, core:1, post:1, regions:['all'] },
   { name:'Gandhi Jayanti',     cat:'n', aliases:['gandhi'],                         ref:'2026-10-02', fut:'2027-10-02', pre:1, core:1, post:1,  regions:['all'] },
-  { name:'Navratri',           cat:'r', aliases:['sharad navratri','navaratri'],    ref:'2026-10-11', fut:'2027-09-22', pre:3, core:9, post:2,  regions:['all'] },
-  { name:'Navratri / Garba',   cat:'r', aliases:['garba','dandiya','navratri gujarat'], ref:'2026-10-11', fut:'2027-09-22', pre:7, core:9, post:4, regions:['west','gujarat'] },
-  { name:'Durga Puja',         cat:'r', aliases:['bengali durga puja','maha saptami','maha ashtami','maha navami','vijaya dashami','puja'], ref:'2026-10-11', fut:'2027-09-22', pre:20,core:5, post:7, regions:['east','bengal'] },
-  { name:'Dussehra',           cat:'r', aliases:['vijayadashami','dasara'],         ref:'2026-10-20', fut:'2027-10-01', pre:3, core:1, post:2,  regions:['all'] },
+  { name:'Navratri',           cat:'r', aliases:['sharad navratri','navaratri'],    ref:'2026-10-11', fut:'2027-09-30', pre:3, core:9, post:2,  regions:['all'] },
+  { name:'Navratri / Garba',   cat:'r', aliases:['garba','dandiya','navratri gujarat'], ref:'2026-10-11', fut:'2027-09-30', pre:7, core:9, post:4, regions:['west','gujarat'] },
+  { name:'Durga Puja',         cat:'r', aliases:['bengali durga puja','maha saptami','maha ashtami','maha navami','vijaya dashami','puja'], ref:'2026-10-11', fut:'2027-09-30', pre:20,core:5, post:7, regions:['east','bengal'] },
+  { name:'Dussehra',           cat:'r', aliases:['vijayadashami','dasara'],         ref:'2026-10-20', fut:'2027-10-09', pre:3, core:1, post:2,  regions:['all'] },
   { name:'Karva Chauth',       cat:'r', aliases:['karwa chauth','karvachauth'],     ref:'2026-10-16', fut:'2027-10-04', pre:3, core:1, post:1,  regions:['north','west'] },
   { name:'Dhanteras',          cat:'r', aliases:['dhantrayodashi','dhan teras'],    ref:'2026-10-18', fut:'2027-10-06', pre:7, core:1, post:2,  regions:['all'] },
   { name:'Diwali',             cat:'r', aliases:['deepavali','deepawali','lakshmi puja'], ref:'2026-10-20', fut:'2027-10-08', pre:10,core:3, post:7, regions:['all'] },
@@ -144,11 +146,11 @@ export const FESTIVAL_DB = [
 // range fall back to same month/day estimates - flagged in the sync indicator.
 export const FESTIVAL_DATES = {
   'Lohri':             {'2020':'2020-01-13','2021':'2021-01-13','2022':'2022-01-13','2023':'2023-01-13','2024':'2024-01-13','2025':'2025-01-13','2026':'2026-01-13','2027':'2027-01-13','2028':'2028-01-13'},
-  'Makar Sankranti':   {'2020':'2020-01-15','2021':'2021-01-14','2022':'2022-01-14','2023':'2023-01-15','2024':'2024-01-15','2025':'2025-01-14','2026':'2026-01-14','2027':'2027-01-14','2028':'2028-01-15'},
+  'Makar Sankranti':   {'2020':'2020-01-15','2021':'2021-01-14','2022':'2022-01-14','2023':'2023-01-15','2024':'2024-01-15','2025':'2025-01-14','2026':'2026-01-14','2027':'2027-01-15','2028':'2028-01-15'},
   'Uttarayan':         {'2020':'2020-01-14','2021':'2021-01-14','2022':'2022-01-14','2023':'2023-01-14','2024':'2024-01-14','2025':'2025-01-14','2026':'2026-01-14','2027':'2027-01-14','2028':'2028-01-15'},
   'Pongal':            {'2020':'2020-01-15','2021':'2021-01-14','2022':'2022-01-14','2023':'2023-01-15','2024':'2024-01-15','2025':'2025-01-14','2026':'2026-01-14','2027':'2027-01-14','2028':'2028-01-14'},
   'Republic Day':      {'2020':'2020-01-26','2021':'2021-01-26','2022':'2022-01-26','2023':'2023-01-26','2024':'2024-01-26','2025':'2025-01-26','2026':'2026-01-26','2027':'2027-01-26','2028':'2028-01-26'},
-  'Basant Panchami':   {'2020':'2020-01-29','2021':'2021-02-16','2022':'2022-02-05','2023':'2023-01-26','2024':'2024-02-14','2025':'2025-02-02','2026':'2026-02-02','2027':'2027-01-23','2028':'2028-02-11'},
+  'Basant Panchami':   {'2020':'2020-01-29','2021':'2021-02-16','2022':'2022-02-05','2023':'2023-01-26','2024':'2024-02-14','2025':'2025-02-02','2026':'2026-01-23','2027':'2027-02-11','2028':'2028-02-11'},
   'Maha Shivaratri':   {'2020':'2020-02-21','2021':'2021-03-11','2022':'2022-03-01','2023':'2023-02-18','2024':'2024-03-08','2025':'2025-02-26','2026':'2026-02-26','2027':'2027-02-15','2028':'2028-03-06'},
   'Holi':              {'2020':'2020-03-10','2021':'2021-03-29','2022':'2022-03-18','2023':'2023-03-08','2024':'2024-03-25','2025':'2025-03-14','2026':'2026-03-04','2027':'2027-03-22','2028':'2028-03-12'},
   'Eid al-Fitr':       {'2020':'2020-05-25','2021':'2021-05-14','2022':'2022-05-03','2023':'2023-04-22','2024':'2024-04-11','2025':'2025-03-30','2026':'2026-03-20','2027':'2027-03-09','2028':'2028-02-26'},
@@ -163,18 +165,18 @@ export const FESTIVAL_DATES = {
   'Akshaya Tritiya':   {'2020':'2020-04-26','2021':'2021-05-14','2022':'2022-05-03','2023':'2023-04-22','2024':'2024-05-10','2025':'2025-04-30','2026':'2026-04-21','2027':'2027-05-09','2028':'2028-04-28'},
   'Buddha Purnima':    {'2020':'2020-05-07','2021':'2021-05-26','2022':'2022-05-16','2023':'2023-05-05','2024':'2024-05-23','2025':'2025-05-12','2026':'2026-05-03','2027':'2027-05-20','2028':'2028-05-10'},
   'Eid al-Adha':       {'2020':'2020-08-01','2021':'2021-07-21','2022':'2022-07-10','2023':'2023-06-29','2024':'2024-06-17','2025':'2025-06-06','2026':'2026-05-27','2027':'2027-05-17','2028':'2028-05-06'},
-  'Rath Yatra':        {'2020':'2020-06-23','2021':'2021-07-12','2022':'2022-07-01','2023':'2023-06-20','2024':'2024-07-07','2025':'2025-06-27','2026':'2026-06-27','2027':'2027-07-16','2028':'2028-07-04'},
-  'Raksha Bandhan':    {'2020':'2020-08-03','2021':'2021-08-22','2022':'2022-08-11','2023':'2023-08-30','2024':'2024-08-19','2025':'2025-08-09','2026':'2026-08-09','2027':'2027-08-29','2028':'2028-08-18'},
+  'Rath Yatra':        {'2020':'2020-06-23','2021':'2021-07-12','2022':'2022-07-01','2023':'2023-06-20','2024':'2024-07-07','2025':'2025-06-27','2026':'2026-07-16','2027':'2027-07-05','2028':'2028-07-04'},
+  'Raksha Bandhan':    {'2020':'2020-08-03','2021':'2021-08-22','2022':'2022-08-11','2023':'2023-08-30','2024':'2024-08-19','2025':'2025-08-09','2026':'2026-08-28','2027':'2027-08-17','2028':'2028-08-18'},
   'Independence Day':  {'2020':'2020-08-15','2021':'2021-08-15','2022':'2022-08-15','2023':'2023-08-15','2024':'2024-08-15','2025':'2025-08-15','2026':'2026-08-15','2027':'2027-08-15','2028':'2028-08-15'},
   'Janmashtami':       {'2020':'2020-08-11','2021':'2021-08-30','2022':'2022-08-18','2023':'2023-09-06','2024':'2024-08-26','2025':'2025-08-16','2026':'2026-08-14','2027':'2027-08-04','2028':'2028-08-23'},
   'Ganesh Chaturthi':  {'2020':'2020-08-22','2021':'2021-09-10','2022':'2022-08-31','2023':'2023-09-19','2024':'2024-09-07','2025':'2025-08-27','2026':'2026-08-22','2027':'2027-09-10','2028':'2028-08-30'},
   'Onam':              {'2020':'2020-08-31','2021':'2021-08-21','2022':'2022-09-08','2023':'2023-08-29','2024':'2024-09-15','2025':'2025-09-05','2026':'2026-09-07','2027':'2027-08-27','2028':'2028-09-14'},
-  'Milad-un-Nabi':     {'2020':'2020-10-29','2021':'2021-10-19','2022':'2022-10-09','2023':'2023-09-28','2024':'2024-09-16','2025':'2025-09-04','2026':'2026-09-04','2027':'2027-08-25','2028':'2028-08-14'},
+  'Milad-un-Nabi':     {'2020':'2020-10-29','2021':'2021-10-19','2022':'2022-10-09','2023':'2023-09-28','2024':'2024-09-16','2025':'2025-09-04','2026':'2026-08-26','2027':'2027-08-15','2028':'2028-08-14'},
   'Gandhi Jayanti':    {'2020':'2020-10-02','2021':'2021-10-02','2022':'2022-10-02','2023':'2023-10-02','2024':'2024-10-02','2025':'2025-10-02','2026':'2026-10-02','2027':'2027-10-02','2028':'2028-10-02'},
-  'Navratri':          {'2020':'2020-10-17','2021':'2021-10-07','2022':'2022-09-26','2023':'2023-10-15','2024':'2024-10-03','2025':'2025-09-22','2026':'2026-10-11','2027':'2027-09-22','2028':'2028-10-10'},
-  'Navratri / Garba':  {'2020':'2020-10-17','2021':'2021-10-07','2022':'2022-09-26','2023':'2023-10-15','2024':'2024-10-03','2025':'2025-09-22','2026':'2026-10-11','2027':'2027-09-22','2028':'2028-10-10'},
-  'Durga Puja':        {'2020':'2020-10-17','2021':'2021-10-07','2022':'2022-09-26','2023':'2023-10-15','2024':'2024-10-03','2025':'2025-09-22','2026':'2026-10-11','2027':'2027-09-22','2028':'2028-10-10'},
-  'Dussehra':          {'2020':'2020-10-25','2021':'2021-10-15','2022':'2022-10-04','2023':'2023-10-24','2024':'2024-10-12','2025':'2025-10-02','2026':'2026-10-20','2027':'2027-10-01','2028':'2028-10-19'},
+  'Navratri':          {'2020':'2020-10-17','2021':'2021-10-07','2022':'2022-09-26','2023':'2023-10-15','2024':'2024-10-03','2025':'2025-09-22','2026':'2026-10-11','2027':'2027-09-30','2028':'2028-10-10'},
+  'Navratri / Garba':  {'2020':'2020-10-17','2021':'2021-10-07','2022':'2022-09-26','2023':'2023-10-15','2024':'2024-10-03','2025':'2025-09-22','2026':'2026-10-11','2027':'2027-09-30','2028':'2028-10-10'},
+  'Durga Puja':        {'2020':'2020-10-17','2021':'2021-10-07','2022':'2022-09-26','2023':'2023-10-15','2024':'2024-10-03','2025':'2025-09-22','2026':'2026-10-11','2027':'2027-09-30','2028':'2028-10-10'},
+  'Dussehra':          {'2020':'2020-10-25','2021':'2021-10-15','2022':'2022-10-04','2023':'2023-10-24','2024':'2024-10-12','2025':'2025-10-02','2026':'2026-10-20','2027':'2027-10-09','2028':'2028-10-19'},
   'Karva Chauth':      {'2020':'2020-11-04','2021':'2021-10-24','2022':'2022-10-13','2023':'2023-11-01','2024':'2024-10-20','2025':'2025-10-07','2026':'2026-10-16','2027':'2027-10-04','2028':'2028-10-24'},
   'Dhanteras':         {'2020':'2020-11-13','2021':'2021-11-02','2022':'2022-10-23','2023':'2023-11-10','2024':'2024-10-29','2025':'2025-10-18','2026':'2026-10-18','2027':'2027-10-06','2028':'2028-10-26'},
   'Diwali':            {'2020':'2020-11-14','2021':'2021-11-04','2022':'2022-10-24','2023':'2023-11-12','2024':'2024-10-31','2025':'2025-10-20','2026':'2026-10-20','2027':'2027-10-08','2028':'2028-10-28'},
