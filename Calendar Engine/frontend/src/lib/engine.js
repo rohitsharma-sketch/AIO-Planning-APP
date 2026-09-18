@@ -20,22 +20,36 @@ const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 // --- Festive Map ---
 export function buildFestMap(yr, fests, refYear) {
   // Returns { dateStr: { festival, festObj, position, category, priority } }
-  const map = {};
+  // Collect every festival's every day as a candidate, then resolve
+  // same-date collisions by |position| ascending, then by total window size
+  // (pre+core+post) ascending - each festival's own anchor day (pos 0)
+  // always wins its date over another festival's outer pre/post day, and
+  // among equal |pos| ties the more specific/regional occasion (smaller
+  // window) wins. Without this, a long blanket window (e.g. a 15-day
+  // mourning period) would silently swallow another festival's real anchor
+  // date under plain first-in-array-wins.
+  const candidates = [];
   for (const f of fests) {
     const ds = yr === refYear ? f.refDate : f.futDate;
     if (!ds) continue;
     const fd = parseDate(ds);
     if (!fd) continue;
     const pre = +f.pre || 0, core = +f.core || 1, post = +f.post || 0;
+    const window = pre + core + post;
     for (let pos = -pre; pos <= post + core - 1; pos++) {
       const dd = addDays(fd, pos);
       if (dd.getFullYear() !== yr) continue;
-      let cat = pos < 0 ? 'Pre-Festive' : pos < core ? 'Core Festive' : 'Post-Festive';
-      const key = fmtISO(dd);
-      if (!map[key]) {
-        map[key] = { festival: f.name, festObj: f, position: pos, category: cat };
-      }
+      const cat = pos < 0 ? 'Pre-Festive' : pos < core ? 'Core Festive' : 'Post-Festive';
+      candidates.push({
+        key: fmtISO(dd), absPos: Math.abs(pos), window,
+        entry: { festival: f.name, festObj: f, position: pos, category: cat },
+      });
     }
+  }
+  candidates.sort((a, b) => a.absPos - b.absPos || a.window - b.window);
+  const map = {};
+  for (const c of candidates) {
+    if (!map[c.key]) map[c.key] = c.entry;
   }
   return map;
 }
@@ -266,14 +280,12 @@ function _v1Core(fests, refYr, futYr, maxShift, moPri, coreNames) {
 }
 
 // V2 post-processor: take V1's Phase 1 festival anchors, then redo Phase 2
-// for ALL remaining TY days using a split pool — non-festive TY days draw from
-// the adjacent LY month, non-core festive TY days draw from the same LY month
-// (matching the original V2 Phase 2 pool selection). This is why we can't just
-// carry V1's same-month assignments forward for non-core festive days: V1
-// competed all TY days for the same-month pool, causing sharedRef when the pool
-// ran short. V2 frees same-month LY days by routing non-festive TY days to the
-// adjacent month, giving non-core festive days a larger pool and eliminating
-// the shared-ref problem entirely.
+// for ALL remaining TY days with two rounds - Round A gives every TY day
+// (festive or not) first claim on its own month's residual LY pool; Round B
+// lets only the non-festive TY days left over from a dried-up month fall
+// back to the adjacent LY month (moPri controls direction). Festive TY days
+// never fall back cross-month - a dry same-month pool for one goes straight
+// to the final "still available" fallback instead.
 function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
   maxShift = +maxShift || 45;
   const W = getWeights();
@@ -298,43 +310,66 @@ function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
     lyByMonth.get(mo).push(d);
   }
 
-  // Build all (TY non-anchor, LY candidate) pairs using the split pool rule:
-  //   - TY day in full festival map  → same-month LY pool (festive day stays local)
-  //   - TY day NOT in full fest map  → adjacent-month LY pool (moPri controls direction)
-  const allPairs = [];
-  for (const m of toReassign) {
-    const fd = m.futureDate, fs = fmtISO(fd), fi = fMap[fs];
-    let pool;
-    if (fMapFull[fs]) {
-      pool = lyByMonth.get(fd.getMonth()) || [];
-    } else {
-      const adjMo = moPri === 'next' ? (fd.getMonth() + 1) % 12 : (fd.getMonth() - 1 + 12) % 12;
-      pool = lyByMonth.get(adjMo) || [];
-    }
-    for (const rd of pool) {
-      const rs = fmtISO(rd), ri = rMap[rs];
-      const s = scoreMapping(rd, fd, ri, fi, W, maxShift, moPri);
-      allPairs.push({ rs, fs, rd, fd, ri, fi, ...s });
-    }
-  }
-  allPairs.sort((a, b) => b.score - a.score);
+  const assign = (p, assigned) => assigned.set(p.fs, {
+    refDate: p.rd, futureDate: p.fd,
+    festival: p.ri ? p.ri.festival : null,
+    festivePosition: p.ri ? p.ri.position : null,
+    festiveCategory: p.ri ? p.ri.category : (p.fi ? p.fi.category : 'Non-Festive'),
+    futFestInfo: p.fi,
+    mappingType: p.mtype, mappingPriority: p.mpri, score: p.score,
+    monthMatch: p.monthMatch, weekdayMatch: p.weekdayMatch, dateDiff: p.diff,
+    sharedRef: false,
+  });
 
   const assigned = new Map();
   const usedFut = new Set(), usedRef = new Set(committed);
-  for (const p of allPairs) {
+
+  // Round A: same-month LY pool for every remaining TY day - a festive TY
+  // day (in the full festival map) always stays same-month; a non-festive
+  // TY day now also gets first crack at its own month's residual, per the
+  // rule "non-festive days match same month's residual LY dates first."
+  const roundA = [];
+  for (const m of toReassign) {
+    const fd = m.futureDate, fs = fmtISO(fd), fi = fMap[fs];
+    const pool = lyByMonth.get(fd.getMonth()) || [];
+    for (const rd of pool) {
+      const rs = fmtISO(rd), ri = rMap[rs];
+      const s = scoreMapping(rd, fd, ri, fi, W, maxShift, moPri);
+      roundA.push({ rs, fs, rd, fd, ri, fi, ...s });
+    }
+  }
+  roundA.sort((a, b) => b.score - a.score);
+  for (const p of roundA) {
     if (usedFut.has(p.fs) || usedRef.has(p.rs)) continue;
-    assigned.set(p.fs, {
-      refDate: p.rd, futureDate: p.fd,
-      festival: p.ri ? p.ri.festival : null,
-      festivePosition: p.ri ? p.ri.position : null,
-      festiveCategory: p.ri ? p.ri.category : (p.fi ? p.fi.category : 'Non-Festive'),
-      futFestInfo: p.fi,
-      mappingType: p.mtype, mappingPriority: p.mpri, score: p.score,
-      monthMatch: p.monthMatch, weekdayMatch: p.weekdayMatch, dateDiff: p.diff,
-      sharedRef: false,
-    });
-    usedFut.add(p.fs);
-    usedRef.add(p.rs);
+    assign(p, assigned);
+    usedFut.add(p.fs); usedRef.add(p.rs);
+  }
+
+  // Round B: non-festive TY days whose own month ran dry in Round A fall
+  // back to the adjacent LY month (moPri controls direction) - "otherwise
+  // +/-1 month variation." Festive TY days never reach this round: they're
+  // meant to stay same-month (rule 1), so a dry pool for one just falls
+  // through to the cross-month "still available" fallback below instead.
+  const roundB = [];
+  for (const m of toReassign) {
+    const fs = fmtISO(m.futureDate);
+    if (usedFut.has(fs) || fMapFull[fs]) continue;
+    const fd = m.futureDate, fi = fMap[fs];
+    const adjMo = moPri === 'next' ? (fd.getMonth() + 1) % 12 : (fd.getMonth() - 1 + 12) % 12;
+    const pool = lyByMonth.get(adjMo) || [];
+    for (const rd of pool) {
+      const rs = fmtISO(rd);
+      if (usedRef.has(rs)) continue;
+      const ri = rMap[rs];
+      const s = scoreMapping(rd, fd, ri, fi, W, maxShift, moPri);
+      roundB.push({ rs, fs, rd, fd, ri, fi, ...s });
+    }
+  }
+  roundB.sort((a, b) => b.score - a.score);
+  for (const p of roundB) {
+    if (usedFut.has(p.fs) || usedRef.has(p.rs)) continue;
+    assign(p, assigned);
+    usedFut.add(p.fs); usedRef.add(p.rs);
   }
 
   // Fallback: TY dates whose preferred pool ran dry (rare — only when a month's

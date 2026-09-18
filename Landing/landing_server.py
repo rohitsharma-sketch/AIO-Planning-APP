@@ -353,6 +353,9 @@ class Handler(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     os.chdir(_HERE)
+    for app in APPS:
+        if not _is_online(app["port"]):
+            _launch(app)
     webbrowser.open(f"http://localhost:{PORT}")
     print(f"RS Planning landing page at http://localhost:{PORT}")
     ThreadingHTTPServer(("", PORT), Handler).serve_forever()

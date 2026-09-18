@@ -49,17 +49,24 @@ export const DEFAULT_FESTIVALS = [
 // Matched by exact festival NAME against whatever a cluster's festival list
 // actually contains - a cluster missing one of its listed core names (e.g. no
 // Navratri configured yet) just has one fewer anchor, not an error.
+// Shraad (Pitru Paksha) is a pan-India lunar-calendar mourning period - same
+// dates in every cluster's profile except Kashmir (which has no Shraad entry
+// at all - see the live data). It's core everywhere it's configured so Phase 1
+// anchors its own LY window to its own TY window, the same as any other
+// national major - otherwise its wide window still claims TY dates in
+// fMapFull for display but gets filled by whatever nearby LY dates score
+// best, not the real Shraad period.
 export const CORE_FESTIVALS_BY_CLUSTER = {
   'Kashmir':           ['Diwali', 'Eid al-Fitr', 'Eid al-Adha'],
-  'UP + NCR':          ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja'],
-  'UP + BIHAR - PUJA': ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja'],
-  'BIHAR':             ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja'],
-  'JAMMU + RJ':        ['Holi', 'Navratri', 'Dussehra', 'Diwali'],
-  'ODISHA':            ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Rath Yatra', 'Nuakhai'],
-  'N. EAST - PUJA':    ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Durga Puja'],
-  'N. EAST':           ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Bihu'],
-  'JH + MP + CG':      ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja'],
-  'WB':                ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Durga Puja'],
+  'UP + NCR':          ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Shraad'],
+  'UP + BIHAR - PUJA': ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja', 'Shraad'],
+  'BIHAR':             ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja', 'Shraad'],
+  'JAMMU + RJ':        ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Shraad'],
+  'ODISHA':            ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Rath Yatra', 'Nuakhai', 'Shraad'],
+  'N. EAST - PUJA':    ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Durga Puja', 'Shraad'],
+  'N. EAST':           ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Bihu', 'Shraad'],
+  'JH + MP + CG':      ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja', 'Shraad'],
+  'WB':                ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Durga Puja', 'Shraad'],
 }
 
 // Any cluster not named above (a new cluster added later, or renamed) falls
