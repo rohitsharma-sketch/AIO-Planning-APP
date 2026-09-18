@@ -21,64 +21,23 @@ export const DEFAULT_FESTIVALS = [
 ];
 
 // ─── Core (anchor-driving) festivals per cluster ──────────────────────────────
-// User-specified 2026-09-01: only a small set of MASS-CELEBRATED festivals per
-// cluster should act as shift anchors in generateMappings (engine.js) - every
-// other festival on a cluster's list (Good Friday, Easter, Ram Navami, Karva
-// Chauth, Onam, Baisakhi, Milad-un-Nabi, Guru Nanak Jayanti, Pongal, Gudi
-// Padwa, Vishu, Ganesh Chaturthi, Uttarayan, Kali Puja, Shraad, national
-// holidays, etc.) still appears in the output/festival legend but no longer
-// pins the calendar shift - it's treated as an ordinary day, confined to the
-// same-month shuffling rule below.
+// Policy as of 2026-09-18 (explicit, supersedes the earlier "only a small
+// mass-celebrated subset anchors" design from 2026-09-01): every festival on
+// a cluster's list is core, full stop - no per-cluster allowlist anymore.
 //
-// "core" here is unrelated to a festival's own pre/core/post day-WINDOW size
-// (the fields above) - this is a per-cluster CLASSIFICATION of which festival
-// NAMES are anchor-worthy at all, decided with the user against each
-// cluster's real festival list (see calendar-engine-business-rules memory):
-// - National majors everywhere they're actually observed: Holi, Diwali,
-//   Dussehra, Navratri.
-// - Each cluster's own biggest regional festival(s) - can be more than one
-//   where two are genuinely comparable in scale (e.g. Chhath Puja AND Durga
-//   Puja for the Bihar-adjacent clusters).
-// - Kashmir has neither Holi nor Dussehra/Navratri in its actual festival
-//   list (see the live data) - Diwali is its only national major, so its
-//   core set is just Diwali + both Eids.
-// - JAMMU + RJ has no single festival that clearly dominates the whole
-//   cluster - left at the 4 national majors with no regional addition,
-//   rather than forcing a pick.
-//
-// Matched by exact festival NAME against whatever a cluster's festival list
-// actually contains - a cluster missing one of its listed core names (e.g. no
-// Navratri configured yet) just has one fewer anchor, not an error.
-// Every festival is core in every cluster that actually carries it in its
-// profile (2026-09-18, explicit rule: no two clusters may shift the same
-// festival by different amounts) - a non-core festival's Phase 1 anchor
-// never fires, so Round A/Phase 2 fills its TY window with whatever nearby
-// LY date scores best independently per cluster, which drifts even when
-// every cluster stores the exact same ref/fut date. Kept in sync with each
-// cluster's actual festival list - a cluster missing one of these names
-// just has one fewer anchor, not an error. Rath Yatra now core for WB too
-// (previously ODISHA-only by an earlier, now-superseded design choice).
-export const CORE_FESTIVALS_BY_CLUSTER = {
-  'Kashmir':           ['Diwali', 'Eid al-Fitr', 'Eid al-Adha', 'Milad-un-Nabi'],
-  'UP + NCR':          ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Shraad', 'Raksha Bandhan', 'Eid al-Fitr', 'Christmas'],
-  'UP + BIHAR - PUJA': ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja', 'Shraad', 'Raksha Bandhan', 'Basant Panchami', 'Milad-un-Nabi', 'Makar Sankranti', 'Eid al-Fitr', 'Eid al-Adha', 'Christmas'],
-  'BIHAR':             ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja', 'Shraad', 'Raksha Bandhan', 'Basant Panchami', 'Milad-un-Nabi', 'Makar Sankranti', 'Eid al-Fitr', 'Eid al-Adha', 'Christmas'],
-  'JAMMU + RJ':        ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Shraad', 'Raksha Bandhan', 'Eid al-Fitr', 'Christmas'],
-  'ODISHA':            ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Rath Yatra', 'Nuakhai', 'Shraad', 'Raksha Bandhan', 'Eid al-Fitr'],
-  'N. EAST - PUJA':    ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Durga Puja', 'Shraad', 'Raksha Bandhan', 'Eid al-Fitr', 'Bihu'],
-  'N. EAST':           ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Bihu', 'Shraad', 'Raksha Bandhan', 'Eid al-Fitr'],
-  'JH + MP + CG':      ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Chhath Puja', 'Durga Puja', 'Shraad', 'Raksha Bandhan', 'Basant Panchami', 'Milad-un-Nabi', 'Makar Sankranti', 'Eid al-Fitr', 'Eid al-Adha', 'Christmas'],
-  'WB':                ['Holi', 'Navratri', 'Dussehra', 'Diwali', 'Durga Puja', 'Shraad', 'Raksha Bandhan', 'Basant Panchami', 'Milad-un-Nabi', 'Makar Sankranti', 'Eid al-Fitr', 'Eid al-Adha', 'Christmas', 'Rath Yatra'],
-}
-
-// Any cluster not named above (a new cluster added later, or renamed) falls
-// back to just the 4 pan-India majors - never falls back to "everything is
-// core" (the old, now-rejected behaviour), since that would silently un-do
-// the whole point of this list for a cluster nobody has classified yet.
-export const DEFAULT_CORE_FESTIVALS = ['Holi', 'Navratri', 'Dussehra', 'Diwali']
-
+// Why: a non-core festival's Phase 1 anchor never fires, so Round A/Phase 2
+// fills its TY window with whatever nearby LY date scores best independently
+// per cluster - which drifts even when every cluster stores the exact same
+// ref/fut date for that festival. Three separate rounds of "festival X isn't
+// self-matching" bugs this session (Shraad, Raksha Bandhan, then Eid al-Fitr/
+// Eid al-Adha/Christmas/Bihu/Rath Yatra) were all the same root cause: a name
+// present in the profile but missing from this list. Removing the allowlist
+// removes the whole bug class instead of catching one more name each time.
+// generateMappings/validate (engine.js) already treat `coreNames === null` as
+// "no restriction - every festival on the list is core", so this is just
+// that existing behaviour made the permanent, only behaviour.
 export function coreFestivalNamesFor(clusterName) {
-  return CORE_FESTIVALS_BY_CLUSTER[clusterName] || DEFAULT_CORE_FESTIVALS
+  return null
 }
 
 // ─── Festival Date Database (2026 / 2027) ─────────────────────────────────────
@@ -179,10 +138,10 @@ export const FESTIVAL_DATES = {
   'Dussehra':          {'2020':'2020-10-25','2021':'2021-10-15','2022':'2022-10-04','2023':'2023-10-24','2024':'2024-10-12','2025':'2025-10-02','2026':'2026-10-20','2027':'2027-10-09','2028':'2028-10-19'},
   'Karva Chauth':      {'2020':'2020-11-04','2021':'2021-10-24','2022':'2022-10-13','2023':'2023-11-01','2024':'2024-10-20','2025':'2025-10-07','2026':'2026-10-16','2027':'2027-10-04','2028':'2028-10-24'},
   'Dhanteras':         {'2020':'2020-11-13','2021':'2021-11-02','2022':'2022-10-23','2023':'2023-11-10','2024':'2024-10-29','2025':'2025-10-18','2026':'2026-10-18','2027':'2027-10-06','2028':'2028-10-26'},
-  'Diwali':            {'2020':'2020-11-14','2021':'2021-11-04','2022':'2022-10-24','2023':'2023-11-12','2024':'2024-10-31','2025':'2025-10-20','2026':'2026-10-20','2027':'2027-10-08','2028':'2028-10-28'},
+  'Diwali':            {'2020':'2020-11-14','2021':'2021-11-04','2022':'2022-10-24','2023':'2023-11-12','2024':'2024-10-31','2025':'2025-10-20','2026':'2026-11-08','2027':'2027-10-29','2028':'2028-10-28'},
   'Govardhan Puja':    {'2020':'2020-11-15','2021':'2021-11-05','2022':'2022-10-26','2023':'2023-11-14','2024':'2024-11-02','2025':'2025-10-21','2026':'2026-10-21','2027':'2027-10-09','2028':'2028-10-29'},
   'Bhai Dooj':         {'2020':'2020-11-16','2021':'2021-11-06','2022':'2022-10-27','2023':'2023-11-15','2024':'2024-11-03','2025':'2025-10-22','2026':'2026-10-23','2027':'2027-10-11','2028':'2028-10-30'},
-  'Chhath Puja':       {'2020':'2020-11-20','2021':'2021-11-10','2022':'2022-10-30','2023':'2023-11-19','2024':'2024-11-07','2025':'2025-10-26','2026':'2026-10-27','2027':'2027-10-16','2028':'2028-11-02'},
+  'Chhath Puja':       {'2020':'2020-11-20','2021':'2021-11-10','2022':'2022-10-30','2023':'2023-11-19','2024':'2024-11-07','2025':'2025-10-26','2026':'2026-11-15','2027':'2027-11-05','2028':'2028-11-02'},
   'Guru Nanak Jayanti':{'2020':'2020-11-30','2021':'2021-11-19','2022':'2022-11-08','2023':'2023-11-27','2024':'2024-11-15','2025':'2025-11-05','2026':'2026-11-05','2027':'2027-11-24','2028':'2028-11-13'},
   'Christmas':         {'2020':'2020-12-25','2021':'2021-12-25','2022':'2022-12-25','2023':'2023-12-25','2024':'2024-12-25','2025':'2025-12-25','2026':'2026-12-25','2027':'2027-12-25','2028':'2028-12-25'},
   // Derived as Ganesh Chaturthi + 1 day - see the FESTIVAL_DB comment above.
