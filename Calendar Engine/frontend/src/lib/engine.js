@@ -403,12 +403,20 @@ function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
     usedRef.add(rs);
   }
 
-  // Reassemble in calendar order: Phase 1 anchors from V1, everything else freshly assigned
+  // Merge anchors + freshly assigned into one map, then repair excessive
+  // shifts exactly like V1 does at the end of _v1Core. Without this, V2 has
+  // no safety net at all: its Fallback phase above (rare, but real - a
+  // month's pool running dry) can leave a day matched to whatever's nearest
+  // in the GLOBAL remaining pool with no cap, and unlike V1's Phase 3 same-
+  // month-reuse fallback, V2's Fallback deliberately allows crossing months -
+  // repairExcessiveShifts is what pulls a resulting outlier back under
+  // maxShift via a same-month swap. Found missing 2026-09-18: "All" (V2) had
+  // 90-day shifts in every cluster while "Version 1" (V1) had none, the
+  // opposite of what V2 exists to achieve.
   const anchorMap = new Map(anchors.map(m => [fmtISO(m.futureDate), m]));
-  const result = fDays.map(d => {
-    const fs = fmtISO(d);
-    return anchorMap.get(fs) || assigned.get(fs);
-  }).filter(Boolean);
+  const combined = new Map([...anchorMap, ...assigned]);
+  repairExcessiveShifts(combined, rMap, fMap, W, maxShift, moPri);
+  const result = fDays.map(d => combined.get(fmtISO(d))).filter(Boolean);
 
   // Labeling pass: full festival identity for display on all non-anchor rows
   for (const m of result) {
