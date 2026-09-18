@@ -94,12 +94,13 @@ export function scoreMapping(rDay, fDay, rInfo, fInfo, W, maxShift, moPri) {
 // --- Engine ---
 
 // V1 core - pure same-month algorithm, no version awareness.
-// coreNames: per-cluster list of festival NAMES allowed to anchor the shift
-// (Phase 1) or exempt a mapping from the same-month containment rule below -
-// see CORE_FESTIVALS_BY_CLUSTER in festivalData.js. null/undefined = no
-// restriction (every festival on the list is core) - kept only so any other
-// caller of this function that hasn't been updated to pass core names still
-// behaves exactly as before, rather than silently losing every anchor.
+// coreNames: optional restriction on which festival NAMES are allowed to
+// anchor the shift (Phase 1) or exempt a mapping from the same-month
+// containment rule below. null/undefined = no restriction (every festival
+// on the list is core) - this is the only value festivalData.js's
+// coreFestivalNamesFor() returns as of 2026-09-18 (see that file), but the
+// parameter itself stays general so a caller could still pass a real
+// restriction if a future need for one ever comes back.
 function _v1Core(fests, refYr, futYr, maxShift, moPri, coreNames) {
   maxShift = +maxShift || 45;
   const W = getWeights();
