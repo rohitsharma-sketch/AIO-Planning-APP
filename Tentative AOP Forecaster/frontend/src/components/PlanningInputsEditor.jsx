@@ -13,6 +13,7 @@ const TABS = [
   { key: 'nso',    label: 'NSO Opening Months' },
   { key: 'aop',    label: 'AOP Overrides' },
   { key: 'stores', label: 'Store Master' },
+  { key: 'refmap', label: 'Ref Store Mapping' },
 ]
 
 // Valid tag values — vintage-based (DB / engine) + simple aliases (CSV imports)
@@ -113,14 +114,23 @@ export default function PlanningInputsEditor({ onBack, onContinue }) {
           stores={stores}
           setStores={setStores}
           loadErr={storeLoadErr}
-          reload={() => {
-            setStores(null); setStoreLoadErr(null)
-            fetchJson('/api/config/store-master').then(setStores).catch(e => setStoreLoadErr(e.message))
-          }}
+          reload={reloadStores}
+        />
+      )}
+      {tab === 'refmap'  && (
+        <RefStoreMapTab
+          stores={stores}
+          loadErr={storeLoadErr}
+          reload={reloadStores}
         />
       )}
     </div>
   )
+
+  function reloadStores() {
+    setStores(null); setStoreLoadErr(null)
+    fetchJson('/api/config/store-master').then(setStores).catch(e => setStoreLoadErr(e.message))
+  }
 }
 
 /* ── Count tile component ───────────────────────────────────────── */
@@ -511,6 +521,97 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
             {!filtered.length && (
               <tr><td colSpan={9} className="sm-empty-row">No stores match the current filters.</td></tr>
             )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+/* ── Ref Store / Buddy Store Mapping Tab ─────────────────────────────
+   Focused store → ref_store editor (a narrow slice of Store Master).
+   Writes to the same `stores.ref_store` Postgres column via the same
+   PUT /api/config/store-master endpoint, so a change here is instantly
+   the value every engine and every app reads — there's no separate
+   ref-store store to fall out of sync. ────────────────────────────── */
+function RefStoreMapTab({ stores, loadErr, reload }) {
+  const [edits, setEdits]   = useState({})
+  const [search, setSearch] = useState('')
+  const [status, setStatus] = useState(null)
+  const [busy, setBusy]     = useState(false)
+  const safeStores = stores || []
+
+  const filtered = useMemo(() => {
+    if (!search) return safeStores
+    const q = search.toLowerCase()
+    return safeStores.filter(s =>
+      (s.store_id || '').toLowerCase().includes(q) ||
+      (s.store_name || '').toLowerCase().includes(q) ||
+      (s.ref_store || '').toLowerCase().includes(q)
+    )
+  }, [safeStores, search])
+
+  function setRef(store_id, value) {
+    setEdits(e => ({ ...e, [store_id]: value }))
+  }
+
+  async function save() {
+    const rows = Object.entries(edits).map(([store_id, ref_store]) => ({ store_id, ref_store }))
+    if (!rows.length) { setStatus({ err: false, msg: 'No changes to save.' }); return }
+    setBusy(true); setStatus(null)
+    try {
+      const r = await fetchJson('/api/config/store-master', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows }),
+      })
+      setStatus({ err: false, msg: `Saved ${r.updated} ref-store mapping(s).` })
+      setEdits({})
+      reload()
+    } catch (e) { setStatus({ err: true, msg: e.message }) }
+    finally { setBusy(false) }
+  }
+
+  const unsavedCount = Object.keys(edits).length
+
+  if (!stores && !loadErr) return <div className="card pie-card pie-loading">Loading store master…</div>
+
+  return (
+    <div className="card pie-card">
+      {loadErr && <p className="pie-status err">Could not load store data — {loadErr}</p>}
+      <div className="pie-toolbar">
+        <input
+          className="pie-search"
+          placeholder="Search store code, name, or ref store…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        <span className="pie-count-label">{filtered.length} stores{unsavedCount > 0 ? ` · ${unsavedCount} unsaved` : ''}</span>
+        <button className="btn-primary pie-save" onClick={save} disabled={busy || !unsavedCount}>
+          {busy ? 'Saving…' : 'Save changes'}
+        </button>
+      </div>
+      {status && <p className={`pie-status ${status.err ? 'err' : ''}`}>{status.msg}</p>}
+      <div className="pie-scroll">
+        <table className="pie-row-table sm-table">
+          <thead><tr><th>Store</th><th>Name</th><th>Tag</th><th>Ref Store / Buddy Store</th></tr></thead>
+          <tbody>
+            {filtered.map(s => (
+              <tr key={s.store_id} className={edits[s.store_id] !== undefined ? 'sm-row-edited' : ''}>
+                <td className="sm-code">{s.store_id}</td>
+                <td className="sm-name">{s.store_name || <span className="sm-null">—</span>}</td>
+                <td className="sm-muted">{s.tag || '—'}</td>
+                <td>
+                  <input
+                    className="sm-input sm-input-sm"
+                    type="text"
+                    value={edits[s.store_id] !== undefined ? edits[s.store_id] : (s.ref_store || '')}
+                    onChange={e => setRef(s.store_id, e.target.value)}
+                  />
+                </td>
+              </tr>
+            ))}
+            {!filtered.length && <tr><td colSpan={4} className="sm-empty-row">No stores match.</td></tr>}
           </tbody>
         </table>
       </div>

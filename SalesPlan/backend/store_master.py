@@ -1,15 +1,14 @@
 # Universal Store Master
 # Single source of truth for store -> cluster / tag / ref mapping.
 # All engines import from here -- never read the file themselves.
-# Source: Store Master\Store Master.xlsx
-# Columns: Store Name | Ref Name - Merch | CLUSTER | STORE TAG
+# Source: the shared Postgres `stores` table (AOP Forecaster's db layer, schema
+# `calendar`) — the same table AOP's Planning Inputs UI (incl. Ref Store Mapping)
+# writes to. Previously read a standalone Excel file that could drift out of
+# sync with Postgres edits; switched to the shared DB 2026-09-21 so a ref_store
+# edit anywhere (UI or API) is visible to every app immediately.
 # SSG rule: STORE TAG ends with "- Stores" (e.g. "032 - Stores", "080 - Stores")
 
-import os
-import pandas as pd
 from functools import lru_cache
-
-STORE_MASTER_PATH = r"C:\Users\A9820\Documents\CLaude - New Projects\Store Master\Store Master.xlsx"
 
 SSG_OVERRIDE_STORES: set[str] = {"ANG"}
 
@@ -22,20 +21,23 @@ def load_store_master() -> tuple[dict, ...]:
     Call list(load_store_master()) to get a plain list.
     """
     try:
-        df = pd.read_excel(STORE_MASTER_PATH, header=0)
-        df.columns = [str(c).strip() for c in df.columns]
-        col_map = {
-            "Store Name":       "Store",
-            "Ref Name - Merch": "Ref Store",
-            "CLUSTER":          "Cluster",
-            "STORE TAG":        "Tag",
-        }
-        df = df.rename(columns=col_map)
-        for col in ["Store", "Ref Store", "Cluster", "Tag"]:
-            if col in df.columns:
-                df[col] = df[col].astype(str).str.strip()
-        df = df[df["Store"].notna() & (df["Store"] != "") & (df["Store"] != "nan")]
-        return tuple(df[["Store", "Ref Store", "Cluster", "Tag"]].to_dict(orient="records"))
+        from sqlalchemy import select
+        from db.base import SessionLocal
+        from db.models.masterdata import Store as StoreRow
+
+        with SessionLocal() as session:
+            rows = session.execute(
+                select(StoreRow).where(StoreRow.valid_to.is_(None))
+            ).scalars().all()
+            return tuple(
+                {
+                    "Store": (r.store_id or "").strip(),
+                    "Ref Store": (r.ref_store or "").strip(),
+                    "Cluster": (r.cluster_key or "").strip(),
+                    "Tag": (r.tag or "").strip(),
+                }
+                for r in rows if r.store_id
+            )
     except Exception:
         return tuple()
 
@@ -60,5 +62,5 @@ def get_store_cluster_map() -> dict[str, str]:
 
 
 def reload():
-    """Force re-read of the file (clears lru_cache)."""
+    """Force re-read from Postgres (clears lru_cache)."""
     load_store_master.cache_clear()
