@@ -4578,7 +4578,33 @@ function saveState(){
   try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopUnit:S.aopUnit,locked:[...S.locked],aopSeeds:S.aopSeeds,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],customDepts:S.customDepts,at:now.toISOString()}))}catch(e){}
   _updateSaveLabel(now);
   _maybeSaveVersion(now);
+  pushBuyerGrowthLive();
   toast('State saved ✓');
+}
+// Live push to SalesPlan's Department Growth Matrix — every department/month
+// growth % currently entered (not just locked MAMJ cells; "automatic, live"
+// per the standing instruction, so any month the buyer has actually worked
+// on floats through, not just the AOP-matched ones). Fire-and-forget: a
+// SalesPlan/AOP outage must never block or error out the buyer's own save.
+async function pushBuyerGrowthLive(){
+  try{
+    const rows=[];
+    DVDATA.forEach(dv=>{
+      dv.secs.forEach(sec=>{
+        if(S.hiddenSecs.has(sec.id))return; // inactive dept — nothing to float
+        for(let mi=0;mi<12;mi++){
+          const v=S.inputs[sec.id+'__'+mi];
+          if(v==null||v==='')continue;
+          rows.push({division:dv.nm,department:sec.nm,mi,growth_pct:Number(v)});
+        }
+      });
+    });
+    if(!rows.length)return;
+    await fetch('/api/config/buyer-department-growth',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({rows}),
+    });
+  }catch(e){/* SalesPlan/AOP unreachable — never block the buyer's own save on this */}
 }
 function _updateSaveLabel(d){
   const el=document.getElementById('autosave-lbl');

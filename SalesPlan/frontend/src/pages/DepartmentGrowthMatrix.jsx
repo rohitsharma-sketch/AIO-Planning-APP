@@ -230,11 +230,21 @@ export default function DepartmentGrowthMatrix() {
 
   const depts      = data?.departments || []
   const allPeriods = data?.periods || []
+  // Months with at least one live value from Buyer's Input Sheet — a month
+  // stays hidden here until real work has landed in BIS for it (standing
+  // instruction: don't show a column nobody's touched yet).
+  const buyerMonths = new Set(data?.buyer_available_months || [])
 
-  // Restrict to months that have actuals; fall back to all if none loaded yet
-  const activePeriods = activeMonths.size > 0
-    ? allPeriods.filter(p => activeMonths.has(p.replace(/ P[12]$/, '')))
-    : allPeriods
+  // Restrict to months that have actuals AND (once BIS has anything at all)
+  // to months present in Buyer's Input — either filter is skipped while its
+  // own source is empty, so this degrades to "show everything" the same way
+  // it always did before either live source existed.
+  const activePeriods = allPeriods.filter(p => {
+    const month = p.replace(/ P[12]$/, '')
+    if (activeMonths.size > 0 && !activeMonths.has(month)) return false
+    if (buyerMonths.size > 0 && !buyerMonths.has(month)) return false
+    return true
+  })
   const monthGroups = buildMonthGroups(activePeriods)
 
   const attrCounts = {}
@@ -614,6 +624,9 @@ export default function DepartmentGrowthMatrix() {
             <span style={{ display: 'inline-block', width: 10, height: 10, background: 'transparent', border: '1px solid #D6E0EF', borderRadius: 2, marginRight: 4 }} />
             100 = baseline
           </span>
+          <span style={{ color: theme.textMuted }}>
+            🔗 <span style={{ color: '#60A5FA' }}>Live from Buyer's Input</span> — read-only here, edit there
+          </span>
           <span style={{ marginLeft: 'auto', color: theme.textMuted, fontStyle: 'italic' }}>
             Click a P1/P2 header to fill entire column
           </span>
@@ -696,34 +709,38 @@ export default function DepartmentGrowthMatrix() {
                       {activePeriods.map((p, pi) => {
                         const val = dept.periods[p] ?? 100
                         const isP2 = pi % 2 === 1
+                        const fromBuyer = dept.buyer_periods?.includes(p)
                         return (
                           <td key={p} style={{
                             padding: '3px 2px',
-                            background: cellBg(val),
+                            background: fromBuyer ? 'rgba(96,165,250,0.10)' : cellBg(val),
                             borderRight: isP2 ? `1px solid ${theme.border}` : 'none',
                             textAlign: 'center',
-                          }}>
+                          }} title={fromBuyer ? "Live from Buyer's Input Sheet — edit there, not here" : undefined}>
                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}>
+                              {fromBuyer && <span style={{ fontSize: 9, color: '#60A5FA' }}>🔗</span>}
                               <input
                                 type="number"
                                 step={0.1}
                                 value={val}
-                                onChange={e => handleChange(dept.name, p, e.target.value)}
+                                readOnly={fromBuyer}
+                                onChange={e => !fromBuyer && handleChange(dept.name, p, e.target.value)}
                                 style={{
                                   width: 40, textAlign: 'right',
                                   border: '1px solid transparent', borderRadius: 3,
                                   fontSize: 11, padding: '2px 1px',
                                   background: 'transparent',
-                                  color: cellColor(val),
+                                  color: fromBuyer ? '#60A5FA' : cellColor(val),
                                   fontFamily: theme.fontMono,
                                   fontVariantNumeric: 'tabular-nums',
                                   fontWeight: val !== 100 ? 600 : 400,
                                   outline: 'none',
+                                  cursor: fromBuyer ? 'not-allowed' : 'text',
                                 }}
-                                onFocus={e => e.target.style.borderColor = theme.primaryLight}
+                                onFocus={e => !fromBuyer && (e.target.style.borderColor = theme.primaryLight)}
                                 onBlur={e => e.target.style.borderColor = 'transparent'}
                               />
-                              <span style={{ fontSize: 10, color: cellColor(val), opacity: 0.7, userSelect: 'none' }}>%</span>
+                              <span style={{ fontSize: 10, color: fromBuyer ? '#60A5FA' : cellColor(val), opacity: 0.7, userSelect: 'none' }}>%</span>
                             </div>
                           </td>
                         )

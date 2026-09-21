@@ -281,6 +281,41 @@ def aop_division_targets():
         db.close()
 
 
+@router.post("/api/config/buyer-department-growth")
+def post_buyer_department_growth(body: dict = Body(...)):
+    """Live push from Buyer's Input Sheet (otb-plan-app.html) after every
+    save — feeds SalesPlan's Department Growth Matrix (see
+    db/buyer_department_growth.py). Unauthenticated on this standalone port,
+    same reasoning as /api/config/aop-division-targets: BIS has no server of
+    its own with a DB session, its browser JS calls straight here."""
+    from db.base import SessionLocal
+    from db.buyer_department_growth import upsert_buyer_growth
+
+    rows = body.get("rows") or []
+    db = SessionLocal()
+    try:
+        updated = upsert_buyer_growth(db, rows)
+        return {"ok": True, "updated": updated}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@router.get("/api/config/buyer-department-growth")
+def get_buyer_department_growth(division: str | None = None):
+    """Read side for SalesPlan's Department Growth Matrix — optionally
+    scoped to one division (?division=MENS)."""
+    from db.base import SessionLocal
+    from db.buyer_department_growth import get_buyer_growth
+
+    db = SessionLocal()
+    try:
+        return {"rows": get_buyer_growth(db, division)}
+    finally:
+        db.close()
+
+
 @router.post("/api/promote-aop-targets")
 def promote_aop_targets_endpoint():
     """Promote current staging AOP targets → locked, making them visible to the

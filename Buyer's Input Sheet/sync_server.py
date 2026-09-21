@@ -233,6 +233,28 @@ def aop_division_targets():
                         "note": f"AOP Forecaster unreachable: {e}"})
 
 
+@app.route("/api/config/buyer-department-growth", methods=["GET", "POST"])
+def buyer_department_growth():
+    """Proxy to AOP Forecaster (port 8000) — same shape/reasoning as
+    /api/config/aop-division-targets above. POST pushes this browser's
+    department growth % live after every save; GET is only used by
+    SalesPlan's own backend directly (bypasses this proxy), kept here too
+    for parity/debugging via the BIS origin."""
+    import urllib.request as _ur
+    from flask import request as _req, Response
+    target = "http://127.0.0.1:8000/api/config/buyer-department-growth"
+    try:
+        if _req.method == "POST":
+            req = _ur.Request(target, data=_req.get_data(), method="POST",
+                               headers={"Content-Type": "application/json"})
+        else:
+            req = _ur.Request(target)
+        with _ur.urlopen(req, timeout=5) as r:
+            return Response(r.read(), status=r.status, content_type="application/json")
+    except Exception as e:
+        return jsonify({"ok": False, "note": f"AOP Forecaster unreachable: {e}"}), 502
+
+
 def _run_sales_job(src: str):
     """Background worker: aggregate FY26 AOP-month actuals and store in _sales_job."""
     global _sales_job, _last_sync

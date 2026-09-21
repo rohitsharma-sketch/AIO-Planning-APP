@@ -400,17 +400,66 @@ def _save_growth(data: dict):
         json.dump(data, f, indent=2)
 
 
-def _get_growth_matrix(division: str) -> list:
-    """Returns [{name, attribute, periods: {period: float}}] for a division."""
+AOP_FORECASTER_BASE = os.environ.get("AOP_FORECASTER_URL", "http://localhost:8000")
+
+
+def _fetch_buyer_growth_live(division: str) -> list[dict]:
+    """Live pull from Buyer's Input Sheet (via AOP Forecaster's shared-DB
+    endpoint — see Tentative AOP Forecaster/db/buyer_department_growth.py).
+    Called on every GET, not cached: this is the "automatic, live" half of
+    the integration, matching the equally-live AOP-Forecaster-to-BIS sync.
+    Never raises — AOP Forecaster being down just means no buyer overlay
+    this request, same graceful-degradation as sync_from_aop_forecaster."""
+    import urllib.error
+    import urllib.request
+    url = f"{AOP_FORECASTER_BASE}/api/config/buyer-department-growth?division={division}"
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            return json.loads(resp.read()).get("rows", [])
+    except Exception:
+        return []
+
+
+def _get_growth_matrix(division: str) -> tuple[list, list]:
+    """Returns ([{name, attribute, periods: {period: float}, buyer_periods:
+    [period]}], buyer_months) for a division. Any period the buyer has
+    actually entered in BIS overrides the saved/manual value for BOTH P1 and
+    P2 of that month (same growth % floated across the fortnight split BIS
+    itself doesn't have) and is flagged in buyer_periods so the frontend can
+    mark it read-only. buyer_months is every month label (e.g. "Apr'27")
+    with at least one buyer value anywhere in the division — the set the
+    frontend hides all other months against, per the standing instruction
+    that a month stays hidden until real work has landed in Buyer's Input."""
     master = _build_master()
     depts  = master.get(division, [])
     saved  = _load_growth().get(division, {})
+
+    buyer_rows = _fetch_buyer_growth_live(division)
+    # {dept_name: {month_label: growth_pct}}
+    buyer_by_dept: dict[str, dict[str, float]] = {}
+    buyer_months: set[str] = set()
+    for r in buyer_rows:
+        buyer_by_dept.setdefault(r["department"], {})[r["month"]] = r["growth_pct"]
+        buyer_months.add(r["month"])
+
     result = []
     for d in depts:
-        dept_vals = saved.get(d["name"], {})
+        dept_vals  = saved.get(d["name"], {})
+        buyer_vals = buyer_by_dept.get(d["name"], {})
         periods = {p: dept_vals.get(p, 100.0) for p in GROWTH_PERIODS}
-        result.append({"name": d["name"], "attribute": d["attribute"], "periods": periods})
-    return result
+        buyer_periods = []
+        for month, growth_pct in buyer_vals.items():
+            index_val = 100.0 + growth_pct
+            for suffix in (" P1", " P2"):
+                p = month + suffix
+                if p in periods:
+                    periods[p] = index_val
+                    buyer_periods.append(p)
+        result.append({
+            "name": d["name"], "attribute": d["attribute"],
+            "periods": periods, "buyer_periods": buyer_periods,
+        })
+    return result, sorted(buyer_months)
 
 
 class GrowthUpdate(BaseModel):
@@ -420,10 +469,12 @@ class GrowthUpdate(BaseModel):
 
 @router.get("/growth-matrix/{division}")
 def get_growth_matrix(division: str):
+    departments, buyer_months = _get_growth_matrix(division.upper())
     return {
         "division": division,
         "periods": GROWTH_PERIODS,
-        "departments": _get_growth_matrix(division.upper()),
+        "departments": departments,
+        "buyer_available_months": buyer_months,
     }
 
 
