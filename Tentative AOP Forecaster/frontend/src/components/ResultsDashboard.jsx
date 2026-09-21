@@ -67,6 +67,14 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
   const [reindexedLoading, setReindexedLoading] = useState(false)
   const [reindexedError, setReindexedError] = useState(null)
   const [promoteState, setPromoteState] = useState(null)  // null | 'loading' | 'done' | 'error'
+  // The real, persisted lock — promoteState above only covers the in-flight
+  // click; this is what the Planning Engine actually sees (survives reload).
+  const [lockStatus, setLockStatus] = useState(null)  // null (unknown yet) | {locked, locked_at, ...}
+
+  const refreshLockStatus = () =>
+    fetch(apiUrl('/api/aop-lock-status')).then(r => r.json()).then(setLockStatus).catch(() => {})
+
+  useEffect(() => { refreshLockStatus() }, [])
 
   const handlePromote = async () => {
     setPromoteState('loading')
@@ -74,10 +82,26 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
       const res = await fetch(apiUrl('/api/promote-aop-targets'), { method: 'POST' })
       if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Failed') }
       setPromoteState('done')
+      await refreshLockStatus()
     } catch {
       setPromoteState('error')
     }
   }
+
+  const handleUnlock = async () => {
+    if (!window.confirm('Unlock this AOP? The Planning Engine will fall back to the live (unlocked) staging targets until it — or someone else — promotes again.')) return
+    setPromoteState('loading')
+    try {
+      const res = await fetch(apiUrl('/api/unlock-aop-targets'), { method: 'POST' })
+      if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Failed') }
+      setPromoteState(null)
+      await refreshLockStatus()
+    } catch {
+      setPromoteState('error')
+    }
+  }
+
+  const isLocked = !!lockStatus?.locked
 
   useEffect(() => {
     if (baseSource !== 'reindexed' || reindexed || reindexedLoading) return
@@ -217,22 +241,38 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
         </div>
         <div className="dash-actions">
           <button className="btn-secondary" onClick={onRunAgain}>Back</button>
-          <button
-            className="btn-secondary"
-            onClick={handlePromote}
-            disabled={promoteState === 'loading' || promoteState === 'done'}
-            title="Lock this forecast as the approved AOP for the Planning Engine"
-            style={{
-              background: promoteState === 'done' ? '#D1FAE5' : promoteState === 'error' ? '#FEE2E2' : undefined,
-              color: promoteState === 'done' ? '#065F46' : promoteState === 'error' ? '#991B1B' : undefined,
-              borderColor: promoteState === 'done' ? '#6EE7B7' : promoteState === 'error' ? '#FCA5A5' : undefined,
-            }}
-          >
-            {promoteState === 'loading' ? 'Locking…'
-              : promoteState === 'done'  ? '🔒 Locked to Planning'
-              : promoteState === 'error' ? '⚠ Lock failed'
-              : '🔒 Promote to Planning'}
-          </button>
+          {isLocked ? (
+            <>
+              <button
+                className="btn-secondary"
+                disabled
+                title={lockStatus.locked_at ? `Locked ${new Date(lockStatus.locked_at).toLocaleString('en-IN')}` : 'Locked for the Planning Engine'}
+                style={{ background: '#D1FAE5', color: '#065F46', borderColor: '#6EE7B7' }}
+              >
+                🔒 Locked to Planning
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={handleUnlock}
+                disabled={promoteState === 'loading'}
+                title="Undo the lock — Planning Engine falls back to live staging targets"
+              >
+                {promoteState === 'loading' ? 'Unlocking…' : 'Unlock'}
+              </button>
+            </>
+          ) : (
+            <button
+              className="btn-secondary"
+              onClick={handlePromote}
+              disabled={promoteState === 'loading'}
+              title="Lock this forecast as the approved AOP for the Planning Engine"
+              style={promoteState === 'error' ? { background: '#FEE2E2', color: '#991B1B', borderColor: '#FCA5A5' } : undefined}
+            >
+              {promoteState === 'loading' ? 'Locking…'
+                : promoteState === 'error' ? '⚠ Lock failed — retry'
+                : '🔒 Promote to Planning'}
+            </button>
+          )}
           <button className="btn-primary"   onClick={onDownload}>Download Excel</button>
         </div>
       </div>

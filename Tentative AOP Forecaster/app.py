@@ -336,6 +336,23 @@ def promote_aop_version(version_id: int):
         db.close()
 
 
+@router.post("/api/unlock-aop-targets")
+def unlock_aop_targets_endpoint():
+    """Undo a promote: clear aop_locked_target so the Planning Engine falls
+    back to reading live staging targets (aop_division_target) again. Safe to
+    call any time — a later "Promote to Planning" just re-locks from whatever
+    staging holds at that point."""
+    from db.base import SessionLocal
+    from db.publish_aop_targets import unlock_aop_targets
+    db = SessionLocal()
+    try:
+        return unlock_aop_targets(db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
 @router.get("/api/aop-lock-status")
 def aop_lock_status():
     """Returns whether staging AOP targets have been promoted (locked) for the

@@ -312,3 +312,19 @@ def promote_aop_targets(session) -> dict:
 
     session.commit()
     return {"ok": True, "locked_rows": len(staging_rows)}
+
+
+def unlock_aop_targets(session) -> dict:
+    """Clear aop_locked_target — the Planning Engine's read (division_plan.py's
+    _get_aop_targets, "prefers locked over staging") falls straight back to
+    the live staging targets (aop_division_target) once no locked row exists,
+    no separate 'is it locked' flag to flip. Reversible: promoting again just
+    re-inserts these same rows."""
+    result = session.execute(text("""
+        DELETE FROM planning_inputs.input_values
+        WHERE lever_key = :lk
+          AND row_key    IN ('MENS','LADIES','KIDS')
+          AND period_id  IN (202703,202704,202705,202706)
+    """), {"lk": LOCKED_LEVER_KEY})
+    session.commit()
+    return {"ok": True, "unlocked_rows": result.rowcount}
