@@ -599,6 +599,21 @@ def get_store_master_config():
         ]
 
 
+def _invalidate_salesplan_store_cache():
+    """SalesPlan's store_master.py (SalesPlan/backend/store_master.py)
+    @lru_cache's its store list for the whole process lifetime — under the
+    unified backend (sys.path includes SalesPlan/backend/), a ref_store/tag/
+    cluster edit made here would otherwise sit invisible to SalesPlan's
+    engines until someone hits its own reload endpoint or the whole process
+    restarts. Best-effort + no-op on AOP's standalone port (8000), where
+    SalesPlan isn't on sys.path at all — never let this fail the actual save."""
+    try:
+        import store_master as _salesplan_store_master
+        _salesplan_store_master.reload()
+    except ImportError:
+        pass
+
+
 @router.put("/api/config/store-master")
 def put_store_master_config(body: dict = Body(...)):
     """Update editable planning fields (tag, cluster_key, ref_store) on current store rows."""
@@ -622,6 +637,7 @@ def put_store_master_config(body: dict = Body(...)):
                         setattr(current, field, row[field] if row[field] != "" else None)
                 updated += 1
         session.commit()
+        _invalidate_salesplan_store_cache()
         return {"updated": updated}
 
 
@@ -644,6 +660,7 @@ def delete_untagged_stores():
         for store in rows:
             store.valid_to = now
         session.commit()
+        _invalidate_salesplan_store_cache()
         return {"deleted": len(rows)}
 
 
