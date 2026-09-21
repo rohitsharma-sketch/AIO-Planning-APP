@@ -32,6 +32,15 @@ const NSO_TAG_SET  = new Set(['NSO','MAMJ-NSO'])
 
 const csvField = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`
 
+// Stamped on every successful save below. App.jsx compares this against when
+// the currently-open plan's session was built from the DB — if a save landed
+// after that, the open Review/Results is showing stale data (e.g. a store's
+// ref_store changed but its forecast still reflects the old one) and a
+// "Rebuild plan" banner is shown there.
+function markConfigChanged() {
+  try { localStorage.setItem('aop-config-changed-at', String(Date.now())) } catch {}
+}
+
 function parseCSVRow(line) {
   const fields = []; let cur = ''; let inQ = false
   for (let i = 0; i < line.length; i++) {
@@ -387,6 +396,7 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
       setStatus({ err: false, msg: `Saved ${r.updated} store(s).` })
       setEdits({})
       reload()
+      markConfigChanged()
     } catch (e) { setStatus({ err: true, msg: e.message }) }
     finally { setBusy(false) }
   }
@@ -568,6 +578,7 @@ function RefStoreMapTab({ stores, loadErr, reload }) {
       setStatus({ err: false, msg: `Saved ${r.updated} ref-store mapping(s).` })
       setEdits({})
       reload()
+      markConfigChanged()
     } catch (e) { setStatus({ err: true, msg: e.message }) }
     finally { setBusy(false) }
   }
@@ -707,7 +718,7 @@ function NsoTab() {
     setBusy(true); setStatus(null)
     try {
       await fetchJson('/api/config/nso', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows }) })
-      setStatus({ err: false, msg: 'Saved.' }); load()
+      setStatus({ err: false, msg: 'Saved.' }); load(); markConfigChanged()
     } catch (e) { setStatus({ err: true, msg: e.message }) }
     finally { setBusy(false) }
   }
@@ -848,7 +859,7 @@ function AopTab() {
         return { store_id, division, month, value: v === '' ? null : Number(v) }
       })
       await fetchJson('/api/config/aop-overrides', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows: payload }) })
-      setStatus({ err: false, msg: `Saved ${payload.length} change(s).` }); load()
+      setStatus({ err: false, msg: `Saved ${payload.length} change(s).` }); load(); markConfigChanged()
     } catch (e) { setStatus({ err: true, msg: e.message }) }
     finally { setBusy(false) }
   }

@@ -49,6 +49,9 @@
   transition: opacity 0.2s;
 }
 .step-item.active, .step-item.done { opacity: 1; }
+.step-item.clickable { cursor: pointer; }
+.step-item.clickable:hover .step-label { text-decoration: underline; }
+.step-item.clickable:hover .step-num { background: rgba(255,255,255,0.35); }
 .step-num {
   width: 24px; height: 24px;
   border-radius: 50%;

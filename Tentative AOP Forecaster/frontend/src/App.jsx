@@ -52,6 +52,11 @@ export default function App() {
   const [cellLocks, setCellLocks] = useState(null)
   const initedFor = useRef(null)  // tracks which session_id we've initialised for
 
+  // When this session/plan was last (re)built from the DB — compared against
+  // Planning Inputs' "last saved" marker (see below) to detect a stale plan.
+  const [sessionBuiltAt, setSessionBuiltAt] = useState(null)
+  const [rebuilding, setRebuilding] = useState(false)
+
   // Initialise once per session upload; never reinitialise on back navigation.
   // Restores an in-progress Review draft (rates + cell locks) if this browser
   // still has one for this exact session — e.g. after a reload.
@@ -111,6 +116,7 @@ export default function App() {
     setRates(null)
     setCellLocks(null)
     setSession(data)
+    setSessionBuiltAt(Date.now())
     setShowLanding(false)
     setStep(1)
   }
@@ -241,6 +247,7 @@ export default function App() {
       // Update version log to point at the new session so future loads stay fresh
       if (rates) await savePlanVersion(newSession.session_id, rates, 'db')
       setSession({ ...newSession })
+      setSessionBuiltAt(Date.now())
       setResults(data)
       setRunKey(k => k + 1)
       setStep(2)
@@ -249,6 +256,30 @@ export default function App() {
       setShowLanding(true)
     } finally {
       setRunning(false)
+    }
+  }
+
+  // Planning Inputs Editor (Store Master / Ref Store Mapping / AOP Overrides /
+  // NSO tabs) stamps `aop-config-changed-at` in localStorage on every successful
+  // save. If that's newer than when this session's data was last built from the
+  // DB, the open plan is stale — e.g. a store's ref_store changed after this
+  // plan was generated, so its forecast is still shaped by the OLD ref store's
+  // pattern. Surfaced as a banner rather than auto-rerunning on every edit,
+  // since a config save can happen mid-batch (several fields before "Save").
+  const configChangedAt = Number(localStorage.getItem('aop-config-changed-at') || 0)
+  const planIsStale = sessionBuiltAt && configChangedAt > sessionBuiltAt && (step === 1 || step === 2)
+
+  // One click: rebuild the session fresh from the DB (picks up any Planning
+  // Inputs edit, ref_store included) and re-run the forecast with it.
+  async function handleRebuild() {
+    setRebuilding(true)
+    try {
+      await handleUseDb()   // fresh session from current DB → adoptSession() → step 1
+      await handleRun()     // re-forecast on the fresh session → step 2
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setRebuilding(false)
     }
   }
 
@@ -266,13 +297,28 @@ export default function App() {
           </div>
           {!showLanding && (
             <nav className="stepper">
-              {STEPS.map((s, i) => (
-                <div key={s} className={`step-item ${i === step ? 'active' : ''} ${i < step ? 'done' : ''}`}>
-                  <span className="step-num">{i < step ? 'OK' : i + 1}</span>
-                  <span className="step-label">{s}</span>
-                  {i < STEPS.length - 1 && <span className="step-sep" />}
-                </div>
-              ))}
+              {STEPS.map((s, i) => {
+                // A step is reachable — from anywhere, not just by walking
+                // forward one at a time — once its data already exists, so
+                // going back (manual clicks) never forces a walk back through
+                // every screen to get forward again.
+                const reachable = i === 0 || (i === 1 && session && rates) || (i === 2 && !!results)
+                const clickable = reachable && i !== step
+                return (
+                  <div
+                    key={s}
+                    className={`step-item ${i === step ? 'active' : ''} ${i < step ? 'done' : ''} ${clickable ? 'clickable' : ''}`}
+                    onClick={clickable ? () => setStep(i) : undefined}
+                    role={clickable ? 'button' : undefined}
+                    tabIndex={clickable ? 0 : undefined}
+                    title={clickable ? `Go to ${s}` : undefined}
+                  >
+                    <span className="step-num">{i < step ? 'OK' : i + 1}</span>
+                    <span className="step-label">{s}</span>
+                    {i < STEPS.length - 1 && <span className="step-sep" />}
+                  </div>
+                )
+              })}
             </nav>
           )}
           <div style={{display:'flex', alignItems:'center', gap:8, flexShrink:0}}>
@@ -306,6 +352,20 @@ export default function App() {
           <div className="error-banner">
             <strong>Error:</strong> {error}
             <button onClick={() => setError(null)} style={{marginLeft:12,background:'none',color:'inherit',border:'none',cursor:'pointer',fontSize:16}}>×</button>
+          </div>
+        )}
+
+        {planIsStale && (
+          <div className="error-banner" style={{background:'#fffbeb', borderColor:'#fbbf24', color:'#92400e'}}>
+            <strong>Planning Inputs changed</strong> since this plan was built — store actuals, ref/buddy stores, or AOP overrides may be stale here.
+            <button
+              className="btn-outline"
+              onClick={handleRebuild}
+              disabled={rebuilding || running}
+              style={{marginLeft:12, fontSize:12}}
+            >
+              {rebuilding ? 'Rebuilding…' : 'Rebuild plan from current data →'}
+            </button>
           </div>
         )}
 
