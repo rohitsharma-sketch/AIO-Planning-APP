@@ -264,13 +264,13 @@ export default function App() {
   // save. If that's newer than when this session's data was last built from the
   // DB, the open plan is stale — e.g. a store's ref_store changed after this
   // plan was generated, so its forecast is still shaped by the OLD ref store's
-  // pattern. Surfaced as a banner rather than auto-rerunning on every edit,
-  // since a config save can happen mid-batch (several fields before "Save").
+  // pattern. Detected only while looking at Review/Results (not mid-edit on
+  // Configure) and auto-rebuilt below — see the effect right after handleRebuild.
   const configChangedAt = Number(localStorage.getItem('aop-config-changed-at') || 0)
   const planIsStale = sessionBuiltAt && configChangedAt > sessionBuiltAt && (step === 1 || step === 2)
 
-  // One click: rebuild the session fresh from the DB (picks up any Planning
-  // Inputs edit, ref_store included) and re-run the forecast with it.
+  // Rebuild the session fresh from the DB (picks up any Planning Inputs edit,
+  // ref_store included) and re-run the forecast with it.
   async function handleRebuild() {
     setRebuilding(true)
     try {
@@ -282,6 +282,14 @@ export default function App() {
       setRebuilding(false)
     }
   }
+
+  // Auto-rebuild: the instant a stale plan is showing (Planning Inputs saved
+  // something after this session was built), rebuild it with no click needed.
+  // sessionBuiltAt updates synchronously inside handleRebuild → adoptSession(),
+  // so planIsStale flips false before this can re-fire — self-limiting, no loop.
+  useEffect(() => {
+    if (planIsStale && !rebuilding) handleRebuild()
+  }, [planIsStale, rebuilding])
 
   // When running embedded under the unified backend (port 8010) the outer
   // shell already provides navigation — suppress the standalone header.
@@ -355,17 +363,9 @@ export default function App() {
           </div>
         )}
 
-        {planIsStale && (
-          <div className="error-banner" style={{background:'#fffbeb', borderColor:'#fbbf24', color:'#92400e'}}>
-            <strong>Planning Inputs changed</strong> since this plan was built — store actuals, ref/buddy stores, or AOP overrides may be stale here.
-            <button
-              className="btn-outline"
-              onClick={handleRebuild}
-              disabled={rebuilding || running}
-              style={{marginLeft:12, fontSize:12}}
-            >
-              {rebuilding ? 'Rebuilding…' : 'Rebuild plan from current data →'}
-            </button>
+        {rebuilding && (
+          <div className="error-banner" style={{background:'#eef2ff', borderColor:'#818cf8', color:'#3730a3'}}>
+            🔄 Planning Inputs changed since this plan was built — rebuilding automatically with the current data…
           </div>
         )}
 
