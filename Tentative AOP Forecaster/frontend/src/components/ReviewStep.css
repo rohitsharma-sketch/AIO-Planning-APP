@@ -1,5 +1,7 @@
 .review-wrap  { display: flex; flex-direction: column; gap: 20px; }
 
+.review-topnav { display: flex; align-items: center; gap: 8px; }
+
 .review-header {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap;
 }

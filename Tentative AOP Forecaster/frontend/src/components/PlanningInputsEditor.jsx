@@ -538,6 +538,65 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
   )
 }
 
+/* ── Searchable single-select for a store code ───────────────────────
+   Options come from the store master already loaded for this tab — no
+   separate fetch. Only the row currently open renders a panel (openId
+   is owned by the parent), so 400+ rows don't each mount a listener. */
+function StoreRefSelect({ value, options, onChange, isOpen, onOpen, onClose }) {
+  const [q, setQ] = useState('')
+  const rootRef  = useRef(null)
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    setQ('')
+    function onClickOutside(e) { if (rootRef.current && !rootRef.current.contains(e.target)) onClose() }
+    document.addEventListener('mousedown', onClickOutside)
+    const t = setTimeout(() => inputRef.current?.focus(), 0)
+    return () => { document.removeEventListener('mousedown', onClickOutside); clearTimeout(t) }
+  }, [isOpen])
+
+  const filtered = useMemo(() => {
+    if (!q) return options
+    const s = q.toLowerCase()
+    return options.filter(o => o.id.toLowerCase().includes(s) || o.name.toLowerCase().includes(s))
+  }, [options, q])
+
+  return (
+    <div className="ms-root rss-root" ref={rootRef}>
+      <button type="button" className="sm-input sm-input-sm rss-trigger" onClick={() => (isOpen ? onClose() : onOpen())}>
+        {value || <span className="sm-null">—</span>}
+      </button>
+      {isOpen && (
+        <div className="ms-panel rss-panel">
+          <input
+            ref={inputRef}
+            className="rss-search"
+            type="text"
+            placeholder="Search store code or name…"
+            value={q}
+            onChange={e => setQ(e.target.value)}
+          />
+          <div className="rss-list">
+            <div className="ms-item rss-item-clear" onClick={() => { onChange(''); onClose() }}>— Clear —</div>
+            {filtered.length === 0 && <div className="ms-empty">No stores match</div>}
+            {filtered.map(o => (
+              <div
+                key={o.id}
+                className={`ms-item ${o.id === value ? 'rss-item-sel' : ''}`}
+                onClick={() => { onChange(o.id); onClose() }}
+              >
+                <span className="rss-item-code">{o.id}</span>
+                {o.name && o.name !== o.id && <span className="rss-item-name">{o.name}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ── Ref Store / Buddy Store Mapping Tab ─────────────────────────────
    Focused store → ref_store editor (a narrow slice of Store Master).
    Writes to the same `stores.ref_store` Postgres column via the same
@@ -549,7 +608,13 @@ function RefStoreMapTab({ stores, loadErr, reload }) {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState(null)
   const [busy, setBusy]     = useState(false)
+  const [openFor, setOpenFor] = useState(null)  // store_id whose ref-store dropdown is open
   const safeStores = stores || []
+
+  // The dropdown's own option list — every store in the master, code + name.
+  const storeOptions = useMemo(() =>
+    safeStores.map(s => ({ id: s.store_id, name: s.store_name || s.store_id }))
+  , [safeStores])
 
   const filtered = useMemo(() => {
     if (!search) return safeStores
@@ -613,11 +678,13 @@ function RefStoreMapTab({ stores, loadErr, reload }) {
                 <td className="sm-name">{s.store_name || <span className="sm-null">—</span>}</td>
                 <td className="sm-muted">{s.tag || '—'}</td>
                 <td>
-                  <input
-                    className="sm-input sm-input-sm"
-                    type="text"
+                  <StoreRefSelect
                     value={edits[s.store_id] !== undefined ? edits[s.store_id] : (s.ref_store || '')}
-                    onChange={e => setRef(s.store_id, e.target.value)}
+                    options={storeOptions}
+                    onChange={v => setRef(s.store_id, v)}
+                    isOpen={openFor === s.store_id}
+                    onOpen={() => setOpenFor(s.store_id)}
+                    onClose={() => setOpenFor(f => (f === s.store_id ? null : f))}
                   />
                 </td>
               </tr>

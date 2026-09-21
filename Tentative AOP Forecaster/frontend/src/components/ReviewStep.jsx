@@ -273,6 +273,21 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
 
   return (
     <div className="review-wrap">
+      {/* Always-visible top nav — NOT inside App.jsx's header, which is hidden
+          when this runs embedded under the unified backend (port 8010), so
+          this is the one back/forward control guaranteed to render everywhere.
+          Manual navigation only: no side effects, no re-run. */}
+      {(onGoToConfig || onBack) && (
+        <div className="review-topnav">
+          {onGoToConfig && (
+            <button className="btn-sm-outline" onClick={onGoToConfig}>← Configure</button>
+          )}
+          {onBack && (
+            <button className="btn-sm-outline" onClick={onBack}>Results →</button>
+          )}
+        </div>
+      )}
+
       <div className="review-header">
         <div>
           <h2 className="review-title">Review inputs</h2>
