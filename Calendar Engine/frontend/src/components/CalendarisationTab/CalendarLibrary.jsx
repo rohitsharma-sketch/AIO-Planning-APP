@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
-import { listCalendarLibrary, getCalendar, saveCalendar, deleteCalendar, renameCalendar } from '../../lib/api'
+import { listCalendarLibrary, getCalendar, saveCalendar, deleteCalendar, renameCalendar, getAppState } from '../../lib/api'
+import { generateMappings } from '../../lib/engine'
+import { coreFestivalNamesFor } from '../../lib/festivalData'
+import { fmtISO, yearDays } from '../../lib/dateUtils'
 
 // Saved-date format used on every library card, matching the old app's
 // renderCalendarLibrary() (calendar_engine.html line ~3849:
@@ -11,16 +14,127 @@ function fmtSavedAt(iso) {
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+// Data-integrity + staleness check for one locked calendar, run entirely
+// client-side against its own stored snapshot (getCalendar's clusters+dayMap)
+// - no server endpoint needed since the V2 algorithm only exists in engine.js.
+//
+// Two independent things get checked, per the standing business rule (see
+// CALENDAR_ENGINE_LOGIC.md's "V1 vs V2 engines" section):
+//   1. Coverage/duplicates on the STORED day-map itself - missing or
+//      future-date-collision rows are always a hard bug (should be 0).
+//      Duplicate REFERENCE dates are reported but NOT treated as an error:
+//      the 2026-09-22 tier-reorder fix confirmed a genuine mathematical floor
+//      of same-month reuse remains even under the current, correct algorithm
+//      (e.g. 45/113/87/151 per calendar) - flagging every one as an "error"
+//      would just be noise the user already decided to accept.
+//   2. Staleness - only meaningful for a V2-tagged calendar: regenerate each
+//      cluster's day-map right now, from the SAME stored festival config,
+//      using today's engine.js + today's global maxShift/moPri (app-state).
+//      A mismatch means the algorithm has changed since this was locked
+//      (exactly what happened repeatedly this session) and the snapshot no
+//      longer reflects the current rules - "Sync Now" regenerates it in place.
+function checkIntegrity(full, appSettings) {
+  const ry = Number(full.refYear), fy = Number(full.futYear)
+  const ms = Number(appSettings.maxShift) || 45
+  const moPri = appSettings.moPri || 'prev'
+  const isV2 = (full.engine || '').includes('v2')
+  const expectedFut = new Set(yearDays(fy).map(fmtISO))
+
+  let dupRefDates = 0, missingDays = 0, futCollisions = 0, staleClusters = 0
+  for (const cl of full.clusters || []) {
+    const pairs = (full.dayMap && full.dayMap[cl.name]) || []
+    const refCounts = new Map(), futSeen = new Set()
+    for (const [r, f] of pairs) {
+      refCounts.set(r, (refCounts.get(r) || 0) + 1)
+      if (futSeen.has(f)) futCollisions++
+      futSeen.add(f)
+    }
+    dupRefDates += [...refCounts.values()].filter(n => n > 1).length
+    for (const d of expectedFut) if (!futSeen.has(d)) missingDays++
+
+    if (isV2) {
+      const fresh = generateMappings(cl.festivals, ry, fy, ms, moPri, coreFestivalNamesFor(cl.name), 2)
+      const freshSet = new Set(fresh.map(m => `${fmtISO(m.refDate)}|${fmtISO(m.futureDate)}`))
+      const storedSet = new Set(pairs.map(([r, f]) => `${r}|${f}`))
+      const same = freshSet.size === storedSet.size && [...freshSet].every(k => storedSet.has(k))
+      if (!same) staleClusters++
+    }
+  }
+  return { isV2, dupRefDates, missingDays, futCollisions, isStale: staleClusters > 0 }
+}
+
 export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSavePayload }) {
   const [items, setItems] = useState([])
   const [status, setStatus] = useState(null)
   const [busy, setBusy] = useState(false)
+  // {calendar id -> checkIntegrity() result}, filled in as each card's own
+  // getCalendar(id) resolves - never blocks the initial list render.
+  const [integrity, setIntegrity] = useState({})
+  const [syncingId, setSyncingId] = useState(null)
+  const [appSettings, setAppSettings] = useState({ maxShift: 45, moPri: 'prev' })
 
   function refresh() {
     listCalendarLibrary().then(setItems).catch(e => setStatus({ ok: false, msg: e.message }))
   }
 
   useEffect(refresh, [])
+  useEffect(() => {
+    getAppState().then(s => setAppSettings({ maxShift: s.maxShift ?? 45, moPri: s.moPri || 'prev' })).catch(() => {})
+  }, [])
+
+  // Re-checks every card whenever the library list changes (including after
+  // a Sync Now, which issues the calendar a brand-new id) - an id already
+  // present in `integrity` is skipped, so this never re-fetches a card that
+  // hasn't changed just because some OTHER card in the list changed.
+  useEffect(() => {
+    items.forEach(c => {
+      if (integrity[c.id] !== undefined) return
+      getCalendar(c.id)
+        .then(full => setIntegrity(prev => ({ ...prev, [c.id]: checkIntegrity(full, appSettings) })))
+        .catch(() => setIntegrity(prev => ({ ...prev, [c.id]: null })))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, appSettings])
+
+  // "Sync Now" - regenerates this ONE locked calendar's day-map from its own
+  // stored festival config, using today's V2 engine + today's global
+  // maxShift/moPri, and overwrites it in place (same delete-then-create
+  // pattern every other library write uses, per handleSave's comment above -
+  // there is no partial-update endpoint). Deliberately scoped to just this
+  // calendar's own stored clusters, independent of whatever's currently
+  // loaded in the live editor.
+  async function handleSyncNow(item) {
+    if (!isPlanner || syncingId) return
+    if (!window.confirm(
+      `Regenerate "${item.name}" using today's V2 rules?\nThis overwrites the locked snapshot and cannot be undone.`
+    )) return
+    setSyncingId(item.id)
+    try {
+      const full = await getCalendar(item.id)
+      const ry = Number(full.refYear), fy = Number(full.futYear)
+      const ms = Number(appSettings.maxShift) || 45
+      const moPri = appSettings.moPri || 'prev'
+      const dayMap = {}
+      full.clusters.forEach(cl => {
+        const fresh = generateMappings(cl.festivals, ry, fy, ms, moPri, coreFestivalNamesFor(cl.name), 2)
+        dayMap[cl.name] = fresh.map(m => [fmtISO(m.refDate), fmtISO(m.futureDate)])
+      })
+      const payload = {
+        id: Date.now(), name: full.name, refYear: ry, futYear: fy,
+        savedAt: new Date().toISOString(), engine: 'calendarisation-v2',
+        clusters: full.clusters.map(cl => ({ name: cl.name, region: cl.region, festivals: cl.festivals })),
+        dayMap,
+      }
+      await deleteCalendar(item.id)
+      await saveCalendar(payload)
+      setStatus({ ok: true, msg: `"${item.name}" synced to today's V2 rules.` })
+      refresh()
+    } catch (e) {
+      setStatus({ ok: false, msg: e.message })
+    } finally {
+      setSyncingId(null)
+    }
+  }
 
   // "Lock & Save Calendar" - ported from the old app's saveCalendarToLibrary()
   // (calendar_engine.html lines 3756-3817). Two behaviours are restored here:
@@ -131,6 +245,9 @@ export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSaveP
         <div className="lib-grid">
           {items.map(c => {
             const chips = c.mappingSummary || []
+            const chk = integrity[c.id]
+            const engineLabel = (c.engine || '').includes('v2') ? 'V2' : (c.engine || '').includes('v1') ? 'V1' : null
+            const hasIntegrityIssue = chk && (chk.missingDays > 0 || chk.futCollisions > 0)
             return (
               <div
                 key={c.id}
@@ -152,10 +269,42 @@ export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSaveP
                           is therefore shown on all of them, as a statement that saved calendars
                           are immutable, rather than driven by a (non-existent) `locked` field. */}
                       <span className="lib-locked-badge">Locked</span>
+                      {engineLabel && <span className="lib-locked-badge lib-engine-badge">{engineLabel}</span>}
                     </div>
                     <div className="lib-pair">{c.refYear} -&gt; {c.futYear}</div>
                   </div>
                 </div>
+
+                {/* Automatic data-integrity + V1/V2 staleness check (checkIntegrity,
+                    top of this file) - no manual DB query needed to answer "is this
+                    locked snapshot still trustworthy". Skipped silently while its
+                    own getCalendar(id) is still in flight rather than showing a
+                    "Checking..." placeholder on every card on every page load. */}
+                {chk && (
+                  <div className="lib-integrity">
+                    {hasIntegrityIssue ? (
+                      <span className="lib-badge lib-badge-error">
+                        {chk.missingDays > 0 ? `${chk.missingDays} day(s) unmapped` : `${chk.futCollisions} future-date collision(s)`}
+                      </span>
+                    ) : (
+                      <span className="lib-badge lib-badge-ok">365 coverage OK</span>
+                    )}
+                    {chk.dupRefDates > 0 && (
+                      <span className="lib-badge lib-badge-muted" title="Reused reference dates - expected when a month's future days outnumber its spare reference days (see sharedRef in CALENDAR_ENGINE_LOGIC.md), not necessarily a bug.">
+                        {chk.dupRefDates} reused ref-date{chk.dupRefDates === 1 ? '' : 's'}
+                      </span>
+                    )}
+                    {chk.isV2 && (
+                      chk.isStale ? (
+                        <span className="lib-badge lib-badge-stale" title="Regenerating this calendar's stored festival config with today's engine.js produces a different day-map - the V2 algorithm has changed since this was locked.">
+                          Out of sync with current V2
+                        </span>
+                      ) : (
+                        <span className="lib-badge lib-badge-synced">In sync with current V2</span>
+                      )
+                    )}
+                  </div>
+                )}
 
                 {/* Chip count is days mapped for that cluster (mappingSummary.totalDays,
                     the only per-cluster number the list endpoint returns). The old app's
@@ -175,6 +324,15 @@ export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSaveP
 
                 <div className="lib-actions">
                   <button className="btn" onClick={e => { e.stopPropagation(); handleLoad(c.id) }}>Load &amp; Preview</button>
+                  {isPlanner && chk?.isStale && (
+                    <button
+                      className="btn lib-sync-btn"
+                      disabled={syncingId === c.id}
+                      onClick={e => { e.stopPropagation(); handleSyncNow(c) }}
+                    >
+                      {syncingId === c.id ? 'Syncing…' : 'Sync Now'}
+                    </button>
+                  )}
                   {isPlanner && (
                     <button className="btn" onClick={e => { e.stopPropagation(); handleRename(c) }}>Rename</button>
                   )}

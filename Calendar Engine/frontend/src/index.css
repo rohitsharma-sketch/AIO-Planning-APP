@@ -748,6 +748,27 @@ input[type=number].year-input { width: 80px; font-size: 15px; font-weight: 600; 
   vertical-align: middle;
 }
 .lib-pair { font-size: 11px; color: var(--navy); font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.lib-engine-badge { background: var(--light); color: var(--muted); }
+
+/* Automatic integrity + V1/V2 sync badges (checkIntegrity in CalendarLibrary.jsx) */
+.lib-integrity { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.lib-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  border-radius: 3px;
+  padding: 2px 6px;
+}
+.lib-badge-ok     { background: #D1FAE5; color: var(--green); }
+.lib-badge-error  { background: #FEE2E2; color: var(--red); }
+.lib-badge-muted  { background: var(--light); color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 600; cursor: help; }
+.lib-badge-synced { background: #D1FAE5; color: var(--green); }
+.lib-badge-stale  { background: #FEF3C7; color: #92400E; cursor: help; }
+.lib-actions .btn.lib-sync-btn { background: #F59E0B; color: #fff; border-color: #F59E0B; }
+.lib-actions .btn.lib-sync-btn:hover { background: #F59E0B; opacity: .88; }
 .lib-clusters { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
 .lib-cluster-chip {
   font-size: 10px;

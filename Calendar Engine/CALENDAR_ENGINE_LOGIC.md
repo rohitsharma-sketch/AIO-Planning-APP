@@ -59,6 +59,16 @@ Separate generation paths, not the same calendar relabeled — switching the eng
 
 Each regenerated via Load & Preview → Create Calendar (engine V2) → Save Changes to [name] (overwrites in place under a NEW numeric id — the backend has no partial-update endpoint, it's always delete-then-recreate; the name stays the same so anything referencing it by name is unaffected). **"2026 → 2027 Calendar - Version 1" was deliberately left untouched** — it's explicitly the V1-engine representative by name/design, not a candidate for this fix. Note V1 also carries duplicates (151) — same-month reuse existed in V1 long before this session; it isn't unique to the V2 rewrite.
 
+### Automatic V1/V2 sync badge (2026-09-22)
+
+Manually re-verifying "is this locked calendar still correct" via direct Postgres queries (the method used for the table above) doesn't scale and was never surfaced anywhere in the UI — the Calendar Library now checks this itself, automatically, on every page load.
+
+`CalendarLibrary.jsx`'s `checkIntegrity(full, appSettings)` runs entirely client-side (no backend endpoint — the V2 algorithm only exists in `engine.js`), for every locked calendar:
+1. **Coverage/duplicates on the stored day-map** — missing future days or a future-date collision are always flagged red (should be 0, never happens in practice). Duplicate reference dates are counted and shown as a plain gray badge, **not** an error — the tier-reorder fix above already established these are a genuine floor, not a bug.
+2. **Staleness vs. today's V2 code** — for any calendar tagged `engine: calendarisation-v2`, regenerates every cluster's day-map right now, from the calendar's own stored festival config, using today's `engine.js` + today's global `maxShift`/`moPri` (`/app-state`), and diffs the result against what's actually stored. A mismatch means the algorithm (or a global setting) has changed since this snapshot was locked. **V1-tagged calendars are exempt from this check** — comparing a deliberately-V1 snapshot against V2 output would always "fail" and isn't meaningful.
+
+A stale V2 calendar gets an amber "Out of sync with current V2" badge plus a one-click **Sync Now** button (planner-only) that regenerates just that calendar's own stored clusters/festivals under V2 and overwrites it in place (same delete-then-recreate pattern as every other library write — no partial-update endpoint exists). Verified live 2026-09-22: badges rendered correctly, and — importantly — this caught real drift the table above didn't know about: **"2025 → 2026 Calendar - All" and "2026 → 2027 Calendar - All" both show "Out of sync"**, while "2024 → 2025 Calendar" shows "In sync". The duplicate-date counts (113/45/87) match the table above exactly, confirming the check is sound; the sync itself was intentionally left for the user to trigger (a locked calendar is shared, real data other apps read — not something to silently rewrite mid-investigation).
+
 ## Reindex / data-pipeline facts
 
 - A single reference day can legitimately map to two future days (same-month reuse via `sharedRef`) — any ref→fut join must be a proper table merge over `calendar_day_pairs`, never a `{ref_date: fut_date}` dict (a dict silently drops the second mapping, last-wins).
