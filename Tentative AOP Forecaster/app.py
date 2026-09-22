@@ -279,9 +279,32 @@ def aop_division_targets():
             if published_at is None or updated_at > published_at:
                 published_at = updated_at
 
+        # Which AOP plan version produced this staging data, if any - lets BIS
+        # show "Version 2" instead of just a timestamp, so a planner can tell
+        # at a glance whether BIS is synced to the plan they think it is.
+        # aop_publish_history's newest row IS the one that wrote the current
+        # staging values (every publish overwrites staging + appends history
+        # atomically in publish_aop_targets()), so its session_id is the right
+        # one to join against plan_versions - not every publish comes from an
+        # explicitly-saved version (ad-hoc "Get started" runs never get one),
+        # so version_label can legitimately be null.
+        version_label = None
+        try:
+            v = db.execute(text("""
+                SELECT pv.data->>'label'
+                FROM planning_inputs.aop_publish_history h
+                JOIN planning_inputs.plan_versions pv ON pv.data->>'sessionId' = h.session_id
+                ORDER BY h.published_at DESC
+                LIMIT 1
+            """)).scalar()
+            version_label = v
+        except Exception:
+            pass
+
         return {
             "targets": targets,
             "published_at": published_at.isoformat() if published_at else None,
+            "version_label": version_label,
             "note": None,
         }
     finally:
