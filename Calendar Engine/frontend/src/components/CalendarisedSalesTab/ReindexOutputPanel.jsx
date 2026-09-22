@@ -49,7 +49,7 @@ const KEY_LABELS = { store: 'Store', division: 'Division' }
 
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
-export default function ReindexOutputPanel({ result, festivalByCluster, refDateByCluster }) {
+export default function ReindexOutputPanel({ result, festivalByCluster, refDateByCluster, refMonthsByCluster }) {
   const [activeSub, setActiveSub] = useState('reindexed')
   const [search, setSearch] = useState('')
   // Reindexed Sales has two layouts to choose from: Wide (the existing
@@ -897,18 +897,26 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
         const rxYear = visibleMonthCols[0]?.slice(0, 4) ?? 'Reindexed'
         const { rows: smRows, grandActualMM, grandRxYM } = storeMonthComp
         const displayRows = filteredStoreMonthComp || smRows
-        // For each TY month column, collect the distinct LY months that clusters map into it.
-        // refDateByCluster[cluster][ym] gives the dominant LY month ("2026-02") for each TY month ym.
+        // For each TY month column, collect EVERY distinct LY month that actually
+        // contributed a day to it, across every cluster - refMonthsByCluster[cluster][ym]
+        // is the full list (not refDateByCluster's single majority pick, which is
+        // what the sales NUMBER gets counted against but silently drops a real
+        // minority month, e.g. 20 Feb days + 10 Mar days would show as "Feb" only).
+        // Falls back to the majority value if the full-list map isn't populated yet
+        // (e.g. a job resumed without a fresh getCalendar call) so this never regresses
+        // to blank.
         const lyMonthLabelByYM = {}
         for (const ym of visibleMonthCols) {
           const tyMonthIdx = parseInt(ym.slice(5, 7), 10) - 1
           const lyMonths = new Set()
-          for (const cl of Object.keys(refDateByCluster || {})) {
-            const ly = refDateByCluster[cl]?.[ym]
+          for (const cl of Object.keys(refMonthsByCluster || refDateByCluster || {})) {
+            const list = refMonthsByCluster?.[cl]?.[ym]
+            if (list?.length) { list.forEach(ly => lyMonths.add(ly)); continue }
+            const ly = refDateByCluster?.[cl]?.[ym]
             if (ly) lyMonths.add(ly.slice(0, 7))
           }
           const parts = [...lyMonths].sort().map(m => MONTH_ABBR[parseInt(m.slice(5, 7), 10) - 1])
-          lyMonthLabelByYM[ym] = { label: parts.join('/'), isCross: parts.length > 0 && parts.some(p => p !== MONTH_ABBR[tyMonthIdx]) }
+          lyMonthLabelByYM[ym] = { label: parts.join(' + '), isCross: parts.length > 0 && parts.some(p => p !== MONTH_ABBR[tyMonthIdx]) }
         }
         return (
           <>

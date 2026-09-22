@@ -60,6 +60,16 @@ async function fetchCalendarMaps(calendarId, source) {
     ([cl, m]) => [cl, Object.fromEntries(Object.entries(m).map(([k, v]) => [k, [...v].sort()]))]
   ))
   const refByCluster = {}
+  // {cluster -> {futureYYYY-MM -> [every ref YYYY-MM that fed it, sorted]}} -
+  // the full picture behind refByCluster's single plurality-winner value
+  // below. A TY month whose days split e.g. 20/Feb + 10/Mar still shows BOTH
+  // in this map even though refByCluster (majority vote, matching what
+  // reindex_monthwise's own cluster_month_map picks for the actual sales
+  // total) only ever names Feb - two genuinely different questions ("what
+  // month did the SALES NUMBER get counted against" vs "which real 2026
+  // dates actually landed in this 2027 month"), so both are kept rather than
+  // collapsing one into the other.
+  const refMonthsByCluster = {}
   for (const [cl, pairs] of Object.entries(detail.dayMap || {})) {
     if (source === 'dw') {
       const m = (refByCluster[cl] = {})
@@ -72,11 +82,14 @@ async function fetchCalendarMaps(calendarId, source) {
         b[rm] = (b[rm] || 0) + 1
       }
       const m = (refByCluster[cl] = {})
-      for (const [fm, counts] of Object.entries(buckets))
+      const mm = (refMonthsByCluster[cl] = {})
+      for (const [fm, counts] of Object.entries(buckets)) {
         m[fm] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0]
+        mm[fm] = Object.keys(counts).sort()
+      }
     }
   }
-  return { detail, festivalByDate, refByCluster }
+  return { detail, festivalByDate, refByCluster, refMonthsByCluster }
 }
 
 export default function CalendarisedSalesTab({ isPlanner }) {
@@ -120,6 +133,11 @@ export default function CalendarisedSalesTab({ isPlanner }) {
   // cluster) and matches reindex_monthwise's own per-cluster plurality
   // bucketing for month-wise, just not mixed across clusters.
   const [refDateByCluster, setRefDateByCluster] = useState({})
+  // {cluster -> {futureYYYY-MM -> [every contributing ref YYYY-MM]}} - the
+  // full-list companion to refDateByCluster's single majority pick, see
+  // fetchCalendarMaps above. Month-wise only (empty for day-wise, which
+  // already has no aggregation ambiguity at the day level).
+  const [refMonthsByCluster, setRefMonthsByCluster] = useState({})
   const [status, setStatus] = useState(null)
   // null = idle; otherwise {pct, filesDone, filesTotal} while a background
   // reindex job is running (day-wise can read tens of millions of rows - the
@@ -310,9 +328,10 @@ export default function CalendarisedSalesTab({ isPlanner }) {
     setProgress({ pct: 0, filesDone: 0, filesTotal: 0, elapsedSeconds: 0 })
     pollJob(job.jobId, job.startedAt)
     if (job.calendarId) {
-      fetchCalendarMaps(job.calendarId, job.source).then(({ festivalByDate: fbd, refByCluster }) => {
+      fetchCalendarMaps(job.calendarId, job.source).then(({ festivalByDate: fbd, refByCluster, refMonthsByCluster: rmc }) => {
         setFestivalByDate(fbd)
         setRefDateByCluster(refByCluster)
+        setRefMonthsByCluster(rmc)
       }).catch(() => {})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -346,12 +365,13 @@ export default function CalendarisedSalesTab({ isPlanner }) {
     const startedAt = Date.now()
     setProgress({ pct: 0, filesDone: 0, filesTotal: 0, elapsedSeconds: 0 })
     try {
-      const [{ detail, festivalByDate: fbd, refByCluster }, storeMap] = await Promise.all([
+      const [{ detail, festivalByDate: fbd, refByCluster, refMonthsByCluster: rmc }, storeMap] = await Promise.all([
         fetchCalendarMaps(calendarId, source), getStoreClusterMap(),
       ])
       const storeCluster = Object.fromEntries((storeMap.stores || []).map(s => [s.store, s.cluster]))
       setFestivalByDate(fbd)
       setRefDateByCluster(refByCluster)
+      setRefMonthsByCluster(rmc)
 
       const { jobId } = await startReindex({
         source, months: monthsToRun,
@@ -562,7 +582,7 @@ export default function CalendarisedSalesTab({ isPlanner }) {
         </div>
       )}
 
-      <ReindexOutputPanel result={result ?? snapshotResult} festivalByCluster={festivalByDate} refDateByCluster={refDateByCluster} />
+      <ReindexOutputPanel result={result ?? snapshotResult} festivalByCluster={festivalByDate} refDateByCluster={refDateByCluster} refMonthsByCluster={refMonthsByCluster} />
     </div>
   )
 }
