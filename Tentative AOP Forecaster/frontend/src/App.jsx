@@ -222,31 +222,28 @@ export default function App() {
   // clean actuals regardless of when the original session was created. Old
   // session files are intentionally bypassed because their inputs.xlsx was
   // snapshotted at creation time and may contain stale actuals.
-  async function handleResumeSaved(_sessionId) {
+  // FIXED 2026-09-22: this used to ignore sessionId entirely (it was even
+  // named `_sessionId`, the JS convention for "deliberately unused"),
+  // building a BRAND NEW session from current DB data and re-running with
+  // NO growth_overrides - silently using inputs.xlsx's flat 6% default
+  // instead of whatever rates the saved version actually used, then
+  // re-pointing that version's own sessionId at this wrong new session.
+  // "Load" on a saved version must show EXACTLY what was saved, not a
+  // fresh 6%-default re-run wearing that version's label - reading the
+  // session's own already-cached results (same GET the ?session_id= dev
+  // shortcut above already uses) does that with no re-run and no risk of
+  // silently overwriting the version's real data.
+  async function handleResumeSaved(sessionId) {
     setError(null)
     setShowLanding(false)
     setRunning(true)
     try {
-      // Always build a fresh session from current DB actuals + planning_inputs rates.
-      const sessionRes = await fetch(apiUrl('/api/config/session-from-db'), { method: 'POST' })
-      if (!sessionRes.ok) {
-        const err = await sessionRes.json()
-        throw new Error(typeof err.detail === 'string' ? err.detail : 'Could not create session from DB')
+      const res = await fetch(apiUrl(`/api/results/${sessionId}`))
+      if (!res.ok) {
+        throw new Error('This saved plan\'s session data is no longer available - it may need to be re-run from Planning Inputs.')
       }
-      const newSession = await sessionRes.json()
-      const freshRun = await fetch(apiUrl(`/api/run/${newSession.session_id}`), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ palette: 'classic' }),
-      })
-      if (!freshRun.ok) {
-        const err = await freshRun.json()
-        throw new Error(typeof err.detail === 'string' ? err.detail : 'Engine run failed')
-      }
-      const data = await freshRun.json()
-      // Update version log to point at the new session so future loads stay fresh
-      if (rates) await savePlanVersion(newSession.session_id, rates, 'db')
-      setSession({ ...newSession })
+      const data = await res.json()
+      setSession({ session_id: sessionId })
       setSessionBuiltAt(Date.now())
       setResults(data)
       setRunKey(k => k + 1)
