@@ -2073,6 +2073,7 @@ let S = {
   showFP: true,
   inputs: {},     // buyers plan: div__sec__mi = growth%
   aop: {mens:{},ladies:{},kids:{}}, // Division AOP: {divId:{mi:Rs.Cr}}
+  aopBase: {}, // AOP's OWN LFL base per divId/mi (Rs.Cr) - see syncFromAop(), 2026-09-22
   aopUnit: 'lakhs', // 'lakhs' or 'crore' — unit user enters in modal
   aopLocked: false,
   aqp: 0,         // active quick preset
@@ -5330,9 +5331,11 @@ function syncFromAop(){
     toast('No AOP data available — run AOP Forecaster first');return;
   }
   const t=_aopCache.targets;
+  const b=_aopCache.bases; // {DIV:{period:lakhs}} - AOP's OWN LFL base, same one its growth% is computed against (2026-09-22)
   const periodOf={11:202703,0:202704,1:202705,2:202706};
   const mamjMIs=[11,0,1,2];
   let applied=0;
+  S.aopBase={};
   AOP_DIVS.forEach(dv=>{
     const divKey=dv.id.toUpperCase();
     const divData=t[divKey];
@@ -5343,6 +5346,11 @@ function syncFromAop(){
       if(lkh==null||lkh<=0)return;
       if(!S.aop[dv.id])S.aop[dv.id]={};
       S.aop[dv.id][mi]=lkh/100; // Rs Lakhs → Rs Crore
+      const baseLkh=b?.[divKey]?.[periodOf[mi]];
+      if(baseLkh!=null&&baseLkh>0){
+        if(!S.aopBase[dv.id])S.aopBase[dv.id]={};
+        S.aopBase[dv.id][mi]=baseLkh/100;
+      }
       applied++;
     });
   });
@@ -5368,10 +5376,12 @@ function importAndLockAop(){syncFromAop();}
 function _autoApplyAop(){
   if(!_aopCache||!_aopCache.targets)return;
   const t=_aopCache.targets;
+  const b=_aopCache.bases;
   const periodOf={11:202703,0:202704,1:202705,2:202706};
   const mamjMIs=[11,0,1,2];
   let applied=0;
   S.aop={mens:{},ladies:{},kids:{}};
+  S.aopBase={};
   AOP_DIVS.forEach(dv=>{
     const divKey=dv.id.toUpperCase();
     const divData=t[divKey];
@@ -5381,6 +5391,11 @@ function _autoApplyAop(){
       if(lkh==null||lkh<=0)return;
       if(!S.aop[dv.id])S.aop[dv.id]={};
       S.aop[dv.id][mi]=lkh/100; // Rs Lakhs → Rs Crore
+      const baseLkh=b?.[divKey]?.[periodOf[mi]];
+      if(baseLkh!=null&&baseLkh>0){
+        if(!S.aopBase[dv.id])S.aopBase[dv.id]={};
+        S.aopBase[dv.id][mi]=baseLkh/100;
+      }
       applied++;
     });
   });
@@ -5426,7 +5441,13 @@ function seedPlanFromAop(){
     for(let mi=0;mi<12;mi++){
       const aopCr=S.aop[dv.id]?.[mi]; // Rs. Crore
       if(aopCr==null||aopCr<=0)continue;
-      const divLYMon=DEPT_ACTUAL_LY?.[dv.id]?.[mi]??dv.secs.reduce((a,sec)=>a+monLY(sec.ly,mi,sec.lyMo),0); // Rs. Crore
+      // Prefer AOP's OWN base (same one its own growth% is computed against,
+      // synced alongside the target - 2026-09-22) over BIS's separately-
+      // sourced DEPT_ACTUAL_LY, which is a hardcoded snapshot that drifts
+      // out of step with AOP's continuously-updated actuals. Falls back to
+      // the old local base only when an AOP-synced base isn't available
+      // (older publish, or synced before this fix).
+      const divLYMon=S.aopBase?.[dv.id]?.[mi]??DEPT_ACTUAL_LY?.[dv.id]?.[mi]??dv.secs.reduce((a,sec)=>a+monLY(sec.ly,mi,sec.lyMo),0); // Rs. Crore
       if(!divLYMon)continue;
       const gr=parseFloat(((aopCr/divLYMon-1)*100).toFixed(1));
       dv.secs.forEach(sec=>{
