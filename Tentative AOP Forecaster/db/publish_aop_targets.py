@@ -76,6 +76,15 @@ def _ensure_history_table(session) -> None:
         ALTER TABLE planning_inputs.aop_publish_history
         ADD COLUMN IF NOT EXISTS growth_pct NUMERIC(8,2)
     """))
+    # division_base_totals: the LFL base (Rs Lakhs) AOP's own growth% was
+    # computed against, per division/period - lets a downstream consumer
+    # (BIS) derive AOP's OWN growth% (target/base - 1) instead of dividing
+    # AOP's target by its own, separately-sourced LY baseline. See BIS's
+    # DEPT_ACTUAL_LY comment/2026-09-22 fix for why that divergence mattered.
+    session.execute(text("""
+        ALTER TABLE planning_inputs.aop_publish_history
+        ADD COLUMN IF NOT EXISTS division_base_totals JSONB
+    """))
 
 
 def publish_aop_targets(session, detail_records: list[dict], session_id: str = None) -> None:
@@ -90,7 +99,10 @@ def publish_aop_targets(session, detail_records: list[dict], session_id: str = N
     """), {"k": LEVER_KEY})
 
     # Aggregate LFL-only forecast totals: {(row_key, period_id): total_lakhs}
+    # base_totals mirrors it exactly, reading Base instead of Forecast - the
+    # SAME base AOP's own growth% (below) is computed against.
     totals: dict[tuple[str, int], float] = {}
+    base_totals: dict[tuple[str, int], float] = {}
     for rec in detail_records:
         if rec.get("Tag") not in LFL_TAGS:
             continue  # skip NSO and Ramp stores
@@ -99,8 +111,10 @@ def publish_aop_targets(session, detail_records: list[dict], session_id: str = N
             continue
         for month_label, period_id in MAMJ.items():
             val = rec.get(f"{month_label} | Forecast") or 0.0
+            base = rec.get(f"{month_label} | Base") or 0.0
             key = (div, period_id)
             totals[key] = totals.get(key, 0.0) + float(val)
+            base_totals[key] = base_totals.get(key, 0.0) + float(base)
 
     if not totals:
         return
@@ -124,15 +138,19 @@ def publish_aop_targets(session, detail_records: list[dict], session_id: str = N
         div_totals: dict[str, dict[str, float]] = {}
         for (div, pid), val in totals.items():
             div_totals.setdefault(div, {})[str(pid)] = round(val, 2)
+        div_base_totals: dict[str, dict[str, float]] = {}
+        for (div, pid), val in base_totals.items():
+            div_base_totals.setdefault(div, {})[str(pid)] = round(val, 2)
         total_mamj = round(sum(totals.values()), 2)
         growth_pct = _compute_mamj_growth(detail_records)
         session.execute(text("""
             INSERT INTO planning_inputs.aop_publish_history
-                (session_id, division_totals, total_mamj_lakhs, growth_pct)
-            VALUES (:sid, CAST(:dt AS jsonb), :total, :gpct)
+                (session_id, division_totals, division_base_totals, total_mamj_lakhs, growth_pct)
+            VALUES (:sid, CAST(:dt AS jsonb), CAST(:dbt AS jsonb), :total, :gpct)
         """), {
             "sid": session_id,
             "dt": json.dumps(div_totals),
+            "dbt": json.dumps(div_base_totals),
             "total": total_mamj,
             "gpct": growth_pct,
         })

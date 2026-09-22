@@ -287,24 +287,35 @@ def aop_division_targets():
         # atomically in publish_aop_targets()), so its session_id is the right
         # one to join against plan_versions - not every publish comes from an
         # explicitly-saved version (ad-hoc "Get started" runs never get one),
-        # so version_label can legitimately be null.
+        # so version_label can legitimately be null. Same row's own
+        # division_base_totals/growth_pct let BIS compute AOP's OWN growth%
+        # (target/base) instead of dividing by BIS's separately-sourced LY
+        # baseline (DEPT_ACTUAL_LY, a hardcoded snapshot - see its comment) -
+        # the two bases had drifted apart, which is why AOP's own growth%
+        # and BIS's previously-recomputed one could show different numbers
+        # for the identical synced target.
         version_label = None
+        bases = None
+        growth_pct = None
         try:
-            v = db.execute(text("""
-                SELECT pv.data->>'label'
+            row = db.execute(text("""
+                SELECT pv.data->>'label', h.division_base_totals, h.growth_pct
                 FROM planning_inputs.aop_publish_history h
-                JOIN planning_inputs.plan_versions pv ON pv.data->>'sessionId' = h.session_id
+                LEFT JOIN planning_inputs.plan_versions pv ON pv.data->>'sessionId' = h.session_id
                 ORDER BY h.published_at DESC
                 LIMIT 1
-            """)).scalar()
-            version_label = v
+            """)).first()
+            if row:
+                version_label, bases, growth_pct = row[0], row[1], (float(row[2]) if row[2] is not None else None)
         except Exception:
             pass
 
         return {
             "targets": targets,
+            "bases": bases,
             "published_at": published_at.isoformat() if published_at else None,
             "version_label": version_label,
+            "growth_pct": growth_pct,
             "note": None,
         }
     finally:
