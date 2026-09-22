@@ -55,7 +55,14 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
   const [search, setSearch] = useState('')
   // Month Wise Matrix: which store's split to preview (Download XLSX always
   // covers every store regardless of this selection).
-  const [mwMatrixStore, setMwMatrixStore] = useState('')
+  // Multi-select: which stores' own matrix blocks to render in the preview
+  // (Download XLSX always covers every store regardless of this selection).
+  // null = "not yet defaulted"; defaults to just the first store once data
+  // loads, same starting point the old single-select had, but the user can
+  // add more from the dropdown to compare stores side by side.
+  const [mwMatrixStores, setMwMatrixStores] = useState(null)
+  const [mwMatrixSearch, setMwMatrixSearch] = useState('')
+  const [mwMatrixPickerOpen, setMwMatrixPickerOpen] = useState(false)
   // Reindexed Sales has two layouts to choose from: Wide (the existing
   // pivot - one row per store[+extra fields], one column per date/month;
   // good for a full year at a glance but the column count explodes with
@@ -229,8 +236,22 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
   }, [isMwMatrix, result, fwdSplitByCluster, monthCols, storeCluster])
 
   useEffect(() => {
-    if (isMwMatrix && !mwMatrixStore && mwMatrixData.stores.length) setMwMatrixStore(mwMatrixData.stores[0])
-  }, [isMwMatrix, mwMatrixData, mwMatrixStore])
+    if (isMwMatrix && mwMatrixStores === null && mwMatrixData.stores.length) setMwMatrixStores(new Set([mwMatrixData.stores[0]]))
+  }, [isMwMatrix, mwMatrixData, mwMatrixStores])
+
+  const mwMatrixSelected = mwMatrixStores || new Set()
+  const mwMatrixFilteredStores = useMemo(() => {
+    const q = mwMatrixSearch.toLowerCase().trim()
+    if (!q) return mwMatrixData.stores
+    return mwMatrixData.stores.filter(s => s.toLowerCase().includes(q))
+  }, [mwMatrixData, mwMatrixSearch])
+  function toggleMwMatrixStore(store) {
+    setMwMatrixStores(prev => {
+      const next = new Set(prev || [])
+      next.has(store) ? next.delete(store) : next.add(store)
+      return next
+    })
+  }
 
   function downloadMwMatrixXlsx() {
     if (!mwMatrixData.stores.length) return
@@ -1074,19 +1095,39 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
       })()}
 
       {activeSub === 'mwmatrix' && isMwMatrix && (() => {
-        const sel = mwMatrixData.byStore.get(mwMatrixStore)
         const hasSplitMap = fwdSplitByCluster && Object.keys(fwdSplitByCluster).length > 0
+        const selectedStores = mwMatrixData.stores.filter(s => mwMatrixSelected.has(s))
+        const pickerLabel = mwMatrixSelected.size === 0 ? 'Select stores...'
+          : mwMatrixSelected.size <= 3 ? selectedStores.join(', ')
+          : `${mwMatrixSelected.size} stores selected`
         return (
           <>
-            <div className="scm-toolbar">
+            <div className="scm-toolbar" style={{ position: 'relative' }}>
               <div className="field">
-                <label htmlFor="mwmx-store">Store Filter</label>
-                <input id="mwmx-store" list="mwmx-store-list" style={{ width: '220px' }}
-                  placeholder="type to search a store"
-                  value={mwMatrixStore} onChange={e => setMwMatrixStore(e.target.value)} />
-                <datalist id="mwmx-store-list">
-                  {mwMatrixData.stores.map(s => <option key={s} value={s} />)}
-                </datalist>
+                <label htmlFor="mwmx-store-btn">Store Filter</label>
+                <button type="button" id="mwmx-store-btn" className="btn" style={{ minWidth: '220px', textAlign: 'left' }}
+                  onClick={() => setMwMatrixPickerOpen(o => !o)}>
+                  {pickerLabel}
+                </button>
+                {mwMatrixPickerOpen && (
+                  <div className="fest-name-suggest" style={{ position: 'absolute', top: '100%', left: 0, minWidth: '260px', maxHeight: '320px', padding: '8px' }}>
+                    <input type="text" autoFocus placeholder="search stores" style={{ width: '100%', marginBottom: '6px' }}
+                      value={mwMatrixSearch} onChange={e => setMwMatrixSearch(e.target.value)} />
+                    <div style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
+                      <button type="button" onClick={() => setMwMatrixStores(new Set(mwMatrixFilteredStores))}>Select all ({mwMatrixFilteredStores.length})</button>
+                      <button type="button" onClick={() => setMwMatrixStores(new Set())}>Clear</button>
+                    </div>
+                    <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                      {mwMatrixFilteredStores.map(s => (
+                        <label key={s} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '3px 4px', cursor: 'pointer', fontSize: '12px' }}>
+                          <input type="checkbox" checked={mwMatrixSelected.has(s)} onChange={() => toggleMwMatrixStore(s)} />
+                          {s} <span style={{ color: 'var(--muted)' }}>({mwMatrixData.byStore.get(s)?.cluster})</span>
+                        </label>
+                      ))}
+                    </div>
+                    <button type="button" onClick={() => setMwMatrixPickerOpen(false)} style={{ marginTop: '6px', width: '100%' }}>Done</button>
+                  </div>
+                )}
               </div>
               <button className="btn" onClick={downloadMwMatrixXlsx} disabled={!mwMatrixData.stores.length || !hasSplitMap}>
                 Download XLSX (All Stores)
@@ -1103,29 +1144,37 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                 calendar in "Calendar to Reindex" above (Run Reindex not required) to populate it.
               </p>
             )}
-            {!sel ? <p>No data for store "{mwMatrixStore}".</p> : (
-              <div className="tbl-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th rowSpan={2}>Ref Month</th>
-                      <th rowSpan={2} style={num}>Ref Actual Sales</th>
-                      <th colSpan={monthCols.length} style={{ textAlign: 'center' }}>TY Months</th>
-                    </tr>
-                    <tr>
-                      {monthCols.map(m => <th key={m} style={num}>{m}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sel.rows.map(r => (
-                      <tr key={r.refMonth}>
-                        <td style={{ fontWeight: 600 }}>{r.refMonth}</td>
-                        <td style={num}>{round2(r.total)}</td>
-                        {monthCols.map(m => <td key={m} style={num}>{round2(r.cells[m])}</td>)}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {!selectedStores.length ? <p>No store selected - pick one or more from Store Filter above.</p> : (
+              <div className="tbl-wrap" style={{ maxHeight: 'none' }}>
+                {selectedStores.map(store => {
+                  const sel = mwMatrixData.byStore.get(store)
+                  return (
+                    <div key={store} style={{ marginBottom: '18px' }}>
+                      <h4 style={{ margin: '0 0 6px' }}>{store} <span style={{ fontWeight: 400, color: 'var(--muted)' }}>({sel.cluster})</span></h4>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th rowSpan={2}>Ref Month</th>
+                            <th rowSpan={2} style={num}>Ref Actual Sales</th>
+                            <th colSpan={monthCols.length} style={{ textAlign: 'center' }}>TY Months</th>
+                          </tr>
+                          <tr>
+                            {monthCols.map(m => <th key={m} style={num}>{m}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sel.rows.map(r => (
+                            <tr key={r.refMonth}>
+                              <td style={{ fontWeight: 600 }}>{r.refMonth}</td>
+                              <td style={num}>{round2(r.total)}</td>
+                              {monthCols.map(m => <td key={m} style={num}>{round2(r.cells[m])}</td>)}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </>
