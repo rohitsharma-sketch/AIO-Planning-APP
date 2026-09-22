@@ -9,7 +9,7 @@
 // reads have been converted to explicit function parameters (refYr, futYr,
 // maxShift, moPri, fests) threaded through the call chain. The scoring/
 // assignment/repair/validation algorithm itself is unchanged.
-import { parseDate, fmtISO, fmtDisp, addDays, calDiff, yearDays } from './dateUtils';
+import { parseDate, fmtISO, fmtDisp, addDays, calDiff, yearDays } from './dateUtils.js';
 
 // Ported from the source file's lines 1336-1337 (defined alongside MON3,
 // just above the Date Utilities section there) since `validate` depends on
@@ -281,12 +281,22 @@ function _v1Core(fests, refYr, futYr, maxShift, moPri, coreNames) {
 }
 
 // V2 post-processor: take V1's Phase 1 festival anchors, then redo Phase 2
-// for ALL remaining TY days with two rounds - Round A gives every TY day
-// (festive or not) first claim on its own month's residual LY pool; Round B
-// lets only the non-festive TY days left over from a dried-up month fall
-// back to the adjacent LY month (moPri controls direction). Festive TY days
-// never fall back cross-month - a dry same-month pool for one goes straight
-// to the final "still available" fallback instead.
+// for ALL remaining TY days under a strict 4-tier month-adjacency hierarchy
+// (business rule confirmed 2026-09-22, replacing an earlier design that let
+// a dried-up pool fall back to ANY day in the reference year - confirmed
+// live to have produced e.g. a March 2026 day mapped to a January 2027 date
+// with no month relationship at all):
+//   1. Round A    - same month, an unused LY day.
+//   2. Round A2   - same month, REUSE an already-committed LY day
+//                   (checked BEFORE ever considering another month).
+//   3. Round B    - adjacent month only (moPri's preferred direction, then
+//                   the other), an unused LY day.
+//   4. Exception  - same/adjacent month REUSE, bounded to the same 3
+//                   months as tiers 1-3. Never a 4th, unrelated month.
+// Festive TY days (per the CORE-only fMap) only ever go through Round A -
+// they're meant to stay same-month by rule 1, and Round A2's reuse tier
+// deliberately skips them (see its own guard) so a dry pool for one falls
+// straight to the tier-4 exception instead of borrowing another month.
 function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
   maxShift = +maxShift || 45;
   const W = getWeights();
@@ -311,7 +321,7 @@ function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
     lyByMonth.get(mo).push(d);
   }
 
-  const assign = (p, assigned) => assigned.set(p.fs, {
+  const assign = (p, assigned, sharedRef = false) => assigned.set(p.fs, {
     refDate: p.rd, futureDate: p.fd,
     festival: p.ri ? p.ri.festival : null,
     festivePosition: p.ri ? p.ri.position : null,
@@ -319,7 +329,7 @@ function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
     futFestInfo: p.fi,
     mappingType: p.mtype, mappingPriority: p.mpri, score: p.score,
     monthMatch: p.monthMatch, weekdayMatch: p.weekdayMatch, dateDiff: p.diff,
-    sharedRef: false,
+    sharedRef,
   });
 
   const assigned = new Map();
@@ -346,73 +356,110 @@ function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
     usedFut.add(p.fs); usedRef.add(p.rs);
   }
 
-  // Round B: non-festive TY days whose own month ran dry in Round A fall
-  // back to the adjacent LY month (moPri controls direction) - "otherwise
-  // +/-1 month variation." Festive TY days never reach this round: they're
-  // meant to stay same-month (rule 1), so a dry pool for one just falls
-  // through to the cross-month "still available" fallback below instead.
-  const roundB = [];
+  // Round A2 (business rule, confirmed 2026-09-22): same-month REUSE, tried
+  // BEFORE ever considering another month at all - "before borrowing from
+  // an adjacent month, determine whether an eligible same-month reference
+  // date can be reused." A TY day whose own month's UNUSED pool ran dry in
+  // Round A reuses the nearest already-committed reference day from that
+  // SAME month (sharedRef: true, mirroring V1 Phase 3's own "Same-Month
+  // Reuse") rather than ever looking at a neighbouring month. Every real
+  // Gregorian month has real days to reuse, so this tier resolves nearly
+  // everything on its own - Round B/the exception tier below exist for
+  // completeness (e.g. if a non-core-festival restriction is reintroduced)
+  // but should rarely if ever fire while every festival stays core.
   for (const m of toReassign) {
     const fs = fmtISO(m.futureDate);
-    if (usedFut.has(fs) || fMapFull[fs]) continue;
+    if (usedFut.has(fs) || fMapFull[fs]) continue; // already placed, or a festive TY day (never reused here)
     const fd = m.futureDate, fi = fMap[fs];
-    const adjMo = moPri === 'next' ? (fd.getMonth() + 1) % 12 : (fd.getMonth() - 1 + 12) % 12;
-    const pool = lyByMonth.get(adjMo) || [];
-    for (const rd of pool) {
-      const rs = fmtISO(rd);
-      if (usedRef.has(rs)) continue;
-      const ri = rMap[rs];
-      const s = scoreMapping(rd, fd, ri, fi, W, maxShift, moPri);
-      roundB.push({ rs, fs, rd, fd, ri, fi, ...s });
-    }
-  }
-  roundB.sort((a, b) => b.score - a.score);
-  for (const p of roundB) {
-    if (usedFut.has(p.fs) || usedRef.has(p.rs)) continue;
-    assign(p, assigned);
-    usedFut.add(p.fs); usedRef.add(p.rs);
+    const sameMonthAny = rDays.filter(d => d.getMonth() === fd.getMonth());
+    if (!sameMonthAny.length) continue; // defensively unreachable for a real month
+    sameMonthAny.sort((a, b) => Math.abs(calDiff(fd, a)) - Math.abs(calDiff(fd, b)));
+    const rd = sameMonthAny[0], rs = fmtISO(rd), ri = rMap[rs];
+    const s = scoreMapping(rd, fd, ri, fi, W, maxShift, moPri);
+    assign({ rs, fs, rd, fd, ri, fi, mtype: 'Nearest Available Date (Same-Month Reuse)', mpri: 7, ...s }, assigned, true);
+    usedFut.add(fs); // NOT usedRef - the day stays reusable by other TY days too
   }
 
-  // Fallback: TY dates whose preferred pool ran dry (rare — only when a month's
-  // adjacent LY has more TY days than it has LY days, or a festive window consumes
-  // the whole same-month pool). Use any still-available LY day, nearest first.
-  const stillAvail = rDays.filter(d => !usedRef.has(fmtISO(d)));
+  // Round B: adjacent-month UNUSED pool - tier 3 of the hierarchy, reached
+  // only by whatever Round A/A2 couldn't place. "Adjacent month means ONLY:
+  // previous calendar month, next calendar month" - tries moPri's preferred
+  // direction to completion first, then the other direction for anything
+  // still left, never a third month either way.
+  function runRoundB(adjMoOf) {
+    const cands = [];
+    for (const m of toReassign) {
+      const fs = fmtISO(m.futureDate);
+      if (usedFut.has(fs) || fMapFull[fs]) continue;
+      const fd = m.futureDate, fi = fMap[fs];
+      const pool = lyByMonth.get(adjMoOf(fd)) || [];
+      for (const rd of pool) {
+        const rs = fmtISO(rd);
+        if (usedRef.has(rs)) continue;
+        const ri = rMap[rs];
+        const s = scoreMapping(rd, fd, ri, fi, W, maxShift, moPri);
+        cands.push({ rs, fs, rd, fd, ri, fi, ...s });
+      }
+    }
+    cands.sort((a, b) => b.score - a.score);
+    for (const p of cands) {
+      if (usedFut.has(p.fs) || usedRef.has(p.rs)) continue;
+      assign(p, assigned);
+      usedFut.add(p.fs); usedRef.add(p.rs);
+    }
+  }
+  const preferredAdj = moPri === 'next' ? (fd) => (fd.getMonth() + 1) % 12 : (fd) => (fd.getMonth() - 1 + 12) % 12;
+  const otherAdj = moPri === 'next' ? (fd) => (fd.getMonth() - 1 + 12) % 12 : (fd) => (fd.getMonth() + 1) % 12;
+  runRoundB(preferredAdj);
+  runRoundB(otherAdj);
+
+  // Tier 4 - controlled, bounded exception (replaces the old unrestricted
+  // "any still-available LY day, nearest first" fallback, which is exactly
+  // what let a March 2026 reference day get assigned to a January 2027 date
+  // with no month relationship at all). Whatever STILL isn't placed after
+  // tiers 1-3 reuses a day from the SAME set of eligible months only (its
+  // own month or either adjacent month) - never expands the search to any
+  // other month. In this app's current all-festivals-are-core configuration
+  // this should never actually fire (Round A2 already resolves everything
+  // before Round B is even reached); it exists as a documented, bounded
+  // safety net rather than a second unrestricted escape hatch.
   for (const m of toReassign) {
     const fs = fmtISO(m.futureDate);
     if (assigned.has(fs)) continue;
-    if (!stillAvail.length) {
-      // Absolute last resort: no LY days left at all — inherit V1's sharedRef
-      assigned.set(fs, { ...m, sharedRef: true });
+    const fd = m.futureDate, fi = fMap[fs];
+    const eligibleMonths = new Set([fd.getMonth(), (fd.getMonth() - 1 + 12) % 12, (fd.getMonth() + 1) % 12]);
+    const pool = rDays.filter(d => eligibleMonths.has(d.getMonth()));
+    if (!pool.length) {
+      // No reference day exists in this month or either neighbour at all -
+      // defensively unreachable for a real Gregorian calendar. Flagged
+      // distinctly rather than silently borrowing from further away.
+      assigned.set(fs, { ...m, sharedRef: true, mappingType: 'Unmapped - No Eligible Reference Day (Same/Adjacent Month Exhausted)' });
       continue;
     }
-    stillAvail.sort((a, b) => Math.abs(calDiff(a, m.futureDate)) - Math.abs(calDiff(b, m.futureDate)));
-    const rd = stillAvail.shift();
-    const rs = fmtISO(rd), ri = rMap[rs], fi = fMap[fs];
-    const s = scoreMapping(rd, m.futureDate, ri, fi, W, maxShift, moPri);
+    pool.sort((a, b) => Math.abs(calDiff(fd, a)) - Math.abs(calDiff(fd, b)));
+    const rd = pool[0], rs = fmtISO(rd), ri = rMap[rs];
+    const s = scoreMapping(rd, fd, ri, fi, W, maxShift, moPri);
     assigned.set(fs, {
-      refDate: rd, futureDate: m.futureDate,
+      refDate: rd, futureDate: fd,
       festival: ri ? ri.festival : null,
       festivePosition: ri ? ri.position : null,
       festiveCategory: ri ? ri.category : (fi ? fi.category : 'Non-Festive'),
       futFestInfo: fi,
-      mappingType: 'Nearest Available Date (Cross-Month)',
+      mappingType: 'Same/Adjacent Month Reuse (Exception)',
       mappingPriority: 7, score: s.score,
       monthMatch: s.monthMatch, weekdayMatch: s.weekdayMatch, dateDiff: s.diff,
-      sharedRef: false,
+      sharedRef: true,
     });
-    usedRef.add(rs);
   }
 
   // Merge anchors + freshly assigned into one map, then repair excessive
-  // shifts exactly like V1 does at the end of _v1Core. Without this, V2 has
-  // no safety net at all: its Fallback phase above (rare, but real - a
-  // month's pool running dry) can leave a day matched to whatever's nearest
-  // in the GLOBAL remaining pool with no cap, and unlike V1's Phase 3 same-
-  // month-reuse fallback, V2's Fallback deliberately allows crossing months -
-  // repairExcessiveShifts is what pulls a resulting outlier back under
-  // maxShift via a same-month swap. Found missing 2026-09-18: "All" (V2) had
-  // 90-day shifts in every cluster while "Version 1" (V1) had none, the
-  // opposite of what V2 exists to achieve.
+  // shifts exactly like V1 does at the end of _v1Core. maxShift is a
+  // secondary quality control here, not a month boundary - the 4-tier
+  // hierarchy above already guarantees every non-festive assignment stays
+  // within the same or an adjacent month, so this only ever tightens an
+  // already-eligible match (e.g. an early-month day paired with a
+  // late-month day - same month, but a wide day-difference worth swapping
+  // for a closer same-month pair if one exists). It can no longer "fix" a
+  // month-boundary violation because tiers 1-4 above never produce one.
   const anchorMap = new Map(anchors.map(m => [fmtISO(m.futureDate), m]));
   const combined = new Map([...anchorMap, ...assigned]);
   repairExcessiveShifts(combined, rMap, fMap, W, maxShift, moPri);
