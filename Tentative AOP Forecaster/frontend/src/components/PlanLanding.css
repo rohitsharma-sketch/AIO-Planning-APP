@@ -239,6 +239,25 @@
   flex-shrink: 0;
 }
 
+.pl-rename-btn {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1.5px solid var(--nav2, #E0E7FF);
+  background: transparent;
+  color: var(--nav-m, #64748B);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  font-family: inherit;
+}
+.pl-rename-btn:hover {
+  border-color: var(--navy3);
+  color: var(--navy3);
+  background: var(--nav2, #EEF2FF);
+}
+
 .pl-del-btn {
   flex-shrink: 0;
   width: 30px;

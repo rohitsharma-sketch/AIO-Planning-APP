@@ -50,6 +50,17 @@ export async function deletePlanVersion(id) {
   await fetch(apiUrl(`/api/plan-versions/${id}`), { method: 'DELETE' }).catch(() => {})
 }
 
+// The POST endpoint is an upsert (ON CONFLICT id DO UPDATE) - renaming is just
+// re-posting the SAME stored object with its label swapped, same id, no
+// dedicated rename endpoint needed.
+export async function renamePlanVersion(version, newLabel) {
+  await fetch(apiUrl('/api/plan-versions'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...version, label: newLabel, lastModifiedAt: new Date().toISOString() }),
+  }).catch(() => {})
+}
+
 export function isMajorChangeVsLog(rates) {
   // Sync — reads local fp cache only (used for save-before-leave dialog)
   try {
@@ -110,6 +121,15 @@ export default function PlanLanding({ onNewPlan, onResume, theme, onThemeChange 
     const updated = await loadPlanVersions()
     setVersionList(updated)
     if (updated.length === 0) setShowSaved(false)
+  }
+
+  async function handleRename(v) {
+    const entered = window.prompt('Rename this plan version:', v.label)
+    if (entered === null) return   // cancelled
+    const label = entered.trim()
+    if (!label || label === v.label) return
+    await renamePlanVersion(v, label)
+    setVersionList(await loadPlanVersions())
   }
 
   return (
@@ -190,6 +210,13 @@ export default function PlanLanding({ onNewPlan, onResume, theme, onThemeChange 
                 <div className="pl-row-actions">
                   <button className="pl-load-btn" onClick={() => onResume(v.sessionId)}>
                     Load →
+                  </button>
+                  <button
+                    className="pl-rename-btn"
+                    title="Rename this version"
+                    onClick={e => { e.stopPropagation(); handleRename(v) }}
+                  >
+                    Rename
                   </button>
                   <button
                     className="pl-del-btn"
