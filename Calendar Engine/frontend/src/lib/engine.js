@@ -282,19 +282,25 @@ function _v1Core(fests, refYr, futYr, maxShift, moPri, coreNames) {
 
 // V2 post-processor: take V1's Phase 1 festival anchors, then redo Phase 2
 // for ALL remaining TY days under a strict 4-tier month-adjacency hierarchy
-// (business rule confirmed 2026-09-22, replacing an earlier design that let
-// a dried-up pool fall back to ANY day in the reference year - confirmed
-// live to have produced e.g. a March 2026 day mapped to a January 2027 date
-// with no month relationship at all):
-//   1. Round A    - same month, an unused LY day.
-//   2. Round A2   - same month, REUSE an already-committed LY day
-//                   (checked BEFORE ever considering another month).
-//   3. Round B    - adjacent month only (moPri's preferred direction, then
-//                   the other), an unused LY day.
-//   4. Exception  - same/adjacent month REUSE, bounded to the same 3
-//                   months as tiers 1-3. Never a 4th, unrelated month.
+// (business rule confirmed 2026-09-22, revised same day to forbid ANY
+// duplicate reference date - a genuinely free day beats reuse even in the
+// adjacent month - replacing an earlier design that let a dried-up pool
+// fall back to ANY day in the reference year, confirmed live to have
+// produced e.g. a March 2026 day mapped to a January 2027 date with no
+// month relationship at all):
+//   1. Round A - same month, an unused LY day.
+//   2. Round B - adjacent month only (moPri's preferred direction, then the
+//                other), an unused LY day. A free day always wins over reuse.
+//   3. Round C - same month, REUSE an already-committed LY day. Only
+//                reached once tiers 1-2 have exhausted every unused day in
+//                both eligible months - by construction this can't happen
+//                for a real month, so this is the true last resort now, not
+//                a preference.
+//   4. Exception - same/adjacent month REUSE, bounded to the same 3 months
+//                  as tiers 1-3. Never a 4th, unrelated month; exists only
+//                  as a defensive backstop, should never actually fire.
 // Festive TY days (per the CORE-only fMap) only ever go through Round A -
-// they're meant to stay same-month by rule 1, and Round A2's reuse tier
+// they're meant to stay same-month by rule 1, and Round C's reuse tier
 // deliberately skips them (see its own guard) so a dry pool for one falls
 // straight to the tier-4 exception instead of borrowing another month.
 function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
@@ -356,35 +362,15 @@ function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
     usedFut.add(p.fs); usedRef.add(p.rs);
   }
 
-  // Round A2 (business rule, confirmed 2026-09-22): same-month REUSE, tried
-  // BEFORE ever considering another month at all - "before borrowing from
-  // an adjacent month, determine whether an eligible same-month reference
-  // date can be reused." A TY day whose own month's UNUSED pool ran dry in
-  // Round A reuses the nearest already-committed reference day from that
-  // SAME month (sharedRef: true, mirroring V1 Phase 3's own "Same-Month
-  // Reuse") rather than ever looking at a neighbouring month. Every real
-  // Gregorian month has real days to reuse, so this tier resolves nearly
-  // everything on its own - Round B/the exception tier below exist for
-  // completeness (e.g. if a non-core-festival restriction is reintroduced)
-  // but should rarely if ever fire while every festival stays core.
-  for (const m of toReassign) {
-    const fs = fmtISO(m.futureDate);
-    if (usedFut.has(fs) || fMapFull[fs]) continue; // already placed, or a festive TY day (never reused here)
-    const fd = m.futureDate, fi = fMap[fs];
-    const sameMonthAny = rDays.filter(d => d.getMonth() === fd.getMonth());
-    if (!sameMonthAny.length) continue; // defensively unreachable for a real month
-    sameMonthAny.sort((a, b) => Math.abs(calDiff(fd, a)) - Math.abs(calDiff(fd, b)));
-    const rd = sameMonthAny[0], rs = fmtISO(rd), ri = rMap[rs];
-    const s = scoreMapping(rd, fd, ri, fi, W, maxShift, moPri);
-    assign({ rs, fs, rd, fd, ri, fi, mtype: 'Nearest Available Date (Same-Month Reuse)', mpri: 7, ...s }, assigned, true);
-    usedFut.add(fs); // NOT usedRef - the day stays reusable by other TY days too
-  }
-
-  // Round B: adjacent-month UNUSED pool - tier 3 of the hierarchy, reached
-  // only by whatever Round A/A2 couldn't place. "Adjacent month means ONLY:
-  // previous calendar month, next calendar month" - tries moPri's preferred
-  // direction to completion first, then the other direction for anything
-  // still left, never a third month either way.
+  // Round B: adjacent-month UNUSED pool - tier 2 of the hierarchy (business
+  // rule REVISED 2026-09-22: no duplicate reference dates allowed, period -
+  // a genuinely free day, even in the adjacent month, is always preferred
+  // over reusing one that's already spoken for; reuse is now the last
+  // resort, not a preference over borrowing a neighbouring month). Tries
+  // moPri's preferred direction to completion first, then the other
+  // direction for anything still left - "adjacent month means ONLY:
+  // previous calendar month, next calendar month", never a third month
+  // either way.
   function runRoundB(adjMoOf) {
     const cands = [];
     for (const m of toReassign) {
@@ -412,6 +398,28 @@ function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
   runRoundB(preferredAdj);
   runRoundB(otherAdj);
 
+  // Round C: same-month REUSE - tier 3, reached only by whatever's STILL
+  // unplaced after BOTH the own-month (A) and adjacent-month (B) unused
+  // pools are exhausted. By the time a TY day reaches here every day in its
+  // own month is already claimed (Round A would have taken any that
+  // weren't), so this always is a reuse (sharedRef: true, mirroring V1
+  // Phase 3's own "Same-Month Reuse"). Kept scoped to the SAME month only -
+  // Round B above already had first claim on the adjacent month's unused
+  // days, so falling back to REUSE there too would mean picking between two
+  // duplicate-creating options for no reason; same-month is the nearer one.
+  for (const m of toReassign) {
+    const fs = fmtISO(m.futureDate);
+    if (usedFut.has(fs) || fMapFull[fs]) continue; // already placed, or a festive TY day (never reused here)
+    const fd = m.futureDate, fi = fMap[fs];
+    const sameMonthAny = rDays.filter(d => d.getMonth() === fd.getMonth());
+    if (!sameMonthAny.length) continue; // defensively unreachable for a real month
+    sameMonthAny.sort((a, b) => Math.abs(calDiff(fd, a)) - Math.abs(calDiff(fd, b)));
+    const rd = sameMonthAny[0], rs = fmtISO(rd), ri = rMap[rs];
+    const s = scoreMapping(rd, fd, ri, fi, W, maxShift, moPri);
+    assign({ rs, fs, rd, fd, ri, fi, mtype: 'Nearest Available Date (Same-Month Reuse)', mpri: 7, ...s }, assigned, true);
+    usedFut.add(fs); // NOT usedRef - the day stays reusable by other TY days too
+  }
+
   // Tier 4 - controlled, bounded exception (replaces the old unrestricted
   // "any still-available LY day, nearest first" fallback, which is exactly
   // what let a March 2026 reference day get assigned to a January 2027 date
@@ -419,9 +427,9 @@ function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
   // tiers 1-3 reuses a day from the SAME set of eligible months only (its
   // own month or either adjacent month) - never expands the search to any
   // other month. In this app's current all-festivals-are-core configuration
-  // this should never actually fire (Round A2 already resolves everything
-  // before Round B is even reached); it exists as a documented, bounded
-  // safety net rather than a second unrestricted escape hatch.
+  // this should never actually fire (Round C already resolves everything
+  // that reaches it); it exists as a documented, bounded safety net rather
+  // than a second unrestricted escape hatch.
   for (const m of toReassign) {
     const fs = fmtISO(m.futureDate);
     if (assigned.has(fs)) continue;

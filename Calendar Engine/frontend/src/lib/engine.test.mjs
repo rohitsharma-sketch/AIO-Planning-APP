@@ -122,15 +122,45 @@ function test6_bothEnginesValidateClean() {
 }
 
 // Test 7 - shared reference reuse stays within the same/adjacent month rule
-// (sharedRef rows are exactly the Round A2 / tier-4 reuse rows - they must
-// never be the mechanism a violation sneaks through).
+// whenever it does happen (sharedRef rows are exactly the Round C / tier-4
+// reuse rows - they must never be the mechanism a violation sneaks
+// through). Business rule revised 2026-09-22: reuse is now the LAST
+// resort, tried only after both the own-month and adjacent-month unused
+// pools are exhausted (Round B, added the same day, now runs before this) -
+// so this test no longer asserts reuse rows must exist, only that if any
+// do, they're bounded.
 function test7_sharedRefStaysBounded() {
   const mappings = runsForVersion(2);
   const sharedRefRows = mappings.filter(m => m.sharedRef && !m.festival);
-  assert.ok(sharedRefRows.length > 0, 'expected at least some same-month reuse rows in a real BIHAR-shaped run');
   const violations = sharedRefRows.filter(m => !monthsAdjacent(m.refDate.getMonth(), m.futureDate.getMonth()));
   assert.equal(violations.length, 0, `${violations.length} sharedRef row(s) violate the month rule`);
   console.log(`PASS test7_sharedRefStaysBounded (${sharedRefRows.length} reuse rows, all within bounds)`);
+}
+
+// Test 8 - duplicate reference dates are minimized, not just bounded. Business
+// rule (2026-09-22): "no duplicates, period" - an unused day (even in the
+// adjacent month) must always be preferred over reusing a claimed one, so
+// Round B (adjacent, unused) now runs BEFORE Round C (same-month, reuse).
+// For this test's BIHAR-shaped festival config, only 3 non-festive TY days
+// still need reuse - the genuine mathematical floor for this data (every
+// day in both that TY day's own month AND its one adjacent month is
+// already claimed by a festival anchor or another TY day; honoring "no
+// duplicates" further would require either breaking the +/-1 month rule or
+// leaving a future date unmapped, both explicitly ruled out). Asserts an
+// upper bound (not an exact count, which would make this brittle to
+// festival-date maintenance) so a future regression that reverts the tier
+// order or otherwise inflates reuse gets caught.
+function test8_duplicateReferenceDatesMinimized() {
+  const mappings = runsForVersion(2);
+  const nonFestive = mappings.filter(m => !m.festival);
+  const counts = new Map();
+  for (const m of nonFestive) {
+    const k = fmtISO(m.refDate);
+    counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  const dupCount = [...counts.values()].filter(v => v > 1).length;
+  assert.ok(dupCount <= 10, `expected duplicate reference dates to stay near the known floor (3), got ${dupCount} - Round B may no longer be running before Round C`);
+  console.log(`PASS test8_duplicateReferenceDatesMinimized (${dupCount} duplicate ref dates, floor is 3 for this config)`);
 }
 
 test1_noMonthAdjacencyViolations();
@@ -139,4 +169,5 @@ test4_monthEligibilityBeatsProximity();
 test5_festivalCrossMonthPreserved();
 test6_bothEnginesValidateClean();
 test7_sharedRefStaysBounded();
+test8_duplicateReferenceDatesMinimized();
 console.log('\nAll engine.test.mjs checks passed.');

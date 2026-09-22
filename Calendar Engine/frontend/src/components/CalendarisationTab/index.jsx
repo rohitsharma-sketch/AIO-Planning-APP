@@ -466,7 +466,31 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
       return
     }
     const clusterNames = matches.map(cp => cp.name).join(', ')
-    if (!window.confirm(`Remove "${name}" from ${matches.length} cluster(s): ${clusterNames}?\nThis cannot be undone automatically.`)) {
+
+    // Also reach every OTHER saved template, not just the one currently
+    // loaded - removing a festival here is a "this shouldn't exist
+    // anywhere" decision, so it propagates the same way
+    // handleSyncStructureToAllTemplates does, just narrower: only strips
+    // the named festival from whichever clusters already have it, never
+    // replaces or adds anything else in a target's list. Checked BEFORE
+    // confirming so the prompt's scope is accurate, not a guess.
+    let otherTargets = []
+    try {
+      const items = await listCalendarLibrary()
+      const candidates = items.filter(it => it.id !== previewCalendarId)
+      for (const item of candidates) {
+        const full = await getCalendar(item.id)
+        const hit = (full.clusters || []).some(c => (c.festivals || []).some(f => f.name.trim().toLowerCase() === needle))
+        if (hit) otherTargets.push({ id: item.id, name: item.name, clusters: full.clusters || [] })
+      }
+    } catch {
+      // best-effort - a failure here still leaves the live-editor removal available below
+    }
+
+    const otherMsg = otherTargets.length
+      ? `\n\nAlso found in ${otherTargets.length} other saved template(s): ${otherTargets.map(t => t.name).join(', ')} - removing there too.`
+      : ''
+    if (!window.confirm(`Remove "${name}" from ${matches.length} cluster(s): ${clusterNames}?${otherMsg}\nThis cannot be undone automatically.`)) {
       return
     }
     const next = profiles.map(cp => ({ ...cp, festivals: cp.festivals.filter(f => f.name.trim().toLowerCase() !== needle) }))
@@ -475,10 +499,23 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
     // failure keeps persist()'s own error message on screen instead of being
     // clobbered by a false "Removed" claim.
     const saved = await persist(next)
-    if (saved) {
-      setRedactName('')
-      setStatus({ ok: true, msg: `Removed "${name}" from ${matches.length} cluster(s): ${clusterNames}.` })
+    if (!saved) return
+    setRedactName('')
+
+    let otherUpdated = 0, otherFailed = 0
+    for (const t of otherTargets) {
+      try {
+        const nextClusters = t.clusters.map(c => ({ ...c, festivals: (c.festivals || []).filter(f => f.name.trim().toLowerCase() !== needle) }))
+        await updateCalendarFestivals(t.id, { clusters: nextClusters })
+        otherUpdated++
+      } catch {
+        otherFailed++
+      }
     }
+    const otherPart = otherTargets.length
+      ? ` Also removed from ${otherUpdated} other template${otherUpdated === 1 ? '' : 's'}${otherFailed ? `, ${otherFailed} failed` : ''}.`
+      : ''
+    setStatus({ ok: true, msg: `Removed "${name}" from ${matches.length} cluster(s): ${clusterNames}.${otherPart}` })
   }
 
   // Applying a bulk festival import (FestivalImportPanel's confirmImport) -
