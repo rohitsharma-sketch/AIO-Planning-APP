@@ -4,7 +4,6 @@ import {
   PieChart, Pie, Cell, ComposedChart, LabelList
 } from 'recharts'
 import OutputTab from './OutputTab'
-import StoreDrillTable from './StoreDrillTable'
 import { toLeaf, MONTHS, TYPES } from '../lib/tags'
 import { apiUrl } from '../lib/apiBase'
 import './ResultsDashboard.css'
@@ -466,8 +465,11 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
         </div>
       </div>
 
-      {/* ── Store drill-down: every level, pivot-style filters, sortable headers ── */}
-      <StoreDrillTable leaves={leaves} error={dataErr} runKey={runKey} />
+      {/* Store drill-down REMOVED from Summary 2026-09-22 (user request) - it
+          duplicated the Output tab's own drill table, which has the same
+          Type/Tag/Cluster/Store/Division levels plus richer view modes
+          (Store summary/Monthly detail/Division rollup). Output is now the
+          only place to drill into store-level detail. */}
 
       </>}
     </div>

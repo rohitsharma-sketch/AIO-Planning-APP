@@ -218,14 +218,33 @@
 .ms-pv-all { cursor: pointer; }
 
 .ms-pv-cb {
-  font-size: 14px;
-  line-height: 1;
-  color: var(--muted);
-  cursor: pointer;
+  display: inline-block;
+  width: 13px;
+  height: 13px;
   flex-shrink: 0;
-  user-select: none;
+  border: 1.5px solid var(--border);
+  border-radius: 3px;
+  background: var(--white);
+  cursor: pointer;
+  position: relative;
+  transition: background 0.08s, border-color 0.08s;
 }
-.ms-pv-cb--on { color: var(--navy); }
+.ms-pv-cb:hover { border-color: var(--navy3); }
+.ms-pv-cb--on {
+  background: var(--navy);
+  border-color: var(--navy);
+}
+.ms-pv-cb--on::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0px;
+  width: 4px;
+  height: 7px;
+  border: solid #fff;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
 
 .ms-pv-row-label {
   flex: 1;

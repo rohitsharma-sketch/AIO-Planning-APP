@@ -99,9 +99,7 @@ function MultiSelect({ label, options, selected, onChange, colorMap, width }) {
               className={`ms-pv-row ms-pv-all${allSelected ? ' ms-pv-row--checked' : ''}`}
               onClick={toggleAll}
             >
-              <span className={`ms-pv-cb${allSelected ? ' ms-pv-cb--on' : ''}`}>
-                {allSelected ? '[x]' : '[ ]'}
-              </span>
+              <span className={`ms-pv-cb${allSelected ? ' ms-pv-cb--on' : ''}`} />
               <span className="ms-pv-row-label">(Select All)</span>
             </div>
             <div className="ms-pv-divider" />
@@ -117,9 +115,7 @@ function MultiSelect({ label, options, selected, onChange, colorMap, width }) {
                   <span
                     className={`ms-pv-cb${checked ? ' ms-pv-cb--on' : ''}`}
                     onClick={e => toggleCheck(opt, e)}
-                  >
-                    {checked ? '[x]' : '[ ]'}
-                  </span>
+                  />
                   {/* Color dot */}
                   {colorMap?.[opt] && (
                     <span className="ms-dot" style={{ background: colorMap[opt] }} />
@@ -134,7 +130,7 @@ function MultiSelect({ label, options, selected, onChange, colorMap, width }) {
             })}
           </div>
           <div className="ms-pv-footer">
-            <span className="ms-pv-hint">[x] checkbox = multi-select · label = only</span>
+            <span className="ms-pv-hint">Checkbox = multi-select · label = only</span>
           </div>
         </div>
       )}
@@ -209,9 +205,7 @@ function MonthSelect({ selected, onChange }) {
               className={`ms-pv-row ms-pv-all${allSelected ? ' ms-pv-row--checked' : ''}`}
               onClick={() => onChange([...MONTHS])}
             >
-              <span className={`ms-pv-cb${allSelected ? ' ms-pv-cb--on' : ''}`}>
-                {allSelected ? '[x]' : '[ ]'}
-              </span>
+              <span className={`ms-pv-cb${allSelected ? ' ms-pv-cb--on' : ''}`} />
               <span className="ms-pv-row-label">(Select All)</span>
             </div>
             <div className="ms-pv-divider" />
@@ -228,9 +222,7 @@ function MonthSelect({ selected, onChange }) {
                     <span
                       className={`ms-pv-cb${checked ? ' ms-pv-cb--on' : ''}`}
                       onClick={e => toggleCheck(m, e)}
-                    >
-                      {checked ? '[x]' : '[ ]'}
-                    </span>
+                    />
                     <span className="ms-pv-row-label" onClick={e => selectOnly(m, e)}>
                       {m}
                     </span>
@@ -241,7 +233,7 @@ function MonthSelect({ selected, onChange }) {
             </div>
           </div>
           <div className="ms-pv-footer">
-            <span className="ms-pv-hint">[x] checkbox = multi-select · label = only</span>
+            <span className="ms-pv-hint">Checkbox = multi-select · label = only</span>
           </div>
         </div>
       )}

@@ -1,4 +1,7 @@
-// Shared drill-down (pivot-tree) engine used by StoreDrillTable (Summary tab) and OutputTab.
+// Shared drill-down (pivot-tree) engine used by OutputTab. Was also used by
+// StoreDrillTable (Summary tab's own drill table, removed 2026-09-22 as a
+// duplicate of this one) - the CSS import below stays since OutputTab's
+// table still reuses those .sdt-* classes.
 import { useState, useEffect, useRef } from 'react'
 import { TYPES } from './tags'
 import '../components/StoreDrillTable.css'
