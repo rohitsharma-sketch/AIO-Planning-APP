@@ -18,7 +18,7 @@ e.g. store AAC is "MP, CG, RJ - (NP)" / cluster_key business-side but
 """
 import datetime
 
-from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Integer, LargeBinary, String, UniqueConstraint, func, SmallInteger, CheckConstraint
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Integer, LargeBinary, String, UniqueConstraint, func, SmallInteger, CheckConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -104,6 +104,13 @@ class CalendarClusterFestival(Base):
     pre: Mapped[int] = mapped_column(Integer, nullable=False)
     core: Mapped[int] = mapped_column(Integer, nullable=False)
     post: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Manual-intervention exemption: when true, this cluster's row for this
+    # festival name is excluded from the cross-cluster Pre/Core/Post cascade
+    # (handleDayFieldChange) in both directions - editing it doesn't push out
+    # to other clusters, and editing another cluster's same-named festival
+    # doesn't overwrite it. Lets e.g. Kashmir keep a genuinely different
+    # window for one festival while staying synced on every other festival.
+    independent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class StoreClusterMapMeta(Base):
@@ -153,6 +160,10 @@ class ClusterProfileFestival(Base):
     pre: Mapped[int] = mapped_column(Integer, nullable=False)
     core: Mapped[int] = mapped_column(Integer, nullable=False)
     post: Mapped[int] = mapped_column(Integer, nullable=False)
+    # See the matching field on CalendarClusterFestival - kept in sync across
+    # both tables so Load & Preview / Create Calendar round-trips this flag
+    # instead of silently dropping it.
+    independent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class AppStateMeta(Base):

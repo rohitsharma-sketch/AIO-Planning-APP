@@ -127,7 +127,8 @@ def get_calendar(calendar_id: int, user: dict = Depends(require_login)):
             cluster_out.append({
                 "name": cl.cluster_name, "region": cl.region,
                 "festivals": [{"id": f.source_festival_id, "name": f.name, "refDate": f.ref_date.isoformat(),
-                               "futDate": f.fut_date.isoformat(), "pre": f.pre, "core": f.core, "post": f.post}
+                               "futDate": f.fut_date.isoformat(), "pre": f.pre, "core": f.core, "post": f.post,
+                               "independent": f.independent}
                               for f in festivals],
             })
 
@@ -171,6 +172,7 @@ def create_calendar(body: dict = Body(...), actor: dict = Depends(require_role("
                     calendar_cluster_id=cl.id, source_festival_id=fest["id"], name=fest["name"],
                     ref_date=datetime.date.fromisoformat(fest["refDate"]), fut_date=datetime.date.fromisoformat(fest["futDate"]),
                     pre=fest["pre"], core=fest["core"], post=fest["post"],
+                    independent=fest.get("independent", False),
                 ))
 
         rows = [
@@ -219,6 +221,7 @@ def update_calendar_festivals(calendar_id: int, body: dict = Body(...), actor: d
                     calendar_cluster_id=cl.id, source_festival_id=fest["id"], name=fest["name"],
                     ref_date=datetime.datetime.fromisoformat(fest["refDate"]).date(), fut_date=datetime.datetime.fromisoformat(fest["futDate"]).date(),
                     pre=fest["pre"], core=fest["core"], post=fest["post"],
+                    independent=fest.get("independent", False),
                 ))
 
         session.commit()
@@ -390,7 +393,8 @@ def get_cluster_profiles(user: dict = Depends(require_login)):
             out.append({
                 "name": p.name, "region": p.region, "nextId": p.next_id,
                 "festivals": [{"id": f.source_festival_id, "name": f.name, "refDate": f.ref_date.isoformat(),
-                               "futDate": f.fut_date.isoformat(), "pre": f.pre, "core": f.core, "post": f.post}
+                               "futDate": f.fut_date.isoformat(), "pre": f.pre, "core": f.core, "post": f.post,
+                               "independent": f.independent}
                               for f in festivals],
             })
         return {"profiles": out}
@@ -416,6 +420,7 @@ def put_cluster_profiles(body: dict = Body(...), actor: dict = Depends(require_r
                     cluster_profile_id=p.id, source_festival_id=fest["id"], name=fest["name"],
                     ref_date=datetime.date.fromisoformat(fest["refDate"]), fut_date=datetime.date.fromisoformat(fest["futDate"]),
                     pre=fest["pre"], core=fest["core"], post=fest["post"],
+                    independent=fest.get("independent", False),
                 ))
         session.commit()
         return {"ok": True}

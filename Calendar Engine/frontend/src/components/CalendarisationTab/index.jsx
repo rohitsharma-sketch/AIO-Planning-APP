@@ -543,14 +543,34 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
   // duplicated) - clusters with no festival of that name are left untouched.
   // Unlike handleHeaderBulk, this is a normal-weight edit (one named
   // festival, not "every festival in every cluster"), so it does not confirm.
+  //
+  // `independent` (per row) is the manual-intervention exemption: an island
+  // neither pushes its own edits out to other clusters' same-named festival,
+  // nor gets overwritten by an edit made on one of them - it stays in the
+  // shared cascade for every OTHER festival, this flag only takes ONE row out.
   function handleDayFieldChange(idx, field, value) {
-    const name = profiles[activeIdx].festivals[idx].name
+    const editedFest = profiles[activeIdx].festivals[idx]
+    const name = editedFest.name
+    const editedIsIndependent = !!editedFest.independent
     persist(profiles.map((cp, ci) => ({
       ...cp,
-      festivals: cp.festivals.map((f, fi) => ((ci === activeIdx && fi === idx) || f.name === name)
-        ? { ...f, [field]: value }
-        : f),
+      festivals: cp.festivals.map((f, fi) => {
+        const isEditedRow = ci === activeIdx && fi === idx
+        if (isEditedRow) return { ...f, [field]: value }
+        if (editedIsIndependent || f.independent) return f
+        return f.name === name ? { ...f, [field]: value } : f
+      }),
     })))
+  }
+
+  // Toggling the "Independent" exemption itself must never cascade the way
+  // handleDayFieldChange does for every other field - it is inherently a
+  // per-row property (whether THIS cluster's THIS festival opts out), so
+  // this only ever changes the one row clicked.
+  function handleIndependentToggle(idx, value) {
+    persist(profiles.map((cp, ci) => ci === activeIdx
+      ? { ...cp, festivals: cp.festivals.map((f, fi) => fi === idx ? { ...f, independent: value } : f) }
+      : cp))
   }
 
   // Header Pre/Core/Post bulk set - old app: applyHeaderBulk()
@@ -580,7 +600,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
       name: 'New Festival',
       refDate: defaultFestivalDate(refYear),
       futDate: defaultFestivalDate(futYear),
-      pre: 1, core: 1, post: 1,
+      pre: 1, core: 1, post: 1, independent: false,
     }])
   }
 
@@ -762,7 +782,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
               )}
               <FestivalTable festivals={profiles[activeIdx].festivals} onChange={handleFestivalsChange}
                 onAdd={handleAddFestival} onReset={handleResetFestivals} onBulkSet={handleHeaderBulk}
-                onDayFieldChange={handleDayFieldChange} onFestivalPicked={handleFestivalPicked} isPlanner={isPlanner}
+                onDayFieldChange={handleDayFieldChange} onIndependentToggle={handleIndependentToggle} onFestivalPicked={handleFestivalPicked} isPlanner={isPlanner}
                 refYear={refYear} futYear={futYear} />
             </div>
           )}

@@ -7,7 +7,7 @@ const DAY_COLS = [
   ['post', 'Post (days)', 'Days after the core festival', 0],
 ]
 
-export default function FestivalTable({ festivals, onChange, onAdd, onReset, onBulkSet, onDayFieldChange, onFestivalPicked, isPlanner, refYear, futYear }) {
+export default function FestivalTable({ festivals, onChange, onAdd, onReset, onBulkSet, onDayFieldChange, onIndependentToggle, onFestivalPicked, isPlanner, refYear, futYear }) {
   const [dragIdx, setDragIdx] = useState(null)
   const [dragOverIdx, setDragOverIdx] = useState(null)
   // Header bulk-set boxes, one per day column. Kept as strings so an empty box
@@ -128,6 +128,7 @@ export default function FestivalTable({ festivals, onChange, onAdd, onReset, onB
           <thead>
             <tr>
               <th style={{ width: '22px' }}></th><th>#</th><th>Festival Name</th><th>Reference Date</th><th>Future Date</th>
+              <th title="Exempt this cluster's row from the cross-cluster Pre/Core/Post cascade for this one festival - it neither pushes its own edits out nor gets overwritten by another cluster's edit, but stays synced on every other festival">Independent</th>
               {DAY_COLS.map(([field, label, tip, min]) => (
                 <th key={field} title={tip}>
                   {label}
@@ -176,6 +177,11 @@ export default function FestivalTable({ festivals, onChange, onAdd, onReset, onB
                 </td>
                 <td><input type="date" value={f.refDate} disabled={!isPlanner} onChange={e => updateField(idx, 'refDate', e.target.value)} /></td>
                 <td><input type="date" value={f.futDate} disabled={!isPlanner} onChange={e => updateField(idx, 'futDate', e.target.value)} /></td>
+                <td style={{ textAlign: 'center' }}>
+                  <input type="checkbox" checked={!!f.independent} disabled={!isPlanner}
+                    title="Exempt this row from the cross-cluster cascade"
+                    onChange={e => onIndependentToggle(idx, e.target.checked)} />
+                </td>
                 {DAY_COLS.map(([field, , , min]) => (
                   <td key={field}>
                     <div className="day-cell">
