@@ -751,6 +751,13 @@ thead .c0,thead .c1{background:var(--th-bg) !important;color:var(--th-tx) !impor
    fine (line below has its own explicit, higher-specificity color). */
 .dtbl .hr1 th{background:var(--s2)!important;border-bottom:1px solid var(--bd)!important;color:var(--ac)!important}
 .dtbl thead tr.hr1 th.hsum{background:rgba(99,102,241,.08)!important;color:#4338CA!important;border-right:1px solid rgba(99,102,241,.2)!important}
+/* Same specificity fight as the dark-theme block below, in light mode: the
+   rule above (4 classes+3 types) beats the plain .st-blk/.hist-blk/.plan-blk
+   rules (3 classes+1 type) for hr1's "Period" (.hsum) cells specifically,
+   so they stayed flat indigo instead of following their block's color. */
+.dtbl thead tr.hr1 th.hsum.st-blk{background:#FB923C!important;color:#0A0A0F!important}
+.dtbl thead tr.hr1 th.hsum.hist-blk{background:#6366F1!important;color:#0A0A0F!important}
+.dtbl thead tr.hr1 th.hsum.plan-blk{background:#10B981!important;color:#0A0A0F!important}
 .dtbl .hr2 th{background:rgba(99,102,241,.05)!important;color:#4338CA!important;font-size:9px!important;letter-spacing:.05em!important;border-bottom:1.5px solid rgba(99,102,241,.12)!important}
 .dtbl .hr2 th.sc{background:rgba(99,102,241,.12)!important;color:#4338CA!important}
 .dtbl thead tr.hrow1 th,.dtbl thead tr.hrow2 th,.dtbl thead tr.hrow3 th{background:rgba(99,102,241,.07)!important;color:#4338CA!important;border-bottom:1px solid rgba(99,102,241,.15)!important;font-size:9px!important;letter-spacing:.06em!important}
@@ -769,16 +776,43 @@ thead .c0,thead .c1{background:var(--th-bg) !important;color:var(--th-tx) !impor
 .dtbl .hr1 th.hist-blk{background:#6366F1!important;color:#0A0A0F!important;border-right-color:rgba(10,10,15,.15)!important}
 .dtbl .hr1 th.plan-blk{background:#10B981!important;color:#0A0A0F!important;border-right-color:rgba(10,10,15,.15)!important}
 
+/* hr2 (sub-labels: ST%, Avg ST%, 19 V 26, LY Actual Sales, Block Growth%...)
+   gets the same treatment, same specificity trick (.dtbl .hr2 th.xxx-blk =
+   3 classes+1 type ties .dtbl .hr2 th.sc's own specificity, wins on source
+   order since it's declared after). A slightly lower alpha than hr0/hr1
+   (.85 vs fully solid) keeps three stacked fully-saturated rows from
+   reading as one undifferentiated block of color while still being
+   unambiguously opaque, not the old 5-14% tints. */
+.dtbl .hr2 th.st-blk{background:rgba(251,146,60,.85)!important;color:#0A0A0F!important;border-bottom-color:#9A3E00!important}
+.dtbl .hr2 th.hist-blk{background:rgba(99,102,241,.85)!important;color:#0A0A0F!important;border-bottom-color:#312E81!important}
+.dtbl .hr2 th.plan-blk{background:rgba(16,185,129,.85)!important;color:#0A0A0F!important;border-bottom-color:#065F46!important}
+
 /* ── Dark-mode header overrides ── */
 :root[data-theme="dark"] .dtbl thead tr.hr1 th.hsum{background:#131E42!important;color:#818CF8!important}
+/* .hsum "Period" cells in hr1 ALSO carry st-blk/hist-blk/plan-blk (every
+   cell in a block gets it, not just hmon ones) - these need to beat the
+   plain ".hsum" rule right above (which specifically targets the old
+   flat-indigo "Period" look) by adding one more class to the selector. */
+:root[data-theme="dark"] .dtbl thead tr.hr1 th.hsum.st-blk{background:#FB923C!important;color:#0A0A0F!important}
+:root[data-theme="dark"] .dtbl thead tr.hr1 th.hsum.hist-blk{background:#6366F1!important;color:#0A0A0F!important}
+:root[data-theme="dark"] .dtbl thead tr.hr1 th.hsum.plan-blk{background:#10B981!important;color:#0A0A0F!important}
 :root[data-theme="dark"] .dtbl .hr2 th{background:#101930!important;color:#7A92B6!important}
 :root[data-theme="dark"] .dtbl .hr2 th.sc{background:rgba(99,102,241,.16)!important;color:#818CF8!important}
+:root[data-theme="dark"] .dtbl .hr2 th.st-blk{background:rgba(251,146,60,.85)!important;color:#fff!important}
+:root[data-theme="dark"] .dtbl .hr2 th.hist-blk{background:rgba(99,102,241,.85)!important;color:#fff!important}
+:root[data-theme="dark"] .dtbl .hr2 th.plan-blk{background:rgba(16,185,129,.85)!important;color:#fff!important}
 :root[data-theme="dark"] .dtbl thead tr.hrow1 th,:root[data-theme="dark"] .dtbl thead tr.hrow2 th,:root[data-theme="dark"] .dtbl thead tr.hrow3 th{background:#131E42!important;color:#9AB4D0!important;border-bottom:1px solid rgba(99,102,241,.2)!important}
 :root[data-theme="dark"] .dtbl thead tr.hrow1 th.sc,:root[data-theme="dark"] .dtbl thead tr.hrow2 th.sc,:root[data-theme="dark"] .dtbl thead tr.hrow3 th.sc{background:rgba(99,102,241,.17)!important;color:#818CF8!important}
 @media(prefers-color-scheme:dark){
   :root:not([data-theme="light"]) .dtbl thead tr.hr1 th.hsum{background:#131E42!important;color:#818CF8!important}
+  :root:not([data-theme="light"]) .dtbl thead tr.hr1 th.hsum.st-blk{background:#FB923C!important;color:#0A0A0F!important}
+  :root:not([data-theme="light"]) .dtbl thead tr.hr1 th.hsum.hist-blk{background:#6366F1!important;color:#0A0A0F!important}
+  :root:not([data-theme="light"]) .dtbl thead tr.hr1 th.hsum.plan-blk{background:#10B981!important;color:#0A0A0F!important}
   :root:not([data-theme="light"]) .dtbl .hr2 th{background:#101930!important;color:#7A92B6!important}
   :root:not([data-theme="light"]) .dtbl .hr2 th.sc{background:rgba(99,102,241,.16)!important;color:#818CF8!important}
+  :root:not([data-theme="light"]) .dtbl .hr2 th.st-blk{background:rgba(251,146,60,.85)!important;color:#fff!important}
+  :root:not([data-theme="light"]) .dtbl .hr2 th.hist-blk{background:rgba(99,102,241,.85)!important;color:#fff!important}
+  :root:not([data-theme="light"]) .dtbl .hr2 th.plan-blk{background:rgba(16,185,129,.85)!important;color:#fff!important}
   :root:not([data-theme="light"]) .dtbl thead tr.hrow1 th,:root:not([data-theme="light"]) .dtbl thead tr.hrow2 th,:root:not([data-theme="light"]) .dtbl thead tr.hrow3 th{background:#131E42!important;color:#9AB4D0!important;border-bottom:1px solid rgba(99,102,241,.2)!important}
   :root:not([data-theme="light"]) .dtbl thead tr.hrow1 th.sc,:root:not([data-theme="light"]) .dtbl thead tr.hrow2 th.sc,:root:not([data-theme="light"]) .dtbl thead tr.hrow3 th.sc{background:rgba(99,102,241,.17)!important;color:#818CF8!important}
 }
@@ -2920,7 +2954,7 @@ function buildHeader(defs,noC1=false){
     if(d.block==='hist'&&!seenHist){sep=' hist-sep';seenHist=true;}
     if(d.block==='plan'&&!seenPlan){sep=' plan-sep';seenPlan=true;}
     const sortIcon=S.sortCol===d.id?`<span class="th-sort-icon">${S.sortAsc?'▲':'▼'}</span>`:'';
-    hr2+=`<th class="${d.sum?'sc':''}${sep} th-sort" data-ci="${dimCols2+i}" onclick="setSort('${d.id}')">${d.sub}${sortIcon}</th>`;
+    hr2+=`<th class="${d.sum?'sc':''}${sep} ${d.block}-blk th-sort" data-ci="${dimCols2+i}" onclick="setSort('${d.id}')">${d.sub}${sortIcon}</th>`;
   });
   hr2+='</tr>';
 
