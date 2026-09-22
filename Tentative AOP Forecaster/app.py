@@ -97,19 +97,26 @@ async def run(session_id: str, body: RunRequest = RunRequest()):
     if not os.path.exists(inp):
         raise HTTPException(404, "Session not found — upload inputs.xlsx first")
     palette = body.palette if body.palette in EXCEL_PALETTES else "classic"
-    # DB-built sessions include estimates for months not yet closed (source='import').
-    # Pass open_months=set() so the engine uses all available data instead of
-    # filtering out the current/future months — the sync already guards what
-    # gets written as real actuals; these are deliberately loaded planning estimates.
-    from_db = os.path.exists(os.path.join(_session_dir(session_id), ".from_db"))
-    engine_open_months = set() if from_db else None
+    # REMOVED 2026-09-22: this used to pass open_months=set() for any
+    # .from_db session, on the theory that "the sync already guards what
+    # gets written as real actuals; these are deliberately loaded planning
+    # estimates." Confirmed false against live data — store_actuals had real
+    # rows for Nov'26/Dec'26 (physically impossible as actuals; today is
+    # Sep'26) and a stale partial Sep'26 count, all written by one
+    # `--include-partial` sync run on 2026-09-17 and never refreshed since,
+    # tagged with the exact same source='calendar_sync' as genuine closed
+    # months — nothing distinguishes "deliberate estimate" from "leftover
+    # partial data" at read time. Always passing open_months=None now (the
+    # engine's own default, i.e. _open_months()) restores pivot_actuals()'s
+    # documented "defence in depth" for every session, DB-built or not. If a
+    # genuine forward-looking estimate feed is wanted later, it needs its own
+    # distinctly-tagged source, not a blanket bypass of this guard.
     try:
         results = run_engine(inp, _output_path(session_id), palette=palette,
                              detail_file=_detail_path(session_id),
                              include_debug=body.include_debug,
                              growth_overrides=body.growth_overrides,
-                             overall_override=body.overall_override,
-                             open_months=engine_open_months)
+                             overall_override=body.overall_override)
     except Exception as e:
         raise HTTPException(500, str(e))
     with open(_results_path(session_id), "w", encoding="utf-8") as f:
@@ -218,7 +225,7 @@ def session_from_db():
         raise HTTPException(422, f"Could not build inputs from database: {e}")
     finally:
         db_session.close()
-    open(os.path.join(_session_dir(session_id), ".from_db"), "w").close()  # marks provenance for /api/run
+    open(os.path.join(_session_dir(session_id), ".from_db"), "w").close()  # marks provenance for persist_forecast_run below
     return {"session_id": session_id, "from_db": True, **info}
 
 
