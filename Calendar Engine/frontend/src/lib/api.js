@@ -50,6 +50,17 @@ export async function importStoreCluster(file) {
 // cluster-profiles
 export const getClusterProfiles = () => fetchJson('/cluster-profiles')
 export const putClusterProfiles = (payload) => jsonPost('/cluster-profiles', payload, 'PUT')
+export async function importFestivals(file) {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(`${BASE}/import/festivals`, { method: 'POST', credentials: 'same-origin', body: form })
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`
+    try { const e = await res.json(); msg = typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail ?? e) } catch {}
+    throw new Error(msg)
+  }
+  return res.json()
+}
 
 // app-state
 export const getAppState = () => fetchJson('/app-state')

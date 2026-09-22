@@ -4,6 +4,7 @@ import { generateMappings, validate, computeMonthly, buildFestMap } from '../../
 import { parseDate, fmtISO, fmtDisp, calDiff, weekNum } from '../../lib/dateUtils'
 import ClusterTabs from './ClusterTabs'
 import FestivalTable from './FestivalTable'
+import FestivalImportPanel from './FestivalImportPanel'
 import OutputSection from './OutputSection'
 import CalendarLibrary from './CalendarLibrary'
 import ChangeLogViewer from './ChangeLogViewer'
@@ -480,6 +481,14 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
     }
   }
 
+  // Applying a bulk festival import (FestivalImportPanel's confirmImport) -
+  // same awaited-persist-then-more-specific-message pattern as
+  // handleRedactFestival above.
+  async function handleImportFestivals(mergedProfiles, message) {
+    const saved = await persist(mergedProfiles)
+    if (saved) setStatus({ ok: true, msg: message })
+  }
+
   // Rename the active cluster - old app: renameCluster() (calendar_engine.html
   // lines 2197-2206). The trim/"Cluster N" fallback and the uniqueness check
   // live in ClusterTabs (which owns the draft input); by the time this runs the
@@ -778,6 +787,11 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
                     title="Replace every other saved template's festival list per cluster with the current structure, dates resolved for each template's own year">
                     {syncingStructure ? 'Syncing...' : 'Sync Festival Structure to All Templates'}
                   </button>
+                  {/* Bulk festival-to-cluster import, modeled on Store-Cluster
+                      Mapping's own upload+diff-preview flow - see
+                      FestivalImportPanel for why this is an upsert per
+                      (festival, cluster) row, never a full replace. */}
+                  <FestivalImportPanel profiles={profiles} onApply={handleImportFestivals} isPlanner={isPlanner} />
                 </div>
               )}
               <FestivalTable festivals={profiles[activeIdx].festivals} onChange={handleFestivalsChange}

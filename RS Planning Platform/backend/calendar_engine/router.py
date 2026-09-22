@@ -71,14 +71,16 @@ def _rows_from_table(table):
     return out
 
 
-def parse_template(data, filename):
+def _load_table_from_upload(data, filename):
+    """Raw table (list of row lists, first row = header) from an uploaded
+    .xlsx/.xlsm/.csv/.tsv/.txt file - shared by every "upload a template,
+    review a diff before committing" import flow (store/cluster, festivals)."""
     name = (filename or "").lower()
     if name.endswith(".xlsx") or name.endswith(".xlsm"):
         import openpyxl  # available on this machine; error surfaces to the client if not
         wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True, read_only=True)
         ws = wb.worksheets[0]
-        table = [list(r) for r in ws.iter_rows(values_only=True)]
-        return _rows_from_table(table)
+        return [list(r) for r in ws.iter_rows(values_only=True)]
     # CSV / TSV / TXT
     text = data.decode("utf-8-sig", errors="replace")
     sample = text[:2048]
@@ -86,8 +88,96 @@ def parse_template(data, filename):
         dialect = csv.Sniffer().sniff(sample, delimiters=",\t;|")
     except Exception:
         dialect = csv.excel
-    table = [row for row in csv.reader(io.StringIO(text), dialect)]
-    return _rows_from_table(table)
+    return [row for row in csv.reader(io.StringIO(text), dialect)]
+
+
+def parse_template(data, filename):
+    return _rows_from_table(_load_table_from_upload(data, filename))
+
+
+# ─── Festival template parsing (bulk festival-to-cluster import) ────────────
+def _pick_festival_columns(header):
+    norm = [str(h or "").strip().lower() for h in header]
+
+    def find(*keys, default=None):
+        return next((i for i, h in enumerate(norm) if any(k in h for k in keys)), default)
+
+    return {
+        "festival": find("festival", "name", default=0),
+        "cluster": find("cluster", default=1),
+        "refDate": find("reference date", "ref date", "refdate", default=2),
+        "futDate": find("future date", "fut date", "futdate", default=3),
+        "pre": find("pre", default=4),
+        "core": find("core", default=5),
+        "post": find("post", default=6),
+        "independent": find("independent", default=None),
+    }
+
+
+def _iso_date(v):
+    if v is None:
+        return ""
+    if isinstance(v, datetime.datetime):
+        return v.date().isoformat()
+    if isinstance(v, datetime.date):
+        return v.isoformat()
+    s = str(v).strip()
+    if not s:
+        return ""
+    for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%m/%d/%Y"):
+        try:
+            return datetime.datetime.strptime(s, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return s  # left as-is - applying the import validates real dates, not this parse step
+
+
+def _to_int(v, default):
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return default
+
+
+def _festival_rows_from_table(table):
+    """table: list of row lists (first row = header). Returns list of
+    {festival, cluster, refDate, futDate, pre, core, post, independent} -
+    one row per (festival, cluster) relation, the same long-form shape
+    downloadFestivalTemplate() exports so a downloaded template can be
+    edited and re-uploaded unchanged."""
+    if not table:
+        raise ValueError("Template is empty")
+    header = table[0]
+    cols = _pick_festival_columns(header)
+
+    def cell(r, idx):
+        return r[idx] if idx is not None and idx < len(r) else None
+
+    out = []
+    for r in table[1:]:
+        if r is None:
+            continue
+        festival = str(cell(r, cols["festival"]) or "").strip()
+        cluster = str(cell(r, cols["cluster"]) or "").strip()
+        if not festival or not cluster:
+            continue
+        ind_raw = str(cell(r, cols["independent"]) or "").strip().lower()
+        out.append({
+            "festival": festival, "cluster": cluster,
+            "refDate": _iso_date(cell(r, cols["refDate"])),
+            "futDate": _iso_date(cell(r, cols["futDate"])),
+            "pre": _to_int(cell(r, cols["pre"]), 0),
+            "core": _to_int(cell(r, cols["core"]), 1),
+            "post": _to_int(cell(r, cols["post"]), 0),
+            "independent": ind_raw in ("true", "yes", "y", "1"),
+        })
+    if not out:
+        raise ValueError("No festival rows found (expected columns: Festival, Cluster, Reference Date, Future Date, Pre, Core, Post)")
+    return out
+
+
+def parse_festival_template(data, filename):
+    return _festival_rows_from_table(_load_table_from_upload(data, filename))
 
 
 @router.get("/calendar-library")
@@ -374,6 +464,34 @@ async def import_store_cluster(file: UploadFile = File(...), actor: dict = Depen
         session.close()
     out = [
         {**r, "resolvedCluster": resolve_cluster_name(str(r.get("cluster", "")).strip(), profile_names, aliases)}
+        for r in rows
+    ]
+    return {"ok": True, "filename": file.filename, "rows": out}
+
+
+@router.post("/import/festivals")
+async def import_festivals(file: UploadFile = File(...), actor: dict = Depends(require_role("planner"))):
+    """Bulk festival-to-cluster import: parses an uploaded template into one
+    row per (festival, cluster) relation. Purely a parse+resolve step - same
+    as /import/store-cluster, applying the result is a separate client-side
+    merge into cluster-profiles (an UPSERT per row, never a full replace: a
+    narrow file naming 2 festivals must never touch any other cluster's
+    unrelated festivals, unlike store-cluster's inherently 1-cluster-per-store
+    full replace)."""
+    data = await file.read()
+    try:
+        rows = parse_festival_template(data, file.filename)
+    except Exception as e:
+        raise HTTPException(400, str(e))
+    session = SessionLocal()
+    try:
+        profile_names = session.execute(
+            select(ClusterProfile.name).order_by(ClusterProfile.seq, ClusterProfile.name)
+        ).scalars().all()
+    finally:
+        session.close()
+    out = [
+        {**r, "resolvedCluster": resolve_cluster_name(r.get("cluster", ""), profile_names)}
         for r in rows
     ]
     return {"ok": True, "filename": file.filename, "rows": out}
