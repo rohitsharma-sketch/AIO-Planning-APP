@@ -114,6 +114,24 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
     : (hintYearStr && byYear[hintYearStr]) ? hintYearStr
     : years[0]
 
+  // Cascading range: To Year only ever offers years >= From Year and vice
+  // versa, so the two selects can never land on an inverted combination in
+  // the first place (previously each listed the full year list independently -
+  // picking From=2026/To=2019 was allowed, just silently normalized by
+  // syncRange's own min/max). Changing one edge that would strand the OTHER
+  // outside its now-narrower list snaps that other edge to match, the same
+  // way a native date-range picker keeps both ends valid together.
+  const fromOptions = years.filter(y => +y <= +effRangeTo)
+  const toOptions = years.filter(y => +y >= +effRangeFrom)
+  function handleFromChange(v) {
+    setRangeFrom(v)
+    if (+v > +effRangeTo) setRangeTo(v)
+  }
+  function handleToChange(v) {
+    setRangeTo(v)
+    if (+v < +effRangeFrom) setRangeFrom(v)
+  }
+
   async function syncRange() {
     if (!isPlanner || !link || !effRangeFrom || !effRangeTo) return
     const lo = Math.min(+effRangeFrom, +effRangeTo)
@@ -210,14 +228,14 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
             <div className="link-month-picker">
               <div className="field">
                 <label htmlFor={`linkRangeFrom_${sourceType}`}>From Year</label>
-                <select id={`linkRangeFrom_${sourceType}`} value={effRangeFrom || ''} onChange={e => setRangeFrom(e.target.value)}>
-                  {years.map(y => <option key={y} value={y}>{y}</option>)}
+                <select id={`linkRangeFrom_${sourceType}`} value={effRangeFrom || ''} onChange={e => handleFromChange(e.target.value)}>
+                  {fromOptions.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
               </div>
               <div className="field">
                 <label htmlFor={`linkRangeTo_${sourceType}`}>To Year</label>
-                <select id={`linkRangeTo_${sourceType}`} value={effRangeTo || ''} onChange={e => setRangeTo(e.target.value)}>
-                  {years.map(y => <option key={y} value={y}>{y}</option>)}
+                <select id={`linkRangeTo_${sourceType}`} value={effRangeTo || ''} onChange={e => handleToChange(e.target.value)}>
+                  {toOptions.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
               </div>
               <div className="link-month-picker-months">
