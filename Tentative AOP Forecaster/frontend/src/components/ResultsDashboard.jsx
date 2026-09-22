@@ -435,6 +435,17 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
               </Bar>
             </BarChart>
           </ResponsiveContainer>
+          <div className="pie-legend">
+            {divisions.map(d => (
+              <div key={d.division} className="pie-leg-item">
+                <span>{d.division}</span>
+                <span className="num pie-val">₹{fmt(d.forecast)} Cr</span>
+                <span className={`num ${d.growth_pct >= 0 ? 'positive' : 'negative'}`} style={{ fontSize: 11 }}>
+                  {fmtPct(d.growth_pct)}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="card chart-card">
