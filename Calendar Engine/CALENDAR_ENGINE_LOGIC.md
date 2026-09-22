@@ -1,0 +1,105 @@
+# Calendar Engine — Logic Handover
+
+Business rules, domain formulas, and verified data for Calendar Engine specifically. Structure/deployment/ops facts live in the companion doc, `CALENDAR_ENGINE_ARCHITECTURE.md`, in this same folder. Last compiled 2026-09-22.
+
+---
+
+## What this app does, in one paragraph
+
+Calendar Engine builds a day-by-day mapping from a "reference" year's real sales calendar (e.g. 2026) onto a "future" year's calendar (e.g. 2027), so that festival-driven demand shifts — Diwali falling on a different date, Eid moving by the lunar cycle, etc. — get carried forward correctly instead of naively assuming "the same calendar month next year behaves the same." Downstream, SalesPlan and AOP Forecaster read this mapping (directly or via a snapshot) to reindex real historical sales onto the future calendar for planning purposes.
+
+## Propagation rules (the "who changes when I edit one thing" model)
+
+- **Cross-cluster cascade** (live editor, same session): editing Pre/Core/Post on a festival in one cluster propagates to every OTHER cluster's festival with the exact same name (`handleDayFieldChange` in `CalendarisationTab/index.jsx`). This is what enforces the standing rule below.
+- **Manual-intervention override, added 2026-09-22**: a per-(cluster, festival) **Independent** checkbox. When set, that one row is excluded from the cascade in BOTH directions — editing it doesn't push out to other clusters' same-named festival, and editing one of those doesn't overwrite it. Every other festival on that cluster stays fully synced as before; this only ever takes one (cluster, festival) pair out of the shared window. Persisted as `independent` on both `cluster_profile_festivals` (live) and `calendar_cluster_festivals` (locked), specifically so it survives a "Load & Preview" round-trip instead of silently resetting to synced.
+- **Cross-template auto-copy**: picking a festival from the real `FESTIVAL_DB` autocomplete auto-copies it into every other saved/locked calendar's same-named cluster, each resolved to ITS OWN ref/fut year — purely additive, never overwrites an existing row.
+- **"Sync Festival Structure to All Templates"** (manual button, Festival Master toolbar): pushes the CURRENT full festival structure (every cluster's list, as it stands right now) into every OTHER saved template. Only a cluster name common to both sides gets its list REPLACED — a cluster unique to either side is left untouched. Re-dates via the festival's own day/month shifted onto each target's year (not `FESTIVAL_DB`'s generic default), so a deliberately customized date survives the sync. Does **not** filter by engine (V1/V2) or year-pair — it already reaches every saved calendar regardless, which is broader than "just the sibling engine of the same year-pair" (see Open design items below for a more targeted version that's been discussed but not built). Does **not** touch a target's locked day-map — only "Create Calendar + Lock & Save" on that specific template regenerates the actual day-by-day mapping.
+- **"Locked" preview autosave**: while a locked template is loaded via "Load & Preview", every live festival-list edit autosaves into that template's storage too (festival list only — the day-map stays exactly as last generated until Create Calendar + Lock & Save reruns). "Load & Preview" itself does NOT write to the DB on its own — a stale reload can make a removed festival appear to "come back"; verify against the rendered table, not just a DB query, when checking whether something persisted.
+
+**Standing rule**: no two clusters may shift the same festival by a different number of days, UNLESS one of them is explicitly marked Independent for that festival. Re-check this any time a festival is added to a cluster's profile.
+
+## Calendar generation rules
+
+- **Overlap resolution** (changed 2026-09-18): when two festivals' windows land on the same date, resolve by `|position|` ascending then window size ascending — each festival's own anchor (pos 0) always wins its own date. Genuine calendar coincidences (e.g. Eid al-Fitr vs Bihu, Raksha Bandhan vs Milad-un-Nabi) are expected, not a bug to "fix more correctly."
+- **Month-containment rule**: non-core-festival days must never shift into a different calendar month than their future date — only core (anchored) festivals may cross months, since they follow their real lunar/astronomical date. When a future month's own reference-day pool runs short, reuse the nearest already-used reference day from that SAME month (`sharedRef: true`) rather than borrow an unused day from an adjacent month.
+- **Core/non-core distinction — removed entirely (2026-09-18)**: every festival on a cluster's list is now core, no exceptions. `CORE_FESTIVALS_BY_CLUSTER` is deleted; `coreFestivalNamesFor()` always returns null.
+- **Pre/Core/Post windowing formula** (`engine.js`):
+  ```js
+  for (pos = -pre; pos <= post + core - 1; pos++)
+    category = pos < 0 ? 'Pre' : pos < core ? 'Core' : 'Post'
+  ```
+  Core anchor is always `pos = 0`. Output labels are suffixed per category (e.g. "Holi (Pre)").
+
+### V1 vs V2 engines
+
+Separate generation paths, not the same calendar relabeled — switching the engine dropdown only affects newly-generated calendars; an existing locked template keeps whatever algorithm produced it (check `calendars.engine`: `calendarisation-v1` or `calendarisation-v2`).
+
+- **V1**: strict same-month-only matching for every non-festival day.
+- **V2**: three tiers per non-festive TY day —
+  1. **Round A**: own month's residual reference-day pool first.
+  2. **Round B**: falls back to the ADJACENT month's pool (direction set by `moPri`) only if Round A's pool is exhausted. This is the "+1 month" rule.
+  3. **Fallback** (rare — fires only when BOTH pools are exhausted): grabs the nearest still-available reference day from **anywhere in the year**, with **no month-adjacency cap at all**. Its only safety net is `repairExcessiveShifts`, which fires ONLY when `|dateDiff| > maxShift` (default 45 days) and tries a same-month swap to pull the outlier back under the cap.
+- **Both V1 and V2 must call `repairExcessiveShifts`** on their final assignment before output. V2 was missing this call until fixed 2026-09-18 (commit `30474c7`) — a calendar locked before that fix has no repair applied at all, regardless of how far outside `maxShift` an outlier is.
+
+**Known gap, confirmed 2026-09-22 while investigating a real user report** (BIHAR cluster, "2026 → 2027 Calendar - All", locked 2026-09-17 — one day BEFORE the V2 repair fix landed): 3 of March 2026's days mapped to January/February 2027 dates instead of March 2027, via the Fallback tier.
+- One of the three (a −51 day shift) exceeds `maxShift` (45) and would have been caught by `repairExcessiveShifts` — this calendar simply predates that fix; regenerating it resolves this one.
+- The other two (−40 day shifts) are UNDER `maxShift` and would **not** be caught even after regenerating — they're within the app's own defined tolerance, just looser than an intuitive "+1 month" expectation. `maxShift` (45 days) is genuinely looser than "1 adjacent month" (~31 days) by design; the Fallback tier has no independent month-adjacency cap of its own.
+- **If a hard "+1 month, no exceptions" ceiling is wanted everywhere**, either lower `maxShift` to ~31, or give the Fallback tier its own adjacency cap separate from `maxShift`. Not yet implemented — flagged as an open design item, not a bug, since occasional far-fallback matches may be an acceptable tradeoff depending on how rare they are in practice.
+
+## Reindex / data-pipeline facts
+
+- A single reference day can legitimately map to two future days (same-month reuse via `sharedRef`) — any ref→fut join must be a proper table merge over `calendar_day_pairs`, never a `{ref_date: fut_date}` dict (a dict silently drops the second mapping, last-wins).
+- A duplicate `ref_date` in `calendar_day_pairs` is not automatically a bug — check `mappingPriority`/`sharedRef` intent before calling it drift.
+- Whenever a festival's date changes, check whether any OTHER festival's date is DERIVED from it (Nuakhai = Ganesh Chaturthi+1; Kali Puja = same day as Diwali; Shraad's end = day before Navratri's start) and re-verify those too.
+- **Month-wise double-counting bug — fixed 2026-09-22, commit `8d975fb`**: `_fetch_raw_monthwise()` and 2 other call sites in `scans.py` globbed every `.parquet` file in `PARQUET_DIR` and concatenated them, with no "latest export only" guard (day-wise already had this via `_latest_daywise_files()`). With 2 overlapping full-history re-exports sitting in the folder, every month-wise reindexed total was counted ~2x. Fixed with `_latest_monthwise_files()`, applied at all 3 read sites (link scan, `get_source_schema`, `_fetch_raw_monthwise`). AOP Forecaster's own actuals sync was never affected (separate, correct `sync.common.latest_file()` implementation). Verified live: file count read dropped 2→1, and Month Wise Matrix row totals now tie out exactly to actual sales.
+
+### Month Wise Matrix (new feature, 2026-09-22)
+
+For a chosen store, splits each REFERENCE month's actual sales total across TY months, **proportional to how many of that reference month's real calendar days landed in each TY month**, per the locked calendar's own day-map. This is a day-COUNT proportional split, not a measured intra-month sales pattern — month-wise source has no day-of-month field at all, so the calendar's day-map is the only available signal for how a month's total should divide when a festival shift splits it across two TY months (e.g. a reference month whose days split 90%/10% between two TY months shows the same 90%/10% split of its actual sales total).
+
+- Computed in `fwdSplitByCluster` (`CalendarisedSalesTab/index.jsx`'s `fetchCalendarMaps()`) — the forward-direction companion to the pre-existing `refMonthsByCluster` (which answers "which LY months fed this TY month"; `fwdSplitByCluster` answers "where did this LY month's days go").
+- **Requires a calendar to be selected** in the "Calendar to Reindex" dropdown — it's purely calendar-derived, no completed reindex run needed, but a page showing only a cached snapshot (no calendar picked yet) will show a visible "select a calendar" warning instead of guessing or silently rendering blank.
+- Store Filter is a true multi-select (checkbox dropdown, search + Select All/Clear) — each selected store renders its own stacked block. "Download XLSX (All Stores)" always covers every store regardless of the preview selection, via the `xlsx` (SheetJS) dependency.
+
+## Festival date sourcing discipline
+
+Never invent or estimate a real calendrical festival date. Only use a date the user has explicitly verified, or one mathematically/tithi-derived from another already-verified date, with the derivation stated explicitly. A brand-new festival with no anchor and no user-supplied date → ask, don't guess, even under time pressure.
+
+### Verified 2026 → 2027 festival dates
+
+Re-audited in full 2026-09-18 against Wikipedia/DrikPanchang/multiple Panchang sites — treat as needing periodic re-verification, not permanently settled.
+
+| Festival | 2026 (ref) | 2027 (fut) | Note |
+|---|---|---|---|
+| Holi | 2026-03-04 | 2027-03-22 | verified |
+| Eid al-Fitr | 2026-03-20 | 2027-03-09 | moon-sighting dependent, ±1 day |
+| Eid al-Adha | 2026-05-27 | 2027-05-17 | 2026 is J&K's date; majority-state is 2026-05-28 — deliberate regional choice |
+| Rath Yatra | 2026-07-16 | 2027-07-05 | fixed 2026-09-18, was a full year shifted |
+| Raksha Bandhan | 2026-08-28 | 2027-08-17 | fixed 2026-09-18, 2026 value had actually been 2025's date |
+| Nuakhai | 2026-08-23 | 2027-09-11 | verified |
+| Shraad (Pitru Paksha start) | 2026-09-26 | 2027-09-15 | derived from Navratri's start; must re-derive whenever Navratri's date changes |
+| Navratri (Ghatasthapana) | 2026-10-11 | 2027-09-30 | fixed 2026-09-18, was off by 8 days |
+| Dussehra (Vijayadashami) | 2026-10-20 | 2027-10-09 | fixed 2026-09-18, was off by 8 days |
+| Diwali | 2026-11-08 | 2027-10-29 | verified (fixed 2026-09-17 — was a data-entry duplicate of Dussehra's date) |
+| Chhath Puja | 2026-11-15 | 2027-11-05 | 2027-11-04 is DrikPanchang's main day, 11-05 is the closing day — deliberate |
+| Milad-un-Nabi | 2026-08-26 | 2027-08-15 | fixed 2026-09-18, was off ~9-10 days (lunar drift not applied) |
+| Basant Panchami | 2026-01-23 | 2027-02-11 | fixed 2026-09-18, was a full year shifted |
+| Makar Sankranti | 2026-01-14 | 2027-01-15 | fixed 2026-09-18, off by 1 day |
+| Durga Puja (WB/N.EAST) | covered by Navratri window | — | not a separate entry — do not add separately |
+
+**Recurring bug pattern seen 2026-09-17/18**: several festivals showed the identical signature — the stored future-year value matched what should have been the date one cycle earlier ("everything shifted by one year"), or a straight data-entry duplicate of another festival's date. When a festival appears missing from output despite being in the profile, check for duplicate `ref_date`s in `cluster_profile_festivals` first.
+
+**Real clusters (region tags actually in use)**: Kashmir, UP+NCR, UP+BIHAR-PUJA, BIHAR, JAMMU+RJ, ODISHA, N.EAST-PUJA, N.EAST, JH+MP+CG, WB — only `north`, `east`, `bengal` tags in use across these 10; no South India/Gujarat/Maharashtra cluster exists despite `FESTIVAL_DB` carrying those tags for completeness. N.EAST/N.EAST-PUJA are tagged `bengal` in live data (existing data, not a bug to silently fix).
+
+## Open design items (discussed, not yet built)
+
+Raised by the user 2026-09-22, alongside the Independent-override feature above:
+
+1. **Automatic V1/V2 sync for the same year-pair.** User's stated preference: a manual button (not fully automatic on every edit) that's scoped specifically to the sibling engine's template for the same year-pair (not every saved template, unlike the existing "Sync Festival Structure to All Templates"), plus an "out of sync" badge/warning shown when the two have diverged since the last sync. Not yet built — would need: (a) a lookup for "the other engine's calendar with the same refYear/futYear," (b) a diff function comparing live structure against that sibling's saved structure, (c) a badge component, (d) a scoped version of the sync push.
+2. **Bulk festival→cluster import**, modeled on Store-Cluster Mapping's file-upload + diff-preview UX (`StoreMappingPanel.jsx`'s `importStoreCluster` flow: upload a file, see added/removed/reassigned before committing). Not yet built — the current "Copy festivals from..." dropdown only replaces one cluster's ENTIRE list from another cluster; there's no way to import "just this one festival, into these N clusters" without hand-editing each cluster.
+
+---
+
+## Change Log
+
+- **2026-09-22**: Doc created, compiled from session memory (Logic Base / Architecture Base) covering the day this session ran: month-wise double-counting bug fix, Month Wise Matrix feature (incl. its blank-split fix and multi-select correction), Festival Master button-row layout fix, per-cluster Independent override feature, and the V2 Fallback-tier root-cause investigation for the March→January outlier report. Open design items (V1/V2 auto-sync, bulk festival import) captured but not started.
