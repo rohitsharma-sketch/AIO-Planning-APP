@@ -197,13 +197,16 @@ function MonthSelect({ selected, onChange }) {
               <button onClick={e => { e.stopPropagation(); onChange([...MONTHS]) }}>All</button>
               <button onClick={e => { e.stopPropagation(); onChange([...H1]) }}>H1</button>
               <button onClick={e => { e.stopPropagation(); onChange([...H2]) }}>H2</button>
+              {selected.length > 0 && (
+                <button onClick={e => { e.stopPropagation(); onChange([]) }}>None</button>
+              )}
             </div>
           </div>
           {/* (Select All) row */}
           <div className="ms-pv-options">
             <div
               className={`ms-pv-row ms-pv-all${allSelected ? ' ms-pv-row--checked' : ''}`}
-              onClick={() => onChange([...MONTHS])}
+              onClick={() => onChange(allSelected ? [] : [...MONTHS])}
             >
               <span className={`ms-pv-cb${allSelected ? ' ms-pv-cb--on' : ''}`} />
               <span className="ms-pv-row-label">(Select All)</span>
@@ -243,8 +246,8 @@ function MonthSelect({ selected, onChange }) {
 
 const EMPTY_NUM  = { base: { min: '', max: '' }, fcst: { min: '', max: '' }, dev: { min: '', max: '' }, growthEng: { min: '', max: '' } }
 const NUM_TITLES = { base: 'Base', fcst: 'Forecast', dev: 'Deviation', growthEng: 'Growth %' }
-const COL_SETS   = { fcst: ['fcst'], base_fcst: ['base', 'fcst'], all: ['base', 'fcst', 'dev'] }
-const COL_LABEL  = { base: 'Base', fcst: 'Forecast', dev: 'Deviation' }
+const COL_SETS   = { fcst: ['fcst'], base_fcst: ['base', 'fcst'], all: ['base', 'fcst', 'dev', 'gr'] }
+const COL_LABEL  = { base: 'Base', fcst: 'Forecast', dev: 'Deviation', gr: 'Growth %' }
 const MONTH_RE   = /^m(\d+)\|(base|fcst|dev)$/
 
 export default function OutputTab({ sessionId, runKey }) {
@@ -326,7 +329,9 @@ export default function OutputTab({ sessionId, runKey }) {
   const fU   = v => fmt1(v * U)
   const fD   = v => fmtDev(v * U)
   const monthCols = COL_SETS[colSet]
-  const cellVal = (n, i, c) => c === 'base' ? n.mb[i] : c === 'fcst' ? n.m[i] : n.m[i] - n.mb[i]
+  const cellVal = (n, i, c) => c === 'base' ? n.mb[i] : c === 'fcst' ? n.m[i]
+    : c === 'gr' ? (n.mb[i] > 0 ? (n.m[i] / n.mb[i] - 1) * 100 : null)
+    : n.m[i] - n.mb[i]
 
   const hasFilter = col => LEVEL_KEYS.includes(col) ? d.dimF[col].length > 0 : hasNum(numF[col])
   const drillFilters = [...LEVEL_KEYS, ...Object.keys(EMPTY_NUM)].filter(hasFilter).length
@@ -363,6 +368,7 @@ export default function OutputTab({ sessionId, runKey }) {
     if (viewMode === 'monthly') return (<>
       {selMonths.map(m => { const i = MONTHS.indexOf(m); return monthCols.map(c => {
         const v = cellVal(n, i, c)
+        if (c === 'gr') return <td key={`${m}|${c}`} className={`num ${v == null ? 'muted' : v >= 0 ? 'positive' : 'negative'}`}>{v == null ? 'new' : (v > 0 ? '+' : '') + v.toFixed(1) + '%'}</td>
         return <td key={`${m}|${c}`} className={`num ${c === 'fcst' ? 'fw-bold' : ''} ${c === 'dev' ? (v > 0 ? 'positive' : v < 0 ? 'negative' : '') : ''}`}>{c === 'dev' ? fD(v) : fU(v)}</td>
       }) })}
       <td className="num fw-bold">{fU(n.fcst)}</td>
@@ -453,7 +459,7 @@ export default function OutputTab({ sessionId, runKey }) {
         {viewMode === 'monthly' && (
           <div className="out-col-opts">
             <span className="out-inline-label">Show</span>
-            {[['fcst', 'Forecast'], ['base_fcst', 'Base + Forecast'], ['all', 'Base + Fcst + Dev']].map(([v, l]) => (
+            {[['fcst', 'Forecast'], ['base_fcst', 'Base + Forecast'], ['all', 'Base + Fcst + Dev + Gr%']].map(([v, l]) => (
               <button key={v} className={`out-col-btn ${colSet === v ? 'active' : ''}`} onClick={() => setColSet(v)}>{l}</button>
             ))}
           </div>
