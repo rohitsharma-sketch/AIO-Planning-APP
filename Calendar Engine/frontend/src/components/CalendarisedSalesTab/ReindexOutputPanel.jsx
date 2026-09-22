@@ -1075,6 +1075,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
 
       {activeSub === 'mwmatrix' && isMwMatrix && (() => {
         const sel = mwMatrixData.byStore.get(mwMatrixStore)
+        const hasSplitMap = fwdSplitByCluster && Object.keys(fwdSplitByCluster).length > 0
         return (
           <>
             <div className="scm-toolbar">
@@ -1087,7 +1088,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                   {mwMatrixData.stores.map(s => <option key={s} value={s} />)}
                 </datalist>
               </div>
-              <button className="btn" onClick={downloadMwMatrixXlsx} disabled={!mwMatrixData.stores.length}>
+              <button className="btn" onClick={downloadMwMatrixXlsx} disabled={!mwMatrixData.stores.length || !hasSplitMap}>
                 Download XLSX (All Stores)
               </button>
             </div>
@@ -1096,6 +1097,12 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
               month's calendar days landed in each - a month whose days split across two TY months (a festival
               mid-month shift) shows a real split here, not a single guess. Download covers every store, not just this preview.
             </div>
+            {!hasSplitMap && (
+              <p style={{ color: 'var(--warn)', fontWeight: 600, fontSize: '12px' }}>
+                This screen is showing a cached summary - the split needs the calendar it came from. Pick that
+                calendar in "Calendar to Reindex" above (Run Reindex not required) to populate it.
+              </p>
+            )}
             {!sel ? <p>No data for store "{mwMatrixStore}".</p> : (
               <div className="tbl-wrap">
                 <table>

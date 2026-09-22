@@ -190,6 +190,28 @@ export default function CalendarisedSalesTab({ isPlanner }) {
     return () => { alive = false }
   }, [source])
 
+  // A cached snapshot (above) carries no calendarId of its own - it's a
+  // monthly rollup of the last Run Reindex, not tied to whatever calendar is
+  // currently selected in the dropdown. Month Wise Matrix's split map has no
+  // fallback the way refDateByCluster/festivalByCluster do (there's no
+  // backend-computed global plurality to fall back to), so it stays properly
+  // blank until a calendar is actually selected here - this effect is what
+  // populates it as soon as that happens, without requiring a fresh Run
+  // Reindex click first (the split is purely calendar-derived, it doesn't
+  // need a completed sales fetch to be correct).
+  useEffect(() => {
+    if (!calendarId) return
+    let alive = true
+    fetchCalendarMaps(calendarId, source).then(({ festivalByDate: fbd, refByCluster, refMonthsByCluster: rmc, fwdSplitByCluster: fsc }) => {
+      if (!alive) return
+      setFestivalByDate(fbd)
+      setRefDateByCluster(refByCluster)
+      setRefMonthsByCluster(rmc)
+      setFwdSplitByCluster(fsc)
+    }).catch(() => {})
+    return () => { alive = false }
+  }, [calendarId, source])
+
   // Hydrate extraDims/metric from the persisted selection once it's available
   // (LinkStatusPanel loads it independently via GET and reports it up through
   // onSelectionChange) instead of always resetting to "no extras" - this is
