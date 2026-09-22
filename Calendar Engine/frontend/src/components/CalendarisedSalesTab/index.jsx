@@ -107,6 +107,11 @@ export default function CalendarisedSalesTab({ isPlanner }) {
   const [selections, setSelections] = useState({})
   const [calendars, setCalendars] = useState([])
   const [source, setSource] = useState('dw')
+  // Both Link Sales Data Source panels (Month-wise/Day-wise) combined under
+  // one collapsible card instead of two always-open ones - collapsed by
+  // default so the link status isn't taking up space every visit; expand
+  // to check/sync either source.
+  const [linkPanelOpen, setLinkPanelOpen] = useState(false)
   const [calendarId, setCalendarId] = useState(null)
   const [result, setResult] = useState(null)
   // Set instead of `result` when a completed job's payload is too large to
@@ -448,10 +453,20 @@ export default function CalendarisedSalesTab({ isPlanner }) {
 
   return (
     <div className="module-panel">
-      <LinkStatusPanel sourceType="mw" isPlanner={isPlanner} onSelectionChange={handleSelectionChange}
-        hintYear={source === 'mw' ? selectedCalendar?.refYear : null} hintCalendarName={selectedCalendar?.name} />
-      <LinkStatusPanel sourceType="dw" isPlanner={isPlanner} onSelectionChange={handleSelectionChange}
-        hintYear={source === 'dw' ? selectedCalendar?.refYear : null} hintCalendarName={selectedCalendar?.name} />
+      <div className="card">
+        <div className="card-toggle-hdr" onClick={() => setLinkPanelOpen(o => !o)}>
+          <h4>Link Sales Data Source</h4>
+          <span className="toggle-lbl">{linkPanelOpen ? 'Hide' : 'Show'}</span>
+        </div>
+        {linkPanelOpen && (
+          <>
+            <LinkStatusPanel sourceType="mw" isPlanner={isPlanner} onSelectionChange={handleSelectionChange}
+              hintYear={source === 'mw' ? selectedCalendar?.refYear : null} hintCalendarName={selectedCalendar?.name} />
+            <LinkStatusPanel sourceType="dw" isPlanner={isPlanner} onSelectionChange={handleSelectionChange}
+              hintYear={source === 'dw' ? selectedCalendar?.refYear : null} hintCalendarName={selectedCalendar?.name} />
+          </>
+        )}
+      </div>
 
       <div className="card">
         <h4>Run Reindex</h4>
