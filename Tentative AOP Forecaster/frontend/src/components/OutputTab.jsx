@@ -377,6 +377,7 @@ export default function OutputTab({ sessionId, runKey }) {
         return <td key={`${m}|gr`} className={`num ${gr == null ? 'muted' : gr >= 0 ? 'positive' : 'negative'}`}>{gr == null ? 'new' : (gr > 0 ? '+' : '') + gr.toFixed(1) + '%'}</td>
       })()] })}
       <td className="num fw-bold">{fU(n.fcst)}</td>
+      {growthCell(n.growthEng, true)}
     </>)
     return (<>
       <td className="num">{n.stores}</td>
@@ -410,6 +411,7 @@ export default function OutputTab({ sessionId, runKey }) {
         <Th {...th} key={`${m}|gr`} col={`m${i}|gr`} label={m} sub="Growth %" num />,
       ] })}
       <Th {...th} col="fcst" label="Total" sub="Forecast" num filterable />
+      <Th {...th} col="growthEng" label="Total" sub="Growth %" num filterable />
     </>)
     return (<>
       <Th {...th} col="stores" label="Stores" num />
