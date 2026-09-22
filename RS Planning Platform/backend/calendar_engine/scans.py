@@ -478,7 +478,18 @@ def _row_group_stats(pf, date_col):
     return out
 
 
-def _read_file_filtered(fp, columns, date_col, lo, hi):
+# How many row groups to fetch per read_row_groups() call in _read_file_filtered.
+# A pure tradeoff: smaller gives more frequent progress ticks but adds a network
+# round-trip per chunk (the whole reason read_row_groups() batches multiple
+# groups into one call in the first place - see that function's own docstring);
+# larger goes back to one opaque call with no feedback. 60 was picked against
+# this app's real files (~600-900 row groups for a multi-month day-wise
+# request), giving roughly 10-15 ticks - enough to make a long cold-network
+# read visibly move instead of sitting at one file's "done" flag for minutes.
+_READ_CHUNK_SIZE = 60
+
+
+def _read_file_filtered(fp, columns, date_col, lo, hi, progress=None):
     """Skip entirely (no data read) if the file's own row groups - from footer
     statistics, not a data read - provably have zero overlap with [lo, hi).
     Otherwise read only the OVERLAPPING row groups, off the SAME already-open
@@ -496,7 +507,20 @@ def _read_file_filtered(fp, columns, date_col, lo, hi):
     only some of its rows actually matching - so the caller's existing exact
     ym-based filter still runs afterward; this only cuts what gets fetched
     over the network, not what counts as a match.
+
+    `progress`, if given, is set to real read progress in units of CHUNKS (a
+    batch of up to _READ_CHUNK_SIZE row groups), not files - live-measured
+    2026-09-22 against a real 12-month day-wise request: the single
+    read_row_groups() call this used to make (matching hundreds of row
+    groups on a cold network read) is what actually took the bulk of a
+    6-minute run, not the post-read pandas aggregation the progress bar's own
+    UI text used to blame - that call gave the poller nothing to report for
+    however long it took. Reading (and date-filtering) one chunk at a time
+    instead gives a real, incrementing done/total the whole way through, and
+    as a side effect caps peak memory to one chunk's unfiltered rows instead
+    of the whole matching set before the exact-date mask ever runs.
     """
+    import pandas as pd
     import pyarrow.parquet as pq
 
     pf = pq.ParquetFile(fp)  # one footer-only network round-trip
@@ -508,16 +532,32 @@ def _read_file_filtered(fp, columns, date_col, lo, hi):
         matching = list(range(pf.num_row_groups))  # no stats to prune on - read everything
     else:
         matching = [i for i, (mn, mx) in enumerate(stats) if not (mx < lo_cmp or mn >= hi_cmp)]
-        if not matching:
-            return None  # provably no matching rows - skip the read entirely
 
-    tbl = pf.read_row_groups(matching, columns=columns)
-    if tbl.num_rows == 0:
+    if not matching:
+        if progress is not None:
+            progress["total"] = progress["done"] = 1  # nothing to read - instantly complete
+        return None  # provably no matching rows - skip the read entirely
+
+    chunks = [matching[i:i + _READ_CHUNK_SIZE] for i in range(0, len(matching), _READ_CHUNK_SIZE)]
+    if progress is not None:
+        progress["total"] = len(chunks)
+        progress["done"] = 0
+
+    frames = []
+    for chunk in chunks:
+        tbl = pf.read_row_groups(chunk, columns=columns)
+        if progress is not None:
+            progress["done"] += 1
+        if tbl.num_rows == 0:
+            continue
+        cdf = tbl.to_pandas()
+        mask = (cdf[date_col] >= lo_cmp) & (cdf[date_col] < hi_cmp)
+        cdf = cdf.loc[mask]
+        if not cdf.empty:
+            frames.append(cdf)
+    if not frames:
         return None
-    df = tbl.to_pandas()
-    mask = (df[date_col] >= lo_cmp) & (df[date_col] < hi_cmp)
-    df = df.loc[mask]
-    return df if not df.empty else None
+    return pd.concat(frames, ignore_index=True) if len(frames) > 1 else frames[0]
 
 
 # ─── Customisable output fields ──────────────────────────────────────────────
@@ -608,8 +648,8 @@ def _fetch_raw_daywise(months, progress=None, extra_dims=None, metric_col="SL_V"
     months_set = set(months)
     lo, hi = _month_bounds(months)
     files = _latest_daywise_files()
-    if progress is not None:
-        progress["total"] = len(files)
+    if not files and progress is not None:
+        progress["total"] = progress["done"] = 1  # nothing to read - instantly complete
 
     columns = ["BILLDATE", "STORE_NAME", metric_col] + [c for c in extra_dims if c not in ("BILLDATE", "STORE_NAME", metric_col)]
 
@@ -623,12 +663,13 @@ def _fetch_raw_daywise(months, progress=None, extra_dims=None, metric_col="SL_V"
     # process, completed in under 2 minutes with no slowdown at all). A
     # somewhat longer fetch phase that leaves the server responsive is a much
     # better trade than a faster one that freezes the app for every user.
+    # progress (chunk-level, see _read_file_filtered) is owned entirely by
+    # that call now - there's always at most one file (_latest_daywise_files
+    # never returns more), so nothing here needs its own file-count tracking.
     frames = []
     total_read = 0
     for fp in files:
-        df = _read_file_filtered(fp, columns, "BILLDATE", lo, hi)
-        if progress is not None:
-            progress["done"] += 1
+        df = _read_file_filtered(fp, columns, "BILLDATE", lo, hi, progress=progress)
         if df is None or df.empty:
             continue
         total_read += len(df)
@@ -656,18 +697,19 @@ def _fetch_raw_monthwise(months, progress=None, extra_dims=None, metric_col="SL_
     months_set = set(months)
     lo, hi = _month_bounds(months)
     files = _latest_monthwise_files()
-    if progress is not None:
-        progress["total"] = len(files)
+    if not files and progress is not None:
+        progress["total"] = progress["done"] = 1  # nothing to read - instantly complete
 
     columns = ["BILLMONTH", "DIVISION", "STORE_NAME", metric_col] + \
         [c for c in extra_dims if c not in ("BILLMONTH", "DIVISION", "STORE_NAME", metric_col)]
 
+    # progress (chunk-level, see _read_file_filtered) is owned entirely by
+    # that call - there's always at most one file (_latest_monthwise_files
+    # never returns more), so nothing here needs its own file-count tracking.
     frames = []
     total_read = 0
     for fp in files:
-        df = _read_file_filtered(fp, columns, "BILLMONTH", lo, hi)
-        if progress is not None:
-            progress["done"] += 1
+        df = _read_file_filtered(fp, columns, "BILLMONTH", lo, hi, progress=progress)
         if df is None or df.empty:
             continue
         total_read += len(df)

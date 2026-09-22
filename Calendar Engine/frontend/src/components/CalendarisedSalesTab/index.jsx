@@ -434,22 +434,25 @@ export default function CalendarisedSalesTab({ isPlanner }) {
     }
   }
 
-  // Files-based pct (progress.pct) sits at 100% for nearly the whole run once
-  // the single file finishes reading - the read is a small fraction of a big
-  // day-wise job, the post-read pandas aggregation is the rest, and that phase
-  // has no file-completion signal of its own. That's what made the bar LOOK
-  // finished for 15+ minutes while the job was still genuinely working.
-  // Once a time estimate exists (etaSeconds), drive the bar from elapsed vs.
-  // estimated-total instead, capped at 99% so it never claims "done" before
-  // the job actually reports done=true. Without an estimate yet (cold start,
-  // no history for this source), fall back to the file pct but still cap it
-  // at 90 once the file read itself is done, so the bar keeps room to move
-  // instead of parking at 100.
-  const displayPct = progress && progress.etaSeconds != null
-    ? Math.min(99, Math.round((progress.elapsedSeconds / Math.max(1, progress.elapsedSeconds + progress.etaSeconds)) * 100))
-    : progress && progress.filesTotal > 0 && progress.filesDone >= progress.filesTotal
-      ? Math.min(progress.pct, 90)
-      : progress?.pct || 0
+  // filesDone/filesTotal are now CHUNK counts, not files (2026-09-22 - see
+  // _read_file_filtered in scans.py): the read itself used to be one single
+  // opaque read_row_groups() call with zero feedback for however long a cold
+  // network read took (live-measured: the bulk of a 6-minute run, not the
+  // post-read pandas aggregation this bar's own text used to blame) - it now
+  // reads in ~60-row-group batches and reports real done/total as it goes.
+  // Prefer that real signal (filesTotal > 1 means a genuine multi-chunk read
+  // is in flight) while chunks are still coming in; once every chunk is read,
+  // fall back to the eta-projection (or the 90%-cap) for the now much
+  // shorter post-read aggregation tail, same "no signal for this bit" case
+  // as before, just for seconds instead of minutes.
+  const readInProgress = progress && progress.filesTotal > 1 && progress.filesDone < progress.filesTotal
+  const displayPct = readInProgress
+    ? Math.min(99, Math.round(progress.pct))
+    : progress && progress.etaSeconds != null
+      ? Math.min(99, Math.round((progress.elapsedSeconds / Math.max(1, progress.elapsedSeconds + progress.etaSeconds)) * 100))
+      : progress && progress.filesTotal > 0 && progress.filesDone >= progress.filesTotal
+        ? Math.min(progress.pct, 90)
+        : progress?.pct || 0
 
   return (
     <div className="module-panel">
@@ -604,16 +607,20 @@ export default function CalendarisedSalesTab({ isPlanner }) {
               }} />
             </div>
             <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>
-              {displayPct}%{progress.filesTotal > 0 && ` - ${progress.filesDone} of ${progress.filesTotal} files`}
+              {displayPct}%{progress.filesTotal > 0 && ` - ${progress.filesDone} of ${progress.filesTotal} read batches`}
               {progress.elapsedSeconds != null && ` - elapsed ${fmtDuration(progress.elapsedSeconds)}`}
-              {progress.etaSeconds != null
-                ? ` - about ${fmtDuration(progress.etaSeconds)} remaining`
-                : ' - estimating remaining time...'}
+              {readInProgress
+                ? '' // real per-batch progress above already shows where this stands - no estimate needed
+                : progress.etaSeconds != null
+                  ? ` - about ${fmtDuration(progress.etaSeconds)} remaining`
+                  : ' - estimating remaining time...'}
             </div>
             <div style={{ fontSize: '11px', color: 'var(--muted)' }}>
-              The read/aggregate step has no sub-progress signal of its own, so the remaining-time
-              estimate is projected from how long past runs of this size took - it firms up as more
-              runs complete, and reads "estimating..." until the first one finishes.
+              {readInProgress
+                ? 'Reading the source file in batches - the percentage above is real progress through this run\'s data, not an estimate.'
+                : 'The source file has been fully read - only the final aggregation is left, which has no sub-progress '
+                  + 'signal of its own, so the remaining-time estimate below is projected from how long past runs of this '
+                  + 'size took (firms up as more runs complete; reads "estimating..." until the first one finishes).'}
             </div>
           </div>
         )}
