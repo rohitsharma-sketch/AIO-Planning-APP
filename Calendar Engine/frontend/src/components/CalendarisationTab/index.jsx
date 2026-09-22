@@ -734,8 +734,11 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
                   cluster tabs and deleting that row individually. Cross-cluster
                   (not scoped to activeIdx), so it lives here rather than inside
                   FestivalTable, which only ever edits the active cluster. */}
+              {/* Both cross-cluster actions (redact-by-name and push-to-all-templates)
+                  in one toolbar row so every button here sits in one place instead of
+                  wrapping onto its own line. */}
               {isPlanner && (
-                <div className="scm-toolbar" style={{ margin: '10px 0' }}>
+                <div className="scm-toolbar" style={{ margin: '10px 0', flexWrap: 'wrap' }}>
                   <div className="field">
                     <label htmlFor="fest-redact-name">Remove festival from all clusters</label>
                     <input id="fest-redact-name" type="text" style={{ width: '220px' }}
@@ -746,15 +749,11 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
                   <button className="btn" onClick={handleRedactFestival} disabled={!redactName.trim()}>
                     Remove from All Clusters
                   </button>
-                </div>
-              )}
-              {/* Push the CURRENT full festival structure out to every other
-                  saved template, each re-dated for its own reference/future
-                  year - see handleSyncStructureToAllTemplates for exactly
-                  what this does and doesn't touch (festival lists only,
-                  never a target's locked day-map). */}
-              {isPlanner && (
-                <div className="scm-toolbar" style={{ margin: '10px 0' }}>
+                  {/* Push the CURRENT full festival structure out to every other
+                      saved template, each re-dated for its own reference/future
+                      year - see handleSyncStructureToAllTemplates for exactly
+                      what this does and doesn't touch (festival lists only,
+                      never a target's locked day-map). */}
                   <button className="btn" onClick={handleSyncStructureToAllTemplates} disabled={syncingStructure}
                     title="Replace every other saved template's festival list per cluster with the current structure, dates resolved for each template's own year">
                     {syncingStructure ? 'Syncing...' : 'Sync Festival Structure to All Templates'}
