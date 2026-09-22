@@ -382,10 +382,11 @@ export default function OutputTab({ sessionId, runKey }) {
       <td className="num fw-bold">{fU(n.fcst)}</td>
       {devCell(n.dev, b)}
       {growthCell(n.growthEng, b)}
-      {selMonths.map(m => { const i = MONTHS.indexOf(m); return (
+      {selMonths.map(m => { const i = MONTHS.indexOf(m); const gr = cellVal(n, i, 'gr'); return (
         <td key={m} className="num sdt-month-cell">
           <div className="fw-bold">{fU(n.m[i])}</div>
           <div className="sdt-month-base">{fU(n.mb[i])}</div>
+          <div className={gr == null ? 'muted' : gr >= 0 ? 'positive' : 'negative'}>{gr == null ? 'new' : (gr > 0 ? '+' : '') + gr.toFixed(1) + '%'}</div>
         </td>) })}
     </>)
   }
@@ -412,7 +413,7 @@ export default function OutputTab({ sessionId, runKey }) {
       <Th {...th} col="fcst"   label="Forecast (Cr)"  num filterable />
       <Th {...th} col="dev"    label="Deviation (Cr)" num filterable />
       <Th {...th} col="growthEng" label="Growth %" num filterable />
-      {selMonths.map(m => <Th {...th} key={m} col={`m${MONTHS.indexOf(m)}|fcst`} label={m} sub="Fcst / Base" num />)}
+      {selMonths.map(m => <Th {...th} key={m} col={`m${MONTHS.indexOf(m)}|fcst`} label={m} sub="Fcst / Base / Gr%" num />)}
     </>)
   }
 
