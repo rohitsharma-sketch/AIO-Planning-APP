@@ -246,7 +246,7 @@ function MonthSelect({ selected, onChange }) {
 
 const EMPTY_NUM  = { base: { min: '', max: '' }, fcst: { min: '', max: '' }, dev: { min: '', max: '' }, growthEng: { min: '', max: '' } }
 const NUM_TITLES = { base: 'Base', fcst: 'Forecast', dev: 'Deviation', growthEng: 'Growth %' }
-const COL_SETS   = { fcst: ['fcst'], base_fcst: ['base', 'fcst'], all: ['base', 'fcst', 'dev', 'gr'] }
+const COL_SETS   = { fcst: ['fcst'], base_fcst: ['base', 'fcst'], all: ['base', 'fcst', 'dev'] }
 const COL_LABEL  = { base: 'Base', fcst: 'Forecast', dev: 'Deviation', gr: 'Growth %' }
 const MONTH_RE   = /^m(\d+)\|(base|fcst|dev)$/
 
@@ -366,11 +366,16 @@ export default function OutputTab({ sessionId, runKey }) {
       {growthCell(n.growthEng, b)}
     </>)
     if (viewMode === 'monthly') return (<>
-      {selMonths.map(m => { const i = MONTHS.indexOf(m); return monthCols.map(c => {
+      {selMonths.map(m => { const i = MONTHS.indexOf(m); return [...monthCols.map(c => {
         const v = cellVal(n, i, c)
-        if (c === 'gr') return <td key={`${m}|${c}`} className={`num ${v == null ? 'muted' : v >= 0 ? 'positive' : 'negative'}`}>{v == null ? 'new' : (v > 0 ? '+' : '') + v.toFixed(1) + '%'}</td>
         return <td key={`${m}|${c}`} className={`num ${c === 'fcst' ? 'fw-bold' : ''} ${c === 'dev' ? (v > 0 ? 'positive' : v < 0 ? 'negative' : '') : ''}`}>{c === 'dev' ? fD(v) : fU(v)}</td>
-      }) })}
+      }), (() => {
+        // Growth% is always shown per month regardless of the Show toggle -
+        // same convention as Store summary's and Division rollup's own
+        // always-on growth column, not something worth hiding behind Show.
+        const gr = cellVal(n, i, 'gr')
+        return <td key={`${m}|gr`} className={`num ${gr == null ? 'muted' : gr >= 0 ? 'positive' : 'negative'}`}>{gr == null ? 'new' : (gr > 0 ? '+' : '') + gr.toFixed(1) + '%'}</td>
+      })()] })}
       <td className="num fw-bold">{fU(n.fcst)}</td>
     </>)
     return (<>
@@ -400,8 +405,10 @@ export default function OutputTab({ sessionId, runKey }) {
       <Th {...th} col="growthEng" label="Growth %" num filterable />
     </>)
     if (viewMode === 'monthly') return (<>
-      {selMonths.map(m => { const i = MONTHS.indexOf(m); return monthCols.map(c =>
-        <Th {...th} key={`${m}|${c}`} col={`m${i}|${c}`} label={m} sub={COL_LABEL[c]} num />) })}
+      {selMonths.map(m => { const i = MONTHS.indexOf(m); return [
+        ...monthCols.map(c => <Th {...th} key={`${m}|${c}`} col={`m${i}|${c}`} label={m} sub={COL_LABEL[c]} num />),
+        <Th {...th} key={`${m}|gr`} col={`m${i}|gr`} label={m} sub="Growth %" num />,
+      ] })}
       <Th {...th} col="fcst" label="Total" sub="Forecast" num filterable />
     </>)
     return (<>
@@ -460,7 +467,7 @@ export default function OutputTab({ sessionId, runKey }) {
         {viewMode === 'monthly' && (
           <div className="out-col-opts">
             <span className="out-inline-label">Show</span>
-            {[['fcst', 'Forecast'], ['base_fcst', 'Base + Forecast'], ['all', 'Base + Fcst + Dev + Gr%']].map(([v, l]) => (
+            {[['fcst', 'Forecast'], ['base_fcst', 'Base + Forecast'], ['all', 'Base + Fcst + Dev']].map(([v, l]) => (
               <button key={v} className={`out-col-btn ${colSet === v ? 'active' : ''}`} onClick={() => setColSet(v)}>{l}</button>
             ))}
           </div>
