@@ -702,37 +702,23 @@ thead .c0,thead .c1{background:var(--th-bg) !important;color:var(--th-tx) !impor
   font-weight:900!important;letter-spacing:.1em!important;
   border-bottom:2px solid currentColor!important;
 }
-/* Text colors below are light-theme values (dark, saturated - checked at
-   ~4.2:1 contrast against the rgba background composited over a light
-   page). Unscoped .hblk-* rules apply in BOTH themes (no data-theme guard
-   on this whole block), so dark theme needs its OWN override further down -
-   the same dark text reads at ~1.4:1 (near-invisible) once this background
-   composites over the dark theme's navy page instead. */
+/* Fully opaque (alpha 1) - a solid background no longer composites with
+   whatever page color is behind it, so unlike the .60-alpha version this
+   reads identically in both themes with ONE text color; near-black checked
+   at 8.7:1 / 4.4:1 / 7.8:1 against the three solid hues (all comfortably
+   pass, purple being the tightest since it's the most mid-toned hue). No
+   per-theme override needed any more. */
 .dtbl .hr-sg .hblk-st{
-  background:rgba(251,146,60,.60)!important;
-  color:#9A3E00!important;border-bottom-color:#9A3E00!important;
+  background:#FB923C!important;
+  color:#0A0A0F!important;border-bottom-color:#0A0A0F!important;
 }
 .dtbl .hr-sg .hblk-hist{
-  background:rgba(99,102,241,.60)!important;
-  color:#312E81!important;border-bottom-color:#312E81!important;
+  background:#6366F1!important;
+  color:#0A0A0F!important;border-bottom-color:#0A0A0F!important;
 }
 .dtbl .hr-sg .hblk-plan{
-  background:rgba(16,185,129,.55)!important;
-  color:#065F46!important;border-bottom-color:#065F46!important;
-}
-/* Dark-theme override: white reads at ~5-8:1 against this same background
-   once it's composited over the dark navy page - checked, not guessed. */
-:root[data-theme="dark"] .dtbl .hr-sg .hblk-st,
-:root[data-theme="dark"] .dtbl .hr-sg .hblk-hist,
-:root[data-theme="dark"] .dtbl .hr-sg .hblk-plan{
-  color:#fff!important;border-bottom-color:#fff!important;
-}
-@media(prefers-color-scheme:dark){
-  :root:not([data-theme="light"]) .dtbl .hr-sg .hblk-st,
-  :root:not([data-theme="light"]) .dtbl .hr-sg .hblk-hist,
-  :root:not([data-theme="light"]) .dtbl .hr-sg .hblk-plan{
-    color:#fff!important;border-bottom-color:#fff!important;
-  }
+  background:#10B981!important;
+  color:#0A0A0F!important;border-bottom-color:#0A0A0F!important;
 }
 .htoggle{
   background:rgba(255,255,255,.10)!important;border-radius:10px!important;
