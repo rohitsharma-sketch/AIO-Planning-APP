@@ -496,20 +496,51 @@
   color: #92400E;
   cursor: help;
 }
-.refmap-ref-cell { position: relative; }
+.refmap-ref-cell { position: relative; display: flex; align-items: center; gap: 5px; }
+.refmap-mix-btn {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--white);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+}
+.refmap-mix-btn:hover { border-color: var(--navy3); color: var(--navy); background: var(--light); }
 .refmap-popover {
   position: absolute;
   z-index: 20;
   top: 100%;
   left: 0;
   margin-top: 4px;
-  padding: 8px;
+  padding: 8px 24px 8px 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--white);
   box-shadow: 0 6px 18px rgba(0,0,0,0.12);
   white-space: nowrap;
 }
+.refmap-popover-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.refmap-popover-close:hover { background: var(--light); color: var(--char); }
 
 /* ── Multi-select dropdown ───────────────────────────────────────── */
 .ms-root { position: relative; }

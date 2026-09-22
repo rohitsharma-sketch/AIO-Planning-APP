@@ -616,9 +616,25 @@ function RefStoreMapTab({ stores, loadErr, reload }) {
   const [logByStore, setLogByStore] = useState({})
   const [showLog, setShowLog] = useState(false)
   const [fullLog, setFullLog] = useState(null)  // lazy-loaded only when the panel opens
-  const [hoverStore, setHoverStore] = useState(null)  // store_id whose drill-down popover is open
+  // store_id whose drill-down popover is open - click-to-toggle, not hover:
+  // a hover popover closed the instant the cursor crossed from the row into
+  // the popover itself (outside the row's own bounding box), so a user could
+  // never actually reach it to read the numbers. Click-to-open + click-away-
+  // to-close (see the document listener below) fixes both the flicker and
+  // gives the user a stable, deliberately-dismissed panel.
+  const [openMixStore, setOpenMixStore] = useState(null)
   const [mixByStore, setMixByStore] = useState({})  // {store_id -> {totalLakhs, mix: {div: pct}}}
+  const mixPopoverRef = useRef(null)
   const safeStores = stores || []
+
+  useEffect(() => {
+    if (!openMixStore) return
+    function onDocClick(e) {
+      if (mixPopoverRef.current && !mixPopoverRef.current.contains(e.target)) setOpenMixStore(null)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [openMixStore])
 
   function loadLatestLog() {
     fetchJson('/api/config/ref-store-log?limit=2000').then(r => {
@@ -753,17 +769,16 @@ function RefStoreMapTab({ stores, loadErr, reload }) {
           <tbody>
             {filtered.map(s => {
               const priorEntry = logByStore[s.store_id]
+              const mixOpen = openMixStore === s.store_id
               return (
-                <tr key={s.store_id} className={edits[s.store_id] !== undefined ? 'sm-row-edited' : ''}
-                  onMouseEnter={() => { setHoverStore(s.store_id); loadMix(s) }}
-                  onMouseLeave={() => setHoverStore(f => (f === s.store_id ? null : f))}>
+                <tr key={s.store_id} className={edits[s.store_id] !== undefined ? 'sm-row-edited' : ''}>
                   <td className="sm-code">
                     {s.store_id}
                     {priorEntry && <span className="refmap-changed-badge" title={`Changed from "${priorEntry.oldRefStore || '(none)'}"`}>changed</span>}
                   </td>
                   <td className="sm-name">{s.store_name || <span className="sm-null">—</span>}</td>
                   <td className="sm-muted">{s.tag || '—'}</td>
-                  <td className="refmap-ref-cell">
+                  <td className="refmap-ref-cell" ref={mixOpen ? mixPopoverRef : null}>
                     <StoreRefSelect
                       value={edits[s.store_id] !== undefined ? edits[s.store_id] : (s.ref_store || '')}
                       options={storeOptions}
@@ -772,10 +787,23 @@ function RefStoreMapTab({ stores, loadErr, reload }) {
                       onOpen={() => setOpenFor(s.store_id)}
                       onClose={() => setOpenFor(f => (f === s.store_id ? null : f))}
                     />
-                    {hoverStore === s.store_id && (
+                    <button
+                      type="button"
+                      className="refmap-mix-btn"
+                      title="Compare division sales mix vs old/current ref store"
+                      onClick={() => {
+                        if (mixOpen) { setOpenMixStore(null); return }
+                        setOpenMixStore(s.store_id)
+                        loadMix(s)
+                      }}
+                    >
+                      %
+                    </button>
+                    {mixOpen && (
                       <DivisionMixPopover store={s} priorEntry={priorEntry}
                         currentRef={edits[s.store_id] !== undefined ? edits[s.store_id] : (s.ref_store || '')}
-                        mix={mixByStore[s.store_id]} />
+                        mix={mixByStore[s.store_id]}
+                        onClose={() => setOpenMixStore(null)} />
                     )}
                   </td>
                 </tr>
@@ -789,14 +817,18 @@ function RefStoreMapTab({ stores, loadErr, reload }) {
   )
 }
 
-// Hover drill-down: this store's own division sales mix % next to its OLD
-// ref store's (if a change is logged) and its CURRENT/staged ref store's -
-// a quick "does the new buddy actually look more like me than the old one
-// did" sanity check, using the same store_actuals data the forecast itself
-// draws from (see get_store_division_mix in app.py).
-function DivisionMixPopover({ store, priorEntry, currentRef, mix }) {
+// Click-to-open drill-down: this store's own division sales mix % next to
+// its OLD ref store's (if a change is logged) and its CURRENT/staged ref
+// store's - a quick "does the new buddy actually look more like me than the
+// old one did" sanity check, using the same store_actuals data the forecast
+// itself draws from (see get_store_division_mix in app.py). Stays open until
+// the % button is clicked again or the user clicks anywhere outside it (see
+// the mousedown listener in RefStoreMapTab) - no more hover-close-on-the-
+// way-there.
+function DivisionMixPopover({ store, priorEntry, currentRef, mix, onClose }) {
+  const closeBtn = <button type="button" className="refmap-popover-close" onClick={onClose} aria-label="Close">×</button>
   if (!mix) return (
-    <div className="refmap-popover"><span className="pie-count-label">Loading division mix…</span></div>
+    <div className="refmap-popover">{closeBtn}<span className="pie-count-label">Loading division mix…</span></div>
   )
   const cols = [
     { label: store.store_id, id: store.store_id },
@@ -804,10 +836,11 @@ function DivisionMixPopover({ store, priorEntry, currentRef, mix }) {
     ...(currentRef ? [{ label: `${currentRef} (current)`, id: currentRef }] : []),
   ].filter(c => c.id)
   if (cols.length < 2) return (
-    <div className="refmap-popover"><span className="pie-count-label">No ref store to compare yet.</span></div>
+    <div className="refmap-popover">{closeBtn}<span className="pie-count-label">No ref store to compare yet.</span></div>
   )
   return (
     <div className="refmap-popover">
+      {closeBtn}
       <table className="pie-row-table sm-table">
         <thead><tr><th>Division</th>{cols.map(c => <th key={c.id}>{c.label}</th>)}</tr></thead>
         <tbody>
