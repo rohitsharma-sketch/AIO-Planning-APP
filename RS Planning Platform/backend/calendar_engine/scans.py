@@ -65,9 +65,9 @@ def _mapped_stores():
 
 
 def _scan_parquet_link(progress=None):
-    """Read only BILLMONTH + STORE_NAME across every .parquet file in PARQUET_DIR.
+    """Read only BILLMONTH + STORE_NAME from the latest .parquet file in PARQUET_DIR.
     No sales figures are read or processed here - this is detection only."""
-    files = sorted(glob.glob(os.path.join(PARQUET_DIR, "*.parquet")))
+    files = _latest_monthwise_files()
     if not files:
         raise FileNotFoundError(f"No .parquet files found under {PARQUET_DIR}")
     if progress is not None:
@@ -166,6 +166,18 @@ def _latest_daywise_files():
     candidates = []
     for d in DAYWISE_DIRS:
         candidates.extend(glob.glob(os.path.join(d, "*.parquet")))
+    if not candidates:
+        return []
+    return [max(candidates, key=os.path.getmtime)]
+
+
+def _latest_monthwise_files():
+    """Only the single most-recently-modified *.parquet in PARQUET_DIR - same
+    reasoning as _latest_daywise_files(): this folder holds full compiled
+    re-exports, not incremental partitions, so reading more than one file
+    double-counts every sale in the overlap. All three month-wise reads (link
+    scan, schema introspection, reindex fetch) go through this."""
+    candidates = glob.glob(os.path.join(PARQUET_DIR, "*.parquet"))
     if not candidates:
         return []
     return [max(candidates, key=os.path.getmtime)]
@@ -554,7 +566,7 @@ def get_source_schema(source_type):
     if source_type not in SOURCE_SCHEMA:
         return {"ok": False, "error": "source_type must be 'mw' or 'dw'"}
     if source_type == "mw":
-        files = sorted(glob.glob(os.path.join(PARQUET_DIR, "*.parquet")))
+        files = _latest_monthwise_files()
     else:
         files = _latest_daywise_files()
     if not files:
@@ -643,7 +655,7 @@ def _fetch_raw_monthwise(months, progress=None, extra_dims=None, metric_col="SL_
     extra_dims = extra_dims or []
     months_set = set(months)
     lo, hi = _month_bounds(months)
-    files = sorted(glob.glob(os.path.join(PARQUET_DIR, "*.parquet")))
+    files = _latest_monthwise_files()
     if progress is not None:
         progress["total"] = len(files)
 

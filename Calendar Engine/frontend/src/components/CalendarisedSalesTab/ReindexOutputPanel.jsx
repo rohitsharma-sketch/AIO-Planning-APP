@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
+import * as XLSX from 'xlsx'
 import { getStoreClusterMap } from '../../lib/api'
 
 // Ported from the old app's reindex output tabs (calendar_engine.html
@@ -49,9 +50,12 @@ const KEY_LABELS = { store: 'Store', division: 'Division' }
 
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
-export default function ReindexOutputPanel({ result, festivalByCluster, refDateByCluster, refMonthsByCluster }) {
+export default function ReindexOutputPanel({ result, festivalByCluster, refDateByCluster, refMonthsByCluster, fwdSplitByCluster }) {
   const [activeSub, setActiveSub] = useState('reindexed')
   const [search, setSearch] = useState('')
+  // Month Wise Matrix: which store's split to preview (Download XLSX always
+  // covers every store regardless of this selection).
+  const [mwMatrixStore, setMwMatrixStore] = useState('')
   // Reindexed Sales has two layouts to choose from: Wide (the existing
   // pivot - one row per store[+extra fields], one column per date/month;
   // good for a full year at a glance but the column count explodes with
@@ -188,6 +192,62 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
   const monthCols = useMemo(
     () => (ok ? [...new Set(result.columns.map(c => c.slice(0, 7)))].sort() : []),
     [ok, result])
+
+  // Month Wise Matrix: MW-only - splits each store's REFERENCE month actual
+  // total across TY months proportional to how many of that month's real
+  // calendar days landed in each (fwdSplitByCluster, built in
+  // CalendarisedSalesTab/index.jsx from the calendar's own day-map). No
+  // day-of-month sales figure exists in month-wise source, so the day-map's
+  // own split is the only available signal for dividing a month's total -
+  // this is why DW has no equivalent tab, its rows are already day-exact.
+  const isMwMatrix = ok && result.source === 'mw' && !!result.actualRows
+  const mwMatrixData = useMemo(() => {
+    if (!isMwMatrix) return { stores: [], byStore: new Map() }
+    const byStoreRefMonth = new Map()  // store -> {refMonth -> total}
+    for (const row of result.actualRows) {
+      const rm = row.col.slice(0, 7)
+      let e = byStoreRefMonth.get(row.store)
+      if (!e) { e = {}; byStoreRefMonth.set(row.store, e) }
+      e[rm] = (e[rm] || 0) + row.value
+    }
+    const stores = [...byStoreRefMonth.keys()].sort()
+    const byStore = new Map()
+    for (const store of stores) {
+      const cluster = clusterOf(store)
+      const refTotals = byStoreRefMonth.get(store)
+      const rows = Object.keys(refTotals).sort().map(rm => {
+        const total = refTotals[rm]
+        const split = fwdSplitByCluster?.[cluster]?.[rm] || {}
+        const totalDays = Object.values(split).reduce((a, b) => a + b, 0)
+        const cells = {}
+        for (const fm of monthCols) cells[fm] = totalDays ? total * (split[fm] || 0) / totalDays : null
+        return { refMonth: rm, total, cells }
+      })
+      byStore.set(store, { cluster, rows })
+    }
+    return { stores, byStore }
+  }, [isMwMatrix, result, fwdSplitByCluster, monthCols, storeCluster])
+
+  useEffect(() => {
+    if (isMwMatrix && !mwMatrixStore && mwMatrixData.stores.length) setMwMatrixStore(mwMatrixData.stores[0])
+  }, [isMwMatrix, mwMatrixData, mwMatrixStore])
+
+  function downloadMwMatrixXlsx() {
+    if (!mwMatrixData.stores.length) return
+    const aoa = [['Store', 'Cluster', 'Ref Month', 'Ref Actual Sales', ...monthCols]]
+    for (const store of mwMatrixData.stores) {
+      const { cluster, rows } = mwMatrixData.byStore.get(store)
+      for (const r of rows) {
+        aoa.push([store, cluster, r.refMonth, +r.total.toFixed(2),
+          ...monthCols.map(fm => r.cells[fm] == null ? '' : +r.cells[fm].toFixed(2))])
+      }
+    }
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
+    ws['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, ...monthCols.map(() => ({ wch: 12 }))]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Month Wise Matrix')
+    XLSX.writeFile(wb, `${fileStem}_month_wise_matrix.xlsx`)
+  }
 
   // Reset the month filter to "everything" on a new result (a fresh reindex
   // run or a switch between Day-wise/Month-wise) - a stale selection from a
@@ -635,6 +695,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
             (isEven, see p1p2Rows) - shown either way for a consistent shape
             across sources, but clearly labeled below when it's the even case. */}
         {ok && result.actualRows && <button className={activeSub === 'divmonth' ? 'active' : ''} onClick={() => setActiveSub('divmonth')}>MW Comparison</button>}
+        {isMwMatrix && <button className={activeSub === 'mwmatrix' ? 'active' : ''} onClick={() => setActiveSub('mwmatrix')}>Month Wise Matrix</button>}
         {ok && result.actualRows && result.source === 'dw' && !result.isSnapshot && result.columns?.[0]?.length >= 10 && <button className={activeSub === 'daycomp' ? 'active' : ''} onClick={() => setActiveSub('daycomp')}>DW Comparison</button>}
         {ok && result.actualRows && <button className={activeSub === 'p1p2' ? 'active' : ''} onClick={() => setActiveSub('p1p2')}>P1 / P2 Comparison</button>}
         <button className={activeSub === 'raw' ? 'active' : ''} onClick={() => setActiveSub('raw')}>Run Details</button>
@@ -1008,6 +1069,58 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                 </tbody>
               </table>
             </div>
+          </>
+        )
+      })()}
+
+      {activeSub === 'mwmatrix' && isMwMatrix && (() => {
+        const sel = mwMatrixData.byStore.get(mwMatrixStore)
+        return (
+          <>
+            <div className="scm-toolbar">
+              <div className="field">
+                <label htmlFor="mwmx-store">Store Filter</label>
+                <input id="mwmx-store" list="mwmx-store-list" style={{ width: '220px' }}
+                  placeholder="type to search a store"
+                  value={mwMatrixStore} onChange={e => setMwMatrixStore(e.target.value)} />
+                <datalist id="mwmx-store-list">
+                  {mwMatrixData.stores.map(s => <option key={s} value={s} />)}
+                </datalist>
+              </div>
+              <button className="btn" onClick={downloadMwMatrixXlsx} disabled={!mwMatrixData.stores.length}>
+                Download XLSX (All Stores)
+              </button>
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
+              Each reference month's actual sales, split across TY months proportional to how many of that
+              month's calendar days landed in each - a month whose days split across two TY months (a festival
+              mid-month shift) shows a real split here, not a single guess. Download covers every store, not just this preview.
+            </div>
+            {!sel ? <p>No data for store "{mwMatrixStore}".</p> : (
+              <div className="tbl-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th rowSpan={2}>Ref Month</th>
+                      <th rowSpan={2} style={num}>Ref Actual Sales</th>
+                      <th colSpan={monthCols.length} style={{ textAlign: 'center' }}>TY Months</th>
+                    </tr>
+                    <tr>
+                      {monthCols.map(m => <th key={m} style={num}>{m}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sel.rows.map(r => (
+                      <tr key={r.refMonth}>
+                        <td style={{ fontWeight: 600 }}>{r.refMonth}</td>
+                        <td style={num}>{round2(r.total)}</td>
+                        {monthCols.map(m => <td key={m} style={num}>{round2(r.cells[m])}</td>)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </>
         )
       })()}
