@@ -654,7 +654,7 @@ def put_store_master_config(body: dict = Body(...)):
     """Update editable planning fields (tag, cluster_key, ref_store) on current store rows."""
     from sqlalchemy import select
     from db.base import SessionLocal
-    from db.models.masterdata import Store
+    from db.models.masterdata import Store, RefStoreChangeLog
 
     rows = body.get("rows") or []
     with SessionLocal() as session:
@@ -667,6 +667,18 @@ def put_store_master_config(body: dict = Body(...)):
                 select(Store).where(Store.store_id == store_id, Store.valid_to.is_(None))
             ).scalar_one_or_none()
             if current:
+                if "ref_store" in row:
+                    new_ref = row["ref_store"] if row["ref_store"] != "" else None
+                    # Logged BEFORE the mutation below overwrites current.ref_store -
+                    # this is the only history a ref_store change gets (Store's own
+                    # effective-dating isn't used for this field, see the model's
+                    # docstring), so a no-op "save" with an unchanged value must
+                    # never write a row here, or Revert would have to skip past its
+                    # own noise to find the real prior value.
+                    if new_ref != current.ref_store:
+                        session.add(RefStoreChangeLog(
+                            store_id=store_id, old_ref_store=current.ref_store, new_ref_store=new_ref,
+                        ))
                 for field in ("tag", "cluster_key", "ref_store"):
                     if field in row:
                         setattr(current, field, row[field] if row[field] != "" else None)
@@ -674,6 +686,64 @@ def put_store_master_config(body: dict = Body(...)):
         session.commit()
         _invalidate_salesplan_store_cache()
         return {"updated": updated}
+
+
+@router.get("/api/config/ref-store-log")
+def get_ref_store_log(store_id: Optional[str] = None, limit: int = 200):
+    """Change history for stores.ref_store, most recent first - powers the Ref
+    Store Mapping tab's Change Log (old value, new value, when) and its
+    per-store Revert action."""
+    from sqlalchemy import select
+    from db.base import SessionLocal
+    from db.models.masterdata import RefStoreChangeLog
+
+    with SessionLocal() as session:
+        q = select(RefStoreChangeLog)
+        if store_id:
+            q = q.where(RefStoreChangeLog.store_id == store_id)
+        q = q.order_by(RefStoreChangeLog.changed_at.desc()).limit(limit)
+        rows = session.execute(q).scalars().all()
+        return {"entries": [
+            {"id": r.id, "storeId": r.store_id, "oldRefStore": r.old_ref_store,
+             "newRefStore": r.new_ref_store, "changedAt": r.changed_at.isoformat() if r.changed_at else None}
+            for r in rows
+        ]}
+
+
+@router.get("/api/config/store-division-mix")
+def get_store_division_mix(store_ids: str):
+    """Division sales mix % for a comma-separated list of store_ids, computed
+    from planning_inputs.input_values (lever_key='store_actuals' - the same
+    FY27 base-sales data a ref store's forecast pattern actually feeds into,
+    see nso_ramp()/pass1b_ramp_forecasts in engine_v3.py). Powers the Ref
+    Store Mapping tab's drill-down: does this store's own division mix look
+    more like the new buddy's than the old one's, as a quick sanity check on
+    the reassignment - not a claim about which buddy is objectively "right",
+    just the same data the forecast itself will lean on."""
+    from sqlalchemy import select, func as sa_func
+    from db.base import SessionLocal
+    from db.models.planning_inputs import InputValue
+
+    ids = [s.strip() for s in (store_ids or "").split(",") if s.strip()]
+    if not ids:
+        return {"stores": {}}
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(InputValue.store_id, InputValue.division_code, sa_func.sum(InputValue.value))
+            .where(InputValue.lever_key == "store_actuals", InputValue.store_id.in_(ids))
+            .group_by(InputValue.store_id, InputValue.division_code)
+        ).all()
+    by_store = {}
+    totals = {}
+    for store_id, div, val in rows:
+        v = float(val or 0)
+        by_store.setdefault(store_id, {})[div or "(none)"] = v
+        totals[store_id] = totals.get(store_id, 0.0) + v
+    result = {}
+    for store_id, divs in by_store.items():
+        total = totals[store_id] or 1.0
+        result[store_id] = {"totalLakhs": round(total, 2), "mix": {d: round(100 * v / total, 1) for d, v in divs.items()}}
+    return {"stores": result}
 
 
 @router.delete("/api/config/store-master/untagged")

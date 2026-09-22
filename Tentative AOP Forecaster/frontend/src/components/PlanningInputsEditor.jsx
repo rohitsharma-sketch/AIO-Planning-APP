@@ -609,7 +609,27 @@ function RefStoreMapTab({ stores, loadErr, reload }) {
   const [status, setStatus] = useState(null)
   const [busy, setBusy]     = useState(false)
   const [openFor, setOpenFor] = useState(null)  // store_id whose ref-store dropdown is open
+  // {store_id -> most recent log entry} - only the LATEST change per store,
+  // since that's the only "old value" a Revert or the drill-down cares
+  // about. Fetched once on mount; refreshed after every save (a save is
+  // exactly when a new entry can appear) rather than on every render.
+  const [logByStore, setLogByStore] = useState({})
+  const [showLog, setShowLog] = useState(false)
+  const [fullLog, setFullLog] = useState(null)  // lazy-loaded only when the panel opens
+  const [hoverStore, setHoverStore] = useState(null)  // store_id whose drill-down popover is open
+  const [mixByStore, setMixByStore] = useState({})  // {store_id -> {totalLakhs, mix: {div: pct}}}
   const safeStores = stores || []
+
+  function loadLatestLog() {
+    fetchJson('/api/config/ref-store-log?limit=2000').then(r => {
+      const latest = {}
+      for (const e of r.entries || []) {  // entries are newest-first, so first hit per store wins
+        if (!latest[e.storeId]) latest[e.storeId] = e
+      }
+      setLogByStore(latest)
+    }).catch(() => {})
+  }
+  useEffect(() => { loadLatestLog() }, [])
 
   // The dropdown's own option list — every store in the master, code + name.
   const storeOptions = useMemo(() =>
@@ -643,9 +663,42 @@ function RefStoreMapTab({ stores, loadErr, reload }) {
       setStatus({ err: false, msg: `Saved ${r.updated} ref-store mapping(s).` })
       setEdits({})
       reload()
+      loadLatestLog()
+      if (showLog) fetchJson('/api/config/ref-store-log').then(r2 => setFullLog(r2.entries)).catch(() => {})
       markConfigChanged()
     } catch (e) { setStatus({ err: true, msg: e.message }) }
     finally { setBusy(false) }
+  }
+
+  // One-click undo: stage the logged OLD value as an edit, same as if the
+  // user had retyped it themselves - still goes through the normal Save (and
+  // gets its own new log entry, old=newRefStore/new=oldRefStore), so a
+  // revert is itself always revertible, never a special silent write.
+  function revert(entry) {
+    setRef(entry.storeId, entry.oldRefStore || '')
+  }
+
+  async function toggleLog() {
+    if (!showLog) {  // refetch every time it opens, not just the first time - a save while it's closed must not leave it stale
+      try { const r = await fetchJson('/api/config/ref-store-log'); setFullLog(r.entries) }
+      catch (e) { setStatus({ err: true, msg: e.message }) }
+    }
+    setShowLog(o => !o)
+  }
+
+  // Drill-down: fetch division mix for the store itself + its OLD ref (from
+  // the log, if any) + its CURRENT/staged ref, all in one request. Cached in
+  // mixByStore so re-hovering the same row doesn't re-fetch.
+  async function loadMix(s) {
+    if (mixByStore[s.store_id]) return
+    const currentRef = edits[s.store_id] !== undefined ? edits[s.store_id] : (s.ref_store || '')
+    const oldRef = logByStore[s.store_id]?.oldRefStore
+    const ids = [s.store_id, currentRef, oldRef].filter(Boolean)
+    if (!ids.length) return
+    try {
+      const r = await fetchJson(`/api/config/store-division-mix?store_ids=${encodeURIComponent(ids.join(','))}`)
+      setMixByStore(m => ({ ...m, [s.store_id]: r.stores }))
+    } catch { /* drill-down is a convenience, not worth surfacing a status error for */ }
   }
 
   const unsavedCount = Object.keys(edits).length
@@ -663,36 +716,113 @@ function RefStoreMapTab({ stores, loadErr, reload }) {
           onChange={e => setSearch(e.target.value)}
         />
         <span className="pie-count-label">{filtered.length} stores{unsavedCount > 0 ? ` · ${unsavedCount} unsaved` : ''}</span>
+        <button className="btn-secondary" onClick={toggleLog}>{showLog ? 'Hide Change Log' : 'Change Log'}</button>
         <button className="btn-primary pie-save" onClick={save} disabled={busy || !unsavedCount}>
           {busy ? 'Saving…' : 'Save changes'}
         </button>
       </div>
       {status && <p className={`pie-status ${status.err ? 'err' : ''}`}>{status.msg}</p>}
+
+      {showLog && (
+        <div className="refmap-log">
+          <div className="refmap-log-hdr">
+            <strong>Ref Store Change Log</strong>
+            <span className="pie-count-label">Newest first · click Revert to stage the old value (still needs Save)</span>
+          </div>
+          <table className="pie-row-table sm-table">
+            <thead><tr><th>Store</th><th>Old Ref Store</th><th>New Ref Store</th><th>Changed At</th><th /></tr></thead>
+            <tbody>
+              {(fullLog || []).map(e => (
+                <tr key={e.id}>
+                  <td className="sm-code">{e.storeId}</td>
+                  <td>{e.oldRefStore || <span className="sm-null">—</span>}</td>
+                  <td>{e.newRefStore || <span className="sm-null">—</span>}</td>
+                  <td className="sm-muted">{new Date(e.changedAt).toLocaleString()}</td>
+                  <td><button className="btn-secondary" onClick={() => revert(e)}>Revert</button></td>
+                </tr>
+              ))}
+              {fullLog !== null && !fullLog.length && <tr><td colSpan={5} className="sm-empty-row">No ref-store changes logged yet.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       <div className="pie-scroll">
         <table className="pie-row-table sm-table">
           <thead><tr><th>Store</th><th>Name</th><th>Tag</th><th>Ref Store / Buddy Store</th></tr></thead>
           <tbody>
-            {filtered.map(s => (
-              <tr key={s.store_id} className={edits[s.store_id] !== undefined ? 'sm-row-edited' : ''}>
-                <td className="sm-code">{s.store_id}</td>
-                <td className="sm-name">{s.store_name || <span className="sm-null">—</span>}</td>
-                <td className="sm-muted">{s.tag || '—'}</td>
-                <td>
-                  <StoreRefSelect
-                    value={edits[s.store_id] !== undefined ? edits[s.store_id] : (s.ref_store || '')}
-                    options={storeOptions}
-                    onChange={v => setRef(s.store_id, v)}
-                    isOpen={openFor === s.store_id}
-                    onOpen={() => setOpenFor(s.store_id)}
-                    onClose={() => setOpenFor(f => (f === s.store_id ? null : f))}
-                  />
-                </td>
-              </tr>
-            ))}
+            {filtered.map(s => {
+              const priorEntry = logByStore[s.store_id]
+              return (
+                <tr key={s.store_id} className={edits[s.store_id] !== undefined ? 'sm-row-edited' : ''}
+                  onMouseEnter={() => { setHoverStore(s.store_id); loadMix(s) }}
+                  onMouseLeave={() => setHoverStore(f => (f === s.store_id ? null : f))}>
+                  <td className="sm-code">
+                    {s.store_id}
+                    {priorEntry && <span className="refmap-changed-badge" title={`Changed from "${priorEntry.oldRefStore || '(none)'}"`}>changed</span>}
+                  </td>
+                  <td className="sm-name">{s.store_name || <span className="sm-null">—</span>}</td>
+                  <td className="sm-muted">{s.tag || '—'}</td>
+                  <td className="refmap-ref-cell">
+                    <StoreRefSelect
+                      value={edits[s.store_id] !== undefined ? edits[s.store_id] : (s.ref_store || '')}
+                      options={storeOptions}
+                      onChange={v => setRef(s.store_id, v)}
+                      isOpen={openFor === s.store_id}
+                      onOpen={() => setOpenFor(s.store_id)}
+                      onClose={() => setOpenFor(f => (f === s.store_id ? null : f))}
+                    />
+                    {hoverStore === s.store_id && (
+                      <DivisionMixPopover store={s} priorEntry={priorEntry}
+                        currentRef={edits[s.store_id] !== undefined ? edits[s.store_id] : (s.ref_store || '')}
+                        mix={mixByStore[s.store_id]} />
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
             {!filtered.length && <tr><td colSpan={4} className="sm-empty-row">No stores match.</td></tr>}
           </tbody>
         </table>
       </div>
+    </div>
+  )
+}
+
+// Hover drill-down: this store's own division sales mix % next to its OLD
+// ref store's (if a change is logged) and its CURRENT/staged ref store's -
+// a quick "does the new buddy actually look more like me than the old one
+// did" sanity check, using the same store_actuals data the forecast itself
+// draws from (see get_store_division_mix in app.py).
+function DivisionMixPopover({ store, priorEntry, currentRef, mix }) {
+  if (!mix) return (
+    <div className="refmap-popover"><span className="pie-count-label">Loading division mix…</span></div>
+  )
+  const cols = [
+    { label: store.store_id, id: store.store_id },
+    ...(priorEntry ? [{ label: `${priorEntry.oldRefStore} (old)`, id: priorEntry.oldRefStore }] : []),
+    ...(currentRef ? [{ label: `${currentRef} (current)`, id: currentRef }] : []),
+  ].filter(c => c.id)
+  if (cols.length < 2) return (
+    <div className="refmap-popover"><span className="pie-count-label">No ref store to compare yet.</span></div>
+  )
+  return (
+    <div className="refmap-popover">
+      <table className="pie-row-table sm-table">
+        <thead><tr><th>Division</th>{cols.map(c => <th key={c.id}>{c.label}</th>)}</tr></thead>
+        <tbody>
+          {DIVS.map(div => (
+            <tr key={div}>
+              <td className="sm-muted">{div}</td>
+              {cols.map(c => <td key={c.id}>{mix[c.id]?.mix?.[div] != null ? `${mix[c.id].mix[div]}%` : '—'}</td>)}
+            </tr>
+          ))}
+          <tr>
+            <td className="sm-muted">Total (₹ L)</td>
+            {cols.map(c => <td key={c.id}>{mix[c.id]?.totalLakhs != null ? mix[c.id].totalLakhs.toLocaleString('en-IN') : '—'}</td>)}
+          </tr>
+        </tbody>
+      </table>
     </div>
   )
 }

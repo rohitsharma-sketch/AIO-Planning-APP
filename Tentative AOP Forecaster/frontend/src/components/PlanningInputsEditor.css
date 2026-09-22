@@ -469,6 +469,48 @@
   font-size: 13px;
 }
 
+/* ── Ref Store change log + division-mix drill-down ─────────────── */
+.refmap-log {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 10px 0;
+  background: var(--light);
+}
+.refmap-log-hdr {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.refmap-changed-badge {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #FEF3C7;
+  color: #92400E;
+  cursor: help;
+}
+.refmap-ref-cell { position: relative; }
+.refmap-popover {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--white);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+  white-space: nowrap;
+}
+
 /* ── Multi-select dropdown ───────────────────────────────────────── */
 .ms-root { position: relative; }
 

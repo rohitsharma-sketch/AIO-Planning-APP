@@ -8,7 +8,7 @@ NSO logic actually use.
 """
 import datetime
 
-from sqlalchemy import Boolean, Date, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import Base
@@ -70,6 +70,24 @@ class Store(Base):
     tag: Mapped[str | None] = mapped_column(String, nullable=True)
     valid_from: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     valid_to: Mapped[datetime.date | None] = mapped_column(Date, nullable=True)  # NULL = current
+
+
+class RefStoreChangeLog(Base):
+    """Append-only ledger of stores.ref_store edits made via the Ref Store
+    Mapping tab, per the same ledger principle as planning_inputs.
+    input_values_history. Store itself is effective-dated in principle (see
+    its own docstring) but put_store_master_config mutates ref_store in
+    place rather than inserting a new dated row, so this table is what
+    actually lets a planner see "what was this store's buddy before I
+    changed it" and revert - never updated or deleted, only inserted."""
+    __tablename__ = "ref_store_change_log"
+    __table_args__ = {"schema": "masterdata"}
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    store_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    old_ref_store: Mapped[str | None] = mapped_column(String, nullable=True)
+    new_ref_store: Mapped[str | None] = mapped_column(String, nullable=True)
+    changed_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class NsoOpening(Base):
