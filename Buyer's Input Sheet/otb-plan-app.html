@@ -756,6 +756,19 @@ thead .c0,thead .c1{background:var(--th-bg) !important;color:var(--th-tx) !impor
 .dtbl thead tr.hrow1 th,.dtbl thead tr.hrow2 th,.dtbl thead tr.hrow3 th{background:rgba(99,102,241,.07)!important;color:#4338CA!important;border-bottom:1px solid rgba(99,102,241,.15)!important;font-size:9px!important;letter-spacing:.06em!important}
 .dtbl thead tr.hrow1 th.sc,.dtbl thead tr.hrow2 th.sc,.dtbl thead tr.hrow3 th.sc{background:rgba(99,102,241,.14)!important;color:#4338CA!important}
 
+/* hr1 fully opaque, per-block-colored (2026-09-22) - same solid hues as the
+   hr0 super-group band above it (.hblk-st/-hist/-plan), continuing the
+   color ribbon down into the month/period row instead of the previous flat
+   near-white/8%-tint cells. .st-blk/.hist-blk/.plan-blk are added to EVERY
+   cell in their block (not just the first, unlike -sep-th), so specificity
+   (.dtbl .hr1 th.xxx-blk = 3 classes+1 type) beats both the plain
+   ".dtbl .hr1 th" rule above and the older ".dtbl thead tr.hr1 th.hsum"
+   rule regardless of source order. One dark text color works in both
+   themes since a solid background no longer composites with the page. */
+.dtbl .hr1 th.st-blk{background:#FB923C!important;color:#0A0A0F!important;border-right-color:rgba(10,10,15,.15)!important}
+.dtbl .hr1 th.hist-blk{background:#6366F1!important;color:#0A0A0F!important;border-right-color:rgba(10,10,15,.15)!important}
+.dtbl .hr1 th.plan-blk{background:#10B981!important;color:#0A0A0F!important;border-right-color:rgba(10,10,15,.15)!important}
+
 /* ── Dark-mode header overrides ── */
 :root[data-theme="dark"] .dtbl thead tr.hr1 th.hsum{background:#131E42!important;color:#818CF8!important}
 :root[data-theme="dark"] .dtbl .hr2 th{background:#101930!important;color:#7A92B6!important}
@@ -2888,12 +2901,12 @@ function buildHeader(defs,noC1=false){
 
   // Row 1: month / group labels
   let hr1='<tr class="hr1">';
-  grpConsec(stDefs).forEach((g,i)=>  { hr1+=`<th colspan="${g.count}" class="${g.sum?'hsum':'hmon'}${i===0?' st-sep-th':''}">${g.label}</th>`; });
-  grpConsec(histDefs).forEach((g,i)=>{ hr1+=`<th colspan="${g.count}" class="${g.sum?'hsum':'hmon'}${i===0?' hist-sep-th':''}">${g.label}</th>`; });
+  grpConsec(stDefs).forEach((g,i)=>  { hr1+=`<th colspan="${g.count}" class="${g.sum?'hsum':'hmon'} st-blk${i===0?' st-sep-th':''}">${g.label}</th>`; });
+  grpConsec(histDefs).forEach((g,i)=>{ hr1+=`<th colspan="${g.count}" class="${g.sum?'hsum':'hmon'} hist-blk${i===0?' hist-sep-th':''}">${g.label}</th>`; });
   grpConsec(planDefs).forEach((g,i)=>{
     const aopCls=g.hasAop?' aop-month-hl':'';
     const pip=g.hasAop&&!g.sum?'<span class="aop-lock-pip">&#x1F512;</span>':'';
-    hr1+=`<th colspan="${g.count}" class="${g.sum?'hsum':'hmon'}${i===0?' plan-sep-th':''}${aopCls}">${g.label}${pip}</th>`;
+    hr1+=`<th colspan="${g.count}" class="${g.sum?'hsum':'hmon'} plan-blk${i===0?' plan-sep-th':''}${aopCls}">${g.label}${pip}</th>`;
   });
   hr1+='</tr>';
 
