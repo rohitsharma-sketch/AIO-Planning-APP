@@ -458,14 +458,20 @@ export default function CalendarisedSalesTab({ isPlanner }) {
           <h4>Link Sales Data Source</h4>
           <span className="toggle-lbl">{linkPanelOpen ? 'Hide' : 'Show'}</span>
         </div>
-        {linkPanelOpen && (
-          <>
+        {/* Always mounted, just visually hidden when collapsed (not
+            conditionally rendered) - "Months to Reindex" below depends on
+            these two panels' own onSelectionChange report to know which
+            months are already synced; conditionally unmounting them while
+            collapsed silently starved that (found live 2026-09-22: a fresh
+            page load with the panel collapsed showed "No months synced" for
+            a calendar that genuinely had months synced, purely because
+            nothing had fetched the selection yet). */}
+        <div style={{ display: linkPanelOpen ? 'block' : 'none' }}>
             <LinkStatusPanel sourceType="mw" isPlanner={isPlanner} onSelectionChange={handleSelectionChange}
               hintYear={source === 'mw' ? selectedCalendar?.refYear : null} hintCalendarName={selectedCalendar?.name} />
             <LinkStatusPanel sourceType="dw" isPlanner={isPlanner} onSelectionChange={handleSelectionChange}
               hintYear={source === 'dw' ? selectedCalendar?.refYear : null} hintCalendarName={selectedCalendar?.name} />
-          </>
-        )}
+        </div>
       </div>
 
       <div className="card">
