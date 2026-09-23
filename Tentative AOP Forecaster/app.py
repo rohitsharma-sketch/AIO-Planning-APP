@@ -296,23 +296,29 @@ def aop_division_targets():
         # for the identical synced target.
         version_label = None
         bases = None
+        engine_bases = None
         growth_pct = None
         try:
             row = db.execute(text("""
-                SELECT pv.data->>'label', h.division_base_totals, h.growth_pct
+                SELECT pv.data->>'label', h.division_base_totals, h.growth_pct, h.division_engine_totals
                 FROM planning_inputs.aop_publish_history h
                 LEFT JOIN planning_inputs.plan_versions pv ON pv.data->>'sessionId' = h.session_id
                 ORDER BY h.published_at DESC
                 LIMIT 1
             """)).first()
             if row:
-                version_label, bases, growth_pct = row[0], row[1], (float(row[2]) if row[2] is not None else None)
+                version_label, bases, growth_pct, engine_bases = row[0], row[1], (float(row[2]) if row[2] is not None else None), row[3]
         except Exception:
             pass
 
         return {
             "targets": targets,
             "bases": bases,
+            # engine_bases: the pure engine-forecast totals (excludes the
+            # ref-store-mix deviation layer) - BIS uses this, not `targets`,
+            # to compute its displayed growth%/vs-LY%, so it matches what
+            # AOP's own Output tab shows for LFL (see publish_aop_targets.py).
+            "engine_bases": engine_bases,
             "published_at": published_at.isoformat() if published_at else None,
             "version_label": version_label,
             "growth_pct": growth_pct,

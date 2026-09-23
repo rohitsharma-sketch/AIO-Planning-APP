@@ -60,14 +60,12 @@ VALID_WK_STRS:  set  = set(WEEK_STR_TO_MI)
 
 # ── PINNED LY ACTUALS ─────────────────────────────────────────────────────────
 # Division-level AOP month actuals (Mar/Apr/May/Jun FY26, Rs Cr) sourced from
-# the Aug-10 parquet (32 LFL stores). Server returns these instead of reading
-# the current parquet, so the KPI LY total stays at 388.75 Cr.
+# the Aug-10 parquet (32 LFL stores — stale vs the current 148-store LFL_TAGS_26V27
+# definition). Unpinned 2026-09-23: live parquet path below is already correctly
+# scoped to the 148-store LFL set (see tag_col filter a few lines down) and was
+# sanity-checked (rs_sales_latest.parquet reads fine, TAG_TYPE has 148 LFL stores).
 # Keys: division string → {mi_string → Cr value}. Set to None to use live parquet.
-PINNED_LY_ACTUALS = {
-    "kids":   {"11": 38.0918, "0": 30.2102, "1": 29.815,  "2": 28.136},
-    "ladies": {"11": 34.02,   "0": 31.0028, "1": 29.578,  "2": 28.369},
-    "mens":   {"11": 42.3026, "0": 34.8313, "1": 32.2924, "2": 30.0966},
-}
+PINNED_LY_ACTUALS = None
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Division aliases for auto-mapping parquet DIV column → app div ID

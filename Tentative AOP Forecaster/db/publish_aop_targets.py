@@ -85,6 +85,18 @@ def _ensure_history_table(session) -> None:
         ALTER TABLE planning_inputs.aop_publish_history
         ADD COLUMN IF NOT EXISTS division_base_totals JSONB
     """))
+    # division_engine_totals: the pure engine forecast (Rs Lakhs, "Engine
+    # Forecast" column - excludes the ref-store-mix deviation layer applied
+    # on top for the final "Forecast"/target figure). AOP's own Output tab
+    # displays growth% off THIS figure (drill.jsx's growthEng), not off the
+    # deviation-inclusive target - confirmed 2026-09-23 the two diverge (e.g.
+    # MENS MAMJ: engine/base = flat +10.0%, but target/base = +9.3% once the
+    # ref-store redistribution is folded in). BIS must use this one for its
+    # displayed growth%/vs-LY%, so it matches what the user sees in AOP.
+    session.execute(text("""
+        ALTER TABLE planning_inputs.aop_publish_history
+        ADD COLUMN IF NOT EXISTS division_engine_totals JSONB
+    """))
 
 
 def publish_aop_targets(session, detail_records: list[dict], session_id: str = None) -> None:
@@ -103,6 +115,7 @@ def publish_aop_targets(session, detail_records: list[dict], session_id: str = N
     # SAME base AOP's own growth% (below) is computed against.
     totals: dict[tuple[str, int], float] = {}
     base_totals: dict[tuple[str, int], float] = {}
+    engine_totals: dict[tuple[str, int], float] = {}
     for rec in detail_records:
         if rec.get("Tag") not in LFL_TAGS:
             continue  # skip NSO and Ramp stores
@@ -112,9 +125,16 @@ def publish_aop_targets(session, detail_records: list[dict], session_id: str = N
         for month_label, period_id in MAMJ.items():
             val = rec.get(f"{month_label} | Forecast") or 0.0
             base = rec.get(f"{month_label} | Base") or 0.0
+            # Same fallback drill.jsx's toLeaf() uses: older sessions run
+            # before "Engine Forecast" existed as its own column have no
+            # deviation layer anyway, so Forecast IS the engine figure.
+            engine = rec.get(f"{month_label} | Engine Forecast")
+            if engine is None:
+                engine = val
             key = (div, period_id)
             totals[key] = totals.get(key, 0.0) + float(val)
             base_totals[key] = base_totals.get(key, 0.0) + float(base)
+            engine_totals[key] = engine_totals.get(key, 0.0) + float(engine)
 
     if not totals:
         return
@@ -141,16 +161,20 @@ def publish_aop_targets(session, detail_records: list[dict], session_id: str = N
         div_base_totals: dict[str, dict[str, float]] = {}
         for (div, pid), val in base_totals.items():
             div_base_totals.setdefault(div, {})[str(pid)] = round(val, 2)
+        div_engine_totals: dict[str, dict[str, float]] = {}
+        for (div, pid), val in engine_totals.items():
+            div_engine_totals.setdefault(div, {})[str(pid)] = round(val, 2)
         total_mamj = round(sum(totals.values()), 2)
         growth_pct = _compute_mamj_growth(detail_records)
         session.execute(text("""
             INSERT INTO planning_inputs.aop_publish_history
-                (session_id, division_totals, division_base_totals, total_mamj_lakhs, growth_pct)
-            VALUES (:sid, CAST(:dt AS jsonb), CAST(:dbt AS jsonb), :total, :gpct)
+                (session_id, division_totals, division_base_totals, division_engine_totals, total_mamj_lakhs, growth_pct)
+            VALUES (:sid, CAST(:dt AS jsonb), CAST(:dbt AS jsonb), CAST(:det AS jsonb), :total, :gpct)
         """), {
             "sid": session_id,
             "dt": json.dumps(div_totals),
             "dbt": json.dumps(div_base_totals),
+            "det": json.dumps(div_engine_totals),
             "total": total_mamj,
             "gpct": growth_pct,
         })
