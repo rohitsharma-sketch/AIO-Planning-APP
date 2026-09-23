@@ -23,7 +23,16 @@ export async function savePlanVersion(sessionId, rates, baseSource, labelOverrid
   const fp  = _fingerprint(rates)
   const now = new Date().toISOString()
 
-  const existing = versions[0]
+  // FIXED 2026-09-23: this used to be versions[0] - the globally
+  // most-recently-modified version, with no connection to which version's
+  // session is actually being saved. If the user loaded an OLDER version,
+  // edited it, and the edit's fingerprint delta happened to look "minor"
+  // relative to whatever version was most-recently-modified elsewhere, the
+  // save would silently overwrite that UNRELATED top version's sessionId/
+  // fingerprint - corrupting a different saved plan. sessionId is already
+  // this function's own argument - look up the version that actually
+  // matches the session being saved, not just "whichever is newest."
+  const existing = versions.find(v => v.sessionId === sessionId)
   const isMajor  = !existing || _isMajorChange(existing.fingerprint, fp)
 
   let entry
