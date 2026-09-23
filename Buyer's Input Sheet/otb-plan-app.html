@@ -2890,7 +2890,7 @@ function renderKPI(rows){
     <div class="ktile a"><div class="kl">LY Actuals</div><div class="kv" id="kLY">${fCr(tLY)} Cr</div><div class="ks">${c.length?MO[c[0]]+'->'+MO[c[c.length-1]]:'-'} | ${c.length}mo</div></div>
     <div class="ktile${gr!=null?gr>=0?' p':' n':''}"><div class="kl">TY Plan</div><div class="kv">${anyTY?fCr(tTY)+' Cr':'-'}</div><div class="ks">Planned period total</div></div>
     <div class="ktile${gr!=null?gr>=0?' p':' n':''}"><div class="kl">Growth vs LY</div><div class="kv">${gr!=null?fP(gr):'-'}</div><div class="ks">Selected period</div></div>
-    <div class="ktile"><div class="kl">Avg ST%</div><div class="kv" style="color:var(--ac)">8.4%</div><div class="ks">WK-15->27 | Apparel</div></div>
+    <div class="ktile"><div class="kl">Avg ST%</div><div class="kv" style="color:var(--ac)">8.4%</div><div class="ks">WK-15->27 | All Stores</div></div>
   `;
   document.getElementById('kstrip').innerHTML=html;
 }
@@ -2918,7 +2918,7 @@ function buildHeader(defs,noC1=false){
   let hr0=`<tr class="hr0 hr-sg"><th class="c0 hdim" rowspan="3" data-ci="0">${dim0}${cfb(c0ft)}</th>${c1html}`;
   if(stDefs.length){
     const stToggle=S.showSTDetail?'&#x25B2; Collapse':'&#x25BC; Show Monthly';
-    hr0+=`<th colspan="${stDefs.length}" class="hblk hblk-st">&#x2460; Avg Weekly Sell Thru <button class="htoggle" onclick="S.showSTDetail=!S.showSTDetail;refresh()">${stToggle}</button></th>`;
+    hr0+=`<th colspan="${stDefs.length}" class="hblk hblk-st">&#x2460; Avg Weekly Sell Thru | All Stores <button class="htoggle" onclick="S.showSTDetail=!S.showSTDetail;refresh()">${stToggle}</button></th>`;
   }
   if(S.report==='buyers'||S.report==='attr'){
     hr0+=`<th colspan="${histDefs.length}" class="hblk hblk-hist">&#x2461; Historical Growth% | LY Actual Sales <button class="htoggle" onclick="S.showHistDetail=!S.showHistDetail;refresh()">${toggleLbl}</button></th>`;
