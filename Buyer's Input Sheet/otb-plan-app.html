@@ -3025,7 +3025,7 @@ function cellVal(row,def){
           `<span class="blk-lock${isLkAttr?' locked':''}" onclick="event.stopPropagation();toggleAttrLock('${attrInfo.dvId}','${attrArg}')" title="${isLkAttr?'Unlock attribute — allow reapportion':'Lock attribute — freeze vs reapportion'}">
             ${isLkAttr?'🔒':'○'}
           </span>`;
-        return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="${cls}" data-abk="${row._key}" type="number" step="0.1" placeholder="%" value="${bg!=null?bg:''}" ${isLkDiv?'disabled title="Division locked"':''} oninput="setAttrBlockGrowth('${attrInfo.dvId}','${attrArg}',this.value)" onblur="refresh()"></span>`;
+        return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="${cls}" data-abk="${row._key}" type="number" step="0.01" placeholder="%" value="${bg!=null?bg:''}" ${isLkDiv?'disabled title="Division locked"':''} oninput="setAttrBlockGrowth('${attrInfo.dvId}','${attrArg}',this.value)" onblur="refresh()"></span>`;
       }
       // Section row — editable block growth% input with per-section lock
       const dv=DVDATA.find(d=>d.secs.some(s=>s.id===row._key));
@@ -3040,7 +3040,7 @@ function cellVal(row,def){
         `<span class="blk-lock${isLkSec?' locked':''}" data-sbk="${sec.id}" onclick="event.stopPropagation();toggleSecLock('${sec.id}')" title="${isLkSec?'Unlock section — allow reapportion':'Lock section — freeze vs reapportion'}">
           ${isLkSec?'🔒':'○'}
         </span>`;
-      return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="${cls}" data-bk="${sec.id}" type="number" step="0.1" placeholder="%" value="${bg!=null?bg:''}" ${isLkDiv?'disabled title="Division locked"':''} oninput="setBlockGrowth('${sec.id}',this.value)" onblur="refresh()"></span>`;
+      return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="${cls}" data-bk="${sec.id}" type="number" step="0.01" placeholder="%" value="${bg!=null?bg:''}" ${isLkDiv?'disabled title="Division locked"':''} oninput="setBlockGrowth('${sec.id}',this.value)" onblur="refresh()"></span>`;
     }
     case 'attr_label': return row._attr?`<span style="font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--mu)">${row._attr}</span>`:'—';
     case 'tot_ly': return `<b>${fCr(row._ly)} Cr</b>`;
@@ -4218,7 +4218,7 @@ function _blockGrowth(sec,dv){
     const g=S.inputs[sec.id+'__'+mi]??0;
     lySum+=ly; tySum+=ly*(1+g/100);
   });
-  return lySum>0?parseFloat(((tySum/lySum-1)*100).toFixed(1)):0;
+  return lySum>0?parseFloat(((tySum/lySum-1)*100).toFixed(2)):0;
 }
 
 // Sets a single block growth% for a section — distributes equally across all MAMJ months
@@ -4400,7 +4400,7 @@ function _attrBlockGrowth(dv,attr){
       lySum+=ly;tySum+=ly*(1+g/100);
     });
   });
-  return lySum>0?parseFloat(((tySum/lySum-1)*100).toFixed(1)):0;
+  return lySum>0?parseFloat(((tySum/lySum-1)*100).toFixed(2)):0;
 }
 
 // LY-weighted average of a per-dept metric (ST%, LFL growth%) across a div+attr
@@ -4508,7 +4508,7 @@ function _divReappAttr(dv,mi,tempLockAttr=null){
   if(!totalUnlockedLY)return;
   unlockedAttrs.forEach(g=>{
     const targetTY=remaining*(g.ly/totalUnlockedLY);
-    const newG=g.ly>0?parseFloat(((targetTY/g.ly-1)*100).toFixed(1)):0;
+    const newG=g.ly>0?parseFloat(((targetTY/g.ly-1)*100).toFixed(2)):0;
     g.secs.forEach(sec=>{
       const k=sec.id+'__'+mi;
       S.inputs[k]=newG;
@@ -4541,7 +4541,7 @@ function _divReapp(dv,mi,tempLock=null){
   if(!totalUnlockedLY)return;
   unlocked.forEach(({sec,ly})=>{
     const targetTY=remaining*(ly/totalUnlockedLY);
-    const newG=ly>0?parseFloat(((targetTY/ly-1)*100).toFixed(1)):0;
+    const newG=ly>0?parseFloat(((targetTY/ly-1)*100).toFixed(2)):0;
     const k=sec.id+'__'+mi;
     S.inputs[k]=newG;
     const inp=document.querySelector(`input[data-key="${k}"]`);
@@ -4583,7 +4583,7 @@ function revertToLyCont(){
       activeSecs.forEach(sec=>{
         const ly=_secMonLY(sec,dv,mi,activeDivAnnual);
         const targetTY=aopMon*(ly/totalMonLY);
-        const newG=ly>0?parseFloat(((targetTY/ly-1)*100).toFixed(1)):0;
+        const newG=ly>0?parseFloat(((targetTY/ly-1)*100).toFixed(2)):0;
         const k=sec.id+'__'+mi;
         S.inputs[k]=newG;
         S.locked.delete(k);
