@@ -99,20 +99,14 @@ def _ensure_history_table(session) -> None:
     """))
 
 
-def publish_aop_targets(session, detail_records: list[dict], session_id: str = None) -> None:
-    """Upsert MENS/LADIES/KIDS × MAMJ LFL forecast totals to planning_inputs.input_values.
-    Also records a row in aop_publish_history so the Planning Engine can pick
-    any past version to promote.  Idempotent: safe to call after every run."""
-    # Ensure the lever definition row exists (FK parent for input_values.lever_key)
-    session.execute(text("""
-        INSERT INTO planning_inputs.lever_definitions (lever_key, label, required, shape)
-        VALUES (:k, 'AOP Division Target (live from Forecaster)', false, 'named_row')
-        ON CONFLICT (lever_key) DO NOTHING
-    """), {"k": LEVER_KEY})
-
-    # Aggregate LFL-only forecast totals: {(row_key, period_id): total_lakhs}
-    # base_totals mirrors it exactly, reading Base instead of Forecast - the
-    # SAME base AOP's own growth% (below) is computed against.
+def _aggregate_lfl_totals(detail_records: list[dict]):
+    """Pure aggregation, no DB I/O - kept separate from publish_aop_targets()
+    so it's directly unit-testable (see test_publish_aop_targets.py). Returns
+    three {(row_key, period_id): total_lakhs} dicts: forecast (deviation-
+    inclusive target), base (LY actuals AOP's growth% is computed against),
+    and engine (pure engine forecast, excl. the ref-store-mix deviation layer
+    - what AOP's own Output tab displays growth% off; see drill.jsx's
+    growthEng and BIS's S.aopEngine, 2026-09-23)."""
     totals: dict[tuple[str, int], float] = {}
     base_totals: dict[tuple[str, int], float] = {}
     engine_totals: dict[tuple[str, int], float] = {}
@@ -135,6 +129,21 @@ def publish_aop_targets(session, detail_records: list[dict], session_id: str = N
             totals[key] = totals.get(key, 0.0) + float(val)
             base_totals[key] = base_totals.get(key, 0.0) + float(base)
             engine_totals[key] = engine_totals.get(key, 0.0) + float(engine)
+    return totals, base_totals, engine_totals
+
+
+def publish_aop_targets(session, detail_records: list[dict], session_id: str = None) -> None:
+    """Upsert MENS/LADIES/KIDS × MAMJ LFL forecast totals to planning_inputs.input_values.
+    Also records a row in aop_publish_history so the Planning Engine can pick
+    any past version to promote.  Idempotent: safe to call after every run."""
+    # Ensure the lever definition row exists (FK parent for input_values.lever_key)
+    session.execute(text("""
+        INSERT INTO planning_inputs.lever_definitions (lever_key, label, required, shape)
+        VALUES (:k, 'AOP Division Target (live from Forecaster)', false, 'named_row')
+        ON CONFLICT (lever_key) DO NOTHING
+    """), {"k": LEVER_KEY})
+
+    totals, base_totals, engine_totals = _aggregate_lfl_totals(detail_records)
 
     if not totals:
         return
