@@ -3,9 +3,10 @@
 Original plan: Store x Department x MRP x Display Type rows, "<Month> Plan" value + "<Month> Plan Qty".
 Revised plan:  Store x Department rows, "<Month> New" values (only the departments the buyer changed).
 
-Per Store x Division x Month the original total is the target. Revised departments keep their
-new value exactly (split to MRP x Display Type by the original mix); every other department in
-that store-division absorbs the difference pro-rata. Run: python server.py -> http://localhost:8070
+Per Store x Division x Attribute x Month the original total is the target. Revised departments keep
+their new value exactly (split to MRP x Display Type by the original cont %); every other department
+in that bucket absorbs the difference pro-rata. Jan/Feb are never touched.
+Run: python server.py -> http://localhost:8070
 """
 import io
 import json
@@ -22,7 +23,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE = os.path.join(HERE, ".cache", "original.pkl")  # gitignored: real plan data
 MAX_BODY = 400 * 1024 * 1024
 TOL = 1e-9
-STORE, DIV, DEPT, MRP, DISP = "Store Name", "DIVISION", "DEPARTMENT", "MRP", "DISPLAY TYPE"
+STORE, DIV, DEPT, MRP, DISP, ATTR = "Store Name", "DIVISION", "DEPARTMENT", "MRP", "DISPLAY TYPE", "ATTRIBUTE"
+FROZEN = ("Jan", "Feb")  # user rule: Jan & Feb plans stay exactly as the original
 
 state = {"orig": None, "months": None, "meta": None, "out": None}
 
@@ -43,12 +45,12 @@ def load_original(data):
     o = read_sheet(data, "STORE NAME")
     months = [c[:-5] for c in o.columns if c.endswith(" Plan")]
     num = [m + " Plan" for m in months] + [m + " Plan Qty" for m in months]
-    missing = [c for c in [STORE, DIV, DEPT, MRP, DISP] + num if c not in o.columns]
+    missing = [c for c in [STORE, DIV, DEPT, MRP, DISP, ATTR] + num if c not in o.columns]
     if missing or not months:
         raise ValueError(f"Original plan is missing columns: {missing or '<Month> Plan'}")
     for c in num:
         o[c] = pd.to_numeric(o[c], errors="coerce").fillna(0.0)
-    for c in (STORE, DIV, DEPT, DISP):
+    for c in (STORE, DIV, DEPT, DISP, ATTR):
         o[c] = o[c].astype(str).str.strip()
     if o.duplicated([STORE, DEPT, MRP, DISP]).any():
         raise ValueError("Original plan has duplicate Store x Department x MRP x Display Type rows.")
@@ -119,23 +121,27 @@ def realign(o, r, months):
     rev = r.set_index([STORE, DEPT]).reindex(columns=months)
     locked = keys.isin(rev.index)
     R = np.nan_to_num(rev.reindex(keys).to_numpy(float))
-    lk = locked[:, None] & rev.notna().any().to_numpy()[None, :]  # a month absent from the revised file isn't locked
+    frozen = np.array([m[:3] in FROZEN for m in months])
+    # a month absent from the revised file, or a frozen month (Jan/Feb), is never touched
+    lk = locked[:, None] & rev.notna().any().to_numpy()[None, :] & ~frozen[None, :]
 
-    # 1. split revised Store x Dept value to MRP x Display rows by original mix
-    #    fallback when the dept had 0 that month: its all-month mix; then equal split
+    # 1. split revised Store x Dept value to MRP x Display rows by that month's original cont %;
+    #    a month where the dept had no plan uses the row's average cont % across the months it did have
     sd = (o[STORE] + "||" + o[DEPT]).to_numpy()
     gsum = pd.DataFrame(basis).groupby(sd).transform("sum").to_numpy()
-    rowtot = pd.Series(basis.sum(1))
-    alltot = rowtot.groupby(sd).transform("sum").to_numpy()
-    cnt = rowtot.groupby(sd).transform("size").to_numpy()
-    fb = np.where(np.abs(alltot) > TOL, rowtot.to_numpy() / np.where(np.abs(alltot) > TOL, alltot, 1), 1.0 / cnt)
     has = np.abs(gsum) > TOL
-    mix = np.where(has, basis / np.where(has, gsum, 1), fb[:, None])
+    share = np.where(has, basis / np.where(has, gsum, 1), np.nan)
+    avg = np.nan_to_num(np.nanmean(np.where(has.any(1, keepdims=True), share, 0.0), axis=1))
+    cnt = pd.Series(avg).groupby(sd).transform("size").to_numpy()
+    avg = np.where(has.any(1), avg, 1.0 / cnt)  # dept never planned in this store -> equal split
+    mix = np.where(has, share, avg[:, None])
     new = np.where(lk, R * mix, orig)
     fb_cells = int((lk & ~has & (np.abs(R) > TOL)).sum())
+    ignored = int((locked[:, None] & frozen[None, :] & (np.abs(R - pd.DataFrame(orig).groupby(sd).transform("sum").to_numpy()) > 1e-6)).any(1).sum())
 
-    # 2. unlocked rows in each Store x Division x Month absorb the difference pro-rata
-    grp = (o[STORE] + "||" + o[DIV]).to_numpy()
+    # 2. unlocked rows in each Store x Division x Attribute x Month absorb the difference pro-rata
+    o[ATTR] = o[ATTR].astype(str).str.strip()
+    grp = (o[STORE] + "||" + o[DIV] + "||" + o[ATTR]).to_numpy()
     T = pd.DataFrame(orig).groupby(grp).transform("sum").to_numpy()
     L = pd.DataFrame(np.where(lk, new, 0.0)).groupby(grp).transform("sum").to_numpy()
     U = pd.DataFrame(np.where(lk, 0.0, orig)).groupby(grp).transform("sum").to_numpy()
@@ -160,14 +166,16 @@ def realign(o, r, months):
             summ.append({"division": d, "month": m, "original": float(orig[i, j].sum()), "final": float(new[i, j].sum()),
                          "revised_before": float(orig[i, j][locked[i]].sum()), "revised_after": float(new[i, j][locked[i]].sum())})
     miss = (~ok & (np.abs(T - L) > 1e-6)).any(1)  # group couldn't land on its original total
-    over = sorted({f"{s}/{d}" for s, d in zip(o[STORE][miss], o[DIV][miss])})
+    over = sorted({f"{s}/{d}/{a}" for s, d, a in zip(o[STORE][miss], o[DIV][miss], o[ATTR][miss])})
     warn = []
     if n_new_sd:
         warn.append(f"{n_new_sd} new store-departments created ({n_new_rows} MRP/display rows) from their parent department's rows.")
     if fb_cells:
-        warn.append(f"{fb_cells} revised row-months had no original value that month; split by the department's all-month MRP/display mix.")
+        warn.append(f"{fb_cells} revised row-months had no original plan that month; split by the row's average cont % across the other months.")
+    if ignored:
+        warn.append(f"{ignored} revised rows had Jan/Feb values different from the original - ignored, Jan/Feb stay as original.")
     if over:
-        warn.append(f"{len(over)} store-division(s) can't land on the original total in some month (revised departments alone "
+        warn.append(f"{len(over)} store-division-attribute bucket(s) can't land on the original total in some month (revised departments alone "
                     f"exceed it, or no other department to absorb) - revised values kept as given: {', '.join(over[:15])}")
     return o, summ, warn
 

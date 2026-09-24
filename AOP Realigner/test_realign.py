@@ -3,41 +3,47 @@ import numpy as np
 import pandas as pd
 from server import realign
 
-M = ["M1", "M2"]
-def row(store, div, dept, mrp, disp, v1, v2, q1=None, q2=None):
-    return {"Store Name": store, "DIVISION": div, "DEPARTMENT": dept, "MRP": mrp, "DISPLAY TYPE": disp,
-            "M1 Plan": v1, "M2 Plan": v2, "M1 Plan Qty": v1 if q1 is None else q1, "M2 Plan Qty": v2 if q2 is None else q2,
-            "Tag": "Original"}
+M = ["Sep'26", "Nov'26", "Jan'27 P1"]
+def row(store, div, attr, dept, mrp, disp, *v):
+    d = {"Store Name": store, "DIVISION": div, "ATTRIBUTE": attr, "DEPARTMENT": dept, "MRP": mrp, "DISPLAY TYPE": disp, "Tag": "Original"}
+    for m, x in zip(M, v):
+        d[m + " Plan"] = d[m + " Plan Qty"] = x
+    return d
 
 orig = pd.DataFrame([
-    row("S1", "LADIES", "A", 299, "TABLE", 6, 0), row("S1", "LADIES", "A", 399, "NON_TABLE", 4, 0),
-    row("S1", "LADIES", "B", 299, "TABLE", 10, 20), row("S1", "LADIES", "C", 299, "TABLE", 10, 20),
-    row("S1", "MENS", "X", 299, "TABLE", 50, 50),                       # other division: untouched
-    row("S2", "LADIES", "A", 299, "TABLE", 5, 5), row("S2", "LADIES", "B", 299, "TABLE", 5, 5),
+    #                                   Sep  Nov  Jan
+    row("S1", "LADIES", "REGULAR", "A", 299, "TABLE",     6,   0,  6),
+    row("S1", "LADIES", "REGULAR", "A", 399, "NON_TABLE", 4,   0,  4),
+    row("S1", "LADIES", "REGULAR", "B", 299, "TABLE",    10,  20, 10),
+    row("S1", "LADIES", "REGULAR", "C", 299, "TABLE",    10,  20, 10),
+    row("S1", "LADIES", "SUMMER",  "D", 299, "TABLE",    40,  40, 40),   # other attribute: never absorbs
+    row("S2", "LADIES", "REGULAR", "A", 299, "TABLE",     5,   5,  5),
+    row("S2", "LADIES", "REGULAR", "B", 299, "TABLE",     5,   5,  5),
 ])
 rev = pd.DataFrame([
-    {"Store Name": "S1", "DEPARTMENT": "A", "M1": 12, "M2": 5},     # M2: A had 0 -> all-month mix 6:4
-    {"Store Name": "S1", "DEPARTMENT": "A F/S", "M1": 3, "M2": 0},  # new dept -> cloned from A
-    {"Store Name": "S2", "DEPARTMENT": "A", "M1": 20, "M2": 5},     # M1 overshoots S2's total of 10
+    {"Store Name": "S1", "DEPARTMENT": "A",     "Sep'26": 12, "Nov'26": 5, "Jan'27 P1": 99},  # Jan must be ignored
+    {"Store Name": "S1", "DEPARTMENT": "A F/S", "Sep'26": 3,  "Nov'26": 0, "Jan'27 P1": 0},
+    {"Store Name": "S2", "DEPARTMENT": "A",     "Sep'26": 20, "Nov'26": 5, "Jan'27 P1": 5},   # Sep overshoots S2 bucket (10)
 ])
 out, summ, warn = realign(orig, rev, M)
 g = lambda s, d, mrp, m: out[(out["Store Name"] == s) & (out.DEPARTMENT == d) & (out.MRP == mrp)][m + " Plan"].sum()
+bucket = lambda s, a, m: out[(out["Store Name"] == s) & (out.ATTRIBUTE == a)][m + " Plan"].sum()
 
-# revised values kept exactly, split by original MRP/display mix
-assert np.isclose(g("S1", "A", 299, "M1"), 7.2) and np.isclose(g("S1", "A", 399, "M1"), 4.8)
-assert np.isclose(g("S1", "A F/S", 299, "M1"), 1.8) and np.isclose(g("S1", "A F/S", 399, "M1"), 1.2)
-assert np.isclose(g("S1", "A", 299, "M2"), 3) and np.isclose(g("S1", "A", 399, "M2"), 2)   # fallback mix
-# others absorb pro-rata so S1 x LADIES x month total == original
-assert np.isclose(g("S1", "B", 299, "M1"), 7.5) and np.isclose(g("S1", "C", 299, "M1"), 7.5)
-s1l = out[(out["Store Name"] == "S1") & (out.DIVISION == "LADIES")]
-assert np.isclose(s1l["M1 Plan"].sum(), 30) and np.isclose(s1l["M2 Plan"].sum(), 40)
-assert np.isclose(g("S1", "X", 299, "M1"), 50)                                             # MENS untouched
-# overshoot: revised kept, other dept -> 0, flagged; M2 lands exactly
-assert np.isclose(g("S2", "A", 299, "M1"), 20) and np.isclose(g("S2", "B", 299, "M1"), 0)
-assert np.isclose(g("S2", "B", 299, "M2"), 5)
-assert any("S2/LADIES" in w for w in warn) and any("new store-departments" in w for w in warn)
+# rule 2: revised kept, split by that month's cont % (6:4)
+assert np.isclose(g("S1", "A", 299, "Sep'26"), 7.2) and np.isclose(g("S1", "A", 399, "Sep'26"), 4.8)
+assert np.isclose(g("S1", "A F/S", 299, "Sep'26"), 1.8) and np.isclose(g("S1", "A F/S", 399, "Sep'26"), 1.2)
+# rule 2: Nov had no A plan -> average cont % of the months A did have (Sep 60/40, Jan 60/40)
+assert np.isclose(g("S1", "A", 299, "Nov'26"), 3) and np.isclose(g("S1", "A", 399, "Nov'26"), 2)
+# rule 1: others absorb inside Store x Division x Attribute; other attribute untouched
+assert np.isclose(g("S1", "B", 299, "Sep'26"), 7.5) and np.isclose(g("S1", "B", 299, "Nov'26"), 17.5)
+assert np.isclose(bucket("S1", "REGULAR", "Sep'26"), 30) and np.isclose(bucket("S1", "REGULAR", "Nov'26"), 40)
+assert np.isclose(g("S1", "D", 299, "Sep'26"), 40)
+# rule 3: Jan untouched even though the revised file says 99
+assert np.isclose(g("S1", "A", 299, "Jan'27 P1"), 6) and np.isclose(g("S1", "B", 299, "Jan'27 P1"), 10)
+assert np.isclose(g("S1", "A F/S", 299, "Jan'27 P1"), 0)
+assert any("Jan/Feb" in w for w in warn)
+# overshoot flagged
+assert any("S2/LADIES/REGULAR" in w for w in warn)
 # qty follows value at the row's ASP
-q = out[(out["Store Name"] == "S1") & (out.DEPARTMENT == "B")]["M1 Plan Qty"].iloc[0]
-assert np.isclose(q, 7.5)
-assert (out[out.DEPARTMENT == "A F/S"]["Tag"] == "New Dept").all()
+assert np.isclose(out[(out["Store Name"] == "S1") & (out.DEPARTMENT == "B")]["Sep'26 Plan Qty"].iloc[0], 7.5)
 print("all realign checks passed")
