@@ -337,6 +337,82 @@ def apply_proxy_base(actuals_pivot, proxy, store_info, open_months):
                     cells.add((store, div, fy28m))
     return base, cells
 
+
+def _lbl_ym(label):
+    """"Sep'26" -> "2026-09"."""
+    return f"20{label[-2:]}-{_MON_NUM[label[:3]]:02d}"
+
+
+def _load_shift_maps():
+    """db.calendar_shift.load_shift_maps() from the shared DB, or None when
+    there's no DB (standalone xlsx run) -> bases stay unshifted."""
+    try:
+        from db.base import SessionLocal
+        from db.calendar_shift import load_shift_maps
+        with SessionLocal() as session:
+            return load_shift_maps(session)
+    except Exception as e:  # noqa: BLE001
+        print(f"[WARN] festival shift skipped - calendar maps unavailable: {e}")
+        return None
+
+
+def apply_festival_shift(actuals_pivot, proxy, store_info, open_months, base_pivot, proxy_cells, maps=None):
+    """Festival-shift LfL bases onto the forecast year's festival calendar
+    (user decision 2026-09-24: BOTH real closed bases and option-(b)
+    placeholders), via db.calendar_shift's day-count split per the store's
+    Calendar Engine cluster:
+      1. FY26 placeholder months (raw 2025) -> 2026 via the locked 2025->2026
+         calendar, so e.g. Sep'25's Navratri days land where 2026's fall.
+      2. 2026 series = real closed months (Jan/Feb'26 from FY26, Mar'26+ from
+         FY27 actuals) + the step-1 synthetic values for still-open months.
+      3. 2026 series -> 2027 via the locked 2026->2027 calendar = the base for
+         FY28 Mar'27..Dec'27 (e.g. Diwali-window days that move from late Oct
+         into Nov move their share of sales with them).
+    Jan'28..Mar'28 bases are left as they were: there is no 2027->2028
+    calendar yet. Ramp/NSO and unmapped stores are untouched (partial
+    pre-opening months would smear). A target month counts as a proxy cell
+    when any of its shifted value came from a placeholder month.
+    Returns (base_pivot, proxy_cells, shifted_stores {store: calendar name})."""
+    from db.calendar_shift import shift_month_totals
+    maps = _load_shift_maps() if maps is None else maps
+    if not maps or (2026, 2027) not in maps["shares"]:
+        return base_pivot, proxy_cells, {}
+    sh25, sh26 = maps["shares"].get((2025, 2026), {}), maps["shares"][(2026, 2027)]
+    cal_name = maps["calendars"][(2026, 2027)]
+    base = {s: {d: dict(v) for d, v in divs.items()} for s, divs in base_pivot.items()}
+    cells, shifted = set(proxy_cells), {}
+    targets = [(L, f"2027-{_lbl_ym(L)[5:]}", FY28_M[i]) for i, L in enumerate(FY27_M) if _lbl_ym(L).startswith("2026-")]
+    for store, si in store_info.items():
+        cl = maps["store_cluster"].get(store)
+        if si["tag"] not in LFL_TAGS or cl not in sh26:
+            continue
+        for div in DIVS:
+            real = {_lbl_ym(L): v for L, v in actuals_pivot.get(store, {}).get(div, {}).items() if L not in open_months}
+            raw25 = {f"{int(_lbl_ym(L)[:4]) - 1}{_lbl_ym(L)[4:]}": v for L, v in proxy.get(store, {}).get(div, {}).items()}
+            syn26 = shift_month_totals({k: v for k, v in raw25.items() if k.startswith("2025-")}, sh25.get(cl, {}))
+            series, placeholder = {}, set()
+            for mo in range(1, 13):
+                ym = f"2026-{mo:02d}"
+                if ym in real or (ym in raw25 and mo <= 2):   # closed: FY27 actual, or Jan/Feb'26 from FY26
+                    series[ym] = real.get(ym, raw25.get(ym, 0.0))
+                elif syn26.get(ym):
+                    series[ym] = syn26[ym]
+                    placeholder.add(ym)
+            if not any(series.values()):
+                continue
+            fut = shift_month_totals(series, sh26[cl])
+            fut_real = shift_month_totals({k: v for k, v in series.items() if k not in placeholder}, sh26[cl])
+            vals = base.setdefault(store, {}).setdefault(div, {m: 0.0 for m in FY27_M})
+            for L, ym27, fy28m in targets:
+                vals[L] = fut.get(ym27, 0.0)
+                if fut.get(ym27, 0.0) - fut_real.get(ym27, 0.0) > 1e-9:
+                    cells.add((store, div, fy28m))
+                else:
+                    cells.discard((store, div, fy28m))
+            shifted[store] = cal_name
+    print(f"[OK] festival-shifted bases for {len(shifted)} LfL stores via '{cal_name}'")
+    return base, cells, shifted
+
 # ── Growth rate lookup ─────────────────────────────────────────────────────────
 def build_growth_map(growth_df):
     """
@@ -739,7 +815,7 @@ def pass2_forecasts(store_info, nso_open, ref_fc, actuals_pivot, gmap, mar27_anc
     return fc
 
 # ── Build output DataFrame ─────────────────────────────────────────────────────
-def build_df(store_info, actuals_pivot, all_fc, aop_overrides=None, proxy_cells=None):
+def build_df(store_info, actuals_pivot, all_fc, aop_overrides=None, proxy_cells=None, shifted=None):
     """Assemble the flat forecast DataFrame.
 
     For every concat listed in any historical diff sheet:
@@ -792,6 +868,7 @@ def build_df(store_info, actuals_pivot, all_fc, aop_overrides=None, proxy_cells=
                 else:
                     row[f"{fy28m} | Deviation"] = _round2(fcst - base)
             row["Proxy Base Months"] = ", ".join(m for m in FY28_M if (store, div, m) in proxy_cells)
+            row["Base Calendar"] = (shifted or {}).get(store, "")  # festival-shifted Mar'27..Dec'27 bases (apply_festival_shift)
             rows.append(row)
     return pd.DataFrame(rows)
 
@@ -1242,7 +1319,9 @@ def main():
     nso_open     = {str(r["Store"]).strip(): str(r["Opening Month"]).strip()
                     for _, r in nso_df.iterrows()}
     actuals_pivot, mar27_anchor = pivot_actuals(actuals_df, aop_df)
-    base_pivot, proxy_cells = apply_proxy_base(actuals_pivot, load_fy26_proxy(None), store_info, _open_months())
+    _proxy, _om = load_fy26_proxy(None), _open_months()
+    base_pivot, proxy_cells = apply_proxy_base(actuals_pivot, _proxy, store_info, _om)
+    base_pivot, proxy_cells, shifted = apply_festival_shift(actuals_pivot, _proxy, store_info, _om, base_pivot, proxy_cells)
     aop_overrides = build_aop_overrides(aop_df)
 
     n_lfl  = sum(1 for si in store_info.values() if si["tag"] in LFL_TAGS)
@@ -1266,7 +1345,7 @@ def main():
     all_fc = {**ref_fc, **nso_fc}
 
     print("[OK] Assembling rows...")
-    df = build_df(store_info, base_pivot, all_fc, aop_overrides, proxy_cells)
+    df = build_df(store_info, base_pivot, all_fc, aop_overrides, proxy_cells, shifted)
 
     print("[OK] Writing Excel...")
     write_excel(df)
@@ -1383,7 +1462,9 @@ def run_engine(input_file, output_file, palette="classic", detail_file=None, inc
                      for _, r in nso_df.iterrows()}
     open_months   = _open_months() if open_months is None else open_months  # read once, shared by every pass
     actuals_pivot, mar27_anchor = pivot_actuals(actuals_df, aop_df, open_months=open_months)
-    base_pivot, proxy_cells = apply_proxy_base(actuals_pivot, load_fy26_proxy(input_file), store_info, open_months)
+    fy26_proxy    = load_fy26_proxy(input_file)
+    base_pivot, proxy_cells = apply_proxy_base(actuals_pivot, fy26_proxy, store_info, open_months)
+    base_pivot, proxy_cells, shifted = apply_festival_shift(actuals_pivot, fy26_proxy, store_info, open_months, base_pivot, proxy_cells)
     aop_overrides = build_aop_overrides(aop_df)
     gmap          = build_growth_map(growth_df)
     if growth_overrides:
@@ -1397,7 +1478,7 @@ def run_engine(input_file, output_file, palette="classic", detail_file=None, inc
     ref_fc        = {**lfl_fc, **ramp_fc}
     nso_fc        = pass2_forecasts(store_info, nso_open, ref_fc, actuals_pivot, gmap, mar27_anchor=mar27_anchor)
     all_fc        = {**ref_fc, **nso_fc}
-    df            = build_df(store_info, base_pivot, all_fc, aop_overrides, proxy_cells)
+    df            = build_df(store_info, base_pivot, all_fc, aop_overrides, proxy_cells, shifted)
 
     # overall_override: adjust the UNFIXED divisions (those not in growth_overrides for
     # that month) so the blended LfL growth hits the target exactly, while leaving
