@@ -75,6 +75,7 @@ PROXY_ROUTES = [
     ('/api/status',                      'http://127.0.0.1:5050', ''),
     # AOP standalone — sync endpoints and division targets (no auth required)
     ('/api/config/aop-division-targets', 'http://127.0.0.1:8000', ''),
+    ('/api/config/aop-versions',         'http://127.0.0.1:8000', ''),
     ('/api/config/db-sync',              'http://127.0.0.1:8000', ''),
     # Unified RS Planning Platform
     ('/calendar/',                       'http://127.0.0.1:8010', ''),

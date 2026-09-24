@@ -57,6 +57,23 @@ def test_non_publish_division_excluded():
     assert "RETAIL" not in PUBLISH_DIVS
 
 
+def test_versions_sharing_one_session_each_get_their_own_publish():
+    """Real case 2026-09-24: Version 2 and Version 3 share AOP session S; the
+    old one-per-session list showed only one of them. Timestamps are the real
+    ones (IST): V2 saved 12 s AFTER its first publish, V3 17 s BEFORE its."""
+    import datetime as dt
+    from publish_aop_targets import pick_version_publishes
+    IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
+    t = lambda *a: dt.datetime(2026, 9, *a, tzinfo=IST)
+    versions = [("Version 1", "A", "2026-09-11T11:22:05Z", None),
+                ("Version 2", "S", "2026-09-15T05:49:38Z", None),   # 11:19:38 IST
+                ("Version 3", "S", "2026-09-24T11:58:42Z", None)]   # 17:28:42 IST
+    pubs = [(32, "A", t(15, 10, 20)), (40, "S", t(15, 11, 19, 26)), (90, "S", t(23, 17, 30)),
+            (111, "S", t(24, 17, 28, 59))]
+    got = {label: p[0] for label, _sid, p in pick_version_publishes(versions, pubs)}
+    assert got == {"Version 3": 111, "Version 2": 90, "Version 1": 32}, got
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_")]
     for t in tests:

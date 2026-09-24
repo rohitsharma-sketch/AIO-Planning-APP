@@ -240,40 +240,66 @@ def list_aop_history(session, limit: int = 15) -> list[dict]:
     the versions the user deliberately saved in the AOP Forecaster."""
     try:
         _ensure_history_table(session)
-        rows = session.execute(text("""
-            SELECT DISTINCT ON (h.session_id)
-                h.id,
-                h.session_id,
-                h.published_at,
-                h.division_totals,
-                h.total_mamj_lakhs,
-                h.growth_pct,
-                pv.data->>'label' AS version_label,
-                pv.last_modified_at AS version_saved_at
-            FROM planning_inputs.aop_publish_history h
-            JOIN planning_inputs.plan_versions pv
-                ON pv.data->>'sessionId' = h.session_id
-            ORDER BY h.session_id, h.published_at DESC
-            LIMIT :lim
-        """), {"lim": limit}).fetchall()
-
-        # Order by version saved_at DESC (newest plan version first)
-        rows = sorted(rows, key=lambda r: r[7] if r[7] else r[2], reverse=True)
-
+        versions = session.execute(text("""
+            SELECT data->>'label', data->>'sessionId', data->>'createdAt', last_modified_at
+            FROM planning_inputs.plan_versions
+        """)).fetchall()
+        pubs = session.execute(text("""
+            SELECT id, session_id, published_at, division_totals, total_mamj_lakhs, growth_pct
+            FROM planning_inputs.aop_publish_history
+            WHERE session_id IN (SELECT data->>'sessionId' FROM planning_inputs.plan_versions)
+            ORDER BY published_at
+        """)).fetchall()
         return [
             {
-                "id": r[0],
-                "session_id": r[1],
-                "published_at": r[2].isoformat() if r[2] else None,
-                "division_totals": r[3],
-                "total_mamj_lakhs": float(r[4]) if r[4] is not None else 0.0,
-                "growth_pct": float(r[5]) if r[5] is not None else None,
-                "version_label": r[6],
+                "id": p[0],
+                "session_id": p[1],
+                "published_at": p[2].isoformat() if p[2] else None,
+                "division_totals": p[3],
+                "total_mamj_lakhs": float(p[4]) if p[4] is not None else 0.0,
+                "growth_pct": float(p[5]) if p[5] is not None else None,
+                "version_label": label,
             }
-            for r in rows
+            for label, _sid, p in pick_version_publishes(versions, pubs)[:limit]
         ]
     except Exception:
         return []
+
+
+def _ts(iso_or_dt):
+    import datetime as _dt
+    if iso_or_dt is None or isinstance(iso_or_dt, _dt.datetime):
+        return iso_or_dt
+    return _dt.datetime.fromisoformat(str(iso_or_dt).replace("Z", "+00:00"))
+
+
+def pick_version_publishes(versions, pubs, tolerance_s=120):
+    """[(label, session_id, publish_row)] newest version first - one entry PER
+    SAVED VERSION. Several versions can share one AOP session (Version 2 and
+    Version 3 did, 2026-09-24), so the old one-publish-per-session query hid
+    all but one of them. A version owns its session's publishes from its own
+    creation up to the next version's creation (the first version has no
+    start bound, the last none at the end); its entry is the latest publish it
+    owns. Boundaries sit `tolerance_s` before createdAt because a version is
+    saved seconds before OR after the run that publishes it.
+    versions: (label, session_id, createdAt iso, last_modified_at);
+    pubs: (id, session_id, published_at, ...) sorted by published_at."""
+    import datetime as _dt
+    tol = _dt.timedelta(seconds=tolerance_s)
+    out, by_sid = [], {}
+    for v in versions:
+        by_sid.setdefault(v[1], []).append(v)
+    for sid, vs in by_sid.items():
+        vs = sorted(vs, key=lambda v: _ts(v[2]) or _ts(v[3]))
+        sp = [p for p in pubs if p[1] == sid]
+        for i, v in enumerate(vs):
+            start = _ts(v[2]) - tol if i > 0 and v[2] else None
+            end = _ts(vs[i + 1][2]) - tol if i + 1 < len(vs) and vs[i + 1][2] else None
+            owned = [p for p in sp if (start is None or p[2] >= start) and (end is None or p[2] < end)]
+            if owned:
+                out.append((v[0], sid, owned[-1]))
+    out.sort(key=lambda t: t[2][2], reverse=True)
+    return out
 
 
 def promote_from_history(session, version_id: int) -> dict:

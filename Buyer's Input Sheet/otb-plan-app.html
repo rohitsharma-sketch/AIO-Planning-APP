@@ -2082,6 +2082,7 @@ let S = {
   aopEngine: {}, // AOP's pure engine forecast (excl. ref-store deviation) per divId/mi (Rs.Cr) - 2026-09-23, growth% numerator
   aopUnit: 'lakhs', // 'lakhs' or 'crore' — unit user enters in modal
   aopLocked: false,
+  aopVersionId: null, // AOP publish-history id pinned via the AOP Division Sync version selector; null = latest publish (live)
   aqp: 0,         // active quick preset
   storeLflOnly: false,
   filters: {
@@ -4692,7 +4693,7 @@ function resetPlanToAop(){
 /* ── SAVE & EXPORT ─────────────────────────────── */
 function saveState(){
   const now=new Date();
-  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopUnit:S.aopUnit,locked:[...S.locked],aopSeeds:S.aopSeeds,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],customDepts:S.customDepts,at:now.toISOString()}))}catch(e){}
+  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopVersionId:S.aopVersionId,aopUnit:S.aopUnit,locked:[...S.locked],aopSeeds:S.aopSeeds,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],customDepts:S.customDepts,at:now.toISOString()}))}catch(e){}
   _updateSaveLabel(now);
   _maybeSaveVersion(now);
   pushBuyerGrowthLive();
@@ -4800,6 +4801,8 @@ function loadState(){
     // S.aop / S.aopLocked / S.aopSeeds are NOT restored from localStorage —
     // they are always overwritten by fresh data from the AOP Forecaster API on startup
     if(p.aopUnit)S.aopUnit=p.aopUnit;
+    // The pinned AOP version IS restored (unlike S.aop): it decides WHICH AOP publish the startup fetch applies.
+    if(p.aopVersionId!=null)S.aopVersionId=p.aopVersionId;
     if(p.locked)S.locked=new Set(p.locked);
     if(p.divTab!=null)S.divTab=p.divTab;
     if(p.hiddenSecs)S.hiddenSecs=new Set(p.hiddenSecs);
@@ -5251,25 +5254,50 @@ function buildAopKpiTile(planTotal){
 // {targets:{MENS:{202703:lkh,…},…}, published_at:iso, note:str|null}
 let _aopCache=null;
 
-async function fetchAopTargets(){
+// Version selector (2026-09-24): S.aopVersionId pins one saved AOP version
+// (aop_publish_history id); null = latest publish, live. _aopPendingVer is
+// what the modal's dropdown is previewing - only Sync & Lock commits it.
+let _aopVersions=[];
+let _aopPendingVer=null;
+async function fetchAopTargets(ver=S.aopVersionId){
   try{
-    const r=await fetch('/api/config/aop-division-targets',{cache:'no-store'});
+    const r=await fetch('/api/config/aop-division-targets'+(ver!=null?'?version_id='+ver:''),{cache:'no-store'});
+    if(r.status===404&&ver!=null){                       // pinned version deleted in AOP -> fall back to live
+      await fetchAopTargets(null);
+      _aopCache.note='The pinned AOP version no longer exists - showing the latest publish.';
+      return;
+    }
     if(!r.ok)throw new Error('HTTP '+r.status);
     _aopCache=await r.json();
   }catch(e){
     _aopCache={targets:null,published_at:null,note:'Could not reach AOP Forecaster: '+e.message};
   }
 }
+async function fetchAopVersions(){
+  try{
+    const r=await fetch('/api/config/aop-versions',{cache:'no-store'});
+    _aopVersions=r.ok?((await r.json()).versions||[]):[];
+  }catch(e){_aopVersions=[];}
+}
+function onAopVersionChange(val){
+  _aopPendingVer=val===''?null:Number(val);
+  fetchAopTargets(_aopPendingVer).then(()=>buildAopGrid());
+}
 
 function openAopModal(){
+  _aopPendingVer=S.aopVersionId;
   buildAopGrid();
   syncAopLockStatus();
   document.getElementById('aopOv').style.display='flex';
   document.getElementById('aopModalFY').textContent=window.FY_PLAN||'';
-  // Refresh live data in background then redraw
-  fetchAopTargets().then(()=>buildAopGrid());
+  // Refresh live data + the version list in background then redraw
+  Promise.all([fetchAopTargets(_aopPendingVer),fetchAopVersions()]).then(()=>buildAopGrid());
 }
-function closeAopModal(){document.getElementById('aopOv').style.display='none';}
+function closeAopModal(){
+  document.getElementById('aopOv').style.display='none';
+  // A previewed-but-not-synced version must not linger in the cache
+  if(_aopPendingVer!==S.aopVersionId){_aopPendingVer=S.aopVersionId;fetchAopTargets();}
+}
 
 // AOP months in the plan: period_id → mi
 const _PERIOD_TO_MI={202703:11,202704:0,202705:1,202706:2};
@@ -5285,12 +5313,17 @@ function buildAopGrid(){
 
   // Header
   const pubStr=pub?new Date(pub).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'—';
-  // version_label is null whenever the publish came from an ad-hoc AOP run
-  // that was never saved as a named plan version there - not every publish
-  // has one, so this chip is skipped rather than shown blank/misleading.
-  const verChip=verLabel
-    ?`<span style="font-size:10px;color:var(--ac);font-weight:700;margin-left:8px;padding:1px 8px;background:var(--sf);border:1px solid var(--ac-b);border-radius:10px">${verLabel}</span>`
-    :'';
+  // Version selector (2026-09-24): every saved AOP version, live from the
+  // Forecaster. Picking one previews it here; Sync & Lock applies and pins it.
+  // version_label is null for an ad-hoc AOP run never saved as a version.
+  const _h=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const _d=iso=>iso?new Date(iso).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+  const verOpts=[`<option value="">Latest publish (live)${verLabel&&_aopPendingVer==null?' - '+_h(verLabel):''}</option>`]
+    .concat(_aopVersions.map(v=>`<option value="${v.id}"${_aopPendingVer===v.id?' selected':''}>${_h(v.version_label||'Unnamed')} - ${_d(v.published_at)} - Rs.${(v.total_mamj_lakhs/100).toFixed(1)} Cr${v.growth_pct!=null?' ('+(v.growth_pct>=0?'+':'')+v.growth_pct.toFixed(1)+'%)':''}</option>`));
+  const pinned=_aopPendingVer!=null&&!_aopVersions.some(v=>v.id===_aopPendingVer)
+    ?`<option value="${_aopPendingVer}" selected>${_h(verLabel||'Pinned version')} - ${_d(pub)}</option>`:'';
+  const verChip=`<select class="aop-ver-sel" title="AOP Forecaster version to sync" onchange="onAopVersionChange(this.value)"
+      style="margin-left:auto;font-size:11px;font-weight:600;color:var(--tx);background:var(--sf);border:1px solid var(--ac-b);border-radius:6px;padding:3px 6px;max-width:360px">${verOpts.join('')}${pinned}</select>`;
   const srcBanner=t
     ?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:var(--ac-l);border-radius:6px;border:1px solid var(--ac-b)">
         <span style="font-size:18px">🔗</span>
@@ -5298,8 +5331,9 @@ function buildAopGrid(){
         <span style="font-size:10px;color:var(--t3);margin-left:4px">Published ${pubStr}</span>
         ${verChip}
        </div>`
-    :`<div style="padding:8px 12px;background:var(--wa-b);border-radius:6px;border:1px solid var(--wa-br);font-size:11px;color:var(--wa);margin-bottom:10px">
+    :`<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--wa-b);border-radius:6px;border:1px solid var(--wa-br);font-size:11px;color:var(--wa);margin-bottom:10px">
         ${note||'No AOP forecast run yet — run AOP Forecaster first.'}
+        ${_aopVersions.length?verChip:''}
        </div>`;
 
   // MAMJ months only (Mar, Apr, May, Jun)
@@ -5414,6 +5448,7 @@ function syncFromAop(){
     });
   });
   if(!applied){toast('No AOP data for the selected months — select Mar/Apr/May/Jun');return;}
+  S.aopVersionId=_aopPendingVer; // commit the version picked in the selector (null = latest, live)
   S.aopLocked=true;
   const aopMonths=new Set();
   AOP_DIVS.forEach(d=>{for(let mi=0;mi<12;mi++){if((S.aop[d.id]?.[mi]||0)>0)aopMonths.add(mi);}});
@@ -5481,6 +5516,8 @@ function clearAop(){
   if(S.aopLocked&&!confirm('AOP is locked. Clear and unlock it?'))return;
   S.aop={mens:{},ladies:{},kids:{}};
   S.aopLocked=false;
+  S.aopVersionId=null;_aopPendingVer=null; // back to the latest publish, live
+  fetchAopTargets(null).then(()=>buildAopGrid());
   S.selM=new Set([0,1,2,3,4,5,6,7,8,9,10,11]);
   saveState();
   syncAopLockUI();

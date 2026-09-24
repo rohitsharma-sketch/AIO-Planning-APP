@@ -222,13 +222,30 @@ def aop_division_targets():
     Returns the same JSON shape so BIS works whether accessed at 5050 or via
     the 7800 proxy."""
     import urllib.request as _ur
-    from flask import Response
+    import urllib.error as _ue
+    from flask import Response, request as _req
+    qs = ("?" + _req.query_string.decode()) if _req.query_string else ""  # ?version_id= (version selector)
     try:
-        with _ur.urlopen("http://127.0.0.1:8000/api/config/aop-division-targets", timeout=5) as r:
+        with _ur.urlopen("http://127.0.0.1:8000/api/config/aop-division-targets" + qs, timeout=5) as r:
             return Response(r.read(), status=r.status, content_type="application/json")
+    except _ue.HTTPError as e:
+        return Response(e.read(), status=e.code, content_type="application/json")
     except Exception as e:
         return jsonify({"targets": None, "published_at": None,
                         "note": f"AOP Forecaster unreachable: {e}"})
+
+
+@app.route("/api/config/aop-versions")
+def aop_versions():
+    """Proxy to AOP Forecaster (port 8000): saved AOP plan versions for the
+    AOP Division Sync modal's version selector."""
+    import urllib.request as _ur
+    from flask import Response
+    try:
+        with _ur.urlopen("http://127.0.0.1:8000/api/config/aop-versions", timeout=5) as r:
+            return Response(r.read(), status=r.status, content_type="application/json")
+    except Exception as e:
+        return jsonify({"versions": [], "note": f"AOP Forecaster unreachable: {e}"})
 
 
 @app.route("/api/config/buyer-department-growth", methods=["GET", "POST"])

@@ -247,16 +247,59 @@ def base_sales_reindexed():
         db_session.close()
 
 
+@router.get("/api/config/aop-versions")
+def aop_versions():
+    """Saved AOP plan versions (newest first) for BIS's version selector -
+    same list the Planning Engine's picker uses (list_aop_history: one row per
+    saved plan version, its latest publish). Unauthenticated like
+    /api/config/aop-division-targets (read-only, no user data)."""
+    from db.base import SessionLocal
+    from db.publish_aop_targets import list_aop_history
+    db = SessionLocal()
+    try:
+        return {"versions": [{k: v[k] for k in ("id", "version_label", "published_at", "total_mamj_lakhs", "growth_pct")}
+                             for v in list_aop_history(db, limit=30)]}
+    finally:
+        db.close()
+
+
+def _aop_targets_for_version(db, version_id: int):
+    """/api/config/aop-division-targets payload for ONE publish-history row
+    (a version picked in BIS's selector) instead of the live staging rows."""
+    from sqlalchemy import text
+    row = db.execute(text("""
+        SELECT h.division_totals, h.division_base_totals, h.division_engine_totals,
+               h.growth_pct, h.published_at, pv.data->>'label'
+        FROM planning_inputs.aop_publish_history h
+        LEFT JOIN planning_inputs.plan_versions pv ON pv.data->>'sessionId' = h.session_id
+        WHERE h.id = :id
+    """), {"id": version_id}).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"AOP version {version_id} not found")
+    targets = {d: (row[0] or {}).get(d, {}) for d in ("MENS", "LADIES", "KIDS")}
+    return {
+        "targets": targets, "bases": row[1], "engine_bases": row[2],
+        "published_at": row[4].isoformat() if row[4] else None,
+        "version_label": row[5], "version_id": version_id,
+        "growth_pct": float(row[3]) if row[3] is not None else None,
+        "note": None,
+    }
+
+
 @router.get("/api/config/aop-division-targets")
-def aop_division_targets():
+def aop_division_targets(version_id: int | None = None):
     """Latest MENS/LADIES/KIDS MAMJ targets published after the most recent
     forecast run.  Used by the Buyer's Input Sheet for live auto-sync — no
-    authentication required (reads only, no user-specific data)."""
+    authentication required (reads only, no user-specific data).
+    ?version_id=<aop_publish_history.id> returns that saved version instead
+    (BIS's version selector, 2026-09-24)."""
     from db.base import SessionLocal
     from sqlalchemy import text
 
     db = SessionLocal()
     try:
+        if version_id is not None:
+            return _aop_targets_for_version(db, version_id)
         rows = db.execute(text("""
             SELECT row_key, period_id, value, updated_at
             FROM planning_inputs.input_values
