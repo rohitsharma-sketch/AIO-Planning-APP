@@ -9,15 +9,19 @@ Store x Division x Month total, in which case they're capped down to fit it exac
 department in that bucket absorbs whatever's left, pro-rata. Jan/Feb are never touched.
 Run: python server.py -> http://localhost:8070
 """
+import contextlib
 import io
 import json
 import os
 import pickle
+import threading
 import time
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import numpy as np
 import pandas as pd
+import xlsxwriter
 
 PORT = int(os.environ.get("REALIGNER_PORT", 8070))
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -27,7 +31,27 @@ TOL = 1e-9
 STORE, DIV, DEPT, MRP, DISP = "Store Name", "DIVISION", "DEPARTMENT", "MRP", "DISPLAY TYPE"
 FROZEN = ("Jan", "Feb")  # user rule: Jan & Feb plans stay exactly as the original
 
-state = {"orig": None, "months": None, "meta": None, "out": None}
+state = {"orig": None, "months": None, "meta": None, "out": None, "summary": None, "compare": None}
+# One progress entry per running operation (keyed by request thread), so an upload finishing in
+# another tab can't wipe a long export's progress. /api/progress reports the newest still running.
+active = {}
+
+
+@contextlib.contextmanager
+def stage(name):
+    tid = threading.get_ident()
+    active[tid] = {"stage": name, "since": time.time(), "done": None, "total": None}
+    try:
+        yield
+    finally:
+        active.pop(tid, None)
+
+
+def _progress(**kw):
+    """Update this thread's running operation, if any (no-op outside stage(), e.g. in tests)."""
+    cur = active.get(threading.get_ident())
+    if cur:
+        cur.update(kw)
 
 
 def read_sheet(data, header_marker):
@@ -62,6 +86,9 @@ def load_revised(data, months):
     r = read_sheet(data, "DEPARTMENT")
     r.columns = [{"STORE NAME": STORE, "DEPARTMENT": DEPT}.get(c.upper(), c) for c in r.columns]
     cols = [m for m in months if m + " New" in r.columns]
+    if not cols and any(m + " Plan" in r.columns for m in months):
+        raise ValueError("This file looks like a full plan ('<Month> Plan' columns, e.g. an original or a realigned "
+                         "output) - box 2 needs the revised plan: Store x Department rows with '<Month> New' columns.")
     if STORE not in r.columns or DEPT not in r.columns or not cols:
         raise ValueError("Revised plan needs STORE NAME, DEPARTMENT and '<Month> New' columns matching the original months.")
     r = r.rename(columns={m + " New": m for m in cols})
@@ -110,7 +137,8 @@ def add_new_departments(o, r, months):
 
 def realign(o, r, months):
     """o: original rows (numeric cols clean), r: revised Store x Dept values over `months`.
-    Returns (realigned rows in original layout, division x month summary, warnings)."""
+    Returns (realigned rows in original layout, division x month summary, warnings,
+    a long-format table of every cell that actually changed - for the comparison download)."""
     V = [m + " Plan" for m in months]
     Q = [m + " Plan Qty" for m in months]
     o, n_new_sd, n_new_rows = add_new_departments(o, r, months)
@@ -164,6 +192,28 @@ def realign(o, r, months):
     has_o = np.abs(orig) > TOL
     new_qty = np.where(has_o, qty * np.divide(new, orig, out=np.zeros_like(new), where=has_o),
                        np.divide(new, asp[:, None], out=np.zeros_like(new), where=asp[:, None] > TOL))
+
+    # 4. comparison table: every cell that actually moved, tagged with why - the "did this come out
+    #    okay" check against the original. "kept"/"capped" are locked rows; "absorbed" is everything
+    #    else that moved to make room; a locked row's own capping status still shows even for its
+    #    frozen months, which is fine since frozen months never change (f==1 there) and get filtered out.
+    status = np.where(lk & over, "capped", np.where(lk, "kept",
+              np.where(np.abs(f - 1) > TOL, "absorbed", "unchanged")))
+    delta = new - orig
+    changed = np.abs(delta) > 1e-6
+    if changed.any():
+        ri, ci = np.nonzero(changed)
+        ov, nv = orig[ri, ci], new[ri, ci]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            pct = np.where(np.abs(ov) > TOL, (nv - ov) / np.abs(ov) * 100, np.nan)
+        compare = pd.DataFrame({
+            STORE: o[STORE].to_numpy()[ri], DIV: o[DIV].to_numpy()[ri], DEPT: o[DEPT].to_numpy()[ri],
+            MRP: o[MRP].to_numpy()[ri], DISP: o[DISP].to_numpy()[ri], "Month": np.asarray(months)[ci],
+            "Original": ov, "Realigned": nv, "Delta": nv - ov, "Delta %": pct, "Status": status[ri, ci],
+        })
+    else:
+        compare = pd.DataFrame(columns=[STORE, DIV, DEPT, MRP, DISP, "Month", "Original", "Realigned", "Delta", "Delta %", "Status"])
+
     o[V], o[Q] = new, new_qty
 
     summ = []
@@ -187,16 +237,53 @@ def realign(o, r, months):
     if short_sd:
         warn.append(f"{len(short_sd)} store-division(s) have no other department left to absorb into in some month - "
                     f"total stays under the original there: {', '.join(short_sd[:15])}")
-    return o, summ, warn
+    return o, summ, warn, compare
+
+
+XLSX_CTYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def _cell(v):
+    """numpy scalar -> native Python, and NaN/Inf -> blank (xlsxwriter can't write either directly)."""
+    if hasattr(v, "item"):
+        v = v.item()
+    return None if isinstance(v, float) and not np.isfinite(v) else v
+
+
+def _write_xlsx(sheets):
+    """sheets: [(name, df), ...]. Writes row-by-row via xlsxwriter's own API (not pandas' .to_excel
+    wrapper) so `progress` can be updated as it goes - the full plan is ~680k rows and takes minutes."""
+    _progress(done=0, total=sum(len(df) for _, df in sheets))
+    buf = io.BytesIO()
+    wb = xlsxwriter.Workbook(buf, {"in_memory": True, "constant_memory": True})
+    done = 0
+    for name, df in sheets:
+        ws = wb.add_worksheet(name[:31])  # Excel's own sheet-name length limit
+        for j, c in enumerate(df.columns):
+            ws.write(0, j, str(c))
+        for i, row in enumerate(df.itertuples(index=False, name=None)):
+            ws.write_row(i + 1, 0, [_cell(v) for v in row])
+            if i % 3000 == 0:
+                _progress(done=done + i)
+        done += len(df)
+        _progress(done=done)
+    wb.close()
+    return buf.getvalue()
 
 
 def export(df, fmt):
-    """csv ~3s; xlsx ~2.5 min for the full 680k-row plan, so it's built only when asked."""
+    """csv ~3s; xlsx ~2.5 min for the full 680k-row plan (progress via the `progress` dict)."""
     if fmt == "csv":
         return df.round(6).to_csv(index=False).encode("utf-8-sig"), "text/csv", "csv"
-    buf = io.BytesIO()
-    df.to_excel(buf, index=False, engine="xlsxwriter")
-    return buf.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "xlsx"
+    return _write_xlsx([("Realigned Plan", df.round(6))]), XLSX_CTYPE, "xlsx"
+
+
+def export_compare(summ, compare, fmt):
+    """The "did this come out okay" file: a tiny Division x Month summary plus every cell that
+    actually changed vs. the original - far smaller than the full plan, so it's quick even as xlsx."""
+    if fmt == "csv":
+        return compare.round(4).to_csv(index=False).encode("utf-8-sig"), "text/csv", "csv"
+    return _write_xlsx([("Summary", pd.DataFrame(summ).round(4)), ("Changed Rows", compare.round(4))]), XLSX_CTYPE, "xlsx"
 
 
 def set_original(o, months, name):
@@ -230,9 +317,30 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, fh.read(), "text/html; charset=utf-8")
         if p == "/api/original":
             return self._send(200, state["meta"] or {})
-        if p == "/api/download" and state["out"] is not None:
-            data, ctype, ext = export(state["out"], "xlsx" if "fmt=xlsx" in self.path else "csv")
-            return self._send(200, data, ctype, {"Content-Disposition": f'attachment; filename="Realigned Plan.{ext}"'})
+        if p == "/api/progress":
+            cur = max(list(active.values()), key=lambda a: a["since"], default=None)
+            if not cur:
+                return self._send(200, {"stage": None, "elapsed": 0, "done": None, "total": None})
+            return self._send(200, {**{k: cur[k] for k in ("stage", "done", "total")}, "elapsed": time.time() - cur["since"]})
+        if p == "/api/download":
+            q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            fmt, kind = q.get("fmt", ["csv"])[0], q.get("type", ["full"])[0]
+            try:
+                if kind == "compare":
+                    if state["compare"] is None:
+                        raise ValueError("Run a realign first.")
+                    with stage(f"Building comparison ({fmt})"):
+                        data, ctype, ext = export_compare(state["summary"], state["compare"], fmt)
+                    fname = f"Realigned Plan - Comparison.{ext}"
+                else:
+                    if state["out"] is None:
+                        raise ValueError("Run a realign first.")
+                    with stage(f"Building full plan ({fmt})"):
+                        data, ctype, ext = export(state["out"], fmt)
+                    fname = f"Realigned Plan.{ext}"
+            except ValueError as e:
+                return self._send(400, {"error": str(e)})
+            return self._send(200, data, ctype, {"Content-Disposition": f'attachment; filename="{fname}"'})
         self._send(404, {"error": "not found"})
 
     def do_POST(self):
@@ -240,18 +348,21 @@ class Handler(BaseHTTPRequestHandler):
         if n > MAX_BODY:
             return self._send(413, {"error": "File too large (400 MB max)."})
         data = self.rfile.read(n)
-        name = self.headers.get("X-File-Name", "upload.xlsx")
+        name = urllib.parse.unquote(self.headers.get("X-File-Name", "upload.xlsx"))
         try:
             if self.path == "/api/original":
-                set_original(*load_original(data), name)
+                with stage(f"Reading {name}"):
+                    set_original(*load_original(data), name)
                 return self._send(200, state["meta"])
             if self.path == "/api/realign":
                 if state["orig"] is None:
                     raise ValueError("Upload the original plan first.")
                 r, _ = load_revised(data, state["months"])
-                out, summ, warn = realign(state["orig"], r, state["months"])
-                state["out"] = out
+                with stage("Realigning"):
+                    out, summ, warn, compare = realign(state["orig"], r, state["months"])
+                state["out"], state["summary"], state["compare"] = out, summ, compare
                 return self._send(200, {"summary": summ, "warnings": warn, "rows": len(out),
+                                        "changed_rows": len(compare),
                                         "revised_departments": sorted(r[DEPT].unique().tolist())})
             self._send(404, {"error": "not found"})
         except ValueError as e:

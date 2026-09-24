@@ -27,9 +27,10 @@ rev = pd.DataFrame([
     {"Store Name": "S2", "DEPARTMENT": "A",     "Sep'26": 20, "Nov'26": 5, "Jan'27 P1": 5},   # Sep: revised alone (20) > bucket total (10)
     {"Store Name": "S3", "DEPARTMENT": "A",     "Sep'26": 5,  "Nov'26": 8, "Jan'27 P1": 8},   # Sep: nothing else to absorb the shortfall
 ])
-out, summ, warn = realign(orig, rev, M)
+out, summ, warn, compare = realign(orig, rev, M)
 g = lambda s, d, mrp, m: out[(out["Store Name"] == s) & (out.DEPARTMENT == d) & (out.MRP == mrp)][m + " Plan"].sum()
 bucket = lambda s, m: out[out["Store Name"] == s][m + " Plan"].sum()
+c = compare.set_index(["Store Name", "DEPARTMENT", "MRP", "Month"])
 
 # rule 2: revised kept, split by that month's cont % (6:4)
 assert np.isclose(g("S1", "A", 299, "Sep'26"), 7.2) and np.isclose(g("S1", "A", 399, "Sep'26"), 4.8)
@@ -54,4 +55,30 @@ assert any("no other department" in w and "S3/LADIES" in w for w in warn)
 # qty follows value at the row's ASP
 assert np.isclose(out[(out["Store Name"] == "S1") & (out.DEPARTMENT == "B")]["Sep'26 Plan Qty"].iloc[0], 9.166666666)
 assert np.isclose(out[(out["Store Name"] == "S2") & (out.DEPARTMENT == "A")]["Sep'26 Plan Qty"].iloc[0], 10)
+
+# comparison table: only changed cells appear, tagged with why
+assert np.isclose(c.loc[("S1", "A", 299, "Sep'26"), "Realigned"], 7.2) and c.loc[("S1", "A", 299, "Sep'26"), "Status"] == "kept"
+assert np.isclose(c.loc[("S1", "B", 299, "Sep'26"), "Realigned"], 9.166666666) and c.loc[("S1", "B", 299, "Sep'26"), "Status"] == "absorbed"
+assert np.isclose(c.loc[("S2", "A", 299, "Sep'26"), "Realigned"], 10) and c.loc[("S2", "A", 299, "Sep'26"), "Status"] == "capped"
+assert np.isclose(c.loc[("S3", "A", 299, "Sep'26"), "Realigned"], 5) and c.loc[("S3", "A", 299, "Sep'26"), "Status"] == "kept"
+assert np.isclose(c.loc[("S3", "A", 299, "Sep'26"), "Delta"], -3)
+assert ("S1", "A", 299, "Jan'27 P1") not in c.index   # frozen month, never changes -> excluded
+assert ("S2", "B", 299, "Nov'26") not in c.index      # nothing to absorb that month -> f==1, excluded
+assert len(compare) == len(compare.drop_duplicates())  # no duplicate (store,dept,mrp,month) rows
+
+# progress: a short operation finishing (e.g. an upload in another tab) must not wipe a long export's progress
+import threading
+import server
+started, release = threading.Event(), threading.Event()
+def long_op():
+    with server.stage("long export"):
+        server._progress(done=5, total=10)
+        started.set()
+        release.wait()
+t = threading.Thread(target=long_op); t.start(); started.wait()
+with server.stage("short upload"):
+    pass
+assert [(a["stage"], a["done"], a["total"]) for a in server.active.values()] == [("long export", 5, 10)]
+release.set(); t.join()
+assert not server.active
 print("all realign checks passed")

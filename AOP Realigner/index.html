@@ -23,16 +23,21 @@ main{max-width:1300px;margin:0 auto;padding:20px 16px 60px}
 .drop h2{margin:0;font-size:14px}
 .drop small,.mut{color:var(--mut)}
 .status{font-size:13px;font-weight:600}
-input[type=file]:focus-visible,a:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+input[type=file]:focus-visible,button:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 .msg{padding:10px 14px;border-radius:8px;margin-top:14px}
 .err{background:#FEE2E2;color:var(--dn)}
-.busy{background:var(--ac-soft);color:var(--ac)}
 .warn{background:var(--warn-bg);color:var(--warn);margin:6px 0;padding:8px 12px;border-radius:8px;font-size:13px}
+.progress-wrap{margin-top:14px}
+.progress-label{font-size:12px;color:var(--mut);margin-bottom:4px;font-variant-numeric:tabular-nums}
+.progress-track{background:var(--ac-soft);border-radius:999px;height:10px;overflow:hidden}
+.progress-fill{background:var(--ac);height:100%;width:2%;transition:width .3s ease}
 .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-top:18px}
 .card h3{margin:0 0 10px;font-size:15px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.dl{margin-left:auto;display:flex;gap:8px}
-.dl a{font-weight:600;text-decoration:none;border-radius:8px;padding:8px 14px;background:var(--ac);color:#fff}
-.dl a.ghost{background:var(--ac-soft);color:var(--ac)}
+.dl{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.dl button{font:inherit;font-weight:600;border:0;cursor:pointer;border-radius:8px;padding:8px 14px;background:var(--ac);color:#fff}
+.dl button.ghost{background:var(--ac-soft);color:var(--ac)}
+.dl button:disabled{opacity:.5;cursor:not-allowed}
+.hint{color:var(--mut);font-size:12px;margin:-4px 0 10px}
 .scroll{overflow:auto}
 table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
 th,td{padding:6px 10px;border-bottom:1px solid #EEF2FF;text-align:right;white-space:nowrap}
@@ -53,24 +58,41 @@ tbody tr:nth-child(even){background:#FAFBFF}
       <h2>1 · Original plan</h2>
       <span class="status" id="orig-status">Checking…</span>
       <input type="file" accept=".xlsx,.xlsb,.xls" id="orig">
-      <small>Store × Department × MRP × Display Type, “&lt;Month&gt; Plan” + “&lt;Month&gt; Plan Qty”. Stays loaded — only re-upload when the original changes.</small>
+      <small>Store × Department × MRP × Display Type, "&lt;Month&gt; Plan" + "&lt;Month&gt; Plan Qty". Stays loaded — only re-upload when the original changes.</small>
     </label>
     <label class="drop" id="drop-rev">
       <h2>2 · Revised plan</h2>
       <span class="status mut" id="rev-status">Upload to realign</span>
       <input type="file" accept=".xlsx,.xlsb,.xls" id="rev">
-      <small>Store × Department, “&lt;Month&gt; New” columns — only the departments you changed. A new department (e.g. LW_U_T-TOP F/S) borrows its parent’s MRP/display rows.</small>
+      <small>Store × Department, "&lt;Month&gt; New" columns — only the departments you changed. A new department (e.g. LW_U_T-TOP F/S) borrows its parent's MRP/display rows.</small>
     </label>
   </section>
   <div class="msg" id="msg" hidden></div>
+  <div class="progress-wrap" id="progress-wrap" hidden>
+    <div class="progress-label" id="progress-label"></div>
+    <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+  </div>
 
   <section id="out" hidden>
     <div id="warns"></div>
     <div class="card">
-      <h3>Division × Month <span class="mut" id="meta"></span>
-        <span class="dl"><a href="/api/download?fmt=csv">Download CSV</a><a class="ghost" href="/api/download?fmt=xlsx" title="Full plan as xlsx takes ~2–3 min to build">XLSX (slow)</a></span>
+      <h3>Compare against original <span class="mut" id="changed-meta"></span>
+        <span class="dl">
+          <button id="dl-compare-xlsx">Comparison XLSX</button>
+          <button class="ghost" id="dl-compare-csv">Comparison CSV</button>
+        </span>
       </h3>
+      <p class="hint">A Summary sheet (Division × Month, original vs. realigned) plus every Store × Department × MRP × Display Type cell that actually changed, with Original/Realigned/Delta/Status — the fast way to check the output is okay without opening the full plan.</p>
       <div class="scroll"><table id="sum"></table></div>
+    </div>
+    <div class="card">
+      <h3>Full realigned plan <span class="mut" id="meta"></span>
+        <span class="dl">
+          <button class="ghost" id="dl-full-csv">Full plan CSV</button>
+          <button class="ghost" id="dl-full-xlsx">Full plan XLSX</button>
+        </span>
+      </h3>
+      <p class="hint">Every row of the original plan, Store × Department × MRP × Display Type — the file to actually load back into planning. XLSX takes a few minutes for the full ~680k rows; CSV is fast.</p>
     </div>
   </section>
 </main>
@@ -80,25 +102,63 @@ const fmt = v => v.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFra
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function msg(t, cls) { $('#msg').textContent = t; $('#msg').className = 'msg ' + (cls || ''); $('#msg').hidden = !t; }
 
+// Progress: the backend can't report true completion % for the fast steps (a single vectorized
+// pandas/calamine call, not row-by-row), so those use a rough elapsed-vs-typical-duration estimate.
+// The one truly slow step (xlsx export, minutes for the full plan) DOES report real rows-written
+// progress via /api/progress's done/total, which this uses whenever present.
+const TYPICAL_SECONDS = {reading: 30, realigning: 12, 'comparison (csv)': 4, 'full plan (csv)': 12};
+function etaFor(stage) {
+  const s = (stage || '').toLowerCase();
+  for (const k in TYPICAL_SECONDS) if (s.includes(k)) return TYPICAL_SECONDS[k];
+  return 20;
+}
+let progressTimer = null;
+function startProgress(label) {
+  msg('');
+  $('#progress-wrap').hidden = false;
+  $('#progress-label').textContent = label;
+  $('#progress-fill').style.width = '2%';
+  const t0 = Date.now();
+  clearInterval(progressTimer);
+  progressTimer = setInterval(async () => {
+    try {
+      const p = await (await fetch('/api/progress')).json();
+      const secs = Math.round((Date.now() - t0) / 1000);
+      const pct = p.total ? Math.min(99, (p.done / p.total) * 100) : Math.min(96, (secs / etaFor(p.stage)) * 100);
+      $('#progress-fill').style.width = pct.toFixed(0) + '%';
+      const rows = p.total ? ` · ${p.done.toLocaleString('en-IN')}/${p.total.toLocaleString('en-IN')} rows` : '';
+      $('#progress-label').textContent = `${p.stage || label} — ${secs}s${rows}`;
+    } catch { /* progress is best-effort */ }
+  }, 400);
+}
+function stopProgress() {
+  clearInterval(progressTimer);
+  $('#progress-fill').style.width = '100%';
+  setTimeout(() => { $('#progress-wrap').hidden = true; }, 300);
+}
+
 function showOrig(m) {
   const ok = m && m.rows;
-  $('#orig-status').textContent = ok ? `Loaded: ${m.name} · ${m.rows.toLocaleString('en-IN')} rows · ${m.loaded_at}` : 'Not loaded yet';
+  let name = ok ? m.name : '';
+  try { name = decodeURIComponent(name); } catch { /* already plain (older caches stored it encoded) */ }
+  $('#orig-status').textContent = ok ? `Loaded: ${name} · ${m.rows.toLocaleString('en-IN')} rows · ${m.loaded_at}` : 'Not loaded yet';
   $('#drop-orig').classList.toggle('ok', !!ok);
 }
 fetch('/api/original').then(r => r.json()).then(showOrig);
 
-async function post(url, file, busy) {
-  msg(busy, 'busy');
-  const r = await fetch(url, {method: 'POST', body: file, headers: {'X-File-Name': encodeURIComponent(file.name)}});
-  const j = await r.json();
-  if (!r.ok) throw new Error(j.error || r.statusText);
-  msg('');
-  return j;
+async function post(url, file, label) {
+  startProgress(label);
+  try {
+    const r = await fetch(url, {method: 'POST', body: file, headers: {'X-File-Name': encodeURIComponent(file.name)}});
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.statusText);
+    return j;
+  } finally { stopProgress(); }
 }
 
 $('#orig').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
-  try { const m = await post('/api/original', f, `Reading ${f.name} — about 20–30 s for a full plan…`); m.name = decodeURIComponent(m.name); showOrig(m); }
+  try { showOrig(await post('/api/original', f, `Reading ${f.name}`)); }
   catch (err) { msg(err.message, 'err'); }
   e.target.value = '';
 };
@@ -106,7 +166,7 @@ $('#orig').onchange = async e => {
 $('#rev').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
   try {
-    const j = await post('/api/realign', f, `Realigning against ${f.name}…`);
+    const j = await post('/api/realign', f, `Realigning against ${f.name}`);
     $('#rev-status').textContent = `Realigned: ${f.name} · ${j.revised_departments.join(', ')}`;
     $('#drop-rev').classList.add('ok');
     render(j);
@@ -114,9 +174,32 @@ $('#rev').onchange = async e => {
   e.target.value = '';
 };
 
+async function download(kind, fmt, label) {
+  startProgress(label);
+  try {
+    const r = await fetch(`/api/download?type=${kind}&fmt=${fmt}`);
+    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || r.statusText); }
+    const blob = await r.blob();
+    const name = kind === 'compare' ? `Realigned Plan - Comparison.${fmt}` : `Realigned Plan.${fmt}`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  } catch (err) { msg(err.message, 'err'); }
+  stopProgress();
+}
+$('#dl-compare-xlsx').onclick = () => download('compare', 'xlsx', 'Building comparison (xlsx)');
+$('#dl-compare-csv').onclick = () => download('compare', 'csv', 'Building comparison (csv)');
+$('#dl-full-csv').onclick = () => download('full', 'csv', 'Building full plan (csv)');
+$('#dl-full-xlsx').onclick = () => download('full', 'xlsx', 'Building full plan (xlsx) — several minutes for ~680k rows');
+
 function render(j) {
   $('#warns').innerHTML = j.warnings.map(w => `<div class="warn">${esc(w)}</div>`).join('');
-  $('#meta').textContent = `${j.rows.toLocaleString('en-IN')} output rows`;
+  $('#meta').textContent = `${j.rows.toLocaleString('en-IN')} rows`;
+  $('#changed-meta').textContent = `${j.changed_rows.toLocaleString('en-IN')} cells changed`;
   let h = '<thead><tr><th>Division</th><th>Month</th><th>Original</th><th>Realigned</th><th>Diff</th><th>Revised depts: before</th><th>after</th><th>Other depts: change</th></tr></thead><tbody>';
   for (const s of j.summary) {
     const diff = s.final - s.original, other = (s.final - s.revised_after) - (s.original - s.revised_before);
