@@ -101,3 +101,9 @@ def test_reindex_route_returns_ok_false_for_invalid_payload(planner_client):
     body = r.json()
     assert body["ok"] is False
     assert "error" in body
+
+
+def test_buyer_cannot_run_reindex(buyer_client):
+    # Run Reindex overwrites calendar.sales_snapshots (read by SalesPlan's Sales Sync) - planner-only.
+    for path in ("/api/calendar/salesdata/reindex", "/api/calendar/salesdata/reindex/start"):
+        assert buyer_client.post(path, json={"source": "bogus"}).status_code == 403

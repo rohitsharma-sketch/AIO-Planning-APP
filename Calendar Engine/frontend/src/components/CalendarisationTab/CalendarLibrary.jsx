@@ -105,9 +105,6 @@ export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSaveP
   // loaded in the live editor.
   async function handleSyncNow(item) {
     if (!isPlanner || syncingId) return
-    if (!window.confirm(
-      `Regenerate "${item.name}" using today's V2 rules?\nThis overwrites the locked snapshot and cannot be undone.`
-    )) return
     setSyncingId(item.id)
     try {
       const full = await getCalendar(item.id)
@@ -115,10 +112,20 @@ export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSaveP
       const ms = Number(appSettings.maxShift) || 45
       const moPri = appSettings.moPri || 'prev'
       const dayMap = {}
+      let changed = 0, total = 0
       full.clusters.forEach(cl => {
         const fresh = generateMappings(cl.festivals, ry, fy, ms, moPri, coreFestivalNamesFor(cl.name), 2)
         dayMap[cl.name] = fresh.map(m => [fmtISO(m.refDate), fmtISO(m.futureDate)])
+        const freshSet = new Set(dayMap[cl.name].map(([r, f]) => `${r}|${f}`))
+        const stored = (full.dayMap && full.dayMap[cl.name]) || []
+        total += stored.length
+        changed += stored.filter(([r, f]) => !freshSet.has(`${r}|${f}`)).length
       })
+      // Its stored festival list may have been edited since lock, so say how
+      // much of the locked day map this actually rewrites before doing it.
+      if (!window.confirm(
+        `Sync Now will rewrite ${changed} of ${total} stored day pairs for "${item.name}" from its current festival list (today's V2 rules).\nThis overwrites the locked snapshot and cannot be undone.`
+      )) return
       const payload = {
         id: Date.now(), name: full.name, refYear: ry, futYear: fy,
         savedAt: new Date().toISOString(), engine: 'calendarisation-v2',

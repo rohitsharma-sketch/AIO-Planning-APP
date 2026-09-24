@@ -127,7 +127,9 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
         for (const f of keyFields) e[f] = row[f] ?? ''
         byKey.set(k, e)
       }
-      e.vals[row.col] = row.value
+      // Sum, not assign: month-wise can send two ref months to the same TY
+      // month, so the same (key, col) arrives twice and both must count.
+      e.vals[row.col] = (e.vals[row.col] || 0) + row.value
     }
     const out = [...byKey.values()]
     out.sort((a, b) => {

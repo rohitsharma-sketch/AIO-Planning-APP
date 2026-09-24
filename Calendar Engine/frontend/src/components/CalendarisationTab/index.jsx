@@ -131,6 +131,11 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
   // Only the festival list autosaves this way; the day-by-day mapping stays
   // exactly as last generated until Create Calendar + Lock & Save runs again.
   const [previewCalendarId, setPreviewCalendarId] = useState(null)
+  // True once Load & Preview has swapped a library template's clusters into
+  // the editor - from then on the editor does NOT hold the live working set,
+  // so persist() must never PUT it to /cluster-profiles. (previewCalendarId
+  // alone can't tell this: Lock & Save of the live set also sets it.)
+  const [editingTemplate, setEditingTemplate] = useState(false)
   // The loaded template's own name, kept alongside previewCalendarId - lets
   // handleSaveToLoadedTemplate overwrite that EXACT template without
   // prompting (Lock & Save's own prompt defaults to an auto-generated name
@@ -209,6 +214,17 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
         // re-renders with the new dates - the old app's renderFestivalTable().
         await persist(workingProfiles)
         syncMsg = yearSyncMessage(ry, fy, sync.updated, sync.estimated) + ' · '
+      }
+    } else {
+      // Non-planners can't re-date (persist() no-ops for them), and
+      // buildFestMap drops every festival date outside ry/fy - so stale
+      // Festival Master dates would silently give a festival-less calendar.
+      const stale = profiles.flatMap(cp => cp.festivals || []).find(f =>
+        (f.refDate && String(f.refDate).slice(0, 4) !== String(ry)) ||
+        (f.futDate && String(f.futDate).slice(0, 4) !== String(fy)))
+      if (stale) {
+        setEngineStatus({ ok: false, msg: `Festival Master dates are for ${String(stale.refDate || '?').slice(0, 4)} -> ${String(stale.futDate || '?').slice(0, 4)}, but this calendar is ${ry} -> ${fy}. Ask a planner to update the Festival Master.` })
+        return null
       }
     }
 
@@ -327,11 +343,11 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
   // re-rendered a day table for whichever cluster happened to already be loaded
   // from /cluster-profiles, so "Load" previewed a calendar instead of loading it.
   //
-  // The restored profiles are in-memory only: they are NOT pushed to
-  // /cluster-profiles here, matching every other profiles-state change in this
-  // file (handleReorder/handleAdd/handleFestivalsChange all write through
-  // persist() only when the user actually edits something). The next real edit
-  // persists the loaded set through that same path.
+  // The restored profiles are in-memory only and are NEVER pushed to
+  // /cluster-profiles: editingTemplate makes persist() write edits into that
+  // template's own festival list only, so previewing a template can't
+  // overwrite the shared live Festival Master. Reload the page to get back to
+  // the live working set.
   function handleLoadFromLibrary(full) {
     const clusters = full.clusters || []
     const ry = Number(full.refYear), fy = Number(full.futYear)
@@ -364,6 +380,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
     setClusterMappingsRaw(null) // a loaded snapshot; regenerate via "Create Calendar" before saving again
     setPreviewCalendarId(full.id) // subsequent festival-list edits autosave into this calendar too
     setPreviewCalendarName(full.name)
+    setEditingTemplate(true)
 
     // Every cluster's saved pairs, reconstructed the same way the active
     // cluster's are below - feeds the Day-by-Day preview's "all clusters"
@@ -399,28 +416,30 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
   async function persist(nextProfiles) {
     setProfiles(nextProfiles)
     if (!isPlanner) return false
-    try {
-      await putClusterProfiles({
-        profiles: nextProfiles.map(cp => ({ name: cp.name, region: cp.region, nextId: cp.nextId, festivals: cp.festivals })),
-      })
-      setStatus({ ok: true, msg: 'Saved' })
-    } catch (e) {
-      setStatus({ ok: false, msg: e.message })
-      return false
+    // A Load & Preview'd template (editingTemplate) holds THAT calendar's
+    // clusters (possibly another year's dates), not the live working set - so
+    // it is never PUT to /cluster-profiles.
+    if (!editingTemplate) {
+      try {
+        await putClusterProfiles({
+          profiles: nextProfiles.map(cp => ({ name: cp.name, region: cp.region, nextId: cp.nextId, festivals: cp.festivals })),
+        })
+        setStatus({ ok: true, msg: 'Saved' })
+      } catch (e) {
+        setStatus({ ok: false, msg: e.message })
+        return false
+      }
     }
-    // Autosave into whichever locked calendar is on the preview board (see
-    // previewCalendarId above) - festival list only, day-map untouched. Best-
-    // effort: a failure here doesn't roll back or re-throw, since the live
-    // working set above already saved fine; it just shows alongside the normal
-    // "Saved" status so a real problem (e.g. that calendar got deleted from
-    // another tab) is still visible instead of silently swallowed.
+    // Autosave into whichever locked calendar is on the preview board -
+    // festival list only, day-map untouched.
     if (previewCalendarId != null) {
       try {
         await updateCalendarFestivals(previewCalendarId, {
           clusters: nextProfiles.map(cp => ({ name: cp.name, region: cp.region, festivals: cp.festivals })),
         })
+        if (editingTemplate) setStatus({ ok: true, msg: 'Saved to previewed template (live Festival Master unchanged)' })
       } catch (e) {
-        setStatus({ ok: false, msg: `Saved to working set, but autosave into the previewed template failed: ${e.message}` })
+        setStatus({ ok: false, msg: `Autosave into the previewed template failed: ${e.message}` })
         return false
       }
     }

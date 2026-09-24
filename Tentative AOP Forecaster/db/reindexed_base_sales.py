@@ -135,11 +135,11 @@ def get_reindexed_lfl_base_sales(session):
         # Step 2 — MW division proportions (MW always carries DIVISION in its grain)
         mw_div_total = {}    # {(div, label): raw-rupee total}
         mw_month_total = {}  # {label: raw-rupee total across all divs}
-        # MW rows store the division in ATTRIBUTE1 (not DIVISION) — month-wise
-        # reindex always uses ATTRIBUTE1 as its dimension key regardless of what
-        # the source column is named in the parquet.
+        # MW rows store the division under the lowercase 'division' key
+        # (reindex_monthwise's key_fields) - ATTRIBUTE1 is a season/attribute
+        # value (REGULAR, SUMMER, ...), not a division.
         mw_div_rows = session.execute(text("""
-            SELECT elem->>'ATTRIBUTE1' AS raw_div,
+            SELECT elem->>'division' AS raw_div,
                    SUBSTRING(elem->>'col' FROM 1 FOR 7) AS col,
                    SUM((elem->>'value')::numeric) AS total
             FROM calendar.sales_snapshots, jsonb_array_elements(rows) elem
@@ -156,6 +156,15 @@ def get_reindexed_lfl_base_sales(session):
                 continue
             mw_div_total[(div, label)] = mw_div_total.get((div, label), 0.0) + float(total)
             mw_month_total[label] = mw_month_total.get(label, 0.0) + float(total)
+
+        # No KIDS/LADIES/MENS rows means the MW snapshot has no usable division
+        # breakdown (missing, or saved without 'division') - any split from it
+        # would be fake, so refuse rather than estimate.
+        if not any(div in ("KIDS", "LADIES", "MENS") for div, _ in mw_div_total):
+            return {"base_sales": empty, "hasAttribute": has_attribute, "availableMonths": [],
+                    "note": ("Day-wise reindex has no Division breakdown and the month-wise snapshot has no "
+                             "KIDS/LADIES/MENS rows to split it by - re-run Month-wise Reindex (or Day-wise "
+                             "with DIVISION ticked) first.")}
 
         # Step 3 — Combine: DW total × MW division share → Lakhs
         base_sales = {div: {m: 0.0 for m in FY28_M} for div in DIVS}
@@ -174,18 +183,8 @@ def get_reindexed_lfl_base_sales(session):
                 base_sales[div][m] = round(base_sales[div][m], 2) if m in closed_fy28_months else 0.0
         available_fy28_months = sorted([m for m in dw_total_by_month if m in closed_fy28_months])
 
-        if mw_month_total:
-            note = ("Day-wise reindex has no Division breakdown — division split estimated from "
-                    "month-wise reindex proportions. Monthly totals (festival shifts) are from day-wise output.")
-        else:
-            # No MW data either — fall back to equal split so totals are at least correct
-            n = len(DIVS)
-            for m in available_fy28_months:
-                dw_total = dw_total_by_month.get(m, 0.0)
-                for div in DIVS:
-                    base_sales[div][m] = round(dw_total / n / LAKH, 2)
-            note = ("Day-wise reindex has no Division breakdown and no month-wise snapshot exists "
-                    "to estimate division splits — monthly totals are spread equally across divisions.")
+        note = ("Day-wise reindex has no Division breakdown — division split estimated from "
+                "month-wise reindex proportions. Monthly totals (festival shifts) are from day-wise output.")
 
         return {"base_sales": base_sales, "hasAttribute": has_attribute,
                 "availableMonths": available_fy28_months, "note": note}

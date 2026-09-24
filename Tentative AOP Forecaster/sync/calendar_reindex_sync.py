@@ -107,6 +107,13 @@ def run():
 
         if not rx_result.get("ok"):
             raise RuntimeError(rx_result.get("error") or "reindex_worker returned ok=false with no error message")
+        if rx_result.get("sourceUnreachable"):
+            # Message matches sync/common.py's _is_network_offline -> status 'offline'.
+            raise ConnectionError(
+                f"0 rows read for every freshly computed month {rx_result.get('computedMonths')} - "
+                "data-lake network path was not found; existing MW snapshot left untouched")
+        if rx_result.get("snapshotSaveError"):
+            raise RuntimeError(f"Reindex ran but saving the MW snapshot failed: {rx_result['snapshotSaveError']}")
 
         result["rows_read"] = rx_result.get("rowsRead")
         result["rows_updated"] = rx_result.get("rowsMapped")

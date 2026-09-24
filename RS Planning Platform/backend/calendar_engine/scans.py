@@ -973,7 +973,11 @@ def _save_sales_snapshot(session, source_type, kind, grain, metric, key_fields, 
 # (DEPARTMENT, SECTION, ARTICLE_NAME, SEASON_TYPE, DISPLAY_TYPE, STORE_STATUS,
 # CLUSTER_TYPE, REGION_TYPE) inflates row count for zero downstream benefit.
 # "store" is always kept - it's the base grain, added separately below.
-_PERSIST_DIMS = {"DIVISION", "ATTRIBUTE1"}
+# Month-wise's key_fields name the division "division" (lowercase, baked into
+# its grain - see reindex_monthwise); day-wise's opt-in extra dim keeps the
+# raw "DIVISION". Listing only "DIVISION" silently dropped division from every
+# persisted month-wise snapshot.
+_PERSIST_DIMS = {"division", "DIVISION", "ATTRIBUTE1"}
 
 
 def _collapse_for_persistence(key_fields, rows):
@@ -1013,7 +1017,9 @@ def _save_calendarised_sales_snapshot(result):
     other apps (e.g. SalesPlan's Sales Sync) can read both straight from the
     DB instead of re-running their own reindex or parquet parse. Best-effort:
     a save failure must never turn a successful reindex into an error for the
-    Calendar Engine caller, so it's logged and swallowed."""
+    Calendar Engine caller, so it's logged and returned as an error string
+    (None on success) - run_reindex surfaces it as result["snapshotSaveError"]
+    so callers that depend on the snapshot (calendar_reindex_sync) can fail."""
     try:
         from db.base import SessionLocal
 
@@ -1029,8 +1035,10 @@ def _save_calendarised_sales_snapshot(result):
             session.commit()
         finally:
             session.close()
-    except Exception:
+    except Exception as e:
         traceback.print_exc()
+        return f"{type(e).__name__}: {e}"
+    return None
 
 
 def _is_month_closed(ym, today=None):
@@ -1153,13 +1161,17 @@ def _merge_reindex_results(results):
     months=[that one month], so its rows/actualRows belong entirely to that
     month - see run_reindex) back into one combined result matching the same
     shape a single multi-month reindex_daywise/reindex_monthwise call would
-    have returned. Safe to just concatenate rather than re-aggregate: a
-    locked calendar's day-map is a per-cluster bijection ref-date -> fut-date,
-    so distinct reference months can never produce overlapping output
-    columns to sum together."""
+    have returned. `rows` are re-aggregated (summed by keyFields + col), not
+    just concatenated: month-wise assigns each reference month to a TY month
+    by plurality, so two reference months CAN land on the same output column
+    (e.g. 2025-10 and 2025-11 both -> 2026-11 for BIHAR), and a plain extend
+    left duplicate (key, col) rows that every wide pivot then overwrote.
+    actualRows are concatenated - each one's col is its own reference
+    month/date, so distinct reference months never overlap there."""
     if len(results) == 1:
         return results[0]
     first = results[0]
+    rows_by_key = {}
     merged = {
         "ok": True, "source": first["source"], "keyFields": first["keyFields"],
         "grain": first["grain"], "metric": first["metric"],
@@ -1170,7 +1182,10 @@ def _merge_reindex_results(results):
         "usedFrozenSync": True,
     }
     for r in results:
-        merged["rows"].extend(r.get("rows", []))
+        for row in r.get("rows", []):
+            key = tuple(row.get(f) for f in first["keyFields"]) + (row["col"],)
+            prev = rows_by_key.get(key)
+            rows_by_key[key] = row if prev is None else {**prev, "value": round(prev["value"] + row["value"], 2)}
         merged["actualRows"].extend(r.get("actualRows", []))
         merged["columns"].extend(r.get("columns", []))
         merged["actualColumns"].extend(r.get("actualColumns", []))
@@ -1183,6 +1198,7 @@ def _merge_reindex_results(results):
         merged["unmappedClusters"].update(r.get("unmappedClusters", []))
         merged["unmappedClusterStores"].update(r.get("unmappedClusterStores", []))
         merged["usedFrozenSync"] = merged["usedFrozenSync"] and r.get("usedFrozenSync", False)
+    merged["rows"] = list(rows_by_key.values())
     merged["columns"] = sorted(set(merged["columns"]))
     merged["actualColumns"] = sorted(set(merged["actualColumns"]))
     merged["unmappedStores"] = sorted(merged["unmappedStores"])
@@ -1246,6 +1262,7 @@ def run_reindex(payload, progress=None):
             _get_raw(source, computed_months, sync_id, raw_fetch_fn, progress=progress,
                      extra_dims=extra_dims, metric_col=metric_col)
 
+        fresh_rows_read = 0
         for m in computed_months:
             # One month at a time - each call's whole result belongs to
             # exactly this one reference month, which is what makes it safe
@@ -1258,6 +1275,7 @@ def run_reindex(payload, progress=None):
             if not r.get("ok"):
                 return r
             results.append(r)
+            fresh_rows_read += r.get("rowsRead", 0)
             # rowsRead == 0 means nothing was actually read for this month -
             # almost always the sales data source being temporarily
             # unreachable (parquet directory unmounted/offline), not a real
@@ -1274,8 +1292,15 @@ def run_reindex(payload, progress=None):
         result = _merge_reindex_results(results)
         result["cachedMonths"] = sorted(cached_status.keys())
         result["computedMonths"] = sorted(computed_months)
-        if result.get("ok"):
-            _save_calendarised_sales_snapshot(result)
+        # Every freshly computed month read 0 rows = source unreachable (see
+        # the rowsRead comment above) - saving now would replace the snapshot
+        # with only the cached months (or nothing). Leave it untouched.
+        if computed_months and fresh_rows_read == 0:
+            result["sourceUnreachable"] = True
+        elif result.get("ok"):
+            save_error = _save_calendarised_sales_snapshot(result)
+            if save_error:
+                result["snapshotSaveError"] = save_error
         return result
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}

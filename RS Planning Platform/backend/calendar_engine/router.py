@@ -719,12 +719,12 @@ def salesdata_schema(source_type: str, user: dict = Depends(require_login)):
 
 
 @router.post("/salesdata/reindex")
-def salesdata_reindex(payload: dict = Body(...), user: dict = Depends(require_login)):
+def salesdata_reindex(payload: dict = Body(...), actor: dict = Depends(require_role("planner"))):
     return run_reindex(payload)
 
 
 @router.post("/salesdata/reindex/start")
-def salesdata_reindex_start(payload: dict = Body(...), user: dict = Depends(require_login)):
+def salesdata_reindex_start(payload: dict = Body(...), actor: dict = Depends(require_role("planner"))):
     """Background variant of /salesdata/reindex - returns a job id immediately
     instead of blocking for the whole read (day-wise runs tens of millions of
     rows). Poll /salesdata/reindex/poll/{job_id} for progress and the result."""

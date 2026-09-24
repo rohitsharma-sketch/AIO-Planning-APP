@@ -100,7 +100,8 @@ def get_sales_data(source: str = "mw", kind: str = "trend_shifted", limit: int =
     by_key = {}
     for r in snap["rows"]:
         k = tuple(r.get(f) for f in key_fields)
-        by_key.setdefault(k, {f: r.get(f) for f in key_fields})[r["col"]] = r["value"]
+        e = by_key.setdefault(k, {f: r.get(f) for f in key_fields})
+        e[r["col"]] = e.get(r["col"], 0) + r["value"]  # sum, not assign: duplicate (key, col) rows must not overwrite
     preview = list(by_key.values())[:limit]
 
     return {

@@ -201,7 +201,7 @@ def write_wide_csv(result, store_cluster, festival_by_cluster_date, ref_by_clust
     for row in result.get("rows") or []:
         key = tuple(row.get(f, "") or "" for f in key_fields)
         e = grouped.setdefault(key, {})
-        e[row["col"]] = row["value"]
+        e[row["col"]] = e.get(row["col"], 0) + row["value"]  # += : two ref months can share a TY month
         key_of.setdefault(key, {f: row.get(f, "") for f in key_fields})
 
     # Wide is one row per store(+fields), one column per date - a single
