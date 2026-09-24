@@ -23,6 +23,8 @@ import os
 import socket
 import subprocess
 import sys
+import threading
+import time
 import urllib.error
 import urllib.request
 import webbrowser
@@ -143,12 +145,36 @@ def _shutdown_many(ports_and_names):
     return [procs[p] for p in procs], missing
 
 
+_last_launch = {}  # port -> time.monotonic() of our last launch attempt
+
+
 def _launch(app):
+    _last_launch[app["port"]] = time.monotonic()
     creationflags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
     subprocess.Popen(
         app["cmd"], cwd=app["cwd"], creationflags=creationflags,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
     )
+
+
+# Crash watchdog: every WATCH_INTERVAL s, relaunch any APPS entry whose port is
+# down. Skips an app launched < LAUNCH_GRACE s ago (8010 takes ~10 s to bind,
+# so without this it'd be launched twice). Paused by Master Switch "shutdown
+# all" (else it would undo the shutdown within 30 s), resumed by "launch all".
+WATCH_INTERVAL, LAUNCH_GRACE = 30, 90
+_watch_paused = threading.Event()
+
+
+def _watchdog():
+    while True:
+        time.sleep(WATCH_INTERVAL)
+        if _watch_paused.is_set():
+            continue
+        for app in APPS:
+            recent = time.monotonic() - _last_launch.get(app["port"], -LAUNCH_GRACE) < LAUNCH_GRACE
+            if not recent and not _is_online(app["port"]):
+                print(f"watchdog: {app['name']} (:{app['port']}) is down - relaunching", flush=True)
+                _launch(app)
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -341,6 +367,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def _launch_all(self):
+        _watch_paused.clear()
         launched, already_online = [], []
         for app in APPS:
             if _is_online(app["port"]):
@@ -351,6 +378,7 @@ class Handler(SimpleHTTPRequestHandler):
         self._json({"ok": True, "launched": launched, "alreadyOnline": already_online})
 
     def _shutdown_all(self):
+        _watch_paused.set()
         stopped, already_offline = _shutdown_many([(app["port"], app["name"]) for app in APPS])
         self._json({"ok": True, "stopped": stopped, "alreadyOffline": already_offline})
 
@@ -360,6 +388,7 @@ if __name__ == "__main__":
     for app in APPS:
         if not _is_online(app["port"]):
             _launch(app)
+    threading.Thread(target=_watchdog, daemon=True).start()
     webbrowser.open(f"http://localhost:{PORT}")
     print(f"RS Planning landing page at http://localhost:{PORT}")
     ThreadingHTTPServer(("", PORT), Handler).serve_forever()
