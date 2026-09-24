@@ -4,9 +4,10 @@ Original plan: Store x Department x MRP x Display Type rows, "<Month> Plan" valu
 Revised plan:  Store x Department rows, "<Month> New" values (only the departments the buyer changed).
 
 Per Store x Division x Month the original total is the target. Revised departments keep their new
-value exactly (split to MRP x Display Type by the original cont %) UNLESS they alone exceed the
-Store x Division x Month total, in which case they're capped down to fit it exactly; every other
-department in that bucket absorbs whatever's left, pro-rata. Jan/Feb are never touched.
+value exactly (split to MRP x Display Type by the original cont %); every other department in that
+bucket absorbs the difference pro-rata. If revised alone exceed a month's total, the excess comes out
+of the same store-division's other live months instead. Jan/Feb are never touched. Qty = value /
+the original ASP for that Department x MRP x Display Type x Month.
 Run: python server.py -> http://localhost:8070
 """
 import contextlib
@@ -168,37 +169,50 @@ def realign(o, r, months):
     fb_cells = int((lk & ~has & (np.abs(R) > TOL)).sum())
     ignored = int((locked[:, None] & frozen[None, :] & (np.abs(R - pd.DataFrame(orig).groupby(sd).transform("sum").to_numpy()) > 1e-6)).any(1).sum())
 
-    # 2. revised departments are capped to fit the Store x Division x Month total if they alone exceed
-    #    it; every other department in that bucket absorbs whatever's left, pro-rata
+    # 2. every other department in the Store x Division x Month absorbs the difference pro-rata. Revised
+    #    values are never changed: if they alone exceed a month's total, the other departments go to 0 that
+    #    month and the excess is taken from the same store-division's other live months (in proportion to
+    #    their room), so the store x division season total - and the grand total - still match the original.
     grp = (o[STORE] + "||" + o[DIV]).to_numpy()
     T = pd.DataFrame(orig).groupby(grp).transform("sum").to_numpy()
     L = pd.DataFrame(np.where(lk, new, 0.0)).groupby(grp).transform("sum").to_numpy()
     U = pd.DataFrame(np.where(lk, 0.0, orig)).groupby(grp).transform("sum").to_numpy()
-    over = L > T + TOL
-    has_l = np.abs(L) > TOL
-    cap = np.where(over & has_l, T / np.where(has_l, L, 1), 1.0)
-    new = np.where(lk, new * cap, new)
-    L = np.where(over, T, L)  # locked total after capping - exactly T where it was over
+    live = (rev.notna().any().to_numpy() & ~frozen)[None, :]
     has_u = np.abs(U) > TOL
-    f = np.where(has_u, (T - L) / np.where(has_u, U, 1), 0.0)
+    over = live & (L > T + TOL)
+    excess = np.where(over, L - T, 0.0).sum(1, keepdims=True)
+    room = np.where(live & ~over & has_u, np.clip(T - L, 0, None), 0.0)
+    room_tot = room.sum(1, keepdims=True)
+    take = np.where(room_tot > TOL, room * np.minimum(excess / np.where(room_tot > TOL, room_tot, 1), 1.0), 0.0)
+    Tadj = T - take
+    f = np.where(has_u & ~over, (Tadj - L) / np.where(has_u, U, 1), 0.0)
     new = np.where(lk, new, orig * f)
-    short = ((~has_u) & (T - L > 1e-6)).any(1)  # nothing left to absorb into, bucket stays under target
-    capped = over.any(1)
+    spilled = over.any(1)
+    unplaced = excess[:, 0] - take.sum(1)  # excess with no room left in any other month
+    # nothing left to absorb into (bucket stays under target), or excess that couldn't be placed (stays over)
+    short = ((~has_u) & live & (Tadj - L > 1e-6)).any(1) | (unplaced > 1e-6)
 
-    # 3. qty follows value at the row's ASP (a clone uses its parent's ASP; no qty history -> MRP)
-    vs, qs = orig.sum(1)[b], qty.sum(1)[b]
-    asp = np.divide(vs, qs, out=np.zeros(len(o)), where=np.abs(qs) > TOL)
-    asp = np.where(asp > TOL, asp, pd.to_numeric(o[MRP], errors="coerce").fillna(0).to_numpy() / 1e5)
-    has_o = np.abs(orig) > TOL
-    new_qty = np.where(has_o, qty * np.divide(new, orig, out=np.zeros_like(new), where=has_o),
-                       np.divide(new, asp[:, None], out=np.zeros_like(new), where=asp[:, None] > TOL))
+    # 3. qty = new value / the original plan's ASP for that Department x MRP x Display Type x Month, pooled
+    #    across stores (in the original it's identical across stores anyway). A new dept uses its parent's.
+    #    No qty for that combo that month -> the combo's all-month ASP -> MRP. Unchanged cells keep their qty.
+    key = (pd.Series(o[DEPT].to_numpy()[b]) + "||" + o[MRP].astype(str) + "||" + o[DISP]).to_numpy()
+    qm = np.abs(qty) > TOL
+    num = pd.DataFrame(np.where(qm, orig, 0.0)).groupby(key).transform("sum").to_numpy()
+    den = pd.DataFrame(np.where(qm, qty, 0.0)).groupby(key).transform("sum").to_numpy()
+    def _ratio(n, d):
+        r = np.divide(n, d, out=np.zeros_like(n, dtype=float), where=np.abs(d) > TOL)
+        return np.where(r > TOL, r, np.nan)
+    asp_m, asp_all = _ratio(num, den), _ratio(num.sum(1), den.sum(1))
+    asp_all = np.where(np.isnan(asp_all), pd.to_numeric(o[MRP], errors="coerce").fillna(0).to_numpy() / 1e5, asp_all)
+    asp = np.where(np.isnan(asp_m), asp_all[:, None], asp_m)
+    moved = np.abs(new - orig) > 1e-12
+    new_qty = np.where(moved, np.divide(new, asp, out=np.zeros_like(new), where=asp > TOL), qty)
+    asp_fb = int((moved & np.isnan(asp_m) & (np.abs(new) > TOL)).sum())
 
     # 4. comparison table: every cell that actually moved, tagged with why - the "did this come out
-    #    okay" check against the original. "kept"/"capped" are locked rows; "absorbed" is everything
-    #    else that moved to make room; a locked row's own capping status still shows even for its
-    #    frozen months, which is fine since frozen months never change (f==1 there) and get filtered out.
-    status = np.where(lk & over, "capped", np.where(lk, "kept",
-              np.where(np.abs(f - 1) > TOL, "absorbed", "unchanged")))
+    #    okay" check against the original. "kept" = a revised row; "absorbed" = everything else that
+    #    moved to make room (frozen months never change - f==1 there - so they're filtered out).
+    status = np.where(lk, "kept", np.where(np.abs(f - 1) > TOL, "absorbed", "unchanged"))
     delta = new - orig
     changed = np.abs(delta) > 1e-6
     if changed.any():
@@ -222,7 +236,8 @@ def realign(o, r, months):
         for j, m in enumerate(months):
             summ.append({"division": d, "month": m, "original": float(orig[i, j].sum()), "final": float(new[i, j].sum()),
                          "revised_before": float(orig[i, j][locked[i]].sum()), "revised_after": float(new[i, j][locked[i]].sum())})
-    capped_sd = sorted({f"{s}/{d}" for s, d in zip(o[STORE][capped], o[DIV][capped])})
+    spilled_sd = sorted({f"{s}/{d}" for s, d in zip(o[STORE][spilled], o[DIV][spilled])})
+    spilled_amt = float(pd.Series(excess[:, 0]).groupby(grp).first().sum())
     short_sd = sorted({f"{s}/{d}" for s, d in zip(o[STORE][short], o[DIV][short])})
     warn = []
     if n_new_sd:
@@ -231,12 +246,16 @@ def realign(o, r, months):
         warn.append(f"{fb_cells} revised row-months had no original plan that month; split by the row's average cont % across the other months.")
     if ignored:
         warn.append(f"{ignored} revised rows had Jan/Feb values different from the original - ignored, Jan/Feb stay as original.")
-    if capped_sd:
-        warn.append(f"{len(capped_sd)} store-division(s) had revised departments exceeding the original total in some month - "
-                    f"capped down to fit, other departments set to 0 that month: {', '.join(capped_sd[:15])}")
+    if spilled_sd:
+        warn.append(f"{len(spilled_sd)} store-division(s) had revised departments exceeding a month's original total - "
+                    f"revised kept exactly, other departments set to 0 that month, and the excess ({spilled_amt:.4f}) taken "
+                    f"from the same store-division's other live months, so its season total still matches: {', '.join(spilled_sd[:15])}")
+    if asp_fb:
+        warn.append(f"{asp_fb} changed row-months had no original qty for their Department x MRP x Display Type that month - "
+                    f"qty uses that combination's all-month ASP instead.")
     if short_sd:
-        warn.append(f"{len(short_sd)} store-division(s) have no other department left to absorb into in some month - "
-                    f"total stays under the original there: {', '.join(short_sd[:15])}")
+        warn.append(f"{len(short_sd)} store-division(s) couldn't fully land on the original total (no other department "
+                    f"or month left to absorb into): {', '.join(short_sd[:15])}")
     return o, summ, warn, compare
 
 
