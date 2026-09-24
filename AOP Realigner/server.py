@@ -3,9 +3,10 @@
 Original plan: Store x Department x MRP x Display Type rows, "<Month> Plan" value + "<Month> Plan Qty".
 Revised plan:  Store x Department rows, "<Month> New" values (only the departments the buyer changed).
 
-Per Store x Division x Attribute x Month the original total is the target. Revised departments keep
-their new value exactly (split to MRP x Display Type by the original cont %); every other department
-in that bucket absorbs the difference pro-rata. Jan/Feb are never touched.
+Per Store x Division x Month the original total is the target. Revised departments keep their new
+value exactly (split to MRP x Display Type by the original cont %) UNLESS they alone exceed the
+Store x Division x Month total, in which case they're capped down to fit it exactly; every other
+department in that bucket absorbs whatever's left, pro-rata. Jan/Feb are never touched.
 Run: python server.py -> http://localhost:8070
 """
 import io
@@ -23,7 +24,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE = os.path.join(HERE, ".cache", "original.pkl")  # gitignored: real plan data
 MAX_BODY = 400 * 1024 * 1024
 TOL = 1e-9
-STORE, DIV, DEPT, MRP, DISP, ATTR = "Store Name", "DIVISION", "DEPARTMENT", "MRP", "DISPLAY TYPE", "ATTRIBUTE"
+STORE, DIV, DEPT, MRP, DISP = "Store Name", "DIVISION", "DEPARTMENT", "MRP", "DISPLAY TYPE"
 FROZEN = ("Jan", "Feb")  # user rule: Jan & Feb plans stay exactly as the original
 
 state = {"orig": None, "months": None, "meta": None, "out": None}
@@ -45,12 +46,12 @@ def load_original(data):
     o = read_sheet(data, "STORE NAME")
     months = [c[:-5] for c in o.columns if c.endswith(" Plan")]
     num = [m + " Plan" for m in months] + [m + " Plan Qty" for m in months]
-    missing = [c for c in [STORE, DIV, DEPT, MRP, DISP, ATTR] + num if c not in o.columns]
+    missing = [c for c in [STORE, DIV, DEPT, MRP, DISP] + num if c not in o.columns]
     if missing or not months:
         raise ValueError(f"Original plan is missing columns: {missing or '<Month> Plan'}")
     for c in num:
         o[c] = pd.to_numeric(o[c], errors="coerce").fillna(0.0)
-    for c in (STORE, DIV, DEPT, DISP, ATTR):
+    for c in (STORE, DIV, DEPT, DISP):
         o[c] = o[c].astype(str).str.strip()
     if o.duplicated([STORE, DEPT, MRP, DISP]).any():
         raise ValueError("Original plan has duplicate Store x Department x MRP x Display Type rows.")
@@ -139,16 +140,22 @@ def realign(o, r, months):
     fb_cells = int((lk & ~has & (np.abs(R) > TOL)).sum())
     ignored = int((locked[:, None] & frozen[None, :] & (np.abs(R - pd.DataFrame(orig).groupby(sd).transform("sum").to_numpy()) > 1e-6)).any(1).sum())
 
-    # 2. unlocked rows in each Store x Division x Attribute x Month absorb the difference pro-rata
-    o[ATTR] = o[ATTR].astype(str).str.strip()
-    grp = (o[STORE] + "||" + o[DIV] + "||" + o[ATTR]).to_numpy()
+    # 2. revised departments are capped to fit the Store x Division x Month total if they alone exceed
+    #    it; every other department in that bucket absorbs whatever's left, pro-rata
+    grp = (o[STORE] + "||" + o[DIV]).to_numpy()
     T = pd.DataFrame(orig).groupby(grp).transform("sum").to_numpy()
     L = pd.DataFrame(np.where(lk, new, 0.0)).groupby(grp).transform("sum").to_numpy()
     U = pd.DataFrame(np.where(lk, 0.0, orig)).groupby(grp).transform("sum").to_numpy()
-    ok = (np.abs(U) > TOL) & (T - L >= -TOL)
-    # ponytail: revised depts alone overshoot (or nothing left to absorb) -> other depts 0, total stays over; flagged
-    f = np.where(ok, (T - L) / np.where(ok, U, 1), 0.0)
+    over = L > T + TOL
+    has_l = np.abs(L) > TOL
+    cap = np.where(over & has_l, T / np.where(has_l, L, 1), 1.0)
+    new = np.where(lk, new * cap, new)
+    L = np.where(over, T, L)  # locked total after capping - exactly T where it was over
+    has_u = np.abs(U) > TOL
+    f = np.where(has_u, (T - L) / np.where(has_u, U, 1), 0.0)
     new = np.where(lk, new, orig * f)
+    short = ((~has_u) & (T - L > 1e-6)).any(1)  # nothing left to absorb into, bucket stays under target
+    capped = over.any(1)
 
     # 3. qty follows value at the row's ASP (a clone uses its parent's ASP; no qty history -> MRP)
     vs, qs = orig.sum(1)[b], qty.sum(1)[b]
@@ -165,8 +172,8 @@ def realign(o, r, months):
         for j, m in enumerate(months):
             summ.append({"division": d, "month": m, "original": float(orig[i, j].sum()), "final": float(new[i, j].sum()),
                          "revised_before": float(orig[i, j][locked[i]].sum()), "revised_after": float(new[i, j][locked[i]].sum())})
-    miss = (~ok & (np.abs(T - L) > 1e-6)).any(1)  # group couldn't land on its original total
-    over = sorted({f"{s}/{d}/{a}" for s, d, a in zip(o[STORE][miss], o[DIV][miss], o[ATTR][miss])})
+    capped_sd = sorted({f"{s}/{d}" for s, d in zip(o[STORE][capped], o[DIV][capped])})
+    short_sd = sorted({f"{s}/{d}" for s, d in zip(o[STORE][short], o[DIV][short])})
     warn = []
     if n_new_sd:
         warn.append(f"{n_new_sd} new store-departments created ({n_new_rows} MRP/display rows) from their parent department's rows.")
@@ -174,9 +181,12 @@ def realign(o, r, months):
         warn.append(f"{fb_cells} revised row-months had no original plan that month; split by the row's average cont % across the other months.")
     if ignored:
         warn.append(f"{ignored} revised rows had Jan/Feb values different from the original - ignored, Jan/Feb stay as original.")
-    if over:
-        warn.append(f"{len(over)} store-division-attribute bucket(s) can't land on the original total in some month (revised departments alone "
-                    f"exceed it, or no other department to absorb) - revised values kept as given: {', '.join(over[:15])}")
+    if capped_sd:
+        warn.append(f"{len(capped_sd)} store-division(s) had revised departments exceeding the original total in some month - "
+                    f"capped down to fit, other departments set to 0 that month: {', '.join(capped_sd[:15])}")
+    if short_sd:
+        warn.append(f"{len(short_sd)} store-division(s) have no other department left to absorb into in some month - "
+                    f"total stays under the original there: {', '.join(short_sd[:15])}")
     return o, summ, warn
 
 
