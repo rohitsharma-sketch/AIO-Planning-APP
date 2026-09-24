@@ -65,7 +65,26 @@ def test_apply_festival_shift():
                                   {"store_cluster": {}, "shares": {}, "calendars": {}})[0] is base
 
 
+def test_missing_source_month_keeps_unshifted_base():
+    """Regression (2026-09-24): FY26 actuals not synced yet, and the 2026->2027
+    map feeds Mar'27 days 1-5 from Feb'26. Shifting counted Feb'26 as 0 and cut
+    the Mar'27 LfL KLM base 114.4 -> 99.8 Cr; it must stay unshifted instead."""
+    moves = [(dt.date(2027, 3, i), dt.date(2026, 2, 20 + i)) for i in range(1, 6)]
+    maps = {"store_cluster": {"LFL1": "X"},
+            "shares": {(2025, 2026): {"X": month_shares(year_map(2025, 2026))},
+                       (2026, 2027): {"X": month_shares(year_map(2026, 2027, moves))}},
+            "calendars": {(2026, 2027): "2026 -> 2027 Calendar - All"}}
+    store_info = {"LFL1": {"tag": next(iter(e.LFL_TAGS))}}
+    open_months = {m for m in e.FY27_M if e._lbl_ym(m) > "2026-08"}
+    actuals = {"LFL1": {"MENS": {m: (100.0 if m not in open_months else 0.0) for m in e.FY27_M}}}
+    base, cells = e.apply_proxy_base(actuals, {}, store_info, open_months)   # no FY26 data at all
+    base2, _, _ = e.apply_festival_shift(actuals, {}, store_info, open_months, base, cells, maps)
+    assert base2["LFL1"]["MENS"]["Mar'26"] == 100.0, base2["LFL1"]["MENS"]["Mar'26"]  # FY28 Mar'27 base untouched
+    assert abs(base2["LFL1"]["MENS"]["Jun'26"] - 100.0) < 1e-9                       # complete months still shift
+
+
 if __name__ == "__main__":
     test_shift_conserves_and_moves()
     test_apply_festival_shift()
+    test_missing_source_month_keeps_unshifted_base()
     print("test_festival_shift: all passed")

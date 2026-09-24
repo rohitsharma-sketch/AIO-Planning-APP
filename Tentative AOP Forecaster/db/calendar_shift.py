@@ -40,6 +40,16 @@ def shift_month_totals(monthly, shares):
     return dict(out)
 
 
+def incomplete_targets(monthly, shares):
+    """Future months fed by at least one reference month that has NO data in
+    `monthly` (key absent - e.g. FY26 actuals not synced yet). Their shifted
+    value would silently count those days as 0 sales, so callers must keep
+    the unshifted value for them instead. (Bug caught 2026-09-24: Feb'26
+    missing -> Mar'27 LfL KLM base fell 114.4 -> 99.8 Cr.) A key present
+    with value 0 is real data (a genuinely zero month), not missing."""
+    return {f for r, fs in shares.items() if r not in monthly for f, s in fs.items() if s > 0}
+
+
 def load_shift_maps(session, year_pairs=((2025, 2026), (2026, 2027))):
     """{'store_cluster': {store: cluster}, 'shares': {(ry, fy): {cluster: month_shares}},
     'calendars': {(ry, fy): name}} from the shared DB. Picks the calendar for

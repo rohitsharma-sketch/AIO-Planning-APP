@@ -373,7 +373,7 @@ def apply_festival_shift(actuals_pivot, proxy, store_info, open_months, base_piv
     pre-opening months would smear). A target month counts as a proxy cell
     when any of its shifted value came from a placeholder month.
     Returns (base_pivot, proxy_cells, shifted_stores {store: calendar name})."""
-    from db.calendar_shift import shift_month_totals
+    from db.calendar_shift import shift_month_totals, incomplete_targets
     maps = _load_shift_maps() if maps is None else maps
     if not maps or (2026, 2027) not in maps["shares"]:
         return base_pivot, proxy_cells, {}
@@ -389,21 +389,29 @@ def apply_festival_shift(actuals_pivot, proxy, store_info, open_months, base_piv
         for div in DIVS:
             real = {_lbl_ym(L): v for L, v in actuals_pivot.get(store, {}).get(div, {}).items() if L not in open_months}
             raw25 = {f"{int(_lbl_ym(L)[:4]) - 1}{_lbl_ym(L)[4:]}": v for L, v in proxy.get(store, {}).get(div, {}).items()}
-            syn26 = shift_month_totals({k: v for k, v in raw25.items() if k.startswith("2025-")}, sh25.get(cl, {}))
+            src25 = {k: v for k, v in raw25.items() if k.startswith("2025-")}
+            syn26 = shift_month_totals(src25, sh25.get(cl, {}))
+            syn_bad = incomplete_targets(src25, sh25.get(cl, {}))
             series, placeholder = {}, set()
             for mo in range(1, 13):
                 ym = f"2026-{mo:02d}"
                 if ym in real or (ym in raw25 and mo <= 2):   # closed: FY27 actual, or Jan/Feb'26 from FY26
                     series[ym] = real.get(ym, raw25.get(ym, 0.0))
-                elif syn26.get(ym):
+                elif ym in syn26 and ym not in syn_bad:
                     series[ym] = syn26[ym]
                     placeholder.add(ym)
             if not any(series.values()):
                 continue
             fut = shift_month_totals(series, sh26[cl])
             fut_real = shift_month_totals({k: v for k, v in series.items() if k not in placeholder}, sh26[cl])
+            # A target month fed by any month with no data (e.g. Feb'26 before
+            # the FY26 actuals are synced) keeps its unshifted base - shifting
+            # would count those days as zero sales.
+            skip = incomplete_targets(series, sh26[cl])
             vals = base.setdefault(store, {}).setdefault(div, {m: 0.0 for m in FY27_M})
             for L, ym27, fy28m in targets:
+                if ym27 in skip:
+                    continue
                 vals[L] = fut.get(ym27, 0.0)
                 if fut.get(ym27, 0.0) - fut_real.get(ym27, 0.0) > 1e-9:
                     cells.add((store, div, fy28m))
