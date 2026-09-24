@@ -1007,7 +1007,7 @@ thead .c0,thead .c1{background:#101930!important}
       <div class="tbar-actions">
         <span id="rptCrumb" style="display:none"></span>
         <div class="tbtn" onclick="exportCSV()">Export</div>
-        <div class="tbtn" onclick="seedPlanDefaults(true);refresh();toast('Plan reset to LFL defaults')">Reset</div>
+        <div class="tbtn" onclick="resetPlanToAop()">Reset</div>
         <div class="tbtn dng" onclick="if(confirm('Clear all plan inputs?')){S.inputs={};refresh();toast('Plan cleared')}">Clear</div>
         <div class="tbtn" id="aop-btn" onclick="openAopModal()">Sync AOP</div>
         <div class="aop-lock-tag" id="aop-lock-tag" style="display:none" onclick="openAopModal()">AOP Locked</div>
@@ -4641,6 +4641,37 @@ function revertToAop(dvId,attr){
   });
   refresh();
   toast((attr||dv.nm)+' reverted to AOP ✓');
+}
+
+/* ── GLOBAL RESET — reverts to the selected/seeded AOP, not LY/LFL defaults ── */
+// The top toolbar's "Reset" used to call seedPlanDefaults(true), which reseeds every cell
+// from DEPT_LFL_GROWTH (LY-derived), silently discarding whatever AOP version the plan was
+// actually seeded from. Reset should mean "go back to the plan I started from" — that's the
+// selected AOP once one has been seeded (S.aopSeeds), same source revertToAop() above already
+// uses per-row. "↺ LY Cont%" (revertToLyCont) is a separate, deliberate redistribution method
+// and is unaffected by this — it already targets the AOP total, just splits it via LY
+// contribution % instead of AOP's own growth%; nothing here changes it.
+function resetPlanToAop(){
+  if(!Object.keys(S.aopSeeds).length){
+    // No AOP has been seeded this session (or it wasn't restored — S.aopSeeds isn't persisted
+    // to localStorage, see saveState()) — fall back to the old LFL-based default rather than
+    // resetting to nothing.
+    seedPlanDefaults(true);
+    refresh();
+    toast('No AOP seeded yet — reset to LFL defaults');
+    return;
+  }
+  DVDATA.forEach(dv=>{
+    dv.secs.filter(s=>!S.hiddenSecs.has(s.id)).forEach(sec=>{
+      for(let mi=0;mi<12;mi++){
+        const k=sec.id+'__'+mi;
+        S.locked.delete(k);
+        if(S.aopSeeds[k]!=null)S.inputs[k]=S.aopSeeds[k];else delete S.inputs[k];
+      }
+    });
+  });
+  refresh();
+  toast('Plan reset to selected AOP ✓');
 }
 
 
