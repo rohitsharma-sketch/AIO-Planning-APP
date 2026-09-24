@@ -42,6 +42,7 @@ const MAP_TYPE_OPTIONS = [
   'Festival-to-Festival',
   'Festive Relative Day',
   'Same Month + Same Weekday',
+  'Same Month + Same Day Type',
   'Same Month + Nearest Weekday',
   'Previous Month + Same Weekday',
   'Next Month + Same Weekday',

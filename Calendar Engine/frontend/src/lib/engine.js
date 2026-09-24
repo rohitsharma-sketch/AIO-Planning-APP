@@ -55,23 +55,36 @@ export function buildFestMap(yr, fests, refYear) {
 }
 
 // --- Scoring ---
+// Day type (business rule 2026-09-24): a non-festive day maps to the same
+// weekday first, then at least the same DAY TYPE (weekend Sat/Sun <->
+// weekend, weekday <-> weekday), and only then the nearest date. dayType (50)
+// outweighs the whole proximity term (max maxShift=45), so a Sat->Sun 5 days
+// away beats a Sat->Fri 1 day away; exact weekday (100 + 50) still wins.
+export const isWeekend = d => d.getDay() === 0 || d.getDay() === 6;
+// Sort comparator for the nearest-date fallbacks: same day type first, then nearest.
+export const byDayTypeThenNearest = fd => (a, b) =>
+  ((isWeekend(b) === isWeekend(fd)) - (isWeekend(a) === isWeekend(fd)))
+  || (Math.abs(calDiff(fd, a)) - Math.abs(calDiff(fd, b)));
+
 export function getWeights() {
-  return { festival: 1000, position: 500, month: 200, weekday: 100, prox: 1 };
+  return { festival: 1000, position: 500, month: 200, weekday: 100, dayType: 50, prox: 1 };
 }
 export function scoreMapping(rDay, fDay, rInfo, fInfo, W, maxShift, moPri) {
   let score = 0, mtype, mpri;
   const monthMatch   = rDay.getMonth() === fDay.getMonth();
   const weekdayMatch = rDay.getDay()   === fDay.getDay();
+  const dayTypeMatch = isWeekend(rDay) === isWeekend(fDay);
   const diff = calDiff(rDay, fDay);
   if (rInfo && fInfo && rInfo.festival === fInfo.festival && rInfo.position === fInfo.position) {
     score += W.festival + W.position; mtype = 'Festival-to-Festival'; mpri = 1;
   } else if (rInfo && fInfo && rInfo.position === fInfo.position) {
     score += W.position; mtype = 'Festive Relative Day'; mpri = 2;
   }
-  score += (monthMatch ? W.month : 0) + (weekdayMatch ? W.weekday : 0)
+  score += (monthMatch ? W.month : 0) + (weekdayMatch ? W.weekday : 0) + (dayTypeMatch ? (W.dayType || 0) : 0)
          + W.prox * Math.max(0, maxShift - Math.abs(diff));
   if (!mtype) {
     if (monthMatch && weekdayMatch)         { mtype = 'Same Month + Same Weekday';    mpri = 3; }
+    else if (monthMatch && dayTypeMatch)    { mtype = 'Same Month + Same Day Type';   mpri = 4; }
     else if (monthMatch)                    { mtype = 'Same Month + Nearest Weekday'; mpri = 4; }
     else {
       const mPri = moPri;
@@ -207,7 +220,7 @@ function _v1Core(fests, refYr, futYr, maxShift, moPri, coreNames) {
 
     const sameMonthAvail = stillAvailRef.filter(d => d.getMonth() === fMonth);
     if (sameMonthAvail.length) {
-      sameMonthAvail.sort((a, b) => Math.abs(calDiff(fd, a)) - Math.abs(calDiff(fd, b)));
+      sameMonthAvail.sort(byDayTypeThenNearest(fd));
       rd = sameMonthAvail[0];
       stillAvailRef.splice(stillAvailRef.indexOf(rd), 1);
       mappingLabel = 'Nearest Available Date';
@@ -222,7 +235,7 @@ function _v1Core(fests, refYr, futYr, maxShift, moPri, coreNames) {
       // already uses, just scoped to one month instead of the whole year.
       const sameMonthAny = rDays.filter(d => d.getMonth() === fMonth);
       if (sameMonthAny.length) {
-        sameMonthAny.sort((a, b) => Math.abs(calDiff(fd, a)) - Math.abs(calDiff(fd, b)));
+        sameMonthAny.sort(byDayTypeThenNearest(fd));
         rd = sameMonthAny[0];
         sharedRef = true;
         mappingLabel = 'Nearest Available Date (Same-Month Reuse)';
@@ -413,7 +426,7 @@ function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
     const fd = m.futureDate, fi = fMap[fs];
     const sameMonthAny = rDays.filter(d => d.getMonth() === fd.getMonth());
     if (!sameMonthAny.length) continue; // defensively unreachable for a real month
-    sameMonthAny.sort((a, b) => Math.abs(calDiff(fd, a)) - Math.abs(calDiff(fd, b)));
+    sameMonthAny.sort(byDayTypeThenNearest(fd));
     const rd = sameMonthAny[0], rs = fmtISO(rd), ri = rMap[rs];
     const s = scoreMapping(rd, fd, ri, fi, W, maxShift, moPri);
     assign({ rs, fs, rd, fd, ri, fi, mtype: 'Nearest Available Date (Same-Month Reuse)', mpri: 7, ...s }, assigned, true);
@@ -443,7 +456,7 @@ function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
       assigned.set(fs, { ...m, sharedRef: true, mappingType: 'Unmapped - No Eligible Reference Day (Same/Adjacent Month Exhausted)' });
       continue;
     }
-    pool.sort((a, b) => Math.abs(calDiff(fd, a)) - Math.abs(calDiff(fd, b)));
+    pool.sort(byDayTypeThenNearest(fd));
     const rd = pool[0], rs = fmtISO(rd), ri = rMap[rs];
     const s = scoreMapping(rd, fd, ri, fi, W, maxShift, moPri);
     assigned.set(fs, {
@@ -536,7 +549,7 @@ export function repairExcessiveShifts(assignments, rMap, fMap, W, maxShift, moPr
       const cands = usedRefDays
         .filter(r => Math.abs(calDiff(r, fd)) < Math.abs(m.dateDiff) && r.getMonth() === fd.getMonth())
         .sort((a, b) => ((b.getDay() === fd.getDay()) - (a.getDay() === fd.getDay()))
-                     || (Math.abs(calDiff(a, fd)) - Math.abs(calDiff(b, fd))));
+                     || byDayTypeThenNearest(fd)(a, b));
       let best = null, bestGain = 0;
       for (const r2 of cands) {
         const r2s = fmtISO(r2), f2s = refToFut.get(r2s);

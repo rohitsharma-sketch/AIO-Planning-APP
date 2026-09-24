@@ -163,8 +163,39 @@ function test8_duplicateReferenceDatesMinimized() {
   console.log(`PASS test8_duplicateReferenceDatesMinimized (${dupCount} duplicate ref dates, floor is 3 for this config)`);
 }
 
+// Test 9 - day type (business rule 2026-09-24): a non-festive day keeps its
+// day type (weekend Sat/Sun <-> weekend, weekday <-> weekday) whenever its own
+// month's pool allows, before falling back to the nearest date. Uses its own
+// festival set (verified 2026->2027 dates, live Festival Master windows)
+// because BIHAR's list happens not to expose the difference. Bound, not exact
+// count (like test8): the old nearest-date engine gave 10 crossings in V1 and
+// 9 in V2 here, day-type-aware gives 6 and 7 - the rest are forced by
+// weekend-count imbalance between a TY month and its LY pool.
+const DAYTYPE_FESTIVALS = [
+  { name: 'Holi', refDate: '2026-03-04', futDate: '2027-03-22', pre: 7, core: 3, post: 0 },
+  { name: 'Eid al-Fitr', refDate: '2026-03-20', futDate: '2027-03-09', pre: 4, core: 3, post: 0 },
+  { name: 'Raksha Bandhan', refDate: '2026-08-28', futDate: '2027-08-17', pre: 2, core: 1, post: 0 },
+  { name: 'Shraad', refDate: '2026-09-26', futDate: '2027-09-15', pre: 0, core: 15, post: 0 },
+  { name: 'Navratri', refDate: '2026-10-11', futDate: '2027-09-30', pre: 0, core: 9, post: 0 },
+  { name: 'Dussehra', refDate: '2026-10-20', futDate: '2027-10-09', pre: 0, core: 1, post: 0 },
+  { name: 'Diwali', refDate: '2026-11-08', futDate: '2027-10-29', pre: 2, core: 3, post: 9 },
+  { name: 'Chhath Puja', refDate: '2026-11-15', futDate: '2027-11-05', pre: 3, core: 2, post: 0 },
+  { name: 'Eid al-Adha', refDate: '2026-05-27', futDate: '2027-05-17', pre: 2, core: 1, post: 0 },
+];
+function test9_dayTypePreserved() {
+  const wk = d => d.getDay() === 0 || d.getDay() === 6;
+  for (const [version, bound] of [[1, 6], [2, 7]]) {
+    const non = generateMappings(DAYTYPE_FESTIVALS, REF_YR, FUT_YR, MAX_SHIFT, MO_PRI, null, version)
+      .filter(m => m.mappingPriority > 2);
+    const crossings = non.filter(m => wk(m.refDate) !== wk(m.futureDate)).length;
+    assert.ok(crossings <= bound, `V${version}: ${crossings} weekend/weekday crossings, expected <= ${bound} - day type no longer preferred over nearest date?`);
+  }
+  console.log('PASS test9_dayTypePreserved');
+}
+
 test1_noMonthAdjacencyViolations();
 test1b_reportedRowsRejected();
+test9_dayTypePreserved();
 test4_monthEligibilityBeatsProximity();
 test5_festivalCrossMonthPreserved();
 test6_bothEnginesValidateClean();
