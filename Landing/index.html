@@ -531,7 +531,7 @@
       <div class="selector-card" id="go-additional" role="button" tabindex="0" aria-label="Open Additional Modules">
         <div class="sel-icon">✨</div>
         <h2>Additional Modules</h2>
-        <p>Lagan Calendar (auspicious date lookup) and NSO Plan Distributor.</p>
+        <p>Lagan Calendar (auspicious date lookup), NSO Plan Distributor, and AOP Realigner.</p>
         <div class="sel-arrow">Open modules <span>→</span></div>
       </div>
     </div>
@@ -647,6 +647,17 @@
         <p class="desc">Upload NSO Details, Sales Plan, and Division Cont % — generate a month-wise store plan XLSX ready for distribution.</p>
         <div class="meta">
           <span class="port">10.0.1.131:8060</span>
+          <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
+        </div>
+      </a>
+
+      <!-- AOP Realigner tile — direct LAN link (xlsx export is too slow for the 7800 proxy) -->
+      <a class="card" href="http://10.0.1.131:8070" target="_blank" rel="noopener" data-check="/api/port-status/8070">
+        <div class="card-icon">⚖️</div>
+        <h2>AOP Realigner</h2>
+        <p class="desc">Upload a revised department plan — revised values stay, other departments flex so every Store × Division × Month lands back on the original plan, output at MRP × Display Type.</p>
+        <div class="meta">
+          <span class="port">10.0.1.131:8070</span>
           <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
         </div>
       </a>

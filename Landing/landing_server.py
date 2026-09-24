@@ -56,6 +56,10 @@ APPS = [
     {"name": "RS Planning Platform", "port": 8010,
      "cmd": [sys.executable, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", "8010"],
      "cwd": os.path.join(_REPO_ROOT, "RS Planning Platform", "backend")},
+    # Linked directly (not proxied): its xlsx export outruns the 60s proxy timeout.
+    {"name": "AOP Realigner", "port": 8070,
+     "cmd": [sys.executable, "server.py"],
+     "cwd": os.path.join(_REPO_ROOT, "AOP Realigner")},
 ]
 
 # Proxy route table — (path_prefix, target_base, strip_prefix).
