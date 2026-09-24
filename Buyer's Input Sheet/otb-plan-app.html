@@ -1,4 +1,4 @@
-﻿<!-- CityKart Buyer's Input Sheet -->
+<!-- CityKart Buyer's Input Sheet -->
 <meta charset="UTF-8">
 <meta name="bis-version" content="v4-2026-09-03">
 <title>CityKart - Buyer's Input Sheet</title>
@@ -2900,6 +2900,9 @@ function buildHeader(defs,noC1=false){
   const stDefs  =defs.filter(d=>d.block==='st');
   const histDefs=defs.filter(d=>d.block==='hist');
   const planDefs=defs.filter(d=>d.block==='plan');
+  // hist/plan columns interleaved per month (not two contiguous runs) → header must follow defs order, not block order
+  const hpDefs=defs.filter(d=>d.block!=='st');
+  const mixed=hpDefs.some((d,i)=>i>0&&d.block!==hpDefs[i-1].block&&hpDefs.findIndex(x=>x.block===d.block)<i-1);
   const dim0=S.report==='summary'?'Division':S.report==='dept'||S.report==='buyers'||S.report==='division'||S.report==='inactive'?'Department':S.report==='attr'?'Attribute':'Category';
   const dim1=S.report==='store'?'Region':S.report==='summary'?'':S.report==='division'?'Division':S.report==='buyers'||S.report==='dept'||S.report==='inactive'||S.report==='attr'?'Division':'';
   const c0ft=S.report==='summary'?'div':S.report==='attr'?'attr':'dept';
@@ -2924,6 +2927,8 @@ function buildHeader(defs,noC1=false){
     hr0+=`<th colspan="${histDefs.length}" class="hblk hblk-hist">&#x2461; Historical Growth% | LY Actual Sales <button class="htoggle" onclick="S.showHistDetail=!S.showHistDetail;refresh()">${toggleLbl}</button></th>`;
     const planToggleLbl=S.showPlanDetail?'&#x25B2; Collapse Monthly':'&#x25BC; Show Monthly';
     hr0+=`<th colspan="${planDefs.length}" class="hblk hblk-plan">&#x2462; AOP Plan | ${FY_PLAN} <button class="htoggle" onclick="S.showPlanDetail=!S.showPlanDetail;refresh()">${planToggleLbl}</button></th>`;
+  } else if(mixed){
+    hr0+=`<th colspan="${hpDefs.length}" class="hblk hblk-plan">LY Actual vs ${S.report==='dept'?'Plan':'Buyer Plan'} | ${FY_PLAN}${S.aopLocked&&S.report!=='dept'?' &nbsp;&#x1F512; vs AOP':''} <button class="htoggle" onclick="S.showMonthCols=!S.showMonthCols;refresh()">&#x25B2; Block Only</button></th>`;
   } else if(S.report==='summary'||S.report==='division'){
     const monLbl=S.showMonthCols?'&#x25B2; Block Only':'&#x25BC; Show Months';
     hr0+=`<th colspan="${histDefs.length}" class="hblk hblk-hist">LY Actual Sales <button class="htoggle" onclick="S.showMonthCols=!S.showMonthCols;refresh()">${monLbl}</button></th>`;
@@ -2938,8 +2943,12 @@ function buildHeader(defs,noC1=false){
   // Row 1: month / group labels
   let hr1='<tr class="hr1">';
   grpConsec(stDefs).forEach((g,i)=>  { hr1+=`<th colspan="${g.count}" class="${g.sum?'hsum':'hmon'} st-blk${i===0?' st-sep-th':''}">${g.label}</th>`; });
-  grpConsec(histDefs).forEach((g,i)=>{ hr1+=`<th colspan="${g.count}" class="${g.sum?'hsum':'hmon'} hist-blk${i===0?' hist-sep-th':''}">${g.label}</th>`; });
-  grpConsec(planDefs).forEach((g,i)=>{
+  if(mixed) grpConsec(hpDefs.map(d=>({...d,block:'hp'}))).forEach((g,i)=>{
+    const pip=g.hasAop&&!g.sum?'<span class="aop-lock-pip">&#x1F512;</span>':'';
+    hr1+=`<th colspan="${g.count}" class="${g.sum?'hsum':'hmon'} plan-blk${i===0?' hist-sep-th':''}${g.hasAop?' aop-month-hl':''}">${g.label}${pip}</th>`;
+  });
+  else grpConsec(histDefs).forEach((g,i)=>{ hr1+=`<th colspan="${g.count}" class="${g.sum?'hsum':'hmon'} hist-blk${i===0?' hist-sep-th':''}">${g.label}</th>`; });
+  if(!mixed) grpConsec(planDefs).forEach((g,i)=>{
     const aopCls=g.hasAop?' aop-month-hl':'';
     const pip=g.hasAop&&!g.sum?'<span class="aop-lock-pip">&#x1F512;</span>':'';
     hr1+=`<th colspan="${g.count}" class="${g.sum?'hsum':'hmon'} plan-blk${i===0?' plan-sep-th':''}${aopCls}">${g.label}${pip}</th>`;
@@ -3928,7 +3937,7 @@ function getRows(){
 /* ── COLUMN RESIZE ──────────────────────────────── */
 function _colKey(ci){return S.report+':'+ci;}
 function _applyColWidths(){
-  const noC1=S.report==='buyers'||S.report==='dept'||S.report==='division'||S.report==='attr'||S.report==='inactive';
+  const noC1=S.report==='buyers'||S.report==='dept'||S.report==='division'||S.report==='attr'||S.report==='summary'||S.report==='inactive';
   const defC0=S.report==='attr'?120:155;
   const c0w=S.colWidths[_colKey(0)]??defC0;
   const c1w=S.colWidths[_colKey(1)]??100;
@@ -3959,7 +3968,7 @@ function _insertColgroup(tbl,defs,noC1){
   tbl.insertBefore(cg,tbl.firstChild);
 }
 function _initColResize(tbl){
-  const noC1=S.report==='buyers'||S.report==='dept'||S.report==='division'||S.report==='attr'||S.report==='inactive';
+  const noC1=S.report==='buyers'||S.report==='dept'||S.report==='division'||S.report==='attr'||S.report==='summary'||S.report==='inactive';
   tbl.querySelectorAll('thead th[data-ci]').forEach(th=>{
     if(th.querySelector('.col-resizer'))return;
     const handle=document.createElement('div');
@@ -4074,7 +4083,7 @@ function renderTable(){
     tbl.innerHTML=`<tbody><tr><td colspan="20" style="text-align:center;padding:60px 20px;color:var(--mu)"><div style="font-size:28px;margin-bottom:10px">✓</div><div style="font-weight:700;font-size:14px;margin-bottom:5px">No inactive departments</div><div style="font-size:12px">Use the <strong>Inactive</strong> toggle on any department row in the Buyer's Plan to deactivate it</div></td></tr></tbody>`;
     renderKPI([]);renderGT([]);return;
   }
-  const noC1=S.report==='buyers'||S.report==='dept'||S.report==='division'||S.report==='attr';
+  const noC1=S.report==='buyers'||S.report==='dept'||S.report==='division'||S.report==='attr'||S.report==='summary';
   const thead=buildHeader(defs,noC1);
   const fsti=defs.findIndex(d=>d.block==='st');
   const fhi =defs.findIndex(d=>d.block==='hist');
