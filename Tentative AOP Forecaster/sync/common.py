@@ -4,6 +4,7 @@ status/rows/error), never silent."""
 import contextlib
 import datetime
 import os
+import re
 import threading
 import time
 
@@ -54,6 +55,50 @@ def latest_file(folder: str) -> str:
     if not files:
         raise FileNotFoundError(f"No parquet snapshot found in {folder}")
     return os.path.join(folder, files[-1])
+
+
+def snapshot_last_day(filename: str):
+    """Last sales day a data-lake export accounts for: the day BEFORE its
+    `_<YYYYMMDD>T<HHMMSS>.parquet` snapshot stamp (verified on the day-wise
+    export: its _20260828T... file's max BILLDATE is 2026-08-27). The
+    month-wise source has no day grain (BILLMONTH only), so this stamp is its
+    only "last day accounted" signal. None if the name carries no stamp."""
+    m = re.search(r"_(\d{8})T\d{6}\.parquet$", filename)
+    return datetime.datetime.strptime(m.group(1), "%Y%m%d").date() - datetime.timedelta(days=1) if m else None
+
+
+def closed_through_from_last_day(last_day: datetime.date) -> str:
+    """'YYYY-MM' of the last month whose final day is <= last_day - month-1
+    unless last_day IS that month's last day."""
+    nxt = last_day + datetime.timedelta(days=1)
+    return (nxt.replace(day=1) - datetime.timedelta(days=1)).strftime("%Y-%m")
+
+
+CLOSED_THROUGH_TTL_SECONDS = 60
+_CLOSED_THROUGH = {"at": 0.0, "val": None}
+
+
+def get_closed_through():
+    """Persisted 'closed_through' ('YYYY-MM') from the latest successful
+    data_lake_sales sync (store_actuals_sync writes it into sync_runs.detail),
+    cached per process for CLOSED_THROUGH_TTL_SECONDS so every step reads the
+    same value without a re-sync or a DB hit per call. None = nothing
+    persisted yet / DB unreachable -> callers fall back to the date rule."""
+    if time.time() - _CLOSED_THROUGH["at"] > CLOSED_THROUGH_TTL_SECONDS:
+        val = None
+        try:
+            from sqlalchemy import select
+            with SessionLocal() as s:
+                detail = s.execute(
+                    select(SyncRun.detail)
+                    .where(SyncRun.source_key == "data_lake_sales", SyncRun.status == "success")
+                    .order_by(SyncRun.sync_run_id.desc()).limit(1)
+                ).scalar()
+            val = (detail or {}).get("closed_through")
+        except Exception:  # noqa: BLE001 - no DB = date-rule fallback, never block a run
+            pass
+        _CLOSED_THROUGH.update(at=time.time(), val=val)
+    return _CLOSED_THROUGH["val"]
 
 
 def _is_network_offline(e: Exception) -> bool:

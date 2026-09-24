@@ -1,4 +1,37 @@
 import { parseDate, fmtISO } from './dateUtils'
+import { getFestivalReference } from './api'
+
+// ─── Festival reference cache (Google "Holidays in India") ────────────────────
+// { name: { 'YYYY': 'YYYY-MM-DD' } } from GET /festival-reference, which the
+// daily festival_dates sync fills from Google's public calendar (plus derived
+// Nuakhai/Shraad/Kali Puja and a couple of deliberate overrides). This is the
+// source of truth for festival dates; FESTIVAL_DATES below is only a fallback
+// for names/years the cache doesn't have, and every such fallback is reported
+// (applyYearToProfiles' `fallback`) so the UI can warn about it.
+let FESTIVAL_REFERENCE = {}
+
+// Refetches the cache; await it before applyYearToProfiles. On failure the
+// previous cache is kept (lookups fall back to FESTIVAL_DATES, with a warning).
+export async function loadFestivalReference() {
+  try {
+    const { dates } = await getFestivalReference()
+    const next = {}
+    for (const r of dates) (next[r.festival] ??= {})[String(r.year)] = r.date
+    FESTIVAL_REFERENCE = next
+  } catch (e) {
+    console.warn('Festival reference cache unavailable - using built-in FESTIVAL_DATES', e)
+  }
+}
+
+// Reference date for (name, year), else the old hard-coded table (name added
+// to `fallback`), else undefined.
+function knownDate(name, year, fallback) {
+  const ref = FESTIVAL_REFERENCE[name]?.[year]
+  if (ref) return ref
+  const old = FESTIVAL_DATES[name]?.[year]
+  if (old) fallback?.add(name)
+  return old
+}
 
 // ─── Default Festivals ───────────────────────────────────────────────────────
 // Ported verbatim from `Calendar Engine/calendar_engine.html` lines 1097-1160.
@@ -189,11 +222,11 @@ export function suggestFestivalNames(query, limit = 8) {
 export function resolveFestivalDefaults(name, refYear, futYear) {
   const dbDefault = FESTIVAL_DB.find(f => f.name === name)
   if (!dbDefault) return null
-  const dbEntry = FESTIVAL_DATES[name]
   const ry = Number(refYear), fy = Number(futYear)
 
   function resolveOne(dbDateStr, targetYear, entryYearKey) {
-    if (dbEntry && dbEntry[entryYearKey]) return dbEntry[entryYearKey]
+    const known = knownDate(name, entryYearKey)
+    if (known) return known
     const d = parseDate(dbDateStr)
     return d && Number.isFinite(targetYear) ? fmtISO(new Date(targetYear, d.getMonth(), d.getDate())) : dbDateStr
   }
@@ -214,7 +247,8 @@ export function resolveFestivalDefaults(name, refYear, futYear) {
 // Scope matches the original exactly: EVERY cluster's EVERY festival is
 // rewritten, not just the one on screen.
 //
-// Per festival:
+// Per festival ("DB" = Google reference cache first, then FESTIVAL_DATES -
+// see knownDate; call loadFestivalReference() first):
 //   * DB entry exists and has that exact year  -> use the real date verbatim.
 //   * DB entry exists but not that year        -> keep month/day, swap the year.
 //   * No DB entry at all (custom festival)     -> keep month/day, swap the year.
@@ -236,47 +270,40 @@ export function resolveFestivalDefaults(name, refYear, futYear) {
 //               years (i.e. fell back to a month/day estimate). Mirrors the old
 //               app's sync-indicator count at lines 2848-2852, which counted
 //               distinct names across all clusters.
+//   fallback  - distinct festival names whose date came from the hard-coded
+//               FESTIVAL_DATES because the Google reference cache had none.
 export function applyYearToProfiles(profiles, refYr, futYr) {
   const ry = Number(refYr), fy = Number(futYr)
   let updated = 0
   const estimated = new Set()
+  const fallback = new Set()
 
   const nextProfiles = (profiles || []).map(cp => ({
     ...cp,
     festivals: (cp.festivals || []).map(f => {
       const next = { ...f }
-      const dbEntry = FESTIVAL_DATES[f.name]
-
-      if (dbEntry) {
-        const rd = dbEntry[String(ry)]
-        const fd = dbEntry[String(fy)]
-        if (rd) {
-          next.refDate = rd
-        } else {
-          const d = parseDate(f.refDate)
-          if (d) next.refDate = fmtISO(new Date(ry, d.getMonth(), d.getDate()))
-        }
-        if (fd) {
-          next.futDate = fd
-        } else {
-          const d = parseDate(f.futDate)
-          if (d) next.futDate = fmtISO(new Date(fy, d.getMonth(), d.getDate()))
-        }
-        if (!rd || !fd) estimated.add(f.name)
+      const rd = knownDate(f.name, String(ry), fallback)
+      const fd = knownDate(f.name, String(fy), fallback)
+      if (rd) {
+        next.refDate = rd
       } else {
-        const rd = parseDate(f.refDate)
-        const fd = parseDate(f.futDate)
-        if (rd) next.refDate = fmtISO(new Date(ry, rd.getMonth(), rd.getDate()))
-        if (fd) next.futDate = fmtISO(new Date(fy, fd.getMonth(), fd.getDate()))
-        estimated.add(f.name)
+        const d = parseDate(f.refDate)
+        if (d) next.refDate = fmtISO(new Date(ry, d.getMonth(), d.getDate()))
       }
+      if (fd) {
+        next.futDate = fd
+      } else {
+        const d = parseDate(f.futDate)
+        if (d) next.futDate = fmtISO(new Date(fy, d.getMonth(), d.getDate()))
+      }
+      if (!rd || !fd) estimated.add(f.name)
 
       if (next.refDate !== f.refDate || next.futDate !== f.futDate) updated++
       return next
     }),
   }))
 
-  return { profiles: nextProfiles, updated, estimated: estimated.size }
+  return { profiles: nextProfiles, updated, estimated: estimated.size, fallback: [...fallback] }
 }
 
 // The status line the old app showed in #savedIndicator after a re-sync
@@ -284,9 +311,12 @@ export function applyYearToProfiles(profiles, refYr, futYr) {
 // exist yet - see applyYearToProfiles). `updated` is added here because it is
 // real information the old inline table re-render conveyed visually and a
 // tab-switching flow does not.
-export function yearSyncMessage(refYr, futYr, updated, estimated) {
+export function yearSyncMessage(refYr, futYr, updated, estimated, fallback = []) {
   const est = estimated
     ? ` · ${estimated} festival${estimated > 1 ? 's' : ''} estimated - verify dates`
     : ''
-  return `Dates updated for ${refYr} -> ${futYr} · ${updated} festival date${updated === 1 ? '' : 's'} changed${est}`
+  const fb = fallback.length
+    ? ` · WARNING: not in Google reference, used built-in table: ${fallback.join(', ')}`
+    : ''
+  return `Dates updated for ${refYr} -> ${futYr} · ${updated} festival date${updated === 1 ? '' : 's'} changed${est}${fb}`
 }

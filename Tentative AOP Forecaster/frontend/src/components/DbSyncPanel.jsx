@@ -30,8 +30,12 @@ export default function DbSyncPanel({ onSynced }) {
   const [busy, setBusy]   = useState(false)
   const [err, setErr]     = useState(null)
   const [open, setOpen]   = useState(false)
+  const [closedThrough, setClosedThrough] = useState(null)   // 'YYYY-MM', persisted by store_actuals_sync
 
-  const load = () => fetchJson('/api/config/db-sync/status').then(d => setRuns(d.runs)).catch(e => setErr(e.message))
+  const load = () => fetchJson('/api/config/db-sync/status').then(d => { setRuns(d.runs); setClosedThrough(d.closed_through) }).catch(e => setErr(e.message))
+  const closedLabel = closedThrough
+    ? new Date(`${closedThrough}-01T00:00:00`).toLocaleString('en-US', { month: 'short' }) + "'" + closedThrough.slice(2, 4)
+    : null
   useEffect(() => { load() }, [])
 
   async function syncAll() {
@@ -79,6 +83,7 @@ export default function DbSyncPanel({ onSynced }) {
               : anyFailed  ? 'Last sync had failures — see Details.'
               : anyOffline ? 'Some sources were offline — existing data still active.'
               : <>All {runs.length} sources synced · last {fmtStamp(lastAt)}</>}
+            {closedLabel && <> · Actuals closed through {closedLabel}</>}
           </span>
         </div>
         <div className="cfg-sync-actions">

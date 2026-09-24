@@ -87,6 +87,15 @@ def build_workbook_from_db(session: Session, out_path: str) -> str:
     actuals_rows = [[store, div, attr] + [vals.get(m) for m in FY27_M] for (store, div, attr), vals in grid.items()]
     _write_sheet(wb, "Store Actuals", ["Store", "Division", "Attribute"] + FY27_M, actuals_rows)
 
+    # Store Actuals FY26 — raw FY26 month actuals (store_actuals_sync step 5),
+    # the engine's placeholder base for a not-yet-closed FY27 month.
+    fy26_m = [f"{m[:4]}{int(m[4:]) - 1:02d}" for m in FY27_M[:-1]]  # Mar'25..Feb'26
+    fy26_grid = {}
+    for v in session.execute(select(InputValue).where(InputValue.lever_key == "store_actuals_fy26")).scalars().all():
+        fy26_grid.setdefault((v.store_id, v.division_code), {})[periods.get(v.period_id)] = float(v.value)
+    _write_sheet(wb, "Store Actuals FY26", ["Store", "Division"] + fy26_m,
+                 [[store, div] + [vals.get(m) for m in fy26_m] for (store, div), vals in fy26_grid.items()])
+
     # Growth % — pivot row_key (OVERALL/division) x FY28 month
     growth = session.execute(select(InputValue).where(InputValue.lever_key == "growth_pct")).scalars().all()
     ggrid = {}

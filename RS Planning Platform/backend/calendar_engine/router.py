@@ -546,6 +546,41 @@ def put_cluster_profiles(body: dict = Body(...), actor: dict = Depends(require_r
         session.close()
 
 
+# ─── Festival reference dates (Google "Holidays in India" cache) ──────────────
+# Filled by Tentative AOP Forecaster/sync/festival_dates_sync.py (daily run_all
+# job, or the POST below). The frontend's applyYearToProfiles re-dates from this.
+@router.get("/festival-reference")
+def get_festival_reference(years: str | None = None, user: dict = Depends(require_login)):
+    from sqlalchemy import text
+    from sync.festival_dates_sync import ensure_schema
+    try:
+        year_list = [int(y) for y in years.split(",") if y.strip()] if years else None
+    except ValueError:
+        raise HTTPException(400, "years must be comma-separated integers, e.g. 2026,2027")
+    ensure_schema()
+    session = SessionLocal()
+    try:
+        sql = "SELECT festival, year, date, source, source_name, fetched_at FROM calendar.festival_reference_dates"
+        params = {}
+        if year_list:
+            sql += " WHERE year = ANY(:years)"
+            params["years"] = year_list
+        rows = session.execute(text(sql + " ORDER BY year, festival"), params).all()
+        return {"dates": [{"festival": r.festival, "year": r.year, "date": r.date.isoformat(), "source": r.source,
+                           "sourceName": r.source_name, "fetchedAt": r.fetched_at.isoformat()} for r in rows]}
+    finally:
+        session.close()
+
+
+@router.post("/festival-reference/sync")
+def sync_festival_reference(actor: dict = Depends(require_role("planner"))):
+    from sync.festival_dates_sync import run as run_festival_dates_sync
+    out = run_festival_dates_sync()
+    if out is None:
+        raise HTTPException(503, "Google holiday calendar unreachable - nothing changed (see sync.sync_runs)")
+    return {"ok": True, **out}
+
+
 @router.get("/app-state")
 def get_app_state(user: dict = Depends(require_login)):
     session = SessionLocal()

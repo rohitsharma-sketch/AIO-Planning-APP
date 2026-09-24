@@ -18,8 +18,15 @@ locally now, no dependency on the :7822 server:
      _norm_div.
   4. fut_month (e.g. "2027-04") -> the FY27 period label, same month previous
      year ("Apr'26") — calendar_sync.py's _fut_to_label — convert Rupees to
-     Lakhs, and skip months that may be incomplete in the data lake (the
-     current calendar month, and the latest month the data actually contains).
+     Lakhs, and skip months not yet closed in the data lake: a month is closed
+     only when the export accounts for its LAST day (snapshot stamp - 1 day,
+     see sync.common.snapshot_last_day). The result is persisted as
+     sync_runs.detail["closed_through"] ('YYYY-MM') - the single value the
+     engine / reindex / UI read (sync.common.get_closed_through) instead of
+     recomputing a cutoff from today's date.
+  5. Also writes the raw (not reindexed) FY26 months Mar'25..Feb'26 to
+     lever_key='store_actuals_fy26' - the placeholder base the engine uses for
+     an FY28 month whose FY27 base month hasn't closed yet (option b, 2026-09-24).
 
 Run manually: python sync/store_actuals_sync.py [--include-partial]
 """
@@ -36,12 +43,13 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from db.models.calendar import Calendar, CalendarDayPair, StoreCalendarCluster
-from db.models.planning_inputs import InputValue, Period
+from db.models.planning_inputs import InputValue, LeverDefinition, Period
 from db.models.sync import SyncSource
-from sync.common import sync_run
+from sync.common import closed_through_from_last_day, snapshot_last_day, sync_run
 
 SOURCE_KEY = "data_lake_sales"
 LEVER_KEY = "store_actuals"
+FY26_LEVER_KEY = "store_actuals_fy26"
 REF_YEAR = 2026  # matches calendar_sync.py's default _load_calendar(ref_year=2026)
 
 FY27_M = ["Mar'26", "Apr'26", "May'26", "Jun'26", "Jul'26", "Aug'26", "Sep'26",
@@ -59,6 +67,12 @@ LAKH = 1e5
 def _label_to_ym(label):
     mon, yy = label.split("'")
     return f"20{yy}-{MON[mon]:02d}"
+
+
+# Same month one year earlier for every FY27 base month except Mar'27 (Mar'28
+# waits for a real closed Mar'27 - pivot_actuals docstring, 2026-08-27):
+# "2025-03".."2026-02".
+FY26_YM = [f"{int(_label_to_ym(m)[:4]) - 1}{_label_to_ym(m)[4:]}" for m in FY27_M[:-1]]
 
 
 def _fut_to_label(fut):
@@ -102,13 +116,24 @@ def _fetch_raw_monthwise(folder, months):
     return df, total_read
 
 
-def _complete_months(ref_months, latest_month_in_data, include_partial=False):
-    today = datetime.date.today()
-    cur = f"{today.year:04d}-{today.month:02d}"
+def _closed_through(snapshot_name, latest_month_in_data, today=None):
+    """'YYYY-MM' of the last month the export fully accounts for. Unstamped
+    export -> the old date rule (neither today's month nor the data's latest
+    month counts as closed). Never later than the data's own latest month."""
+    last_day = snapshot_last_day(snapshot_name)
+    if last_day is None:
+        cut = (today or datetime.date.today()).replace(day=1)
+        if latest_month_in_data:
+            cut = min(cut, datetime.date(int(latest_month_in_data[:4]), int(latest_month_in_data[5:]), 1))
+        last_day = cut - datetime.timedelta(days=1)
+    ct = closed_through_from_last_day(last_day)
+    return min(ct, latest_month_in_data) if latest_month_in_data else ct
+
+
+def _complete_months(ref_months, closed_through, include_partial=False):
     keep, skipped = [], []
     for m in ref_months:
-        partial = m >= cur or (latest_month_in_data is not None and m >= latest_month_in_data)
-        (skipped if partial and not include_partial else keep).append(m)
+        (keep if m <= closed_through or include_partial else skipped).append(m)
     return keep, skipped
 
 
@@ -144,16 +169,21 @@ def run(include_partial=False):
         ref_months_all = [_label_to_ym(m) for m in FY27_M]
         # max-month probe — only the latest file (full re-export contains all history)
         from sync.common import call_with_timeout, latest_file
-        bm = call_with_timeout(pq.read_table, latest_file(path), columns=["BILLMONTH"]).column("BILLMONTH").to_pandas()
+        snapshot = latest_file(path)
+        bm = call_with_timeout(pq.read_table, snapshot, columns=["BILLMONTH"]).column("BILLMONTH").to_pandas()
         all_months = set(bm.dropna().dt.strftime("%Y-%m").unique().tolist())
         latest_month_in_data = max(all_months) if all_months else None
+        closed_through = _closed_through(os.path.basename(snapshot), latest_month_in_data)
 
-        ref_months, partial_months = _complete_months(ref_months_all, latest_month_in_data, include_partial)
+        ref_months, partial_months = _complete_months(ref_months_all, closed_through, include_partial)
         if not ref_months:
             raise RuntimeError("No complete reference months available yet")
 
-        # 4. read + reindex (reindex_monthwise, ported)
-        df, rows_read = _fetch_raw_monthwise(path, ref_months)
+        # 4. read + reindex (reindex_monthwise, ported) - one read covers the
+        #    FY26 proxy months too (disjoint from ref_months, split right after)
+        df, rows_read = _fetch_raw_monthwise(path, ref_months + FY26_YM)
+        fy26_df = df[df["ym"].isin(FY26_YM)]
+        df = df[df["ym"].isin(ref_months)].copy()
         df["cluster"] = df["STORE_NAME"].map(store_cluster)
         unmapped_stores = sorted(df.loc[df["cluster"].isna(), "STORE_NAME"].unique().tolist())
         df = df.dropna(subset=["cluster"])
@@ -241,10 +271,32 @@ def run(include_partial=False):
                 )
                 session.execute(stmt)
 
+        # 7. FY26 raw month actuals (placeholder base, see docstring step 5) -
+        #    full replace every run, one row per store x division x FY26 month.
+        fy26 = {}
+        for r in fy26_df.groupby(["STORE_NAME", "DIVISION", "ym"], observed=True)["SL_V"].sum().reset_index().itertuples():
+            div = _norm_div(r.DIVISION)
+            if div is not None:
+                key = (r.STORE_NAME.strip(), div, f"{MON_NAMES[int(r.ym[5:])]}'{r.ym[2:4]}")
+                fy26[key] = fy26.get(key, 0.0) + r.SL_V / LAKH
+        session.execute(pg_insert(LeverDefinition).values(
+            lever_key=FY26_LEVER_KEY, label="Store Actuals FY26 (proxy base)", required=False,
+            shape="store_division_period").on_conflict_do_nothing())
+        session.execute(InputValue.__table__.delete().where(InputValue.lever_key == FY26_LEVER_KEY))
+        fy26_rows = [
+            {"lever_key": FY26_LEVER_KEY, "store_id": store, "division_code": div, "period_id": period_ids[label],
+             "row_key": "", "value": round(v, 10), "source": "data_lake_raw"}
+            for (store, div, label), v in fy26.items()
+        ]
+        for i in range(0, len(fy26_rows), 5000):
+            session.execute(pg_insert(InputValue).values(fy26_rows[i:i + 5000]))
+
         result["rows_read"] = rows_read
         result["rows_updated"] = len(rows)
         result["rows_added"] = 0
         result["detail"] = {
+            "closed_through": closed_through, "snapshot_file": os.path.basename(snapshot),
+            "fy26_proxy_rows": len(fy26_rows),
             "calendar_id": cal.calendar_id, "calendar_name": cal.name,
             "months_synced": ref_months, "months_partial_skipped": partial_months,
             "unmapped_stores": unmapped_stores, "excluded_departments_lakhs": {k: round(v, 1) for k, v in excluded_lakhs.items()},

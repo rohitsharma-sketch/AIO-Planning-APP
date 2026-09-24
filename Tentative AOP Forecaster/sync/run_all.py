@@ -36,6 +36,9 @@ DB_SYNC_JOBS = [
     ("day_shift", "data_lake_day_shift"),
     ("store_actuals", "data_lake_sales"),
     ("calendar_reindex", "calendar_reindex"),
+    # Not in app.py's list: Google "Holidays in India" -> festival_reference_dates,
+    # then re-dates Festival Master + locked calendars' festival lists.
+    ("festival_dates", "festival_dates"),
 ]
 
 

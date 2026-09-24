@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getClusterProfiles, putClusterProfiles, getAppState, updateCalendarFestivals, listCalendarLibrary, getCalendar, saveCalendar, deleteCalendar } from '../../lib/api'
+import { getClusterProfiles, putClusterProfiles, getAppState, updateCalendarFestivals, listCalendarLibrary, getCalendar, saveCalendar, deleteCalendar, syncFestivalReference } from '../../lib/api'
 import { generateMappings, validate, computeMonthly, buildFestMap } from '../../lib/engine'
 import { parseDate, fmtISO, fmtDisp, calDiff, weekNum } from '../../lib/dateUtils'
 import ClusterTabs from './ClusterTabs'
@@ -8,7 +8,7 @@ import FestivalImportPanel from './FestivalImportPanel'
 import OutputSection from './OutputSection'
 import CalendarLibrary from './CalendarLibrary'
 import ChangeLogViewer from './ChangeLogViewer'
-import { DEFAULT_FESTIVALS, applyYearToProfiles, yearSyncMessage, resolveFestivalDefaults, coreFestivalNamesFor } from '../../lib/festivalData'
+import { DEFAULT_FESTIVALS, applyYearToProfiles, yearSyncMessage, resolveFestivalDefaults, coreFestivalNamesFor, loadFestivalReference } from '../../lib/festivalData'
 
 let _nextFestivalId = 1000
 
@@ -144,6 +144,8 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
   const [previewCalendarName, setPreviewCalendarName] = useState(null)
   const [savingToTemplate, setSavingToTemplate] = useState(false)
   const [syncingStructure, setSyncingStructure] = useState(false)
+  const [syncingDates, setSyncingDates] = useState(false)
+  const [dateSyncChanges, setDateSyncChanges] = useState(null)
   const [dayMap, setDayMap] = useState(null)
   const [validationIssues, setValidationIssues] = useState([])
   const [monthlySummary, setMonthlySummary] = useState(null)
@@ -161,6 +163,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
     getClusterProfiles().then(({ profiles }) => {
       setProfiles(profiles.length ? profiles : [{ name: 'Cluster 1', region: 'all', nextId: 20, festivals: DEFAULT_FESTIVALS.map(f => ({ ...f })) }])
     }).catch(e => setStatus({ ok: false, msg: e.message }))
+    loadFestivalReference()  // so resolveFestivalDefaults (festival-name picks) sees the Google dates
     getAppState().then(s => {
       if (s.refYear != null) setRefYear(s.refYear)
       if (s.futYear != null) setFutYear(s.futYear)
@@ -207,13 +210,16 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
     let workingProfiles = profiles
     let syncMsg = ''
     if (isPlanner) {
+      await loadFestivalReference()
       const sync = applyYearToProfiles(profiles, ry, fy)
       workingProfiles = sync.profiles
       if (sync.updated) {
         // persist() also does setProfiles(), so the festival table on screen
         // re-renders with the new dates - the old app's renderFestivalTable().
         await persist(workingProfiles)
-        syncMsg = yearSyncMessage(ry, fy, sync.updated, sync.estimated) + ' · '
+        syncMsg = yearSyncMessage(ry, fy, sync.updated, sync.estimated, sync.fallback) + ' · '
+      } else if (sync.fallback.length) {
+        syncMsg = `WARNING: not in Google reference, used built-in table: ${sync.fallback.join(', ')} · `
       }
     } else {
       // Non-planners can't re-date (persist() no-ops for them), and
@@ -765,11 +771,15 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
 
     setSyncingStructure(true)
     let updated = 0, failed = 0
+    const fallback = new Set()
     try {
+      await loadFestivalReference()
       for (const item of targets) {
         try {
           const full = await getCalendar(item.id)
-          const resolved = applyYearToProfiles(profiles, full.refYear, full.futYear).profiles
+          const sync = applyYearToProfiles(profiles, full.refYear, full.futYear)
+          sync.fallback.forEach(n => fallback.add(n))
+          const resolved = sync.profiles
           const sourceByName = new Map(resolved.map(cp => [cp.name, cp]))
           const nextClusters = (full.clusters || []).map(tc => {
             const source = sourceByName.get(tc.name)
@@ -783,10 +793,39 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
       }
       setStatus({
         ok: failed === 0,
-        msg: `Synced festival structure to ${updated} template${updated === 1 ? '' : 's'}${failed ? `, ${failed} failed` : ''}: ${targetNames}.`,
+        msg: `Synced festival structure to ${updated} template${updated === 1 ? '' : 's'}${failed ? `, ${failed} failed` : ''}: ${targetNames}.`
+          + (fallback.size ? ` WARNING: not in Google reference, used built-in table: ${[...fallback].join(', ')}.` : ''),
       })
     } finally {
       setSyncingStructure(false)
+    }
+  }
+
+  // Server-side festival_dates sync (same job as the 05:00 run_all): refreshes
+  // the Google reference cache, then re-dates the live Festival Master (for
+  // app_state's years) and every locked calendar's festival list (its own
+  // years) - dates only, never pre/core/post or any day-map. Reloads profiles
+  // afterwards so the table on screen shows what the server wrote.
+  async function handleSyncFestivalDates() {
+    if (!isPlanner || syncingDates) return
+    setSyncingDates(true)
+    try {
+      const { changes, reference_rows } = await syncFestivalReference()
+      await loadFestivalReference()
+      // A Load & Preview'd template on screen is that calendar's clusters, not
+      // the live set - swapping the live set in would autosave it INTO the template.
+      if (!editingTemplate) {
+        const { profiles: fresh } = await getClusterProfiles()
+        if (fresh.length) setProfiles(fresh)
+      }
+      const lines = changes.map(c => `${c.scope} / ${c.cluster}: ${c.festival} ${c.field === 'ref_date' ? 'ref' : 'fut'} ${c.old} -> ${c.new}`)
+      setStatus({ ok: true, msg: `Festival dates synced from Google (${reference_rows} reference dates) · ${changes.length} date${changes.length === 1 ? '' : 's'} changed`
+        + (editingTemplate ? ' - Load & Preview the template again to see its new dates' : '') })
+      setDateSyncChanges(lines)
+    } catch (e) {
+      setStatus({ ok: false, msg: `Festival date sync failed: ${e.message}` })
+    } finally {
+      setSyncingDates(false)
     }
   }
 
@@ -843,12 +882,27 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
                     title="Replace every other saved template's festival list per cluster with the current structure, dates resolved for each template's own year">
                     {syncingStructure ? 'Syncing...' : 'Sync Festival Structure to All Templates'}
                   </button>
+                  <button className="btn" onClick={handleSyncFestivalDates} disabled={syncingDates}
+                    title="Refresh festival dates from Google's Holidays in India calendar, then re-date the Festival Master and every locked calendar's festival list for its own years (dates only)">
+                    {syncingDates ? 'Syncing...' : 'Sync festival dates (Google)'}
+                  </button>
                   {/* Bulk festival-to-cluster import, modeled on Store-Cluster
                       Mapping's own upload+diff-preview flow - see
                       FestivalImportPanel for why this is an upsert per
                       (festival, cluster) row, never a full replace. */}
                   <FestivalImportPanel profiles={profiles} onApply={handleImportFestivals} isPlanner={isPlanner} />
                 </div>
+              )}
+              {dateSyncChanges && (
+                <details open style={{ margin: '0 0 10px', fontSize: '12px' }}>
+                  <summary>
+                    Google date sync: {dateSyncChanges.length} change{dateSyncChanges.length === 1 ? '' : 's'}{' '}
+                    <button className="btn" onClick={() => setDateSyncChanges(null)}>Dismiss</button>
+                  </summary>
+                  {dateSyncChanges.length
+                    ? <ul style={{ maxHeight: '200px', overflowY: 'auto', margin: '6px 0' }}>{dateSyncChanges.map((l, i) => <li key={i}>{l}</li>)}</ul>
+                    : <p style={{ margin: '6px 0' }}>All festival dates already matched the reference.</p>}
+                </details>
               )}
               <FestivalTable festivals={profiles[activeIdx].festivals} onChange={handleFestivalsChange}
                 onAdd={handleAddFestival} onReset={handleResetFestivals} onBulkSet={handleHeaderBulk}

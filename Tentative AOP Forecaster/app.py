@@ -546,7 +546,8 @@ def db_sync_status():
                 last_success = {r.source_key: r.completed_at.isoformat() if r.completed_at else None
                                 for r in success_runs}
 
-        return {"runs": [
+        from sync.common import get_closed_through
+        return {"closed_through": get_closed_through(), "runs": [
             {"source_key": r.source_key, "status": r.status, "started_at": r.started_at.isoformat(),
              "completed_at": r.completed_at.isoformat() if r.completed_at else None,
              "rows_read": r.rows_read, "rows_updated": r.rows_updated, "rows_added": r.rows_added,

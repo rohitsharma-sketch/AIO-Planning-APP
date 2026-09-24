@@ -39,7 +39,13 @@ PLAN_DIV_MASTERS = {
 
 _cache: dict = {}   # keys: "plan", "attr_map", "aggregates", "preview_result"
 
-def _mtime(path: str) -> float:
+def _mtime(path: str):
+    # Attribute master's cache fingerprint: the shared DB table's (count,
+    # max(updated_at)) while it is live, else the xlsx file's mtime.
+    if path == ATTR_MASTER_PATH:
+        sig = _attr_db("SELECT count(*), max(updated_at) FROM masterdata.attribute_master")
+        if sig and sig[0][0]:
+            return ("db", sig[0][0], str(sig[0][1]))
     try:
         return os.path.getmtime(path)
     except FileNotFoundError:
@@ -90,9 +96,34 @@ def _save_corrections(data: dict):
 
 
 # ── Attribute master ──────────────────────────────────────────────────────────
+# Source: shared Postgres masterdata.attribute_master (loaded from att master.xlsx
+# by `Tentative AOP Forecaster/db/attribute_master.py`), same lazy db.base import
+# as store_master.py. Falls back to the xlsx when the db layer is missing, the DB
+# is unreachable, or the table is empty/absent.
+
+def _attr_db(sql: str):
+    """Rows of a read on the shared DB, or None if it can't be reached."""
+    # ponytail: no failure memo - an unreachable-but-configured DB costs one connect
+    # timeout per call; add a short negative cache if that ever bites (on 8010 auth
+    # already needs this DB, so it would be down anyway).
+    try:
+        from sqlalchemy import text
+        from db.base import engine
+        with engine.connect() as c:
+            return c.execute(text(sql)).fetchall()
+    except Exception:
+        return None
+
+
+def _read_attr_master() -> pd.DataFrame:
+    rows = _attr_db("SELECT division, section, department, attribute1 FROM masterdata.attribute_master")
+    if rows:
+        return pd.DataFrame([tuple(r) for r in rows], columns=["DIVISION", "SECTION", "DEPARTMENT", "ATTRIBUTE1"])
+    return pd.read_excel(ATTR_MASTER_PATH)
+
 
 def _get_attr_map_cached(active_dept_set: dict) -> dict:
-    """Cache attr map keyed on Excel mtime + active_dept_set hash."""
+    """Cache attr map keyed on attribute-master fingerprint (DB or xlsx) + active_dept_set hash."""
     import hashlib
     dept_sig = hashlib.md5(
         json.dumps(sorted((k, sorted(v)) for k, v in active_dept_set.items())).encode()
@@ -111,7 +142,7 @@ def _build_attr_dept_map(active_dept_set: dict) -> dict:
     Filtered to departments present and active in the plan.
     """
     try:
-        df = pd.read_excel(ATTR_MASTER_PATH)
+        df = _read_attr_master()
         df.columns = [str(c).strip() for c in df.columns]
         df = df[df["DEPARTMENT"].notna() & df["ATTRIBUTE1"].notna()]
         df["DEPARTMENT"] = df["DEPARTMENT"].astype(str).str.strip()

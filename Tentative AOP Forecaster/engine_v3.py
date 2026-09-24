@@ -44,17 +44,34 @@ _MON_NUM = {"Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
             "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12}
 
 
-def _open_months(as_of=None):
-    """FY27_M labels that have NOT yet fully closed as of `as_of` (defaults
-    to real today) - the current, in-progress calendar month and any later
-    one. A month closes the instant the calendar moves past it (the 1st of
-    the following month) - the exact same cutoff store_actuals_sync.py's
-    _complete_months() already uses to decide what to sync, so the engine
-    and the sync agree on the identical "is this month usable yet" line.
+def _persisted_closed_through():
+    """sync.common.get_closed_through() (DB value, per-process TTL cache), or
+    None when there's no DB/.env (standalone xlsx run) -> date-rule fallback."""
+    try:
+        from sync.common import get_closed_through
+        return get_closed_through()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _open_months(as_of=None, closed_through=None):
+    """FY27_M labels that have NOT yet fully closed.
+
+    Source of truth (user rule, 2026-09-24): `closed_through` ('YYYY-MM') -
+    the last month whose LAST day the synced actuals actually include,
+    computed by store_actuals_sync.py and persisted in sync_runs.detail, so
+    the sync, engine, reindex cache and UI all agree without a re-sync.
+    Read from the DB when neither argument is given. Falls back to the old
+    date rule (the current calendar month as of `as_of`/today and any later
+    one are open) only when nothing is persisted yet, or when `as_of` is passed.
     pivot_actuals() uses this to refuse a not-yet-closed month's actuals even
     if a stale/partial sync already wrote something for it into the DB -
     defence in depth, since the sync-side skip only stops FUTURE partial
     writes, it can't retroactively hide one that already landed."""
+    if as_of is None and closed_through is None:
+        closed_through = _persisted_closed_through()
+    if closed_through:
+        return {m for m in FY27_M if f"20{m[-2:]}-{_MON_NUM[m[:3]]:02d}" > closed_through}
     as_of = as_of or datetime.date.today()
     cur = (as_of.year, as_of.month)
     return {m for m in FY27_M if (2000 + int(m.split("'")[1]), _MON_NUM[m.split("'")[0]]) >= cur}
@@ -271,6 +288,54 @@ def load_inputs(input_file=None):
         aop_df = tgt_raw
 
     return sm, actuals, growth, nso_df, aop_df
+
+FY26_SHEET = "Store Actuals FY26"   # db/to_workbook.py - raw Mar'25..Feb'26 actuals
+
+
+def load_fy26_proxy(input_file=None):
+    """{store: {div: {fy27_month: value}}} from the optional Store Actuals FY26
+    sheet, re-keyed one year forward (Sep'25 -> Sep'26) so it lines up with
+    the FY27 base month it stands in for. {} when the sheet is absent."""
+    xl = pd.ExcelFile(input_file or INPUT_FILE, engine="calamine")
+    if FY26_SHEET not in xl.sheet_names:
+        return {}
+    df = xl.parse(FY26_SHEET, skiprows=3)
+    df.columns = [str(c).strip() for c in df.columns]
+    out = {}
+    for _, row in df.dropna(subset=["Store"]).iterrows():
+        vals = out.setdefault(str(row["Store"]).strip(), {}).setdefault(str(row["Division"]).strip().upper(), {})
+        for fy27m in FY27_M[:-1]:
+            v = row.get(f"{fy27m[:4]}{int(fy27m[4:]) - 1:02d}")
+            if v is not None and v == v:
+                vals[fy27m] = vals.get(fy27m, 0.0) + float(v)
+    return out
+
+
+def apply_proxy_base(actuals_pivot, proxy, store_info, open_months):
+    """Option b (user-approved 2026-09-24): an LfL store's FY27 base month
+    that is only missing because it hasn't CLOSED yet takes the same month's
+    FY26 actual (`proxy`, from load_fy26_proxy) as a placeholder base, so
+    pass1 still forecasts it as base x (1 + growth%). Returns (base_pivot,
+    proxy_cells): a copy of actuals_pivot with those months filled, and the
+    set of (store, div, fy28_month) that used the proxy. Excludes Mar'27 ->
+    Mar'28, which must wait for a real closed Mar'27 (pivot_actuals
+    docstring). No FY26 value either -> stays 0. Once the month closes it
+    leaves open_months and the real actual is used automatically. Ramp/NSO
+    own bases are NOT proxied (their FY26 is pre-opening/partial, not the
+    same situation) - they only see it indirectly via an LfL ref store's
+    forecast pattern."""
+    base = {s: {d: dict(v) for d, v in divs.items()} for s, divs in actuals_pivot.items()}
+    cells = set()
+    for store, si in store_info.items():
+        if si["tag"] not in LFL_TAGS:
+            continue
+        for div in DIVS:
+            for fy27m, fy28m in zip(FY27_M[:-1], FY28_M[:-1]):
+                v = proxy.get(store, {}).get(div, {}).get(fy27m, 0.0)
+                if fy27m in open_months and v:
+                    base.setdefault(store, {}).setdefault(div, {m: 0.0 for m in FY27_M})[fy27m] = v
+                    cells.add((store, div, fy28m))
+    return base, cells
 
 # ── Growth rate lookup ─────────────────────────────────────────────────────────
 def build_growth_map(growth_df):
@@ -674,7 +739,7 @@ def pass2_forecasts(store_info, nso_open, ref_fc, actuals_pivot, gmap, mar27_anc
     return fc
 
 # ── Build output DataFrame ─────────────────────────────────────────────────────
-def build_df(store_info, actuals_pivot, all_fc, aop_overrides=None):
+def build_df(store_info, actuals_pivot, all_fc, aop_overrides=None, proxy_cells=None):
     """Assemble the flat forecast DataFrame.
 
     For every concat listed in any historical diff sheet:
@@ -684,7 +749,12 @@ def build_df(store_info, actuals_pivot, all_fc, aop_overrides=None):
     aop_overrides ({(store,div,fy28_month): value}, from the AOP (Optional) sheet)
     takes priority over the diff adjustment for that exact cell — the user has
     typed in the AOP number they want, so it is used as-is.
+
+    proxy_cells ({(store, div, fy28_month)}, from apply_proxy_base) is listed
+    per row in the trailing "Proxy Base Months" column - those months' Base is
+    the FY26 placeholder, not a closed FY27 actual.
     """
+    proxy_cells = proxy_cells or set()
     is_named = lambda s: not any(s.startswith(p) for p in UNNAMED_PFX)
 
     adjustments = _load_adjustments()
@@ -721,6 +791,7 @@ def build_df(store_info, actuals_pivot, all_fc, aop_overrides=None):
                     row[f"{fy28m} | Deviation"] = 0.0
                 else:
                     row[f"{fy28m} | Deviation"] = _round2(fcst - base)
+            row["Proxy Base Months"] = ", ".join(m for m in FY28_M if (store, div, m) in proxy_cells)
             rows.append(row)
     return pd.DataFrame(rows)
 
@@ -1171,6 +1242,7 @@ def main():
     nso_open     = {str(r["Store"]).strip(): str(r["Opening Month"]).strip()
                     for _, r in nso_df.iterrows()}
     actuals_pivot, mar27_anchor = pivot_actuals(actuals_df, aop_df)
+    base_pivot, proxy_cells = apply_proxy_base(actuals_pivot, load_fy26_proxy(None), store_info, _open_months())
     aop_overrides = build_aop_overrides(aop_df)
 
     n_lfl  = sum(1 for si in store_info.values() if si["tag"] in LFL_TAGS)
@@ -1181,7 +1253,7 @@ def main():
     gmap = build_growth_map(growth_df)
 
     print("[OK] Pass 1  -> LfL stores: own actuals x growth%...")
-    lfl_fc = pass1_forecasts(store_info, actuals_pivot, gmap)
+    lfl_fc = pass1_forecasts(store_info, base_pivot, gmap)
 
     print("[OK] Pass 1b -> Ramp stores: ref store cont% x scale (growth% embedded)...")
     ramp_fc = pass1b_ramp_forecasts(store_info, actuals_pivot, lfl_fc, gmap, mar27_anchor=mar27_anchor)
@@ -1194,7 +1266,7 @@ def main():
     all_fc = {**ref_fc, **nso_fc}
 
     print("[OK] Assembling rows...")
-    df = build_df(store_info, actuals_pivot, all_fc, aop_overrides)
+    df = build_df(store_info, base_pivot, all_fc, aop_overrides, proxy_cells)
 
     print("[OK] Writing Excel...")
     write_excel(df)
@@ -1309,7 +1381,9 @@ def run_engine(input_file, output_file, palette="classic", detail_file=None, inc
 
     nso_open      = {str(r["Store"]).strip(): str(r["Opening Month"]).strip()
                      for _, r in nso_df.iterrows()}
+    open_months   = _open_months() if open_months is None else open_months  # read once, shared by every pass
     actuals_pivot, mar27_anchor = pivot_actuals(actuals_df, aop_df, open_months=open_months)
+    base_pivot, proxy_cells = apply_proxy_base(actuals_pivot, load_fy26_proxy(input_file), store_info, open_months)
     aop_overrides = build_aop_overrides(aop_df)
     gmap          = build_growth_map(growth_df)
     if growth_overrides:
@@ -1318,12 +1392,12 @@ def run_engine(input_file, output_file, palette="classic", detail_file=None, inc
                 for month, rate_pct in months.items():
                     if month in gmap[div]:
                         gmap[div][month] = float(rate_pct) / 100.0
-    lfl_fc        = pass1_forecasts(store_info, actuals_pivot, gmap)
+    lfl_fc        = pass1_forecasts(store_info, base_pivot, gmap)
     ramp_fc       = pass1b_ramp_forecasts(store_info, actuals_pivot, lfl_fc, gmap, open_months=open_months, mar27_anchor=mar27_anchor)
     ref_fc        = {**lfl_fc, **ramp_fc}
     nso_fc        = pass2_forecasts(store_info, nso_open, ref_fc, actuals_pivot, gmap, mar27_anchor=mar27_anchor)
     all_fc        = {**ref_fc, **nso_fc}
-    df            = build_df(store_info, actuals_pivot, all_fc, aop_overrides)
+    df            = build_df(store_info, base_pivot, all_fc, aop_overrides, proxy_cells)
 
     # overall_override: adjust the UNFIXED divisions (those not in growth_overrides for
     # that month) so the blended LfL growth hits the target exactly, while leaving

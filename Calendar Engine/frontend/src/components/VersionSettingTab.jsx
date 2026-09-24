@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getAppState, putAppState, getClusterProfiles, putClusterProfiles } from '../lib/api'
-import { applyYearToProfiles, yearSyncMessage } from '../lib/festivalData'
+import { applyYearToProfiles, yearSyncMessage, loadFestivalReference } from '../lib/festivalData'
 
 // The seven mapping-type strings `lib/engine.js`'s scoreMapping() actually
 // assigns to `mappingType` (see its `mtype = ...` branches) - these are the
@@ -96,11 +96,12 @@ export default function VersionSettingTab({ isPlanner, onNavigate }) {
       // rewritten, whatever order those land in.
       await putAppState({ refYear: ry, futYear: fy })
       const { profiles } = await getClusterProfiles()
+      await loadFestivalReference()
       const sync = applyYearToProfiles(profiles || [], ry, fy)
       await putClusterProfiles({
         profiles: sync.profiles.map(cp => ({ name: cp.name, region: cp.region, nextId: cp.nextId, festivals: cp.festivals })),
       })
-      setStatus({ ok: true, msg: yearSyncMessage(ry, fy, sync.updated, sync.estimated) })
+      setStatus({ ok: true, msg: yearSyncMessage(ry, fy, sync.updated, sync.estimated, sync.fallback) })
       if (onNavigate) onNavigate('calendarisation')
     } catch (e) {
       setStatus({ ok: false, msg: e.message })

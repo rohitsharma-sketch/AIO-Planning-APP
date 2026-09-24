@@ -1048,7 +1048,18 @@ def _is_month_closed(ym, today=None):
     accumulating sales). Only closed months are safe to cache: an open
     month's sales can still change between now and month-end, so caching it
     would silently freeze it at a partial, stale total. `today` is only for
-    tests - real callers always use the actual system date."""
+    tests - real callers always use the actual system date.
+    2026-09-24: when AOP's store_actuals_sync has persisted a data-driven
+    'closed_through' (last month whose LAST day the synced actuals include),
+    that wins over the date rule - see sync.common.get_closed_through."""
+    if today is None:
+        try:
+            from sync.common import get_closed_through
+            ct = get_closed_through()
+            if ct:
+                return ym <= ct
+        except Exception:  # noqa: BLE001 - no AOP DB -> date rule below
+            pass
     today = today or datetime.date.today()
     y, m = (int(p) for p in ym.split("-"))
     first_of_next = datetime.date(y + (m == 12), (m % 12) + 1, 1)
