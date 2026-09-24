@@ -6,222 +6,127 @@
 <title>AOP Realigner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 :root{--ac:#4F46E5;--ac-soft:#EEF2FF;--top:#312E81;--bg:#F8FAFC;--card:#fff;--bd:#E0E7FF;--tx:#1E1B4B;--mut:#64748B;
-  --up:#047857;--dn:#B91C1C;--warn:#B45309;--warn-bg:#FEF3C7;--lock-bg:#E0E7FF}
+  --up:#047857;--dn:#B91C1C;--warn-bg:#FEF3C7;--warn:#92400E}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 'Plus Jakarta Sans',system-ui,sans-serif}
 [hidden]{display:none!important}
-header{background:var(--top);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:16px}
+header{background:var(--top);color:#fff;padding:14px 24px}
 header h1{font-size:18px;margin:0}
-header p{margin:0;opacity:.75;font-size:13px}
-main{max-width:1400px;margin:0 auto;padding:20px 16px 60px}
-.inputs{display:grid;grid-template-columns:1fr 1fr auto;gap:16px;align-items:stretch}
+header p{margin:2px 0 0;opacity:.75;font-size:13px}
+main{max-width:1300px;margin:0 auto;padding:20px 16px 60px}
+.inputs{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:760px){.inputs{grid-template-columns:1fr}}
 .drop{background:var(--card);border:2px dashed var(--bd);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:8px}
 .drop.ok{border-style:solid;border-color:var(--ac)}
 .drop h2{margin:0;font-size:14px}
-.drop small{color:var(--mut)}
-.drop select{font:inherit;padding:4px 6px;border:1px solid var(--bd);border-radius:6px}
-button{font:inherit;font-weight:600;border:0;border-radius:8px;padding:10px 18px;cursor:pointer;background:var(--ac);color:#fff}
-button:disabled{opacity:.45;cursor:not-allowed}
-button.ghost{background:var(--ac-soft);color:var(--ac)}
-button:focus-visible,select:focus-visible,input:focus-visible,td:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
-.go{display:flex;flex-direction:column;gap:8px;justify-content:center}
-.err{background:#FEE2E2;color:var(--dn);padding:10px 14px;border-radius:8px;margin-top:14px}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:22px 0}
-.kpi{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px 14px}
-.kpi b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
-.kpi span{color:var(--mut);font-size:12px}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:18px}
-.card h3{margin:0 0 10px;font-size:15px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.tabs{display:flex;gap:6px;flex-wrap:wrap}
-.tabs button{padding:6px 14px;border-radius:999px;background:var(--ac-soft);color:var(--ac)}
-.tabs button.on{background:var(--ac);color:#fff}
-.scroll{overflow:auto;max-height:70vh}
+.drop small,.mut{color:var(--mut)}
+.status{font-size:13px;font-weight:600}
+input[type=file]:focus-visible,a:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.msg{padding:10px 14px;border-radius:8px;margin-top:14px}
+.err{background:#FEE2E2;color:var(--dn)}
+.busy{background:var(--ac-soft);color:var(--ac)}
+.warn{background:var(--warn-bg);color:var(--warn);margin:6px 0;padding:8px 12px;border-radius:8px;font-size:13px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-top:18px}
+.card h3{margin:0 0 10px;font-size:15px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.dl{margin-left:auto;display:flex;gap:8px}
+.dl a{font-weight:600;text-decoration:none;border-radius:8px;padding:8px 14px;background:var(--ac);color:#fff}
+.dl a.ghost{background:var(--ac-soft);color:var(--ac)}
+.scroll{overflow:auto}
 table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
 th,td{padding:6px 10px;border-bottom:1px solid #EEF2FF;text-align:right;white-space:nowrap}
-th{background:var(--top);color:#fff;position:sticky;top:0;z-index:1;font-weight:600}
-th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:inherit;z-index:2}
+th{background:var(--top);color:#fff;font-weight:600}
+th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
 tbody tr:nth-child(even){background:#FAFBFF}
-tbody tr:nth-child(odd){background:#fff}
-td.cell{cursor:pointer}
-td.cell .d{display:block;font-size:11px}
-td.kept{background:var(--lock-bg)!important;font-weight:600}
-td.compressed{background:var(--warn-bg)!important}
-td.no-target{color:var(--mut);font-style:italic}
-.up{color:var(--up)}.dn{color:var(--dn)}.mut{color:var(--mut)}
-.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mut);font-weight:400}
-.sw{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:4px;border:1px solid var(--bd)}
-tr.tot td{font-weight:700;border-top:2px solid var(--bd)}
+.up{color:var(--up)}.dn{color:var(--dn)}
 </style>
 </head>
 <body>
 <header>
-  <div><h1>AOP Realigner</h1><p>Upload the original AOP and a revised plan. Department changes are kept; everything else flexes back to the AOP.</p></div>
+  <h1>AOP Realigner</h1>
+  <p>Revised departments keep their values; every other department in the store-division flexes so each Store × Division × Month lands back on the original plan — output at Store × Department × MRP × Display Type.</p>
 </header>
 <main>
   <section class="inputs">
-    <label class="drop" id="drop-aop">
-      <h2>1 · Original AOP</h2>
-      <input type="file" accept=".xlsx,.xls,.xlsb,.csv" data-k="aop">
-      <select data-k="aop" hidden aria-label="AOP sheet"></select>
-      <small>Division, Department, then one column per month — or long form: Division, Department, Month, Value. Department optional (division-level AOP).</small>
+    <label class="drop" id="drop-orig">
+      <h2>1 · Original plan</h2>
+      <span class="status" id="orig-status">Checking…</span>
+      <input type="file" accept=".xlsx,.xlsb,.xls" id="orig">
+      <small>Store × Department × MRP × Display Type, “&lt;Month&gt; Plan” + “&lt;Month&gt; Plan Qty”. Stays loaded — only re-upload when the original changes.</small>
     </label>
-    <label class="drop" id="drop-plan">
+    <label class="drop" id="drop-rev">
       <h2>2 · Revised plan</h2>
-      <input type="file" accept=".xlsx,.xls,.xlsb,.csv" data-k="plan">
-      <select data-k="plan" hidden aria-label="Plan sheet"></select>
-      <small>Same layout as the AOP, with the buyer's department changes.</small>
+      <span class="status mut" id="rev-status">Upload to realign</span>
+      <input type="file" accept=".xlsx,.xlsb,.xls" id="rev">
+      <small>Store × Department, “&lt;Month&gt; New” columns — only the departments you changed. A new department (e.g. LW_U_T-TOP F/S) borrows its parent’s MRP/display rows.</small>
     </label>
-    <div class="go">
-      <button id="run" disabled>Realign</button>
-      <button id="export" class="ghost" disabled>Export XLSX</button>
-      <button id="template" class="ghost">Template</button>
-    </div>
   </section>
-  <div class="err" id="err" hidden></div>
+  <div class="msg" id="msg" hidden></div>
 
   <section id="out" hidden>
-    <div class="kpis" id="kpis"></div>
+    <div id="warns"></div>
     <div class="card">
-      <h3>Division × Month — AOP vs Plan vs Realigned</h3>
-      <div class="scroll"><table id="sum"></table></div>
-    </div>
-    <div class="card">
-      <h3>Departments <span class="tabs" id="tabs"></span>
-        <span class="legend">
-          <span><i class="sw" style="background:var(--lock-bg)"></i>Kept (buyer change, locked)</span>
-          <span><i class="sw"></i>Absorbed (flexed to hit AOP)</span>
-          <span><i class="sw" style="background:var(--warn-bg)"></i>Compressed (changes overshoot AOP)</span>
-          <span>Click a cell to lock / unlock it</span>
-        </span>
+      <h3>Division × Month <span class="mut" id="meta"></span>
+        <span class="dl"><a href="/api/download?fmt=csv">Download CSV</a><a class="ghost" href="/api/download?fmt=xlsx" title="Full plan as xlsx takes ~2–3 min to build">XLSX (slow)</a></span>
       </h3>
-      <div class="scroll"><table id="dept"></table></div>
+      <div class="scroll"><table id="sum"></table></div>
     </div>
   </section>
 </main>
 <script>
 const $ = s => document.querySelector(s);
-const books = {}, sheets = {aop: null, plan: null};
-let res = null, overrides = {}, div = null;
-const fmt = v => v == null ? '—' : v.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-const pct = (a, b) => b ? ((a / b - 1) * 100).toFixed(1) + '%' : '';
+const fmt = v => v.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function msg(t, cls) { $('#msg').textContent = t; $('#msg').className = 'msg ' + (cls || ''); $('#msg').hidden = !t; }
 
-function rowsOf(k) {
-  const ws = books[k].Sheets[sheets[k]];
-  return XLSX.utils.sheet_to_json(ws, {raw: true, defval: ''});
+function showOrig(m) {
+  const ok = m && m.rows;
+  $('#orig-status').textContent = ok ? `Loaded: ${m.name} · ${m.rows.toLocaleString('en-IN')} rows · ${m.loaded_at}` : 'Not loaded yet';
+  $('#drop-orig').classList.toggle('ok', !!ok);
+}
+fetch('/api/original').then(r => r.json()).then(showOrig);
+
+async function post(url, file, busy) {
+  msg(busy, 'busy');
+  const r = await fetch(url, {method: 'POST', body: file, headers: {'X-File-Name': encodeURIComponent(file.name)}});
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  msg('');
+  return j;
 }
 
-document.querySelectorAll('input[type=file]').forEach(inp => inp.addEventListener('change', async () => {
-  const k = inp.dataset.k, f = inp.files[0];
-  if (!f) return;
+$('#orig').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { const m = await post('/api/original', f, `Reading ${f.name} — about 20–30 s for a full plan…`); m.name = decodeURIComponent(m.name); showOrig(m); }
+  catch (err) { msg(err.message, 'err'); }
+  e.target.value = '';
+};
+
+$('#rev').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
   try {
-    books[k] = XLSX.read(await f.arrayBuffer());
-    const sel = document.querySelector(`select[data-k=${k}]`);
-    sel.innerHTML = books[k].SheetNames.map(n => `<option>${esc(n)}</option>`).join('');
-    sel.hidden = books[k].SheetNames.length < 2;
-    sheets[k] = books[k].SheetNames[0];
-    $('#drop-' + k).classList.add('ok');
-    showErr('');
-  } catch (e) { showErr(`Could not read ${f.name}: ${e.message}`); }
-  $('#run').disabled = !(books.aop && books.plan);
-}));
-document.querySelectorAll('select[data-k]').forEach(s => s.addEventListener('change', () => sheets[s.dataset.k] = s.value));
+    const j = await post('/api/realign', f, `Realigning against ${f.name}…`);
+    $('#rev-status').textContent = `Realigned: ${f.name} · ${j.revised_departments.join(', ')}`;
+    $('#drop-rev').classList.add('ok');
+    render(j);
+  } catch (err) { msg(err.message, 'err'); }
+  e.target.value = '';
+};
 
-function showErr(m) { $('#err').textContent = m; $('#err').hidden = !m; }
-
-async function realign() {
-  $('#run').disabled = true;
-  try {
-    const r = await fetch('/api/realign', {method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({aop: rowsOf('aop'), plan: rowsOf('plan'), overrides})});
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || r.statusText);
-    res = j; showErr(''); render();
-  } catch (e) { showErr(e.message); }
-  $('#run').disabled = false;
-}
-$('#run').onclick = () => { overrides = {}; realign(); };
-
-function render() {
-  const {months, rows, summary} = res;
-  const divs = [...new Set(summary.map(s => s.division))];
-  if (!divs.includes(div)) div = divs[0];
-  const tAop = summary.reduce((a, s) => a + (s.aop || 0), 0);
-  const tPlan = summary.reduce((a, s) => a + s.plan, 0);
-  const tFin = summary.reduce((a, s) => a + s.final, 0);
-  const kept = rows.filter(r => r.status === 'kept').length;
-  const comp = new Set(rows.filter(r => r.status === 'compressed').map(r => r.division + r.month)).size;
-  const noT = summary.filter(s => s.aop == null).length;
-  $('#kpis').innerHTML = [
-    ['Original AOP', fmt(tAop)], ['Revised plan', fmt(tPlan), pct(tPlan, tAop) + ' vs AOP'],
-    ['Realigned', fmt(tFin), Math.abs(tFin - tAop) < 0.01 ? 'matches AOP' : 'gap ' + fmt(tFin - tAop)],
-    ['Dept changes kept', kept, res.aop_has_departments ? 'cells locked' : 'AOP is division-level — lock cells manually'],
-    ['Compressed groups', comp, 'changes exceeded AOP'], ...(noT ? [['No AOP target', noT, 'division-months left as plan']] : [])
-  ].map(([l, v, s]) => `<div class="kpi"><span>${l}</span><b>${v}</b><span>${s || ''}</span></div>`).join('');
-
-  // Division x Month summary
-  let h = '<thead><tr><th>Division</th>' + months.map(m => `<th>${esc(m)}</th>`).join('') + '</tr></thead><tbody>';
-  for (const d of divs) {
-    const by = Object.fromEntries(summary.filter(s => s.division === d).map(s => [s.month, s]));
-    for (const [lab, key] of [['AOP', 'aop'], ['Plan', 'plan'], ['Realigned', 'final']])
-      h += `<tr${key === 'final' ? ' class="tot"' : ''}><td>${esc(d)} · ${lab}</td>` + months.map(m => {
-        const s = by[m]; if (!s) return '<td class="mut">—</td>';
-        const extra = key === 'plan' && s.aop ? ` <span class="d ${s.plan >= s.aop ? 'up' : 'dn'}">${pct(s.plan, s.aop)}</span>` : '';
-        return `<td>${fmt(s[key])}${extra}</td>`;
-      }).join('') + '</tr>';
+function render(j) {
+  $('#warns').innerHTML = j.warnings.map(w => `<div class="warn">${esc(w)}</div>`).join('');
+  $('#meta').textContent = `${j.rows.toLocaleString('en-IN')} output rows`;
+  let h = '<thead><tr><th>Division</th><th>Month</th><th>Original</th><th>Realigned</th><th>Diff</th><th>Revised depts: before</th><th>after</th><th>Other depts: change</th></tr></thead><tbody>';
+  for (const s of j.summary) {
+    const diff = s.final - s.original, other = (s.final - s.revised_after) - (s.original - s.revised_before);
+    const cls = v => Math.abs(v) < 0.005 ? '' : v > 0 ? 'up' : 'dn';
+    h += `<tr><td>${esc(s.division)}</td><td>${esc(s.month)}</td><td>${fmt(s.original)}</td><td>${fmt(s.final)}</td>
+      <td class="${cls(diff)}">${fmt(diff)}</td><td>${fmt(s.revised_before)}</td><td>${fmt(s.revised_after)}</td><td class="${cls(other)}">${fmt(other)}</td></tr>`;
   }
   $('#sum').innerHTML = h + '</tbody>';
-
-  $('#tabs').innerHTML = divs.map(d => `<button class="${d === div ? 'on' : ''}" data-d="${esc(d)}">${esc(d)}</button>`).join('');
-  $('#tabs').querySelectorAll('button').forEach(b => b.onclick = () => { div = b.dataset.d; render(); });
-
-  // Department grid for selected division
-  const mine = rows.filter(r => r.division === div);
-  const depts = [...new Set(mine.map(r => r.department))];
-  const cell = Object.fromEntries(mine.map(r => [r.department + '|' + r.month, r]));
-  h = '<thead><tr><th>Department</th>' + months.map(m => `<th>${esc(m)}</th>`).join('') + '<th>Total</th></tr></thead><tbody>';
-  for (const dp of depts) {
-    let tot = 0;
-    h += `<tr><td>${esc(dp || '(all)')}</td>` + months.map(m => {
-      const r = cell[dp + '|' + m]; if (!r) return '<td class="mut">—</td>';
-      tot += r.final;
-      const base = r.aop ?? r.plan, dlt = r.final - base;
-      const tip = `AOP ${fmt(r.aop)} · Plan ${fmt(r.plan)} · Final ${fmt(r.final)} (${r.status})`;
-      const d = Math.abs(dlt) < 0.005 ? '' : `<span class="d ${dlt > 0 ? 'up' : 'dn'}">${dlt > 0 ? '+' : ''}${fmt(dlt)}</span>`;
-      return `<td class="cell ${r.status}" tabindex="0" data-id="${esc(r.id)}" data-l="${r.locked ? 1 : 0}" title="${esc(tip)}">${r.locked ? '🔒 ' : ''}${fmt(r.final)}${d}</td>`;
-    }).join('') + `<td><b>${fmt(tot)}</b></td></tr>`;
-  }
-  $('#dept').innerHTML = h + '</tbody>';
-  $('#dept').querySelectorAll('td.cell').forEach(td => {
-    const toggle = () => { overrides[td.dataset.id] = td.dataset.l !== '1'; realign(); };
-    td.onclick = toggle;
-    td.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } };
-  });
   $('#out').hidden = false;
-  $('#export').disabled = false;
 }
-
-$('#export').onclick = () => {
-  const {months, rows} = res, wide = {};
-  for (const r of rows) (wide[r.division + '|' + r.department] ??= {Division: r.division, Department: r.department})[r.month] = +r.final.toFixed(4);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(Object.values(wide), {header: ['Division', 'Department', ...months]}), 'Realigned Plan');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.map(r => ({Division: r.division, Department: r.department, Month: r.month,
-    AOP: r.aop, Plan: r.plan, Realigned: +r.final.toFixed(4), Status: r.status, Locked: r.locked ? 'Y' : 'N'}))), 'Detail');
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(res.summary.map(s => ({Division: s.division, Month: s.month,
-    AOP: s.aop, Plan: s.plan, Realigned: +s.final.toFixed(4), Gap: s.gap}))), 'Division Summary');
-  XLSX.writeFile(wb, 'Realigned Plan.xlsx');
-};
-
-$('#template').onclick = () => {
-  const ws = XLSX.utils.aoa_to_sheet([['Division', 'Department', "Mar'27", "Apr'27", "May'27", "Jun'27"],
-    ['MENS', 'M_SHIRT', 50, 40, 38, 35], ['MENS', 'M_JEANS', 30, 40, 36, 30], ['LADIES', 'L_KURTI', 45, 42, 40, 38]]);
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Plan'); XLSX.writeFile(wb, 'AOP Realigner Template.xlsx');
-};
 </script>
 </body>
 </html>

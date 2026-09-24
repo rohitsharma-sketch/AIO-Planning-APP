@@ -1,45 +1,43 @@
-"""python test_realign.py — no deps, no network."""
-from server import run
+"""python test_realign.py — synthetic data, no network."""
+import numpy as np
+import pandas as pd
+from server import realign
 
-AOP = [  # wide format, department-level AOP. MENS Mar total = 100
-    {"Division": "MENS", "Department": "SHIRT", "Mar'27": 50, "Apr'27": 40},
-    {"Division": "MENS", "Department": "JEANS", "Mar'27": 30, "Apr'27": 40},
-    {"Division": "MENS", "Department": "TEE", "Mar'27": 20, "Apr'27": 20},
-]
-by = lambda res: {(r["department"], r["month"]): r for r in res["rows"]}
+M = ["M1", "M2"]
+def row(store, div, dept, mrp, disp, v1, v2, q1=None, q2=None):
+    return {"Store Name": store, "DIVISION": div, "DEPARTMENT": dept, "MRP": mrp, "DISPLAY TYPE": disp,
+            "M1 Plan": v1, "M2 Plan": v2, "M1 Plan Qty": v1 if q1 is None else q1, "M2 Plan Qty": v2 if q2 is None else q2,
+            "Tag": "Original"}
 
-# 1. Buyer bumps SHIRT Mar 50->60: SHIRT kept, JEANS/TEE absorb -10 pro-rata (30:20)
-plan = [dict(r) for r in AOP]
-plan[0]["Mar'27"] = 60
-res = run({"aop": AOP, "plan": plan})
-r = by(res)
-assert r[("SHIRT", "Mar'27")]["final"] == 60 and r[("SHIRT", "Mar'27")]["status"] == "kept"
-assert abs(r[("JEANS", "Mar'27")]["final"] - 24) < 1e-9 and abs(r[("TEE", "Mar'27")]["final"] - 16) < 1e-9
-assert all(abs(s["gap"]) < 1e-9 for s in res["summary"])
-assert r[("SHIRT", "Apr'27")]["status"] == "absorbed" and r[("SHIRT", "Apr'27")]["final"] == 40  # untouched month
+orig = pd.DataFrame([
+    row("S1", "LADIES", "A", 299, "TABLE", 6, 0), row("S1", "LADIES", "A", 399, "NON_TABLE", 4, 0),
+    row("S1", "LADIES", "B", 299, "TABLE", 10, 20), row("S1", "LADIES", "C", 299, "TABLE", 10, 20),
+    row("S1", "MENS", "X", 299, "TABLE", 50, 50),                       # other division: untouched
+    row("S2", "LADIES", "A", 299, "TABLE", 5, 5), row("S2", "LADIES", "B", 299, "TABLE", 5, 5),
+])
+rev = pd.DataFrame([
+    {"Store Name": "S1", "DEPARTMENT": "A", "M1": 12, "M2": 5},     # M2: A had 0 -> all-month mix 6:4
+    {"Store Name": "S1", "DEPARTMENT": "A F/S", "M1": 3, "M2": 0},  # new dept -> cloned from A
+    {"Store Name": "S2", "DEPARTMENT": "A", "M1": 20, "M2": 5},     # M1 overshoots S2's total of 10
+])
+out, summ, warn = realign(orig, rev, M)
+g = lambda s, d, mrp, m: out[(out["Store Name"] == s) & (out.DEPARTMENT == d) & (out.MRP == mrp)][m + " Plan"].sum()
 
-# 2. Long format + new dept not in AOP (locked as a change) + dropped dept (locked at 0)
-plan = [{"Division": "mens", "Department": "shirt", "Month": "Mar'27", "Value": 50},
-        {"Division": "MENS", "Department": "TEE", "Month": "Mar'27", "Value": 20},
-        {"Division": "MENS", "Department": "POLO", "Month": "Mar'27", "Value": 10}]
-r = by(run({"aop": AOP, "plan": plan}))
-assert r[("POLO", "Mar'27")]["final"] == 10 and r[("JEANS", "Mar'27")]["final"] == 0
-assert abs(r[("SHIRT", "Mar'27")]["final"] + r[("TEE", "Mar'27")]["final"] - 90) < 1e-9
-
-# 3. Changes overshoot the AOP -> everything compressed proportionally, total still = AOP
-plan = [{"Division": "MENS", "Department": d, "Mar'27": v} for d, v in (("SHIRT", 150), ("JEANS", 30), ("TEE", 20))]
-res = run({"aop": AOP, "plan": plan})
-assert {x["status"] for x in res["rows"] if x["month"] == "Mar'27"} == {"compressed"}
-assert abs(res["summary"][0]["final"] - 100) < 1e-9
-
-# 4. Manual override: unlock SHIRT's change -> whole plan scales to 100 by plan mix
-plan = [dict(x) for x in AOP]; plan[0]["Mar'27"] = 60
-r = by(run({"aop": AOP, "plan": plan, "overrides": {"MENS|SHIRT|Mar'27": False}}))
-assert abs(r[("SHIRT", "Mar'27")]["final"] - 60 / 110 * 100) < 1e-9
-
-# 5. Division-level AOP (no Department column): plan depts scale to the division total
-res = run({"aop": [{"Division": "MENS", "Mar'27": 200}], "plan": plan})
-assert abs(sum(x["final"] for x in res["rows"] if x["month"] == "Mar'27") - 200) < 1e-9
-assert not res["aop_has_departments"]
-
+# revised values kept exactly, split by original MRP/display mix
+assert np.isclose(g("S1", "A", 299, "M1"), 7.2) and np.isclose(g("S1", "A", 399, "M1"), 4.8)
+assert np.isclose(g("S1", "A F/S", 299, "M1"), 1.8) and np.isclose(g("S1", "A F/S", 399, "M1"), 1.2)
+assert np.isclose(g("S1", "A", 299, "M2"), 3) and np.isclose(g("S1", "A", 399, "M2"), 2)   # fallback mix
+# others absorb pro-rata so S1 x LADIES x month total == original
+assert np.isclose(g("S1", "B", 299, "M1"), 7.5) and np.isclose(g("S1", "C", 299, "M1"), 7.5)
+s1l = out[(out["Store Name"] == "S1") & (out.DIVISION == "LADIES")]
+assert np.isclose(s1l["M1 Plan"].sum(), 30) and np.isclose(s1l["M2 Plan"].sum(), 40)
+assert np.isclose(g("S1", "X", 299, "M1"), 50)                                             # MENS untouched
+# overshoot: revised kept, other dept -> 0, flagged; M2 lands exactly
+assert np.isclose(g("S2", "A", 299, "M1"), 20) and np.isclose(g("S2", "B", 299, "M1"), 0)
+assert np.isclose(g("S2", "B", 299, "M2"), 5)
+assert any("S2/LADIES" in w for w in warn) and any("new store-departments" in w for w in warn)
+# qty follows value at the row's ASP
+q = out[(out["Store Name"] == "S1") & (out.DEPARTMENT == "B")]["M1 Plan Qty"].iloc[0]
+assert np.isclose(q, 7.5)
+assert (out[out.DEPARTMENT == "A F/S"]["Tag"] == "New Dept").all()
 print("all realign checks passed")
