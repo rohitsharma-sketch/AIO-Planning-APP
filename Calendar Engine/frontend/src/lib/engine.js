@@ -66,6 +66,30 @@ export const byDayTypeThenNearest = fd => (a, b) =>
   ((isWeekend(b) === isWeekend(fd)) - (isWeekend(a) === isWeekend(fd)))
   || (Math.abs(calDiff(fd, a)) - Math.abs(calDiff(fd, b)));
 
+// Min-cost perfect assignment (Hungarian / Kuhn-Munkres, O(n^3)) on a square
+// cost matrix; returns col index per row. V2 uses it so no LY day is reused.
+export function assignMinCost(C) {
+  const n = C.length, INF = Infinity;
+  const u = new Float64Array(n + 1), v = new Float64Array(n + 1), p = new Int32Array(n + 1), way = new Int32Array(n + 1);
+  for (let i = 1; i <= n; i++) {
+    p[0] = i; let j0 = 0; const minv = new Float64Array(n + 1).fill(INF), used = new Uint8Array(n + 1);
+    do {
+      used[j0] = 1; const i0 = p[j0], row = C[i0 - 1]; let delta = INF, j1 = 0;
+      for (let j = 1; j <= n; j++) if (!used[j]) {
+        const cur = row[j - 1] - u[i0] - v[j];
+        if (cur < minv[j]) { minv[j] = cur; way[j] = j0; }
+        if (minv[j] < delta) { delta = minv[j]; j1 = j; }
+      }
+      for (let j = 0; j <= n; j++) if (used[j]) { u[p[j]] += delta; v[j] -= delta; } else minv[j] -= delta;
+      j0 = j1;
+    } while (p[j0] !== 0);
+    do { const j1 = way[j0]; p[j0] = p[j1]; j0 = j1; } while (j0);
+  }
+  const a = new Array(n);
+  for (let j = 1; j <= n; j++) a[p[j] - 1] = j - 1;
+  return a;
+}
+
 export function getWeights() {
   return { festival: 1000, position: 500, month: 200, weekday: 100, dayType: 50, prox: 1 };
 }
@@ -293,29 +317,13 @@ function _v1Core(fests, refYr, futYr, maxShift, moPri, coreNames) {
   return mappings;
 }
 
-// V2 post-processor: take V1's Phase 1 festival anchors, then redo Phase 2
-// for ALL remaining TY days under a strict 4-tier month-adjacency hierarchy
-// (business rule confirmed 2026-09-22, revised same day to forbid ANY
-// duplicate reference date - a genuinely free day beats reuse even in the
-// adjacent month - replacing an earlier design that let a dried-up pool
-// fall back to ANY day in the reference year, confirmed live to have
-// produced e.g. a March 2026 day mapped to a January 2027 date with no
-// month relationship at all):
-//   1. Round A - same month, an unused LY day.
-//   2. Round B - adjacent month only (moPri's preferred direction, then the
-//                other), an unused LY day. A free day always wins over reuse.
-//   3. Round C - same month, REUSE an already-committed LY day. Only
-//                reached once tiers 1-2 have exhausted every unused day in
-//                both eligible months - by construction this can't happen
-//                for a real month, so this is the true last resort now, not
-//                a preference.
-//   4. Exception - same/adjacent month REUSE, bounded to the same 3 months
-//                  as tiers 1-3. Never a 4th, unrelated month; exists only
-//                  as a defensive backstop, should never actually fire.
-// Festive TY days (per the CORE-only fMap) only ever go through Round A -
-// they're meant to stay same-month by rule 1, and Round C's reuse tier
-// deliberately skips them (see its own guard) so a dry pool for one falls
-// straight to the tier-4 exception instead of borrowing another month.
+// V2 post-processor: take V1's Phase 1 festival anchors, then re-place every
+// other TY day with ONE optimal one-to-one assignment (no LY day used twice -
+// user's 2025->26 reference calendar, 2026-09-25). Month hierarchy is kept in
+// the cost: own month, then the adjacent month (moPri direction first), a
+// further month only if nothing else fits; festive TY days stay in their own
+// month. Then same weekday > same day type > nearest date. Replaces the
+// earlier greedy Rounds A/B/C + tier-4 reuse (5-15 reused days per cluster).
 function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
   maxShift = +maxShift || 45;
   const W = getWeights();
@@ -354,122 +362,47 @@ function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
   const assigned = new Map();
   const usedFut = new Set(), usedRef = new Set(committed);
 
-  // Round A: same-month LY pool for every remaining TY day - a festive TY
-  // day (in the full festival map) always stays same-month; a non-festive
-  // TY day now also gets first crack at its own month's residual, per the
-  // rule "non-festive days match same month's residual LY dates first."
-  const roundA = [];
-  for (const m of toReassign) {
-    const fd = m.futureDate, fs = fmtISO(fd), fi = fMap[fs];
-    const pool = lyByMonth.get(fd.getMonth()) || [];
-    for (const rd of pool) {
-      const rs = fmtISO(rd), ri = rMap[rs];
-      const s = scoreMapping(rd, fd, ri, fi, W, maxShift, moPri);
-      roundA.push({ rs, fs, rd, fd, ri, fi, ...s });
+  // 2026-09-25 - ONE optimal one-to-one assignment replaces the old Rounds
+  // A/B/C + tier-4 reuse. Rule taken from the user's own 2025->26 reference
+  // calendar (Downloads\FESTIVAL CALENDAR.xlsx, see logic-base): no LY day is
+  // ever used twice. The greedy rounds left 5-15 reused days per cluster
+  // whenever a festival shift drained a month (e.g. Eid pulling 2 April-2025
+  // days into March 2026 made April 2026 reuse 2 of its own days, while 2
+  // February-2025 days sat unused). Cost keeps the V2 hierarchy - own month,
+  // then the adjacent month (moPri direction first), anything further only if
+  // nothing else fits; then same weekday, same day type, nearest date.
+  // Festive TY days (full map) effectively never leave their own month.
+  const tyDays = toReassign.map(m => m.futureDate);
+  const lyFree = rDays.filter(d => !committed.has(fmtISO(d)));
+  const prefDm = moPri === 'next' ? 1 : 11; // (ref month - fut month) mod 12 of the preferred neighbour
+  const cost = (rd, fd) => {
+    const dm = ((rd.getMonth() - fd.getMonth()) % 12 + 12) % 12, md = Math.min(dm, 12 - dm);
+    const monthCost = md === 0 ? 0 : fMapFull[fmtISO(fd)] ? 1e7 : md === 1 ? (dm === prefDm ? 10000 : 10500) : 1e5 * md;
+    return monthCost + (rd.getDay() !== fd.getDay() ? 100 : 0) + (isWeekend(rd) !== isWeekend(fd) ? 50 : 0)
+         + Math.abs(calDiff(rd, fd));
+  };
+  const n = Math.max(tyDays.length, lyFree.length);
+  const C = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) =>
+    i < tyDays.length && j < lyFree.length ? cost(lyFree[j], tyDays[i]) : 0));
+  const pick = assignMinCost(C);
+  tyDays.forEach((fd, i) => {
+    const fs = fmtISO(fd), fi = fMap[fs];
+    const j = pick[i];
+    if (j < lyFree.length) {
+      const rd = lyFree[j], rs = fmtISO(rd), ri = rMap[rs];
+      assign({ rs, fs, rd, fd, ri, fi, ...scoreMapping(rd, fd, ri, fi, W, maxShift, moPri) }, assigned);
+      usedFut.add(fs); usedRef.add(rs);
     }
-  }
-  roundA.sort((a, b) => b.score - a.score);
-  for (const p of roundA) {
-    if (usedFut.has(p.fs) || usedRef.has(p.rs)) continue;
-    assign(p, assigned);
-    usedFut.add(p.fs); usedRef.add(p.rs);
-  }
-
-  // Round B: adjacent-month UNUSED pool - tier 2 of the hierarchy (business
-  // rule REVISED 2026-09-22: no duplicate reference dates allowed, period -
-  // a genuinely free day, even in the adjacent month, is always preferred
-  // over reusing one that's already spoken for; reuse is now the last
-  // resort, not a preference over borrowing a neighbouring month). Tries
-  // moPri's preferred direction to completion first, then the other
-  // direction for anything still left - "adjacent month means ONLY:
-  // previous calendar month, next calendar month", never a third month
-  // either way.
-  function runRoundB(adjMoOf) {
-    const cands = [];
-    for (const m of toReassign) {
-      const fs = fmtISO(m.futureDate);
-      if (usedFut.has(fs) || fMapFull[fs]) continue;
-      const fd = m.futureDate, fi = fMap[fs];
-      const pool = lyByMonth.get(adjMoOf(fd)) || [];
-      for (const rd of pool) {
-        const rs = fmtISO(rd);
-        if (usedRef.has(rs)) continue;
-        const ri = rMap[rs];
-        const s = scoreMapping(rd, fd, ri, fi, W, maxShift, moPri);
-        cands.push({ rs, fs, rd, fd, ri, fi, ...s });
-      }
-    }
-    cands.sort((a, b) => b.score - a.score);
-    for (const p of cands) {
-      if (usedFut.has(p.fs) || usedRef.has(p.rs)) continue;
-      assign(p, assigned);
-      usedFut.add(p.fs); usedRef.add(p.rs);
-    }
-  }
-  const preferredAdj = moPri === 'next' ? (fd) => (fd.getMonth() + 1) % 12 : (fd) => (fd.getMonth() - 1 + 12) % 12;
-  const otherAdj = moPri === 'next' ? (fd) => (fd.getMonth() - 1 + 12) % 12 : (fd) => (fd.getMonth() + 1) % 12;
-  runRoundB(preferredAdj);
-  runRoundB(otherAdj);
-
-  // Round C: same-month REUSE - tier 3, reached only by whatever's STILL
-  // unplaced after BOTH the own-month (A) and adjacent-month (B) unused
-  // pools are exhausted. By the time a TY day reaches here every day in its
-  // own month is already claimed (Round A would have taken any that
-  // weren't), so this always is a reuse (sharedRef: true, mirroring V1
-  // Phase 3's own "Same-Month Reuse"). Kept scoped to the SAME month only -
-  // Round B above already had first claim on the adjacent month's unused
-  // days, so falling back to REUSE there too would mean picking between two
-  // duplicate-creating options for no reason; same-month is the nearer one.
-  for (const m of toReassign) {
-    const fs = fmtISO(m.futureDate);
-    if (usedFut.has(fs) || fMapFull[fs]) continue; // already placed, or a festive TY day (never reused here)
-    const fd = m.futureDate, fi = fMap[fs];
-    const sameMonthAny = rDays.filter(d => d.getMonth() === fd.getMonth());
-    if (!sameMonthAny.length) continue; // defensively unreachable for a real month
-    sameMonthAny.sort(byDayTypeThenNearest(fd));
-    const rd = sameMonthAny[0], rs = fmtISO(rd), ri = rMap[rs];
-    const s = scoreMapping(rd, fd, ri, fi, W, maxShift, moPri);
-    assign({ rs, fs, rd, fd, ri, fi, mtype: 'Nearest Available Date (Same-Month Reuse)', mpri: 7, ...s }, assigned, true);
-    usedFut.add(fs); // NOT usedRef - the day stays reusable by other TY days too
-  }
-
-  // Tier 4 - controlled, bounded exception (replaces the old unrestricted
-  // "any still-available LY day, nearest first" fallback, which is exactly
-  // what let a March 2026 reference day get assigned to a January 2027 date
-  // with no month relationship at all). Whatever STILL isn't placed after
-  // tiers 1-3 reuses a day from the SAME set of eligible months only (its
-  // own month or either adjacent month) - never expands the search to any
-  // other month. In this app's current all-festivals-are-core configuration
-  // this should never actually fire (Round C already resolves everything
-  // that reaches it); it exists as a documented, bounded safety net rather
-  // than a second unrestricted escape hatch.
+  });
+  // Only a TY year LONGER than the LY year (e.g. 2027 -> 2028 leap) can leave a
+  // TY day without a free LY day; it reuses the nearest same-month day.
   for (const m of toReassign) {
     const fs = fmtISO(m.futureDate);
     if (assigned.has(fs)) continue;
     const fd = m.futureDate, fi = fMap[fs];
-    const eligibleMonths = new Set([fd.getMonth(), (fd.getMonth() - 1 + 12) % 12, (fd.getMonth() + 1) % 12]);
-    const pool = rDays.filter(d => eligibleMonths.has(d.getMonth()));
-    if (!pool.length) {
-      // No reference day exists in this month or either neighbour at all -
-      // defensively unreachable for a real Gregorian calendar. Flagged
-      // distinctly rather than silently borrowing from further away.
-      assigned.set(fs, { ...m, sharedRef: true, mappingType: 'Unmapped - No Eligible Reference Day (Same/Adjacent Month Exhausted)' });
-      continue;
-    }
-    pool.sort(byDayTypeThenNearest(fd));
-    const rd = pool[0], rs = fmtISO(rd), ri = rMap[rs];
-    const s = scoreMapping(rd, fd, ri, fi, W, maxShift, moPri);
-    assigned.set(fs, {
-      refDate: rd, futureDate: fd,
-      festival: ri ? ri.festival : null,
-      festivePosition: ri ? ri.position : null,
-      festiveCategory: ri ? ri.category : (fi ? fi.category : 'Non-Festive'),
-      futFestInfo: fi,
-      mappingType: 'Same/Adjacent Month Reuse (Exception)',
-      mappingPriority: 7, score: s.score,
-      monthMatch: s.monthMatch, weekdayMatch: s.weekdayMatch, dateDiff: s.diff,
-      sharedRef: true,
-    });
+    const rd = rDays.filter(d => d.getMonth() === fd.getMonth()).sort(byDayTypeThenNearest(fd))[0];
+    const rs = fmtISO(rd), ri = rMap[rs];
+    assign({ rs, fs, rd, fd, ri, fi, ...scoreMapping(rd, fd, ri, fi, W, maxShift, moPri), mtype: 'Nearest Available Date (Same-Month Reuse)', mpri: 7 }, assigned, true);
   }
 
   // Merge anchors + freshly assigned into one map, then repair excessive

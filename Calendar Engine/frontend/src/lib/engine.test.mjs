@@ -150,17 +150,16 @@ function test7_sharedRefStaysBounded() {
 // upper bound (not an exact count, which would make this brittle to
 // festival-date maintenance) so a future regression that reverts the tier
 // order or otherwise inflates reuse gets caught.
+// Revised 2026-09-25: V2 now uses one optimal one-to-one assignment (user's
+// 2025->26 reference calendar reuses no LY day), so the floor is 0 - every
+// LY day is used at most once, festival or not, in both fixtures.
 function test8_duplicateReferenceDatesMinimized() {
-  const mappings = runsForVersion(2);
-  const nonFestive = mappings.filter(m => !m.festival);
-  const counts = new Map();
-  for (const m of nonFestive) {
-    const k = fmtISO(m.refDate);
-    counts.set(k, (counts.get(k) || 0) + 1);
+  for (const fests of [BIHAR_FESTIVALS, DAYTYPE_FESTIVALS]) {
+    const mappings = generateMappings(fests, REF_YR, FUT_YR, MAX_SHIFT, MO_PRI, null, 2);
+    const dupCount = mappings.length - new Set(mappings.map(m => fmtISO(m.refDate))).size;
+    assert.equal(dupCount, 0, `V2 reused ${dupCount} LY day(s) - the one-to-one assignment is no longer in effect`);
   }
-  const dupCount = [...counts.values()].filter(v => v > 1).length;
-  assert.ok(dupCount <= 10, `expected duplicate reference dates to stay near the known floor (3), got ${dupCount} - Round B may no longer be running before Round C`);
-  console.log(`PASS test8_duplicateReferenceDatesMinimized (${dupCount} duplicate ref dates, floor is 3 for this config)`);
+  console.log('PASS test8_duplicateReferenceDatesMinimized (V2: 0 reused LY days)');
 }
 
 // Test 9 - day type (business rule 2026-09-24): a non-festive day keeps its
@@ -170,7 +169,8 @@ function test8_duplicateReferenceDatesMinimized() {
 // because BIHAR's list happens not to expose the difference. Bound, not exact
 // count (like test8): the old nearest-date engine gave 10 crossings in V1 and
 // 9 in V2 here, day-type-aware gives 6 and 7 - the rest are forced by
-// weekend-count imbalance between a TY month and its LY pool.
+// weekend-count imbalance between a TY month and its LY pool. V2 bound 8
+// since 2026-09-25: with no LY day reusable, one more crossing is forced.
 const DAYTYPE_FESTIVALS = [
   { name: 'Holi', refDate: '2026-03-04', futDate: '2027-03-22', pre: 7, core: 3, post: 0 },
   { name: 'Eid al-Fitr', refDate: '2026-03-20', futDate: '2027-03-09', pre: 4, core: 3, post: 0 },
@@ -184,7 +184,7 @@ const DAYTYPE_FESTIVALS = [
 ];
 function test9_dayTypePreserved() {
   const wk = d => d.getDay() === 0 || d.getDay() === 6;
-  for (const [version, bound] of [[1, 6], [2, 7]]) {
+  for (const [version, bound] of [[1, 6], [2, 8]]) {
     const non = generateMappings(DAYTYPE_FESTIVALS, REF_YR, FUT_YR, MAX_SHIFT, MO_PRI, null, version)
       .filter(m => m.mappingPriority > 2);
     const crossings = non.filter(m => wk(m.refDate) !== wk(m.futureDate)).length;
