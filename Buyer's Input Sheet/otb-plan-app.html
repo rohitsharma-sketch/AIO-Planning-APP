@@ -532,7 +532,7 @@ tr:hover .mag-trig{display:inline}
         <div class="tbar-sep"></div>
         <div class="tbtn" onclick="openVersionLog()" id="history-btn">History</div>
         <div class="tbtn" onclick="exportCSV()">Export</div>
-        <div class="tbtn pri" onclick="saveState()">Save</div>
+        <div class="tbtn pri" onclick="saveState(true)">Save</div>
       </div>
     </div>
 
@@ -4202,11 +4202,11 @@ function resetPlanToAop(){
 
 
 /* ── SAVE & EXPORT ─────────────────────────────── */
-function saveState(){
+function saveState(logVersion=false){
   const now=new Date();
   try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopVersionId:S.aopVersionId,aopUnit:S.aopUnit,locked:[...S.locked],aopSeeds:S.aopSeeds,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],customDepts:S.customDepts,at:now.toISOString()}))}catch(e){}
   _updateSaveLabel(now);
-  _maybeSaveVersion(now);
+  if(logVersion)_maybeSaveVersion(now);
   pushBuyerGrowthLive();
   toast('State saved ✓');
 }
@@ -5118,6 +5118,11 @@ const _VL_KEY='bis.plan_versions';
 const _VL_MAX=10;
 function _vlLoad(){try{return JSON.parse(localStorage.getItem(_VL_KEY)||'[]');}catch(e){return [];}}
 function _vlSave(arr){try{localStorage.setItem(_VL_KEY,JSON.stringify(arr));}catch(e){}}
+// The version the plan on screen came from (last Load, or last new version) - a
+// save with no real change updates THAT one, not a new "Version N+1" (2026-09-25).
+const _VL_ACTIVE_KEY='bis.plan_versions.active';
+function _vlActiveId(){try{return Number(localStorage.getItem(_VL_ACTIVE_KEY))||null;}catch(e){return null;}}
+function _vlSetActive(id){try{localStorage.setItem(_VL_ACTIVE_KEY,String(id));}catch(e){}}
 function _divPlanMAMJTotal(divId){
   const dv=DVDATA.find(d=>d.id===divId);
   if(!dv)return 0;
@@ -5149,24 +5154,8 @@ function _vlFmtDate(now){
   const mm=String(now.getMinutes()).padStart(2,'0');
   return `${dd} ${mmm} ${yyyy}, ${h}:${mm} ${ampm}`;
 }
-function _maybeSaveVersion(now){
-  const vers=_vlLoad();
-  const cur=_vlCurrentTotals();
-  const curSum=_vlTotalSum(cur);
-  if(vers.length>0){
-    const last=vers[0];
-    const diff=Math.abs(curSum-_vlTotalSum(last.divisionTotals));
-    if(diff<=0.5){
-      // minor drift — just update savedAt
-      last.savedAt=now.toISOString();
-      _vlSave(vers);
-      return;
-    }
-  }
-  // new version — store summary totals + full state snapshot for Load
-  const n=vers.length+1;
-  const label=`Version ${n} — ${_vlFmtDate(now)}`;
-  const snapshot={
+function _vlSnapshot(){
+  return {
     inputs:{...S.inputs},
     locked:[...S.locked],
     hiddenSecs:[...S.hiddenSecs],
@@ -5175,9 +5164,33 @@ function _maybeSaveVersion(now){
     aopUnit:S.aopUnit,
     aopSeeds:{...S.aopSeeds}
   };
-  vers.unshift({id:Date.now(),label,savedAt:now.toISOString(),divisionTotals:cur,snapshot});
+}
+function _maybeSaveVersion(now){
+  const vers=_vlLoad();
+  const cur=_vlCurrentTotals();
+  const curSum=_vlTotalSum(cur);
+  // Compare against the version this plan came from (else the newest). The old
+  // check used vers[0] only, so Load "Version 2" + Save with no change made a
+  // "Version 3/4" copy whenever Version 2 wasn't the newest entry.
+  const ai=vers.findIndex(v=>v.id===_vlActiveId());
+  const i=ai>=0?ai:0;
+  if(vers.length&&Math.abs(curSum-_vlTotalSum(vers[i].divisionTotals))<=0.5){
+    // same plan (minor drift) - refresh that version in place and make it the latest
+    const [v]=vers.splice(i,1);
+    Object.assign(v,{savedAt:now.toISOString(),divisionTotals:cur,snapshot:_vlSnapshot()});
+    vers.unshift(v);
+    _vlSave(vers);
+    _vlSetActive(v.id);
+    return;
+  }
+  // new version - store summary totals + full state snapshot for Load
+  const n=vers.length+1;
+  const label=`Version ${n} — ${_vlFmtDate(now)}`;
+  const id=Date.now();
+  vers.unshift({id,label,savedAt:now.toISOString(),divisionTotals:cur,snapshot:_vlSnapshot()});
   if(vers.length>_VL_MAX)vers.length=_VL_MAX;
   _vlSave(vers);
+  _vlSetActive(id);
 }
 function openVersionLog(){
   _renderVersionLog();
@@ -5223,12 +5236,16 @@ function loadVersion(idx){
   S.inputs=snap.inputs||{};
   S.locked=new Set(snap.locked||[]);
   S.hiddenSecs=new Set(snap.hiddenSecs||[]);
-  if(snap.aop)S.aop=snap.aop;
-  if(snap.aopLocked!=null)S.aopLocked=snap.aopLocked;
+  // AOP (S.aop / aopLocked / pinned version) is NOT taken from the snapshot: it
+  // is the live AOP handshake, re-applied on every page load anyway - restoring
+  // a stale lock state here is what made the user re-do Sync & Lock by hand.
+  // The plan inputs ARE restored exactly, so Save right after Load is a no-op.
   if(snap.aopUnit)S.aopUnit=snap.aopUnit;
   if(snap.aopSeeds)S.aopSeeds=snap.aopSeeds;
-  syncAopLockUI();
+  _vlSetActive(v.id);
+  saveState();
   refresh();
+  syncAopLockUI();
   closeVersionLog();
   toast(`Loaded: ${v.label}`);
 }
