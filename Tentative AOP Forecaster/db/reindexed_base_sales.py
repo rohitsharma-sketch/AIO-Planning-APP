@@ -36,7 +36,7 @@ there yet. See `available_months`/`hasAttribute`/`note` in the return value.
 """
 from sqlalchemy import text
 
-from engine_v3 import DIVS, LFL_TAGS, FY27_M, FY28_M, Q1_FY28_MONTHS, Q1_ALLOWED_VALUES, _open_months
+from engine_v3 import DIVS, LFL_TAGS, auto_tag, FY27_M, FY28_M, Q1_FY28_MONTHS, Q1_ALLOWED_VALUES, _open_months
 
 GM_DEPTS = {"HOUSEHOLD", "LIFESTYLE", "NON FOOD", "HOME FURNISHING", "SPORTS & TOYS",
             "FOOTWEAR", "TRAVEL ACCESSORIES", "STATIONERY"}
@@ -98,10 +98,10 @@ def get_reindexed_lfl_base_sales(session):
     key_fields, columns = snap
     has_attribute = "ATTRIBUTE1" in key_fields
 
-    lfl_stores = [r[0] for r in session.execute(
-        text("SELECT store_id FROM masterdata.stores WHERE tag = ANY(:tags)"),
-        {"tags": list(LFL_TAGS)},
-    ).all()]
+    # Same auto LfL rule as the engine's Store Master (engine_v3.auto_tag)
+    lfl_stores = sorted({r[0] for r in session.execute(
+        text("SELECT store_id, tag, opening_date, store_current_status FROM masterdata.stores")
+    ).all() if auto_tag(r[1], r[2], r[3]) in LFL_TAGS})
 
     # Unlike month-wise (DIVISION is always part of the grain), day-wise's
     # default grain is store-only.  When DIVISION was not ticked before the

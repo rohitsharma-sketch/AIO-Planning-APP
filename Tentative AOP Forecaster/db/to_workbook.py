@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 
 from db.models.masterdata import NsoOpening, Store
 from db.models.planning_inputs import InputValue, Period
+from engine_v3 import auto_tag
 
 FY27_M = ["Mar'26", "Apr'26", "May'26", "Jun'26", "Jul'26", "Aug'26", "Sep'26",
           "Oct'26", "Nov'26", "Dec'26", "Jan'27", "Feb'27", "Mar'27"]
@@ -67,7 +68,8 @@ def build_workbook_from_db(session: Session, out_path: str) -> str:
         select(Store).where(Store.valid_to.is_(None), Store.tag.is_not(None))
     ).scalars().all()
     _write_sheet(wb, "Store Master", ["Store", "Ref Store", "Cluster", "Tag"],
-                 [[s.store_id, s.ref_store, s.cluster_key, s.tag] for s in stores])
+                 [[s.store_id, s.ref_store, s.cluster_key, auto_tag(s.tag, s.opening_date, s.store_current_status)]
+                  for s in stores])
 
     # Store Actuals — pivot input_values(store_actuals) to Store x Division x
     # Attribute x FY27 month grid. row_key carries the ATTRIBUTE1 value the sync

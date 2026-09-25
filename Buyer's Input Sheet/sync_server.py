@@ -40,11 +40,24 @@ LOCAL_CACHE = os.path.join(tempfile.gettempdir(), "citykart_otb_cache")
 # Set to None to resume auto-pick (latest file in SALES_DIR).
 PINNED_SALES_FILE = os.path.join(LOCAL_CACHE, "rs_sales_latest.parquet")  # pinned: Aug-17 2026
 
-# ── LFL STORE TAG FILTER (26V27) ─────────────────────────────────────────────
-# TAG_TYPE values that identify LFL stores for the FY27 plan base (FY26 LY).
-# 032=legacy network, 080/095/125=other store clusters, FY26=stores opened in FY26.
-# Combined these give 148 stores. SET-1/SET-2/6-NSO are excluded from LFL.
-LFL_TAGS_26V27 = {"032 - Stores", "080 - Stores", "095 - Stores", "125 - Stores", "FY26"}
+# ── LFL STORES (user rules, 2026-09-25) ──────────────────────────────────────
+# Plan base (26V27, the BIS LY): auto-detected - a trading store (SAME/NEW STORE)
+# that opened by 31 Dec before the LY window starts (Mar'26 -> 31 Dec 2025), so
+# Jan-Feb openings (ambiguous ramp-up base) are left out. 1 Jan 2000 is the
+# placeholder opening date of non-store sites. Today = the 148 stores, same
+# rule as AOP's engine_v3.auto_tag.
+# History growth uses the store cohort tags: 19V26 = the 32-store tag,
+# 25V26 = the 32/80/95/125 tags together (120 stores).
+LFL_TAGS_19V26 = {"032 - Stores"}
+LFL_TAGS_25V26 = {"032 - Stores", "080 - Stores", "095 - Stores", "125 - Stores"}
+
+
+def plan_lfl_stores(opened: dict, status: dict, ly_start: tuple) -> set:
+    """Stores in the plan LfL base: opened by 31 Dec before ly_start (y, m)."""
+    cut = pd.Timestamp(ly_start[0] - 1, 12, 31)
+    return {s for s, d in opened.items()
+            if pd.notna(d) and pd.Timestamp(2000, 1, 1) < d <= cut
+            and str(status.get(s) or "").strip().upper() in ("SAME STORE", "NEW STORE")}
 
 # ── WEEKLY ST% → MONTH MAP (MAMJ block, retail week numbering) ───────────────
 # WK9-13=Mar(mi=11)  WK14-17=Apr(mi=0)  WK18-22=May(mi=1)  WK23-26=Jun(mi=2)
@@ -60,10 +73,9 @@ VALID_WK_STRS:  set  = set(WEEK_STR_TO_MI)
 
 # ── PINNED LY ACTUALS ─────────────────────────────────────────────────────────
 # Division-level AOP month actuals (Mar/Apr/May/Jun FY26, Rs Cr) sourced from
-# the Aug-10 parquet (32 LFL stores — stale vs the current 148-store LFL_TAGS_26V27
-# definition). Unpinned 2026-09-23: live parquet path below is already correctly
-# scoped to the 148-store LFL set (see tag_col filter a few lines down) and was
-# sanity-checked (rs_sales_latest.parquet reads fine, TAG_TYPE has 148 LFL stores).
+# the Aug-10 parquet (32 LFL stores — stale vs the current 148-store plan LfL
+# set). Unpinned 2026-09-23: live parquet path below is scoped to the plan LfL
+# stores (plan_lfl_stores) and was sanity-checked (148 stores).
 # Keys: division string → {mi_string → Cr value}. Set to None to use live parquet.
 PINNED_LY_ACTUALS = None
 # ─────────────────────────────────────────────────────────────────────────────
@@ -95,9 +107,9 @@ DATE_TO_MI = {v: k for k, v in AOP_LY_DATES.items()}
 # Part of data_version, so a browser holding LY cached under an older month
 # definition resyncs instead of keeping it (the parquet mtime alone wouldn't change).
 LY_DEF = "ly" + "".join(f"{y}{m:02d}" for y, m in sorted(AOP_LY_DATES.values()))
-# History growth (19V26, 25V26) uses auto-detected LFL stores per month (see
-# lfl_by_month). In data_version so cached history in every browser re-syncs.
-HIST_DEF = "hlflauto"
+# History growth (19V26, 25V26) = cohort tags x per-month trading (lfl_by_month).
+# In data_version so cached history in every browser re-syncs.
+HIST_DEF = "hlflcohort"
 
 # Full-year FY calendars: mi=0=Apr … mi=11=Mar
 _CAL_MONTHS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3]
@@ -115,12 +127,12 @@ FY25_DATE_TO_MI = _fy_date_to_mi(2024)   # Apr 2024 – Mar 2025
 FY26_DATE_TO_MI = _fy_date_to_mi(2025)   # Apr 2025 – Mar 2026
 
 
-def lfl_by_month(traded: set, opened: dict, base_map: dict, cmp_map: dict) -> dict:
-    """Auto LFL detector: {mi: stores comparable in month mi of base vs cmp FY}.
+def lfl_by_month(traded: set, opened: dict, base_map: dict, cmp_map: dict, pool=None) -> dict:
+    """{mi: stores comparable in month mi of base vs cmp FY}.
 
-    A store counts for a month when it sold in that month in BOTH years and was
-    open before the base month began (no part-month opening). The count therefore
-    moves with each year pair and each month - never a hardcoded tag or count.
+    A store of `pool` (the pair's cohort tags; None = any) counts for a month
+    when it sold in that month in BOTH years and was open before the base month
+    began, so a closed or part-month store drops out of just those months.
     traded = {(store, (y, m))} with sales > 0; opened = {store: Timestamp|NaT}.
     """
     base_ym = {mi: ym for ym, mi in base_map.items()}
@@ -129,6 +141,7 @@ def lfl_by_month(traded: set, opened: dict, base_map: dict, cmp_map: dict) -> di
         ym_b = base_ym[mi]
         start = pd.Timestamp(ym_b[0], ym_b[1], 1)
         out[mi] = {s for s, ym in traded if ym == ym_b and (s, ym_c) in traded
+                   and (pool is None or s in pool)
                    and not (pd.notna(opened.get(s)) and opened[s] >= start)}
     return out
 
@@ -340,7 +353,8 @@ def _run_sales_job(src: str):
                                              "sale_value", "sale_amt", "sales_value", "sales_amt",
                                              "amount", "revenue", "gross", "net_bill", "extaxamt", "ex_tax"])
         store_col = detect_col(cols_lower, ["store_name", "store", "store_nm", "outlet", "outlet_name"])
-        tag_col   = detect_col(cols_lower, ["tag_type", "tag", "store_tag", "store_type"])
+        open_col  = detect_col(cols_lower, ["opening_date", "open_date", "store_open_date"])
+        stat_col  = detect_col(cols_lower, ["store_current_status"])  # not STORE_STATUS
 
         if not all([date_col, div_col, amt_col]):
             _sales_job = {"status": "error", "data": None,
@@ -350,16 +364,18 @@ def _run_sales_job(src: str):
 
         read_cols = [date_col, div_col, amt_col] \
                     + ([store_col] if store_col else []) \
-                    + ([tag_col]   if tag_col   else [])
+                    + ([c for c in (open_col, stat_col) if c] if store_col else [])
         df = pd.read_parquet(src, columns=read_cols)
         _sales_job["progress"] = 70
         df[date_col] = parse_date_col(df[date_col])
         df = df.dropna(subset=[date_col])
 
-        # Filter to 148 LFL stores (TAG_TYPE in LFL_TAGS_26V27)
-        if tag_col and store_col and tag_col in df.columns:
-            lfl_mask = df[tag_col].astype(str).str.strip().isin(LFL_TAGS_26V27)
-            df = df[lfl_mask]
+        # Plan LfL stores, auto-detected (plan_lfl_stores)
+        if store_col and open_col and stat_col:
+            g = df.groupby(store_col)
+            lfl = plan_lfl_stores(pd.to_datetime(g[open_col].first(), errors="coerce").to_dict(),
+                                  g[stat_col].first().to_dict(), min(AOP_LY_DATES.values()))
+            df = df[df[store_col].isin(lfl)]
 
         target = set(AOP_LY_DATES.values())
         mask = df[date_col].apply(lambda d: (d.year, d.month) in target)
@@ -645,8 +661,9 @@ def _run_history_job(src: str):
             except Exception:
                 pass  # fall back to network path if copy fails
 
-        # STORE_NAME (+ OPENING_DATE) feed the auto LFL detector
+        # STORE_NAME + TAG_TYPE (cohorts) + OPENING_DATE feed lfl_by_month
         store_col = detect_col(cols_lower_schema, ["store_name", "store", "store_nm", "outlet", "outlet_name"])
+        tag_col   = detect_col(cols_lower_schema, ["tag_type", "tag", "store_tag", "store_type"])
         open_col  = detect_col(cols_lower_schema, ["opening_date", "open_date", "store_open_date"])
         sec_col   = detect_col(cols_lower_schema, ["section_nm", "section", "sec_nm", "sec_name"])
         dept_col  = detect_col(cols_lower_schema, ["department", "dept_nm", "dept_name", "dept"])
@@ -654,7 +671,7 @@ def _run_history_job(src: str):
                     + ([dept_col]  if dept_col  else []) \
                     + ([sec_col]   if sec_col   else []) \
                     + ([store_col] if store_col else []) \
-                    + ([open_col]  if open_col and store_col else [])
+                    + ([c for c in (open_col, tag_col) if c] if store_col else [])
 
         df = pd.read_parquet(src, columns=read_cols, filters=row_filter)
         df[date_col] = parse_date_col(df[date_col])
@@ -664,16 +681,21 @@ def _run_history_job(src: str):
         df[amt_col] = pd.to_numeric(df[amt_col], errors="coerce").fillna(0)
         df = df.dropna(subset=["_div"])
 
-        # LFL stores are auto-detected per year pair and per month (lfl_by_month):
-        # store counts differ year to year, so no tag list or fixed count.
+        # Each pair: its cohort tags, then per month only stores that traded that
+        # month in both years (lfl_by_month).
         lfl_19v26 = lfl_25v26 = None
         if store_col:
             traded = set(df[df[amt_col] > 0].groupby([store_col, "_ym"]).size().index)
             opened = {}
             if open_col:
                 opened = pd.to_datetime(df.groupby(store_col)[open_col].first(), errors="coerce").to_dict()
-            lfl_19v26 = lfl_by_month(traded, opened, FY19_DATE_TO_MI, FY26_DATE_TO_MI)
-            lfl_25v26 = lfl_by_month(traded, opened, FY25_DATE_TO_MI, FY26_DATE_TO_MI)
+            pool19 = pool25 = None
+            if tag_col:
+                tags = df.groupby(store_col)[tag_col].first().astype(str).str.strip()
+                pool19 = set(tags[tags.isin(LFL_TAGS_19V26)].index)
+                pool25 = set(tags[tags.isin(LFL_TAGS_25V26)].index)
+            lfl_19v26 = lfl_by_month(traded, opened, FY19_DATE_TO_MI, FY26_DATE_TO_MI, pool19)
+            lfl_25v26 = lfl_by_month(traded, opened, FY25_DATE_TO_MI, FY26_DATE_TO_MI, pool25)
 
         def _agg_fy(date_to_mi: dict, store_set=None):
             target = set(date_to_mi.keys())

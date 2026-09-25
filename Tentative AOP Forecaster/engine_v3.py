@@ -84,6 +84,24 @@ RAMP_TAGS = {"FY26 - Q4","FY27 - Q1","FY27 - Q2",
              "10 NSO"}                                       # '10 NSO' = 10th-batch upcoming stores (DB tag: 'Ramp')
 NSO_TAGS  = {"NSO","MAMJ-NSO"}   # 750L ramp formula
 
+# Plan LfL is auto-detected, not read off the tag (user rule 2026-09-25): a
+# trading store (SAME/NEW STORE) that opened by 31 Dec before the LY base
+# window starts (Mar'26 -> 31 Dec 2025) is LfL; later openings are Ramp, as
+# their base months are ramp-up and ambiguous. 1 Jan 2000 is the placeholder
+# opening date of upcoming sites, so it never qualifies. Rolls with FY27_M.
+LFL_CUTOFF = datetime.date(2000 + int(FY27_M[0][-2:]) - 1, 12, 31)
+
+def auto_tag(tag, opening_date, status):
+    """The tag the engine should use: the DB tag, unless the LfL cut-off above
+    disagrees - then "LFL" / "Ramp". NSO tags are never touched."""
+    if tag in NSO_TAGS:
+        return tag
+    lfl = (opening_date is not None and datetime.date(2000, 1, 1) < opening_date <= LFL_CUTOFF
+           and (status or "").upper() in ("SAME STORE", "NEW STORE"))
+    if lfl == (tag in LFL_TAGS):
+        return tag
+    return "LFL" if lfl else "Ramp"
+
 # Q1's base sales (Apr'27/May'27/Jun'27 forecast columns, i.e. the Apr'26/
 # May'26/Jun'26 LY actuals that feed them) are meant to only count specific
 # attribute values - every other quarter counts every attribute.

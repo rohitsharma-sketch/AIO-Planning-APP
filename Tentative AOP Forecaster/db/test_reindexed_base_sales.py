@@ -1,5 +1,6 @@
 """No-DB check: MW snapshot keeps 'division' and the AOP toggle splits by it.
 Run: python db/test_reindexed_base_sales.py"""
+import datetime
 import os
 import sys
 
@@ -35,7 +36,7 @@ class _Session:
         if "SELECT key_fields" in sql:
             return _Res([(["store"], ["2027-04-01"])])
         if "masterdata.stores" in sql:
-            return _Res([("S1",)])
+            return _Res([("S1", "032 - Stores", datetime.date(2020, 1, 1), "SAME STORE")])
         if "source_type = 'mw'" in sql:
             return _Res(self.mw_rows if "elem->>'division'" in sql else [])
         return _Res([("2027-04", 1_000_000.0)])  # DW monthly total: 10 Lakhs
