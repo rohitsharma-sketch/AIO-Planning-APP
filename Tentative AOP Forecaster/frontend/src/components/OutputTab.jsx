@@ -269,14 +269,10 @@ export default function OutputTab({ sessionId, runKey }) {
   const levelLabel = k => LEVELS.find(l => l.key === k).label
   const anyFilter = LEVEL_KEYS.some(k => d.dimF[k].length)
 
-  // Layer chip click: open the table down to layer i; click the deepest open layer again = fold it.
-  const crumbClick = i => {
-    const target = depth === i + 1 ? i : i + 1
-    if (target <= 1) { d.collapse(); setDepth(1) } else { d.expandTo(tree, target - 1); setDepth(target) }
-  }
-  // +/- on layer i: open every node of that layer (show layer i+1) or close them all.
-  const layerToggle = (i, e) => {
-    e.stopPropagation()
+  // One click on layer chip i = expand every node of that layer (show layer i+1),
+  // click again = collapse them all. The last layer has nothing below it.
+  const layerToggle = i => {
+    if (i >= rowFields.length - 1) return
     const target = depth > i + 1 ? i + 1 : i + 2
     if (target <= 1) { d.collapse(); setDepth(1) } else { d.expandTo(tree, target - 1); setDepth(target) }
   }
@@ -321,7 +317,7 @@ export default function OutputTab({ sessionId, runKey }) {
     onDrop: e => { e.preventDefault(); e.stopPropagation(); if (drag && over?.side) moveLayer(drag, k, over.side); endDrag() },
     // Keyboard: Enter/Space = click, Delete = remove the layer, Alt+← / Alt+→ moves it
     onKeyDown: e => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); crumbClick(i); return }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); layerToggle(i); return }
       if (e.key === 'Delete') { e.preventDefault(); removeLayer(k); return }
       if (!e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return
       e.preventDefault()
@@ -428,15 +424,10 @@ export default function OutputTab({ sessionId, runKey }) {
                 <th rowSpan={3} className="pv-rowhead pv-sticky">
                   <div className={`pv-layers${over?.key === '__end' ? ' drop-end' : ''}`} {...headDrop} onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setOver(null) }}>
                     {rowFields.map((k, i) => (
-                      <div key={k} role="button" tabIndex={0} {...chipDnd(k, i)} onClick={() => crumbClick(i)}
-                              className={`pv-layer${i < depth ? ' on' : ''}${drag === k ? ' dragging' : ''}${d.dimF[k].length ? ' filtered' : ''}${over?.key === k && drag !== k ? (over.side < 0 ? ' drop-l' : ' drop-r') : ''}`}
-                              title={`${depth === i + 1 ? 'Fold' : 'Open to'} ${levelLabel(k)} · drag to re-order (Alt+←/→) · drag up to the filter bar to remove (Delete)`}>
-                        {i < rowFields.length - 1 && (
-                          <span className="pv-layer-t" role="button" aria-label={`${depth > i + 1 ? 'Collapse' : 'Expand'} every ${levelLabel(k)}`}
-                                title={`${depth > i + 1 ? 'Collapse' : 'Expand'} every ${levelLabel(k)}`} onClick={e => layerToggle(i, e)}>
-                            {depth > i + 1 ? '−' : '+'}
-                          </span>
-                        )}
+                      <div key={k} role="button" tabIndex={0} {...chipDnd(k, i)} onClick={() => layerToggle(i)}
+                              aria-expanded={i < rowFields.length - 1 ? depth > i + 1 : undefined}
+                              className={`pv-layer${i < depth ? ' on' : ''}${depth > i + 1 ? ' open' : ''}${drag === k ? ' dragging' : ''}${d.dimF[k].length ? ' filtered' : ''}${over?.key === k && drag !== k ? (over.side < 0 ? ' drop-l' : ' drop-r') : ''}`}
+                              title={`${i < rowFields.length - 1 ? `Click to ${depth > i + 1 ? 'collapse' : 'expand'} every ${levelLabel(k)} · ` : ''}drag to re-order (Alt+←/→) · drag up to the filter bar to remove (Delete)`}>
                         {levelLabel(k)}
                       </div>
                     ))}
