@@ -32,7 +32,7 @@ const CATEGORY_LEGEND = [
   ['var(--pre-bg)', 'var(--pre-border)', 'Pre-Festive', 'build-up window before festival'],
   ['var(--core-bg)', 'var(--core-border)', 'Core Festive', 'primary festival days'],
   ['var(--post-bg)', 'var(--post-border)', 'Post-Festive', 'tail window after festival'],
-  ['var(--light)', 'var(--border)', 'Non-Festive', 'weekday-matched days'],
+  ['var(--light)', 'var(--border)', 'Non-Festive', 'same weekday, else weekend↔weekend / weekday↔weekday, same month first'],
 ]
 
 export default function VersionSettingTab({ isPlanner, onNavigate }) {
