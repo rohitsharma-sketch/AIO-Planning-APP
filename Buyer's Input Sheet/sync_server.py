@@ -95,6 +95,10 @@ DATE_TO_MI = {v: k for k, v in AOP_LY_DATES.items()}
 # Part of data_version, so a browser holding LY cached under an older month
 # definition resyncs instead of keeping it (the parquet mtime alone wouldn't change).
 LY_DEF = "ly" + "".join(f"{y}{m:02d}" for y, m in sorted(AOP_LY_DATES.values()))
+# 19V26 compares the SAME long-standing stores in both years (2026-09-25; was
+# FY26 over all 148 stores / FY19 over 32 -> +370%). In data_version so cached
+# history in every browser re-syncs.
+HIST_DEF = "h19v26same"
 
 # Full-year FY calendars: mi=0=Apr … mi=11=Mar
 _CAL_MONTHS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3]
@@ -140,7 +144,7 @@ def _data_version() -> str:
             parts.append(str(int(os.path.getmtime(latest) * 1000)))
     except Exception:
         pass
-    return "-".join(parts + [LY_DEF]) if parts else "unknown"
+    return "-".join(parts + [LY_DEF, HIST_DEF]) if parts else "unknown"
 
 
 def get_latest_file(directory: str, patterns=("*.parquet",)) -> str | None:
@@ -663,6 +667,10 @@ def _run_history_job(src: str):
                 ut_fy19 = set(ut_df[ut_df["_ym"].isin(fy19_s)][store_col].unique())
                 ut_fy26 = set(ut_df[ut_df["_ym"].isin(fy26_s)][store_col].unique())
                 lfl_19v26 |= (ut_fy19 & ut_fy26)
+            # ...and it must actually have traded in BOTH FY19 and FY26
+            fy19_sold = set(df[df["_ym"].isin(set(FY19_DATE_TO_MI.keys()))][store_col].dropna().unique())
+            fy26_sold = set(df[df["_ym"].isin(set(FY26_DATE_TO_MI.keys()))][store_col].dropna().unique())
+            lfl_19v26 &= fy19_sold & fy26_sold
             fy26_tag_mask = df[tag_col].astype(str).str.strip().isin(LFL_TAGS_26V27)
             lfl_26v27 = set(df[fy26_tag_mask & df["_ym"].isin(set(FY26_DATE_TO_MI.keys()))][store_col].dropna().unique())
         elif store_col:
@@ -697,6 +705,8 @@ def _run_history_job(src: str):
         # FY25 + FY26 LY: all FY26 stores (148 stores, full 26V27 base)
         fy25_div, fy25_dept = _agg_fy(FY25_DATE_TO_MI, store_set=lfl_26v27)
         fy26_div, fy26_dept = _agg_fy(FY26_DATE_TO_MI, store_set=lfl_26v27)
+        # FY26 over the 19V26 stores - the numerator of 19V26 growth (same stores both years)
+        fy26_19_div, fy26_19_dept = _agg_fy(FY26_DATE_TO_MI, store_set=lfl_19v26)
         ts = datetime.now().isoformat()
         _last_sync["history"] = ts
         _hist_job = {
@@ -704,6 +714,7 @@ def _run_history_job(src: str):
             "data": {"ok": True,
                      "fy19": fy19_div, "fy25": fy25_div, "fy26": fy26_div,
                      "fy19_dept": fy19_dept, "fy25_dept": fy25_dept, "fy26_dept": fy26_dept,
+                     "fy26_19": fy26_19_div, "fy26_19_dept": fy26_19_dept,
                      "source_file": os.path.basename(src), "synced_at": ts,
                      "lfl_store_count": len(lfl_19v26) if lfl_19v26 is not None else None,
                      "lfl_26v27_count": len(lfl_26v27) if lfl_26v27 is not None else None,

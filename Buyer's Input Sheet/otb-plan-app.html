@@ -4501,25 +4501,28 @@ async function syncHistData(){
       const fy19=data.fy19?.[divId]||{};
       const fy25=data.fy25?.[divId]||{};
       const fy26=data.fy26?.[divId]||{};
+      // 19V26 = the same long-standing stores in both years (fy26_19, ~32 stores);
+      // 25V26 stays on the full 148-store LfL set (2026-09-25)
+      const fy26s=data.fy26_19?.[divId]||{};
       if(!DEPT_LFL_GROWTH[divId])DEPT_LFL_GROWTH[divId]={yoy:{},base:{}};
       DEPT_LFL_GROWTH[divId].base={};
       DEPT_LFL_GROWTH[divId].yoy={};
       for(let mi=0;mi<12;mi++){
-        const v19=fy19[String(mi)],v25=fy25[String(mi)],v26=fy26[String(mi)];
-        if(v19&&v26&&v19>0)DEPT_LFL_GROWTH[divId].base[mi]=Math.round((v26/v19-1)*1000)/10;
+        const v19=fy19[String(mi)],v25=fy25[String(mi)],v26=fy26[String(mi)],v26s=fy26s[String(mi)];
+        if(v19&&v26s&&v19>0)DEPT_LFL_GROWTH[divId].base[mi]=Math.round((v26s/v19-1)*1000)/10;
         if(v25&&v26&&v25>0)DEPT_LFL_GROWTH[divId].yoy[mi]=Math.round((v26/v25-1)*1000)/10;
       }
     });
     // Department-level: 19V26 (base) and 25V26 (yoy) growth
-    const fy19dept=data.fy19_dept||{}, fy25dept=data.fy25_dept||{}, fy26dept=data.fy26_dept||{};
+    const fy19dept=data.fy19_dept||{}, fy25dept=data.fy25_dept||{}, fy26dept=data.fy26_dept||{}, fy26sdept=data.fy26_19_dept||{};
     Object.keys(SEC_LFL_GROWTH).forEach(k=>delete SEC_LFL_GROWTH[k]);
     const allDeptIds=new Set([...Object.keys(fy19dept),...Object.keys(fy26dept)]);
     allDeptIds.forEach(deptId=>{
-      const d19=fy19dept[deptId]||{}, d25=fy25dept[deptId]||{}, d26=fy26dept[deptId]||{};
+      const d19=fy19dept[deptId]||{}, d25=fy25dept[deptId]||{}, d26=fy26dept[deptId]||{}, d26s=fy26sdept[deptId]||{};
       SEC_LFL_GROWTH[deptId]={base:{},yoy:{}};
       for(let mi=0;mi<12;mi++){
-        const v19=d19[String(mi)],v25=d25[String(mi)],v26=d26[String(mi)];
-        if(v19&&v26&&v19>0)SEC_LFL_GROWTH[deptId].base[mi]=Math.round((v26/v19-1)*1000)/10;
+        const v19=d19[String(mi)],v25=d25[String(mi)],v26=d26[String(mi)],v26s=d26s[String(mi)];
+        if(v19&&v26s&&v19>0)SEC_LFL_GROWTH[deptId].base[mi]=Math.round((v26s/v19-1)*1000)/10;
         if(v25&&v26&&v25>0)SEC_LFL_GROWTH[deptId].yoy[mi]=Math.round((v26/v25-1)*1000)/10;
       }
     });
