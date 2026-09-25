@@ -4501,8 +4501,8 @@ async function syncHistData(){
       const fy19=data.fy19?.[divId]||{};
       const fy25=data.fy25?.[divId]||{};
       const fy26=data.fy26?.[divId]||{};
-      // 19V26 = the same long-standing stores in both years (fy26_19, ~32 stores);
-      // 25V26 stays on the full 148-store LfL set (2026-09-25)
+      // Each pair uses the same auto-detected LFL stores per month in both years
+      // (server lfl_by_month): 19V26 = fy19 vs fy26_19, 25V26 = fy25 vs fy26
       const fy26s=data.fy26_19?.[divId]||{};
       if(!DEPT_LFL_GROWTH[divId])DEPT_LFL_GROWTH[divId]={yoy:{},base:{}};
       DEPT_LFL_GROWTH[divId].base={};

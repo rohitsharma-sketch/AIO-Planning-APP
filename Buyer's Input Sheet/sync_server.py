@@ -95,10 +95,9 @@ DATE_TO_MI = {v: k for k, v in AOP_LY_DATES.items()}
 # Part of data_version, so a browser holding LY cached under an older month
 # definition resyncs instead of keeping it (the parquet mtime alone wouldn't change).
 LY_DEF = "ly" + "".join(f"{y}{m:02d}" for y, m in sorted(AOP_LY_DATES.values()))
-# 19V26 compares the SAME long-standing stores in both years (2026-09-25; was
-# FY26 over all 148 stores / FY19 over 32 -> +370%). In data_version so cached
-# history in every browser re-syncs.
-HIST_DEF = "h19v26same"
+# History growth (19V26, 25V26) uses auto-detected LFL stores per month (see
+# lfl_by_month). In data_version so cached history in every browser re-syncs.
+HIST_DEF = "hlflauto"
 
 # Full-year FY calendars: mi=0=Apr … mi=11=Mar
 _CAL_MONTHS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3]
@@ -114,6 +113,24 @@ def _fy_date_to_mi(fy_start_year: int) -> dict:
 FY19_DATE_TO_MI = _fy_date_to_mi(2019)   # Apr 2019 – Mar 2020
 FY25_DATE_TO_MI = _fy_date_to_mi(2024)   # Apr 2024 – Mar 2025
 FY26_DATE_TO_MI = _fy_date_to_mi(2025)   # Apr 2025 – Mar 2026
+
+
+def lfl_by_month(traded: set, opened: dict, base_map: dict, cmp_map: dict) -> dict:
+    """Auto LFL detector: {mi: stores comparable in month mi of base vs cmp FY}.
+
+    A store counts for a month when it sold in that month in BOTH years and was
+    open before the base month began (no part-month opening). The count therefore
+    moves with each year pair and each month - never a hardcoded tag or count.
+    traded = {(store, (y, m))} with sales > 0; opened = {store: Timestamp|NaT}.
+    """
+    base_ym = {mi: ym for ym, mi in base_map.items()}
+    out = {}
+    for ym_c, mi in cmp_map.items():
+        ym_b = base_ym[mi]
+        start = pd.Timestamp(ym_b[0], ym_b[1], 1)
+        out[mi] = {s for s, ym in traded if ym == ym_b and (s, ym_c) in traded
+                   and not (pd.notna(opened.get(s)) and opened[s] >= start)}
+    return out
 
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -614,11 +631,8 @@ def _run_history_job(src: str):
 
         # Integer YYYYMM filter — pushes down to row groups if parquet has stats
         date_field = schema.field(date_col)
-        target_ym_ints = []
-        for mi, cal_mo in enumerate(_CAL_MONTHS):
-            yr19 = 2019 if cal_mo >= 4 else 2020
-            yr26 = 2025 if cal_mo >= 4 else 2026
-            target_ym_ints.extend([yr19 * 100 + cal_mo, yr26 * 100 + cal_mo])
+        target_ym_ints = [y * 100 + m for fy in (FY19_DATE_TO_MI, FY25_DATE_TO_MI, FY26_DATE_TO_MI)
+                          for y, m in fy]
 
         row_filter = [(date_col, "in", target_ym_ints)] if pa.types.is_integer(date_field.type) else None
 
@@ -631,16 +645,16 @@ def _run_history_job(src: str):
             except Exception:
                 pass  # fall back to network path if copy fails
 
-        # Read STORE_NAME and TAG_TYPE to filter to LFL stores (032 - Stores tag)
+        # STORE_NAME (+ OPENING_DATE) feed the auto LFL detector
         store_col = detect_col(cols_lower_schema, ["store_name", "store", "store_nm", "outlet", "outlet_name"])
-        tag_col   = detect_col(cols_lower_schema, ["tag_type", "tag", "store_tag", "store_type"])
+        open_col  = detect_col(cols_lower_schema, ["opening_date", "open_date", "store_open_date"])
         sec_col   = detect_col(cols_lower_schema, ["section_nm", "section", "sec_nm", "sec_name"])
         dept_col  = detect_col(cols_lower_schema, ["department", "dept_nm", "dept_name", "dept"])
         read_cols = [date_col, div_col, amt_col] \
                     + ([dept_col]  if dept_col  else []) \
                     + ([sec_col]   if sec_col   else []) \
                     + ([store_col] if store_col else []) \
-                    + ([tag_col]   if tag_col   else [])
+                    + ([open_col]  if open_col and store_col else [])
 
         df = pd.read_parquet(src, columns=read_cols, filters=row_filter)
         df[date_col] = parse_date_col(df[date_col])
@@ -650,41 +664,24 @@ def _run_history_job(src: str):
         df[amt_col] = pd.to_numeric(df[amt_col], errors="coerce").fillna(0)
         df = df.dropna(subset=["_div"])
 
-        # Two distinct LFL sets:
-        #   lfl_19v26 — stores present in BOTH FY19 and FY26 (long-standing ~32 stores)
-        #               used only for FY19 base data to compute 19V26 growth %
-        #   lfl_26v27 — ALL stores present in FY26 data (~148 stores, full current network)
-        #               used for FY25 and FY26 LY actuals (the 26V27 plan base)
-        lfl_19v26 = None
-        lfl_26v27 = None
-        if tag_col and store_col:
-            lfl_mask  = df[tag_col].astype(str).str.strip() == "032 - Stores"
-            lfl_19v26 = set(df[lfl_mask][store_col].dropna().unique())
-            untagged_mask = df[tag_col].isna() | df[tag_col].astype(str).str.strip().isin(["", "nan", "None"])
-            if untagged_mask.any():
-                ut_df  = df[untagged_mask & df[store_col].notna()]
-                fy19_s = set(FY19_DATE_TO_MI.keys()); fy26_s = set(FY26_DATE_TO_MI.keys())
-                ut_fy19 = set(ut_df[ut_df["_ym"].isin(fy19_s)][store_col].unique())
-                ut_fy26 = set(ut_df[ut_df["_ym"].isin(fy26_s)][store_col].unique())
-                lfl_19v26 |= (ut_fy19 & ut_fy26)
-            # ...and it must actually have traded in BOTH FY19 and FY26
-            fy19_sold = set(df[df["_ym"].isin(set(FY19_DATE_TO_MI.keys()))][store_col].dropna().unique())
-            fy26_sold = set(df[df["_ym"].isin(set(FY26_DATE_TO_MI.keys()))][store_col].dropna().unique())
-            lfl_19v26 &= fy19_sold & fy26_sold
-            fy26_tag_mask = df[tag_col].astype(str).str.strip().isin(LFL_TAGS_26V27)
-            lfl_26v27 = set(df[fy26_tag_mask & df["_ym"].isin(set(FY26_DATE_TO_MI.keys()))][store_col].dropna().unique())
-        elif store_col:
-            fy19_all = set(df[df["_ym"].isin(set(FY19_DATE_TO_MI.keys()))][store_col].dropna().unique())
-            fy26_all = set(df[df["_ym"].isin(set(FY26_DATE_TO_MI.keys()))][store_col].dropna().unique())
-            lfl_19v26 = fy19_all & fy26_all
-            lfl_26v27 = fy26_all
+        # LFL stores are auto-detected per year pair and per month (lfl_by_month):
+        # store counts differ year to year, so no tag list or fixed count.
+        lfl_19v26 = lfl_25v26 = None
+        if store_col:
+            traded = set(df[df[amt_col] > 0].groupby([store_col, "_ym"]).size().index)
+            opened = {}
+            if open_col:
+                opened = pd.to_datetime(df.groupby(store_col)[open_col].first(), errors="coerce").to_dict()
+            lfl_19v26 = lfl_by_month(traded, opened, FY19_DATE_TO_MI, FY26_DATE_TO_MI)
+            lfl_25v26 = lfl_by_month(traded, opened, FY25_DATE_TO_MI, FY26_DATE_TO_MI)
 
         def _agg_fy(date_to_mi: dict, store_set=None):
             target = set(date_to_mi.keys())
             sub = df[df["_ym"].isin(target)].copy()
-            if store_set is not None and store_col and store_col in sub.columns:
-                sub = sub[sub[store_col].isin(store_set)]
             sub["_mi"] = sub["_ym"].map(date_to_mi)
+            if store_set is not None:   # {mi: stores} from lfl_by_month
+                keep = {(st, mi) for mi, sts in store_set.items() for st in sts}
+                sub = sub[[k in keep for k in zip(sub[store_col], sub["_mi"])]]
             # Division-level aggregation
             div_grouped = sub.groupby(["_div", "_mi"])[amt_col].sum()
             div_res: dict = {}
@@ -700,13 +697,13 @@ def _run_history_job(src: str):
                         dept_res.setdefault(dept, {})[str(int(mi))] = round(float(total) / 1e7, 4)
             return div_res, dept_res
 
-        # FY19 base: 19V26 LFL stores only (long-standing stores, for growth % accuracy)
+        # Each growth pair sums both years over the same auto-detected stores:
+        # 19V26 = fy19 vs fy26_19, 25V26 = fy25 vs fy26
         fy19_div, fy19_dept = _agg_fy(FY19_DATE_TO_MI, store_set=lfl_19v26)
-        # FY25 + FY26 LY: all FY26 stores (148 stores, full 26V27 base)
-        fy25_div, fy25_dept = _agg_fy(FY25_DATE_TO_MI, store_set=lfl_26v27)
-        fy26_div, fy26_dept = _agg_fy(FY26_DATE_TO_MI, store_set=lfl_26v27)
-        # FY26 over the 19V26 stores - the numerator of 19V26 growth (same stores both years)
         fy26_19_div, fy26_19_dept = _agg_fy(FY26_DATE_TO_MI, store_set=lfl_19v26)
+        fy25_div, fy25_dept = _agg_fy(FY25_DATE_TO_MI, store_set=lfl_25v26)
+        fy26_div, fy26_dept = _agg_fy(FY26_DATE_TO_MI, store_set=lfl_25v26)
+        _counts = lambda m: [len(m[mi]) for mi in range(12)] if m is not None else None
         ts = datetime.now().isoformat()
         _last_sync["history"] = ts
         _hist_job = {
@@ -716,8 +713,8 @@ def _run_history_job(src: str):
                      "fy19_dept": fy19_dept, "fy25_dept": fy25_dept, "fy26_dept": fy26_dept,
                      "fy26_19": fy26_19_div, "fy26_19_dept": fy26_19_dept,
                      "source_file": os.path.basename(src), "synced_at": ts,
-                     "lfl_store_count": len(lfl_19v26) if lfl_19v26 is not None else None,
-                     "lfl_26v27_count": len(lfl_26v27) if lfl_26v27 is not None else None,
+                     "lfl_19v26_stores": _counts(lfl_19v26),   # per month, Apr..Mar
+                     "lfl_25v26_stores": _counts(lfl_25v26),
                      "detected_dept_col": dept_col,
                      "dept_count": len(fy26_dept),
                      "data_version": _data_version()},
