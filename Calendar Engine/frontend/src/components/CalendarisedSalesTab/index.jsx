@@ -112,8 +112,7 @@ export default function CalendarisedSalesTab({ isPlanner }) {
   // default so the link status isn't taking up space every visit; expand
   // to check/sync either source.
   const [linkPanelOpen, setLinkPanelOpen] = useState(false)
-  // Bumped by the combined link table's single Sync all months / Refresh buttons.
-  const [linkSyncSignal, setLinkSyncSignal] = useState(0)
+  // Bumped by the combined link table's Refresh button (syncing is automatic).
   const [linkRefreshSignal, setLinkRefreshSignal] = useState(0)
   const [calendarId, setCalendarId] = useState(null)
   const [result, setResult] = useState(null)
@@ -480,12 +479,11 @@ export default function CalendarisedSalesTab({ isPlanner }) {
             <tbody>
               {['mw', 'dw'].map(st => (
                 <LinkStatusPanel key={st} sourceType={st} isPlanner={isPlanner} onSelectionChange={handleSelectionChange}
-                  syncSignal={linkSyncSignal} refreshSignal={linkRefreshSignal} />
+                  refreshSignal={linkRefreshSignal} />
               ))}
             </tbody>
           </table>
           <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-            {isPlanner && <button className="btn" onClick={() => setLinkSyncSignal(n => n + 1)}>Sync all months</button>}
             <button onClick={() => setLinkRefreshSignal(n => n + 1)}>Refresh</button>
           </div>
         </div>
@@ -536,7 +534,7 @@ export default function CalendarisedSalesTab({ isPlanner }) {
         {selectedCalendar && syncedMonths.length === 0 && (
           <p className="rx-hint" style={{ color: 'var(--warn)', fontWeight: 600 }}>
             No {selectedCalendar.refYear} months are synced for {source === 'dw' ? 'Day-wise' : 'Month-wise'} yet -
-            click "Sync all months" in Link Sales Data Source above.
+            they sync automatically when a planner opens this page; click Refresh above if the source was just updated.
           </p>
         )}
 

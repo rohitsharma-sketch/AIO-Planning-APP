@@ -14,11 +14,11 @@ function fmtDuration(totalSeconds) {
 
 // One source's row in the combined "Link Sales Data Source" table (2026-09-25:
 // the two cards were squeezed into one table; the From/To year pickers and
-// per-card buttons were removed). The parent's single "Sync all months" /
-// "Refresh" buttons bump syncSignal / refreshSignal; each row reacts to them.
+// per-card buttons were removed). Syncing is automatic (see the auto-sync
+// effect below); the parent's single "Refresh" button bumps refreshSignal.
 // Sync = every month this source currently has (what the full-range default
 // of the old year pickers already did).
-export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChange, syncSignal, refreshSignal }) {
+export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChange, refreshSignal }) {
   const [link, setLink] = useState(null)
   // null = idle; otherwise {pct, filesDone, filesTotal, etaSeconds} while a
   // background scan job is running (day-wise reads 86M+ rows).
@@ -26,6 +26,7 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
   const [fetchError, setFetchError] = useState(null)
   const pollTimer = useRef(null)
   const [selection, setSelection] = useState(null)
+  const [selLoaded, setSelLoaded] = useState(false)
   const [syncing, setSyncing] = useState(false)
 
   async function refresh(force) {
@@ -76,7 +77,7 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
       // Push the PERSISTED selection up too - "Run Reindex" on a fresh page
       // load otherwise posts months: [] and the backend rejects it.
       onSelectionChange?.(sourceType, s)
-    })
+    }).catch(() => {}).finally(() => setSelLoaded(true))  // never synced before -> auto-sync fills it
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceType])
 
@@ -95,7 +96,18 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
       setSyncing(false)
     }
   }
-  useEffect(() => { if (syncSignal) syncAll() }, [syncSignal]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Auto-sync (2026-09-25, replaces the manual "Sync all months" button): a
+  // month that was linked but missing from the saved selection stayed
+  // unusable until someone clicked sync (2024 linked, never synced -> the
+  // 2024 -> 2025 calendar couldn't reindex). Once both the scan and the saved
+  // selection have loaded, any gap is synced straight away. Planner-only
+  // (the PUT is planner-gated); skipped while the source is offline.
+  useEffect(() => {
+    if (!isPlanner || !selLoaded || !link?.ok || link.offline || syncing) return
+    const have = new Set(selection?.months || [])
+    if ((link.months || []).some(m => !have.has(m.month)))
+      syncAll().catch(e => setFetchError(`Auto-sync failed: ${e.message}`))
+  }, [link, selLoaded, selection]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const synced = selection?.syncedAt ? new Date(selection.syncedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-'
   let status
