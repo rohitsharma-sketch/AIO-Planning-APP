@@ -339,6 +339,63 @@ def update_calendar_festivals(calendar_id: int, body: dict = Body(...), actor: d
         session.close()
 
 
+WINDOW_FIELDS = ("pre", "core", "post")
+
+
+def window_patch(body: dict) -> dict:
+    """{field: int} for the pre/core/post values present in `body` - core >= 1,
+    pre/post >= 0 (the same minimums FestivalTable's +/- steppers enforce)."""
+    out = {}
+    for f in WINDOW_FIELDS:
+        if body.get(f) is None:
+            continue
+        v = int(body[f])
+        if v < (1 if f == "core" else 0):
+            raise HTTPException(422, f"{f} must be >= {1 if f == 'core' else 0}")
+        out[f] = v
+    return out
+
+
+@router.put("/festival-window")
+def sync_festival_window(body: dict = Body(...), actor: dict = Depends(require_role("planner"))):
+    """A festival's Pre/Core/Post is ONE decision per festival name (user,
+    2026-09-25: "change … core - pre - post days in a festival it should auto
+    sync to every template and every cluster wherever that festival is
+    available"). Writes {name, pre?, core?, post?} into the live Festival Master
+    AND every saved template, every cluster, matched by trimmed lower-case name;
+    rows marked `independent` keep their own window. Festival lists only - a
+    template's day map changes when it is regenerated (Create Calendar + Lock &
+    Save), same as every other festival-list edit."""
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(422, "name is required")
+    patch = window_patch(body)
+    if not patch:
+        raise HTTPException(422, "nothing to change - send pre, core and/or post")
+    key = name.lower()
+    session = SessionLocal()
+    try:
+        from sqlalchemy import update
+        live = session.execute(
+            update(ClusterProfileFestival)
+            .where(func.lower(func.trim(ClusterProfileFestival.name)) == key, ClusterProfileFestival.independent.is_(False))
+            .values(**patch)
+        ).rowcount
+        hits = session.execute(
+            select(CalendarClusterFestival.id, Calendar.name)
+            .join(CalendarCluster, CalendarCluster.id == CalendarClusterFestival.calendar_cluster_id)
+            .join(Calendar, Calendar.calendar_id == CalendarCluster.calendar_id)
+            .where(func.lower(func.trim(CalendarClusterFestival.name)) == key, CalendarClusterFestival.independent.is_(False))
+        ).all()
+        if hits:
+            session.execute(update(CalendarClusterFestival).where(CalendarClusterFestival.id.in_([h[0] for h in hits])).values(**patch))
+        session.commit()
+        return {"ok": True, "name": name, **patch, "liveRows": live, "templateRows": len(hits),
+                "templates": sorted({h[1] for h in hits})}
+    finally:
+        session.close()
+
+
 @router.delete("/calendar-library/{calendar_id}")
 def delete_calendar(calendar_id: int, actor: dict = Depends(require_role("planner"))):
     session = SessionLocal()

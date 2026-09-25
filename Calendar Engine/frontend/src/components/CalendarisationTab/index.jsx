@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { getClusterProfiles, putClusterProfiles, getAppState, updateCalendarFestivals, listCalendarLibrary, getCalendar, saveCalendar, deleteCalendar, syncFestivalReference } from '../../lib/api'
+import { useState, useEffect, useRef } from 'react'
+import { syncFestivalWindow, getClusterProfiles, putClusterProfiles, getAppState, updateCalendarFestivals, listCalendarLibrary, getCalendar, saveCalendar, deleteCalendar, syncFestivalReference } from '../../lib/api'
 import { generateMappings, validate, computeMonthly, buildFestMap } from '../../lib/engine'
 import { parseDate, fmtISO, fmtDisp, calDiff, weekNum } from '../../lib/dateUtils'
 import ClusterTabs from './ClusterTabs'
@@ -619,11 +619,16 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
   // neither pushes its own edits out to other clusters' same-named festival,
   // nor gets overwritten by an edit made on one of them - it stays in the
   // shared cascade for every OTHER festival, this flag only takes ONE row out.
+  //
+  // It then reaches every saved template too (PUT /festival-window, 2026-09-25:
+  // "it should auto sync to every template and every cluster wherever that
+  // festival is available") - debounced so typing / repeated +/- clicks send
+  // one write, and only after persist() has finished its own writes.
   function handleDayFieldChange(idx, field, value) {
     const editedFest = profiles[activeIdx].festivals[idx]
     const name = editedFest.name
     const editedIsIndependent = !!editedFest.independent
-    persist(profiles.map((cp, ci) => ({
+    const saving = persist(profiles.map((cp, ci) => ({
       ...cp,
       festivals: cp.festivals.map((f, fi) => {
         const isEditedRow = ci === activeIdx && fi === idx
@@ -632,12 +637,31 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
         return f.name === name ? { ...f, [field]: value } : f
       }),
     })))
+    if (!isPlanner || editedIsIndependent || !name?.trim() || value === '' || value == null) return
+    const pend = windowSync.current
+    pend.fields = pend.name === name ? { ...pend.fields, [field]: Number(value) } : { [field]: Number(value) }
+    pend.name = name
+    pend.saving = saving
+    clearTimeout(pend.timer)
+    pend.timer = setTimeout(async () => {
+      const { name: n, fields, saving: s } = pend
+      pend.name = null
+      if (!(await s)) return
+      try {
+        const r = await syncFestivalWindow({ name: n, ...fields })
+        setStatus({ ok: true, msg: `"${n}" window synced - ${r.liveRows} live cluster row(s) and ${r.templateRows} row(s) in ${r.templates.length} template(s)${r.templates.length ? `: ${r.templates.join(', ')}` : ''}. A template's day map updates when it is regenerated (Create Calendar + Lock & Save).` })
+      } catch (err) {
+        setStatus({ ok: false, msg: `"${n}" changed here, but syncing it to the other templates failed: ${err.message}` })
+      }
+    }, 700)
   }
 
   // Toggling the "Independent" exemption itself must never cascade the way
   // handleDayFieldChange does for every other field - it is inherently a
   // per-row property (whether THIS cluster's THIS festival opts out), so
   // this only ever changes the one row clicked.
+  const windowSync = useRef({ name: null, fields: {}, timer: null, saving: null })
+
   function handleIndependentToggle(idx, value) {
     persist(profiles.map((cp, ci) => ci === activeIdx
       ? { ...cp, festivals: cp.festivals.map((f, fi) => fi === idx ? { ...f, independent: value } : f) }
