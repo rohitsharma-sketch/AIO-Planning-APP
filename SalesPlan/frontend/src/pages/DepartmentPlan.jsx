@@ -556,7 +556,7 @@ export default function DepartmentPlan() {
 
                 <button onClick={handleAddDept} style={{
                   padding: '7px 20px', borderRadius: 6, cursor: 'pointer',
-                  background: theme.primary, color: '#fff', border: 'none',
+                  background: '#A8CBB7', color: '#1F4D3A', border: 'none',
                   fontSize: 13, fontWeight: 600,
                 }}>
                   Add

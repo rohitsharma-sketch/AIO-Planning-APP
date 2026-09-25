@@ -416,7 +416,7 @@ export default function PwwDeviation() {
                         </td>
                         <td style={{ ...CELL, textAlign: 'right' }}>
                           <span style={{
-                            background: d.block_cont_pct < 2.5 ? `${theme.textMuted}22` : `${theme.primary}22`,
+                            background: d.block_cont_pct < 2.5 ? `${theme.textMuted}22` : `__TPL<'#A8CBB7'>__22`,
                             color: d.block_cont_pct < 2.5 ? theme.textMuted : theme.primary,
                             borderRadius: 4, padding: '1px 6px', fontFamily: theme.fontMono, fontSize: 11,
                           }}>{fmtP(d.block_cont_pct)}</span>
@@ -567,7 +567,7 @@ export default function PwwDeviation() {
                               </td>
                               <td style={{ ...CELL2, textAlign: 'right' }}>
                                 <span style={{
-                                  background: dd.dept_block_final_pct > 0 ? `${theme.primary}18` : `${theme.textMuted}18`,
+                                  background: dd.dept_block_final_pct > 0 ? `__TPL<'#A8CBB7'>__18` : `${theme.textMuted}18`,
                                   color: dd.dept_block_final_pct > 0 ? theme.primary : theme.textMuted,
                                   borderRadius: 4, padding: '1px 6px', fontFamily: theme.fontMono, fontSize: 10,
                                 }}>{fmtP(dd.dept_block_final_pct)}</span>
@@ -811,9 +811,9 @@ function btnStyle(variant, disabled) {
     cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1,
     border: 'none', transition: 'opacity 0.15s',
   }
-  if (variant === 'primary')   return { ...base, background: theme.primary,  color: '#fff' }
+  if (variant === 'primary')   return { ...base, background: '#A8CBB7',  color: '#1F4D3A' }
   if (variant === 'secondary') return { ...base, background: theme.accent,   color: '#fff' }
   if (variant === 'accent')    return { ...base, background: '#0EA5E9',      color: '#fff' }
-  if (variant === 'teal')     return { ...base, background: '#4F7A66',      color: '#fff' }
+  if (variant === 'teal')     return { ...base, background: '#A8CBB7',      color: '#1F4D3A' }
   return { ...base, background: 'none', color: theme.textSecondary, border: `1px solid ${theme.border}` }
 }

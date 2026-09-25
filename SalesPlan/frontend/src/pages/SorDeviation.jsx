@@ -217,8 +217,8 @@ export default function SorDeviation() {
           disabled={!canRunAvg}
           style={{
             padding: '10px 24px', borderRadius: 8, border: 'none', cursor: canRunAvg ? 'pointer' : 'not-allowed',
-            background: canRunAvg ? theme.primary : theme.surfaceAlt,
-            color: canRunAvg ? '#fff' : theme.textMuted, fontWeight: 700, fontSize: 13,
+            background: canRunAvg ? '#A8CBB7' : theme.surfaceAlt,
+            color: canRunAvg ? '#1F4D3A' : theme.textMuted, fontWeight: 700, fontSize: 13,
           }}
         >
           {running ? 'Computing…' : status?.avg_run ? '↻ Re-run Average' : '▶ Run Average'}
@@ -230,8 +230,8 @@ export default function SorDeviation() {
             disabled={!canReapp}
             style={{
               padding: '10px 24px', borderRadius: 8, border: 'none', cursor: canReapp ? 'pointer' : 'not-allowed',
-              background: canReapp ? '#4F7A66' : theme.surfaceAlt,
-              color: canReapp ? '#fff' : theme.textMuted, fontWeight: 700, fontSize: 13,
+              background: canReapp ? '#A8CBB7' : theme.surfaceAlt,
+              color: canReapp ? '#1F4D3A' : theme.textMuted, fontWeight: 700, fontSize: 13,
             }}
           >
             {reapping ? 'Reapportioning…' : status?.reapp_run ? '↻ Re-reapportion' : '⇄ Reapportion'}
@@ -332,7 +332,7 @@ export default function SorDeviation() {
                   style={{
                     display: 'flex', alignItems: 'center', gap: 12,
                     padding: '10px 16px', cursor: 'pointer',
-                    background: isExpanded ? `${theme.primary}12` : theme.surfaceAlt,
+                    background: isExpanded ? `__TPL<'#A8CBB7'>__12` : theme.surfaceAlt,
                     borderBottom: isExpanded ? `1px solid ${theme.border}` : 'none',
                   }}
                 >

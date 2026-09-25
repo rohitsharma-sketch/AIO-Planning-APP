@@ -61,8 +61,8 @@ function StepBar({ pipeline }) {
                 width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 9, fontWeight: 800,
-                background: isCurrent ? theme.primary : isDone ? theme.success : theme.border,
-                color: isCurrent || isDone ? '#fff' : theme.textMuted,
+                background: isCurrent ? '#A8CBB7' : isDone ? theme.success : theme.border,
+                color: isCurrent ? '#1F4D3A' : isDone ? '#fff' : theme.textMuted,
               }}>
                 {isCurrent ? '→' : isDone ? '✓' : isOpt ? '○' : String(i + 1)}
               </span>
@@ -132,7 +132,7 @@ function DeviationPrompt({ pwwDone, sorDone, onProceed }) {
                 width: 22, height: 22, borderRadius: '50%', flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11,
                 background: item.done ? theme.success : theme.border,
-                color: '#fff', fontWeight: 700,
+                color: item.done ? '#fff' : theme.textSecondary, fontWeight: 700,
               }}>{item.done ? '✓' : '→'}</span>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: item.done ? theme.success : theme.textPrimary }}>
@@ -151,7 +151,7 @@ function DeviationPrompt({ pwwDone, sorDone, onProceed }) {
           onClick={onProceed}
           style={{
             width: '100%', padding: '12px', borderRadius: 9, border: `1.5px solid ${theme.border}`,
-            background: theme.primary, color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            background: '#A8CBB7', color: '#1F4D3A', fontWeight: 700, fontSize: 14, cursor: 'pointer',
           }}
         >
           Proceed with Imported Cont&nbsp;% →
@@ -341,8 +341,8 @@ export default function MrpOutput() {
               {[['contrib', 'Contrib %'], ['ty', 'TY Split (₹L)']].map(([mode, label]) => (
                 <button key={mode} onClick={() => setViewMode(mode)} style={{
                   padding: '5px 14px', fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none',
-                  background: viewMode === mode ? theme.primary : theme.surface,
-                  color: viewMode === mode ? '#fff' : theme.textMuted,
+                  background: viewMode === mode ? '#A8CBB7' : theme.surface,
+                  color: viewMode === mode ? '#1F4D3A' : theme.textMuted,
                 }}>{label}</button>
               ))}
             </div>

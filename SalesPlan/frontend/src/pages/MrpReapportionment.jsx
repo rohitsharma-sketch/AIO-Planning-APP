@@ -328,7 +328,7 @@ export default function MrpReapportionment() {
           </div>
           <a href="/api/planning/mrp-reapportionment/download" style={{
             padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 600,
-            background: theme.primary, color: '#fff', textDecoration: 'none', flexShrink: 0,
+            background: '#A8CBB7', color: '#1F4D3A', textDecoration: 'none', flexShrink: 0,
           }}>↓ Download</a>
         </div>
       )}
@@ -406,7 +406,7 @@ export default function MrpReapportionment() {
               <div style={{ flex: 1 }} />
               <button onClick={loadGroups} style={{
                 padding: '7px 14px', borderRadius: 7, fontSize: 11, cursor: 'pointer',
-                background: theme.primary, border: 'none', color: '#fff', fontWeight: 600,
+                background: '#A8CBB7', border: 'none', color: '#1F4D3A', fontWeight: 600,
               }}>
                 ↻ Load Groups
               </button>
@@ -499,7 +499,7 @@ export default function MrpReapportionment() {
                   <div style={{ flex: 1 }} />
                   <a href="/api/planning/mrp-reapportionment/download" style={{
                     display: 'flex', alignItems: 'center', padding: '6px 14px', borderRadius: 7,
-                    fontSize: 12, fontWeight: 700, background: theme.primary, color: '#fff',
+                    fontSize: 12, fontWeight: 700, background: '#A8CBB7', color: '#1F4D3A',
                     textDecoration: 'none', margin: '8px 0',
                   }}>↓ Download Excel</a>
                 </div>
@@ -543,8 +543,8 @@ export default function MrpReapportionment() {
                 width: '100%', padding: '13px 0', borderRadius: 9,
                 fontSize: 14, fontWeight: 700, letterSpacing: 0.3,
                 cursor: canRun ? 'pointer' : 'not-allowed',
-                background: canRun ? theme.primary : theme.surfaceUp,
-                color: canRun ? '#fff' : theme.textMuted, border: canRun ? 'none' : `1px solid ${theme.border}`,
+                background: canRun ? '#A8CBB7' : theme.surfaceUp,
+                color: canRun ? '#1F4D3A' : theme.textMuted, border: canRun ? 'none' : `1px solid ${theme.border}`,
               }}
             >
               {running ? '⟳  Running engine…' : '▶  Run Re-apportionment'}

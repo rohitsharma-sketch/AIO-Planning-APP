@@ -49,8 +49,8 @@
   border-radius: 7px;
   font-weight: 600;
 }
-.cfg-btn--primary { background: var(--navy3); color: #fff; border: 1px solid var(--navy3); }
-.cfg-btn--primary:hover:not(:disabled) { background: var(--accent-h); color: #fff; border-color: var(--accent-h); }
+.cfg-btn--primary { background: #A8CBB7; color: #1F4D3A; border: 1px solid #95BFA7; }
+.cfg-btn--primary:hover:not(:disabled) { background: #95BFA7; color: #1F4D3A; border-color: var(--accent-h); }
 
 /* Details panel */
 .cfg-sync-details {

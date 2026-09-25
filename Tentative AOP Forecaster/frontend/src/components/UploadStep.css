@@ -59,8 +59,8 @@
   text-transform: uppercase;
   padding: 2px 9px;
   border-radius: 999px;
-  background: var(--navy3);
-  color: #fff;
+  background: #A8CBB7;
+  color: #1F4D3A;
 }
 .us-chip-outline { background: var(--surface3); color: var(--muted); border: 1px solid var(--border); }
 

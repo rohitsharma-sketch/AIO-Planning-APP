@@ -26,7 +26,7 @@
   --char:     #1E2723;
   --text2:    #37423C;
   --muted:    #5F6B64;
-  --faint:    #8C958F;
+  --faint:    #6E7872;
   --border:   #E5E3DA;
   --border2:  #D3D0C4;
 
@@ -78,13 +78,13 @@ input, select { font-family: inherit; }
 
 /* Buttons - one family for the whole app */
 .btn-primary {
-  background: var(--navy3);
-  color: #fff;
+  background: #A8CBB7;
+  color: #1F4D3A;
   padding: 9px 20px;
   font-weight: 600;
   box-shadow: var(--shadow-sm);
 }
-.btn-primary:hover:not(:disabled) { background: var(--accent-h); }
+.btn-primary:hover:not(:disabled) { background: #95BFA7; color: #1F4D3A; }
 
 .btn-secondary {
   background: var(--white);

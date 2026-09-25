@@ -54,7 +54,7 @@ export default function MrpImport() {
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: theme.textPrimary }}>Integrated Buyer's Input</h1>
           <span style={{
             fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 4, letterSpacing: 0.6,
-            background: `${theme.primary}18`, color: theme.primary, border: `1px solid ${theme.primary}33`,
+            background: `__TPL<'#A8CBB7'>__18`, color: theme.primary, border: `1px solid __TPL<'#95BFA7'>__33`,
           }}>MRP PLAN SOURCE</span>
         </div>
         <p style={{ margin: '0 0 10px', fontSize: 13, color: theme.textMuted }}>
@@ -135,8 +135,8 @@ export default function MrpImport() {
             style={{
               width: '100%', padding: '13px 0', borderRadius: 9, fontSize: 14,
               fontWeight: 700, cursor: (syncing || !fileInfo?.file_found) ? 'not-allowed' : 'pointer',
-              background: (syncing || !fileInfo?.file_found) ? theme.border : theme.primary,
-              color: '#fff', border: 'none', letterSpacing: 0.3,
+              background: (syncing || !fileInfo?.file_found) ? theme.border : '#A8CBB7',
+              color: '#1F4D3A', border: 'none', letterSpacing: 0.3,
             }}
           >
             {syncing ? '⟳  Syncing…' : '⟳  Sync from Folder'}

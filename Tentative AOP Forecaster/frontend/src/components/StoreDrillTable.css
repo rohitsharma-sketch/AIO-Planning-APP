@@ -15,8 +15,8 @@
   display: inline-flex; align-items: center; gap: 5px; line-height: 1.2;
 }
 .sdt-chip:hover { border-color: var(--navy3); color: var(--navy); }
-.sdt-chip.on    { background: var(--navy3); color: #fff; border-color: var(--navy3); }
-.sdt-chip.on:hover { color: #fff; background: var(--accent-h); }
+.sdt-chip.on    { background: #A8CBB7; color: #1F4D3A; border-color: #95BFA7; }
+.sdt-chip.on:hover { color: #1F4D3A; background: #95BFA7; }
 .sdt-toggle input { accent-color: var(--navy3); margin: 0; }
 .sdt-search-wrap { position: relative; margin-left: auto; min-width: 220px; }
 .sdt-search { width: 100%; padding: 6px 26px 6px 10px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; background: var(--white); }

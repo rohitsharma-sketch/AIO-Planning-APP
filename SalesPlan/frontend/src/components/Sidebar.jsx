@@ -162,7 +162,7 @@ export default function Sidebar() {
     }} className="sp-nav">
       <div style={{ height: 56, padding: '0 18px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
         <div style={{
-          width: 30, height: 30, borderRadius: 8, background: theme.primary, color: '#fff',
+          width: 30, height: 30, borderRadius: 8, background: '#A8CBB7', color: '#1F4D3A',
           display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, letterSpacing: 0.3,
         }}>SP</div>
         <div style={{ lineHeight: 1.2 }}>

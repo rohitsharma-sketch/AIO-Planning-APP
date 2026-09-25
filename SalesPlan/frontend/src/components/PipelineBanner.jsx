@@ -10,7 +10,7 @@ export default function PipelineBanner({ currentKey }) {
   return (
     <div style={{
       marginBottom: 20, padding: '10px 18px', borderRadius: 9,
-      background: `${theme.primary}12`, border: `1px solid ${theme.primary}55`,
+      background: `__TPL<'#A8CBB7'>__12`, border: `1px solid __TPL<'#95BFA7'>__55`,
       display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
     }}>
       <span style={{ fontSize: 11, color: theme.primary, fontWeight: 700, letterSpacing: 0.4 }}>PIPELINE</span>

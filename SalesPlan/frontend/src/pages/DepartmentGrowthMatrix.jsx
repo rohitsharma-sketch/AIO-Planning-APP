@@ -308,7 +308,7 @@ export default function DepartmentGrowthMatrix() {
               >Skip to Final Results</button>
               <button
                 onClick={() => { setShowPipelineModal(false); handleStartPipeline() }}
-                style={{ flex: 1, padding: '9px 0', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', background: theme.primary, border: 'none', color: '#fff' }}
+                style={{ flex: 1, padding: '9px 0', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', background: '#A8CBB7', border: 'none', color: '#1F4D3A' }}
               >
                 {Object.values(pipelineChecked).some(Boolean) ? 'Run Pipeline →' : 'Go to Final Results'}
               </button>
@@ -414,7 +414,7 @@ export default function DepartmentGrowthMatrix() {
             disabled={generating}
             style={{
               padding: '6px 16px', borderRadius: 6, fontSize: 12, cursor: generating ? 'default' : 'pointer',
-              background: theme.primary, border: 'none', color: '#fff',
+              background: '#A8CBB7', border: 'none', color: '#1F4D3A',
               fontWeight: 700, opacity: generating ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 6,
             }}
           >

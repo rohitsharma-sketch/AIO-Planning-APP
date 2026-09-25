@@ -28,7 +28,7 @@
   background: none; color: inherit; padding: 0; border-radius: 8px; text-align: left;
 }
 .logo[title] { cursor: pointer; }
-.logo[title]:hover .logo-mark { background: var(--navy3); }
+.logo[title]:hover .logo-mark { background: #A8CBB7; color: #1F4D3A; }
 .logo:not([title]) { cursor: default; }
 .logo-mark {
   height: 30px; padding: 0 8px; border-radius: 7px;
@@ -71,7 +71,7 @@
   font-size: 12px; font-weight: 700;
 }
 .step-item.active .step-num { background: #fff; color: var(--navy); }
-.step-item.done   .step-num { background: var(--navy3); color: #fff; }
+.step-item.done   .step-num { background: #A8CBB7; color: #1F4D3A; }
 .step-label { font-size: 13px; font-weight: 600; white-space: nowrap; }
 .step-sep {
   display: block;
@@ -93,8 +93,8 @@
   border: 1px solid rgba(255,255,255,.2);
 }
 .hdr-btn:hover:not(:disabled) { background: rgba(255,255,255,.16); }
-.hdr-btn--primary { background: var(--navy3); border-color: var(--navy3); }
-.hdr-btn--primary:hover:not(:disabled) { background: var(--accent-h); }
+.hdr-btn--primary { background: #A8CBB7; border-color: #95BFA7; color: #1F4D3A; }
+.hdr-btn--primary:hover:not(:disabled) { background: #95BFA7; color: #1F4D3A; }
 
 /* ── Main ────────────────────────────────────────────────────── */
 .app-main {

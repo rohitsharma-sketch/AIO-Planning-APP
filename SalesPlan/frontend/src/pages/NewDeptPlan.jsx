@@ -167,7 +167,7 @@ function PivotSelect({ options, value, onChange }) {
             >Cancel</button>
             <button
               onMouseDown={() => { setOpen(false); setQuery('') }}
-              style={{ padding: '4px 14px', borderRadius: 6, background: theme.primary, color: '#fff', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+              style={{ padding: '4px 14px', borderRadius: 6, background: '#A8CBB7', color: '#1F4D3A', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
             >OK</button>
           </div>
         </div>
@@ -249,7 +249,7 @@ function PivotFilter({ label, options, selected, onChange }) {
         <span style={{ fontSize: 12 }}>⊞</span>
         <span>{label}</span>
         {filterActive && (
-          <span style={{ fontSize: 10, background: theme.primary, color: '#fff', borderRadius: 8, padding: '1px 6px', fontWeight: 700 }}>
+          <span style={{ fontSize: 10, background: '#A8CBB7', color: '#1F4D3A', borderRadius: 8, padding: '1px 6px', fontWeight: 700 }}>
             {selected.size}/{options.length}
           </span>
         )}
@@ -320,7 +320,7 @@ function PivotFilter({ label, options, selected, onChange }) {
             >Cancel</button>
             <button
               onMouseDown={handleOK}
-              style={{ padding: '4px 14px', borderRadius: 6, background: theme.primary, color: '#fff', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+              style={{ padding: '4px 14px', borderRadius: 6, background: '#A8CBB7', color: '#1F4D3A', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
             >OK</button>
           </div>
         </div>
@@ -620,8 +620,8 @@ export default function NewDeptPlan() {
             disabled={syncing || !syncStatus?.file_found}
             style={{
               padding: '6px 18px', borderRadius: 7, fontSize: 12, fontWeight: 600,
-              background: syncStatus?.file_found ? theme.primary : theme.border,
-              color: syncStatus?.file_found ? '#fff' : theme.textMuted,
+              background: syncStatus?.file_found ? '#A8CBB7' : theme.border,
+              color: syncStatus?.file_found ? '#1F4D3A' : theme.textMuted,
               border: 'none', cursor: (syncing || !syncStatus?.file_found) ? 'default' : 'pointer',
               opacity: syncing ? 0.7 : 1,
             }}
@@ -678,7 +678,7 @@ export default function NewDeptPlan() {
           onClick={handleSave} disabled={saving}
           style={{
             padding: '7px 20px', borderRadius: 8,
-            background: theme.primary, color: '#fff',
+            background: '#A8CBB7', color: '#1F4D3A',
             border: 'none', fontWeight: 600, fontSize: 13,
             cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1,
           }}
@@ -897,7 +897,7 @@ export default function NewDeptPlan() {
 
               {/* Draft add-row form */}
               {adding && (
-                <tr style={{ background: `${theme.primary}0D`, borderBottom: `1px solid ${theme.border}` }}>
+                <tr style={{ background: `__TPL<'#A8CBB7'>__0D`, borderBottom: `1px solid ${theme.border}` }}>
                   <td style={{ padding: '10px 12px' }}>
                     <input
                       autoFocus

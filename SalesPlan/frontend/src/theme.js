@@ -33,7 +33,7 @@ export const theme = {
   // Text
   textPrimary:   '#1E2723',
   textSecondary: '#5F6B64',
-  textMuted:     '#8C958F',
+  textMuted:     '#6E7872',
 
   // Sidebar (same navy as the page header, so the chrome reads as one frame)
   sidebar:       '#34453F',

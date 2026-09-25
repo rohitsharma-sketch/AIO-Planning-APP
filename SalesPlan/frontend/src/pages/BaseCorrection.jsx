@@ -116,7 +116,7 @@ export default function BaseCorrection() {
             {inPipeline && checkData && !applied && !applying && (
               <button
                 onClick={handleApply}
-                style={{ background: theme.primary, border: 'none', color: '#fff', borderRadius: 8, padding: '8px 20px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                style={{ background: '#A8CBB7', border: 'none', color: '#1F4D3A', borderRadius: 8, padding: '8px 20px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
               >Apply & Continue →</button>
             )}
             {checkData && !applied && !inPipeline && (
@@ -137,7 +137,7 @@ export default function BaseCorrection() {
               onClick={handleCheck}
               disabled={checking}
               style={{
-                background: theme.primary, border: 'none', color: '#fff', borderRadius: 8,
+                background: '#A8CBB7', border: 'none', color: '#1F4D3A', borderRadius: 8,
                 padding: '8px 20px', cursor: checking ? 'default' : 'pointer',
                 fontSize: 13, fontWeight: 600, opacity: checking ? 0.7 : 1,
               }}

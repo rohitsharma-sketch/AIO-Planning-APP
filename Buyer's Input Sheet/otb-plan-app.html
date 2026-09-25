@@ -19,7 +19,7 @@
   /* surfaces & text */
   --bg:#F7F6F2;--sf:#FFFFFF;--s1:#FFFFFF;--s2:#FAF9F6;--s3:#F3F2EC;
   --bd:#E5E3DA;--bm:#D3D0C4;--bh:#9AA39D;
-  --tx:#1E2723;--t2:#37423C;--t3:#5F6B64;--mu:#8C958F;
+  --tx:#1E2723;--t2:#37423C;--t3:#5F6B64;--mu:#6E7872;
   /* accent (hex: _recomputeAccentDerived mixes these in JS) */
   --ac:#4F7A66;--ac-h:#3F6453;--ac-tint:10%;--ac-bord:34%;
   --ac-l:#EAF3EE;--ac-b:#CBE2D5;
@@ -62,7 +62,7 @@ button{font-family:inherit}
 /* ── SIDENAV ────────────────────────────────────────────────────────── */
 .snav{width:var(--NW);flex-shrink:0;background:var(--nav);display:flex;flex-direction:column;border-right:1px solid var(--nav2)}
 .snav-brand{height:var(--TH);padding:0 14px;display:flex;align-items:center;gap:10px;background:var(--topbar-bg);flex-shrink:0}
-.snav-brand-ico{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:var(--ac);color:#fff;font-size:11px;font-weight:800;letter-spacing:-.3px;flex-shrink:0}
+.snav-brand-ico{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:#A8CBB7;color:#1F4D3A;font-size:11px;font-weight:800;letter-spacing:-.3px;flex-shrink:0}
 .snav-brand-text{display:flex;flex-direction:column;min-width:0}
 .snav-brand-nm{font-size:13px;font-weight:700;color:#fff;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .snav-brand-fy{font-size:9.5px;font-weight:500;color:rgba(226,232,240,.65);margin-top:1px;white-space:nowrap}
@@ -74,6 +74,7 @@ button{font-family:inherit}
 .ni .ico{font-size:14px;width:18px;text-align:center}
 .ni .lbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ni .nbdg{font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;background:var(--s3);color:var(--t3)}
+.ni .live-badge{color:#1F4D3A}
 .ni .nbdg.live-badge{background:var(--po)!important;color:#fff}
 .ni-dh{display:none}
 .ni.ni-dragging{opacity:.35}
@@ -81,7 +82,7 @@ button{font-family:inherit}
 .ni.ni-drop-below{border-bottom-color:var(--ac)}
 .add-dept-ni{color:var(--nav-onDark-ac)!important;font-weight:600}
 .snav-foot{margin-top:auto;border-top:1px solid var(--nav2);padding:10px 8px}
-.snav-status{padding:6px 10px;font-size:11px;color:var(--t3);display:flex;align-items:center;gap:7px}
+.snav-status{padding:6px 10px;font-size:11px;color:rgba(255,255,255,.6);display:flex;align-items:center;gap:7px}
 .status-dot{width:7px;height:7px;border-radius:50%;background:var(--po);flex-shrink:0;animation:pulse 2.4s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 
@@ -98,8 +99,8 @@ button{font-family:inherit}
 /* ── BUTTONS ────────────────────────────────────────────────────────── */
 .tbtn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 13px;border-radius:7px;border:1px solid var(--bm);background:var(--sf);color:var(--t2);font-size:12px;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s,color .15s,box-shadow .15s;white-space:nowrap;user-select:none;letter-spacing:.005em}
 .tbtn:hover{border-color:var(--ac);color:var(--ac);background:var(--ac-l)}
-.tbtn.pri{background:var(--ac);border-color:var(--ac);color:#fff;box-shadow:0 1px 3px rgba(79,122,102,.35)}
-.tbtn.pri:hover{background:var(--ac-h);border-color:var(--ac-h);color:#fff}
+.tbtn.pri{background:#A8CBB7;border-color:#95BFA7;color:#1F4D3A;box-shadow:0 1px 3px rgba(79,122,102,.35)}
+.tbtn.pri:hover{background:#95BFA7;border-color:var(--ac-h);color:#1F4D3A}
 .tbtn.dng{color:var(--ne);border-color:var(--ne-br);background:var(--ne-b)}
 .tbtn.dng:hover{background:var(--ne);border-color:var(--ne);color:#fff}
 .tbtn.icon{padding:0 9px}
@@ -133,7 +134,7 @@ button{font-family:inherit}
 .mpills{display:flex;gap:4px;flex-wrap:wrap}
 .mp{display:inline-flex;align-items:center;height:28px;padding:0 12px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;user-select:none;white-space:nowrap;flex-shrink:0;transition:all .15s;background:var(--mp-bg);color:var(--mp-t);border:1px solid var(--mp-b)}
 .mp:hover{border-color:var(--ac)}
-.mp.on{background:var(--ac)!important;color:#fff!important;border-color:var(--ac)!important}
+.mp.on{background:#A8CBB7!important;color:#1F4D3A!important;border-color:#95BFA7!important}
 .sb-mp{padding:5px 2px;border-radius:8px;font-size:10.5px;font-weight:700;cursor:pointer;text-align:center;border:1px solid;transition:.12s;user-select:none}
 .sb-mp:hover{border-color:var(--ac)!important}
 .qbtns{display:flex;gap:4px;flex-shrink:0}
@@ -143,7 +144,7 @@ button{font-family:inherit}
 .vtog{display:flex;border:1px solid var(--bm);border-radius:7px;overflow:hidden;background:var(--s2)}
 .vt{padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;color:var(--t3);background:transparent;border:none;transition:.12s;user-select:none}
 .vt:hover:not(.on){background:var(--s3);color:var(--t2)}
-.vt.on{background:var(--ac);color:#fff}
+.vt.on{background:#A8CBB7;color:#1F4D3A}
 .fpbtn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:7px;border:1px solid var(--bm);background:var(--sf);font-size:11.5px;font-weight:600;color:var(--t2);cursor:pointer;transition:.15s;user-select:none}
 .fpbtn:hover{background:var(--ac-l);border-color:var(--ac-b);color:var(--ac)}
 .fpbtn.on{background:var(--ac-l);border-color:var(--ac-b);color:var(--ac)}
@@ -188,7 +189,7 @@ button{font-family:inherit}
 .fitem:hover{background:var(--s3);color:var(--tx)}
 .fitem.sel{color:var(--ac)}
 .fcb{width:14px;height:14px;border:1.5px solid var(--bm);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;background:var(--sf)}
-.fitem.chk .fcb{background:var(--ac);border-color:var(--ac);color:#fff}
+.fitem.chk .fcb{background:#A8CBB7;border-color:#95BFA7;color:#1F4D3A}
 .fitem .fcb::after{content:''}
 .fitem.chk .fcb::after{content:'\2713'}
 .fcnt{margin-left:auto;font-size:10px;color:var(--mu);font-variant-numeric:tabular-nums}
@@ -198,15 +199,15 @@ button{font-family:inherit}
 .divtabs.vis{display:flex}
 .dtab{display:inline-flex;align-items:center;height:34px;padding:0 16px;border-radius:8px;border:1px solid var(--bd);background:var(--sf);color:var(--t2);font-size:12px;font-weight:700;letter-spacing:.03em;cursor:pointer;transition:all .15s;user-select:none;outline:none;box-shadow:var(--shadow-sm)}
 .dtab:hover:not(.on){border-color:var(--ac-b);color:var(--ac)}
-.dtab.on{background:var(--ac);border-color:var(--ac);color:#fff;box-shadow:0 2px 8px rgba(79,122,102,.3)}
+.dtab.on{background:#A8CBB7;border-color:#95BFA7;color:#1F4D3A;box-shadow:0 2px 8px rgba(79,122,102,.3)}
 .dtab-cnt{display:inline-block;font-size:10px;font-weight:700;background:var(--s3);color:var(--t3);padding:1px 7px;border-radius:10px;margin-left:8px;min-width:20px;text-align:center;letter-spacing:0}
-.dtab.on .dtab-cnt{background:rgba(255,255,255,.22);color:#fff}
+.dtab.on .dtab-cnt{background:rgba(31,77,58,.12);color:#1F4D3A}
 
 /* ── KPI STRIP ──────────────────────────────────────────────────────── */
 .kstrip{flex-shrink:0;padding:4px 18px 14px;display:flex;gap:12px;background:var(--bg);overflow-x:auto}
 .ktile{position:relative;background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:12px 16px 11px 18px;display:flex;flex-direction:column;gap:3px;min-width:150px;flex:1;box-shadow:var(--shadow);overflow:hidden}
 .ktile::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--bm)}
-.ktile.a::before{background:var(--ac)}
+.ktile.a::before{background:#A8CBB7}
 .ktile.p::before{background:var(--po)}
 .ktile.n::before{background:var(--ne)}
 .kl{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.11em;color:var(--mu)}
@@ -317,13 +318,13 @@ td.aop-col-bg input.gi{background:var(--sf)}
 .attr-rvt-btn:hover{border-color:var(--ac);color:var(--ac)}
 /* resize handles */
 .col-resizer{position:absolute;right:-3px;top:0;width:6px;height:100%;cursor:col-resize;z-index:31;user-select:none;touch-action:none;border-radius:3px}
-.col-resizer:hover,.col-resizer.active{background:var(--ac);opacity:.6}
+.col-resizer:hover,.col-resizer.active{background:#A8CBB7;opacity:.6; color: #1F4D3A; }
 .row-resizer{position:absolute;bottom:0;left:0;right:0;height:5px;cursor:row-resize;z-index:15;user-select:none;touch-action:none}
 .row-resizer:hover,.row-resizer.active{background:color-mix(in srgb,var(--ac) 45%,transparent)}
 /* column filter button + dropdown */
 .col-flt-btn{display:inline-flex;align-items:center;gap:2px;margin-left:6px;padding:2px 6px;border-radius:5px;border:1px solid var(--bm);background:var(--sf);color:var(--t3);font-size:9px;font-weight:700;cursor:pointer;vertical-align:middle;transition:.12s;user-select:none;line-height:1;white-space:nowrap}
 .col-flt-btn:hover,.col-flt-btn.on{border-color:var(--ac);color:var(--ac);background:var(--ac-l)}
-.col-flt-btn .cfb{display:none;min-width:14px;height:14px;border-radius:7px;background:var(--ac);color:#fff;font-size:8px;font-weight:800;text-align:center;line-height:14px;padding:0 3px}
+.col-flt-btn .cfb{display:none;min-width:14px;height:14px;border-radius:7px;background:#A8CBB7;color:#1F4D3A;font-size:8px;font-weight:800;text-align:center;line-height:14px;padding:0 3px}
 .col-flt-btn .cfb.vis{display:inline-block}
 .cfd{position:fixed;z-index:1200;background:var(--sf);border:1px solid var(--bd);border-radius:10px;width:236px;max-height:340px;display:none;flex-direction:column;box-shadow:var(--shadow-lg);overflow:hidden}
 .cfd.vis{display:flex}
@@ -401,7 +402,7 @@ tr:hover .mag-trig{display:inline}
 .mag-mo.aop{border-color:var(--ac-b);background:var(--ac-l)}
 .mag-mon{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--mu);display:flex;justify-content:space-between;align-items:center}
 .mag-mo.aop .mag-mon{color:var(--ac)}
-.mag-aoplbl{font-size:8.5px;font-weight:700;padding:1px 6px;border-radius:4px;background:var(--ac);color:#fff}
+.mag-aoplbl{font-size:8.5px;font-weight:700;padding:1px 6px;border-radius:4px;background:#A8CBB7;color:#1F4D3A}
 .mag-vals{display:flex;gap:8px;font-size:11.5px;font-variant-numeric:tabular-nums;flex-wrap:wrap}
 .mag-vals .lv{color:var(--mu)}
 .mag-vals .tv{font-weight:700;color:var(--tx)}
@@ -435,7 +436,7 @@ tr:hover .mag-trig{display:inline}
 .vlog-divs{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
 .vlog-div{font-size:11px;font-weight:600;color:var(--t3);background:var(--s3);border:1px solid var(--bd);border-radius:20px;padding:3px 10px;white-space:nowrap}
 .vlog-load{padding:5px 14px;border-radius:7px;border:1px solid var(--ac-b);background:var(--ac-l);color:var(--ac);font-size:11.5px;font-weight:700;cursor:pointer}
-.vlog-load:hover{background:var(--ac);color:#fff;border-color:var(--ac)}
+.vlog-load:hover{background:#A8CBB7;color:#1F4D3A;border-color:#95BFA7}
 .vlog-row-ft{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .vlog-hint{font-size:10.5px;color:var(--mu);font-style:italic;padding:8px 12px;background:var(--s2);border-radius:7px;margin-top:4px;line-height:1.5}
 
@@ -478,13 +479,13 @@ tr:hover .mag-trig{display:inline}
       <span class="ni-dh">⠿</span><span class="lbl">Buyer's Plan</span><span class="nbdg">Input</span>
     </div>
     <div class="ni" draggable="true" onclick="setReport('summary')" id="ni-summary">
-      <span class="ni-dh">⠿</span><span class="lbl">Division Summary</span><span class="nbdg live-badge" style="background:var(--ac)">Live</span>
+      <span class="ni-dh">⠿</span><span class="lbl">Division Summary</span><span class="nbdg live-badge" style="background:#A8CBB7">Live</span>
     </div>
     <div class="ni" draggable="true" onclick="setReport('dept')" id="ni-dept">
-      <span class="ni-dh">⠿</span><span class="lbl">Department Summary</span><span class="nbdg live-badge" style="background:var(--ac)">Live</span>
+      <span class="ni-dh">⠿</span><span class="lbl">Department Summary</span><span class="nbdg live-badge" style="background:#A8CBB7">Live</span>
     </div>
     <div class="ni" draggable="true" onclick="setReport('attr')" id="ni-attr">
-      <span class="ni-dh">⠿</span><span class="lbl">Attribute Summary</span><span class="nbdg live-badge" style="background:var(--ac)">Live</span>
+      <span class="ni-dh">⠿</span><span class="lbl">Attribute Summary</span><span class="nbdg live-badge" style="background:#A8CBB7">Live</span>
     </div>
     <div class="ni" draggable="true" onclick="setReport('inactive')" id="ni-inactive">
       <span class="ni-dh">⠿</span><span class="lbl">Inactive Depts</span><span class="nbdg" id="ni-inactive-cnt" style="display:none;background:var(--wa);color:#000">0</span>
@@ -4425,8 +4426,10 @@ function _recomputeAccentDerived(){
   // reliably repainted from var(--ac) alone across repeated same-session accent/theme
   // changes in testing. Setting them directly as a literal color is fully deterministic.
   if(ac){
-    document.querySelectorAll('.ni.act').forEach(el=>{el.style.color=ac;});
-    document.querySelectorAll('.live-badge').forEach(el=>{el.style.background='#059669';});
+    // Active row colour comes from CSS (--nav-onDark-ac, pastel on the dark chrome);
+    // the accent itself is too dark to read there (2026-09-25).
+    document.querySelectorAll('.ni.act').forEach(el=>{el.style.color='';});
+    document.querySelectorAll('.live-badge').forEach(el=>{el.style.background='#A8CBB7';});
   }
 }
 function applyTheme(mode){
@@ -5213,7 +5216,7 @@ function _renderVersionLog(){
     const isLatest=i===0;
     const hasSnap=!!v.snapshot;
     return `<div class="vlog-entry">
-      <div class="vlog-label">${v.label||'Version '+(vers.length-i)}${isLatest?' <span style="font-size:9px;font-weight:800;padding:1px 7px;border-radius:10px;background:var(--ac);color:#fff;vertical-align:middle;letter-spacing:.04em;margin-left:6px">LATEST</span>':''}</div>
+      <div class="vlog-label">${v.label||'Version '+(vers.length-i)}${isLatest?' <span style="font-size:9px;font-weight:800;padding:1px 7px;border-radius:10px;background:#A8CBB7;color:#1F4D3A;vertical-align:middle;letter-spacing:.04em;margin-left:6px">LATEST</span>':''}</div>
       <div class="vlog-divs">
         <span class="vlog-div">MENS: ${fCrV(t.MENS||0)}</span>
         <span class="vlog-div">LADIES: ${fCrV(t.LADIES||0)}</span>

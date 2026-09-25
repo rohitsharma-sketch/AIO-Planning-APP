@@ -18,11 +18,11 @@ const QUARTERS = [
   { label: 'Q4', months: MONTHS.slice(10, 13) },
 ]
 
-// Chart palette = the app theme (index.css): navy ink, teal forecast, slate base,
+// Chart palette = the app theme (index.css): sage ink, sage forecast, pale base,
 // store types LfL blue / Ramp amber / NSO green (same as the .tag-* chips).
 const NAVY   = '#34453F'
 const NAVY2  = '#4F7A66'
-const LIGHT  = '#B9C8D9'
+const LIGHT  = '#C5D3C9'   // base bars: pale sage-grey (legend text uses AXIS, readable)
 const ORANGE = '#B45309'
 const TEAL   = '#15803D'
 const LFL    = '#3D5AD6'
@@ -418,7 +418,7 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
             <XAxis dataKey="month" tick={{ fontSize: 11, fill: AXIS }} />
             <YAxis tick={{ fontSize: 11, fill: AXIS }} tickFormatter={v => `${v}`} width={48} />
             <Tooltip content={<CustomTooltip />} />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
+            <Legend wrapperStyle={{ fontSize: 12 }} formatter={v => <span style={{ color: AXIS }}>{v}</span>} />
             <Bar dataKey="base" name="Base" fill={LIGHT} isAnimationActive={false} radius={[3, 3, 0, 0]}>
               {showLabels && <LabelList dataKey="base" position="top" formatter={lbl0} style={{ fontSize: 10, fill: AXIS }} />}
             </Bar>
@@ -439,7 +439,7 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
               <XAxis type="number" tick={{ fontSize: 11, fill: AXIS }} tickFormatter={v => `${v}`} />
               <YAxis dataKey="division" type="category" width={56} tick={{ fontSize: 11, fill: AXIS }} />
               <Tooltip content={<CustomTooltip />} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Legend wrapperStyle={{ fontSize: 12 }} formatter={v => <span style={{ color: AXIS }}>{v}</span>} />
               <Bar dataKey="base" name="Base" fill={LIGHT} isAnimationActive={false} radius={[0, 3, 3, 0]}>
                 {showLabels && <LabelList dataKey="base" position="right" formatter={lbl0} style={{ fontSize: 10, fill: AXIS }} />}
               </Bar>

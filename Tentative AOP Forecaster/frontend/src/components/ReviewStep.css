@@ -198,10 +198,10 @@
 .quickset-input:focus { outline: none; border-color: var(--navy3); }
 .quickset-btn {
   padding: 3px 7px;
-  border: 1px solid var(--navy3);
+  border: 1px solid #95BFA7;
   border-radius: 0 4px 4px 0;
-  background: var(--navy3);
-  color: #fff;
+  background: #A8CBB7;
+  color: #1F4D3A;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
