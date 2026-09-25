@@ -3,14 +3,12 @@ import './OutputTab.css'
 import { tagClass, MONTHS, toLeaf } from '../lib/tags'
 import { apiUrl } from '../lib/apiBase'
 import { useVisibleMonths } from '../lib/horizon'
-import { LEVELS, LEVEL_KEYS, EMPTY_DIM, aggregate, buildTree, sortTree, flatten, dimOptions, filterLeaves, HeaderFilter, useDrill } from '../lib/drill'
+import { LEVELS, LEVEL_KEYS, EMPTY_DIM, aggregate, buildTree, sortTree, flatten, dimOptions, filterLeaves, useDrill } from '../lib/drill'
 
-const DIVS = ["GM","KIDS","LADIES","MENS","RETAIL"]
-const TAGS = ["LfL","Ramp","NSO"]
-const PAGE_SIZE = 50
 
 const DIV_COLORS = { GM:'#334155', KIDS:'#A16207', LADIES:'#9D174D', MENS:'#0F766E', RETAIL:'#5B21B6' }
 const TAG_COLORS = { LfL:'#3D5AD6', Ramp:'#B45309', NSO:'#15803D' }  // = .tag-* chips / Summary charts
+const LEVEL_COLORS = { Division: DIV_COLORS, Type: TAG_COLORS }
 
 function fmt1(v) {
   if (v == null) return '—'
@@ -29,10 +27,12 @@ function fmtDev(v) {
 // • selected=[] means "all" (no filter applied)
 function MultiSelect({ label, options, selected, onChange, colorMap, width }) {
   const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
   const ref = useRef(null)
+  const shown = q ? options.filter(o => String(o).toLowerCase().includes(q.trim().toLowerCase())) : options
 
   useEffect(() => {
-    function handler(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    function handler(e) { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setQ('') } }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
@@ -93,7 +93,9 @@ function MultiSelect({ label, options, selected, onChange, colorMap, width }) {
               <button className="ms-pv-clear" onClick={() => onChange([])}>Clear</button>
             )}
           </div>
-          {/* Search hint for larger lists */}
+          {options.length > 12 && (
+            <input className="ms-search" autoFocus placeholder={`Search ${label.toLowerCase()}…`} value={q} onChange={e => setQ(e.target.value)} />
+          )}
           <div className="ms-pv-options">
             {/* (Select All) row */}
             <div
@@ -104,7 +106,7 @@ function MultiSelect({ label, options, selected, onChange, colorMap, width }) {
               <span className="ms-pv-row-label">(Select All)</span>
             </div>
             <div className="ms-pv-divider" />
-            {options.map(opt => {
+            {shown.map(opt => {
               const checked = isChecked(opt)
               const exclusive = selected.length === 1 && selected[0] === opt
               return (
@@ -191,12 +193,6 @@ export default function OutputTab({ sessionId, runKey }) {
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
 
-  // Filter bar
-  const [divFilter, setDivFilter]     = useState([])
-  const [tagFilter, setTagFilter]     = useState([])
-  const [clusterFilter, setCluster]   = useState('')
-  const [storeSearch, setStoreSearch] = useState('')
-
   // Pivot layout (remembered per browser)
   const [layout, setLayout] = useState(loadLayout)
   useEffect(() => { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)) } catch {} }, [layout])
@@ -213,7 +209,7 @@ export default function OutputTab({ sessionId, runKey }) {
   const VIS_IDX = useMemo(() => VIS.map(m => MONTHS.indexOf(m)), [VIS])
   const d = useDrill({ defaultSort: 'fcst', resetKey: runKey })
 
-  useEffect(() => { setDivFilter([]); setTagFilter([]); setCluster(''); setStoreSearch(''); setDepth(2) }, [runKey])
+  useEffect(() => { setDepth(2) }, [runKey])   // useDrill clears the layer filters on runKey
 
   useEffect(() => {
     if (!sessionId) return
@@ -226,19 +222,12 @@ export default function OutputTab({ sessionId, runKey }) {
 
   // ── Data pipeline ──────────────────────────────────────────────────────
   const leaves   = useMemo(() => (rows || []).map(r => toLeaf(r, 1)), [rows])          // ₹ Lakhs
-  const clusters = useMemo(() => Array.from(new Set(leaves.map(r => r.Cluster).filter(c => c && c !== '—'))).sort(), [leaves])
-  const options  = useMemo(() => dimOptions(leaves), [leaves])
-
-  const barFiltered = useMemo(() => {
-    let r = leaves
-    if (divFilter.length)   r = r.filter(x => divFilter.includes(x.Division))
-    if (tagFilter.length)   r = r.filter(x => tagFilter.includes(x.Type))
-    if (clusterFilter)      r = r.filter(x => x.Cluster === clusterFilter)
-    const q = storeSearch.trim().toLowerCase()
-    if (q)                  r = r.filter(x => x.Store?.toLowerCase().includes(q))
-    return r
-  }, [leaves, divFilter, tagFilter, clusterFilter, storeSearch])
-  const filtered = useMemo(() => filterLeaves(barFiltered, { dimF: d.dimF, idx: VIS_IDX }), [barFiltered, d.dimF, VIS_IDX])
+  const options  = useMemo(() => {
+    const o = dimOptions(leaves), out = {}
+    for (const k of LEVEL_KEYS) out[k] = o[k].map(x => x.value).filter(v => v != null && v !== '' && v !== '—')
+    return out
+  }, [leaves])
+  const filtered = useMemo(() => filterLeaves(leaves, { dimF: d.dimF, idx: VIS_IDX }), [leaves, d.dimF, VIS_IDX])
 
   // Column groups: Mar'27, then quarter bands (months, or one column when folded), then Total
   const groups = useMemo(() => {
@@ -278,13 +267,17 @@ export default function OutputTab({ sessionId, runKey }) {
   const clsVal = (v, key) => key === 'gr' ? (v == null ? 'muted' : v >= 0 ? 'positive' : 'negative')
     : key === 'dev' ? (v > 0 ? 'positive' : v < 0 ? 'negative' : '') : key === 'fcst' ? 'fw-bold' : ''
   const levelLabel = k => LEVELS.find(l => l.key === k).label
-  const drillFilters = LEVEL_KEYS.filter(k => d.dimF[k].length).length
-  const hasBarFilters = divFilter.length || tagFilter.length || clusterFilter || storeSearch
-  const resetAll = () => { setDivFilter([]); setTagFilter([]); setCluster(''); setStoreSearch(''); d.setDimF(EMPTY_DIM) }
+  const anyFilter = LEVEL_KEYS.some(k => d.dimF[k].length)
 
   // Layer chip click: open the table down to layer i; click the deepest open layer again = fold it.
   const crumbClick = i => {
     const target = depth === i + 1 ? i : i + 1
+    if (target <= 1) { d.collapse(); setDepth(1) } else { d.expandTo(tree, target - 1); setDepth(target) }
+  }
+  // +/- on layer i: open every node of that layer (show layer i+1) or close them all.
+  const layerToggle = (i, e) => {
+    e.stopPropagation()
+    const target = depth > i + 1 ? i + 1 : i + 2
     if (target <= 1) { d.collapse(); setDepth(1) } else { d.expandTo(tree, target - 1); setDepth(target) }
   }
   const moveLayer = (key, target, side) => { reapply.current = true; setL(l => ({ rows: reorder(l.rows, key, target, side) })) }
@@ -381,17 +374,12 @@ export default function OutputTab({ sessionId, runKey }) {
       <div className="card pv-card">
         {/* ── One slim bar: filters · values · unit · export ── */}
         <div className="pv-bar">
-          <MultiSelect label="Division"   options={DIVS} selected={divFilter} onChange={setDivFilter} colorMap={DIV_COLORS} />
-          <MultiSelect label="Store Type" options={TAGS} selected={tagFilter} onChange={setTagFilter} colorMap={TAG_COLORS} width={130} />
-          <select className="out-select" value={clusterFilter} onChange={e => setCluster(e.target.value)} aria-label="Cluster">
-            <option value="">All clusters</option>
-            {clusters.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <div className="out-search-wrap">
-            <input className="out-search" placeholder="Search store…" value={storeSearch} onChange={e => setStoreSearch(e.target.value)} />
-            {storeSearch && <button className="out-search-clear" onClick={() => setStoreSearch('')}>x</button>}
-          </div>
-          {(hasBarFilters || drillFilters > 0) && <button className="pv-link" onClick={resetAll}>Clear filters</button>}
+          {/* One filter per hierarchy layer, in the same order as the header chips */}
+          {rowFields.map(k => (
+            <MultiSelect key={k} label={levelLabel(k)} options={options[k]} selected={d.dimF[k]} colorMap={LEVEL_COLORS[k]}
+                         onChange={v => d.setDimF(f => ({ ...f, [k]: v }))} />
+          ))}
+          {anyFilter && <button className="pv-link" onClick={() => d.setDimF(EMPTY_DIM)}>Clear filters</button>}
           <span className="pv-bar-gap" />
           <div className="pv-vals" role="group" aria-label="Values">
             {VALUE_KEYS.map(k => (
@@ -418,9 +406,13 @@ export default function OutputTab({ sessionId, runKey }) {
                       <div key={k} role="button" tabIndex={0} {...chipDnd(k, i)} onClick={() => crumbClick(i)}
                               className={`pv-layer${i < depth ? ' on' : ''}${drag === k ? ' dragging' : ''}${d.dimF[k].length ? ' filtered' : ''}${over?.key === k && drag !== k ? (over.side < 0 ? ' drop-l' : ' drop-r') : ''}`}
                               title={`${depth === i + 1 ? 'Fold' : 'Open to'} ${levelLabel(k)} · drag to re-order (Alt+←/→)`}>
+                        {i < rowFields.length - 1 && (
+                          <span className="pv-layer-t" role="button" aria-label={`${depth > i + 1 ? 'Collapse' : 'Expand'} every ${levelLabel(k)}`}
+                                title={`${depth > i + 1 ? 'Collapse' : 'Expand'} every ${levelLabel(k)}`} onClick={e => layerToggle(i, e)}>
+                            {depth > i + 1 ? '−' : '+'}
+                          </span>
+                        )}
                         {levelLabel(k)}
-                        <span className="pv-layer-f" role="button" aria-label={`Filter ${levelLabel(k)}`}
-                              onClick={e => d.openF(k, e)}>▾</span>
                       </div>
                     ))}
                   </div>
@@ -464,10 +456,6 @@ export default function OutputTab({ sessionId, runKey }) {
         {VIS.length < MONTHS.length && <div className="pv-foot">{VIS[0]}–{VIS[VIS.length - 1]} shown · later months appear as their base month closes</div>}
       </div>
 
-      {d.openFilter && LEVEL_KEYS.includes(d.openFilter.col) && (
-        <HeaderFilter title={levelLabel(d.openFilter.col)} options={options[d.openFilter.col]} selected={d.dimF[d.openFilter.col]}
-          onChange={v => d.setDimF(f => ({ ...f, [d.openFilter.col]: v }))} onClose={d.closeF} anchor={d.openFilter.anchor} />
-      )}
     </div>
   )
 }

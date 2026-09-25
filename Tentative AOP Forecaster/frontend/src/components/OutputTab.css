@@ -594,9 +594,10 @@
 .pv-layer.dragging { opacity: .35; cursor: grabbing; }
 .pv-layer.drop-l { box-shadow: -3px 0 0 #fff; }
 .pv-layer.drop-r { box-shadow: 3px 0 0 #fff; }
-.pv-layer-f { padding: 0 3px; border-radius: 3px; font-size: 9px; opacity: 0; cursor: pointer; }
-.pv-layer:hover .pv-layer-f, .pv-layer.filtered .pv-layer-f, .pv-layer:focus-visible .pv-layer-f { opacity: .85; }
-.pv-layer-f:hover { background: rgba(255,255,255,.25); opacity: 1; }
+.pv-layer-t { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; margin-right: 3px; border-radius: 3px; border: 1px solid rgba(255,255,255,.4); font-size: 11px; line-height: 1; cursor: pointer; }
+.pv-layer-t:hover { background: #fff; color: var(--navy); }
+.ms-search { display: block; width: calc(100% - 16px); margin: 6px 8px 2px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 11.5px; }
+.pv-bar .ms-dropdown .ms-pv-options { max-height: 300px; overflow: auto; }
 .pv-sortname { margin-top: 3px; font-size: 9.5px; font-weight: 600; opacity: .7; text-transform: uppercase; letter-spacing: .05em; }
 .pv-meta { margin-left: 6px; font-size: 9.5px; font-weight: 500; opacity: .6; }
 
