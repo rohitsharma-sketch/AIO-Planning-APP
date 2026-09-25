@@ -32,6 +32,9 @@ assert ref[("Chhath Puja", 2027)]["date"] == D("2027-11-05") and ref[("Chhath Pu
 assert ref[("Diwali", 2027)]["date"] == D("2027-10-29") and ref[("Diwali", 2027)]["source"] == "google"
 assert ref[("Kali Puja", 2027)]["date"] == D("2027-10-29")
 assert ref[("Makar Sankranti", 2027)]["date"] == D("2027-01-14")
+# Bohag Bihu: fixed 14 April every year (Google says 15 Apr in 2023/2025-2027)
+bihu = {y: r for (f, y), r in ref.items() if f == "Bihu"}
+assert bihu and all(r["date"] == datetime.date(y, 4, 14) and r["source"] == "override" for y, r in bihu.items()), bihu
 assert all(f in {f for f, _ in ref} for f in list(fds.GOOGLE_NAMES) + list(fds.DERIVED)), "a mapped name found nothing"
 
 # tentative suffix stripped; confirmed beats tentative regardless of order

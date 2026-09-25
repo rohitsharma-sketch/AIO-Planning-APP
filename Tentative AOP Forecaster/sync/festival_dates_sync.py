@@ -68,6 +68,12 @@ DERIVED = {
 OVERRIDES = {
     ("Chhath Puja", 2027): ("2027-11-05", "Closing day (Google: 2027-11-04)"),
 }
+# festival -> (month, day, reason): same calendar date every year, beats Google.
+# Bohag (Rongali) Bihu is celebrated on 14 April every year (user, 2026-09-25);
+# Google's India feed lists "Bahag Bihu" on 15 Apr in 2023/2025-2027.
+FIXED_DATES = {
+    "Bihu": (4, 14, "Always 14 April (Bohag Bihu)"),
+}
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS calendar.festival_reference_dates (
@@ -116,6 +122,10 @@ def reference_rows(text):
             if b == base:
                 rows[(fest, year)] = {"date": r["date"] + datetime.timedelta(days=offset),
                                       "source": "derived", "source_name": rule}
+    for fest, (month, day, reason) in FIXED_DATES.items():
+        for (f, year) in list(rows):
+            if f == fest:
+                rows[(f, year)] = {"date": datetime.date(year, month, day), "source": "override", "source_name": reason}
     for (fest, year), (date, reason) in OVERRIDES.items():
         rows[(fest, year)] = {"date": datetime.date.fromisoformat(date), "source": "override", "source_name": reason}
     return [{"festival": f, "year": y, **r} for (f, y), r in sorted(rows.items())]
