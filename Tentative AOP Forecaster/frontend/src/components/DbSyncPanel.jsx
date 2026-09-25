@@ -53,8 +53,13 @@ export default function DbSyncPanel({ onSynced }) {
   const anyFailed  = runs?.some(r => r.status === 'failed')
   const anyOffline = runs?.some(r => r.status === 'offline')
   const lastAt = runs?.length ? runs.map(r => r.completed_at || r.started_at).sort().at(-1) : null
+  // A source that hasn't succeeded for >30h (the daily 05:00 task was skipped,
+  // e.g. the PC started on battery) must not hide behind the newest source's
+  // time - 25 Sep: "All 6 synced · 12:33" while Store Actuals was a day old.
+  const STALE_MS = 30 * 3600 * 1000
+  const stale = (runs || []).filter(r => Date.now() - new Date(r.last_success_at || r.completed_at || r.started_at) > STALE_MS)
 
-  const statusClass = anyFailed ? ' off' : anyOffline ? ' warn' : ''
+  const statusClass = anyFailed ? ' off' : (anyOffline || stale.length) ? ' warn' : ''
 
   function rowLabel(r) {
     if (r.status === 'success')  return 'OK'
@@ -82,6 +87,7 @@ export default function DbSyncPanel({ onSynced }) {
               : !runs.length ? 'Never synced into Postgres yet.'
               : anyFailed  ? 'Last sync had failures — see Details.'
               : anyOffline ? 'Some sources were offline — existing data still active.'
+              : stale.length ? <>Not synced in over a day: {stale.map(r => `${DB_SYNC_LABELS[r.source_key] || r.source_key} (${fmtStamp(r.last_success_at || r.completed_at)})`).join(', ')} — click Sync into database</>
               : <>All {runs.length} sources synced · last {fmtStamp(lastAt)}</>}
             {closedLabel && <> · Actuals closed through {closedLabel}</>}
           </span>
