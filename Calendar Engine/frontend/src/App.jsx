@@ -41,21 +41,16 @@ export default function App() {
           <div className="app-header-icon">CE</div>
           <div>
             <div className="app-header-title">Calendar Engine</div>
-            <div className="app-header-sub">Citykart RS Planning</div>
+            <div className="app-header-sub">RS Planning · CityKart</div>
           </div>
         </div>
         <div className="app-header-spacer" />
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginRight: '0.75rem' }}>
-          <span style={{ fontSize: '0.72rem', color: 'var(--muted)', fontWeight: 500, letterSpacing: '0.02em' }}>Engine:</span>
+        <div className="app-engine">
+          <span>Engine</span>
           <select
             value={engineVersion}
             onChange={e => handleVersionChange(Number(e.target.value))}
-            style={{
-              fontSize: '0.75rem', padding: '0.25rem 0.5rem',
-              borderRadius: '5px', border: '1px solid var(--border)',
-              background: 'var(--light)', color: 'var(--text)',
-              cursor: 'pointer', fontFamily: 'inherit',
-            }}
+            aria-label="Calendar engine version"
           >
             <option value={1}>V1 - LY Same Month</option>
             <option value={2}>V2 - Adjacent Month (+/-1)</option>

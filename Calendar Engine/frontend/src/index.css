@@ -1,26 +1,31 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=JetBrains+Mono:wght@400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 :root {
-  /* ── Brand palette ─────────────────────────────────────────── */
-  --navy:       #1F3864;
-  --navy2:      #2F5597;
-  --navy3:      #4472C4;
-  --navy-light: #B2CFEA;
-  --accent:     #3B82F6;
-  --accent-bg:  #EFF6FF;
+  /* ── Brand palette: RS Planning suite (2026-09-25) - same navy chrome,
+     accent and Plus Jakarta Sans as Landing / AOP / BIS / Sales Plan.
+     Names unchanged (every component reads them); --navy3 is the accent. ── */
+  --navy:       #0F2742;   /* chrome, table heads, headings */
+  --navy2:      #1B3A5C;
+  --navy3:      #7A1F3D;   /* burgundy accent - focus, links, selection, primary buttons */
+  --accent-h:   #5E1730;
+  --navy-light: #E2BFCB;
+  --accent:     #7A1F3D;
+  --accent-bg:  #F6E9EE;
 
   /* ── Surfaces & text ───────────────────────────────────────── */
-  --light:  #EEF3FB;
-  --bg:     #F8FAFC;
+  --light:  #F6E9EE;
+  --bg:     #F5F3F4;
   --white:  #FFFFFF;
-  --char:   #0F172A;
-  --muted:  #64748B;
-  --border: #E2E8F0;
+  --char:   #0F1B2D;
+  --text:   #0F1B2D;
+  --muted:  #5B6B82;
+  --faint:  #8A99AD;
+  --border: #E3E8EF;
 
   /* ── Semantic ───────────────────────────────────────────────── */
-  --green: #16A34A;
-  --red:   #DC2626;
-  --warn:  #D97706;
+  --green: #15803D;
+  --red:   #B42318;
+  --warn:  #B45309;
 
   /* ── Effects ────────────────────────────────────────────────── */
   --radius:    12px;
@@ -41,7 +46,8 @@
 
 body {
   margin: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-variant-numeric: tabular-nums;
   font-size: 14px;
   line-height: 1.5;
   background: var(--bg);
@@ -62,10 +68,10 @@ body {
   align-items: center;
   gap: 16px;
   padding: 0 24px;
-  height: 54px;
+  height: 56px;
   flex-shrink: 0;
   background: var(--navy);
-  box-shadow: 0 1px 0 rgba(0,0,0,0.18), 0 2px 10px rgba(0,0,0,0.15);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
   position: relative;
   z-index: 10;
 }
@@ -79,12 +85,12 @@ body {
   width: 34px;
   height: 34px;
   border-radius: 9px;
-  background: rgba(255,255,255,0.13);
-  border: 1px solid rgba(255,255,255,0.18);
+  background: var(--navy3);
+  border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: 12.5px;
   font-weight: 800;
   color: #fff;
   letter-spacing: -0.02em;
@@ -98,11 +104,9 @@ body {
   line-height: 1.2;
 }
 .app-header-sub {
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 500;
   color: rgba(255,255,255,0.55);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   margin-top: 1px;
 }
 .app-header-spacer { flex: 1; }
@@ -159,7 +163,7 @@ body {
 .mod-tab.active {
   color: var(--navy);
   font-weight: 700;
-  border-bottom-color: var(--navy);
+  border-bottom-color: var(--navy3);
   background: transparent;
 }
 
@@ -208,10 +212,10 @@ input[type=number], input[type=date], input:not([type]), select {
 }
 input[type=number]:focus, input[type=date]:focus, input:not([type]):focus, select:focus {
   border-color: var(--navy3);
-  box-shadow: 0 0 0 3px rgba(68,114,196,0.15);
+  box-shadow: 0 0 0 3px rgba(122,31,61,0.15);
 }
 input[type=number] { font-variant-numeric: tabular-nums; width: 70px; }
-input[type=checkbox], input[type=radio] { accent-color: var(--navy); }
+input[type=checkbox], input[type=radio] { accent-color: var(--navy3); }
 
 /* ═══ Buttons ══════════════════════════════════════════════════════════
    The old app styled every button via an explicit .btn/.btn-* class; the new
@@ -252,21 +256,21 @@ button:disabled { opacity: .45; cursor: default; box-shadow: none; }
   padding: 9px 20px;
   border: none;
   border-radius: 9px;
-  background: var(--navy);
+  background: var(--navy3);
   color: #fff;
   font-size: 13.5px;
   font-weight: 700;
   letter-spacing: .01em;
-  box-shadow: 0 1px 2px rgba(31,56,100,0.25), 0 3px 8px rgba(31,56,100,0.18);
+  box-shadow: 0 1px 2px rgba(122,31,61,0.25), 0 3px 8px rgba(122,31,61,0.18);
 }
 .btn:hover {
-  background: var(--navy2);
+  background: var(--accent-h);
   color: #fff;
   border-color: transparent;
-  box-shadow: 0 2px 4px rgba(31,56,100,0.28), 0 5px 14px rgba(31,56,100,0.22);
+  box-shadow: 0 2px 4px rgba(122,31,61,0.28), 0 5px 14px rgba(122,31,61,0.22);
   opacity: 1;
 }
-.btn:active { transform: scale(.97); box-shadow: 0 1px 2px rgba(31,56,100,0.2); }
+.btn:active { transform: scale(.97); box-shadow: 0 1px 2px rgba(122,31,61,0.2); }
 
 /* ═══ Cluster tabs (CalendarisationTab/ClusterTabs.jsx) ═══════════════════
    Ported from calendar_engine.html lines 179-193. */
@@ -281,9 +285,9 @@ button:disabled { opacity: .45; cursor: default; box-shadow: none; }
   transition: background .15s, color .15s, border-color .15s;
   white-space: nowrap;
 }
-.cluster-tab.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+.cluster-tab.active { background: var(--navy3); color: #fff; border-color: var(--navy3); }
 .cluster-tab:hover:not(.active) { border-color: var(--navy3); color: var(--navy3); background: var(--white); }
-.cluster-tab.cluster-drag-over { border-color: var(--navy) !important; box-shadow: 0 0 0 3px var(--light); }
+.cluster-tab.cluster-drag-over { border-color: var(--navy3) !important; box-shadow: 0 0 0 3px var(--light); }
 
 .cluster-add-btn {
   padding: 4px 10px;
@@ -585,7 +589,7 @@ table.scm-mini td { padding: 4px 8px; }
 .check { color: var(--green); font-weight: 700; font-variant-emoji: text; }
 .cross { color: var(--muted); font-variant-emoji: text; }
 .arrow-sep { color: var(--navy); font-weight: 700; padding: 0 4px; font-variant-emoji: text; }
-.date-mono { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; }
+.date-mono { font-variant-numeric: tabular-nums; }
 
 /* ─── Shift pills (calendar_engine.html lines 256-260) ───────────────────────
    Consumed by the Monthly Summary "Net Month Shift" column, which is still a
@@ -715,7 +719,7 @@ input[type=number].year-input { width: 80px; font-size: 15px; font-weight: 600; 
   cursor: pointer;
   transition: border-color .15s, box-shadow .15s;
 }
-.lib-card:hover { border-color: var(--navy-light); box-shadow: 0 2px 8px rgba(31, 56, 100, .12); }
+.lib-card:hover { border-color: var(--navy-light); box-shadow: 0 2px 8px rgba(15, 39, 66, .10); }
 .lib-card:focus-visible { outline: 2px solid var(--navy3); outline-offset: 2px; }
 .lib-card-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
 .lib-lock-icon {
@@ -787,8 +791,8 @@ input[type=number].year-input { width: 80px; font-size: 15px; font-weight: 600; 
    and the earlier `.btn:hover` regardless of source order. */
 .lib-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .lib-actions button { padding: 5px 11px; font-size: 12px; font-weight: 600; border-radius: 5px; }
-.lib-actions .btn { background: var(--navy); color: #fff; border: 1px solid var(--navy); }
-.lib-actions .btn:hover { background: var(--navy); opacity: .88; }
+.lib-actions .btn { background: var(--navy3); color: #fff; border: 1px solid var(--navy3); }
+.lib-actions .btn:hover { background: var(--accent-h); opacity: 1; }
 .lib-del-btn { color: var(--red); border-color: var(--red); background: var(--white); }
 .lib-del-btn:hover { background: #FEE2E2; }
 
@@ -852,7 +856,7 @@ input[type=number].year-input { width: 80px; font-size: 15px; font-weight: 600; 
   cursor: pointer;
   transition: background .12s, color .12s, border-color .12s;
 }
-.month-pill input:checked + label { background: var(--navy); color: #fff; border-color: var(--navy); }
+.month-pill input:checked + label { background: var(--navy3); color: #fff; border-color: var(--navy3); }
 .month-pill label:hover { border-color: var(--navy); color: var(--navy); }
 .month-pill input:checked + label:hover { color: #fff; }
 /* Keyboard focus ring, since the real checkbox is visually hidden. */
@@ -1088,14 +1092,24 @@ details.rx-section > summary.rx-label { cursor: pointer; display: list-item; }
 .rx-yr { min-width: 48px; font-size: 11px; font-weight: 700; background: none; border: none; color: var(--navy); cursor: pointer; text-align: left; }
 .rx-chip { font-size: 11px; padding: 3px 9px; border-radius: 12px; border: 1px solid var(--border); background: var(--white, #fff); color: var(--muted); cursor: pointer; border-bottom-width: 3px; }
 .rx-chip.cached { border-bottom-color: var(--green); } .rx-chip.open { border-bottom-color: var(--warn); } .rx-chip.pending { border-bottom-color: var(--muted); }
-.rx-chip.on { background: var(--navy2); border-color: var(--navy2); color: #fff; }
+.rx-chip.on { background: var(--navy3); border-color: var(--navy3); color: #fff; }
 .rx-chip.on.cached { border-bottom-color: var(--green); } .rx-chip.on.open { border-bottom-color: var(--warn); }
 /* Reindexed Sales toolbar: Wide/Stacked segmented toggle */
 .rx-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .rx-seg button { border: none; border-radius: 0; background: var(--white); color: var(--muted); padding: 5px 12px; font-size: 12px; cursor: pointer; }
-.rx-seg button.active { background: var(--navy2); color: #fff; }
+.rx-seg button.active { background: var(--navy3); color: #fff; }
 
 /* Month Wise Matrix: a share of a ref month that landed in another month -
    hover shows which days moved and why (lib/moveReasons.js, 2026-09-25). */
 .mx-moved { background: rgba(245, 158, 11, 0.16) !important; cursor: help; text-decoration: underline dotted rgba(180, 83, 9, 0.55); text-underline-offset: 3px; }
 .mx-moved:hover { background: rgba(245, 158, 11, 0.28) !important; }
+
+/* Engine selector in the navy header (was grey-on-navy, barely readable) */
+.app-engine { display: flex; align-items: center; gap: 8px; margin-right: 12px; }
+.app-engine span { font-size: 12px; font-weight: 600; color: rgba(255,255,255,.6); }
+.app-engine select {
+  font-size: 12.5px; font-weight: 600; padding: 5px 10px; border-radius: 8px; cursor: pointer;
+  color: #fff; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.2); box-shadow: none;
+}
+.app-engine select:hover, .app-engine select:focus { border-color: rgba(255,255,255,.45); box-shadow: none; }
+.app-engine option { color: var(--char); background: var(--white); }
