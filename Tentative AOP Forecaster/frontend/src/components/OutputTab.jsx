@@ -25,7 +25,7 @@ function fmtDev(v) {
 // • Click item label → exclusive select (only that item)
 // • (Select All) row → all on/off
 // • selected=[] means "all" (no filter applied)
-function MultiSelect({ label, options, selected, onChange, colorMap, width }) {
+function MultiSelect({ label, options, selected, onChange, colorMap, width, className = '', wrapProps }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const ref = useRef(null)
@@ -73,7 +73,7 @@ function MultiSelect({ label, options, selected, onChange, colorMap, width }) {
   const isChecked = (opt) => selected.length === 0 || selected.includes(opt)
 
   return (
-    <div className="ms-wrap" ref={ref} style={width ? { minWidth: width } : {}}>
+    <div className={`ms-wrap ${className}`} ref={ref} style={width ? { minWidth: width } : {}} {...wrapProps}>
       <button
         className={`ms-trigger${!allSelected ? ' has-sel' : ''}`}
         onClick={() => setOpen(o => !o)}
@@ -167,7 +167,7 @@ function loadLayout() {
     const l = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null')
     if (!l) return DEFAULT_LAYOUT
     const saved = (l.rows || []).filter(k => LEVEL_KEYS.includes(k))
-    const rows = [...saved, ...LEVEL_KEYS.filter(k => !saved.includes(k))]   // always every layer, saved order first
+    const rows = saved.length ? saved : LEVEL_KEYS   // removed layers wait in the filter bar
     const values = VALUE_KEYS.filter(k => k === 'gr' || (l.values || []).includes(k))
     return { rows, values, unit: l.unit === 'Cr' ? 'Cr' : 'L', collapsedQ: Array.isArray(l.collapsedQ) ? l.collapsedQ : [] }
   } catch { return DEFAULT_LAYOUT }
@@ -281,26 +281,48 @@ export default function OutputTab({ sessionId, runKey }) {
     if (target <= 1) { d.collapse(); setDepth(1) } else { d.expandTo(tree, target - 1); setDepth(target) }
   }
   const moveLayer = (key, target, side) => { reapply.current = true; setL(l => ({ rows: reorder(l.rows, key, target, side) })) }
+  // Drag a header chip up to the filter bar = take that layer out of the hierarchy
+  // (its filter keeps working); drag it back from the bar onto the header to re-add it.
+  const removeLayer = k => {
+    if (!rowFields.includes(k) || rowFields.length === 1) return
+    reapply.current = true
+    setDepth(dp => Math.min(dp, rowFields.length - 1))
+    setL(l => ({ rows: l.rows.filter(x => x !== k) }))
+  }
+  const endDrag = () => { setDrag(null); setOver(null) }
+  const dragFrom = k => ({
+    draggable: true,
+    onDragStart: e => { setDrag(k); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', k) },
+    onDragEnd: endDrag,
+  })
+  const barDrop = {
+    onDragOver: e => { if (drag && rowFields.includes(drag) && rowFields.length > 1) { e.preventDefault(); setOver({ key: 'bar' }) } },
+    onDragLeave: e => { if (!e.currentTarget.contains(e.relatedTarget)) setOver(o => (o?.key === 'bar' ? null : o)) },
+    onDrop: e => { e.preventDefault(); removeLayer(drag); endDrag() },
+  }
+  const headDrop = {   // empty space after the last chip = add at the end
+    onDragOver: e => { if (drag) { e.preventDefault(); setOver(o => (o?.key === '__end' ? o : { key: '__end' })) } },
+    onDrop: e => { e.preventDefault(); if (drag) moveLayer(drag, rowFields[rowFields.length - 1], 1); endDrag() },
+  }
   const toggleQ = q => setL(l => ({ collapsedQ: l.collapsedQ.includes(q) ? l.collapsedQ.filter(x => x !== q) : [...l.collapsedQ, q] }))
   const toggleVal = k => setL(l => ({ values: VALUE_KEYS.filter(x => x === k ? !l.values.includes(k) : l.values.includes(x)) }))
   const sortBy = key => setSort(s => (s.key === key ? { key, dir: -s.dir } : { key, dir: key === 'name' ? 1 : -1 }))
 
   // Chip drag & drop: drop on a chip's left half = in front of it, right half = behind it.
   const chipDnd = (k, i) => ({
-    draggable: true,
-    onDragStart: e => { setDrag(k); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', k) },
-    onDragEnd: () => { setDrag(null); setOver(null) },
+    ...dragFrom(k),
     onDragOver: e => {
       if (!drag) return
-      e.preventDefault()
+      e.preventDefault(); e.stopPropagation()
       const r = e.currentTarget.getBoundingClientRect()
       const side = e.clientX < r.left + r.width / 2 ? -1 : 1
       setOver(o => (o?.key === k && o.side === side ? o : { key: k, side }))
     },
-    onDrop: e => { e.preventDefault(); if (drag && over) moveLayer(drag, k, over.side); setDrag(null); setOver(null) },
-    // Keyboard: Enter/Space = click, Alt+← / Alt+→ moves the focused layer
+    onDrop: e => { e.preventDefault(); e.stopPropagation(); if (drag && over?.side) moveLayer(drag, k, over.side); endDrag() },
+    // Keyboard: Enter/Space = click, Delete = remove the layer, Alt+← / Alt+→ moves it
     onKeyDown: e => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); crumbClick(i); return }
+      if (e.key === 'Delete') { e.preventDefault(); removeLayer(k); return }
       if (!e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return
       e.preventDefault()
       const j = i + (e.key === 'ArrowLeft' ? -1 : 1)
@@ -373,11 +395,14 @@ export default function OutputTab({ sessionId, runKey }) {
     <div className="out-wrap out-drill">
       <div className="card pv-card">
         {/* ── One slim bar: filters · values · unit · export ── */}
-        <div className="pv-bar">
-          {/* One filter per hierarchy layer, in the same order as the header chips */}
-          {rowFields.map(k => (
+        <div className={`pv-bar${over?.key === 'bar' ? ' pv-bar--drop' : ''}`} {...barDrop}>
+          {/* One filter per layer: hierarchy layers in chip order, then removed layers (dashed) -
+              every one is a chip you can drag onto the header to place in the hierarchy */}
+          {[...rowFields, ...LEVEL_KEYS.filter(k => !rowFields.includes(k))].map(k => (
             <MultiSelect key={k} label={levelLabel(k)} options={options[k]} selected={d.dimF[k]} colorMap={LEVEL_COLORS[k]}
-                         onChange={v => d.setDimF(f => ({ ...f, [k]: v }))} />
+                         onChange={v => d.setDimF(f => ({ ...f, [k]: v }))}
+                         className={`pv-fchip${rowFields.includes(k) ? '' : ' pv-fchip--off'}${drag === k ? ' dragging' : ''}`}
+                         wrapProps={{ ...dragFrom(k), title: rowFields.includes(k) ? `Drag onto the header to move ${levelLabel(k)}` : `${levelLabel(k)} is not in the hierarchy - drag it onto the header to add it` }} />
           ))}
           {anyFilter && <button className="pv-link" onClick={() => d.setDimF(EMPTY_DIM)}>Clear filters</button>}
           <span className="pv-bar-gap" />
@@ -401,11 +426,11 @@ export default function OutputTab({ sessionId, runKey }) {
             <thead>
               <tr>
                 <th rowSpan={3} className="pv-rowhead pv-sticky">
-                  <div className="pv-layers" onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setOver(null) }}>
+                  <div className={`pv-layers${over?.key === '__end' ? ' drop-end' : ''}`} {...headDrop} onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setOver(null) }}>
                     {rowFields.map((k, i) => (
                       <div key={k} role="button" tabIndex={0} {...chipDnd(k, i)} onClick={() => crumbClick(i)}
                               className={`pv-layer${i < depth ? ' on' : ''}${drag === k ? ' dragging' : ''}${d.dimF[k].length ? ' filtered' : ''}${over?.key === k && drag !== k ? (over.side < 0 ? ' drop-l' : ' drop-r') : ''}`}
-                              title={`${depth === i + 1 ? 'Fold' : 'Open to'} ${levelLabel(k)} · drag to re-order (Alt+←/→)`}>
+                              title={`${depth === i + 1 ? 'Fold' : 'Open to'} ${levelLabel(k)} · drag to re-order (Alt+←/→) · drag up to the filter bar to remove (Delete)`}>
                         {i < rowFields.length - 1 && (
                           <span className="pv-layer-t" role="button" aria-label={`${depth > i + 1 ? 'Collapse' : 'Expand'} every ${levelLabel(k)}`}
                                 title={`${depth > i + 1 ? 'Collapse' : 'Expand'} every ${levelLabel(k)}`} onClick={e => layerToggle(i, e)}>
