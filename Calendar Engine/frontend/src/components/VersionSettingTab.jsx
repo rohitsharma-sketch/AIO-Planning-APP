@@ -13,16 +13,25 @@ import { applyYearToProfiles, yearSyncMessage, loadFestivalReference } from '../
 // emitted, making the legend actively misleading. Descriptions are ported from
 // the old app's Mapping Type Reference card (calendar_engine.html lines
 // 581-591).
-const MAPPING_TYPES = [
-  ['Festival-to-Festival', 'exact festival day match'],
-  ['Festive Relative Day', 'same relative position'],
-  ['Same Month + Same Weekday', 'ideal non-festive'],
-  ['Same Month + Same Day Type', 'weekday unavailable, weekend/weekday kept'],
-  ['Same Month + Nearest Weekday', 'weekday and day type unavailable'],
-  ['Previous Month + Same Weekday', 'month boundary shift'],
-  ['Next Month + Same Weekday', 'month boundary shift'],
-  ['Nearest Available Date', 'last-resort fallback'],
+// 2026-09-24: shown as each engine version's actual priority order (engine.js
+// _v1Core / _v2Remap), not a flat list - [mapping-type badge, what it means].
+const FESTIVE_STEPS = [
+  ['Festival-to-Festival', 'festival day -> the same festival day'],
+  ['Festive Relative Day', 'same position in the festival window (pre/core/post)'],
 ]
+const SAME_MONTH_STEPS = [
+  ['Same Month + Same Weekday', 'unused day, same weekday'],
+  ['Same Month + Same Day Type', 'unused day, weekend<->weekend / weekday<->weekday'],
+  ['Same Month + Nearest Weekday', 'unused day, nearest date'],
+]
+const PRIORITY = {
+  1: [...FESTIVE_STEPS, ...SAME_MONTH_STEPS,
+      ['Nearest Available Date (Same-Month Reuse)', "month's days used up - reuse the nearest same-month day"]],
+  2: [...FESTIVE_STEPS, ...SAME_MONTH_STEPS,
+      [null, 'adjacent month, unused day (Month Priority direction first) - non-festive days only'],
+      ['Nearest Available Date (Same-Month Reuse)', 'both months used up - reuse the nearest same-month day'],
+      ['Same/Adjacent Month Reuse (Exception)', 'safety net, never beyond the adjacent month']],
+}
 
 // Ported from calendar_engine.html lines 573-577. The swatch colours are the
 // same --pre-*/--core-*/--post-* tokens the Day-by-Day badges use, so the
@@ -185,10 +194,21 @@ export default function VersionSettingTab({ isPlanner, onNavigate }) {
       </div>
 
       <div className="card">
-        <div className="card-label">Mapping Type Reference</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '11px', color: 'var(--muted)' }}>
-          {MAPPING_TYPES.map(([type, desc]) => (
-            <div key={type}><span className="b-map">{type}</span> {desc}</div>
+        <div className="card-label">Mapping Priority Order</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', fontSize: '11px', color: 'var(--muted)' }}>
+          {[1, 2].map(v => (
+            <div key={v} style={{ flex: '1 1 320px' }}>
+              <div style={{ fontWeight: 700, color: 'var(--navy)', marginBottom: '6px' }}>
+                V{v} - {v === 1 ? 'same month only' : 'same month, then adjacent month'}
+              </div>
+              <ol style={{ margin: 0, paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                {PRIORITY[v].map(([type, desc], i) => (
+                  <li key={i}>{type
+                    ? <span className="b-map">{type}</span>
+                    : <><span className="b-map">{moPri === 'next' ? 'Next' : 'Previous'} Month + Same Weekday</span> / <span className="b-map">{moPri === 'next' ? 'Previous' : 'Next'} Month + Same Weekday</span></>} {desc}</li>
+                ))}
+              </ol>
+            </div>
           ))}
         </div>
       </div>
