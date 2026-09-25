@@ -28,8 +28,11 @@ const PRIORITY = {
   1: [...FESTIVE_STEPS, ...SAME_MONTH_STEPS,
       ['Nearest Available Date (Same-Month Reuse)', "month's days used up - reuse the nearest same-month day"]],
   2: [...FESTIVE_STEPS, ...SAME_MONTH_STEPS,
-      [null, "month's days used up - unused day from the adjacent month (Month Priority direction first), non-festive days only"],
-      [null, 'no last-year day is ever used twice']],
+      [null, "month's days used up - unused day from the adjacent month (Month Priority direction first), non-festive days only"]],
+}
+const PRIORITY_NOTE = {
+  1: 'Non-festive days never leave their month, so a short month reuses a last-year day.',
+  2: 'No last-year day is ever used twice.',
 }
 // V1 = same month only, reuses a day when a month runs short; V2 = never
 // reuses, borrows the adjacent month instead (user decision 2026-09-25 - both
@@ -181,6 +184,7 @@ export default function VersionSettingTab({ isPlanner, onNavigate }) {
                     : <><span className="b-map">{moPri === 'next' ? 'Next' : 'Previous'} Month + Same Weekday</span> / <span className="b-map">{moPri === 'next' ? 'Previous' : 'Next'} Month + Same Weekday</span></>} {desc}</li>
                 ))}
               </ol>
+              <div style={{ marginTop: '6px', fontStyle: 'italic' }}>{PRIORITY_NOTE[v]}</div>
             </div>
           ))}
         </div>
