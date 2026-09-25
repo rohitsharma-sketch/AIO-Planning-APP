@@ -1068,3 +1068,7 @@ input[type=number].year-input { width: 80px; font-size: 15px; font-weight: 600; 
   color: #fff;
 }
 .hdr-bulk button:hover { background: rgba(255,255,255,.3); }
+
+/* Combined Link Sales Data Source table (LinkStatusPanel rows, 2026-09-25) */
+.link-src-tbl th, .link-src-tbl td { padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+

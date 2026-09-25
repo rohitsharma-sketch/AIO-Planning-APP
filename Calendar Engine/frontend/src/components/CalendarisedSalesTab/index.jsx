@@ -112,6 +112,9 @@ export default function CalendarisedSalesTab({ isPlanner }) {
   // default so the link status isn't taking up space every visit; expand
   // to check/sync either source.
   const [linkPanelOpen, setLinkPanelOpen] = useState(false)
+  // Bumped by the combined link table's single Sync all months / Refresh buttons.
+  const [linkSyncSignal, setLinkSyncSignal] = useState(0)
+  const [linkRefreshSignal, setLinkRefreshSignal] = useState(0)
   const [calendarId, setCalendarId] = useState(null)
   const [result, setResult] = useState(null)
   // Set instead of `result` when a completed job's payload is too large to
@@ -470,10 +473,21 @@ export default function CalendarisedSalesTab({ isPlanner }) {
             a calendar that genuinely had months synced, purely because
             nothing had fetched the selection yet). */}
         <div style={{ display: linkPanelOpen ? 'block' : 'none' }}>
-            <LinkStatusPanel sourceType="mw" isPlanner={isPlanner} onSelectionChange={handleSelectionChange}
-              hintYear={source === 'mw' ? selectedCalendar?.refYear : null} hintCalendarName={selectedCalendar?.name} />
-            <LinkStatusPanel sourceType="dw" isPlanner={isPlanner} onSelectionChange={handleSelectionChange}
-              hintYear={source === 'dw' ? selectedCalendar?.refYear : null} hintCalendarName={selectedCalendar?.name} />
+          <table className="link-src-tbl" style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+            <thead><tr style={{ textAlign: 'left', color: 'var(--muted)', fontSize: '10px', textTransform: 'uppercase' }}>
+              <th>Source</th><th>Status</th><th>Range</th><th>Data</th><th>Stores</th><th>Last synced</th>
+            </tr></thead>
+            <tbody>
+              {['mw', 'dw'].map(st => (
+                <LinkStatusPanel key={st} sourceType={st} isPlanner={isPlanner} onSelectionChange={handleSelectionChange}
+                  syncSignal={linkSyncSignal} refreshSignal={linkRefreshSignal} />
+              ))}
+            </tbody>
+          </table>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+            {isPlanner && <button className="btn" onClick={() => setLinkSyncSignal(n => n + 1)}>Sync all months</button>}
+            <button onClick={() => setLinkRefreshSignal(n => n + 1)}>Refresh</button>
+          </div>
         </div>
       </div>
 

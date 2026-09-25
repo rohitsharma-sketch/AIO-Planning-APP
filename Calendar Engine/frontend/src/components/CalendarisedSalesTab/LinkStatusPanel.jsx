@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { startLinkScan, pollLinkScan, getSalesdataLinkSelection, putSalesdataLinkSelection } from '../../lib/api'
 
 const LABELS = { mw: 'Month-wise', dw: 'Day-wise' }
@@ -12,25 +12,21 @@ function fmtDuration(totalSeconds) {
   return m > 0 ? `${m}m ${String(s).padStart(2, '0')}s` : `${s}s`
 }
 
-export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChange, hintYear, hintCalendarName }) {
+// One source's row in the combined "Link Sales Data Source" table (2026-09-25:
+// the two cards were squeezed into one table; the From/To year pickers and
+// per-card buttons were removed). The parent's single "Sync all months" /
+// "Refresh" buttons bump syncSignal / refreshSignal; each row reacts to them.
+// Sync = every month this source currently has (what the full-range default
+// of the old year pickers already did).
+export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChange, syncSignal, refreshSignal }) {
   const [link, setLink] = useState(null)
-  // null = idle; otherwise {pct, filesDone, filesTotal, elapsedSeconds, etaSeconds}
-  // while a background scan job is running. Day-wise reads real columns across
-  // 86M+ rows - the old code just called the scan endpoint directly and showed
-  // a bare "Loading..." with no feedback and, worse, no error handling at all: a
-  // network failure (not just a "not linked" response) left it stuck on
-  // "Loading..." forever with no way to recover short of a full page reload.
+  // null = idle; otherwise {pct, filesDone, filesTotal, etaSeconds} while a
+  // background scan job is running (day-wise reads 86M+ rows).
   const [progress, setProgress] = useState(null)
   const [fetchError, setFetchError] = useState(null)
   const pollTimer = useRef(null)
   const [selection, setSelection] = useState(null)
   const [syncing, setSyncing] = useState(false)
-  // "From year -> To year" range, same idea as Version Setting's Reference
-  // Year/Future Year pair used to generate a calendar - this is the ONLY way
-  // to pick what syncs (the old per-year month-pill picker was dropped: a
-  // planner just wants "give me these years", not a month-by-month tickbox).
-  const [rangeFrom, setRangeFrom] = useState('')
-  const [rangeTo, setRangeTo] = useState('')
 
   async function refresh(force) {
     clearTimeout(pollTimer.current)
@@ -39,10 +35,7 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
     setProgress({ pct: 0, filesDone: 0, filesTotal: 0, etaSeconds: null })
     try {
       const { jobId } = await startLinkScan(sourceType, force)
-
-      // Same transient-failure tolerance as Run Reindex's poll loop (see
-      // CalendarisedSalesTab/index.jsx) - the scan's own background work can
-      // briefly delay a poll response even though the job is still running fine.
+      // Same transient-failure tolerance as Run Reindex's poll loop.
       let misses = 0
       const MAX_MISSES = 5
       const poll = async () => {
@@ -76,58 +69,21 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
     return () => clearTimeout(pollTimer.current) // stop polling if the tab/panel unmounts mid-scan
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  useEffect(() => { if (refreshSignal) refresh(true) }, [refreshSignal]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     getSalesdataLinkSelection(sourceType).then(s => {
       setSelection(s)
-      // Push the PERSISTED selection up to the parent too, not just the one made by
-      // an explicit sync() below. Without this the checkboxes visibly show last
-      // session's synced months while the parent's `selections` state is still {},
-      // so "Run Reindex" on a freshly loaded page posts months: [] and the backend
-      // rejects it with "months is required".
+      // Push the PERSISTED selection up too - "Run Reindex" on a fresh page
+      // load otherwise posts months: [] and the backend rejects it.
       onSelectionChange?.(sourceType, s)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sourceType])
 
-  // Group the flat, already-sorted `months` array from the backend
-  // (scans.py returns [{month:'YYYY-MM', rows:N}, ...] sorted ascending) by year.
-  // Years run newest-first so the most recent year is the default, exactly as the
-  // old app did (`Object.keys(byYear).sort().reverse()`, then `years[0]`).
-  const { byYear, years } = useMemo(() => {
-    const g = {}
-    ;(link?.months || []).forEach(m => { const y = m.month.slice(0, 4); (g[y] = g[y] || []).push(m) })
-    return { byYear: g, years: Object.keys(g).sort().reverse() }
-  }, [link])
-
-  // Derive rather than store the effective from/to year, so a Refresh that
-  // shrinks `years` can never strand the selects on a year that no longer
-  // exists. Defaults to the full span (oldest -> newest) so a first-ever sync
-  // with no prior interaction just syncs everything available. The selected
-  // Run Reindex calendar's reference year (hintYear) wins for "To Year" when
-  // its data is actually available here - reindex only ever matches sales
-  // from that exact year (see the comment in CalendarisedSalesTab/index.jsx),
-  // so defaulting to it is what actually lets the user pick a working range
-  // instead of guessing.
-  const hintYearStr = hintYear != null ? String(hintYear) : null
-  const effRangeFrom = (rangeFrom && byYear[rangeFrom]) ? rangeFrom : years[years.length - 1]
-  const effRangeTo = (rangeTo && byYear[rangeTo]) ? rangeTo
-    : (hintYearStr && byYear[hintYearStr]) ? hintYearStr
-    : years[0]
-
-  async function syncRange() {
-    if (!isPlanner || !link || !effRangeFrom || !effRangeTo) return
-    const lo = Math.min(+effRangeFrom, +effRangeTo)
-    const hi = Math.max(+effRangeFrom, +effRangeTo)
-    const months = (link.months || [])
-      .filter(m => { const y = +m.month.slice(0, 4); return y >= lo && y <= hi })
-      .map(m => m.month)
-      .sort()
-    // The mw scan result carries a single `path` string, but the dw (day-wise)
-    // scan result has no `path` field at all - it reads from multiple folders
-    // and returns them as `dirs` (see scans.py _scan_daywise_link). The backend's
-    // salesdata_link_selection.path column is NOT NULL, so sending `path: undefined`
-    // (dropped by JSON.stringify) would 500 with a KeyError on PUT for dw. Fall back
-    // to joining `dirs` so both source types always send a non-empty string.
+  async function syncAll() {
+    if (!isPlanner || !link?.ok) return
+    const months = (link.months || []).map(m => m.month).sort()
+    // dw scan results carry `dirs`, not `path`; the backend column is NOT NULL.
     const path = link.path || (Array.isArray(link.dirs) ? link.dirs.join('; ') : '')
     const payload = { months, path, syncedAt: new Date().toISOString() }
     setSyncing(true)
@@ -139,102 +95,37 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
       setSyncing(false)
     }
   }
+  useEffect(() => { if (syncSignal) syncAll() }, [syncSignal]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const synced = selection?.syncedAt ? new Date(selection.syncedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-'
+  let status
   if (progress) {
-    return (
-      <div className="card">
-        <h4>Link Sales Data Source · {LABELS[sourceType]}</h4>
-        <div style={{ background: 'var(--border)', borderRadius: '4px', height: '8px', overflow: 'hidden' }}>
-          <div style={{
-            width: `${progress.pct}%`, height: '100%', background: 'var(--navy2)',
-            transition: 'width 0.3s ease',
-          }} />
-        </div>
-        <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>
-          {progress.pct}%{progress.filesTotal > 0 && ` - ${progress.filesDone} of ${progress.filesTotal} files`}
-          {progress.etaSeconds != null
-            ? ` - about ${fmtDuration(progress.etaSeconds)} remaining`
-            : (progress.filesDone > 0 ? '' : ' - estimating time remaining...')}
-        </div>
-      </div>
-    )
+    status = <td colSpan={4}>
+      Scanning {progress.pct}%{progress.filesTotal > 0 && ` - ${progress.filesDone}/${progress.filesTotal} files`}
+      {progress.etaSeconds != null && ` - ~${fmtDuration(progress.etaSeconds)} left`}
+    </td>
+  } else if (fetchError || (link && !link.ok)) {
+    status = <td colSpan={4}>
+      <span className="scm-pill scm-pill-bad">Not linked</span>{' '}
+      <span style={{ color: 'var(--red)' }}>{fetchError || link.error}</span>{' '}
+      <button className="btn" onClick={() => refresh(false)}>Retry</button>
+    </td>
+  } else if (link) {
+    const unmatched = link.stores?.unmatchedInSource?.length || 0
+    status = <>
+      <td><span className={`scm-pill ${link.offline ? 'scm-pill-warn' : 'scm-pill-ok'}`} title={link.offline ? `Source unreachable - last known data as of ${link.scannedAt}` : ''}>{link.offline ? 'Offline' : 'Linked'}</span></td>
+      <td className="date-mono">{link.dateRange?.min} - {link.dateRange?.max}</td>
+      <td>{link.rowCount?.toLocaleString()} rows / {link.months?.length} months</td>
+      <td>{link.stores?.matched?.length} matched{unmatched ? <span style={{ color: 'var(--warn)' }}> / {unmatched} unmatched</span> : ''}</td>
+    </>
+  } else {
+    status = <td colSpan={4} />
   }
-
-  if (fetchError) {
-    return (
-      <div className="card">
-        <h4>Link Sales Data Source · {LABELS[sourceType]}</h4>
-        <p><span className="scm-pill scm-pill-bad">Not linked</span> <span style={{ color: 'var(--red)' }}>{fetchError}</span></p>
-        <button className="btn" onClick={() => refresh(false)}>Retry</button>
-      </div>
-    )
-  }
-
-  if (!link) return null // brief gap between the progress state clearing and `link` being set
-
   return (
-    <div className="card">
-      <h4>Link Sales Data Source · {LABELS[sourceType]}</h4>
-      {link.ok ? (
-        <>
-          {link.offline && (
-            <p>
-              <span className="scm-pill scm-pill-warn">Offline</span>{' '}
-              Source unreachable right now - showing last known data as of{' '}
-              <span className="date-mono">{link.scannedAt}</span>.
-            </p>
-          )}
-          <p>
-            <span className="scm-pill scm-pill-ok">Linked</span>{' '}
-            {link.rowCount?.toLocaleString()} rows across {link.months?.length} months.
-            {' '}Range: <span className="date-mono">{link.dateRange?.min}</span> - <span className="date-mono">{link.dateRange?.max}</span>.
-          </p>
-          <p>
-            Stores: <span className="scm-pill scm-pill-ok">{link.stores?.matched?.length} matched</span>{' '}
-            <span className={`scm-pill ${link.stores?.unmatchedInSource?.length ? 'scm-pill-warn' : 'scm-pill-ok'}`}>
-              {link.stores?.unmatchedInSource?.length} unmatched in source
-            </span>
-          </p>
-          {hintCalendarName && (
-            hintYearStr && byYear[hintYearStr] ? (
-              <p style={{ fontSize: '11px', color: 'var(--muted)' }}>
-                "{hintCalendarName}" reindexes <strong>{hintYear}</strong> sales - set To Year to {hintYear} below to sync it.
-              </p>
-            ) : hintYearStr ? (
-              <p style={{ fontSize: '11px', color: 'var(--warn)' }}>
-                "{hintCalendarName}" reindexes <strong>{hintYear}</strong> sales, but no {hintYear} data is linked for {LABELS[sourceType]} here - Run Reindex will return nothing until that year is available.
-              </p>
-            ) : null
-          )}
-          {isPlanner && (
-            <div className="link-month-picker">
-              <div className="field">
-                <label htmlFor={`linkRangeFrom_${sourceType}`}>From Year</label>
-                <select id={`linkRangeFrom_${sourceType}`} value={effRangeFrom || ''} onChange={e => setRangeFrom(e.target.value)}>
-                  {years.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-              </div>
-              <div className="field">
-                <label htmlFor={`linkRangeTo_${sourceType}`}>To Year</label>
-                <select id={`linkRangeTo_${sourceType}`} value={effRangeTo || ''} onChange={e => setRangeTo(e.target.value)}>
-                  {years.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-              </div>
-              <div className="link-month-picker-months">
-                <label>&nbsp;</label>
-                <button className="btn" onClick={syncRange} disabled={syncing}
-                        title={`Sync every month from ${Math.min(+effRangeFrom, +effRangeTo)} to ${Math.max(+effRangeFrom, +effRangeTo)}`}>
-                  {syncing ? 'Syncing...' : 'Sync Selected Range'}
-                </button>
-              </div>
-            </div>
-          )}
-        </>
-      ) : (
-        <p><span className="scm-pill scm-pill-bad">Not linked</span> <span style={{ color: 'var(--red)' }}>{link.error}</span></p>
-      )}
-      <button onClick={() => refresh(true)}>Refresh</button>
-      {selection?.syncedAt && <p style={{ color: 'var(--muted)' }}>Last synced: {selection.syncedAt}</p>}
-    </div>
+    <tr>
+      <td style={{ fontWeight: 600 }}>{LABELS[sourceType]}</td>
+      {status}
+      <td style={{ color: 'var(--muted)' }}>{syncing ? 'Syncing...' : synced}</td>
+    </tr>
   )
 }
