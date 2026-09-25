@@ -187,6 +187,11 @@ def aop_spa(full_path: str, request: Request):
 
 @app.get("/planning/{full_path:path}", include_in_schema=False)
 def planning_spa(full_path: str, request: Request):
+    # SalesPlan builds with base './' (it also runs standalone at /), so a hard
+    # refresh on a nested route asks for e.g. /planning/department-plan/assets/x.js
+    # - send those to the real asset instead of answering with index.html.
+    if "/assets/" in f"/{full_path}":
+        return RedirectResponse(f"/planning/assets/{full_path.rsplit('/assets/', 1)[-1]}", status_code=301)
     if get_session_user(request) is None:
         return RedirectResponse(f"/login?next=/planning/")
     return _html_no_cache(os.path.join(_planning_dist, "index.html"))

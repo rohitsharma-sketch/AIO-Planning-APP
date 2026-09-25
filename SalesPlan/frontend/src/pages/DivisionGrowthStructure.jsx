@@ -4,7 +4,6 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from 'recharts'
-import Header from '../components/Header'
 import { theme } from '../theme'
 
 const DIVS = ['GM', 'KIDS', 'LADIES', 'MENS', 'RETAIL']
@@ -617,7 +616,6 @@ export default function DivisionGrowthStructure() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Header title="Division Growth Structure" />
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px', background: theme.surfaceAlt }}>
 
         {loading && (

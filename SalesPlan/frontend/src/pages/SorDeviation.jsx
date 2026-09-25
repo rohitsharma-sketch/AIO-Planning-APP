@@ -5,7 +5,7 @@ const API = '/api/planning/deviation/sor'
 
 const RULE_BADGE = {
   avg:       { label: 'AVG',       bg: '#0D9488', color: '#fff' },
-  plan_only: { label: 'PLAN ONLY', bg: '#F59E0B', color: '#fff' },
+  plan_only: { label: 'PLAN ONLY', bg: '#B45309', color: '#fff' },
   ppo_only:  { label: 'PPO ONLY',  bg: '#8B5CF6', color: '#fff' },
   zero:      { label: 'ZERO',      bg: '#6B7280', color: '#fff' },
 }
@@ -265,7 +265,7 @@ export default function SorDeviation() {
                 style={{
                   padding: '7px 18px', borderRadius: 8, border: `1.5px solid ${viewMode === k ? theme.primary : theme.border}`,
                   background: viewMode === k ? `${theme.primary}22` : theme.surface,
-                  color: viewMode === k ? theme.primaryLight : theme.textSecondary,
+                  color: viewMode === k ? theme.primary : theme.textSecondary,
                   fontWeight: viewMode === k ? 700 : 400, fontSize: 12, cursor: 'pointer',
                 }}>{lbl}</button>
             ))}
@@ -309,7 +309,7 @@ export default function SorDeviation() {
                 padding: '5px 14px', borderRadius: 7, fontSize: 11, fontWeight: curMonth === m ? 700 : 400,
                 border: `1.5px solid ${curMonth === m ? theme.primary : theme.border}`,
                 background: curMonth === m ? `${theme.primary}22` : theme.surface,
-                color: curMonth === m ? theme.primaryLight : theme.textSecondary, cursor: 'pointer',
+                color: curMonth === m ? theme.primary : theme.textSecondary, cursor: 'pointer',
               }}>{m}</button>
             ))}
           </div>

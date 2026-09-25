@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import Header from '../components/Header'
 import { theme } from '../theme'
 
 const inputStyle = {
@@ -203,7 +202,6 @@ export default function DivisionPlan() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Header title="Division Based Plan" />
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px', background: theme.surfaceAlt }}>
 
         {configMeta && (
@@ -450,7 +448,7 @@ export default function DivisionPlan() {
             justifyContent: 'space-between',
           }}>
             <span style={{ fontSize: 14, fontWeight: 600, color: theme.textPrimary }}>Division Inputs</span>
-            <button style={btnStyle(theme.primaryLight)} onClick={addRow}>+ Add Row</button>
+            <button style={btnStyle(theme.primaryLight, theme.primary)} onClick={addRow}>+ Add Row</button>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -552,7 +550,7 @@ export default function DivisionPlan() {
             <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
               {[
                 { label: 'Total Plan Value', value: `₹ ${results.total_planned_sales.toLocaleString('en-IN', { maximumFractionDigits: 1 })} L`, color: theme.primary },
-                { label: 'No. of Divisions', value: results.divisions.length, color: theme.primaryLight },
+                { label: 'No. of Divisions', value: results.divisions.length, color: theme.primary },
                 { label: 'Avg Growth %', value: `${avgGrowth}%`, color: theme.accent },
               ].map(card => (
                 <div key={card.label} style={{

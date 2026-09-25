@@ -45,7 +45,7 @@ function PipelineNode({ label, done, active, optional }) {
 function Arrow({ active }) {
   return (
     <div style={{
-      fontSize: 18, color: active ? theme.success : theme.border,
+      fontSize: 18, color: active ? theme.success : theme.textMuted,
       alignSelf: 'center', marginBottom: 16,
     }}>→</div>
   )
@@ -556,11 +556,11 @@ export default function FinalResults() {
                         fontWeight: active ? 700 : 400,
                         border: `1.5px solid ${active ? theme.primary : theme.border}`,
                         background: active ? `${theme.primary}22` : theme.surface,
-                        color: active ? theme.primaryLight : theme.textSecondary,
+                        color: active ? theme.primary : theme.textSecondary,
                         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
                       }}>
                         <span>{m}</span>
-                        {ms && <span style={{ fontSize: 9, color: active ? theme.primaryLight : theme.textMuted, fontFamily: theme.fontMono }}>₹{ms.ty.toFixed(0)}L</span>}
+                        {ms && <span style={{ fontSize: 9, color: active ? theme.primary : theme.textMuted, fontFamily: theme.fontMono }}>₹{ms.ty.toFixed(0)}L</span>}
                       </button>
                     )
                   })}
@@ -699,8 +699,8 @@ export default function FinalResults() {
                 const divData = dashboard.divisions[dashDiv]
                 const isNoDept = NODEPT.includes(dashDiv)
                 const ATTR_COLOR = {
-                  REGULAR: '#818CF8', SUMMER: '#FB923C', PREWINTER: '#4ADE80',
-                  'LT WINTER': '#60A5FA', 'HVY WINTER': '#93C5FD', OCCASIONAL: '#C084FC',
+                  REGULAR: '#4338CA', SUMMER: '#C2410C', PREWINTER: '#15803D',
+                  'LT WINTER': '#1D4ED8', 'HVY WINTER': '#2563EB', OCCASIONAL: '#7E22CE',
                 }
                 return (
                   <div style={{ background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`, overflow: 'hidden' }}>

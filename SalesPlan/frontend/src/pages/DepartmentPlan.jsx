@@ -12,12 +12,12 @@ const DIV_COLOR = {
 }
 
 const ATTR_STYLE = {
-  'REGULAR':    { bg: '#1E2540', color: '#818CF8' },
-  'SUMMER':     { bg: '#2A1C10', color: '#FB923C' },
-  'PREWINTER':  { bg: '#112318', color: '#4ADE80' },
-  'LT WINTER':  { bg: '#0F1E30', color: '#60A5FA' },
-  'HVY WINTER': { bg: '#0B1524', color: '#93C5FD' },
-  'OCCASIONAL': { bg: '#21102E', color: '#C084FC' },
+  'REGULAR':    { bg: '#EEF1FD', color: '#4338CA' },
+  'SUMMER':     { bg: '#FFF4E8', color: '#C2410C' },
+  'PREWINTER':  { bg: '#ECFDF3', color: '#15803D' },
+  'LT WINTER':  { bg: '#EFF6FF', color: '#1D4ED8' },
+  'HVY WINTER': { bg: '#EFF6FF', color: '#2563EB' },
+  'OCCASIONAL': { bg: '#F5EEFD', color: '#7E22CE' },
 }
 
 function AttrBadge({ attr }) {
@@ -34,7 +34,7 @@ function AttrBadge({ attr }) {
 
 function ContribBar({ value, max = 100 }) {
   const pct = Math.min((value / max) * 100, 100)
-  const color = value > 100.05 ? '#D94F3D' : value >= 99.9 ? '#00A86B' : '#F59E0B'
+  const color = value > 100.05 ? '#D94F3D' : value >= 99.9 ? '#00A86B' : '#B45309'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       <div style={{ flex: 1, height: 4, background: '#E5E7EB', borderRadius: 2, overflow: 'hidden' }}>
@@ -195,7 +195,7 @@ export default function DepartmentPlan() {
                 fontSize: 11, padding: '4px 10px', borderRadius: 5,
                 background: aopSyncResult.ok ? '#1488cc14' : '#FEE2E2',
                 color: aopSyncResult.ok ? '#1488cc' : '#991B1B',
-                border: `1px solid ${aopSyncResult.ok ? '#1488cc44' : '#FCA5A5'}`,
+                border: `1px solid ${aopSyncResult.ok ? '#1488cc44' : '#F7C1BC'}`,
               }}>
                 {aopSyncResult.msg}
               </div>
@@ -468,7 +468,7 @@ export default function DepartmentPlan() {
                     {row.source === 'custom' ? (
                       <span style={{
                         fontSize: 10, padding: '2px 6px', borderRadius: 4,
-                        background: '#21102E', color: '#C084FC', fontWeight: 600,
+                        background: '#F5EEFD', color: '#7E22CE', fontWeight: 600,
                       }}>Custom</span>
                     ) : (
                       <span style={{ fontSize: 10, color: theme.textMuted }}>Master</span>

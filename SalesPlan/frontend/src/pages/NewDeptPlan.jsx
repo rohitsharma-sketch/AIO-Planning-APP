@@ -112,7 +112,7 @@ function PivotSelect({ options, value, onChange }) {
           borderRadius: 10, overflow: 'hidden',
           boxShadow: '0 8px 32px rgba(0,0,0,0.65)',
         }}>
-          <div style={{ padding: '10px 12px 8px', background: '#1e2527', borderBottom: `1px solid ${theme.border}` }}>
+          <div style={{ padding: '10px 12px 8px', background: '#F8FAFC', borderBottom: `1px solid ${theme.border}` }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.9, marginBottom: 7 }}>
               REFERENCE DEPARTMENT
             </div>
@@ -159,7 +159,7 @@ function PivotSelect({ options, value, onChange }) {
 
           <div style={{
             display: 'flex', justifyContent: 'flex-end', gap: 8,
-            padding: '8px 12px', borderTop: `1px solid ${theme.border}`, background: '#1e2527',
+            padding: '8px 12px', borderTop: `1px solid ${theme.border}`, background: '#F8FAFC',
           }}>
             <button
               onMouseDown={() => { setOpen(false); setQuery('') }}
@@ -265,7 +265,7 @@ function PivotFilter({ label, options, selected, onChange }) {
           borderRadius: 10, overflow: 'hidden',
           boxShadow: '0 8px 32px rgba(0,0,0,0.65)',
         }}>
-          <div style={{ padding: '10px 12px 8px', background: '#1e2527', borderBottom: `1px solid ${theme.border}` }}>
+          <div style={{ padding: '10px 12px 8px', background: '#F8FAFC', borderBottom: `1px solid ${theme.border}` }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.9, marginBottom: 7 }}>
               FILTER — {label.toUpperCase()}
             </div>
@@ -287,8 +287,8 @@ function PivotFilter({ label, options, selected, onChange }) {
           {/* Select All */}
           <div
             onMouseDown={toggleAll}
-            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', cursor: 'pointer', borderBottom: `1px solid rgba(255,255,255,0.06)` }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', cursor: 'pointer', borderBottom: `1px solid rgba(15,27,45,0.05)` }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(15,27,45,0.04)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
             <PivotCheckbox checked={allChecked} />
@@ -301,7 +301,7 @@ function PivotFilter({ label, options, selected, onChange }) {
                 key={opt}
                 onMouseDown={() => toggleItem(opt)}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 12px', cursor: 'pointer' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(15,27,45,0.04)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
                 <PivotCheckbox checked={draft.has(opt)} />
@@ -312,7 +312,7 @@ function PivotFilter({ label, options, selected, onChange }) {
 
           <div style={{
             display: 'flex', justifyContent: 'flex-end', gap: 8,
-            padding: '8px 12px', borderTop: `1px solid ${theme.border}`, background: '#1e2527',
+            padding: '8px 12px', borderTop: `1px solid ${theme.border}`, background: '#F8FAFC',
           }}>
             <button
               onMouseDown={() => setOpen(false)}
@@ -792,7 +792,7 @@ export default function NewDeptPlan() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{
                           fontSize: 9, fontWeight: 700, letterSpacing: 0.5,
-                          background: '#0A2820', color: theme.accent,
+                          background: '#ECFDF3', color: theme.accent,
                           borderRadius: 4, padding: '2px 6px', flexShrink: 0,
                         }}>NEW</span>
                         <span style={{ fontFamily: theme.fontMono, fontSize: 12.5, color: theme.textPrimary, fontWeight: 600 }}>
@@ -1089,7 +1089,7 @@ export default function NewDeptPlan() {
                             <span style={{
                               fontSize: 9, fontWeight: 700, letterSpacing: 0.4, borderRadius: 4, padding: '2px 5px',
                               background: row.isSSG ? 'rgba(16,185,129,0.12)' : 'rgba(99,102,241,0.12)',
-                              color: row.isSSG ? theme.accent : '#818cf8',
+                              color: row.isSSG ? theme.accent : '#4338CA',
                             }}>{row.isSSG ? (row.store === 'ANG' ? 'SSG - ANG' : 'SSG') : 'NSO'}</span>
                           </td>
                           {activeDepts.map(dept => {

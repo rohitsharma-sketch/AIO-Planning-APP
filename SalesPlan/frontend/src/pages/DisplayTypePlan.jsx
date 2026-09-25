@@ -345,7 +345,7 @@ function PlanView({ rows, months, curMonth, setFMonth, stores, fStore, setFStore
             fontWeight: curMonth === m ? 700 : 400,
             border: `1.5px solid ${curMonth === m ? theme.primary : theme.border}`,
             background: curMonth === m ? `${theme.primary}22` : theme.surface,
-            color: curMonth === m ? theme.primaryLight : theme.textSecondary,
+            color: curMonth === m ? theme.primary : theme.textSecondary,
           }}>{m}</button>
         ))}
       </div>

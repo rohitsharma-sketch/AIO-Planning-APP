@@ -1,6 +1,7 @@
 import { NavLink, useLocation, Link } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { theme } from '../theme'
+import Icon from './Icon'
 
 const DIVISION_PLAN_SUB = [
   { label: 'Plan Setup', to: '/division-plan' },
@@ -16,18 +17,18 @@ const DEPARTMENT_PLAN_SUB = [
 ]
 
 const navItems = [
-  { label: 'Home', icon: '🏠', to: '/' },
-  { label: 'Division Plan',    icon: '📊', to: '/division-plan',   subItems: DIVISION_PLAN_SUB },
-  { label: 'Department Plan',  icon: '🏬', to: '/department-plan', subItems: DEPARTMENT_PLAN_SUB },
-  { label: 'MRP Plan', icon: '📦', to: '/mrp-plan', subItems: [
+  { label: 'Home', icon: 'home', to: '/' },
+  { label: 'Division Plan',    icon: 'division', to: '/division-plan',   subItems: DIVISION_PLAN_SUB },
+  { label: 'Department Plan',  icon: 'dept', to: '/department-plan', subItems: DEPARTMENT_PLAN_SUB },
+  { label: 'MRP Plan', icon: 'mrp', to: '/mrp-plan', subItems: [
     { label: 'Buyer\'s Input',   to: '/mrp-plan/import' },
     { label: 'Re-apportionment', to: '/mrp-plan/reapportionment' },
     { label: 'PW/W Deviation',   to: '/deviation/pww',  optional: true },
     { label: 'SOR Deviation',    to: '/deviation/sor',  optional: true },
     { label: 'Plan Output',      to: '/mrp-plan/output', final: true },
   ]},
-  { label: 'Display Type Plan', icon: '🖼️', to: '/display-type' },
-  { label: 'Sales Sync',        icon: '🔄', to: '/sync' },
+  { label: 'Display Type Plan', icon: 'display', to: '/display-type' },
+  { label: 'Sales Sync',        icon: 'sync', to: '/sync' },
 ]
 
 const DIV_DOT = {
@@ -158,13 +159,19 @@ export default function Sidebar() {
       left: 0,
       zIndex: 100,
       overflowY: 'auto',
-    }}>
-      <div style={{ padding: '28px 20px 20px 20px', borderBottom: '1px solid rgba(255,255,255,0.12)' }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: theme.sidebarText, letterSpacing: 0.3 }}>Sales Plan</div>
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 3, letterSpacing: 0.5 }}>CityKart</div>
+    }} className="sp-nav">
+      <div style={{ height: 56, padding: '0 18px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+        <div style={{
+          width: 30, height: 30, borderRadius: 8, background: theme.primary, color: '#fff',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, letterSpacing: 0.3,
+        }}>SP</div>
+        <div style={{ lineHeight: 1.2 }}>
+          <div style={{ fontSize: 14.5, fontWeight: 800, color: theme.sidebarText }}>Sales Plan</div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 1 }}>RS Planning · CityKart</div>
+        </div>
       </div>
 
-      <nav style={{ flex: 1, padding: '12px 0' }}>
+      <nav style={{ flex: 1, padding: '10px 0' }}>
         {navItems.map((item) => {
           if (item.soon) {
             return (
@@ -173,7 +180,7 @@ export default function Sidebar() {
                 padding: '10px 20px', color: 'rgba(255,255,255,0.35)',
                 fontSize: 14, cursor: 'default', userSelect: 'none',
               }}>
-                <span style={{ fontSize: 16 }}>{item.icon}</span>
+                <Icon name={item.icon} />
                 <span style={{ flex: 1 }}>{item.label}</span>
                 <span style={{ fontSize: 10, background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.4)', borderRadius: 4, padding: '2px 5px', letterSpacing: 0.3 }}>Soon</span>
               </div>
@@ -186,14 +193,15 @@ export default function Sidebar() {
               <div key={item.label}>
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '10px 20px',
+                  padding: '9px 18px',
                   color: isParentActive ? theme.sidebarText : 'rgba(255,255,255,0.72)',
-                  background: isParentActive ? theme.sidebarActive : 'transparent',
-                  fontSize: 14, fontWeight: isParentActive ? 600 : 400,
-                  borderLeft: isParentActive ? '3px solid rgba(255,255,255,0.8)' : '3px solid transparent',
+                  background: 'transparent',
+                  fontSize: 13.5, fontWeight: isParentActive ? 700 : 500,
+                  borderLeft: '3px solid transparent',
+                  marginTop: 6,
                   userSelect: 'none',
                 }}>
-                  <span style={{ fontSize: 16 }}>{item.icon}</span>
+                  <Icon name={item.icon} />
                   {item.label}
                 </div>
                 {item.subItems.map(sub => sub.soon ? (
@@ -209,19 +217,18 @@ export default function Sidebar() {
                     <span style={{ fontSize: 9, background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.3)', borderRadius: 4, padding: '1px 5px' }}>soon</span>
                   </div>
                 ) : (
-                  <NavLink key={sub.to} to={sub.to} end
+                  <NavLink key={sub.to} to={sub.to} end className="sp-navlink"
                     style={({ isActive }) => ({
                       display: 'flex', alignItems: 'center',
-                      paddingLeft: 36, paddingRight: 20, paddingTop: 7, paddingBottom: 7,
-                      color: isActive ? '#fff' : 'rgba(255,255,255,0.60)',
-                      background: isActive ? 'rgba(255,255,255,0.10)' : 'transparent',
+                      paddingLeft: 44, paddingRight: 18, paddingTop: 6, paddingBottom: 6,
+                      color: isActive ? '#fff' : 'rgba(255,255,255,0.62)',
+                      background: isActive ? theme.sidebarActive : 'transparent',
                       fontSize: 12.5, textDecoration: 'none',
-                      fontWeight: isActive ? 600 : 400,
-                      borderLeft: isActive ? '3px solid rgba(255,255,255,0.6)' : '3px solid transparent',
+                      fontWeight: isActive ? 700 : 500,
+                      borderLeft: isActive ? `3px solid ${'#5FB8CC'}` : '3px solid transparent',
                       transition: 'background 0.15s',
                     })}
                   >
-                    <span style={{ marginRight: 6, fontSize: 10, opacity: 0.7 }}>›</span>
                     <span style={{ flex: 1 }}>{sub.label}</span>
                     {sub.optional && (
                       <span style={{ fontSize: 9, background: 'rgba(255,255,255,0.10)', color: 'rgba(255,255,255,0.45)', borderRadius: 4, padding: '1px 5px', letterSpacing: 0.3, marginLeft: 4 }}>opt</span>
@@ -236,19 +243,19 @@ export default function Sidebar() {
           }
 
           return (
-            <NavLink key={item.label} to={item.to} end={item.to === '/'}
+            <NavLink key={item.label} to={item.to} end={item.to === '/'} className="sp-navlink"
               style={({ isActive }) => ({
                 display: 'flex', alignItems: 'center', gap: 10,
-                padding: '10px 20px',
+                padding: '9px 18px', marginTop: 6,
                 color: isActive ? theme.sidebarText : 'rgba(255,255,255,0.72)',
                 background: isActive ? theme.sidebarActive : 'transparent',
-                fontSize: 14, textDecoration: 'none',
-                fontWeight: isActive ? 600 : 400,
-                borderLeft: isActive ? '3px solid rgba(255,255,255,0.8)' : '3px solid transparent',
+                fontSize: 13.5, textDecoration: 'none',
+                fontWeight: isActive ? 700 : 500,
+                borderLeft: isActive ? `3px solid ${'#5FB8CC'}` : '3px solid transparent',
                 transition: 'background 0.15s',
               })}
             >
-              <span style={{ fontSize: 16 }}>{item.icon}</span>
+              <Icon name={item.icon} />
               {item.label}
             </NavLink>
           )
@@ -259,7 +266,7 @@ export default function Sidebar() {
       <PlanSnapshot />
 
       <div style={{ padding: '14px 20px', borderTop: '1px solid rgba(255,255,255,0.12)', marginTop: 8 }}>
-        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', letterSpacing: 0.5 }}>v1.0</span>
+        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: 0.3 }}>RS Planning suite · v1.0</span>
       </div>
     </div>
   )

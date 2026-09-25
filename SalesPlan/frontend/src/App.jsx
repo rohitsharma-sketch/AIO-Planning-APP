@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { theme } from './theme'
 import Sidebar from './components/Sidebar'
 import TopBar from './components/TopBar'
+import Header from './components/Header'
 import Home from './pages/Home'
 import DivisionPlan from './pages/DivisionPlan'
 import DivisionGrowthStructure from './pages/DivisionGrowthStructure'
@@ -33,7 +34,7 @@ export default function App() {
       root.style.setProperty(`--${key}`, val)
     })
     document.body.style.margin = '0'
-    document.body.style.fontFamily = "'Satoshi', system-ui, -apple-system, sans-serif"
+    document.body.style.fontFamily = theme.fontUI
     document.body.style.background = theme.surfaceAlt
     document.body.style.color = theme.textPrimary
   }, [])
@@ -43,7 +44,8 @@ export default function App() {
       <TopBar />
       <div style={{ display: 'flex', minHeight: '100vh' }}>
         <Sidebar />
-        <div style={{ marginLeft: 220, flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <div style={{ marginLeft: 220, flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+          <Header />
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/division-plan" element={<DivisionPlan />} />

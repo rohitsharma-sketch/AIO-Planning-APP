@@ -72,7 +72,7 @@ function StepBar({ pipeline }) {
               {isOpt && (
                 <span style={{
                   fontSize: 9, padding: '1px 5px', borderRadius: 3, marginLeft: 'auto',
-                  background: isDone ? `${theme.success}18` : 'rgba(255,255,255,0.06)',
+                  background: isDone ? `${theme.success}18` : 'rgba(15,27,45,0.05)',
                   color: isDone ? theme.success : theme.textMuted, fontWeight: 700,
                 }}>
                   {isDone ? 'applied' : 'opt'}

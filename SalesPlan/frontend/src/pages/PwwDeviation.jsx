@@ -115,8 +115,8 @@ const RULE_META = {
   ppo:                    { label: 'PPO',          color: '#3B82F6' },
   ppo_below_threshold:    { label: 'PPO (thr)',     color: '#3B82F6' },
   ppo_no_plan:            { label: 'PPO (no plan)', color: '#6B7280' },
-  floor_50:               { label: '50% Floor',     color: '#F59E0B' },
-  cap_150:                { label: '150% Cap',      color: '#F59E0B' },
+  floor_50:               { label: '50% Floor',     color: '#B45309' },
+  cap_150:                { label: '150% Cap',      color: '#B45309' },
   adjusted:               { label: 'Adjusted',      color: '#0EA5E9' },
 }
 
@@ -417,7 +417,7 @@ export default function PwwDeviation() {
                         <td style={{ ...CELL, textAlign: 'right' }}>
                           <span style={{
                             background: d.block_cont_pct < 2.5 ? `${theme.textMuted}22` : `${theme.primary}22`,
-                            color: d.block_cont_pct < 2.5 ? theme.textMuted : theme.primaryLight,
+                            color: d.block_cont_pct < 2.5 ? theme.textMuted : theme.primary,
                             borderRadius: 4, padding: '1px 6px', fontFamily: theme.fontMono, fontSize: 11,
                           }}>{fmtP(d.block_cont_pct)}</span>
                         </td>
@@ -516,7 +516,7 @@ export default function PwwDeviation() {
                     padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: !reappDiv ? 700 : 400,
                     border: `1.5px solid ${!reappDiv ? theme.primary : theme.border}`,
                     background: !reappDiv ? `${theme.primary}22` : theme.surface,
-                    color: !reappDiv ? theme.primaryLight : theme.textSecondary,
+                    color: !reappDiv ? theme.primary : theme.textSecondary,
                   }}>All</button>
                   {divSet.map(div => {
                     const active = div === reappDiv
@@ -568,7 +568,7 @@ export default function PwwDeviation() {
                               <td style={{ ...CELL2, textAlign: 'right' }}>
                                 <span style={{
                                   background: dd.dept_block_final_pct > 0 ? `${theme.primary}18` : `${theme.textMuted}18`,
-                                  color: dd.dept_block_final_pct > 0 ? theme.primaryLight : theme.textMuted,
+                                  color: dd.dept_block_final_pct > 0 ? theme.primary : theme.textMuted,
                                   borderRadius: 4, padding: '1px 6px', fontFamily: theme.fontMono, fontSize: 10,
                                 }}>{fmtP(dd.dept_block_final_pct)}</span>
                               </td>
@@ -645,7 +645,7 @@ export default function PwwDeviation() {
                   padding: '5px 14px', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: active ? 700 : 500,
                   border: `1.5px solid ${active ? theme.primary : theme.border}`,
                   background: active ? `${theme.primary}22` : theme.surface,
-                  color: active ? theme.primaryLight : theme.textSecondary,
+                  color: active ? theme.primary : theme.textSecondary,
                 }}>{m}</button>
               )
             })}
@@ -674,7 +674,7 @@ export default function PwwDeviation() {
               padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: !activeDiv2 ? 700 : 400,
               border: `1.5px solid ${!activeDiv2 ? theme.primary : theme.border}`,
               background: !activeDiv2 ? `${theme.primary}22` : theme.surface,
-              color: !activeDiv2 ? theme.primaryLight : theme.textSecondary,
+              color: !activeDiv2 ? theme.primary : theme.textSecondary,
             }}>All</button>
             {p2Divs.map(div => {
               const active = div === activeDiv2

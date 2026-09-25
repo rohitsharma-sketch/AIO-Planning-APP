@@ -11,12 +11,12 @@ const DIV_COLOR = {
 }
 
 const ATTR_STYLE = {
-  'REGULAR':    { bg: '#1E2540', color: '#818CF8' },
-  'SUMMER':     { bg: '#2A1C10', color: '#FB923C' },
-  'PREWINTER':  { bg: '#112318', color: '#4ADE80' },
-  'LT WINTER':  { bg: '#0F1E30', color: '#60A5FA' },
-  'HVY WINTER': { bg: '#0B1524', color: '#93C5FD' },
-  'OCCASIONAL': { bg: '#21102E', color: '#C084FC' },
+  'REGULAR':    { bg: '#EEF1FD', color: '#4338CA' },
+  'SUMMER':     { bg: '#FFF4E8', color: '#C2410C' },
+  'PREWINTER':  { bg: '#ECFDF3', color: '#15803D' },
+  'LT WINTER':  { bg: '#EFF6FF', color: '#1D4ED8' },
+  'HVY WINTER': { bg: '#EFF6FF', color: '#2563EB' },
+  'OCCASIONAL': { bg: '#F5EEFD', color: '#7E22CE' },
 }
 
 function cellBg(val) {
@@ -29,7 +29,7 @@ function cellBg(val) {
 function cellColor(val) {
   const v = parseFloat(val)
   if (isNaN(v) || v === 100) return theme.textPrimary
-  return v > 100 ? '#4ADE80' : '#F87171'
+  return v > 100 ? '#15803D' : '#B42318'
 }
 
 function buildMonthGroups(periods) {
@@ -355,7 +355,7 @@ export default function DepartmentGrowthMatrix() {
               fontSize: 11, padding: '4px 10px', borderRadius: 5,
               background: buyerSyncResult.ok ? `${theme.success}14` : '#FEE2E2',
               color: buyerSyncResult.ok ? theme.success : '#991B1B',
-              border: `1px solid ${buyerSyncResult.ok ? theme.success + '44' : '#FCA5A5'}`,
+              border: `1px solid ${buyerSyncResult.ok ? theme.success + '44' : '#F7C1BC'}`,
             }}>
               {buyerSyncResult.msg}
             </div>
@@ -398,7 +398,7 @@ export default function DepartmentGrowthMatrix() {
 
           <div style={{
             padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-            background: '#0F1E30', color: '#60A5FA',
+            background: '#EFF6FF', color: '#1D4ED8',
           }}>
             Baseline 100
           </div>
@@ -470,7 +470,7 @@ export default function DepartmentGrowthMatrix() {
                 </div>
                 <div style={{ fontSize: 12, color: theme.textSecondary, marginBottom: 14, lineHeight: 1.6 }}>
                   Upload an <strong>Excel (.xlsx)</strong> or <strong>CSV</strong> file.<br />
-                  Required columns: <code style={{ background: '#1E2540', padding: '1px 5px', borderRadius: 3, fontSize: 11, color: '#818CF8' }}>Department</code> + any period columns (e.g. <code style={{ background: '#1E2540', padding: '1px 5px', borderRadius: 3, fontSize: 11, color: '#818CF8' }}>Apr'27 P1</code>).<br />
+                  Required columns: <code style={{ background: '#EEF1FD', padding: '1px 5px', borderRadius: 3, fontSize: 11, color: '#4338CA' }}>Department</code> + any period columns (e.g. <code style={{ background: '#EEF1FD', padding: '1px 5px', borderRadius: 3, fontSize: 11, color: '#4338CA' }}>Apr'27 P1</code>).<br />
                   Values are growth % — use <strong>100</strong> for no change, <strong>110</strong> for +10%.
                 </div>
 
@@ -516,9 +516,9 @@ export default function DepartmentGrowthMatrix() {
                 {uploadResult && (
                   <div style={{
                     marginTop: 12, padding: '10px 14px', borderRadius: 7, fontSize: 12,
-                    background: uploadResult.ok ? '#112318' : '#2A1010',
-                    border: `1px solid ${uploadResult.ok ? '#1E4D30' : '#4D1515'}`,
-                    color: uploadResult.ok ? '#4ADE80' : '#F87171',
+                    background: uploadResult.ok ? '#ECFDF3' : '#FEF3F2',
+                    border: `1px solid ${uploadResult.ok ? '#A6E3BD' : '#4D1515'}`,
+                    color: uploadResult.ok ? '#15803D' : '#B42318',
                   }}>
                     {uploadResult.ok ? (
                       <>
@@ -539,9 +539,9 @@ export default function DepartmentGrowthMatrix() {
                 <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.4, marginBottom: 8 }}>EXPECTED FORMAT</div>
                 <table style={{ fontSize: 11, borderCollapse: 'collapse', color: theme.textSecondary }}>
                   <thead>
-                    <tr style={{ background: '#1E2540' }}>
+                    <tr style={{ background: '#EEF1FD' }}>
                       {["Department", "Apr'27 P1", "Apr'27 P2", "May'27 P1", "…"].map(h => (
-                        <th key={h} style={{ padding: '4px 8px', border: `1px solid ${theme.border}`, fontWeight: 600, color: '#818CF8', fontSize: 10 }}>{h}</th>
+                        <th key={h} style={{ padding: '4px 8px', border: `1px solid ${theme.border}`, fontWeight: 600, color: '#4338CA', fontSize: 10 }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -558,7 +558,7 @@ export default function DepartmentGrowthMatrix() {
 
                 {/* Last upload info */}
                 {divMeta && (
-                  <div style={{ marginTop: 12, padding: '8px 10px', borderRadius: 6, background: '#112318', border: '1px solid #1E4D30', fontSize: 11, color: '#4ADE80' }}>
+                  <div style={{ marginTop: 12, padding: '8px 10px', borderRadius: 6, background: '#ECFDF3', border: '1px solid #A6E3BD', fontSize: 11, color: '#15803D' }}>
                     <div style={{ fontWeight: 700, marginBottom: 2 }}>Last buyer upload</div>
                     <div>{divMeta.filename}</div>
                     <div style={{ opacity: 0.8, marginTop: 2 }}>{divMeta.uploaded_at} · {divMeta.depts_updated} depts · {divMeta.periods_updated} periods</div>
@@ -625,7 +625,7 @@ export default function DepartmentGrowthMatrix() {
             100 = baseline
           </span>
           <span style={{ color: theme.textMuted }}>
-            🔗 <span style={{ color: '#60A5FA' }}>Live from Buyer's Input</span> — read-only here, edit there
+            🔗 <span style={{ color: '#1D4ED8' }}>Live from Buyer's Input</span> — read-only here, edit there
           </span>
           <span style={{ marginLeft: 'auto', color: theme.textMuted, fontStyle: 'italic' }}>
             Click a P1/P2 header to fill entire column
@@ -687,7 +687,7 @@ export default function DepartmentGrowthMatrix() {
                   return (
                     <tr key={dept.name} style={{
                       borderBottom: `1px solid #EEF2F8`,
-                      background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
+                      background: i % 2 === 0 ? 'transparent' : 'rgba(15,27,45,0.025)',
                     }}>
                       <td style={{
                         padding: '5px 10px 5px 20px',
@@ -718,7 +718,7 @@ export default function DepartmentGrowthMatrix() {
                             textAlign: 'center',
                           }} title={fromBuyer ? "Live from Buyer's Input Sheet — edit there, not here" : undefined}>
                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}>
-                              {fromBuyer && <span style={{ fontSize: 9, color: '#60A5FA' }}>🔗</span>}
+                              {fromBuyer && <span style={{ fontSize: 9, color: '#1D4ED8' }}>🔗</span>}
                               <input
                                 type="number"
                                 step={0.1}
@@ -730,17 +730,17 @@ export default function DepartmentGrowthMatrix() {
                                   border: '1px solid transparent', borderRadius: 3,
                                   fontSize: 11, padding: '2px 1px',
                                   background: 'transparent',
-                                  color: fromBuyer ? '#60A5FA' : cellColor(val),
+                                  color: fromBuyer ? '#1D4ED8' : cellColor(val),
                                   fontFamily: theme.fontMono,
                                   fontVariantNumeric: 'tabular-nums',
                                   fontWeight: val !== 100 ? 600 : 400,
                                   outline: 'none',
                                   cursor: fromBuyer ? 'not-allowed' : 'text',
                                 }}
-                                onFocus={e => !fromBuyer && (e.target.style.borderColor = theme.primaryLight)}
+                                onFocus={e => !fromBuyer && (e.target.style.borderColor = theme.primary)}
                                 onBlur={e => e.target.style.borderColor = 'transparent'}
                               />
-                              <span style={{ fontSize: 10, color: fromBuyer ? '#60A5FA' : cellColor(val), opacity: 0.7, userSelect: 'none' }}>%</span>
+                              <span style={{ fontSize: 10, color: fromBuyer ? '#1D4ED8' : cellColor(val), opacity: 0.7, userSelect: 'none' }}>%</span>
                             </div>
                           </td>
                         )

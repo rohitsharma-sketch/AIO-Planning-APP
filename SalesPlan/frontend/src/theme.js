@@ -1,36 +1,42 @@
+// One palette for the RS Planning suite (2026-09-25 makeover): the same navy
+// chrome + teal accent + light data area as the AOP Forecaster and the Buyer's
+// Input Sheet. Key names are unchanged - every page reads them inline and
+// App.jsx also exposes each one as a CSS variable (--primary, --surface, ...).
 export const theme = {
-  fontUI:   "'Satoshi', system-ui, sans-serif",
-  fontMono: "'JetBrains Mono', 'Cascadia Code', monospace",
+  fontUI:   "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  fontMono: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",   // numbers use tabular figures (index.css)
 
   // Brand
-  primary:      '#3D7FD4',
-  primaryLight: '#5B9FE8',
-  primaryDark:  '#1B4F8A',
+  navy:         '#0F2742',   // chrome (sidebar + page header), strong headings
+  primary:      '#0E7490',   // teal accent - links, active states, primary actions
+  primaryLight: '#E7F1F4',   // accent tint
+  primaryDark:  '#155E75',   // accent hover
 
-  // Accent
-  accent:       '#00C47D',
-  accentLight:  '#0A2820',
+  // Accent (positive)
+  accent:       '#15803D',
+  accentLight:  '#ECFDF3',
 
   // Status
-  danger:   '#F87171',
-  warning:  '#FBBF24',
+  success:  '#15803D',
+  danger:   '#B42318',
+  warning:  '#B45309',
 
-  // Surfaces  — all sit on top of #1C2022 page bg
-  surface:    '#242B2E',   // cards, panels
-  surfaceAlt: '#1C2022',   // page background (Pantone Dark Green Gray)
-  surfaceUp:  '#2C3538',   // elevated within a card (thead, toolbar tint)
+  // Surfaces
+  surface:    '#FFFFFF',   // cards, panels
+  surfaceAlt: '#F3F5F9',   // page background
+  surfaceUp:  '#F8FAFC',   // table heads, toolbars inside a card
 
   // Borders
-  border:       '#2D3B40',
-  borderStrong: '#3D5060',
+  border:       '#E3E8EF',
+  borderStrong: '#CFD8E3',
 
   // Text
-  textPrimary:   '#E2EAED',
-  textSecondary: '#7FA0AD',
-  textMuted:     '#4A6470',
+  textPrimary:   '#0F1B2D',
+  textSecondary: '#5B6B82',
+  textMuted:     '#8A99AD',
 
-  // Sidebar
-  sidebar:       '#141A1C',
+  // Sidebar (same navy as the page header, so the chrome reads as one frame)
+  sidebar:       '#0F2742',
   sidebarText:   '#FFFFFF',
-  sidebarActive: 'rgba(61,127,212,0.20)',
+  sidebarActive: 'rgba(255,255,255,0.10)',
 }

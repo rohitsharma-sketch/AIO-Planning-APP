@@ -76,7 +76,7 @@ function GroupRow({ group, overrides, onChange }) {
         </div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {!balanced && (
-            <span style={{ fontSize: 10, color: '#FBBF24' }}>Sum={total.toFixed(1)}%</span>
+            <span style={{ fontSize: 10, color: '#B45309' }}>Sum={total.toFixed(1)}%</span>
           )}
           <button onClick={autoBalance} style={{
             padding: '3px 10px', fontSize: 10, borderRadius: 5,
@@ -122,7 +122,7 @@ function GroupRow({ group, overrides, onChange }) {
                 onChange={e => update(idx, e.target.value)}
                 style={{
                   width: 54, padding: '3px 6px', borderRadius: 5,
-                  background: theme.surfaceAlt, border: `1px solid ${balanced ? theme.border : '#FBBF2444'}`,
+                  background: theme.surfaceAlt, border: `1px solid ${balanced ? theme.border : '#B4530944'}`,
                   color: theme.textPrimary, fontSize: 11, textAlign: 'right', ...mono, outline: 'none',
                 }}
               />
@@ -161,7 +161,7 @@ function PreviewTable({ rows, monthCols }) {
         <tbody>
           {rows.map((row, ri) => (
             <tr key={ri} style={{
-              background: ri % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
+              background: ri % 2 === 0 ? 'transparent' : 'rgba(15,27,45,0.025)',
               borderBottom: `1px solid ${theme.border}`,
             }}>
               {allCols.map(c => (
@@ -202,7 +202,7 @@ function LogPanel({ lines }) {
         <div key={i} style={{
           color: l.includes('FAIL') || l.includes('ERROR') ? theme.danger
                : l.includes('PASS') ? theme.accent
-               : l.includes('WARN') ? '#FBBF24'
+               : l.includes('WARN') ? '#B45309'
                : theme.textMuted,
           lineHeight: 1.7,
         }}>{l || ' '}</div>
@@ -476,7 +476,7 @@ export default function MrpReapportionment() {
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                     <StatCard label="INPUT ROWS" value={result.input_rows?.toLocaleString()} />
                     <StatCard label="OUTPUT ROWS" value={result.output_rows?.toLocaleString()} color={theme.primary} />
-                    <StatCard label="UNMAPPED" value={result.unmapped} color={result.unmapped > 0 ? '#FBBF24' : theme.textMuted} />
+                    <StatCard label="UNMAPPED" value={result.unmapped} color={result.unmapped > 0 ? '#B45309' : theme.textMuted} />
                     <StatCard label="TOTAL BEFORE" value={'₹' + (result.total_before/100000).toFixed(1) + 'L'}
                       sub={result.total_before.toLocaleString('en-IN', { maximumFractionDigits: 0 })} />
                     <StatCard label="TOTAL AFTER" value={'₹' + (result.total_after/100000).toFixed(1) + 'L'}
@@ -543,8 +543,8 @@ export default function MrpReapportionment() {
                 width: '100%', padding: '13px 0', borderRadius: 9,
                 fontSize: 14, fontWeight: 700, letterSpacing: 0.3,
                 cursor: canRun ? 'pointer' : 'not-allowed',
-                background: canRun ? theme.primary : theme.border,
-                color: '#fff', border: 'none',
+                background: canRun ? theme.primary : theme.surfaceUp,
+                color: canRun ? '#fff' : theme.textMuted, border: canRun ? 'none' : `1px solid ${theme.border}`,
               }}
             >
               {running ? '⟳  Running engine…' : '▶  Run Re-apportionment'}

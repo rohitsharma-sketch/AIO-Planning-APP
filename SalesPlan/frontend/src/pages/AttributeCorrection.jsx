@@ -11,12 +11,12 @@ const DIV_COLOR = {
 }
 
 const ATTR_COLOR = {
-  SUMMER:    '#F59E0B',
+  SUMMER:    '#B45309',
   REGULAR:   '#38BDF8',
-  PREWINTER: '#4ADE80',
-  OCCASIONAL:'#C084FC',
+  PREWINTER: '#15803D',
+  OCCASIONAL:'#7E22CE',
   'LT WINTER':'#67E8F9',
-  'HVY WINTER':'#93C5FD',
+  'HVY WINTER':'#2563EB',
   GM:        '#94A3B8',
   RETAIL:    '#FB7185',
 }
@@ -51,10 +51,10 @@ function CompareDrawer({ open, onClose, months, pre, post, activeDiv }) {
             <tr style={{ background: theme.surfaceAlt, position: 'sticky', top: 0, zIndex: 1 }}>
               <th style={{ ...HDR, textAlign: 'left', padding: '8px 14px', minWidth: 120 }}>Attribute</th>
               <th style={{ ...HDR, padding: '8px 10px' }}>Month</th>
-              <th style={{ ...HDR, padding: '8px 10px', color: '#64B5F6' }}>Pre TY</th>
-              <th style={{ ...HDR, padding: '8px 10px', color: '#64B5F6' }}>Pre %</th>
-              <th style={{ ...HDR, padding: '8px 10px', color: '#81C784' }}>Post TY</th>
-              <th style={{ ...HDR, padding: '8px 10px', color: '#81C784' }}>Post %</th>
+              <th style={{ ...HDR, padding: '8px 10px', color: '#1D4ED8' }}>Pre TY</th>
+              <th style={{ ...HDR, padding: '8px 10px', color: '#1D4ED8' }}>Pre %</th>
+              <th style={{ ...HDR, padding: '8px 10px', color: '#15803D' }}>Post TY</th>
+              <th style={{ ...HDR, padding: '8px 10px', color: '#15803D' }}>Post %</th>
               <th style={{ ...HDR, padding: '8px 10px' }}>Δ TY</th>
               <th style={{ ...HDR, padding: '8px 10px' }}>Δ %pt</th>
             </tr>
@@ -75,10 +75,10 @@ function CompareDrawer({ open, onClose, months, pre, post, activeDiv }) {
                       </td>
                     )}
                     <td style={{ ...CELL, textAlign: 'left', color: theme.textMuted, fontSize: 11 }}>{m}</td>
-                    <td style={{ ...CELL, color: '#64B5F6' }}>{preCell.ty.toFixed(2)}</td>
-                    <td style={{ ...CELL, color: '#64B5F6' }}>{preCell.cont_pct.toFixed(2)}%</td>
-                    <td style={{ ...CELL, color: '#81C784' }}>{postCell.ty.toFixed(2)}</td>
-                    <td style={{ ...CELL, color: '#81C784' }}>{postCell.cont_pct.toFixed(2)}%</td>
+                    <td style={{ ...CELL, color: '#1D4ED8' }}>{preCell.ty.toFixed(2)}</td>
+                    <td style={{ ...CELL, color: '#1D4ED8' }}>{preCell.cont_pct.toFixed(2)}%</td>
+                    <td style={{ ...CELL, color: '#15803D' }}>{postCell.ty.toFixed(2)}</td>
+                    <td style={{ ...CELL, color: '#15803D' }}>{postCell.cont_pct.toFixed(2)}%</td>
                     <td style={{ ...CELL, color: deltaTy > 0 ? theme.success : deltaTy < 0 ? theme.danger : theme.textMuted }}>
                       {deltaTy > 0 ? '+' : ''}{deltaTy.toFixed(2)}
                     </td>

@@ -171,7 +171,7 @@ export default function MrpImport() {
                     </div>
                   )}
                   {result.contrib_warnings?.length > 0 && (
-                    <div style={{ marginTop: 10, color: '#F59E0B', fontSize: 11 }}>
+                    <div style={{ marginTop: 10, color: '#B45309', fontSize: 11 }}>
                       <div style={{ fontWeight: 700, marginBottom: 3 }}>⚠ Contribution warnings ({result.contrib_warnings.length}):</div>
                       {result.contrib_warnings.slice(0, 6).map((w, i) => <div key={i}>• {w}</div>)}
                       {result.contrib_warnings.length > 6 && <div>…and {result.contrib_warnings.length - 6} more</div>}

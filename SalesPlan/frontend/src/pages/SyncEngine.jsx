@@ -4,7 +4,7 @@ import { theme } from '../theme'
 const API = '/api/planning/sync'
 
 function StatusDot({ ok, syncing }) {
-  const color = syncing ? '#F59E0B' : ok ? '#10B981' : '#6B7280'
+  const color = syncing ? '#B45309' : ok ? '#10B981' : '#6B7280'
   return (
     <span style={{
       display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
