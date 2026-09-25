@@ -76,8 +76,9 @@ DIV_MAP = {
 }
 
 # Indian FY: mi=0=Apr … mi=11=Mar
-# LY for FY27 plan = FY26 = Apr 2025–Mar 2026
-# AOP months and their calendar dates in FY26:
+# The plan's AOP block is Mar-Jun of PLAN_MAMJ_YEAR. It must match AOP's
+# publish_aop_targets.MAMJ (202703-202706) and BIS's mamjLabels (Mar'27..Jun'27).
+PLAN_MAMJ_YEAR = 2027
 AOP_MONTHS = [11, 0, 1, 2]  # Mar, Apr, May, Jun
 # mi → calendar month number (0=Apr→4 … 11=Mar→3)
 MI_TO_CAL_MONTH = {0:4,1:5,2:6,3:7,4:8,5:9,6:10,7:11,8:12,9:1,10:2,11:3}
@@ -85,13 +86,15 @@ MI_TO_CAL_MONTH = {0:4,1:5,2:6,3:7,4:8,5:9,6:10,7:11,8:12,9:1,10:2,11:3}
 AOP_CAL_MONTHS = frozenset(MI_TO_CAL_MONTH[mi] for mi in AOP_MONTHS)
 # Final (latest) calendar month — closing stock denominator (June for MAMJ)
 AOP_FINAL_CAL_MONTH = max(AOP_CAL_MONTHS)
-AOP_FY26_DATES = {
-    11: (2026, 3),   # Mar 2026
-    0:  (2025, 4),   # Apr 2025
-    1:  (2025, 5),   # May 2025
-    2:  (2025, 6),   # Jun 2025
-}
-DATE_TO_MI = {v: k for k, v in AOP_FY26_DATES.items()}
+# LY = the SAME calendar months one year before the plan (AOP's base rule):
+# Mar-Jun 2026 for a Mar-Jun 2027 plan. The old hard-coded table here mixed
+# Mar 2026 with Apr-Jun 2025 (an Apr-Mar "FY26"), so BIS showed LY 336.4 Cr
+# against AOP's 388.9 Cr base and +28.4% growth instead of ~+11% (2026-09-25).
+AOP_LY_DATES = {mi: (PLAN_MAMJ_YEAR - 1, MI_TO_CAL_MONTH[mi]) for mi in AOP_MONTHS}
+DATE_TO_MI = {v: k for k, v in AOP_LY_DATES.items()}
+# Part of data_version, so a browser holding LY cached under an older month
+# definition resyncs instead of keeping it (the parquet mtime alone wouldn't change).
+LY_DEF = "ly" + "".join(f"{y}{m:02d}" for y, m in sorted(AOP_LY_DATES.values()))
 
 # Full-year FY calendars: mi=0=Apr … mi=11=Mar
 _CAL_MONTHS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3]
@@ -137,7 +140,7 @@ def _data_version() -> str:
             parts.append(str(int(os.path.getmtime(latest) * 1000)))
     except Exception:
         pass
-    return "-".join(parts) if parts else "unknown"
+    return "-".join(parts + [LY_DEF]) if parts else "unknown"
 
 
 def get_latest_file(directory: str, patterns=("*.parquet",)) -> str | None:
@@ -337,13 +340,13 @@ def _run_sales_job(src: str):
             lfl_mask = df[tag_col].astype(str).str.strip().isin(LFL_TAGS_26V27)
             df = df[lfl_mask]
 
-        target = set(AOP_FY26_DATES.values())
+        target = set(AOP_LY_DATES.values())
         mask = df[date_col].apply(lambda d: (d.year, d.month) in target)
         df_f = df[mask].copy()
 
         if df_f.empty:
             _sales_job = {"status": "error", "data": None,
-                          "error": "No data for FY26 AOP months (Apr/May/Jun 2025 + Mar 2026)."}
+                          "error": f"No data for the LY AOP months {sorted(AOP_LY_DATES.values())}."}
             return
 
         df_f["_div"] = df_f[div_col].apply(normalize_div)

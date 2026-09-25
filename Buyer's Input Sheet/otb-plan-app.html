@@ -622,12 +622,13 @@ const MO = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','M
 const CAL_ORDER = [9,10,11,0,1,2,3,4,5,6,7,8];
 // Seasonality weights (sum=1)
 const SEA = [.085,.090,.075,.080,.090,.105,.110,.115,.100,.070,.050,.030];
-// Actual monthly LY by division (LFL stores, Mar-Jun 2026, Rs.Cr)
-// Source: store-wise parquet actuals — same data as STORE_ACTUAL_LY, summed by dept
+// Actual monthly LY by division (148 LFL stores, Mar-Jun 2026, Rs.Cr) - offline
+// default only; /api/sync/sales replaces it (sync_server AOP_LY_DATES). Refreshed
+// 2026-09-25 from the Aug-17 parquet: 388.85 Cr, = AOP's own MAMJ base.
 const DEPT_ACTUAL_LY = {
-  kids:   {11:38.0918, 0:30.2102, 1:29.815,  2:28.136},
-  ladies: {11:34.02,   0:31.0028, 1:29.578,  2:28.369},
-  mens:   {11:42.3026, 0:34.8313, 1:32.2924, 2:30.0966},
+  kids:   {11:38.0793, 0:28.2551, 1:28.3984, 2:26.1484},
+  ladies: {11:30.9458, 0:28.5352, 1:28.3337, 2:27.0448},
+  mens:   {11:45.3452, 0:39.1026, 1:35.0471, 2:33.6186},
 };
 
 // Division / Department / Attribute data — auto-synced from Item Master 4.8.26
