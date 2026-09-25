@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, Fragment } from 'react'
+import { explainMove } from '../../lib/moveReasons'
 import * as XLSX from 'xlsx'
 import { getStoreClusterMap } from '../../lib/api'
 
@@ -52,7 +53,7 @@ const KEY_LABELS = { store: 'Store', division: 'Division' }
 
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
-export default function ReindexOutputPanel({ result, festivalByCluster, refDateByCluster, refMonthsByCluster, fwdSplitByCluster }) {
+export default function ReindexOutputPanel({ result, festivalByCluster, refDateByCluster, refMonthsByCluster, fwdSplitByCluster, moveInfo }) {
   const [activeSub, setActiveSub] = useState('reindexed')
   const [search, setSearch] = useState('')
   // Month Wise Matrix: which store's split to preview (Download XLSX always
@@ -1127,7 +1128,9 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
             <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
               Each reference month's actual sales, split across TY months proportional to how many of that
               month's calendar days landed in each - a month whose days split across two TY months (a festival
-              mid-month shift) shows a real split here, not a single guess. Download covers every store, not just this preview.
+              mid-month shift) shows a real split here, not a single guess. <b>Tinted cells moved to another month -
+              hover one to see which days moved and why</b> (a festival shifting, or ordinary days re-placed around it).
+              Download covers every store, not just this preview.
             </div>
             {!hasSplitMap && (
               <p style={{ color: 'var(--warn)', fontWeight: 600, fontSize: '12px' }}>
@@ -1158,7 +1161,16 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                             <tr key={r.refMonth}>
                               <td style={{ fontWeight: 600 }}>{r.refMonth}</td>
                               <td style={num}>{money(r.total)}</td>
-                              {monthCols.map(m => <td key={m} style={num}>{money(r.cells[m])}</td>)}
+                              {monthCols.map(m => {
+                                // A share of this ref month that landed in a DIFFERENT month: tint it and
+                                // say why on hover (festival moved / ordinary days re-placed) - 2026-09-25.
+                                const moved = r.cells[m] > 0 && m.slice(5) !== r.refMonth.slice(5)
+                                const why = moved && explainMove(moveInfo, sel.cluster, r.refMonth, m, {
+                                  amount: r.cells[m],
+                                  refDays: Object.values(fwdSplitByCluster?.[sel.cluster]?.[r.refMonth] || {}).reduce((a, b) => a + b, 0) || undefined,
+                                })
+                                return <td key={m} style={num} className={why ? 'mx-moved' : undefined} title={why || undefined}>{money(r.cells[m])}</td>
+                              })}
                             </tr>
                           ))}
                         </tbody>

@@ -1094,3 +1094,8 @@ details.rx-section > summary.rx-label { cursor: pointer; display: list-item; }
 .rx-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .rx-seg button { border: none; border-radius: 0; background: var(--white); color: var(--muted); padding: 5px 12px; font-size: 12px; cursor: pointer; }
 .rx-seg button.active { background: var(--navy2); color: #fff; }
+
+/* Month Wise Matrix: a share of a ref month that landed in another month -
+   hover shows which days moved and why (lib/moveReasons.js, 2026-09-25). */
+.mx-moved { background: rgba(245, 158, 11, 0.16) !important; cursor: help; text-decoration: underline dotted rgba(180, 83, 9, 0.55); text-underline-offset: 3px; }
+.mx-moved:hover { background: rgba(245, 158, 11, 0.28) !important; }

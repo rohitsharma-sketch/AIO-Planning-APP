@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { buildMoveInfo } from '../../lib/moveReasons'
 import LinkStatusPanel from './LinkStatusPanel'
 import ReindexOutputPanel from './ReindexOutputPanel'
 import { startReindex, pollReindex, getReindexCacheStatus, listCalendarLibrary, getCalendar, getStoreClusterMap, getSourceSchema, putSalesdataLinkSelection, getSalesSnapshotSummary } from '../../lib/api'
@@ -100,7 +101,9 @@ async function fetchCalendarMaps(calendarId, source) {
       }
     }
   }
-  return { detail, festivalByDate, refByCluster, refMonthsByCluster, fwdSplitByCluster }
+  // Hover reasons for the Month Wise Matrix (lib/moveReasons.js, 2026-09-25).
+  const moveInfo = buildMoveInfo(detail)
+  return { detail, festivalByDate, refByCluster, refMonthsByCluster, fwdSplitByCluster, moveInfo }
 }
 
 export default function CalendarisedSalesTab({ isPlanner }) {
@@ -158,6 +161,7 @@ export default function CalendarisedSalesTab({ isPlanner }) {
   const [refMonthsByCluster, setRefMonthsByCluster] = useState({})
   // {cluster -> {refYYYY-MM -> {futYYYY-MM -> dayCount}}} - see fetchCalendarMaps above.
   const [fwdSplitByCluster, setFwdSplitByCluster] = useState({})
+  const [moveInfo, setMoveInfo] = useState(null)
   const [status, setStatus] = useState(null)
   // null = idle; otherwise {pct, filesDone, filesTotal} while a background
   // reindex job is running (day-wise can read tens of millions of rows - the
@@ -209,12 +213,12 @@ export default function CalendarisedSalesTab({ isPlanner }) {
   useEffect(() => {
     if (!calendarId) return
     let alive = true
-    fetchCalendarMaps(calendarId, source).then(({ festivalByDate: fbd, refByCluster, refMonthsByCluster: rmc, fwdSplitByCluster: fsc }) => {
+    fetchCalendarMaps(calendarId, source).then(({ festivalByDate: fbd, refByCluster, refMonthsByCluster: rmc, fwdSplitByCluster: fsc, moveInfo: mi }) => {
       if (!alive) return
       setFestivalByDate(fbd)
       setRefDateByCluster(refByCluster)
       setRefMonthsByCluster(rmc)
-      setFwdSplitByCluster(fsc)
+      setFwdSplitByCluster(fsc); setMoveInfo(mi)
     }).catch(() => {})
     return () => { alive = false }
   }, [calendarId, source])
@@ -370,11 +374,11 @@ export default function CalendarisedSalesTab({ isPlanner }) {
     setProgress({ pct: 0, filesDone: 0, filesTotal: 0, elapsedSeconds: 0 })
     pollJob(job.jobId, job.startedAt)
     if (job.calendarId) {
-      fetchCalendarMaps(job.calendarId, job.source).then(({ festivalByDate: fbd, refByCluster, refMonthsByCluster: rmc, fwdSplitByCluster: fsc }) => {
+      fetchCalendarMaps(job.calendarId, job.source).then(({ festivalByDate: fbd, refByCluster, refMonthsByCluster: rmc, fwdSplitByCluster: fsc, moveInfo: mi }) => {
         setFestivalByDate(fbd)
         setRefDateByCluster(refByCluster)
         setRefMonthsByCluster(rmc)
-        setFwdSplitByCluster(fsc)
+        setFwdSplitByCluster(fsc); setMoveInfo(mi)
       }).catch(() => {})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -408,14 +412,14 @@ export default function CalendarisedSalesTab({ isPlanner }) {
     const startedAt = Date.now()
     setProgress({ pct: 0, filesDone: 0, filesTotal: 0, elapsedSeconds: 0 })
     try {
-      const [{ detail, festivalByDate: fbd, refByCluster, refMonthsByCluster: rmc, fwdSplitByCluster: fsc }, storeMap] = await Promise.all([
+      const [{ detail, festivalByDate: fbd, refByCluster, refMonthsByCluster: rmc, fwdSplitByCluster: fsc, moveInfo: mi }, storeMap] = await Promise.all([
         fetchCalendarMaps(calendarId, source), getStoreClusterMap(),
       ])
       const storeCluster = Object.fromEntries((storeMap.stores || []).map(s => [s.store, s.cluster]))
       setFestivalByDate(fbd)
       setRefDateByCluster(refByCluster)
       setRefMonthsByCluster(rmc)
-      setFwdSplitByCluster(fsc)
+      setFwdSplitByCluster(fsc); setMoveInfo(mi)
 
       const { jobId } = await startReindex({
         source, months: monthsToRun,
@@ -629,7 +633,7 @@ export default function CalendarisedSalesTab({ isPlanner }) {
         </div>
       )}
 
-      <ReindexOutputPanel result={result ?? snapshotResult} festivalByCluster={festivalByDate} refDateByCluster={refDateByCluster} refMonthsByCluster={refMonthsByCluster} fwdSplitByCluster={fwdSplitByCluster} />
+      <ReindexOutputPanel result={result ?? snapshotResult} festivalByCluster={festivalByDate} refDateByCluster={refDateByCluster} refMonthsByCluster={refMonthsByCluster} fwdSplitByCluster={fwdSplitByCluster} moveInfo={moveInfo} />
     </div>
   )
 }
