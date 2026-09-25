@@ -2,16 +2,7 @@ import { useState } from 'react'
 import DbSyncPanel from './DbSyncPanel'
 import './UploadStep.css'
 
-const THEMES = [
-  { id: 'indigo',  label: 'Indigo',    primary: '#312E81', accent: '#4F46E5' },
-  { id: 'classic', label: 'Classic',   primary: '#1F3864', accent: '#4472C4' },
-  { id: 'emerald', label: 'Emerald',   primary: '#1E293B', accent: '#10B981' },
-  { id: 'amber',   label: 'Amber',     primary: '#0F172A', accent: '#F59E0B' },
-  { id: 'coral',   label: 'Coral',     primary: '#3B1F6A', accent: '#F4845F' },
-  { id: 'forest',  label: 'Forest',    primary: '#14532D', accent: '#22C55E' },
-]
-
-export default function UploadStep({ onUseDb, onEditInputs, theme, onThemeChange }) {
+export default function UploadStep({ onUseDb, onEditInputs }) {
   const [err, setErr]       = useState(null)
   const [dbBusy, setDbBusy] = useState(false)
 
@@ -23,22 +14,11 @@ export default function UploadStep({ onUseDb, onEditInputs, theme, onThemeChange
   return (
     <div className="us-wrap">
 
-      {/* ── Hero banner ───────────────────────────────── */}
-      <div className="us-hero">
-        <div className="us-hero-left">
-          <div className="us-hero-badge">FY 2027</div>
-          <h1 className="us-hero-title">AOP Forecaster</h1>
-          <p className="us-hero-sub">
-            Annual Operating Plan · Build the store-level revenue forecast from synced actuals and growth levers.
-          </p>
-        </div>
-        <div className="us-hero-art">
-          <div className="us-hero-ring us-ring-1" />
-          <div className="us-hero-ring us-ring-2" />
-          <div className="us-hero-icon-wrap">
-            <span className="us-hero-icon-letter">A</span>
-          </div>
-        </div>
+      {/* ── Step heading ──────────────────────────────── */}
+      <div className="us-head">
+        <span className="us-step">Step 1 of 3</span>
+        <h1 className="us-title">Configure the plan</h1>
+        <p className="us-sub">Build the store-level forecast from the synced database, or adjust growth, NSO ramp and AOP overrides first.</p>
       </div>
 
       {/* ── Action cards ──────────────────────────────── */}
@@ -94,27 +74,6 @@ export default function UploadStep({ onUseDb, onEditInputs, theme, onThemeChange
         <div className="us-sync-label">Data Sources</div>
         <DbSyncPanel onSynced={useDb} />
       </div>
-
-      {/* ── Appearance ────────────────────────────────── */}
-      {onThemeChange && (
-        <div className="pl-theme-section">
-          <span className="pl-theme-label">Appearance</span>
-          <div className="pl-theme-swatches">
-            {THEMES.map(t => (
-              <button
-                key={t.id}
-                className={`pl-theme-swatch ${t.id === theme ? 'active' : ''}`}
-                title={t.label}
-                onClick={() => onThemeChange(t.id)}
-                style={{ '--sw-primary': t.primary, '--sw-accent': t.accent }}
-              >
-                <span className="pl-sw-1" />
-                <span className="pl-sw-2" />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
     </div>
   )

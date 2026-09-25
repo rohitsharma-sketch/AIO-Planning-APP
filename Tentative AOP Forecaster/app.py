@@ -45,6 +45,9 @@ def _output_path(session_id: str) -> str:
 def _detail_path(session_id: str) -> str:
     return os.path.join(_session_dir(session_id), "detail.json")
 
+def _run_request_path(session_id: str) -> str:
+    return os.path.join(_session_dir(session_id), "run_request.json")
+
 def _results_path(session_id: str) -> str:
     return os.path.join(_session_dir(session_id), "results.json")
 
@@ -121,6 +124,10 @@ async def run(session_id: str, body: RunRequest = RunRequest()):
         raise HTTPException(500, str(e))
     with open(_results_path(session_id), "w", encoding="utf-8") as f:
         json.dump(results, f)
+    # The growth inputs this run used - so reopening a saved version shows
+    # them on Review instead of 0% everywhere (2026-09-25; see get_session).
+    with open(_run_request_path(session_id), "w", encoding="utf-8") as f:
+        json.dump({"growth_overrides": body.growth_overrides, "overall_override": body.overall_override}, f)
 
     run_id = None
     detail_records = None
@@ -154,6 +161,23 @@ async def run(session_id: str, body: RunRequest = RunRequest()):
             _pub.close()
 
     return {**results, "run_id": run_id}
+
+
+@router.get("/api/session/{session_id}")
+def get_session(session_id: str):
+    """Everything Review needs to reopen a saved session: store counts and
+    default growth from its inputs, plus the growth overrides of its last run
+    (None for sessions run before 2026-09-25, when this started being kept)."""
+    inp = _input_path(session_id)
+    if not os.path.exists(inp):
+        raise HTTPException(404, "Session not found")
+    last_run = None
+    if os.path.exists(_run_request_path(session_id)):
+        with open(_run_request_path(session_id), encoding="utf-8") as f:
+            last_run = json.load(f)
+    return {"session_id": session_id,
+            "from_db": os.path.exists(os.path.join(_session_dir(session_id), ".from_db")),
+            **get_file_info(inp), "last_run": last_run}
 
 
 @router.get("/api/results/{session_id}")

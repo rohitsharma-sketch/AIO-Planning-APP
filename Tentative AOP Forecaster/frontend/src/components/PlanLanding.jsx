@@ -107,39 +107,29 @@ function _avgGrowth(fp) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const THEMES = [
-  { id: 'indigo',  label: 'Indigo',    primary: '#312E81', accent: '#4F46E5' },
-  { id: 'classic', label: 'Classic',   primary: '#1F3864', accent: '#4472C4' },
-  { id: 'emerald', label: 'Emerald',   primary: '#1E293B', accent: '#10B981' },
-  { id: 'amber',   label: 'Amber',     primary: '#0F172A', accent: '#F59E0B' },
-  { id: 'coral',   label: 'Coral',     primary: '#3B1F6A', accent: '#F4845F' },
-  { id: 'forest',  label: 'Forest',    primary: '#14532D', accent: '#D97706' },
-]
+const fmtWhen = iso => new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+const signed  = v => (v > 0 ? '+' : '') + v
 
-export default function PlanLanding({ onNewPlan, onResume, theme, onThemeChange }) {
-  const [showSaved, setShowSaved] = useState(false)
-  const [versionList, setVersionList] = useState([])
-  const versions = versionList
+export default function PlanLanding({ onNewPlan, onResume }) {
+  const [versions, setVersions] = useState([])
+  const [loaded, setLoaded] = useState(false)
 
-  // {version label -> latest publish} from /api/config/aop-versions: the card's
-  // growth figure must be the one BIS shows after syncing that version (engine
-  // forecast / base of its latest publish), not an unweighted average of the
-  // growth inputs saved with the version (2026-09-25: card said +10.0% while
-  // BIS correctly showed +12.2% for Version 2's 23 Sep publish).
+  // {version label -> latest publish} from /api/config/aop-versions. Its
+  // lfl_growth_pct is target / base (2026-09-25) - the same growth AOP's
+  // Summary and BIS show, so the card can never disagree with either.
   const [publishByLabel, setPublishByLabel] = useState({})
   useEffect(() => {
-    loadPlanVersions().then(v => setVersionList(v))
+    loadPlanVersions().then(v => { setVersions(v); setLoaded(true) })
     fetch(apiUrl('/api/config/aop-versions'), { cache: 'no-store' })
       .then(r => (r.ok ? r.json() : { versions: [] }))
       .then(d => setPublishByLabel(Object.fromEntries((d.versions || []).map(p => [p.version_label, p]))))
       .catch(() => {})
   }, [])
 
-  async function handleDelete(id) {
-    await deletePlanVersion(id)
-    const updated = await loadPlanVersions()
-    setVersionList(updated)
-    if (updated.length === 0) setShowSaved(false)
+  async function handleDelete(v) {
+    if (!window.confirm(`Delete "${v.label}"? This removes the saved version for everyone and cannot be undone.`)) return
+    await deletePlanVersion(v.id)
+    setVersions(await loadPlanVersions())
   }
 
   async function handleRename(v) {
@@ -148,112 +138,74 @@ export default function PlanLanding({ onNewPlan, onResume, theme, onThemeChange 
     const label = entered.trim()
     if (!label || label === v.label) return
     await renamePlanVersion(v, label)
-    setVersionList(await loadPlanVersions())
+    setVersions(await loadPlanVersions())
   }
+
+  const latest = versions[0]
 
   return (
     <div className="pl-root">
       <div className="pl-header">
-        <h1 className="pl-title">AOP Forecaster</h1>
-        <p className="pl-sub">FY 2027–28 Annual Operating Plan</p>
+        <span className="pl-eyebrow">Annual Operating Plan</span>
+        <h1 className="pl-title">FY 2027–28 AOP Forecaster</h1>
+        <p className="pl-sub">Forecast store × division sales for Mar'27 – Mar'28, review growth, and publish the Mar–Jun targets to the Buyer's Input Sheet.</p>
       </div>
 
-      <div className={`pl-tiles ${showSaved ? 'pl-tiles--open' : ''}`}>
+      <div className="pl-tiles">
+        <button className="pl-tile pl-tile--new" onClick={onNewPlan}>
+          <span className="pl-tile-icon" aria-hidden>＋</span>
+          <span className="pl-tile-body">
+            <span className="pl-tile-title">New plan</span>
+            <span className="pl-tile-desc">Build a fresh forecast from the database or uploaded inputs</span>
+          </span>
+          <span className="pl-tile-arrow" aria-hidden>→</span>
+        </button>
 
-        {/* ── NEW PLAN TILE ── */}
-        <div className="pl-tile pl-tile--new" onClick={() => { setShowSaved(false); onNewPlan() }}>
-          <div className="pl-tile-icon">＋</div>
-          <div className="pl-tile-body">
-            <div className="pl-tile-title">New Plan</div>
-            <div className="pl-tile-desc">Start fresh — upload inputs or load from database</div>
-          </div>
-          <span className="pl-tile-arrow">→</span>
-        </div>
-
-        {/* ── EXISTING PLAN TILE ── */}
-        <div className={`pl-tile pl-tile--saved ${versions.length === 0 ? 'pl-tile--empty' : ''}`}
-             onClick={() => versions.length > 0 && setShowSaved(s => !s)}>
-          <div className="pl-tile-icon">📋</div>
-          <div className="pl-tile-body">
-            <div className="pl-tile-title">Continue with saved</div>
-            <div className="pl-tile-desc">
-              {versions.length === 0
-                ? 'No saved plans yet'
-                : `${versions.length} saved plan${versions.length > 1 ? 's' : ''}`}
-            </div>
-          </div>
-          {versions.length > 0 && <span className="pl-tile-arrow">{showSaved ? '↑' : '↓'}</span>}
-        </div>
+        <button className="pl-tile pl-tile--saved" disabled={!latest} onClick={() => latest && onResume(latest.sessionId)}>
+          <span className="pl-tile-icon" aria-hidden>↻</span>
+          <span className="pl-tile-body">
+            <span className="pl-tile-title">{latest ? 'Continue latest' : 'Continue'}</span>
+            <span className="pl-tile-desc">{latest ? latest.label : loaded ? 'No saved plans yet' : 'Loading…'}</span>
+          </span>
+          {latest && <span className="pl-tile-arrow" aria-hidden>→</span>}
+        </button>
       </div>
 
-      {/* ── THEME PICKER ── */}
-      {onThemeChange && (
-        <div className="pl-theme-section">
-          <div className="pl-theme-label">Appearance</div>
-          <div className="pl-theme-swatches">
-            {THEMES.map(t => (
-              <button
-                key={t.id}
-                className={`pl-theme-swatch ${t.id === theme ? 'active' : ''}`}
-                title={t.label}
-                onClick={() => onThemeChange(t.id)}
-                style={{ '--sw-primary': t.primary, '--sw-accent': t.accent }}
-              >
-                <span className="pl-sw-1" />
-                <span className="pl-sw-2" />
-              </button>
-            ))}
+      {versions.length > 0 && (
+        <section className="pl-log">
+          <div className="pl-log-hd">
+            <span>Saved plan versions</span>
+            <span className="pl-log-count">{versions.length}</span>
           </div>
-        </div>
-      )}
-
-      {/* ── VERSION LOG ── */}
-      {showSaved && versions.length > 0 && (
-        <div className="pl-log">
-          <div className="pl-log-hd">Saved plan versions</div>
           {versions.map((v, idx) => {
             const pub = publishByLabel[v.label]
-            const pubGrowth = pub?.lfl_growth_pct
+            const pubGrowth = pub?.lfl_growth_pct ?? pub?.growth_pct
             const avg = pubGrowth != null ? pubGrowth.toFixed(1) : _avgGrowth(v.fingerprint || {})
-            const fmt = iso => new Date(iso).toLocaleString('en-IN', {
-              day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
-            })
-            const date = fmt(pub?.published_at || v.lastModifiedAt)
+            const totalCr = pub?.total_mamj_lakhs ? (pub.total_mamj_lakhs / 100).toFixed(1) : null
             return (
               <div key={v.id} className="pl-log-row">
                 <div className="pl-log-row-info">
-                  <span className="pl-log-label">{v.label}</span>
+                  <span className="pl-log-label">
+                    {v.label}
+                    {idx === 0 && <span className="pl-log-cur-badge">Latest</span>}
+                  </span>
                   <span className="pl-log-meta">
-                    {idx === 0 && <span className="pl-log-cur-badge">Current</span>}
                     {avg != null && (pubGrowth != null
-                      ? <span title="MAMJ LFL growth of this version's latest publish (engine forecast / base) - the figure BIS shows after syncing it">MAMJ LFL growth: {avg > 0 ? '+' : ''}{avg}%</span>
-                      : <span title="Not published yet - simple average of the growth inputs saved with this version">Avg input growth: {avg > 0 ? '+' : ''}{avg}%</span>)}
-                    <span className="pl-log-date" title={pub ? 'Latest publish' : 'Last saved'}>{pub ? 'Published ' : ''}{date}</span>
+                      ? <span className="pl-chip pl-chip--growth" title="Mar–Jun LfL growth of this version's publish: AOP target ÷ base − 1 (same as AOP Summary and BIS)">MAMJ growth {signed(avg)}%</span>
+                      : <span className="pl-chip" title="Not published yet - simple average of the growth inputs saved with this version">Avg input {signed(avg)}%</span>)}
+                    {totalCr && <span className="pl-chip" title="Published Mar–Jun target, MENS + LADIES + KIDS">₹{totalCr} Cr MAMJ</span>}
+                    <span className="pl-log-date">{pub ? 'Published ' + fmtWhen(pub.published_at) : 'Saved ' + fmtWhen(v.lastModifiedAt)}</span>
                   </span>
                 </div>
                 <div className="pl-row-actions">
-                  <button className="pl-load-btn" onClick={() => onResume(v.sessionId)}>
-                    Load →
-                  </button>
-                  <button
-                    className="pl-rename-btn"
-                    title="Rename this version"
-                    onClick={e => { e.stopPropagation(); handleRename(v) }}
-                  >
-                    Rename
-                  </button>
-                  <button
-                    className="pl-del-btn"
-                    title="Delete this version"
-                    onClick={e => { e.stopPropagation(); handleDelete(v.id) }}
-                  >
-                    ✕
-                  </button>
+                  <button className="pl-load-btn" onClick={() => onResume(v.sessionId)}>Open</button>
+                  <button className="pl-rename-btn" title="Rename this version" onClick={() => handleRename(v)}>Rename</button>
+                  <button className="pl-del-btn" title="Delete this version" aria-label={`Delete ${v.label}`} onClick={() => handleDelete(v)}>✕</button>
                 </div>
               </div>
             )
           })}
-        </div>
+        </section>
       )}
     </div>
   )

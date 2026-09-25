@@ -24,23 +24,25 @@ export const fmtPct = v => v == null ? 'new' : (v > 0 ? '+' : '') + v.toFixed(1)
 export const cmpStr = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true })
 
 // ── Aggregation ────────────────────────────────────────────────────────────
-// `idx` = month indexes included in the scalar totals (base/fcst/eng/dev). Month arrays stay full-length.
+// `idx` = month indexes included in the scalar totals (base/fcst/dev). Month arrays stay full-length.
 export function aggregate(leaves, idx = ALL_IDX) {
-  const mb = new Array(13).fill(0), m = new Array(13).fill(0), me = new Array(13).fill(0)
+  const mb = new Array(13).fill(0), m = new Array(13).fill(0)
   const storesByType = { LfL: new Set(), Ramp: new Set(), NSO: new Set() }
   const stores = new Set()
   for (const r of leaves) {
     stores.add(r.Store); storesByType[r.Type]?.add(r.Store)
-    for (let i = 0; i < 13; i++) { mb[i] += r.mb[i]; m[i] += r.m[i]; me[i] += r.me[i] }
+    for (let i = 0; i < 13; i++) { mb[i] += r.mb[i]; m[i] += r.m[i] }
   }
-  let base = 0, fcst = 0, eng = 0
-  for (const i of idx) { base += mb[i]; fcst += m[i]; eng += me[i] }
+  let base = 0, fcst = 0
+  for (const i of idx) { base += mb[i]; fcst += m[i] }
   return {
-    base, fcst, eng, dev: fcst - base, mb, m, me,
+    base, fcst, dev: fcst - base, mb, m,
     stores: stores.size,
     typeCounts: Object.fromEntries(TYPES.map(t => [t, storesByType[t].size])),
-    growth:    base > 0 ? (fcst / base - 1) * 100 : null,   // forecast-based
-    growthEng: base > 0 ? (eng  / base - 1) * 100 : null,   // engine-forecast-based (Output tab essence)
+    // Forecast (incl. the ref-store deviation layer) vs Base - the same growth
+    // as the Summary tab and BIS (2026-09-25). The engine-only growth shown here
+    // before left the deviation out and never matched BIS.
+    growth: base > 0 ? (fcst / base - 1) * 100 : null,
   }
 }
 
@@ -98,7 +100,7 @@ export function dimOptions(leaves) {
 }
 
 // Apply header dimension filters, free-text search and numeric (store-total) range filters.
-// numF: { [key]: {min,max} } where key ∈ metric names returned by aggregate() (base, fcst, dev, growth, growthEng).
+// numF: { [key]: {min,max} } where key ∈ metric names returned by aggregate() (base, fcst, dev, growth).
 export function filterLeaves(leaves, { dimF = EMPTY_DIM, search = '', numF = {}, idx = ALL_IDX } = {}) {
   let rs = leaves
   for (const k of LEVEL_KEYS) if (dimF[k]?.length) rs = rs.filter(r => dimF[k].includes(r[k]))

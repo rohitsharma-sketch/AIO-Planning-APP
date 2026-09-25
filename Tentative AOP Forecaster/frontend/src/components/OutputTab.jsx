@@ -8,8 +8,8 @@ const DIVS = ["GM","KIDS","LADIES","MENS","RETAIL"]
 const TAGS = ["LfL","Ramp","NSO"]
 const PAGE_SIZE = 50
 
-const DIV_COLORS = { GM:'#1A4B8C', KIDS:'#7C6B14', LADIES:'#8B2252', MENS:'#1A5C3A', RETAIL:'#5A3680' }
-const TAG_COLORS = { LfL:'#1A4B8C', Ramp:'#7C6B14', NSO:'#1A5C3A' }
+const DIV_COLORS = { GM:'#334155', KIDS:'#A16207', LADIES:'#9D174D', MENS:'#0F766E', RETAIL:'#5B21B6' }
+const TAG_COLORS = { LfL:'#3D5AD6', Ramp:'#B45309', NSO:'#15803D' }  // = .tag-* chips / Summary charts
 
 function fmt1(v) {
   if (v == null) return '—'
@@ -244,8 +244,8 @@ function MonthSelect({ selected, onChange }) {
   )
 }
 
-const EMPTY_NUM  = { base: { min: '', max: '' }, fcst: { min: '', max: '' }, dev: { min: '', max: '' }, growthEng: { min: '', max: '' } }
-const NUM_TITLES = { base: 'Base', fcst: 'Forecast', dev: 'Deviation', growthEng: 'Growth %' }
+const EMPTY_NUM  = { base: { min: '', max: '' }, fcst: { min: '', max: '' }, dev: { min: '', max: '' }, growth: { min: '', max: '' } }
+const NUM_TITLES = { base: 'Base', fcst: 'Forecast', dev: 'Deviation', growth: 'Growth %' }
 const COL_SETS   = { fcst: ['fcst'], base_fcst: ['base', 'fcst'], all: ['base', 'fcst', 'dev'] }
 const COL_LABEL  = { base: 'Base', fcst: 'Forecast', dev: 'Deviation', gr: 'Growth %' }
 const MONTH_RE   = /^m(\d+)\|(base|fcst|dev)$/
@@ -311,7 +311,7 @@ export default function OutputTab({ sessionId, runKey }) {
   const tree = useMemo(() => {
     const val = n => {
       if (sortCol === 'name') return n.name
-      if (sortCol === 'growth') return n.growthEng
+      if (sortCol === 'growth') return n.growth
       if (sortCol === 'lfl' || sortCol === 'ramp' || sortCol === 'nso') return n.typeCounts[{ lfl: 'LfL', ramp: 'Ramp', nso: 'NSO' }[sortCol]]
       const mm = sortCol.match(MONTH_RE)
       if (mm) { const i = +mm[1]; return mm[2] === 'base' ? n.mb[i] : mm[2] === 'fcst' ? n.m[i] : n.m[i] - n.mb[i] }
@@ -363,7 +363,7 @@ export default function OutputTab({ sessionId, runKey }) {
       <td className={`num ${b ? 'fw-bold' : ''}`}>{fU(n.base)}</td>
       <td className="num fw-bold">{fU(n.fcst)}</td>
       {devCell(n.dev, b)}
-      {growthCell(n.growthEng, b)}
+      {growthCell(n.growth, b)}
     </>)
     if (viewMode === 'monthly') return (<>
       {selMonths.map(m => { const i = MONTHS.indexOf(m); return [...monthCols.map(c => {
@@ -377,7 +377,7 @@ export default function OutputTab({ sessionId, runKey }) {
         return <td key={`${m}|gr`} className={`num ${gr == null ? 'muted' : gr >= 0 ? 'positive' : 'negative'}`}>{gr == null ? 'new' : (gr > 0 ? '+' : '') + gr.toFixed(1) + '%'}</td>
       })()] })}
       <td className="num fw-bold">{fU(n.fcst)}</td>
-      {growthCell(n.growthEng, true)}
+      {growthCell(n.growth, true)}
     </>)
     return (<>
       <td className="num">{n.stores}</td>
@@ -387,7 +387,7 @@ export default function OutputTab({ sessionId, runKey }) {
       <td className={`num ${b ? 'fw-bold' : ''}`}>{fU(n.base)}</td>
       <td className="num fw-bold">{fU(n.fcst)}</td>
       {devCell(n.dev, b)}
-      {growthCell(n.growthEng, b)}
+      {growthCell(n.growth, b)}
       {selMonths.map(m => { const i = MONTHS.indexOf(m); const gr = cellVal(n, i, 'gr'); return (
         <td key={m} className="num sdt-month-cell">
           <div className="fw-bold">{fU(n.m[i])}</div>
@@ -403,7 +403,7 @@ export default function OutputTab({ sessionId, runKey }) {
       <Th {...th} col="base"   label={`Base (${unit})`}      num filterable />
       <Th {...th} col="fcst"   label={`Forecast (${unit})`}  num filterable />
       <Th {...th} col="dev"    label={`Deviation (${unit})`} num filterable />
-      <Th {...th} col="growthEng" label="Growth %" num filterable />
+      <Th {...th} col="growth" label="Growth %" num filterable />
     </>)
     if (viewMode === 'monthly') return (<>
       {selMonths.map(m => { const i = MONTHS.indexOf(m); return [
@@ -411,7 +411,7 @@ export default function OutputTab({ sessionId, runKey }) {
         <Th {...th} key={`${m}|gr`} col={`m${i}|gr`} label={m} sub="Growth %" num />,
       ] })}
       <Th {...th} col="fcst" label="Total" sub="Forecast" num filterable />
-      <Th {...th} col="growthEng" label="Total" sub="Growth %" num filterable />
+      <Th {...th} col="growth" label="Total" sub="Growth %" num filterable />
     </>)
     return (<>
       <Th {...th} col="stores" label="Stores" num />
@@ -421,7 +421,7 @@ export default function OutputTab({ sessionId, runKey }) {
       <Th {...th} col="base"   label="Base (Cr)"      num filterable />
       <Th {...th} col="fcst"   label="Forecast (Cr)"  num filterable />
       <Th {...th} col="dev"    label="Deviation (Cr)" num filterable />
-      <Th {...th} col="growthEng" label="Growth %" num filterable />
+      <Th {...th} col="growth" label="Growth %" num filterable />
       {selMonths.map(m => <Th {...th} key={m} col={`m${MONTHS.indexOf(m)}|fcst`} label={m} sub="Fcst / Base / Gr%" num />)}
     </>)
   }

@@ -30,11 +30,10 @@ export const MONTHS = ["Mar'27", "Apr'27", "May'27", "Jun'27", "Jul'27", "Aug'27
 export function toLeaf(r, scale = 0.01) {
   const mb = MONTHS.map(m => (r[`${m} | Base`] || 0) * scale)
   const m  = MONTHS.map(mo => (r[`${mo} | Forecast`] || 0) * scale)
-  const me = MONTHS.map(mo => (r[`${mo} | Engine Forecast`] ?? r[`${mo} | Forecast`] ?? 0) * scale)
   const sum = a => a.reduce((s, v) => s + v, 0)
   return {
     Type: tagGroup(r.Tag), Tag: r.Tag || '—', Cluster: r.Cluster || '—',
     Store: r.Store || '—', Division: r.Division || '—',
-    base: sum(mb), fcst: sum(m), eng: sum(me), mb, m, me,
+    base: sum(mb), fcst: sum(m), mb, m,
   }
 }

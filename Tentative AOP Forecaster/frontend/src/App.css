@@ -4,89 +4,132 @@
   min-height: 100vh;
 }
 
-/* ── Header ─────────────────────────────────────────────── */
+/* ── Top bar (same chrome as the Buyer's Input Sheet) ─────────── */
 .app-header {
   background: var(--navy);
   color: #fff;
   position: sticky;
   top: 0;
   z-index: 100;
-  box-shadow: 0 1px 0 rgba(255,255,255,0.06), 0 4px 12px rgba(0,0,0,0.25);
+  box-shadow: 0 1px 0 rgba(255,255,255,.06), 0 6px 18px rgba(15,27,45,.18);
 }
 .header-inner {
-  max-width: 1200px;
+  max-width: 1360px;
   margin: 0 auto;
   padding: 0 24px;
-  height: 52px;
+  height: 58px;
   display: flex;
   align-items: center;
-  gap: 32px;
+  gap: 24px;
 }
 
-.logo { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.logo {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  background: none; color: inherit; padding: 0; border-radius: 8px; text-align: left;
+}
+.logo[title] { cursor: pointer; }
+.logo[title]:hover .logo-mark { background: var(--navy3); }
+.logo:not([title]) { cursor: default; }
 .logo-mark {
-  width: 28px; height: 28px; border-radius: 7px;
-  background: rgba(255,255,255,0.12);
-  border: 1px solid rgba(255,255,255,0.18);
+  height: 30px; padding: 0 8px; border-radius: 7px;
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.18);
   display: flex; align-items: center; justify-content: center;
-  font-weight: 800; font-size: 15px;
+  font-weight: 800; font-size: 11px; letter-spacing: .06em;
+  transition: background .15s;
 }
-.logo-text { font-weight: 700; font-size: 14px; letter-spacing: 0.015em; }
+.logo-words { display: flex; flex-direction: column; line-height: 1.15; }
+.logo-text { font-weight: 700; font-size: 15px; letter-spacing: .005em; }
+.logo-sub  { font-size: 10.5px; font-weight: 600; color: rgba(255,255,255,.6); letter-spacing: .04em; text-transform: uppercase; }
 
-/* ── Stepper ─────────────────────────────────────────────── */
+/* ── Step navigator ──────────────────────────────────────────── */
 .stepper {
   display: flex;
   align-items: center;
   flex: 1;
   justify-content: center;
-  gap: 0;
+  gap: 4px;
 }
 .step-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  opacity: 0.45;
-  transition: opacity 0.2s;
+  padding: 6px 12px 6px 6px;
+  border-radius: 999px;
+  color: rgba(255,255,255,.55);
+  transition: background .15s, color .15s;
 }
-.step-item.active, .step-item.done { opacity: 1; }
+.step-item.active { background: rgba(255,255,255,.12); color: #fff; }
+.step-item.done { color: rgba(255,255,255,.85); }
 .step-item.clickable { cursor: pointer; }
-.step-item.clickable:hover .step-label { text-decoration: underline; }
-.step-item.clickable:hover .step-num { background: rgba(255,255,255,0.35); }
+.step-item.clickable:hover { background: rgba(255,255,255,.08); color: #fff; }
 .step-num {
   width: 24px; height: 24px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,.14);
   display: flex; align-items: center; justify-content: center;
   font-size: 12px; font-weight: 700;
 }
-.step-item.active .step-num  { background: #fff; color: var(--navy); }
-.step-item.done   .step-num  { background: var(--green); color: #fff; font-size: 13px; }
+.step-item.active .step-num { background: #fff; color: var(--navy); }
+.step-item.done   .step-num { background: var(--navy3); color: #fff; }
 .step-label { font-size: 13px; font-weight: 600; white-space: nowrap; }
 .step-sep {
   display: block;
-  width: 40px; height: 1px;
-  background: rgba(255,255,255,0.25);
-  margin: 0 12px;
+  width: 28px; height: 1px;
+  background: rgba(255,255,255,.22);
+  margin: 0 0 0 10px;
 }
 
-/* ── Main ────────────────────────────────────────────────── */
+/* ── Top-bar actions ─────────────────────────────────────────── */
+.hdr-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto; }
+.hdr-msg { font-size: 12px; font-weight: 600; }
+.hdr-msg.ok  { color: #86EFAC; }
+.hdr-msg.err { color: #FCA5A5; }
+.hdr-btn {
+  font-size: 12.5px; font-weight: 600;
+  padding: 7px 14px;
+  color: #fff;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.2);
+}
+.hdr-btn:hover:not(:disabled) { background: rgba(255,255,255,.16); }
+.hdr-btn--primary { background: var(--navy3); border-color: var(--navy3); }
+.hdr-btn--primary:hover:not(:disabled) { background: var(--accent-h); }
+
+/* ── Main ────────────────────────────────────────────────────── */
 .app-main {
   flex: 1;
-  max-width: 1200px;
+  max-width: 1360px;
   margin: 0 auto;
-  padding: 32px 24px;
+  padding: 28px 24px 48px;
   width: 100%;
 }
 
-/* ── Error banner ────────────────────────────────────────── */
-.error-banner {
-  background: #FDECEA;
-  border: 1px solid #F5C6C2;
-  color: var(--red);
+/* ── Banners ─────────────────────────────────────────────────── */
+.error-banner, .info-banner {
   border-radius: var(--radius);
-  padding: 12px 16px;
+  padding: 11px 14px;
   margin-bottom: 20px;
   display: flex;
   align-items: center;
   gap: 6px;
+  font-size: 13.5px;
+}
+.error-banner { background: var(--red-bg); border: 1px solid var(--red-bd); color: var(--red); }
+.info-banner  { background: var(--light); border: 1px solid var(--accent-b); color: var(--accent-h); }
+.banner-x {
+  margin-left: auto; background: none; color: inherit; font-size: 18px; line-height: 1; padding: 0 4px;
+}
+
+@media (max-width: 900px) {
+  .header-inner { gap: 12px; padding: 0 16px; }
+  .logo-sub, .step-label { display: none; }
+  .step-sep { width: 12px; }
+  .app-main { padding: 20px 16px 40px; }
+}
+@media (max-width: 720px) {
+  .logo-words { display: none; }
+  .stepper { min-width: 0; }
+  .step-sep { display: none; }
+  .hdr-btn { padding: 6px 10px; font-size: 12px; }
 }

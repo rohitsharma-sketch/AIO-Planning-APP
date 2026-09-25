@@ -6,7 +6,7 @@
 .sdt-error  { padding: 16px; color: var(--red); font-size: 13px; }
 
 /* Toolbar */
-.sdt-toolbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
+.sdt-toolbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 10px 12px; background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-sm); }
 .sdt-levels, .sdt-expand { display: flex; align-items: center; gap: 4px; }
 .sdt-tb-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-right: 4px; }
 .sdt-chip {
@@ -15,8 +15,9 @@
   display: inline-flex; align-items: center; gap: 5px; line-height: 1.2;
 }
 .sdt-chip:hover { border-color: var(--navy3); color: var(--navy); }
-.sdt-chip.on    { background: var(--navy); color: #fff; border-color: var(--navy); }
-.sdt-toggle input { accent-color: var(--navy); margin: 0; }
+.sdt-chip.on    { background: var(--navy3); color: #fff; border-color: var(--navy3); }
+.sdt-chip.on:hover { color: #fff; background: var(--accent-h); }
+.sdt-toggle input { accent-color: var(--navy3); margin: 0; }
 .sdt-search-wrap { position: relative; margin-left: auto; min-width: 220px; }
 .sdt-search { width: 100%; padding: 6px 26px 6px 10px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; background: var(--white); }
 .sdt-search:focus { outline: none; border-color: var(--navy3); }
@@ -42,7 +43,7 @@
 .sdt-table th.sorted { background: var(--navy2); }
 .sdt-th-filter { background: none; border: none; color: inherit; font-size: 9px; padding: 9px 8px; cursor: pointer; opacity: 0.6; border-radius: 4px; }
 .sdt-th-filter:hover { opacity: 1; background: rgba(255,255,255,0.12); }
-.sdt-th-filter.on { opacity: 1; color: #FFD166; }
+.sdt-th-filter.on { opacity: 1; color: #7DD3E8; }
 .sdt-dim-th { width: 1px; }
 .sdt-dim-filter { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; padding: 9px 10px; white-space: nowrap; opacity: 0.85; }
 .sdt-dim-cell { padding: 0 !important; }
@@ -59,7 +60,7 @@
 .sdt-level-hint { font-size: 10px; color: var(--muted); opacity: 0; margin-left: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
 .sdt-row:hover .sdt-level-hint { opacity: 0.8; }
 .sdt-row.d0 td { background: var(--light); font-weight: 700; color: var(--navy); }
-.sdt-row.d1 td { background: #F7F9FD; font-weight: 600; }
+.sdt-row.d1 td { background: var(--surface2); font-weight: 600; }
 .sdt-row.d0:hover td, .sdt-row.d1:hover td { filter: brightness(0.97); }
 .sdt-grand td { background: var(--navy); color: #fff !important; font-weight: 700; position: sticky; top: 34px; z-index: 1; border-bottom: none; }
 .sdt-table td.muted { color: var(--muted); }
@@ -67,7 +68,7 @@
 /* Filter dropdown (position: fixed — escapes the scroll container) */
 .sdt-dd {
   position: fixed; z-index: 1000; width: 280px; background: var(--white); border: 1px solid var(--border);
-  border-radius: 8px; box-shadow: 0 8px 24px rgba(31,56,100,0.18); font-size: 13px; color: var(--char);
+  border-radius: 8px; box-shadow: 0 8px 24px rgba(15,27,45,0.18); font-size: 13px; color: var(--char);
   display: flex; flex-direction: column; overflow: hidden;
 }
 .sdt-dd-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--navy); border-bottom: 1px solid var(--border); }
@@ -90,7 +91,7 @@
 .sdt-dd-range input { padding: 5px 7px; font-size: 12px; border: 1px solid var(--border); border-radius: 5px; width: 100%; }
 
 /* Chart store-type filter + data labels (used by ResultsDashboard) */
-.chart-filter-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
+.chart-filter-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 14px; background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-sm); }
 .chart-filter-bar .sdt-tb-label { margin-right: 2px; }
 .chart-filter-note { font-size: 12px; color: var(--muted); margin-left: auto; }
 .sdt-chip .chip-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }

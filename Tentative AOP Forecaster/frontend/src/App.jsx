@@ -7,7 +7,6 @@ import PlanningInputsEditor from './components/PlanningInputsEditor'
 import PlanLanding, { loadPlanVersions, savePlanVersion, isMajorChangeVsLog } from './components/PlanLanding'
 import { loadAutosave, useAutosave, clearAutosave, touchAutosaveIndex } from './lib/autosave'
 import { apiUrl } from './lib/apiBase'
-import ThemeSelector from './components/ThemeSelector'
 import './App.css'
 import './components/PlanLanding.css'
 
@@ -25,6 +24,14 @@ function initRates(growth_rates) {
   }
   return r
 }
+// Layer a saved run's growth inputs (GET /api/session -> last_run) over the
+// session defaults, so reopening a saved version shows what it was run with.
+function applyLastRun(r, lastRun) {
+  for (const [div, months] of Object.entries(lastRun?.growth_overrides || {}))
+    for (const [m, v] of Object.entries(months || {})) if (r[div]) r[div][m] = String(v)
+  for (const [m, v] of Object.entries(lastRun?.overall_override || {})) r.Overall[m] = String(v)
+  return r
+}
 function initLocks() {
   const l = {}
   for (const row of ALL_ROWS) { l[row] = {}; for (const m of MONTHS) l[row][m] = true }
@@ -37,13 +44,13 @@ export default function App() {
   const [results, setResults]     = useState(null)
   const [running, setRunning]     = useState(false)
   const [error, setError]         = useState(null)
-  const [theme, setTheme]         = useState(() => localStorage.getItem('aop-theme') || 'indigo')
   const [runKey, setRunKey]       = useState(0)
   const [showEditor, setShowEditor] = useState(false)
 
   // Landing page: shown initially and after reset; bypassed when a session auto-resumes
   const [showLanding, setShowLanding] = useState(true)
   const [saveMsg, setSaveMsg]         = useState(null)  // {text, ok} | null
+  const [inputsNote, setInputsNote]   = useState(null)  // resumed version whose run inputs weren't recorded
   // Save-before-leave dialog state
   const [saveDialog, setSaveDialog]   = useState(null) // {action, rates} | null
 
@@ -64,28 +71,25 @@ export default function App() {
     if (!session) return
     if (initedFor.current === session.session_id) return
     initedFor.current = session.session_id
-    const draft = loadAutosave(`review:${session.session_id}`)
+    // 'review2:' - drafts saved before 2026-09-25 could hold the 0% grid a
+    // reopened version used to get; a new key drops them instead of trusting them.
+    const draft = loadAutosave(`review2:${session.session_id}`)
     if (draft?.rates && draft?.cellLocks) {
       setRates(draft.rates)
       setCellLocks(draft.cellLocks)
     } else {
-      setRates(initRates(session.growth_rates))
+      setRates(applyLastRun(initRates(session.growth_rates), session.last_run))
       setCellLocks(initLocks())
     }
-    touchAutosaveIndex('review:index', session.session_id, id => `review:${id}`)
+    touchAutosaveIndex('review2:index', session.session_id, id => `review2:${id}`)
   }, [session])
 
   // Keep the Review draft saved locally as the user edits, so it survives a reload.
   useAutosave(
-    session ? `review:${session.session_id}` : null,
+    session ? `review2:${session.session_id}` : null,
     { rates, cellLocks },
     { enabled: !!session && !!rates && !!cellLocks }
   )
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
-    localStorage.setItem('aop-theme', theme)
-  }, [theme])
 
   // Dev shortcut: ?session_id=xxx jumps to results (skips landing)
   useEffect(() => {
@@ -171,6 +175,7 @@ export default function App() {
     // on the version list can reload results without re-running the engine.
     // Sessions are temp files and will be cleaned up on server restart.
     clearAutosave('currentSession')
+    setInputsNote(null)
     initedFor.current = null
     setSession(null); setResults(null); setRates(null); setCellLocks(null)
     setStep(0); setError(null); setShowLanding(true)
@@ -243,7 +248,26 @@ export default function App() {
         throw new Error('This saved plan\'s session data is no longer available - it may need to be re-run from Planning Inputs.')
       }
       const data = await res.json()
-      setSession({ session_id: sessionId })
+      // Full session (store counts, default growth, last run's inputs) so
+      // Review isn't blank / 0% after opening a saved version (2026-09-25).
+      let info = await fetch(apiUrl(`/api/session/${sessionId}`)).then(r => (r.ok ? r.json() : null)).catch(() => null)
+      let note = null
+      if (info && !info.last_run) {
+        // Run before its inputs were recorded: its saved version still holds
+        // the Mar-Jun MENS/LADIES/KIDS growth (fingerprint "DIV|Mon'YY").
+        const ver = (await loadPlanVersions()).find(v => v.sessionId === sessionId)
+        const go = {}
+        for (const [k, val] of Object.entries(ver?.fingerprint || {})) {
+          const [div, m] = k.split('|')
+          ;(go[div] ??= {})[m] = val
+        }
+        if (Object.keys(go).length) info = { ...info, last_run: { growth_overrides: go, overall_override: null } }
+        note = Object.keys(go).length
+          ? "Restored this version's Mar–Jun MENS / LADIES / KIDS growth from its saved record. It was run before full inputs were recorded, so other cells show the Planning Inputs defaults — run and save it once to keep all of them."
+          : 'This version was run before its growth inputs were recorded, so Review shows the Planning Inputs defaults. Run and save it once to keep its inputs.'
+      }
+      setSession(info || { session_id: sessionId })
+      setInputsNote(note)
       setSessionBuiltAt(Date.now())
       setResults(data)
       setRunKey(k => k + 1)
@@ -288,18 +312,19 @@ export default function App() {
     if (planIsStale && !rebuilding) handleRebuild()
   }, [planIsStale, rebuilding])
 
-  // When running embedded under the unified backend (port 8010) the outer
-  // shell already provides navigation — suppress the standalone header.
-  const isEmbedded = window.location.port === '8010'
-
   return (
     <div className="app-shell">
-      {!isEmbedded && <header className="app-header">
+      {/* Shown on 8010 too (2026-09-25): the platform shell has no in-app
+          navigation, so hiding this left the steps, Save and Plans unreachable. */}
+      <header className="app-header">
         <div className="header-inner">
-          <div className="logo">
-            <span className="logo-mark">A</span>
-            <span className="logo-text">AOP Forecaster</span>
-          </div>
+          <button className="logo" onClick={showLanding ? undefined : handleReset} title={showLanding ? undefined : 'Back to saved plans'}>
+            <span className="logo-mark">AOP</span>
+            <span className="logo-words">
+              <span className="logo-text">AOP Forecaster</span>
+              <span className="logo-sub">CityKart RS Planning · FY 2027–28</span>
+            </span>
+          </button>
           {!showLanding && (
             <nav className="stepper">
               {STEPS.map((s, i) => {
@@ -318,7 +343,7 @@ export default function App() {
                     tabIndex={clickable ? 0 : undefined}
                     title={clickable ? `Go to ${s}` : undefined}
                   >
-                    <span className="step-num">{i < step ? 'OK' : i + 1}</span>
+                    <span className="step-num">{i < step ? '✓' : i + 1}</span>
                     <span className="step-label">{s}</span>
                     {i < STEPS.length - 1 && <span className="step-sep" />}
                   </div>
@@ -326,43 +351,45 @@ export default function App() {
               })}
             </nav>
           )}
-          <div style={{display:'flex', alignItems:'center', gap:8, flexShrink:0}}>
-            {saveMsg && (
-              <span style={{fontSize:12, color: saveMsg.ok ? '#22c55e' : '#ef4444', fontWeight:500}}>
-                {saveMsg.text}
-              </span>
+          <div className="hdr-actions">
+            {saveMsg && <span className={`hdr-msg ${saveMsg.ok ? 'ok' : 'err'}`}>{saveMsg.text}</span>}
+            {!showLanding && (
+              <button className="hdr-btn" onClick={handleReset} title="Back to the saved plans list">
+                ← Plans
+              </button>
             )}
             {!showLanding && session && (
               <button
-                className="btn-outline"
+                className="hdr-btn hdr-btn--primary"
                 onClick={handleSaveVersion}
                 disabled={running}
-                style={{fontSize:12, display:'flex', alignItems:'center', gap:4}}
                 title="Save this plan as a version and go to Results"
               >
-                💾 Save
-              </button>
-            )}
-            {!showLanding && (
-              <button className="btn-outline" onClick={handleReset} style={{fontSize:12}}>
-                ← Plans
+                Save version
               </button>
             )}
           </div>
         </div>
-      </header>}
+      </header>
 
       <main className="app-main">
         {error && (
-          <div className="error-banner">
+          <div className="error-banner" role="alert">
             <strong>Error:</strong> {error}
-            <button onClick={() => setError(null)} style={{marginLeft:12,background:'none',color:'inherit',border:'none',cursor:'pointer',fontSize:16}}>×</button>
+            <button className="banner-x" onClick={() => setError(null)} aria-label="Dismiss">×</button>
+          </div>
+        )}
+
+        {inputsNote && !showLanding && step === 1 && (
+          <div className="info-banner">
+            {inputsNote}
+            <button className="banner-x" onClick={() => setInputsNote(null)} aria-label="Dismiss">×</button>
           </div>
         )}
 
         {rebuilding && (
-          <div className="error-banner" style={{background:'#eef2ff', borderColor:'#818cf8', color:'#3730a3'}}>
-            🔄 Planning Inputs changed since this plan was built — rebuilding automatically with the current data…
+          <div className="info-banner">
+            Planning Inputs changed since this plan was built — rebuilding automatically with the current data…
           </div>
         )}
 
@@ -371,14 +398,12 @@ export default function App() {
           <PlanLanding
             onNewPlan={() => { setShowLanding(false); setStep(0) }}
             onResume={handleResumeSaved}
-            theme={theme}
-            onThemeChange={setTheme}
           />
         )}
 
         {!showLanding && step === 0 && (showEditor
           ? <PlanningInputsEditor onBack={() => setShowEditor(false)} onContinue={handleUseDb} />
-          : <UploadStep onUseDb={handleUseDb} onEditInputs={() => setShowEditor(true)} theme={theme} onThemeChange={setTheme} />
+          : <UploadStep onUseDb={handleUseDb} onEditInputs={() => setShowEditor(true)} />
         )}
 
         {!showLanding && step === 1 && session && rates && (

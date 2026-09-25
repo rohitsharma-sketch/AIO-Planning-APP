@@ -76,7 +76,7 @@ export default function DbSyncPanel({ onSynced }) {
       <div className="cfg-sync-main">
         <span className="cfg-sync-dot" />
         <div className="cfg-sync-text">
-          <strong>Data lake &amp; Calendar Engine &lt;-&gt; Postgres</strong>
+          <strong>Data lake &amp; Calendar Engine → database</strong>
           <span className="cfg-sync-sub">
             {!runs ? 'Checking…'
               : !runs.length ? 'Never synced into Postgres yet.'
@@ -87,19 +87,18 @@ export default function DbSyncPanel({ onSynced }) {
           </span>
         </div>
         <div className="cfg-sync-actions">
-          <button className="btn-outline cfg-btn" onClick={() => setOpen(o => !o)}>{open ? 'Hide' : 'Details'}</button>
-          <button className="btn-outline cfg-btn" onClick={syncAll} disabled={busy}>{busy ? 'Syncing…' : 'Sync into database'}</button>
+          <button className="btn-outline cfg-btn" onClick={() => setOpen(o => !o)} aria-expanded={open}>{open ? 'Hide details' : 'Details'}</button>
+          <button className="cfg-btn cfg-btn--primary" onClick={syncAll} disabled={busy}>{busy ? 'Syncing…' : 'Sync into database'}</button>
         </div>
       </div>
       {err && <p className="upload-err">{err}</p>}
       {open && runs && (
         <div className="cfg-sync-details">
           {runs.map(r => (
-            <div key={r.source_key} className="cfg-sync-row" style={{ justifyContent: 'space-between' }}>
-              <span style={r.status === 'offline' ? { color: 'var(--amber, #d97706)' } : undefined}>
-                {rowLabel(r)} {DB_SYNC_LABELS[r.source_key] || r.source_key}
-              </span>
-              <span className="cfg-sync-hint">{rowHint(r)}</span>
+            <div key={r.source_key} className="cfg-sync-row">
+              <span className={`cfg-pill cfg-pill--${r.status}`}>{rowLabel(r)}</span>
+              <span className="cfg-sync-name">{DB_SYNC_LABELS[r.source_key] || r.source_key}</span>
+              <span className="cfg-sync-hint" title={rowHint(r)}>{rowHint(r)}</span>
             </div>
           ))}
         </div>

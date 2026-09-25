@@ -17,13 +17,18 @@ const QUARTERS = [
   { label: 'Q4', months: MONTHS.slice(10, 13) },
 ]
 
-const NAVY   = '#1F3864'
-const NAVY2  = '#2F5597'
-const LIGHT  = '#A8C0E8'
-const ORANGE = '#C96A00'
-const TEAL   = '#0F6E56'
+// Chart palette = the app theme (index.css): navy ink, teal forecast, slate base,
+// store types LfL blue / Ramp amber / NSO green (same as the .tag-* chips).
+const NAVY   = '#0F2742'
+const NAVY2  = '#0E7490'
+const LIGHT  = '#B9C8D9'
+const ORANGE = '#B45309'
+const TEAL   = '#15803D'
+const LFL    = '#3D5AD6'
+const GRID   = '#E3E8EF'
+const AXIS   = '#5B6B82'
 const DIVS   = ['GM', 'KIDS', 'LADIES', 'MENS', 'RETAIL']
-const TYPE_COLORS = { LfL: NAVY, Ramp: ORANGE, NSO: TEAL }
+const TYPE_COLORS = { LfL: LFL, Ramp: ORANGE, NSO: TEAL }
 
 function fmt(v)    { return v?.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }
 function fmtPct(v) { return (v > 0 ? '+' : '') + v?.toFixed(1) + '%' }
@@ -239,17 +244,15 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
           <p className="dash-sub">FY28 Annual Operating Plan — Mar'27 to Mar'28</p>
         </div>
         <div className="dash-actions">
-          <button className="btn-secondary" onClick={onRunAgain}>Back</button>
+          <button className="btn-secondary" onClick={onRunAgain} title="Back to the growth inputs">← Review inputs</button>
           {isLocked ? (
             <>
-              <button
-                className="btn-secondary"
-                disabled
+              <span
+                className="dash-status dash-status--locked"
                 title={lockStatus.locked_at ? `Locked ${new Date(lockStatus.locked_at).toLocaleString('en-IN')}` : 'Locked for the Planning Engine'}
-                style={{ background: '#D1FAE5', color: '#065F46', borderColor: '#6EE7B7' }}
               >
-                🔒 Locked to Planning
-              </button>
+                Locked to Planning
+              </span>
               <button
                 className="btn-secondary"
                 onClick={handleUnlock}
@@ -265,11 +268,11 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
               onClick={handlePromote}
               disabled={promoteState === 'loading'}
               title="Lock this forecast as the approved AOP for the Planning Engine"
-              style={promoteState === 'error' ? { background: '#FEE2E2', color: '#991B1B', borderColor: '#FCA5A5' } : undefined}
+              data-state={promoteState === 'error' ? 'error' : undefined}
             >
               {promoteState === 'loading' ? 'Locking…'
-                : promoteState === 'error' ? '⚠ Lock failed — retry'
-                : '🔒 Promote to Planning'}
+                : promoteState === 'error' ? 'Lock failed — retry'
+                : 'Promote to Planning'}
             </button>
           )}
           <button className="btn-primary"   onClick={onDownload}>Download Excel</button>
@@ -401,15 +404,15 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
         <h3 className="section-title">Monthly base vs forecast  (₹ Cr) — {filterLabel}</h3>
         <ResponsiveContainer width="100%" height={showLabels ? 290 : 260}>
           <ComposedChart data={monthly} margin={{ top: showLabels ? 18 : 4, right: 8, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#E5EDF7" />
-            <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6B7A99' }} />
-            <YAxis tick={{ fontSize: 11, fill: '#6B7A99' }} tickFormatter={v => `${v}`} width={48} />
+            <CartesianGrid strokeDasharray="3 3" stroke={GRID} />
+            <XAxis dataKey="month" tick={{ fontSize: 11, fill: AXIS }} />
+            <YAxis tick={{ fontSize: 11, fill: AXIS }} tickFormatter={v => `${v}`} width={48} />
             <Tooltip content={<CustomTooltip />} />
             <Legend wrapperStyle={{ fontSize: 12 }} />
             <Bar dataKey="base" name="Base" fill={LIGHT} isAnimationActive={false} radius={[3, 3, 0, 0]}>
-              {showLabels && <LabelList dataKey="base" position="top" formatter={lbl0} style={{ fontSize: 10, fill: '#6B7A99' }} />}
+              {showLabels && <LabelList dataKey="base" position="top" formatter={lbl0} style={{ fontSize: 10, fill: AXIS }} />}
             </Bar>
-            <Bar dataKey="forecast" name="Forecast" fill={NAVY} isAnimationActive={false} radius={[3, 3, 0, 0]}>
+            <Bar dataKey="forecast" name="Forecast" fill={NAVY2} isAnimationActive={false} radius={[3, 3, 0, 0]}>
               {showLabels && <LabelList dataKey="forecast" position="top" formatter={lbl0} style={{ fontSize: 10, fill: NAVY, fontWeight: 600 }} />}
             </Bar>
           </ComposedChart>
@@ -422,13 +425,13 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
           <h3 className="section-title">Division breakdown  (₹ Cr) — {filterLabel} · {monthLabel}</h3>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={divisions} layout="vertical" margin={{ top: 4, right: showLabels ? 48 : 16, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5EDF7" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 11, fill: '#6B7A99' }} tickFormatter={v => `${v}`} />
-              <YAxis dataKey="division" type="category" width={56} tick={{ fontSize: 11, fill: '#6B7A99' }} />
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID} horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 11, fill: AXIS }} tickFormatter={v => `${v}`} />
+              <YAxis dataKey="division" type="category" width={56} tick={{ fontSize: 11, fill: AXIS }} />
               <Tooltip content={<CustomTooltip />} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="base" name="Base" fill={LIGHT} isAnimationActive={false} radius={[0, 3, 3, 0]}>
-                {showLabels && <LabelList dataKey="base" position="right" formatter={lbl0} style={{ fontSize: 10, fill: '#6B7A99' }} />}
+                {showLabels && <LabelList dataKey="base" position="right" formatter={lbl0} style={{ fontSize: 10, fill: AXIS }} />}
               </Bar>
               <Bar dataKey="forecast" name="Forecast" fill={NAVY2} isAnimationActive={false} radius={[0, 3, 3, 0]}>
                 {showLabels && <LabelList dataKey="forecast" position="right" formatter={lbl0} style={{ fontSize: 10, fill: NAVY, fontWeight: 600 }} />}

@@ -1,138 +1,64 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* ── Theme: Classic Navy (default) ──────────────────────────────────────────── */
-:root,
-[data-theme="classic"] {
-  --navy:     #1F3864;
-  --navy2:    #2F5597;
-  --navy3:    #4472C4;
-  --light:    #EEF3FB;
-  --bg:       #F4F6FB;
+/* ── One theme for the whole app (2026-09-25) ────────────────────────────────
+   Same palette + font as the Buyer's Input Sheet revamp so the RS Planning
+   suite reads as one product. Replaces the six switchable themes (Classic /
+   Indigo / Emerald / Amber / Coral / Forest) and their picker.
+   The legacy names (--navy, --navy3, --light …) are kept because every
+   component stylesheet reads them; only their values changed. */
+:root {
+  /* brand */
+  --navy:     #0F2742;   /* top bar, headings, strong text */
+  --navy2:    #1B3A5C;   /* navy hover */
+  --navy3:    #0E7490;   /* accent (teal) - links, active states, primary actions */
+  --accent-h: #155E75;   /* accent hover */
+  --light:    #E7F1F4;   /* accent tint - selected rows, soft fills */
+  --accent-b: #AACFDA;   /* accent border */
+
+  /* surfaces & text */
+  --bg:       #F3F5F9;
   --white:    #FFFFFF;
-  --char:     #1A2332;
-  --muted:    #6B7A99;
-  --border:   #D0D9ED;
-  --green:    #1A6B3C;
-  --red:      #C0392B;
-  --radius:   10px;
-  --shadow:   0 1px 3px rgba(31,56,100,0.08), 0 4px 16px rgba(31,56,100,0.06);
-  --swatch:   #1F3864;
-  --font-ui:  'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-display: 'Outfit', 'DM Sans', sans-serif;
-}
+  --surface2: #F8FAFC;   /* zebra rows, table heads */
+  --surface3: #F1F4F8;
+  --char:     #0F1B2D;
+  --text2:    #334155;
+  --muted:    #5B6B82;
+  --faint:    #8A99AD;
+  --border:   #E3E8EF;
+  --border2:  #CFD8E3;
 
-/* ── Theme: Indigo & White ───────────────────────────────────────────────────── */
-[data-theme="indigo"] {
-  --navy:     #312E81;
-  --navy2:    #3730A3;
-  --navy3:    #4F46E5;
-  --light:    #EEF2FF;
-  --bg:       #F8FAFC;
-  --white:    #FFFFFF;
-  --char:     #1E1B4B;
-  --muted:    #64748B;
-  --border:   #E0E7FF;
-  --green:    #059669;
-  --red:      #DC2626;
-  --radius:   10px;
-  --shadow:   0 1px 2px rgba(79,70,229,0.06), 0 4px 14px rgba(79,70,229,0.08);
-  --swatch:   #4F46E5;
-  --font-ui:  'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-display: 'Outfit', 'DM Sans', sans-serif;
-}
+  /* semantic */
+  --green:    #15803D;  --green-bg: #ECFDF3;  --green-bd: #A6E3BD;
+  --red:      #B42318;  --red-bg:   #FEF3F2;  --red-bd:   #F7C1BC;
+  --amber:    #B45309;  --amber-bg: #FFF7E8;  --amber-bd: #F5D39A;
 
-/* ── Theme: Slate & Emerald ─────────────────────────────────────────────────── */
-[data-theme="emerald"] {
-  --navy:    #1E293B;
-  --navy2:   #334155;
-  --navy3:   #10B981;
-  --light:   #ECFDF5;
-  --bg:      #F1F5F9;
-  --white:   #FFFFFF;
-  --char:    #0F172A;
-  --muted:   #64748B;
-  --border:  #CBD5E1;
-  --green:   #059669;
-  --red:     #DC2626;
-  --radius:  10px;
-  --shadow:  0 1px 3px rgba(15,23,42,0.08), 0 4px 16px rgba(15,23,42,0.06);
-  --swatch:  #10B981;
-  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-}
+  /* store types (LfL / Ramp / NSO) - used by tags, charts and tables */
+  --lfl:  #3D5AD6;  --lfl-bg:  #EEF1FD;
+  --ramp: #B45309;  --ramp-bg: #FFF7E8;
+  --nso:  #15803D;  --nso-bg:  #ECFDF3;
 
-/* ── Theme: Midnight & Amber ────────────────────────────────────────────────── */
-[data-theme="amber"] {
-  --navy:    #0F172A;
-  --navy2:   #1E293B;
-  --navy3:   #F59E0B;
-  --light:   #FFFBEB;
-  --bg:      #FEF9EE;
-  --white:   #FFFFFF;
-  --char:    #0C1222;
-  --muted:   #78716C;
-  --border:  #E7E5E4;
-  --green:   #15803D;
-  --red:     #DC2626;
-  --radius:  10px;
-  --shadow:  0 1px 3px rgba(15,23,42,0.08), 0 4px 16px rgba(15,23,42,0.06);
-  --swatch:  #F59E0B;
-  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-}
-
-/* ── Theme: Deep Purple & Coral ─────────────────────────────────────────────── */
-[data-theme="coral"] {
-  --navy:    #3B1F6A;
-  --navy2:   #5B2D9E;
-  --navy3:   #F4845F;
-  --light:   #FAF5FF;
-  --bg:      #F5F0FD;
-  --white:   #FFFFFF;
-  --char:    #1A0A2E;
-  --muted:   #7C6F9A;
-  --border:  #E9D5FF;
-  --green:   #16A34A;
-  --red:     #DC2626;
-  --radius:  10px;
-  --shadow:  0 1px 3px rgba(59,31,106,0.08), 0 4px 16px rgba(59,31,106,0.06);
-  --swatch:  #F4845F;
-  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-}
-
-/* ── Theme: Forest & Gold ───────────────────────────────────────────────────── */
-[data-theme="forest"] {
-  --navy:    #14532D;
-  --navy2:   #166534;
-  --navy3:   #D97706;
-  --light:   #F0FDF4;
-  --bg:      #ECFDF5;
-  --white:   #FFFFFF;
-  --char:    #052E16;
-  --muted:   #6B7280;
-  --border:  #BBF7D0;
-  --green:   #15803D;
-  --red:     #DC2626;
-  --radius:  10px;
-  --shadow:  0 1px 3px rgba(20,83,45,0.08), 0 4px 16px rgba(20,83,45,0.06);
-  --swatch:  #D97706;
-  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --radius:   8px;
+  --shadow-sm: 0 1px 2px rgba(15,27,45,.06);
+  --shadow:   0 1px 2px rgba(15,27,45,.05), 0 4px 14px rgba(15,27,45,.06);
+  --shadow-lg: 0 12px 40px rgba(15,27,45,.22);
+  --font-ui:  'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: var(--font-ui);
 }
 
 body {
-  font-family: var(--font-ui, 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif);
+  font-family: var(--font-ui);
   background: var(--bg);
   color: var(--char);
   font-size: 14px;
-  line-height: 1.55;
+  line-height: 1.5;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3, h4 {
-  font-family: var(--font-display, 'Outfit', sans-serif);
-}
+h1, h2, h3, h4 { font-family: var(--font-display); color: var(--navy); letter-spacing: -0.01em; }
 
 button {
   cursor: pointer;
@@ -140,42 +66,47 @@ button {
   font-size: 14px;
   border: none;
   border-radius: var(--radius);
-  transition: opacity 0.15s, transform 0.1s;
+  transition: background .15s, border-color .15s, color .15s, box-shadow .15s, transform .1s;
 }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 button:active:not(:disabled) { transform: scale(0.98); }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--navy3); outline-offset: 2px;
+}
 
 input, select { font-family: inherit; }
 
+/* Buttons - one family for the whole app */
 .btn-primary {
-  background: var(--navy);
+  background: var(--navy3);
   color: #fff;
-  padding: 10px 24px;
+  padding: 9px 20px;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  box-shadow: var(--shadow-sm);
 }
-.btn-primary:hover:not(:disabled) { background: var(--navy2); }
+.btn-primary:hover:not(:disabled) { background: var(--accent-h); }
 
 .btn-secondary {
   background: var(--white);
   color: var(--navy);
-  border: 1.5px solid var(--navy);
-  padding: 9px 20px;
+  border: 1px solid var(--border2);
+  padding: 8px 18px;
   font-weight: 600;
 }
-.btn-secondary:hover:not(:disabled) { background: var(--light); }
+.btn-secondary:hover:not(:disabled) { border-color: var(--navy3); color: var(--navy3); background: var(--light); }
 
 .btn-outline {
-  background: transparent;
-  color: var(--muted);
+  background: var(--white);
+  color: var(--text2);
   border: 1px solid var(--border);
   padding: 7px 14px;
+  font-weight: 500;
 }
-.btn-outline:hover { background: var(--light); color: var(--navy); }
+.btn-outline:hover:not(:disabled) { border-color: var(--border2); background: var(--surface2); color: var(--navy); }
 
 .card {
   background: var(--white);
-  border-radius: var(--radius);
+  border-radius: 12px;
   box-shadow: var(--shadow);
   border: 1px solid var(--border);
 }
@@ -186,11 +117,11 @@ input, select { font-family: inherit; }
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 20px;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
 }
-.tag-lfl  { background: #E3F0FF; color: #1558A8; }
-.tag-ramp { background: #FFF0DC; color: #8B4A00; }
-.tag-nso  { background: #E0F5EC; color: #0F6E56; }
+.tag-lfl  { background: var(--lfl-bg);  color: var(--lfl); }
+.tag-ramp { background: var(--ramp-bg); color: var(--ramp); }
+.tag-nso  { background: var(--nso-bg);  color: var(--nso); }
 
 .num { font-variant-numeric: tabular-nums; }
 
