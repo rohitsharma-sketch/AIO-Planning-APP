@@ -80,13 +80,14 @@ def test_versions_sharing_one_session_each_get_their_own_publish():
 
 
 def test_lfl_growth_matches_bis_growth_vs_ly():
-    """Version 2's 23 Sep publish: base 388.85 -> engine 436.17 = +12.2%, the
-    figure BIS shows. RETAIL/GM never count; old publishes without the columns -> None."""
+    """25 Sep publish, MAMJ LfL KLM: base 388.82 -> target 431.85 = +11.1%, AOP
+    Summary's Overall Growth and BIS's Growth vs LY. The engine totals (423.14,
+    +8.8%) must NOT be the numerator. RETAIL/GM never count; no base -> None."""
     from publish_aop_targets import lfl_growth_pct
-    base = {"MENS": {"202703": 15311.0}, "LADIES": {"202703": 11486.0}, "KIDS": {"202703": 12088.0}, "RETAIL": {"202703": 999.0}}
-    eng = {"MENS": {"202703": 17608.0}, "LADIES": {"202703": 12864.0}, "KIDS": {"202703": 13145.0}, "RETAIL": {"202703": 5.0}}
-    assert lfl_growth_pct(base, eng) == 12.2, lfl_growth_pct(base, eng)
-    assert lfl_growth_pct(None, eng) is None
+    base = {"MENS": {"m": 15310.31}, "LADIES": {"m": 11484.96}, "KIDS": {"m": 12087.27}, "RETAIL": {"m": 999.0}}
+    target = {"MENS": {"m": 16730.08}, "LADIES": {"m": 12815.76}, "KIDS": {"m": 13642.03}, "RETAIL": {"m": 5.0}}
+    assert lfl_growth_pct(base, target) == 11.1, lfl_growth_pct(base, target)
+    assert lfl_growth_pct(None, target) is None
 
 
 if __name__ == "__main__":

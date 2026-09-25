@@ -1585,7 +1585,6 @@ let S = {
   inputs: {},     // buyers plan: div__sec__mi = growth%
   aop: {mens:{},ladies:{},kids:{}}, // Division AOP: {divId:{mi:Rs.Cr}}
   aopBase: {}, // AOP's OWN LFL base per divId/mi (Rs.Cr) - see syncFromAop(), 2026-09-22
-  aopEngine: {}, // AOP's pure engine forecast (excl. ref-store deviation) per divId/mi (Rs.Cr) - 2026-09-23, growth% numerator
   aopUnit: 'lakhs', // 'lakhs' or 'crore' — unit user enters in modal
   aopLocked: false,
   aopVersionId: null, // AOP publish-history id pinned via the AOP Division Sync version selector; null = latest publish (live)
@@ -4927,12 +4926,10 @@ function syncFromAop(){
   }
   const t=_aopCache.targets;
   const b=_aopCache.bases; // {DIV:{period:lakhs}} - AOP's OWN LFL base, same one its growth% is computed against (2026-09-22)
-  const eg=_aopCache.engine_bases; // {DIV:{period:lakhs}} - AOP's pure engine forecast, excl. ref-store deviation (2026-09-23)
   const periodOf={11:202703,0:202704,1:202705,2:202706};
   const mamjMIs=[11,0,1,2];
   let applied=0;
   S.aopBase={};
-  S.aopEngine={};
   AOP_DIVS.forEach(dv=>{
     const divKey=dv.id.toUpperCase();
     const divData=t[divKey];
@@ -4947,11 +4944,6 @@ function syncFromAop(){
       if(baseLkh!=null&&baseLkh>0){
         if(!S.aopBase[dv.id])S.aopBase[dv.id]={};
         S.aopBase[dv.id][mi]=baseLkh/100;
-      }
-      const engLkh=eg?.[divKey]?.[periodOf[mi]];
-      if(engLkh!=null&&engLkh>0){
-        if(!S.aopEngine[dv.id])S.aopEngine[dv.id]={};
-        S.aopEngine[dv.id][mi]=engLkh/100;
       }
       applied++;
     });
@@ -4980,13 +4972,11 @@ function _autoApplyAop(){
   if(!_aopCache||!_aopCache.targets)return;
   const t=_aopCache.targets;
   const b=_aopCache.bases;
-  const eg=_aopCache.engine_bases;
   const periodOf={11:202703,0:202704,1:202705,2:202706};
   const mamjMIs=[11,0,1,2];
   let applied=0;
   S.aop={mens:{},ladies:{},kids:{}};
   S.aopBase={};
-  S.aopEngine={};
   AOP_DIVS.forEach(dv=>{
     const divKey=dv.id.toUpperCase();
     const divData=t[divKey];
@@ -5000,11 +4990,6 @@ function _autoApplyAop(){
       if(baseLkh!=null&&baseLkh>0){
         if(!S.aopBase[dv.id])S.aopBase[dv.id]={};
         S.aopBase[dv.id][mi]=baseLkh/100;
-      }
-      const engLkh=eg?.[divKey]?.[periodOf[mi]];
-      if(engLkh!=null&&engLkh>0){
-        if(!S.aopEngine[dv.id])S.aopEngine[dv.id]={};
-        S.aopEngine[dv.id][mi]=engLkh/100;
       }
       applied++;
     });
@@ -5074,13 +5059,12 @@ function seedPlanFromAop(){
       // (older publish, or synced before this fix).
       const divLYMon=S.aopBase?.[dv.id]?.[mi]??DEPT_ACTUAL_LY?.[dv.id]?.[mi]??dv.secs.reduce((a,sec)=>a+monLY(sec.ly,mi,sec.lyMo),0); // Rs. Crore
       if(!divLYMon)continue;
-      // Growth% uses AOP's own ENGINE forecast (S.aopEngine, excl. the
-      // ref-store-mix deviation layer), not aopCr (the deviation-inclusive
-      // target used to seed Plan money above) - matches what AOP's Output
-      // tab itself displays for LFL growth%. Falls back to aopCr for older
-      // publishes synced before this field existed. 2026-09-23.
-      const engineCr=S.aopEngine?.[dv.id]?.[mi]??aopCr;
-      const gr=parseFloat(((engineCr/divLYMon-1)*100).toFixed(2));
+      // Growth% = AOP TARGET / base - 1, so Plan money (LY x growth) lands on
+      // the AOP target itself: the handshake. 2026-09-25: the engine-only
+      // forecast used before (2026-09-23) leaves out AOP's ref-store deviation
+      // layer (8.7 Cr, all March), so BIS planned 423.1 vs a 431.9 target and
+      // showed +8.8% vs AOP Summary's +11.1%.
+      const gr=parseFloat(((aopCr/divLYMon-1)*100).toFixed(2));
       dv.secs.forEach(sec=>{
         const k=sec.id+'__'+mi;
         S.inputs[k]=gr;

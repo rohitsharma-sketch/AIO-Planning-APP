@@ -260,7 +260,7 @@ def list_aop_history(session, limit: int = 15) -> list[dict]:
                 "division_totals": p[3],
                 "total_mamj_lakhs": float(p[4]) if p[4] is not None else 0.0,
                 "growth_pct": float(p[5]) if p[5] is not None else None,
-                "lfl_growth_pct": lfl_growth_pct(p[6], p[7]),
+                "lfl_growth_pct": lfl_growth_pct(p[6], p[3]),
                 "version_label": label,
             }
             for label, _sid, p in pick_version_publishes(versions, pubs)[:limit]
@@ -269,16 +269,19 @@ def list_aop_history(session, limit: int = 15) -> list[dict]:
         return []
 
 
-def lfl_growth_pct(base_totals, engine_totals):
-    """MAMJ LFL growth % of one publish = sum(engine forecast) / sum(base) - 1
-    over MENS/LADIES/KIDS - the same figure BIS shows as "Growth vs LY" after
-    syncing that publish (it seeds from engine_bases over bases). None when a
-    publish predates those columns."""
-    if not base_totals or not engine_totals:
+def lfl_growth_pct(base_totals, target_totals):
+    """MAMJ LFL growth % of one publish = sum(published target) / sum(base) - 1
+    over MENS/LADIES/KIDS. This is AOP Summary's "Overall Growth" (Forecast vs
+    Base, LfL, KLM) and BIS's "Growth vs LY" once it seeds its plan to these
+    targets - one definition in both apps (2026-09-25). The engine-only
+    forecast is NOT used: it leaves out the ref-store deviation layer (8.7 Cr,
+    all in March) and made BIS plan 423.1 against a 431.9 target. None when a
+    publish predates the base column."""
+    if not base_totals or not target_totals:
         return None
     b = sum(float(v) for d in PUBLISH_DIVS for v in (base_totals.get(d) or {}).values())
-    e = sum(float(v) for d in PUBLISH_DIVS for v in (engine_totals.get(d) or {}).values())
-    return round((e / b - 1) * 100, 1) if b else None
+    t = sum(float(v) for d in PUBLISH_DIVS for v in (target_totals.get(d) or {}).values())
+    return round((t / b - 1) * 100, 1) if b else None
 
 
 def _ts(iso_or_dt):
