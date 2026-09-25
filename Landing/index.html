@@ -1,691 +1,405 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>RS Planning · CityKart</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,400&family=Outfit:wght@400;500;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
+  /* RS Planning suite look (2026-09-25): navy chrome, light data area, teal
+     accent, Plus Jakarta Sans - the same palette as AOP / BIS / Sales Plan. */
   :root {
-    --bg: #080f1e;
-    --bg-grad-a: #1064cc;
-    --bg-grad-b: #031570;
-    --card-bg: rgba(255,255,255,0.055);
-    --card-border: rgba(255,255,255,0.10);
-    --card-border-hover: rgba(255,255,255,0.25);
-    --text: #e8f0fb;
-    --text-dim: rgba(232,240,251,0.55);
-    --teal: #0e7490;
-    --up: #22c55e;
-    --down: #ef4444;
-    --checking: #f59e0b;
+    --navy: #0F2742;  --navy2: #1B3A5C;
+    --teal: #0E7490;  --teal-h: #155E75;  --teal-bg: #E7F1F4;  --teal-bd: #AACFDA;
+    --bg: #F3F5F9;  --white: #FFFFFF;  --surface2: #F8FAFC;
+    --char: #0F1B2D;  --text2: #334155;  --muted: #5B6B82;  --faint: #8A99AD;
+    --border: #E3E8EF;  --border2: #CFD8E3;
+    --up: #15803D;  --up-bg: #ECFDF3;  --up-bd: #A6E3BD;
+    --down: #B42318;  --down-bg: #FEF3F2;  --down-bd: #F7C1BC;
+    --checking: #B45309;  --checking-bg: #FFF7E8;  --checking-bd: #F5D39A;
+    --shadow-sm: 0 1px 2px rgba(15,27,45,.05);
+    --shadow: 0 1px 2px rgba(15,27,45,.05), 0 8px 24px rgba(15,27,45,.07);
+    --shadow-lg: 0 24px 60px rgba(15,27,45,.25);
   }
   * { box-sizing: border-box; }
+  html, body { margin: 0; }
   body {
-    margin: 0;
     min-height: 100vh;
-    font-family: 'Inter', -apple-system, "Segoe UI", sans-serif;
+    font-family: 'Plus Jakarta Sans', -apple-system, 'Segoe UI', sans-serif;
     -webkit-font-smoothing: antialiased;
-    background: linear-gradient(160deg, #0d1628 0%, #080f1e 55%);
-    color: var(--text);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 56px 24px 80px;
+    font-variant-numeric: tabular-nums;
+    background: var(--bg);
+    color: var(--char);
+    font-size: 14px;
+    line-height: 1.5;
   }
-  header { text-align: center; margin-bottom: 12px; }
-  header .brand {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 11.5px;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--text-dim);
-    margin-bottom: 18px;
-    padding: 5px 14px;
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 999px;
-    background: rgba(255,255,255,0.04);
+  a { color: inherit; }
+  button { font-family: inherit; }
+  :focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  svg.i { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* ── Top bar ── */
+  .topbar {
+    position: sticky; top: 0; z-index: 40;
+    height: 60px; padding: 0 28px;
+    display: flex; align-items: center; gap: 16px;
+    background: var(--navy); color: #fff;
+    border-bottom: 1px solid rgba(255,255,255,.06);
   }
-  header .brand::before {
-    content: '';
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--up);
-    display: inline-block;
+  .brand { display: flex; align-items: center; gap: 11px; text-decoration: none; }
+  .brand-mark {
+    width: 32px; height: 32px; border-radius: 9px; background: var(--teal);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12.5px; font-weight: 800; letter-spacing: .02em;
   }
-  header h1 {
-    margin: 0;
-    font-size: 32px;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    color: var(--text);
-    line-height: 1.15;
-  }
-  header p {
-    color: var(--text-dim);
-    margin-top: 14px;
-    font-size: 15px;
-    font-weight: 400;
-    letter-spacing: -0.005em;
-  }
-  /* ── Corner Master Switch ── */
-  .corner-switch {
-    position: fixed;
-    top: 20px;
-    right: 24px;
-    z-index: 50;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 5px;
-  }
-  .corner-msg {
-    font-size: 11px;
-    color: var(--text-dim);
-    text-align: right;
-    max-width: 200px;
-    line-height: 1.4;
+  .brand-name { font-size: 15px; font-weight: 800; letter-spacing: -.01em; }
+  .brand-sub { font-size: 12.5px; color: rgba(255,255,255,.55); padding-left: 11px; border-left: 1px solid rgba(255,255,255,.18); }
+  .topbar-gap { flex: 1; }
+  .sys-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12.5px; font-weight: 600; color: rgba(255,255,255,.8);
+    padding: 5px 12px; border-radius: 999px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12);
   }
   .breaker {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    padding: 7px 14px 7px 8px;
-    border-radius: 999px;
-    border: 1px solid rgba(255,255,255,0.15);
-    background: rgba(255,255,255,0.06);
-    cursor: pointer;
-    user-select: none;
-    transition: border-color .15s, background .15s, box-shadow .15s;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 5px 13px 5px 6px; border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.07);
+    color: #fff; cursor: pointer; user-select: none;
+    transition: background .15s, border-color .15s;
   }
-  .breaker:hover:not(:disabled) {
-    border-color: rgba(255,255,255,0.28);
-    background: rgba(255,255,255,0.1);
+  .breaker:hover:not(:disabled) { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.3); }
+  .breaker:disabled { opacity: .55; cursor: default; }
+  .breaker-track { position: relative; width: 36px; height: 20px; border-radius: 999px; background: rgba(255,255,255,.2); transition: background .25s; flex: none; }
+  .breaker.on .breaker-track { background: #22A45D; }
+  .breaker-knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .25s; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+  .breaker.on .breaker-knob { transform: translateX(16px); }
+  .breaker-label { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+  .corner-msg:empty { display: none; }
+  .corner-msg {
+    position: fixed; top: 70px; right: 28px; z-index: 45; max-width: 340px;
+    font-size: 12.5px; color: var(--text2); line-height: 1.45;
+    background: var(--white); border: 1px solid var(--border); border-radius: 10px; padding: 9px 13px; box-shadow: var(--shadow);
   }
-  .breaker:disabled { opacity: 0.5; cursor: default; }
-  .breaker-track {
-    position: relative;
-    width: 38px;
-    height: 21px;
-    border-radius: 999px;
-    background: rgba(255,255,255,0.15);
-    transition: background 0.25s ease;
-    flex: none;
+
+  /* ── Page ── */
+  main { max-width: 1160px; margin: 0 auto; padding: 44px 28px 64px; }
+  .eyebrow {
+    display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--teal); background: var(--teal-bg); border: 1px solid var(--teal-bd); border-radius: 999px; padding: 4px 12px;
   }
-  .breaker.on .breaker-track { background: var(--up); }
-  .breaker-knob {
-    position: absolute;
-    top: 2px; left: 2px;
-    width: 17px; height: 17px;
-    border-radius: 50%;
-    background: var(--text);
-    transition: transform 0.25s ease;
+  h1 { margin: 14px 0 8px; font-size: 32px; font-weight: 800; color: var(--navy); letter-spacing: -.025em; line-height: 1.15; }
+  .lede { margin: 0; max-width: 640px; font-size: 15px; color: var(--muted); line-height: 1.6; }
+
+  .sec-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin: 40px 0 14px; }
+  .sec-title { font-size: 11.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+  .sec-note { font-size: 12.5px; color: var(--faint); }
+
+  /* ── Cards ── */
+  .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+  .grid.tools { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @media (max-width: 1040px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .grid.tools { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 620px)  { .grid, .grid.tools { grid-template-columns: minmax(0, 1fr); } .brand-sub, .sys-pill { display: none; } }
+
+  .card {
+    position: relative; display: flex; flex-direction: column;
+    text-decoration: none; color: inherit; cursor: pointer;
+    background: var(--white); border: 1px solid var(--border); border-radius: 14px;
+    padding: 18px 18px 14px; box-shadow: var(--shadow-sm);
+    transition: border-color .15s, box-shadow .15s, transform .15s;
   }
-  .breaker.on .breaker-knob { transform: translateX(17px); }
-  .breaker-label {
-    font-size: 12.5px;
-    font-weight: 600;
-    color: var(--text);
-    white-space: nowrap;
-  }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(208px, 1fr));
-    gap: 16px;
-    max-width: 1180px;
-    width: 100%;
-    margin-top: 40px;
-  }
-  a.card {
-    position: relative;
-    display: block;
-    text-decoration: none;
-    color: inherit;
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    border-radius: 14px;
-    padding: 20px 18px 16px;
-    transition: transform .18s ease, border-color .18s ease, background .18s ease;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.25);
-  }
-  a.card:hover {
-    transform: translateY(-3px);
-    border-color: var(--card-border-hover);
-    background: rgba(255,255,255,0.08);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-  }
-  .card { cursor: default; }
+  .card:hover { border-color: var(--teal-bd); box-shadow: var(--shadow); transform: translateY(-2px); }
+  .card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
   .card-icon {
-    width: 38px; height: 38px;
-    border-radius: 10px;
+    width: 40px; height: 40px; border-radius: 10px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 18px;
-    margin-bottom: 12px;
-    background: rgba(16,100,204,0.25);
-    border: 1px solid rgba(255,255,255,0.1);
+    background: var(--teal-bg); color: var(--teal);
   }
-  .card h2 {
-    margin: 0 0 6px;
-    font-size: 17px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
+  .step { font-size: 11.5px; font-weight: 800; letter-spacing: .08em; color: var(--faint); }
+  .card h2 { margin: 0 0 6px; font-size: 16px; font-weight: 800; color: var(--navy); letter-spacing: -.01em; }
+  .card p.desc { margin: 0 0 16px; font-size: 13px; color: var(--muted); line-height: 1.55; flex: 1; }
+  .meta {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    border-top: 1px solid var(--border); padding-top: 11px; font-size: 12px;
   }
-  .card p.desc {
-    margin: 0 0 16px;
-    font-size: 12.5px;
-    color: var(--text-dim);
-    line-height: 1.55;
-    font-weight: 400;
-  }
-  .card .meta {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 11.5px;
-    color: var(--text-dim);
-    border-top: 1px solid var(--card-border);
-    padding-top: 12px;
-    font-weight: 500;
-  }
-  .status { display: flex; align-items: center; gap: 6px; font-weight: 600; }
-  .dot {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: var(--checking);
-    flex-shrink: 0;
-  }
-  .dot.up { background: var(--up); }
-  .dot.down { background: var(--down); }
+  .open-link { font-weight: 700; color: var(--teal); white-space: nowrap; }
+  .card:hover .open-link { color: var(--teal-h); }
+  .port { color: var(--faint); font-weight: 600; font-size: 11.5px; }
+
+  .status { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 11.5px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--checking); flex-shrink: 0; }
+  .dot.up { background: var(--up); box-shadow: 0 0 0 3px var(--up-bg); }
+  .dot.down { background: var(--down); box-shadow: 0 0 0 3px var(--down-bg); }
+  .sys-pill .dot.up { box-shadow: 0 0 0 3px rgba(34,164,93,.25); background: #34C47A; }
+  .sys-pill .dot.down { box-shadow: 0 0 0 3px rgba(240,80,70,.25); background: #F26B5E; }
   .status-label.up { color: var(--up); }
   .status-label.down { color: var(--down); }
   .status-label.checking { color: var(--checking); }
-  .port { font-variant-numeric: tabular-nums; opacity: 0.65; font-size: 11px; }
 
-  .sync-card {
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    border-radius: 14px;
-    padding: 20px 18px 16px;
-    transition: transform .18s ease, border-color .18s ease, background .18s ease;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+  /* ── Data sync strip ── */
+  .sync-strip {
+    margin-top: 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    background: var(--white); border: 1px solid var(--border); border-radius: 14px; padding: 14px 18px; box-shadow: var(--shadow-sm);
+    cursor: pointer; transition: border-color .15s, box-shadow .15s;
   }
-  .sync-card:hover {
-    transform: translateY(-3px);
-    border-color: var(--card-border-hover);
-    background: rgba(255,255,255,0.08);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  .sync-strip:hover { border-color: var(--teal-bd); box-shadow: var(--shadow); }
+  .sync-strip .card-icon { width: 36px; height: 36px; }
+  .sync-strip-title { font-size: 14.5px; font-weight: 800; color: var(--navy); }
+  .sync-strip-sub { font-size: 12.5px; color: var(--muted); }
+  .sync-strip .gap { flex: 1; }
+  .btn-ghost {
+    font-size: 12.5px; font-weight: 700; color: var(--teal); background: var(--teal-bg);
+    border: 1px solid var(--teal-bd); border-radius: 8px; padding: 6px 12px; cursor: pointer;
   }
-  .sync-section + .sync-section { margin-top: 20px; }
-  .sync-section-title {
-    font-size: 11.5px;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--text-dim);
-    margin-bottom: 10px;
-  }
-  .sync-rows { display: flex; flex-direction: column; gap: 8px; }
-  .flow-resume-btn {
-    display: inline-block;
-    margin-top: 8px;
-    padding: 5px 11px;
-    border-radius: 6px;
-    background: var(--bg-grad-a);
-    color: #fff;
-    font-size: 12px;
-    font-weight: 700;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-  .flow-resume-btn:hover { filter: brightness(1.1); }
-  .sync-row {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    row-gap: 4px;
-    gap: 10px;
-    font-size: 13.5px;
-    border-top: 1px solid var(--card-border);
-    padding-top: 8px;
-  }
-  .sync-row:first-child { border-top: none; padding-top: 0; }
-  .sync-row .sync-name { color: var(--text); font-weight: 600; }
-  .sync-row .sync-when { color: var(--text-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .sync-loading, .sync-empty, .sync-error { color: var(--text-dim); font-size: 13.5px; }
-  .sync-error { color: var(--down); }
-  .sync-badge {
-    font-size: 10.5px;
-    font-weight: 700;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    padding: 1px 6px;
-    border-radius: 4px;
-  }
-  .sync-badge.ok { color: var(--up); background: rgba(46,204,113,0.14); }
-  .sync-badge.fail { color: var(--down); background: rgba(231,76,60,0.14); }
-  .sync-card { cursor: pointer; }
-  .sync-card-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  .sync-chevron { color: var(--text-dim); font-size: 13px; flex-shrink: 0; }
-  .sync-summary { margin-top: 10px; }
+  .btn-ghost:hover { background: #D8EAF0; }
 
+  footer { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--faint); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+  /* ── Modals ── */
   .sync-modal-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(4, 8, 20, 0.6);
-    backdrop-filter: blur(2px);
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-    z-index: 100;
+    display: none; position: fixed; inset: 0; z-index: 100; padding: 24px;
+    background: rgba(15,27,45,.45); backdrop-filter: blur(3px);
+    align-items: center; justify-content: center;
   }
   .sync-modal-overlay.open { display: flex; }
   .sync-modal {
-    background: #0e1730;
-    border: 1px solid var(--card-border);
-    border-radius: 16px;
-    padding: 24px 22px 20px;
-    max-width: 460px;
-    width: 100%;
-    max-height: 80vh;
-    overflow-y: auto;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    background: var(--white); border: 1px solid var(--border); border-radius: 16px;
+    padding: 22px 22px 18px; max-width: 480px; width: 100%; max-height: 80vh; overflow-y: auto; box-shadow: var(--shadow-lg);
   }
   .sync-modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-  .sync-modal-header h2 { margin: 0; font-size: 18px; }
-  .sync-modal-close {
-    background: none; border: none; color: var(--text-dim); font-size: 20px;
-    line-height: 1; cursor: pointer; padding: 4px; border-radius: 6px;
-  }
-  .sync-modal-close:hover { color: var(--text); background: rgba(255,255,255,0.08); }
-  .sync-modal .sync-section:first-of-type { margin-top: 18px; }
+  .sync-modal-header h2 { margin: 0; font-size: 17px; font-weight: 800; color: var(--navy); display: flex; align-items: center; gap: 9px; }
+  .sync-modal-header h2 svg { color: var(--teal); }
+  .sync-modal-close { background: none; border: none; color: var(--faint); font-size: 18px; line-height: 1; cursor: pointer; padding: 5px 7px; border-radius: 7px; }
+  .sync-modal-close:hover { color: var(--char); background: var(--surface2); }
+  .sync-section { margin-top: 18px; }
   .sync-section-title {
-    display: flex; align-items: center; justify-content: space-between;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin-bottom: 10px;
   }
+  .sync-rows { display: flex; flex-direction: column; gap: 8px; }
+  .sync-row { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; border-top: 1px solid var(--border); padding-top: 8px; }
+  .sync-row:first-child { border-top: none; padding-top: 0; }
+  .sync-row .sync-name { color: var(--char); font-weight: 600; }
+  .sync-row .sync-when { color: var(--muted); white-space: nowrap; }
+  .sync-loading, .sync-empty, .sync-error { color: var(--muted); font-size: 13px; }
+  .sync-error { color: var(--down); }
+  .sync-badge { font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; margin-right: 4px; }
+  .sync-badge.ok { color: var(--up); background: var(--up-bg); }
+  .sync-badge.fail { color: var(--down); background: var(--down-bg); }
   .sync-now-btn {
-    font-size: 11px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase;
-    padding: 3px 9px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.18);
-    background: rgba(255,255,255,0.07); color: var(--text-dim); cursor: pointer;
-    transition: background .15s, color .15s, border-color .15s;
+    font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+    padding: 4px 10px; border-radius: 7px; border: 1px solid var(--teal-bd); background: var(--teal-bg); color: var(--teal); cursor: pointer;
   }
-  .sync-now-btn:hover:not(:disabled) { background: rgba(255,255,255,0.14); color: var(--text); border-color: rgba(255,255,255,0.32); }
-  .sync-now-btn:disabled { opacity: 0.45; cursor: default; }
-  footer {
-    margin-top: 56px;
-    font-size: 12px;
-    color: var(--text-dim);
-    text-align: center;
-    max-width: 640px;
-  }
-  footer code {
-    background: rgba(255,255,255,0.08);
-    padding: 1px 6px;
-    border-radius: 4px;
-  }
+  .sync-now-btn:hover:not(:disabled) { background: #D8EAF0; }
+  .sync-now-btn:disabled { opacity: .5; cursor: default; }
+  .flow-resume-btn { display: inline-block; margin-top: 8px; padding: 6px 12px; border-radius: 8px; background: var(--teal); color: #fff; font-size: 12px; font-weight: 700; text-decoration: none; }
+  .flow-resume-btn:hover { background: var(--teal-h); }
 
-  /* ── View system ── */
-  .view { display: none; flex-direction: column; align-items: center; width: 100%; }
-  .view.active { display: flex; }
-
-  /* ── Module selector (2-tile choose screen) ── */
-  .selector-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 20px;
-    max-width: 640px;
-    width: 100%;
-    margin-top: 44px;
-  }
-  .selector-card {
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    border-radius: 18px;
-    padding: 32px 28px 28px;
-    cursor: pointer;
-    text-align: left;
-    color: inherit;
-    transition: transform .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease;
-    box-shadow: 0 1px 6px rgba(0,0,0,0.25);
-    user-select: none;
-  }
-  .selector-card:hover {
-    transform: translateY(-4px);
-    border-color: var(--card-border-hover);
-    background: rgba(255,255,255,0.08);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
-  }
-  .selector-card .sel-icon {
-    width: 52px; height: 52px;
-    border-radius: 14px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 24px;
-    margin-bottom: 18px;
-    background: rgba(16,100,204,0.3);
-    border: 1px solid rgba(255,255,255,0.12);
-  }
-  .selector-card h2 {
-    margin: 0 0 8px;
-    font-size: 20px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-  }
-  .selector-card p {
-    margin: 0 0 20px;
-    font-size: 13px;
-    color: var(--text-dim);
-    line-height: 1.6;
-  }
-  .selector-card .sel-arrow {
-    font-size: 13px;
-    color: var(--text-dim);
-    display: flex; align-items: center; gap: 6px;
-    font-weight: 600;
-    letter-spacing: 0.01em;
-    transition: color .15s;
-  }
-  .selector-card:hover .sel-arrow { color: var(--text); }
-
-  /* ── Back button ── */
-  .back-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-dim);
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 999px;
-    padding: 6px 16px 6px 12px;
-    cursor: pointer;
-    transition: color .15s, background .15s, border-color .15s;
-    margin-bottom: 28px;
-    align-self: flex-start;
-  }
-  .back-btn:hover { color: var(--text); background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.22); }
-
-  /* ── Additional modules grid (2 tiles, smaller) ── */
-  .add-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 16px;
-    max-width: 640px;
-    width: 100%;
-    margin-top: 40px;
-  }
-
-  /* ── Lagan Calendar modal — reference redesign ─────────────────────────── */
+  /* ── Lagan Calendar modal (suite palette) ── */
   .lagan-modal {
-    background: #1c0e04; border: 1px solid #3a2010; border-radius: 16px;
+    background: var(--white); border: 1px solid var(--border); border-radius: 16px;
     width: 100%; max-width: 960px; max-height: 88vh;
-    display: flex; flex-direction: column; overflow: hidden;
-    box-shadow: 0 24px 70px rgba(0,0,0,.7);
+    display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow-lg);
   }
-  .lm-hdr { background: #221208; border-bottom: 2px solid #c96b00; padding: 14px 20px 12px; flex-shrink: 0; }
+  .lm-hdr { background: var(--navy); padding: 14px 20px 12px; flex-shrink: 0; }
   .lm-hdr-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-  .lm-logo { font-family: 'Cormorant Garamond',Georgia,serif; font-size: 26px; font-weight: 600; color: #f8ede0; letter-spacing: -.01em; line-height: 1; margin: 0; }
-  .lm-logo em { color: #f0a040; font-style: italic; }
-  .lm-close { background: none; border: none; color: #8a6848; font-size: 20px; line-height: 1; cursor: pointer; padding: 4px 7px; border-radius: 6px; transition: color .15s, background .15s; }
-  .lm-close:hover { color: #f8ede0; background: rgba(255,255,255,.08); }
+  .lm-logo { font-size: 18px; font-weight: 800; color: #fff; letter-spacing: -.01em; line-height: 1; margin: 0; }
+  .lm-logo em { color: #7CC7D9; font-style: normal; }
+  .lm-close { background: none; border: none; color: rgba(255,255,255,.6); font-size: 18px; line-height: 1; cursor: pointer; padding: 5px 7px; border-radius: 7px; }
+  .lm-close:hover { color: #fff; background: rgba(255,255,255,.1); }
   .lm-hdr-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .lm-sel-wrap { position: relative; flex-shrink: 0; }
-  .lm-sel-btn { display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: #180e08; border: 1.5px solid #5a3218; border-radius: 8px; color: #d4bca8; font-size: 13px; font-weight: 500; cursor: pointer; transition: border-color .15s; white-space: nowrap; min-width: 140px; justify-content: space-between; font-family: inherit; }
-  .lm-sel-btn:hover, .lm-sel-btn.open { border-color: #f0a040; outline: none; }
-  .lm-caret { font-size: 10px; opacity: .5; transition: transform .2s; }
+  .lm-sel-btn { display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.2); border-radius: 8px; color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; min-width: 140px; justify-content: space-between; font-family: inherit; }
+  .lm-sel-btn:hover, .lm-sel-btn.open { border-color: rgba(255,255,255,.45); outline: none; }
+  .lm-caret { font-size: 9px; opacity: .6; transition: transform .2s; }
   .lm-sel-btn.open .lm-caret { transform: rotate(180deg); }
-  .lm-sel-dd { position: absolute; top: calc(100% + 4px); left: 0; min-width: 160px; background: #221208; border: 1.5px solid #5a3218; border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,.55); padding: 6px 0; max-height: 260px; overflow-y: auto; display: none; z-index: 200; }
+  .lm-sel-dd { position: absolute; top: calc(100% + 4px); left: 0; min-width: 160px; background: var(--white); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); padding: 6px 0; max-height: 260px; overflow-y: auto; display: none; z-index: 200; }
   .lm-sel-dd.open { display: block; }
-  .lm-dd-acts { display: flex; gap: 5px; padding: 5px 10px 7px; border-bottom: 1px solid #3a2010; margin-bottom: 3px; }
-  .lm-dd-act { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 5px; border: 1px solid #5a3218; background: transparent; color: #8a6848; cursor: pointer; letter-spacing: .04em; text-transform: uppercase; transition: all .15s; font-family: inherit; }
-  .lm-dd-act:hover { color: #f0a040; border-color: #f0a040; }
-  .lm-yr-opt { display: flex; align-items: center; gap: 9px; padding: 7px 13px; cursor: pointer; font-size: 13px; color: #d4bca8; user-select: none; transition: background .1s; }
-  .lm-yr-opt:hover { background: #2a1800; }
-  .lm-yr-opt.sel { color: #f0a040; font-weight: 600; }
-  .lm-yr-opt input[type=checkbox] { accent-color: #f0a040; width: 13px; height: 13px; pointer-events: none; flex-shrink: 0; }
+  .lm-dd-acts { display: flex; gap: 5px; padding: 5px 10px 7px; border-bottom: 1px solid var(--border); margin-bottom: 3px; }
+  .lm-dd-act { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 6px; border: 1px solid var(--border2); background: transparent; color: var(--muted); cursor: pointer; letter-spacing: .04em; text-transform: uppercase; font-family: inherit; }
+  .lm-dd-act:hover { color: var(--teal); border-color: var(--teal-bd); }
+  .lm-yr-opt { display: flex; align-items: center; gap: 9px; padding: 7px 13px; cursor: pointer; font-size: 13px; color: var(--text2); user-select: none; }
+  .lm-yr-opt:hover { background: var(--surface2); }
+  .lm-yr-opt.sel { color: var(--teal); font-weight: 700; }
+  .lm-yr-opt input[type=checkbox] { accent-color: var(--teal); width: 13px; height: 13px; pointer-events: none; flex-shrink: 0; }
   .lm-chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; flex: 1; min-width: 0; }
-  .lm-chip { display: inline-flex; align-items: center; gap: 3px; padding: 3px 5px 3px 10px; background: #3a2010; border: 1px solid #5a3218; border-radius: 20px; font-size: 13px; font-weight: 600; color: #f8ede0; white-space: nowrap; }
-  .lm-chip-x { background: none; border: none; cursor: pointer; color: #8a6848; font-size: 16px; line-height: 1; padding: 0 3px; transition: color .15s; }
-  .lm-chip-x:hover { color: #f0a040; }
-  .lm-ctrl { display: flex; align-items: center; gap: 8px; padding: 10px 20px; border-bottom: 1px solid #3a2010; background: #180e08; flex-shrink: 0; flex-wrap: wrap; }
-  .lm-view-tog { display: flex; background: #1c0e04; border: 1.5px solid #5a3218; border-radius: 8px; overflow: hidden; }
-  .lm-vtb { padding: 6px 14px; border: none; background: transparent; font-size: 13px; font-weight: 500; color: #8a6848; cursor: pointer; transition: all .15s; font-family: inherit; }
-  .lm-vtb.active { background: #c96b00; color: #fff; font-weight: 600; }
-  .lm-vtb:not(.active):hover { background: #2a1800; color: #d4bca8; }
-  .lm-btn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s; white-space: nowrap; font-family: inherit; }
-  .lm-btn-pri { background: #c96b00; color: #fff; border: 1.5px solid #c96b00; }
-  .lm-btn-pri:hover { background: #e8830a; border-color: #e8830a; }
-  .lm-btn-sec { background: transparent; color: #d4bca8; border: 1.5px solid #5a3218; }
-  .lm-btn-sec:hover { border-color: #f0a040; color: #f0a040; }
-  .lm-res-count { margin-left: auto; font-size: 12px; color: #8a6848; font-variant-numeric: tabular-nums; }
-  .lm-res-count strong { color: #f0a040; font-weight: 700; }
-  .lm-content { flex: 1; overflow-y: auto; padding: 20px; }
-  .lm-method-note { margin-bottom: 18px; padding: 9px 14px; background: #221208; border-left: 3px solid #c96b00; border-radius: 0 6px 6px 0; font-size: 12px; color: #8a6848; line-height: 1.6; }
-  .lm-yr-sec { margin-bottom: 36px; }
-  .lm-yr-hdr { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #3a2010; }
-  .lm-yr-num { font-family: 'Cormorant Garamond',Georgia,serif; font-size: 34px; font-weight: 500; color: #f8ede0; line-height: 1; letter-spacing: -.02em; }
-  .lm-yr-meta { font-size: 13px; color: #8a6848; }
-  .lm-yr-meta strong { color: #f0a040; font-weight: 700; font-size: 14px; }
+  .lm-chip { display: inline-flex; align-items: center; gap: 3px; padding: 3px 5px 3px 10px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2); border-radius: 20px; font-size: 12.5px; font-weight: 700; color: #fff; white-space: nowrap; }
+  .lm-chip-x { background: none; border: none; cursor: pointer; color: rgba(255,255,255,.6); font-size: 15px; line-height: 1; padding: 0 3px; }
+  .lm-chip-x:hover { color: #fff; }
+  .lm-ctrl { display: flex; align-items: center; gap: 8px; padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--surface2); flex-shrink: 0; flex-wrap: wrap; }
+  .lm-view-tog { display: flex; background: var(--white); border: 1px solid var(--border2); border-radius: 8px; overflow: hidden; }
+  .lm-vtb { padding: 6px 14px; border: none; background: transparent; font-size: 12.5px; font-weight: 600; color: var(--muted); cursor: pointer; font-family: inherit; }
+  .lm-vtb.active { background: var(--teal); color: #fff; }
+  .lm-vtb:not(.active):hover { background: var(--surface2); color: var(--char); }
+  .lm-btn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; font-family: inherit; }
+  .lm-btn-pri { background: var(--teal); color: #fff; border: 1px solid var(--teal); }
+  .lm-btn-pri:hover { background: var(--teal-h); border-color: var(--teal-h); }
+  .lm-btn-sec { background: var(--white); color: var(--text2); border: 1px solid var(--border2); }
+  .lm-btn-sec:hover { border-color: var(--teal-bd); color: var(--teal); }
+  .lm-res-count { margin-left: auto; font-size: 12px; color: var(--muted); }
+  .lm-res-count strong { color: var(--navy); font-weight: 800; }
+  .lm-content { flex: 1; overflow-y: auto; padding: 20px; background: var(--bg); }
+  .lm-method-note { margin-bottom: 18px; padding: 9px 14px; background: var(--white); border: 1px solid var(--border); border-left: 3px solid var(--teal); border-radius: 0 8px 8px 0; font-size: 12px; color: var(--muted); line-height: 1.6; }
+  .lm-yr-sec { margin-bottom: 32px; }
+  .lm-yr-hdr { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .lm-yr-num { font-size: 28px; font-weight: 800; color: var(--navy); line-height: 1; letter-spacing: -.02em; }
+  .lm-yr-meta { font-size: 13px; color: var(--muted); }
+  .lm-yr-meta strong { color: var(--teal); font-weight: 800; font-size: 14px; }
   .lm-mo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(185px, 1fr)); gap: 10px; }
-  .lm-mo-card { background: #221208; border-radius: 9px; border: 1px solid #3a2010; overflow: hidden; }
-  .lm-mo-card.has { border-top: 3px solid #c96b00; }
+  .lm-mo-card { background: var(--white); border-radius: 10px; border: 1px solid var(--border); overflow: hidden; }
+  .lm-mo-card.has { border-top: 3px solid var(--teal); }
   .lm-mo-hdr { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; }
-  .lm-mo-name { font-family: 'Cormorant Garamond',Georgia,serif; font-size: 16px; font-weight: 600; color: #f8ede0; }
-  .lm-mo-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 11px; background: #d08030; color: #180e08; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .lm-mo-badge.z { background: #3a2010; color: #8a6848; }
+  .lm-mo-name { font-size: 13.5px; font-weight: 700; color: var(--navy); }
+  .lm-mo-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 11px; background: var(--teal); color: #fff; font-size: 11px; font-weight: 800; }
+  .lm-mo-badge.z { background: var(--surface2); color: var(--faint); border: 1px solid var(--border); }
   .lm-mo-body { padding: 5px 12px 11px; min-height: 40px; }
   .lm-d-grid { display: flex; flex-wrap: wrap; gap: 3px; }
-  .lm-d-chip { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 24px; background: #2e1806; border: 1px solid #5a3218; border-radius: 5px; font-size: 11px; font-weight: 700; color: #f8ede0; font-variant-numeric: tabular-nums; }
-  .lm-d-chip.today { background: rgba(34,197,94,.22); border-color: rgba(34,197,94,.45); color: #6ee7a0; }
-  .lm-no-d { font-size: 12px; color: #8a6848; font-style: italic; padding: 2px 0; }
-  .lm-tbl-wrap { overflow-x: auto; border-radius: 9px; border: 1px solid #3a2010; }
-  .lm-stbl { width: 100%; border-collapse: collapse; font-size: 13px; background: #221208; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .lm-stbl th, .lm-stbl td { padding: 10px 9px; text-align: center; border-bottom: 1px solid #3a2010; }
-  .lm-stbl th { font-weight: 600; color: #8a6848; font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; background: #180e08; }
+  .lm-d-chip { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 24px; background: var(--teal-bg); border: 1px solid var(--teal-bd); border-radius: 6px; font-size: 11px; font-weight: 700; color: var(--navy); }
+  .lm-d-chip.today { background: var(--up-bg); border-color: var(--up-bd); color: var(--up); }
+  .lm-no-d { font-size: 12px; color: var(--faint); font-style: italic; padding: 2px 0; }
+  .lm-tbl-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
+  .lm-stbl { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--white); white-space: nowrap; }
+  .lm-stbl th, .lm-stbl td { padding: 10px 9px; text-align: center; border-bottom: 1px solid var(--border); }
+  .lm-stbl th { font-weight: 800; color: var(--faint); font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; background: var(--surface2); }
   .lm-stbl th:first-child, .lm-stbl td:first-child { text-align: left; padding-left: 16px; }
-  .lm-stbl td:first-child { font-family: 'Cormorant Garamond',Georgia,serif; font-size: 19px; font-weight: 500; color: #f8ede0; }
+  .lm-stbl td:first-child { font-size: 15px; font-weight: 800; color: var(--navy); }
   .lm-stbl tr:last-child td { border-bottom: none; }
-  .lm-stbl td.c0 { color: #5a3218; }
-  .lm-stbl td.cn { font-weight: 700; color: #d4bca8; }
-  .lm-stbl td.h1 { background: #2e1806; color: #d4bca8; font-weight: 700; }
-  .lm-stbl td.h2 { background: #4a2a0a; color: #f8ede0; font-weight: 700; }
-  .lm-stbl td.h3 { background: #6a3e10; color: #f8ede0; font-weight: 700; }
-  .lm-stbl td.ctot { font-weight: 800; color: #f0a040; font-size: 14px; }
-  .lm-stbl th.thot { color: #f0a040; }
-  .lm-empty { text-align: center; padding: 60px 24px; color: #8a6848; }
-  .lm-empty-icon { font-size: 38px; margin-bottom: 10px; line-height: 1; }
+  .lm-stbl td.c0 { color: var(--border2); }
+  .lm-stbl td.cn { font-weight: 700; color: var(--text2); }
+  .lm-stbl td.h1 { background: #F1F8FA; }
+  .lm-stbl td.h2 { background: #DDEEF3; color: var(--navy); }
+  .lm-stbl td.h3 { background: #BFDEE7; color: var(--navy); }
+  .lm-stbl td.ctot { font-weight: 800; color: var(--teal); font-size: 14px; }
+  .lm-stbl th.thot { color: var(--teal); }
+  .lm-empty { text-align: center; padding: 60px 24px; color: var(--muted); }
+  .lm-empty-icon { color: var(--teal); margin-bottom: 10px; line-height: 1; }
+  .lm-empty-icon svg { width: 36px; height: 36px; }
   .lm-empty p { font-size: 14px; }
 </style>
 </head>
 <body>
-  <!-- Master Switch — fixed top-right corner, always visible across all views -->
-  <div class="corner-switch">
+  <!-- Icons (line set, currentColor) -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-calendar" viewBox="0 0 24 24"><path d="M4 5h16v15H4zM4 10h16M8 3v4M16 3v4"/></symbol>
+    <symbol id="i-forecast" viewBox="0 0 24 24"><path d="M3 20h18M5 16l4-5 4 3 6-8M15 6h4v4"/></symbol>
+    <symbol id="i-buyer" viewBox="0 0 24 24"><path d="M4 4h16v16H4zM4 9h16M9 9v11M14 13h3M14 16h3"/></symbol>
+    <symbol id="i-plan" viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"/></symbol>
+    <symbol id="i-sync" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2M3 12A9 9 0 0 1 18.5 5.8M21 4v5h-5M3 20v-5h5"/></symbol>
+    <symbol id="i-lagan" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 0 12 6 6 0 0 1 0-12zM4 21h16M7 18h10"/></symbol>
+    <symbol id="i-store" viewBox="0 0 24 24"><path d="M3 9l2-5h14l2 5M4 9v11h16V9M3 9h18M9 20v-6h6v6"/></symbol>
+    <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 3v18M5 21h14M6 7h12M6 7l-3 7a3 3 0 0 0 6 0zM18 7l-3 7a3 3 0 0 0 6 0z"/></symbol>
+  </svg>
+
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="RS Planning home">
+      <span class="brand-mark">RS</span>
+      <span class="brand-name">RS Planning</span>
+      <span class="brand-sub">CityKart</span>
+    </a>
+    <span class="topbar-gap"></span>
+    <span class="sys-pill" id="sys-pill"><span class="dot" id="sys-dot"></span><span id="sys-label">Checking services…</span></span>
+    <!-- Master Switch -->
     <button id="launch-all-btn" class="breaker" type="button" title="Start or stop all planning servers">
       <span class="breaker-track"><span class="breaker-knob"></span></span>
       <span class="breaker-label">Servers</span>
     </button>
-    <div id="launch-all-msg" class="corner-msg"></div>
-  </div>
+  </header>
+  <div id="launch-all-msg" class="corner-msg" role="status" aria-live="polite"></div>
 
-  <!-- ══════════════════════════════════════════════════════════
-       View: select — module chooser (default landing view)
-       ══════════════════════════════════════════════════════════ -->
-  <div class="view active" id="view-select">
-    <header>
-      <div class="brand">CityKart · RS Planning</div>
-      <h1>Planning Suite</h1>
-      <p>Choose a module group to continue.</p>
-    </header>
+  <main>
+    <span class="eyebrow">FY 2027–28 · Planning suite</span>
+    <h1>Planning Suite</h1>
+    <p class="lede">Plan, forecast and publish CityKart's store × division sales — one connected workflow from the festival calendar to the sales plan.</p>
 
-    <div class="selector-grid">
-      <div class="selector-card" id="go-core" role="button" tabindex="0" aria-label="Open Core Modules">
-        <div class="sel-icon">🏢</div>
-        <h2>Core Modules</h2>
-        <p>Calendar Engine, AOP Forecaster, Buyer's Input, Planning Engine, and Data Sync & Flow.</p>
-        <div class="sel-arrow">Open suite <span>→</span></div>
-      </div>
-
-      <div class="selector-card" id="go-additional" role="button" tabindex="0" aria-label="Open Additional Modules">
-        <div class="sel-icon">✨</div>
-        <h2>Additional Modules</h2>
-        <p>Lagan Calendar (auspicious date lookup), NSO Plan Distributor, and AOP Realigner.</p>
-        <div class="sel-arrow">Open modules <span>→</span></div>
-      </div>
+    <div class="sec-hd">
+      <span class="sec-title">Core workflow</span>
+      <span class="sec-note">Each module opens in a new tab</span>
     </div>
-
-    <footer style="margin-top:52px;">
-      Core modules share a unified server on port 8010. Use the Master Switch to bring everything online.
-    </footer>
-  </div>
-
-  <!-- ══════════════════════════════════════════════════════════
-       View: core — existing 5 planning apps
-       ══════════════════════════════════════════════════════════ -->
-  <div class="view" id="view-core">
-    <button class="back-btn" id="back-from-core" type="button">← Module selector</button>
-
-    <header>
-      <div class="brand">CityKart · RS Planning</div>
-      <h1>Core Modules</h1>
-      <p>Pick a module below. Each opens its own app in a new tab.</p>
-    </header>
-
     <div class="grid">
       <a class="card" href="/calendar/" target="_blank" data-check="/api/port-status/8010">
-        <div class="card-icon">📅</div>
+        <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-calendar"/></svg></span><span class="step">01</span></div>
         <h2>Calendar</h2>
-        <p class="desc">Calendarisation Suite — builds the locked, festival-aligned day-shift calendar per cluster, used to reindex last year's sales onto this year's dates.</p>
-        <div class="meta">
-          <span class="port">7800/calendar</span>
-          <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
-        </div>
+        <p class="desc">Festival-aligned day-shift calendar per cluster — reindexes last year's sales onto this year's dates.</p>
+        <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
       </a>
-
       <a class="card" href="/aop/" target="_blank" data-check="/api/port-status/8010">
-        <div class="card-icon">📊</div>
+        <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-forecast"/></svg></span><span class="step">02</span></div>
         <h2>AOP Forecaster</h2>
-        <p class="desc">Annual Operating Plan forecaster — planning inputs (Store Master, Growth %, NSO openings) and the store×division×month forecast engine.</p>
-        <div class="meta">
-          <span class="port">7800/aop</span>
-          <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
-        </div>
+        <p class="desc">Annual Operating Plan — planning inputs and the store × division × month forecast, published to the Buyer's Input.</p>
+        <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
       </a>
-
       <a class="card" href="/buyer/" target="_blank" data-check="/api/port-status/5050">
-        <div class="card-icon">🛒</div>
+        <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-buyer"/></svg></span><span class="step">03</span></div>
         <h2>Buyer's Input</h2>
-        <p class="desc">OTB buyer's plan — division/section-level growth% editing against the AOP seed, with per-cell locking and re-apportioning.</p>
-        <div class="meta">
-          <span class="port">7800/buyer</span>
-          <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
-        </div>
+        <p class="desc">OTB buyer's plan — section-level growth against the locked AOP targets, with cell locks and re-apportioning.</p>
+        <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
       </a>
-
       <a class="card" href="/planning/" target="_blank" data-check="/api/port-status/8010">
-        <div class="card-icon">🧮</div>
+        <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-plan"/></svg></span><span class="step">04</span></div>
         <h2>Planning Engine</h2>
-        <p class="desc">Sales Plan — Division/Department plans, MRP reapportionment, PW-W &amp; SOR deviation, and display-type planning engines.</p>
-        <div class="meta">
-          <span class="port">7800/planning</span>
-          <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
-        </div>
+        <p class="desc">Sales Plan — division and department plans, MRP re-apportionment, PW/W and SOR deviation.</p>
+        <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
       </a>
+    </div>
 
-      <div class="card sync-card" id="sync-card" role="button" tabindex="0" aria-haspopup="dialog">
-        <div class="sync-card-header">
-          <div class="card-icon">🔄</div>
-          <span class="sync-chevron">↗</span>
-        </div>
-        <h2>Data Sync &amp; Flow</h2>
-        <div class="meta sync-summary">
-          <span class="status"><span class="dot" id="sync-summary-dot"></span><span class="status-label checking" id="sync-summary-label">checking…</span></span>
-          <span class="port">click to view</span>
-        </div>
+    <div class="sync-strip" id="sync-card" role="button" tabindex="0" aria-haspopup="dialog">
+      <span class="card-icon"><svg class="i"><use href="#i-sync"/></svg></span>
+      <div>
+        <div class="sync-strip-title">Data sync &amp; flow</div>
+        <div class="sync-strip-sub">Data lake → Postgres extraction and the AOP → Planning Engine hand-off</div>
       </div>
+      <span class="gap"></span>
+      <span class="status"><span class="dot" id="sync-summary-dot"></span><span class="status-label checking" id="sync-summary-label">checking…</span></span>
+      <span class="btn-ghost">View details</span>
+    </div>
+
+    <div class="sec-hd">
+      <span class="sec-title">Additional tools</span>
+      <span class="sec-note">Specialised utilities outside the core workflow</span>
+    </div>
+    <div class="grid tools">
+      <div class="card" id="lagan-card" role="button" tabindex="0" aria-haspopup="dialog">
+        <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-lagan"/></svg></span></div>
+        <h2>Lagan Calendar</h2>
+        <p class="desc">Auspicious wedding and ceremony dates, 2000–2030, by the Drik astronomical method.</p>
+        <div class="meta"><span class="port">2000 – 2030</span><span class="open-link">Look up</span></div>
+      </div>
+      <!-- fixed LAN IP so the link works from any device on the network -->
+      <a class="card" href="http://10.0.1.131:8060" target="_blank" rel="noopener" data-check="/api/port-status/8060" id="nso-card">
+        <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-store"/></svg></span></div>
+        <h2>NSO Plan Distributor</h2>
+        <p class="desc">NSO details, sales plan and division contribution in — a month-wise store plan workbook out.</p>
+        <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
+      </a>
+      <!-- direct LAN link (xlsx export is too slow for the 7800 proxy) -->
+      <a class="card" href="http://10.0.1.131:8070" target="_blank" rel="noopener" data-check="/api/port-status/8070">
+        <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-scale"/></svg></span></div>
+        <h2>AOP Realigner</h2>
+        <p class="desc">Revised department plan in — other departments flex so every store × division × month lands on the original plan.</p>
+        <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
+      </a>
     </div>
 
     <footer>
-      Calendar, AOP Forecaster, and Planning Engine run from one unified server — all accessible
-      through this page. A grey dot means that server isn't running yet — use the Master Switch to start it.
+      <span>RS Planning suite · CityKart</span>
+      <span>Core modules share one server. Use <strong>Servers</strong> to start or stop everything.</span>
     </footer>
-  </div>
+  </main>
 
-  <!-- ══════════════════════════════════════════════════════════
-       View: additional — Lagan Calendar + NSO Plan Distributor
-       ══════════════════════════════════════════════════════════ -->
-  <div class="view" id="view-additional">
-    <button class="back-btn" id="back-from-additional" type="button">← Module selector</button>
-
-    <header>
-      <div class="brand">CityKart · RS Planning</div>
-      <h1>Additional Modules</h1>
-      <p>Specialised tools outside the core planning suite.</p>
-    </header>
-
-    <div class="add-grid">
-      <!-- Lagan Calendar tile -->
-      <div class="card sync-card" id="lagan-card" role="button" tabindex="0" aria-haspopup="dialog">
-        <div class="sync-card-header">
-          <div class="card-icon">🪔</div>
-          <span class="sync-chevron">↗</span>
-        </div>
-        <h2>Lagan Calendar</h2>
-        <p class="desc">Auspicious wedding &amp; ceremony dates 2000–2030, computed via Drik astronomical method. Lookup by year.</p>
-        <div class="meta">
-          <span class="port">2000 – 2030</span>
-          <span class="port">click to lookup</span>
-        </div>
-      </div>
-
-      <!-- NSO Plan Distributor tile — fixed LAN IP so link works from any device on the network -->
-      <a class="card" href="http://10.0.1.131:8060" target="_blank" rel="noopener" data-check="/api/port-status/8060" id="nso-card">
-        <div class="card-icon">📦</div>
-        <h2>NSO Plan Distributor</h2>
-        <p class="desc">Upload NSO Details, Sales Plan, and Division Cont % — generate a month-wise store plan XLSX ready for distribution.</p>
-        <div class="meta">
-          <span class="port">10.0.1.131:8060</span>
-          <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
-        </div>
-      </a>
-
-      <!-- AOP Realigner tile — direct LAN link (xlsx export is too slow for the 7800 proxy) -->
-      <a class="card" href="http://10.0.1.131:8070" target="_blank" rel="noopener" data-check="/api/port-status/8070">
-        <div class="card-icon">⚖️</div>
-        <h2>AOP Realigner</h2>
-        <p class="desc">Upload a revised department plan — revised values stay exactly as given, other departments flex so every Store × Division × Month lands back on the original plan (Jan/Feb untouched), output at MRP × Display Type.</p>
-        <div class="meta">
-          <span class="port">10.0.1.131:8070</span>
-          <span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span>
-        </div>
-      </a>
-    </div>
-
-    <footer style="margin-top:52px;">
-      NSO Plan Distributor auto-starts via Windows Scheduled Task "NSO Distributor Server" at logon.
-    </footer>
-  </div>
-
-  <!-- ══════════════════════════════════════════════════════════
-       Data Sync & Flow modal
-       ══════════════════════════════════════════════════════════ -->
+  <!-- Data Sync & Flow modal -->
   <div class="sync-modal-overlay" id="sync-modal-overlay">
     <div class="sync-modal" id="sync-modal" role="dialog" aria-modal="true" aria-label="Data Sync & Flow">
       <div class="sync-modal-header">
-        <h2>🔄 Data Sync &amp; Flow</h2>
+        <h2><svg class="i"><use href="#i-sync"/></svg>Data sync &amp; flow</h2>
         <button class="sync-modal-close" id="sync-modal-close" type="button" aria-label="Close">✕</button>
       </div>
-
       <div class="sync-section">
         <div class="sync-section-title">
-          <span>Extraction — Calendar Engine → Postgres</span>
-          <button class="sync-now-btn" id="sync-now-btn" type="button">Sync Now</button>
+          <span>Extraction — data lake → Postgres</span>
+          <button class="sync-now-btn" id="sync-now-btn" type="button">Sync now</button>
         </div>
         <div class="sync-rows" id="extraction-rows"><div class="sync-row sync-loading">Checking…</div></div>
       </div>
-
       <div class="sync-section">
         <div class="sync-section-title">Flow — AOP Forecaster → Planning Engine</div>
         <div class="sync-rows" id="flow-rows"><div class="sync-row sync-loading">Checking…</div></div>
@@ -693,9 +407,7 @@
     </div>
   </div>
 
-  <!-- ══════════════════════════════════════════════════════════
-       Lagan Calendar modal
-       ══════════════════════════════════════════════════════════ -->
+  <!-- Lagan Calendar modal -->
   <div class="sync-modal-overlay" id="lagan-modal-overlay">
     <div class="lagan-modal" id="lagan-modal" role="dialog" aria-modal="true" aria-label="Lagan Calendar">
       <div class="lm-hdr">
@@ -729,94 +441,54 @@
         <button class="lm-btn lm-btn-pri" id="lm-btn-dates" type="button">&#x2193; All Dates</button>
         <div class="lm-res-count" id="lm-res-count"></div>
       </div>
-      <div class="lm-content" id="lm-content">
-        <div class="lm-empty"><div class="lm-empty-icon">&#x1FA94;</div><p>Select one or more years to view Lagan dates</p></div>
-      </div>
+      <div class="lm-content" id="lm-content"></div>
     </div>
   </div>
 
 <script>
   var H = window.location.hostname || 'localhost';
 
-  // ── View switching ──────────────────────────────────────────────────────────
-  function showView(name) {
-    document.querySelectorAll('.view').forEach(function(v) { v.classList.remove('active'); });
-    document.getElementById('view-' + name).classList.add('active');
-    window.scrollTo(0, 0);
+  function setDot(dot, label, state, text) {
+    dot.classList.remove('up', 'down');
+    label.classList.remove('up', 'down', 'checking');
+    if (state === 'up' || state === 'down') { dot.classList.add(state); label.classList.add(state); }
+    else label.classList.add('checking');
+    label.textContent = text;
   }
 
-  document.getElementById('go-core').addEventListener('click', function() { showView('core'); });
-  document.getElementById('go-core').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showView('core'); }
-  });
-  document.getElementById('go-additional').addEventListener('click', function() { showView('additional'); checkNsoStatus(); });
-  document.getElementById('go-additional').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showView('additional'); checkNsoStatus(); }
-  });
-  document.getElementById('back-from-core').addEventListener('click', function() { showView('select'); });
-  document.getElementById('back-from-additional').addEventListener('click', function() { showView('select'); });
-
-  // ── Status checks ───────────────────────────────────────────────────────────
+  // ── Status checks (every card with data-check) + the top-bar summary ─────────
   function checkAllStatuses() {
-    var checks = [...document.querySelectorAll('.card[data-check]')].map(function (card) {
-      var url = card.getAttribute('data-check');
-      var dot = card.querySelector('.dot');
-      var label = card.querySelector('.status-label');
-      if (!dot || !label) return Promise.resolve('unknown');
-      function setStatus(state) {
-        dot.classList.remove('up', 'down');
-        label.classList.remove('up', 'down', 'checking');
-        if (state === 'up') { dot.classList.add('up'); label.classList.add('up'); label.textContent = 'online'; }
-        else if (state === 'down') { dot.classList.add('down'); label.classList.add('down'); label.textContent = 'offline'; }
-        else { label.classList.add('checking'); label.textContent = 'checking…'; }
-        return state;
-      }
-      return fetch(url, { cache: 'no-store' })
-        .then(function (r) { return setStatus(r.ok ? 'up' : 'down'); })
-        .catch(function () { return setStatus('down'); });
+    var cards = [...document.querySelectorAll('.card[data-check]')];
+    var checks = cards.map(function (card) {
+      var dot = card.querySelector('.dot'), label = card.querySelector('.status-label');
+      return fetch(card.getAttribute('data-check'), { cache: 'no-store' })
+        .then(function (r) { return r.ok ? 'up' : 'down'; })
+        .catch(function () { return 'down'; })
+        .then(function (s) { setDot(dot, label, s, s === 'up' ? 'online' : 'offline'); return s; });
     });
     return Promise.all(checks).then(function (states) {
-      // Only count the core app cards (not the NSO card in additional view) for the Master Switch
-      var coreStates = states.slice(0, states.length);
-      var btn = document.getElementById('launch-all-btn');
-      if (btn) btn.classList.toggle('on', states.length > 0 && states.every(function (s) { return s === 'up'; }));
+      var up = states.filter(function (s) { return s === 'up'; }).length;
+      var all = states.length > 0 && up === states.length;
+      document.getElementById('launch-all-btn').classList.toggle('on', all);
+      setDot(document.getElementById('sys-dot'), document.getElementById('sys-label'),
+             all ? 'up' : up === 0 ? 'down' : 'checking',
+             all ? 'All ' + states.length + ' modules online' : up + ' of ' + states.length + ' modules online');
       return states;
     });
   }
   checkAllStatuses();
   setInterval(checkAllStatuses, 8000);
 
-  function checkNsoStatus() {
-    var card = document.getElementById('nso-card');
-    if (!card) return;
-    var dot = card.querySelector('.dot');
-    var label = card.querySelector('.status-label');
-    if (!dot || !label) return;
-    fetch('/api/port-status/8060', { cache: 'no-store' })
-      .then(function(r) {
-        dot.classList.remove('up','down'); label.classList.remove('up','down','checking');
-        if (r.ok) { dot.classList.add('up'); label.classList.add('up'); label.textContent = 'online'; }
-        else { dot.classList.add('down'); label.classList.add('down'); label.textContent = 'offline'; }
-      })
-      .catch(function() {
-        dot.classList.remove('up','down'); dot.classList.add('down');
-        label.classList.remove('up','down','checking'); label.classList.add('down');
-        label.textContent = 'offline';
-      });
-  }
-
   // ── Master Switch ───────────────────────────────────────────────────────────
   (function () {
     var btn = document.getElementById('launch-all-btn');
     var msg = document.getElementById('launch-all-msg');
-    if (!btn) return;
+    var hideT;
+    function say(t, sticky) { clearTimeout(hideT); msg.textContent = t; if (!sticky) hideT = setTimeout(function () { msg.textContent = ''; }, 9000); }
     btn.addEventListener('click', function () {
       var turningOff = btn.classList.contains('on');
       btn.disabled = true;
-      msg.textContent = turningOff
-        ? 'Flipping the breaker — stopping servers…'
-        : 'Flipping the breaker — starting offline servers…';
-
+      say(turningOff ? 'Stopping servers…' : 'Starting offline servers…', true);
       fetch(turningOff ? '/api/shutdown-all' : '/api/launch-all', { method: 'POST' })
         .then(function (r) { return r.json(); })
         .then(function (data) {
@@ -824,11 +496,11 @@
           if (turningOff) {
             if (data.stopped && data.stopped.length) parts.push('Stopped: ' + data.stopped.join(', '));
             if (data.alreadyOffline && data.alreadyOffline.length) parts.push('Already offline: ' + data.alreadyOffline.join(', '));
-            msg.textContent = parts.join(' · ') || 'Nothing to stop.';
+            say(parts.join(' · ') || 'Nothing to stop.', true);
           } else {
             if (data.launched && data.launched.length) parts.push('Starting: ' + data.launched.join(', '));
             if (data.alreadyOnline && data.alreadyOnline.length) parts.push('Already online: ' + data.alreadyOnline.join(', '));
-            msg.textContent = parts.join(' · ') || 'Nothing to start.';
+            say(parts.join(' · ') || 'Nothing to start.', true);
           }
           var settleDeadline = Date.now() + 20000;
           (function settle() {
@@ -839,19 +511,17 @@
               if (reached || Date.now() >= settleDeadline) {
                 btn.disabled = false;
                 if (reached && !turningOff) {
-                  msg.textContent = 'All servers online — syncing data lake…';
+                  say('All servers online — syncing the data lake…', true);
                   fetch('/api/config/db-sync', { method: 'POST' })
                     .then(function () { return loadExtractionStatus(); })
-                    .then(function () { msg.textContent = 'All servers online — data lake synced (see Data Sync & Flow below).'; })
-                    .catch(function () { msg.textContent = 'All servers online — data lake sync failed (see Data Sync & Flow below).'; });
-                }
-              } else {
-                setTimeout(settle, 700);
-              }
+                    .then(function () { say('All servers online — data lake synced.'); })
+                    .catch(function () { say('All servers online — data lake sync failed (see Data sync & flow).'); });
+                } else say(msg.textContent);
+              } else setTimeout(settle, 700);
             });
           })();
         })
-        .catch(function (e) { msg.textContent = 'Failed to reach Landing server: ' + e.message; btn.disabled = false; });
+        .catch(function (e) { say('Failed to reach the Landing server: ' + e.message); btn.disabled = false; });
     });
   })();
 
@@ -862,18 +532,14 @@
     return d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
   }
 
-  // ── Sync summary dot ────────────────────────────────────────────────────────
+  // ── Sync summary ────────────────────────────────────────────────────────────
   var _syncSummaryState = { extraction: false, flow: false };
   function updateSyncSummary(which) {
     _syncSummaryState[which] = true;
     if (!_syncSummaryState.extraction || !_syncSummaryState.flow) return;
-    var dot = document.getElementById('sync-summary-dot');
-    var label = document.getElementById('sync-summary-label');
     var hasError = !!document.querySelector('#extraction-rows .sync-error, #flow-rows .sync-error, #extraction-rows .sync-badge.fail');
-    dot.classList.remove('up', 'down');
-    label.classList.remove('up', 'down', 'checking');
-    if (hasError) { dot.classList.add('down'); label.classList.add('down'); label.textContent = 'attention needed'; }
-    else { dot.classList.add('up'); label.classList.add('up'); label.textContent = 'all clear'; }
+    setDot(document.getElementById('sync-summary-dot'), document.getElementById('sync-summary-label'),
+           hasError ? 'down' : 'up', hasError ? 'Attention needed' : 'All clear');
   }
 
   // ── Data Sync modal ─────────────────────────────────────────────────────────
@@ -881,29 +547,18 @@
     var card = document.getElementById('sync-card');
     var overlay = document.getElementById('sync-modal-overlay');
     var closeBtn = document.getElementById('sync-modal-close');
-    function open() {
-      overlay.classList.add('open'); closeBtn.focus();
-      loadExtractionStatus();
-      checkPlanCycleFlow();
-    }
+    function open() { overlay.classList.add('open'); closeBtn.focus(); loadExtractionStatus(); checkPlanCycleFlow(); }
     function close() { overlay.classList.remove('open'); card.focus(); }
     card.addEventListener('click', open);
-    card.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
-    });
+    card.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
     closeBtn.addEventListener('click', close);
     overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && overlay.classList.contains('open')) close();
-    });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && overlay.classList.contains('open')) close(); });
   })();
 
   function loadExtractionStatus() {
     return fetch('/api/config/db-sync/status', { cache: 'no-store' })
-    .then(function (r) {
-      if (!r.ok) throw new Error('http_' + r.status);
-      return r.json();
-    })
+    .then(function (r) { if (!r.ok) throw new Error('http_' + r.status); return r.json(); })
     .then(function (data) {
       var el = document.getElementById('extraction-rows');
       var runs = data.runs || [];
@@ -912,15 +567,15 @@
         var ok = r.status === 'success';
         return '<div class="sync-row">' +
           '<span class="sync-name">' + r.source_key + '</span>' +
-          '<span class="sync-when"><span class="sync-badge ' + (ok ? 'ok' : 'fail') + '">' + (ok ? 'ok' : 'failed') + '</span> ' + fmtWhen(r.completed_at || r.started_at) + '</span>' +
+          '<span class="sync-when"><span class="sync-badge ' + (ok ? 'ok' : 'fail') + '">' + (ok ? 'ok' : 'failed') + '</span>' + fmtWhen(r.completed_at || r.started_at) + '</span>' +
         '</div>';
       }).join('');
     })
     .catch(function (e) {
-      var msg = (e && e.message && e.message.startsWith('http_'))
-        ? 'Sync service error (' + e.message.slice(5) + ') — try Sync Now'
+      var m = (e && e.message && e.message.startsWith('http_'))
+        ? 'Sync service error (' + e.message.slice(5) + ') — try Sync now'
         : 'AOP Forecaster (' + H + ':8000) unreachable.';
-      document.getElementById('extraction-rows').innerHTML = '<div class="sync-error">' + msg + '</div>';
+      document.getElementById('extraction-rows').innerHTML = '<div class="sync-error">' + m + '</div>';
     })
     .then(function () { updateSyncSummary('extraction'); });
   }
@@ -933,18 +588,13 @@
     pending_approval: 'Awaiting Approval', approved: 'Approved — synced to Sales Plan',
   };
   const STAGE_RESUME = {
-    pending_buyer:    { who: 'Buyer',     url: '/buyer/',       label: 'Resume as Buyer →' },
-    pending_review:   { who: 'Reviewer',  url: '/plan-cycles',  label: 'Resume as Reviewer →' },
-    pending_approval: { who: 'Approver',  url: '/plan-cycles',  label: 'Resume as Approver →' },
+    pending_buyer:    { url: '/buyer/',      label: 'Resume as Buyer →' },
+    pending_review:   { url: '/plan-cycles', label: 'Resume as Reviewer →' },
+    pending_approval: { url: '/plan-cycles', label: 'Resume as Approver →' },
   };
-
   async function checkPlanCycleFlow() {
     const el = document.getElementById('flow-rows');
-    try {
-      return await _checkPlanCycleFlowInner(el);
-    } finally {
-      updateSyncSummary('flow');
-    }
+    try { return await _checkPlanCycleFlowInner(el); } finally { updateSyncSummary('flow'); }
   }
   async function _checkPlanCycleFlowInner(el) {
     try {
@@ -959,11 +609,11 @@
       const resume = STAGE_RESUME[latest.status];
       el.innerHTML = `
         <div class="sync-row" style="flex-direction:column; align-items:stretch;">
-          <div style="display:flex; gap:4px; margin-bottom:6px">
-            ${STAGE_ORDER.map((s, i) => `<div style="flex:1; height:4px; border-radius:2px; background:${i <= stageIdx ? '#2ecc71' : 'rgba(255,255,255,0.15)'}"></div>`).join('')}
+          <div style="display:flex; gap:4px; margin-bottom:8px">
+            ${STAGE_ORDER.map((s, i) => `<div style="flex:1; height:4px; border-radius:2px; background:${i <= stageIdx ? 'var(--teal)' : 'var(--border)'}"></div>`).join('')}
           </div>
           <div class="status">
-            <span class="dot ${isDone ? 'up' : 'checking'}"></span>
+            <span class="dot ${isDone ? 'up' : ''}"></span>
             <span class="status-label ${isDone ? 'up' : 'checking'}">Cycle ${latest.id.slice(0, 8)}: ${STAGE_LABELS[latest.status] || latest.status}</span>
           </div>
           ${resume ? `<a class="flow-resume-btn" href="${resume.url}" target="_blank">${resume.label}</a>` : ''}
@@ -977,69 +627,18 @@
 
   (function () {
     var btn = document.getElementById('sync-now-btn');
-    if (!btn) return;
     btn.addEventListener('click', function () {
-      btn.disabled = true;
-      btn.textContent = 'Syncing…';
+      btn.disabled = true; btn.textContent = 'Syncing…';
       document.getElementById('extraction-rows').innerHTML = '<div class="sync-loading">Syncing data lake…</div>';
       fetch('/api/config/db-sync', { method: 'POST' })
         .then(function () { return loadExtractionStatus(); })
-        .then(function () { btn.textContent = 'Sync Now'; btn.disabled = false; })
+        .then(function () { btn.textContent = 'Sync now'; btn.disabled = false; })
         .catch(function () {
           document.getElementById('extraction-rows').innerHTML = '<div class="sync-error">Sync failed — AOP Forecaster unreachable.</div>';
-          btn.textContent = 'Sync Now'; btn.disabled = false;
+          btn.textContent = 'Sync now'; btn.disabled = false;
         });
     });
   })();
-
-  // ── Drag-and-drop card reordering (core view only) ─────────────────────────
-  (function () {
-    const grid = document.querySelector('#view-core .grid');
-    if (!grid) return;
-    const STORAGE_KEY = 'landing-card-order';
-
-    function applyStoredOrder() {
-      let stored;
-      try {
-        stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-      } catch (e) {
-        return;
-      }
-      if (!Array.isArray(stored) || !stored.length) return;
-      const cards = [...grid.children];
-      const byHref = new Map(cards.map(c => [c.getAttribute('href') || c.id, c]));
-      stored.forEach(key => { const c = byHref.get(key); if (c) grid.appendChild(c); });
-    }
-
-    function saveOrder() {
-      const order = [...grid.children].map(c => c.getAttribute('href') || c.id);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(order));
-    }
-
-    [...grid.children].forEach(card => {
-      card.setAttribute('draggable', 'true');
-      card.addEventListener('dragstart', e => {
-        e.dataTransfer.setData('text/plain', card.getAttribute('href') || card.id);
-        card.style.opacity = '0.4';
-      });
-      card.addEventListener('dragend', () => { card.style.opacity = ''; saveOrder(); });
-      card.addEventListener('dragover', e => e.preventDefault());
-      card.addEventListener('drop', e => {
-        e.preventDefault();
-        const draggedKey = e.dataTransfer.getData('text/plain');
-        const dragged = [...grid.children].find(c => (c.getAttribute('href') || c.id) === draggedKey);
-        if (dragged && dragged !== card) {
-          const cards = [...grid.children];
-          const draggedIdx = cards.indexOf(dragged), targetIdx = cards.indexOf(card);
-          if (draggedIdx < targetIdx) card.after(dragged); else card.before(dragged);
-        }
-      });
-    });
-
-    applyStoredOrder();
-  })();
-
-  // NSO Plan Distributor link is fixed to LAN IP in HTML — no JS needed.
 
   // ── Lagan Calendar — Drik astronomical engine + UI ──────────────────────
   (function() {
@@ -1190,7 +789,7 @@
     });
 
     var today=new Date(), todayYr=today.getFullYear(), todayMon=today.getMonth()+1, todayDay=today.getDate();
-    function emptyHtml(){ return '<div class="lm-empty"><div class="lm-empty-icon">&#x1FA94;</div><p>Select one or more years to view Lagan dates</p></div>'; }
+    function emptyHtml(){ return '<div class="lm-empty"><div class="lm-empty-icon"><svg class="i"><use href="#i-lagan"/></svg></div><p>Select one or more years to view Lagan dates</p></div>'; }
 
     function calHtml(){
       if(!selYears.length) return emptyHtml();
@@ -1246,12 +845,12 @@
       return rows.join('\r\n');
     }
     function showExportModal(title,csv){
-      var ov=document.createElement('div'); ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px';
+      var ov=document.createElement('div'); ov.style.cssText='position:fixed;inset:0;background:rgba(15,27,45,.45);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px';
       var safeTitle=title.replace(/</g,'&lt;');
-      ov.innerHTML='<div style="background:#221208;border:1px solid #5a3218;border-radius:12px;width:100%;max-width:540px;display:flex;flex-direction:column;overflow:hidden;max-height:80vh">'+
-        '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #3a2010"><span style="font-family:Cormorant Garamond,serif;font-size:18px;color:#f8ede0">'+safeTitle+'</span><button id="lm-exp-close" style="background:none;border:none;color:#8a6848;font-size:20px;cursor:pointer;padding:2px 6px">&#x2715;</button></div>'+
-        '<textarea readonly spellcheck="false" style="flex:1;margin:14px 18px;padding:10px;border:1.5px solid #5a3218;border-radius:7px;background:#180e08;color:#d4bca8;font-family:Courier New,monospace;font-size:11.5px;resize:none;outline:none;min-height:160px" id="lm-exp-ta"></textarea>'+
-        '<div style="padding:10px 18px 14px;border-top:1px solid #3a2010;display:flex;gap:10px;align-items:center"><span style="font-size:12px;color:#8a6848;flex:1">Copy and save as .csv</span><button id="lm-exp-copy" style="background:#c96b00;color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer">Copy to Clipboard</button></div>'+
+      ov.innerHTML='<div style="background:#FFFFFF;border:1px solid #CFD8E3;border-radius:12px;width:100%;max-width:540px;display:flex;flex-direction:column;overflow:hidden;max-height:80vh">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #E3E8EF"><span style="font-size:16px;font-weight:800;color:#0F2742">'+safeTitle+'</span><button id="lm-exp-close" style="background:none;border:none;color:#5B6B82;font-size:20px;cursor:pointer;padding:2px 6px">&#x2715;</button></div>'+
+        '<textarea readonly spellcheck="false" style="flex:1;margin:14px 18px;padding:10px;border:1.5px solid #CFD8E3;border-radius:7px;background:#F8FAFC;color:#0F1B2D;font-family:Consolas,monospace;font-size:11.5px;resize:none;outline:none;min-height:160px" id="lm-exp-ta"></textarea>'+
+        '<div style="padding:10px 18px 14px;border-top:1px solid #E3E8EF;display:flex;gap:10px;align-items:center"><span style="font-size:12px;color:#5B6B82;flex:1">Copy and save as .csv</span><button id="lm-exp-copy" style="background:#0E7490;color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer">Copy to Clipboard</button></div>'+
         '</div>';
       document.body.appendChild(ov);
       var ta=ov.querySelector('#lm-exp-ta'); ta.value=csv;
