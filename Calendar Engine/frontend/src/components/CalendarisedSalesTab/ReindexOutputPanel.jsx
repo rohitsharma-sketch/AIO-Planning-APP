@@ -34,6 +34,8 @@ function downloadCsv(rows, filename) {
 // 0 - a store with no sales that day genuinely has no row in the source, which
 // is not the same claim as "sold zero".
 const cell = (v) => (v == null ? '' : v)
+// On-screen only (CSV keeps cell()/round2 full precision): whole rupees, Indian grouping.
+const money = (v) => (v == null ? '' : Math.round(v).toLocaleString('en-IN'))
 // Deliberately `== null` rather than the old app's falsy test (`v ? ... : ''`):
 // a month whose rows genuinely sum to 0 is a real, different fact from one with
 // no rows at all, and the live data does contain such totals - 49 of them in
@@ -729,16 +731,23 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
           the CSV export on whichever tab is open, instead of each tab having
           its own separate month picker. */}
       {activeSub !== 'raw' && monthCols.length > 0 && (
-        <div className="scm-toolbar" style={{ marginBottom: '10px', flexWrap: 'wrap' }}>
-          <span className="sdt-tb-label">Months</span>
-          {monthCols.map(m => (
-            <label key={m} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer' }}>
-              <input type="checkbox" checked={activeMonths.has(m)} onChange={() => toggleMonth(m)} />
-              {m}
-            </label>
+        <div className="rx-section" style={{ borderTop: 'none', marginTop: '4px', paddingTop: 0 }}>
+          <div className="rx-label">
+            Months
+            <button className="rx-link" onClick={() => setSelectedMonths(new Set(monthCols))}>All</button>
+            <button className="rx-link" onClick={() => setSelectedMonths(new Set())}>None</button>
+          </div>
+          {Object.entries(monthCols.reduce((g, m) => ((g[m.slice(0, 4)] ||= []).push(m), g), {})).map(([yr, ms]) => (
+            <div key={yr} className="rx-year">
+              <button className="rx-yr" title={`Toggle all ${yr} months`}
+                      onClick={() => { const allOn = ms.every(m => activeMonths.has(m)); ms.forEach(m => activeMonths.has(m) === allOn && toggleMonth(m)) }}>{yr}</button>
+              {ms.map(m => (
+                <button key={m} className={`rx-chip${activeMonths.has(m) ? ' on' : ''}`} title={m} onClick={() => toggleMonth(m)}>
+                  {MONTH_ABBR[+m.slice(5, 7) - 1]}
+                </button>
+              ))}
+            </div>
           ))}
-          <button onClick={() => setSelectedMonths(new Set(monthCols))}>All</button>
-          <button onClick={() => setSelectedMonths(new Set())}>None</button>
         </div>
       )}
 
@@ -760,42 +769,31 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
               Date/Month + Value only regardless of which extra fields were
               picked - a lighter, restricted preview for a quicker look instead
               of the full detailed breakdown. User's choice, not automatic. */}
-          <div className="scm-toolbar" style={{ marginBottom: '8px' }}>
-            <span className="sdt-tb-label">View</span>
-            <button className={viewMode === 'wide' ? 'active' : ''} onClick={() => setViewMode('wide')}>Wide</button>
-            <button className={viewMode === 'stacked' ? 'active' : ''} onClick={() => setViewMode('stacked')}>Stacked</button>
-            {viewMode === 'stacked' && (
-              <span style={{ fontSize: '11px', color: 'var(--muted)' }}>
-                Store + {result.source === 'dw' ? 'Date' : 'Month'} + Value only, summed across any other output fields.
-              </span>
-            )}
-          </div>
           <div className="scm-toolbar">
-            <div className="field">
-              <label htmlFor="rx-search">Search</label>
-              <input id="rx-search" type="text" style={{ width: '240px' }}
-                placeholder={viewMode === 'wide' ? 'store, division, cluster' : 'store, cluster'}
-                value={search} onChange={e => setSearch(e.target.value)} />
+            <div className="rx-seg" title={viewMode === 'stacked'
+              ? `Store + ${result.source === 'dw' ? 'Date' : 'Month'} + Value only, summed across any other output fields`
+              : 'One row per store, one column per date/month'}>
+              <button className={viewMode === 'wide' ? 'active' : ''} onClick={() => setViewMode('wide')}>Wide</button>
+              <button className={viewMode === 'stacked' ? 'active' : ''} onClick={() => setViewMode('stacked')}>Stacked</button>
             </div>
-            {viewMode === 'wide' ? (
-              <button className="btn" onClick={downloadReindexed} disabled={!filteredWide.length}>
+            <input id="rx-search" type="search" style={{ width: '240px' }} aria-label="Search"
+              placeholder={viewMode === 'wide' ? 'Search store, division, cluster' : 'Search store, cluster'}
+              value={search} onChange={e => setSearch(e.target.value)} />
+            <span style={{ fontSize: '11px', color: 'var(--muted)' }}>
+              {countText(viewMode === 'wide' ? filteredWide.length : filteredStacked.length)}
+            </span>
+            <div className="scm-toolbar-right">
+              <button className="btn" onClick={viewMode === 'wide' ? downloadReindexed : downloadStacked}
+                      disabled={!(viewMode === 'wide' ? filteredWide : filteredStacked).length}>
                 Download CSV
               </button>
-            ) : (
-              <button className="btn" onClick={downloadStacked} disabled={!filteredStacked.length}>
-                Download CSV
-              </button>
-            )}
-          </div>
-          <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
-            {countText(viewMode === 'wide' ? filteredWide.length : filteredStacked.length)}
+            </div>
           </div>
           {viewMode === 'wide' ? (
             <div className="tbl-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Cluster</th>
                     {kfHeaders.map(h => <th key={h}>{h}</th>)}
                     {visibleColumns.map(c => <th key={c} style={num}>{c}</th>)}
                   </tr>
@@ -812,16 +810,14 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                       if (shown >= RX_CAP) break
                       out.push(
                         <tr className="rx-ref-date-row" key={`ref-${cluster}`}>
-                          <th style={{ textAlign: 'left' }}>{cluster} - Reference Date</th>
-                          {kfHeaders.map(h => <th key={`ref-${cluster}-${h}`} />)}
+                          <th style={{ textAlign: 'left' }} colSpan={kfHeaders.length}>{cluster} - Reference Date</th>
                           {visibleColumns.map(c => <th key={`ref-${cluster}-${c}`} style={num}>{refDateOf(cluster, c)}</th>)}
                         </tr>
                       )
                       if (hasFestivalRowFor(cluster)) {
                         out.push(
                           <tr className="rx-ref-date-row" key={`fest-${cluster}`}>
-                            <th style={{ textAlign: 'left' }}>{cluster} - Festival</th>
-                            {kfHeaders.map(h => <th key={`fest-${cluster}-${h}`} />)}
+                            <th style={{ textAlign: 'left' }} colSpan={kfHeaders.length}>{cluster} - Festival</th>
                             {visibleColumns.map(c => <th key={`fest-${cluster}-${c}`} style={{ ...num, color: 'var(--warn)' }}>{festivalOf(cluster, c)}</th>)}
                           </tr>
                         )
@@ -830,9 +826,8 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                         if (shown >= RX_CAP) break
                         out.push(
                           <tr key={keyFields.map(f => r[f]).join(KEY_SEP)}>
-                            <td>{cluster}</td>
                             {keyFields.map(f => <td key={f} style={{ fontWeight: f === 'store' ? 600 : 400 }}>{r[f]}</td>)}
-                            {visibleColumns.map(c => <td key={c} style={num}>{cell(r.vals[c])}</td>)}
+                            {visibleColumns.map(c => <td key={c} style={num}>{money(r.vals[c])}</td>)}
                           </tr>
                         )
                         shown++
@@ -866,7 +861,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                         <td>{r.col}</td>
                         <td>{refDateOf(cluster, r.col)}</td>
                         {hasFestivalRow && <td style={{ color: 'var(--warn)' }}>{festivalOf(cluster, r.col)}</td>}
-                        <td style={num}>{round2(r.value)}</td>
+                        <td style={num}>{money(r.value)}</td>
                       </tr>
                     )
                   })}

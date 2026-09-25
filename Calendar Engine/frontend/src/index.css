@@ -1090,3 +1090,7 @@ details.rx-section > summary.rx-label { cursor: pointer; display: list-item; }
 .rx-chip.cached { border-bottom-color: var(--green); } .rx-chip.open { border-bottom-color: var(--warn); } .rx-chip.pending { border-bottom-color: var(--muted); }
 .rx-chip.on { background: var(--navy2); border-color: var(--navy2); color: #fff; }
 .rx-chip.on.cached { border-bottom-color: var(--green); } .rx-chip.on.open { border-bottom-color: var(--warn); }
+/* Reindexed Sales toolbar: Wide/Stacked segmented toggle */
+.rx-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.rx-seg button { border: none; border-radius: 0; background: var(--white); color: var(--muted); padding: 5px 12px; font-size: 12px; cursor: pointer; }
+.rx-seg button.active { background: var(--navy2); color: #fff; }
