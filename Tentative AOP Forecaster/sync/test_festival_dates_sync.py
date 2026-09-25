@@ -25,7 +25,9 @@ assert ref[("Shraad", 2027)]["date"] == D("2027-09-15"), ref[("Shraad", 2027)]
 assert ref[("Shraad", 2026)]["source"] == "derived"
 assert ref[("Nuakhai", 2026)]["date"] == D("2026-09-15"), ref[("Nuakhai", 2026)]
 assert ref[("Nuakhai", 2027)]["date"] == D("2027-09-05"), ref[("Nuakhai", 2027)]
-assert ref[("Eid al-Adha", 2026)]["date"] == D("2026-05-27") and ref[("Eid al-Adha", 2026)]["source"] == "override"
+# Indian dates, not global (India = global + 1 day for moon-sighted festivals)
+for fest, iso in [("Eid al-Fitr", "2026-03-21"), ("Eid al-Adha", "2026-05-28"), ("Eid al-Fitr", "2025-03-31"), ("Milad-un-Nabi", "2025-09-05")]:
+    assert ref[(fest, int(iso[:4]))]["date"] == D(iso) and ref[(fest, int(iso[:4]))]["source"] == "google", (fest, ref[(fest, int(iso[:4]))])
 assert ref[("Chhath Puja", 2027)]["date"] == D("2027-11-05") and ref[("Chhath Puja", 2027)]["source"] == "override"
 assert ref[("Diwali", 2027)]["date"] == D("2027-10-29") and ref[("Diwali", 2027)]["source"] == "google"
 assert ref[("Kali Puja", 2027)]["date"] == D("2027-10-29")

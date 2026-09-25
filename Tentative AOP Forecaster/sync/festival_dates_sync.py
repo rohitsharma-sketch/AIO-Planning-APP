@@ -60,8 +60,12 @@ DERIVED = {
     "Kali Puja": ("Diwali", 0, "Same day as Diwali"),
 }
 # (festival, year) -> (date, reason stored as source_name)
+# Dates must be INDIAN, never global (user rule 2026-09-25): India sights the
+# moon a day after Saudi/global, so Eid, Bakrid, Milad etc. fall one day later
+# here - Google's India calendar already carries the Indian date. Never add an
+# override that puts back a global date (the old Eid al-Adha 2026 = 05-27
+# "J&K" override was the global date and was removed for this reason).
 OVERRIDES = {
-    ("Eid al-Adha", 2026): ("2026-05-27", "J&K date (Google: 2026-05-28)"),
     ("Chhath Puja", 2027): ("2027-11-05", "Closing day (Google: 2027-11-04)"),
 }
 
