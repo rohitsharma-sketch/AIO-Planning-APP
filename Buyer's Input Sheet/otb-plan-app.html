@@ -31,15 +31,9 @@
   --cy:#0E7490;--cy-b:#E7F1F4;--cy-br:#AACFDA;
   /* table block hues */
   --blk-st:#C2410C;--blk-hist:#3D5AD6;--blk-plan:#0E7490;
-  /* navigation — dark navy, matching --topbar-bg, so sidebar+topbar read as one
-     chrome frame around the light working area (2026-09-25: was a white sidebar
-     under a navy topbar, two disconnected tones; this is the "not a whole white
-     app" fix — data tables stay light/readable, only the chrome deepens). Reuses
-     the on-navy teal (#14B8A6/#2DD4BF) already defined for .tbar .tbtn.pri below,
-     not a new accent. */
-  --nav:#0F2742;--nav2:rgba(255,255,255,.10);--nav3:rgba(255,255,255,.07);--nav-t:#E7ECF3;--nav-m:#8FA3BE;
+  /* navigation */
+  --nav:#FFFFFF;--nav2:#E3E8EF;--nav3:#F1F4F8;--nav-t:#1E2A3B;--nav-m:#7A8AA0;
   --nav-a:var(--ac);--nav-ab-pct:10%;--nav-ab:#E7F1F4;
-  --nav-onDark-ac:#2DD4BF;--nav-onDark-ac-b:rgba(45,212,191,.16);
   /* chrome */
   --topbar-bg:#0F2742;--topbar-tx:#FFFFFF;--th-bg:#F4F6FA;--th-tx:#334155;--th-mu:#5B6B82;
   /* type & sizing */
@@ -69,8 +63,8 @@ button{font-family:inherit}
 .snav-sec{padding:16px 16px 6px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--nav-m)}
 .ni{display:flex;align-items:center;gap:8px;padding:8px 10px;margin:1px 8px;border-radius:7px;cursor:pointer;transition:background .12s,color .12s;color:var(--nav-t);font-size:12.5px;font-weight:500;position:relative;border:1px solid transparent}
 .ni:hover{background:var(--nav3)}
-.ni.act{background:var(--nav-onDark-ac-b);color:var(--nav-onDark-ac);font-weight:700}
-.ni.act::before{content:'';position:absolute;left:-8px;top:7px;bottom:7px;width:3px;border-radius:0 3px 3px 0;background:var(--nav-onDark-ac)}
+.ni.act{background:var(--ac-l);color:var(--ac);font-weight:700}
+.ni.act::before{content:'';position:absolute;left:-8px;top:7px;bottom:7px;width:3px;border-radius:0 3px 3px 0;background:var(--ac)}
 .ni .ico{font-size:14px;width:18px;text-align:center}
 .ni .lbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ni .nbdg{font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;background:var(--s3);color:var(--t3)}
@@ -79,7 +73,7 @@ button{font-family:inherit}
 .ni.ni-dragging{opacity:.35}
 .ni.ni-drop-above{border-top-color:var(--ac)}
 .ni.ni-drop-below{border-bottom-color:var(--ac)}
-.add-dept-ni{color:var(--nav-onDark-ac)!important;font-weight:600}
+.add-dept-ni{color:var(--ac)!important;font-weight:600}
 .snav-foot{margin-top:auto;border-top:1px solid var(--nav2);padding:10px 8px}
 .snav-status{padding:6px 10px;font-size:11px;color:var(--t3);display:flex;align-items:center;gap:7px}
 .status-dot{width:7px;height:7px;border-radius:50%;background:var(--po);flex-shrink:0;animation:pulse 2.4s infinite}
