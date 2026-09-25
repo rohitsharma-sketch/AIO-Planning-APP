@@ -4827,7 +4827,7 @@ function buildAopGrid(){
   const _h=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const _d=iso=>iso?new Date(iso).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'';
   const verOpts=[`<option value="">Latest publish (live)${verLabel&&_aopPendingVer==null?' - '+_h(verLabel):''}</option>`]
-    .concat(_aopVersions.map(v=>`<option value="${v.id}"${_aopPendingVer===v.id?' selected':''}>${_h(v.version_label||'Unnamed')} - ${_d(v.published_at)} - Rs.${(v.total_mamj_lakhs/100).toFixed(1)} Cr${v.growth_pct!=null?' ('+(v.growth_pct>=0?'+':'')+v.growth_pct.toFixed(1)+'%)':''}</option>`));
+    .concat(_aopVersions.map(v=>`<option value="${v.id}"${_aopPendingVer===v.id?' selected':''}>${_h(v.version_label||'Unnamed')} - ${_d(v.published_at)} - Rs.${(v.total_mamj_lakhs/100).toFixed(1)} Cr${(g=>g!=null?' (LFL '+(g>=0?'+':'')+g.toFixed(1)+'%)':'')(v.lfl_growth_pct??v.growth_pct)}</option>`));
   const pinned=_aopPendingVer!=null&&!_aopVersions.some(v=>v.id===_aopPendingVer)
     ?`<option value="${_aopPendingVer}" selected>${_h(verLabel||'Pinned version')} - ${_d(pub)}</option>`:'';
   const verChip=`<select class="aop-ver-sel" title="AOP Forecaster version to sync" onchange="onAopVersionChange(this.value)"

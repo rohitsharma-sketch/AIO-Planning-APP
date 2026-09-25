@@ -241,11 +241,13 @@ def list_aop_history(session, limit: int = 15) -> list[dict]:
     try:
         _ensure_history_table(session)
         versions = session.execute(text("""
-            SELECT data->>'label', data->>'sessionId', data->>'createdAt', last_modified_at
+            SELECT data->>'label', data->>'sessionId', data->>'createdAt',
+                   COALESCE(data->>'lastModifiedAt', last_modified_at::text)
             FROM planning_inputs.plan_versions
         """)).fetchall()
         pubs = session.execute(text("""
-            SELECT id, session_id, published_at, division_totals, total_mamj_lakhs, growth_pct
+            SELECT id, session_id, published_at, division_totals, total_mamj_lakhs, growth_pct,
+                   division_base_totals, division_engine_totals
             FROM planning_inputs.aop_publish_history
             WHERE session_id IN (SELECT data->>'sessionId' FROM planning_inputs.plan_versions)
             ORDER BY published_at
@@ -258,12 +260,25 @@ def list_aop_history(session, limit: int = 15) -> list[dict]:
                 "division_totals": p[3],
                 "total_mamj_lakhs": float(p[4]) if p[4] is not None else 0.0,
                 "growth_pct": float(p[5]) if p[5] is not None else None,
+                "lfl_growth_pct": lfl_growth_pct(p[6], p[7]),
                 "version_label": label,
             }
             for label, _sid, p in pick_version_publishes(versions, pubs)[:limit]
         ]
     except Exception:
         return []
+
+
+def lfl_growth_pct(base_totals, engine_totals):
+    """MAMJ LFL growth % of one publish = sum(engine forecast) / sum(base) - 1
+    over MENS/LADIES/KIDS - the same figure BIS shows as "Growth vs LY" after
+    syncing that publish (it seeds from engine_bases over bases). None when a
+    publish predates those columns."""
+    if not base_totals or not engine_totals:
+        return None
+    b = sum(float(v) for d in PUBLISH_DIVS for v in (base_totals.get(d) or {}).values())
+    e = sum(float(v) for d in PUBLISH_DIVS for v in (engine_totals.get(d) or {}).values())
+    return round((e / b - 1) * 100, 1) if b else None
 
 
 def _ts(iso_or_dt):
@@ -275,29 +290,26 @@ def _ts(iso_or_dt):
 
 def pick_version_publishes(versions, pubs, tolerance_s=120):
     """[(label, session_id, publish_row)] newest version first - one entry PER
-    SAVED VERSION. Several versions can share one AOP session (Version 2 and
-    Version 3 did, 2026-09-24), so the old one-publish-per-session query hid
-    all but one of them. A version owns its session's publishes from its own
-    creation up to the next version's creation (the first version has no
-    start bound, the last none at the end); its entry is the latest publish it
-    owns. Boundaries sit `tolerance_s` before createdAt because a version is
-    saved seconds before OR after the run that publishes it.
-    versions: (label, session_id, createdAt iso, last_modified_at);
+    SAVED VERSION: the latest publish of the version's session made at or
+    before the version was last SAVED (+ `tolerance_s`, because a save lands
+    seconds before OR after the run that publishes it).
+    Why "last saved" and not "latest in the session" (2026-09-25): every AOP
+    run publishes, including unsaved what-if runs, and several versions can
+    share one session. Version 2 (saved 15 Sep at 10% flat) had an unsaved
+    23 Sep run at MENS 15 / LADIES 12 / KIDS 9 in its session; BIS synced that
+    run as "Version 2" (+12.2%) while AOP's card showed the saved +10.0%.
+    Bounding by the save time keeps unsaved runs out of any saved version,
+    and deleting another version (V3 was) can't change what a version shows.
+    versions: (label, session_id, createdAt iso, savedAt iso);
     pubs: (id, session_id, published_at, ...) sorted by published_at."""
     import datetime as _dt
     tol = _dt.timedelta(seconds=tolerance_s)
-    out, by_sid = [], {}
-    for v in versions:
-        by_sid.setdefault(v[1], []).append(v)
-    for sid, vs in by_sid.items():
-        vs = sorted(vs, key=lambda v: _ts(v[2]) or _ts(v[3]))
-        sp = [p for p in pubs if p[1] == sid]
-        for i, v in enumerate(vs):
-            start = _ts(v[2]) - tol if i > 0 and v[2] else None
-            end = _ts(vs[i + 1][2]) - tol if i + 1 < len(vs) and vs[i + 1][2] else None
-            owned = [p for p in sp if (start is None or p[2] >= start) and (end is None or p[2] < end)]
-            if owned:
-                out.append((v[0], sid, owned[-1]))
+    out = []
+    for label, sid, created, saved in versions:
+        cutoff = _ts(saved) or _ts(created)
+        owned = [p for p in pubs if p[1] == sid and (cutoff is None or p[2] <= cutoff + tol)]
+        if owned:
+            out.append((label, sid, owned[-1]))
     out.sort(key=lambda t: t[2][2], reverse=True)
     return out
 

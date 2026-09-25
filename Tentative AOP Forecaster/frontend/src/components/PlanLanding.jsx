@@ -121,8 +121,18 @@ export default function PlanLanding({ onNewPlan, onResume, theme, onThemeChange 
   const [versionList, setVersionList] = useState([])
   const versions = versionList
 
+  // {version label -> latest publish} from /api/config/aop-versions: the card's
+  // growth figure must be the one BIS shows after syncing that version (engine
+  // forecast / base of its latest publish), not an unweighted average of the
+  // growth inputs saved with the version (2026-09-25: card said +10.0% while
+  // BIS correctly showed +12.2% for Version 2's 23 Sep publish).
+  const [publishByLabel, setPublishByLabel] = useState({})
   useEffect(() => {
     loadPlanVersions().then(v => setVersionList(v))
+    fetch(apiUrl('/api/config/aop-versions'), { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : { versions: [] }))
+      .then(d => setPublishByLabel(Object.fromEntries((d.versions || []).map(p => [p.version_label, p]))))
+      .catch(() => {})
   }, [])
 
   async function handleDelete(id) {
@@ -202,18 +212,23 @@ export default function PlanLanding({ onNewPlan, onResume, theme, onThemeChange 
         <div className="pl-log">
           <div className="pl-log-hd">Saved plan versions</div>
           {versions.map((v, idx) => {
-            const avg = _avgGrowth(v.fingerprint || {})
-            const date = new Date(v.lastModifiedAt).toLocaleString('en-IN', {
+            const pub = publishByLabel[v.label]
+            const pubGrowth = pub?.lfl_growth_pct
+            const avg = pubGrowth != null ? pubGrowth.toFixed(1) : _avgGrowth(v.fingerprint || {})
+            const fmt = iso => new Date(iso).toLocaleString('en-IN', {
               day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
             })
+            const date = fmt(pub?.published_at || v.lastModifiedAt)
             return (
               <div key={v.id} className="pl-log-row">
                 <div className="pl-log-row-info">
                   <span className="pl-log-label">{v.label}</span>
                   <span className="pl-log-meta">
                     {idx === 0 && <span className="pl-log-cur-badge">Current</span>}
-                    {avg != null && <span>Avg MAMJ growth: {avg > 0 ? '+' : ''}{avg}%</span>}
-                    <span className="pl-log-date">{date}</span>
+                    {avg != null && (pubGrowth != null
+                      ? <span title="MAMJ LFL growth of this version's latest publish (engine forecast / base) - the figure BIS shows after syncing it">MAMJ LFL growth: {avg > 0 ? '+' : ''}{avg}%</span>
+                      : <span title="Not published yet - simple average of the growth inputs saved with this version">Avg input growth: {avg > 0 ? '+' : ''}{avg}%</span>)}
+                    <span className="pl-log-date" title={pub ? 'Latest publish' : 'Last saved'}>{pub ? 'Published ' : ''}{date}</span>
                   </span>
                 </div>
                 <div className="pl-row-actions">

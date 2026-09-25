@@ -65,13 +65,28 @@ def test_versions_sharing_one_session_each_get_their_own_publish():
     from publish_aop_targets import pick_version_publishes
     IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
     t = lambda *a: dt.datetime(2026, 9, *a, tzinfo=IST)
-    versions = [("Version 1", "A", "2026-09-11T11:22:05Z", None),
-                ("Version 2", "S", "2026-09-15T05:49:38Z", None),   # 11:19:38 IST
-                ("Version 3", "S", "2026-09-24T11:58:42Z", None)]   # 17:28:42 IST
-    pubs = [(32, "A", t(15, 10, 20)), (40, "S", t(15, 11, 19, 26)), (90, "S", t(23, 17, 30)),
-            (111, "S", t(24, 17, 28, 59))]
+    # (label, session, createdAt, savedAt) - V2 last saved 15 Sep 11:37 IST at 10% flat
+    versions = [("Version 1", "A", "2026-09-11T11:22:05Z", "2026-09-15T04:50:00Z"),
+                ("Version 2", "S", "2026-09-15T05:49:38Z", "2026-09-15T06:07:00Z"),
+                ("Version 3", "S", "2026-09-24T11:58:42Z", "2026-09-24T11:58:42Z")]
+    pubs = [(32, "A", t(15, 10, 20)), (40, "S", t(15, 11, 19, 26)), (41, "S", t(15, 11, 37, 30)),
+            (90, "S", t(23, 17, 30)),       # unsaved what-if run (MENS 15 / LADIES 12 / KIDS 9)
+            (111, "S", t(24, 17, 28, 59))]  # published 17 s AFTER V3 was saved
     got = {label: p[0] for label, _sid, p in pick_version_publishes(versions, pubs)}
-    assert got == {"Version 3": 111, "Version 2": 90, "Version 1": 32}, got
+    assert got == {"Version 3": 111, "Version 2": 41, "Version 1": 32}, got
+    # Deleting V3 must not hand its run (or the unsaved 23 Sep run) to V2.
+    got = {label: p[0] for label, _sid, p in pick_version_publishes(versions[:2], pubs)}
+    assert got == {"Version 2": 41, "Version 1": 32}, got
+
+
+def test_lfl_growth_matches_bis_growth_vs_ly():
+    """Version 2's 23 Sep publish: base 388.85 -> engine 436.17 = +12.2%, the
+    figure BIS shows. RETAIL/GM never count; old publishes without the columns -> None."""
+    from publish_aop_targets import lfl_growth_pct
+    base = {"MENS": {"202703": 15311.0}, "LADIES": {"202703": 11486.0}, "KIDS": {"202703": 12088.0}, "RETAIL": {"202703": 999.0}}
+    eng = {"MENS": {"202703": 17608.0}, "LADIES": {"202703": 12864.0}, "KIDS": {"202703": 13145.0}, "RETAIL": {"202703": 5.0}}
+    assert lfl_growth_pct(base, eng) == 12.2, lfl_growth_pct(base, eng)
+    assert lfl_growth_pct(None, eng) is None
 
 
 if __name__ == "__main__":

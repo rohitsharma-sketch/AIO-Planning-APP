@@ -257,7 +257,7 @@ def aop_versions():
     from db.publish_aop_targets import list_aop_history
     db = SessionLocal()
     try:
-        return {"versions": [{k: v[k] for k in ("id", "version_label", "published_at", "total_mamj_lakhs", "growth_pct")}
+        return {"versions": [{k: v[k] for k in ("id", "version_label", "published_at", "total_mamj_lakhs", "growth_pct", "lfl_growth_pct")}
                              for v in list_aop_history(db, limit=30)]}
     finally:
         db.close()
