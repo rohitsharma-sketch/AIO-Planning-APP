@@ -131,8 +131,8 @@ function PlanSnapshot() {
           <Link to="/department-plan/final-results" style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
             margin: '10px 12px 4px', padding: '7px', borderRadius: 6,
-            background: 'rgba(99,179,237,0.14)', border: '1px solid rgba(99,179,237,0.25)',
-            color: 'rgba(99,179,237,0.9)', fontSize: 11, fontWeight: 700,
+            background: 'rgba(232,169,190,0.14)', border: '1px solid rgba(232,169,190,0.25)',
+            color: 'rgba(232,169,190,0.9)', fontSize: 11, fontWeight: 700,
             textDecoration: 'none', letterSpacing: 0.3,
           }}>
             View Full Results →
@@ -225,7 +225,7 @@ export default function Sidebar() {
                       background: isActive ? theme.sidebarActive : 'transparent',
                       fontSize: 12.5, textDecoration: 'none',
                       fontWeight: isActive ? 700 : 500,
-                      borderLeft: isActive ? `3px solid ${'#5FB8CC'}` : '3px solid transparent',
+                      borderLeft: isActive ? `3px solid ${'#D98BA5'}` : '3px solid transparent',
                       transition: 'background 0.15s',
                     })}
                   >
@@ -234,7 +234,7 @@ export default function Sidebar() {
                       <span style={{ fontSize: 9, background: 'rgba(255,255,255,0.10)', color: 'rgba(255,255,255,0.45)', borderRadius: 4, padding: '1px 5px', letterSpacing: 0.3, marginLeft: 4 }}>opt</span>
                     )}
                     {sub.final && (
-                      <span style={{ fontSize: 9, background: 'rgba(99,179,237,0.18)', color: 'rgba(99,179,237,0.9)', borderRadius: 4, padding: '1px 5px', letterSpacing: 0.3, marginLeft: 4, fontWeight: 700 }}>out</span>
+                      <span style={{ fontSize: 9, background: 'rgba(232,169,190,0.18)', color: 'rgba(232,169,190,0.9)', borderRadius: 4, padding: '1px 5px', letterSpacing: 0.3, marginLeft: 4, fontWeight: 700 }}>out</span>
                     )}
                   </NavLink>
                 ))}
@@ -251,7 +251,7 @@ export default function Sidebar() {
                 background: isActive ? theme.sidebarActive : 'transparent',
                 fontSize: 13.5, textDecoration: 'none',
                 fontWeight: isActive ? 700 : 500,
-                borderLeft: isActive ? `3px solid ${'#5FB8CC'}` : '3px solid transparent',
+                borderLeft: isActive ? `3px solid ${'#D98BA5'}` : '3px solid transparent',
                 transition: 'background 0.15s',
               })}
             >

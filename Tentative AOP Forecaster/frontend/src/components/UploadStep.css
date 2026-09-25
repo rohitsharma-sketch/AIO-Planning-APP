@@ -49,7 +49,7 @@
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
 }
-.us-card-secondary:hover:not(:disabled) { border-color: var(--navy3); box-shadow: 0 6px 20px rgba(14,116,144,.12); }
+.us-card-secondary:hover:not(:disabled) { border-color: var(--navy3); box-shadow: 0 6px 20px rgba(122,31,61,.12); }
 
 .us-card-header { display: flex; align-items: center; }
 .us-card-chip {

@@ -21,7 +21,7 @@ const QUARTERS = [
 // Chart palette = the app theme (index.css): navy ink, teal forecast, slate base,
 // store types LfL blue / Ramp amber / NSO green (same as the .tag-* chips).
 const NAVY   = '#0F2742'
-const NAVY2  = '#0E7490'
+const NAVY2  = '#7A1F3D'
 const LIGHT  = '#B9C8D9'
 const ORANGE = '#B45309'
 const TEAL   = '#15803D'

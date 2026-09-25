@@ -1,5 +1,5 @@
 // One palette for the RS Planning suite (2026-09-25 makeover): the same navy
-// chrome + teal accent + light data area as the AOP Forecaster and the Buyer's
+// chrome + royal burgundy accent + light data area as the AOP Forecaster and the Buyer's
 // Input Sheet. Key names are unchanged - every page reads them inline and
 // App.jsx also exposes each one as a CSS variable (--primary, --surface, ...).
 export const theme = {
@@ -8,9 +8,9 @@ export const theme = {
 
   // Brand
   navy:         '#0F2742',   // chrome (sidebar + page header), strong headings
-  primary:      '#0E7490',   // teal accent - links, active states, primary actions
-  primaryLight: '#E7F1F4',   // accent tint
-  primaryDark:  '#155E75',   // accent hover
+  primary:      '#7A1F3D',   // burgundy accent - links, active states, primary actions
+  primaryLight: '#F6E9EE',   // accent tint
+  primaryDark:  '#5E1730',   // accent hover
 
   // Accent (positive)
   accent:       '#15803D',
@@ -23,7 +23,7 @@ export const theme = {
 
   // Surfaces
   surface:    '#FFFFFF',   // cards, panels
-  surfaceAlt: '#F3F5F9',   // page background
+  surfaceAlt: '#F5F3F4',   // page background
   surfaceUp:  '#F8FAFC',   // table heads, toolbars inside a card
 
   // Borders

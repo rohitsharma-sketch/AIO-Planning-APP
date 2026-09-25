@@ -13,13 +13,13 @@
   /* brand */
   --navy:     #0F2742;   /* top bar, headings, strong text */
   --navy2:    #1B3A5C;   /* navy hover */
-  --navy3:    #0E7490;   /* accent (teal) - links, active states, primary actions */
-  --accent-h: #155E75;   /* accent hover */
-  --light:    #E7F1F4;   /* accent tint - selected rows, soft fills */
-  --accent-b: #AACFDA;   /* accent border */
+  --navy3:    #7A1F3D;   /* accent (burgundy) - links, active states, primary actions */
+  --accent-h: #5E1730;   /* accent hover */
+  --light:    #F6E9EE;   /* accent tint - selected rows, soft fills */
+  --accent-b: #E2BFCB;   /* accent border */
 
   /* surfaces & text */
-  --bg:       #F3F5F9;
+  --bg:       #F5F3F4;
   --white:    #FFFFFF;
   --surface2: #F8FAFC;   /* zebra rows, table heads */
   --surface3: #F1F4F8;

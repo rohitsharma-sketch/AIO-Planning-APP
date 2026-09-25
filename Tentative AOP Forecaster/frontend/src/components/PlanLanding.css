@@ -45,7 +45,7 @@
 }
 .pl-tile:hover:not(:disabled) {
   border-color: var(--navy3);
-  box-shadow: 0 6px 20px rgba(14,116,144,.14);
+  box-shadow: 0 6px 20px rgba(122,31,61,.14);
   transform: translateY(-1px);
 }
 .pl-tile:disabled { opacity: .55; }

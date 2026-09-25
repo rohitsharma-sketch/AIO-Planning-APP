@@ -814,6 +814,6 @@ function btnStyle(variant, disabled) {
   if (variant === 'primary')   return { ...base, background: theme.primary,  color: '#fff' }
   if (variant === 'secondary') return { ...base, background: theme.accent,   color: '#fff' }
   if (variant === 'accent')    return { ...base, background: '#0EA5E9',      color: '#fff' }
-  if (variant === 'teal')     return { ...base, background: '#0D9488',      color: '#fff' }
+  if (variant === 'teal')     return { ...base, background: '#7A1F3D',      color: '#fff' }
   return { ...base, background: 'none', color: theme.textSecondary, border: `1px solid ${theme.border}` }
 }

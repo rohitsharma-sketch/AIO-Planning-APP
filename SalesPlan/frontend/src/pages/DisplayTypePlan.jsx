@@ -264,7 +264,7 @@ export default function DisplayTypePlan() {
         )}
 
         {status?.qty_run && (
-          <a href={`${API}/export`} style={btnStyle(true, '#0D9488', true)}>↓ Export Excel</a>
+          <a href={`${API}/export`} style={btnStyle(true, '#7A1F3D', true)}>↓ Export Excel</a>
         )}
       </div>
 

@@ -4,7 +4,7 @@ import { theme } from '../theme'
 const API = '/api/planning/deviation/sor'
 
 const RULE_BADGE = {
-  avg:       { label: 'AVG',       bg: '#0D9488', color: '#fff' },
+  avg:       { label: 'AVG',       bg: '#7A1F3D', color: '#fff' },
   plan_only: { label: 'PLAN ONLY', bg: '#B45309', color: '#fff' },
   ppo_only:  { label: 'PPO ONLY',  bg: '#8B5CF6', color: '#fff' },
   zero:      { label: 'ZERO',      bg: '#6B7280', color: '#fff' },
@@ -230,7 +230,7 @@ export default function SorDeviation() {
             disabled={!canReapp}
             style={{
               padding: '10px 24px', borderRadius: 8, border: 'none', cursor: canReapp ? 'pointer' : 'not-allowed',
-              background: canReapp ? '#0D9488' : theme.surfaceAlt,
+              background: canReapp ? '#7A1F3D' : theme.surfaceAlt,
               color: canReapp ? '#fff' : theme.textMuted, fontWeight: 700, fontSize: 13,
             }}
           >
@@ -343,7 +343,7 @@ export default function SorDeviation() {
                     Avg total: {total.toFixed(2)}%
                   </span>
                   {reappSum !== null && (
-                    <span style={{ fontFamily: theme.fontMono, fontSize: 12, color: '#0D9488', minWidth: 90, textAlign: 'right' }}>
+                    <span style={{ fontFamily: theme.fontMono, fontSize: 12, color: '#7A1F3D', minWidth: 90, textAlign: 'right' }}>
                       Reapp Σ: {reappSum.toFixed(1)}%
                     </span>
                   )}
@@ -361,7 +361,7 @@ export default function SorDeviation() {
                           <th style={{ ...HDR }}>Plan %</th>
                           <th style={{ ...HDR }}>PPO %</th>
                           <th style={{ ...HDR }}>Avg %</th>
-                          {viewMode === 'reapp' && <th style={{ ...HDR, color: '#0D9488' }}>Reapp %</th>}
+                          {viewMode === 'reapp' && <th style={{ ...HDR, color: '#7A1F3D' }}>Reapp %</th>}
                           <th style={{ ...HDR, textAlign: 'center' }}>Rule</th>
                         </tr>
                       </thead>
@@ -385,7 +385,7 @@ export default function SorDeviation() {
                               <td style={{ ...CELL }}>{md.ppo_cont?.toFixed(2) ?? '—'}</td>
                               <td style={{ ...CELL, fontWeight: 700, color: theme.textPrimary }}>{md.avg_cont?.toFixed(4) ?? '—'}</td>
                               {viewMode === 'reapp' && (
-                                <td style={{ ...CELL, fontWeight: 700, color: '#0D9488' }}>{md.reapp_cont?.toFixed(4) ?? '—'}</td>
+                                <td style={{ ...CELL, fontWeight: 700, color: '#7A1F3D' }}>{md.reapp_cont?.toFixed(4) ?? '—'}</td>
                               )}
                               <td style={{ ...CELL, textAlign: 'center' }}><RuleBadge rule={md.rule} /></td>
                             </tr>

@@ -17,29 +17,29 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   /* surfaces & text */
-  --bg:#F3F5F9;--sf:#FFFFFF;--s1:#FFFFFF;--s2:#F8FAFC;--s3:#F1F4F8;
+  --bg:#F5F3F4;--sf:#FFFFFF;--s1:#FFFFFF;--s2:#F8FAFC;--s3:#F1F4F8;
   --bd:#E3E8EF;--bm:#CFD8E3;--bh:#94A3B8;
   --tx:#0F1B2D;--t2:#334155;--t3:#5B6B82;--mu:#8A99AD;
   /* accent (hex: _recomputeAccentDerived mixes these in JS) */
-  --ac:#0E7490;--ac-h:#155E75;--ac-tint:10%;--ac-bord:34%;
-  --ac-l:#E7F1F4;--ac-b:#AACFDA;
-  --ac-grad:linear-gradient(135deg,#0E7490,#0B5F77);
+  --ac:#7A1F3D;--ac-h:#5E1730;--ac-tint:10%;--ac-bord:34%;
+  --ac-l:#F6E9EE;--ac-b:#E2BFCB;
+  --ac-grad:linear-gradient(135deg,#7A1F3D,#5E1730);
   /* semantic */
   --po:#15803D;--po-b:#ECFDF3;--po-br:#A6E3BD;
   --ne:#B42318;--ne-b:#FEF3F2;--ne-br:#F7C1BC;
   --wa:#B45309;--wa-b:#FFF7E8;--wa-br:#F5D39A;
-  --cy:#0E7490;--cy-b:#E7F1F4;--cy-br:#AACFDA;
+  --cy:#7A1F3D;--cy-b:#F6E9EE;--cy-br:#E2BFCB;
   /* table block hues */
-  --blk-st:#C2410C;--blk-hist:#3D5AD6;--blk-plan:#0E7490;
+  --blk-st:#C2410C;--blk-hist:#3D5AD6;--blk-plan:#7A1F3D;
   /* navigation — dark navy, matching --topbar-bg, so sidebar+topbar read as one
      chrome frame around the light working area (2026-09-25: was a white sidebar
      under a navy topbar, two disconnected tones; this is the "not a whole white
      app" fix — data tables stay light/readable, only the chrome deepens). Reuses
-     the on-navy teal (#14B8A6/#2DD4BF) already defined for .tbar .tbtn.pri below,
+     the on-navy burgundy (#9E2A4F/#B8375F) already defined for .tbar .tbtn.pri below,
      not a new accent. */
   --nav:#0F2742;--nav2:rgba(255,255,255,.10);--nav3:rgba(255,255,255,.07);--nav-t:#E7ECF3;--nav-m:#8FA3BE;
-  --nav-a:var(--ac);--nav-ab-pct:10%;--nav-ab:#E7F1F4;
-  --nav-onDark-ac:#2DD4BF;--nav-onDark-ac-b:rgba(45,212,191,.16);
+  --nav-a:var(--ac);--nav-ab-pct:10%;--nav-ab:#F6E9EE;
+  --nav-onDark-ac:#E8A9BE;--nav-onDark-ac-b:rgba(232,169,190,.16);
   /* chrome */
   --topbar-bg:#0F2742;--topbar-tx:#FFFFFF;--th-bg:#F4F6FA;--th-tx:#334155;--th-mu:#5B6B82;
   /* type & sizing */
@@ -98,7 +98,7 @@ button{font-family:inherit}
 /* ── BUTTONS ────────────────────────────────────────────────────────── */
 .tbtn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 13px;border-radius:7px;border:1px solid var(--bm);background:var(--sf);color:var(--t2);font-size:12px;font-weight:600;cursor:pointer;transition:background .15s,border-color .15s,color .15s,box-shadow .15s;white-space:nowrap;user-select:none;letter-spacing:.005em}
 .tbtn:hover{border-color:var(--ac);color:var(--ac);background:var(--ac-l)}
-.tbtn.pri{background:var(--ac);border-color:var(--ac);color:#fff;box-shadow:0 1px 3px rgba(14,116,144,.35)}
+.tbtn.pri{background:var(--ac);border-color:var(--ac);color:#fff;box-shadow:0 1px 3px rgba(122,31,61,.35)}
 .tbtn.pri:hover{background:var(--ac-h);border-color:var(--ac-h);color:#fff}
 .tbtn.dng{color:var(--ne);border-color:var(--ne-br);background:var(--ne-b)}
 .tbtn.dng:hover{background:var(--ne);border-color:var(--ne);color:#fff}
@@ -107,8 +107,8 @@ button{font-family:inherit}
 /* on the navy bar */
 .tbar .tbtn{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.16);color:#E2E8F0}
 .tbar .tbtn:hover{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.3);color:#fff}
-.tbar .tbtn.pri{background:#14B8A6;border-color:#14B8A6;color:#062A33;box-shadow:none}
-.tbar .tbtn.pri:hover{background:#2DD4BF;border-color:#2DD4BF;color:#062A33}
+.tbar .tbtn.pri{background:#9E2A4F;border-color:#9E2A4F;color:#FFFFFF;box-shadow:none}
+.tbar .tbtn.pri:hover{background:#B8375F;border-color:#B8375F;color:#FFFFFF}
 /* AOP status button */
 .aop-chip .aop-dot{width:7px;height:7px;border-radius:50%;background:#94A3B8;flex-shrink:0}
 .aop-chip.locked .aop-dot{background:#FBBF24}
@@ -198,7 +198,7 @@ button{font-family:inherit}
 .divtabs.vis{display:flex}
 .dtab{display:inline-flex;align-items:center;height:34px;padding:0 16px;border-radius:8px;border:1px solid var(--bd);background:var(--sf);color:var(--t2);font-size:12px;font-weight:700;letter-spacing:.03em;cursor:pointer;transition:all .15s;user-select:none;outline:none;box-shadow:var(--shadow-sm)}
 .dtab:hover:not(.on){border-color:var(--ac-b);color:var(--ac)}
-.dtab.on{background:var(--ac);border-color:var(--ac);color:#fff;box-shadow:0 2px 8px rgba(14,116,144,.3)}
+.dtab.on{background:var(--ac);border-color:var(--ac);color:#fff;box-shadow:0 2px 8px rgba(122,31,61,.3)}
 .dtab-cnt{display:inline-block;font-size:10px;font-weight:700;background:var(--s3);color:var(--t3);padding:1px 7px;border-radius:10px;margin-left:8px;min-width:20px;text-align:center;letter-spacing:0}
 .dtab.on .dtab-cnt{background:rgba(255,255,255,.22);color:#fff}
 
@@ -1696,10 +1696,10 @@ function abbrev(arr){
 
 /* ── MONTH PILLS ───────────────────────────────── */
 const MP_QC=[
-  {c:'#0E7490',bg:'#F1F4F8',t:'#475569',b:'#E3E8EF'},
-  {c:'#0E7490',bg:'#F1F4F8',t:'#475569',b:'#E3E8EF'},
-  {c:'#0E7490',bg:'#F1F4F8',t:'#475569',b:'#E3E8EF'},
-  {c:'#0E7490',bg:'#F1F4F8',t:'#475569',b:'#E3E8EF'},
+  {c:'#7A1F3D',bg:'#F1F4F8',t:'#475569',b:'#E3E8EF'},
+  {c:'#7A1F3D',bg:'#F1F4F8',t:'#475569',b:'#E3E8EF'},
+  {c:'#7A1F3D',bg:'#F1F4F8',t:'#475569',b:'#E3E8EF'},
+  {c:'#7A1F3D',bg:'#F1F4F8',t:'#475569',b:'#E3E8EF'},
 ];
 function toggleMonth(i){
   if(i===-1){S.selM=new Set([0,1,2,3,4,5,6,7,8,9,10,11]);}
