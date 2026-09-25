@@ -108,6 +108,8 @@ export function explainMove(info, cluster, rm, fm, { amount, refDays } = {}) {
       lines.push(`  ${dominoReason(info, cluster, rm, fm, festivals)}`)
     }
   }
-  lines.push('Sales split by the share of the month\'s days that moved.')
+  lines.push(info.basis?.[cluster]?.[rm] === 'sales'
+    ? 'Amount = the actual sales of the days that moved (daily sales from the day-wise data).'
+    : 'Amount = the month\'s sales x the share of its days that moved (no daily sales for this month).')
   return lines.join('\n')
 }

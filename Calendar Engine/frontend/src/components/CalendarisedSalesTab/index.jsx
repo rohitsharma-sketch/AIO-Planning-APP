@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { buildMoveInfo } from '../../lib/moveReasons'
 import LinkStatusPanel from './LinkStatusPanel'
 import ReindexOutputPanel from './ReindexOutputPanel'
-import { startReindex, pollReindex, getReindexCacheStatus, listCalendarLibrary, getCalendar, getStoreClusterMap, getSourceSchema, putSalesdataLinkSelection, getSalesSnapshotSummary } from '../../lib/api'
+import { getClusterDaySales, startReindex, pollReindex, getReindexCacheStatus, listCalendarLibrary, getCalendar, getStoreClusterMap, getSourceSchema, putSalesdataLinkSelection, getSalesSnapshotSummary } from '../../lib/api'
 import { parseDate, fmtISO, addDays } from '../../lib/dateUtils'
 
 // Same compact "45s" / "2m 05s" style as LinkStatusPanel's fmtDuration.
@@ -38,7 +38,15 @@ function clearActiveJob() {
 // Returns `detail` too so runRx() can pass detail.dayMap to startReindex without
 // a second getCalendar call.
 async function fetchCalendarMaps(calendarId, source) {
-  const detail = await getCalendar(calendarId)
+  // Day sales per cluster (AOP's daily day-weights sync) - the Month Wise Matrix
+  // splits a ref month by the SALES of the days feeding each TY month, same as
+  // AOP's festival shift; a cluster/month without daily data falls back to day
+  // count (2026-09-25). A failed fetch just means day count everywhere.
+  const [detail, daySales] = await Promise.all([
+    getCalendar(calendarId),
+    source === 'dw' ? Promise.resolve({ days: {} }) : getClusterDaySales().catch(() => ({ days: {} })),
+  ])
+  const splitBasis = {}   // {cluster: {refMonth: 'sales' | 'days'}}
   const catLabel = (pos, core) => (pos < 0 ? 'Pre' : pos < core ? 'Core' : 'Post')
   const festMap = {}
   for (const cl of detail.clusters || []) {
@@ -86,12 +94,23 @@ async function fetchCalendarMaps(calendarId, source) {
     } else {
       const buckets = {}
       const fwd = (fwdSplitByCluster[cl] = {})
+      const w = daySales.days?.[cl] || {}
+      const wsum = {}, uncovered = new Set()
       for (const [ref, fut] of pairs) {
         const rm = ref.slice(0, 7), fm = fut.slice(0, 7)
         const b = (buckets[fm] = buckets[fm] || {})
         b[rm] = (b[rm] || 0) + 1
         const f = (fwd[rm] = fwd[rm] || {})
         f[fm] = (f[fm] || 0) + 1
+        if (w[ref] == null) uncovered.add(rm)
+        else { const s = (wsum[rm] = wsum[rm] || {}); s[fm] = (s[fm] || 0) + Math.max(w[ref], 0) }
+      }
+      // Sales-weighted where every day of the ref month has daily sales; the
+      // matrix only uses these as proportions, so weights replace counts as-is.
+      const basis = (splitBasis[cl] = {})
+      for (const rm of Object.keys(fwd)) {
+        const tot = Object.values(wsum[rm] || {}).reduce((x, y) => x + y, 0)
+        if (!uncovered.has(rm) && tot > 0) { fwd[rm] = { ...wsum[rm] }; basis[rm] = 'sales' } else basis[rm] = 'days'
       }
       const m = (refByCluster[cl] = {})
       const mm = (refMonthsByCluster[cl] = {})
@@ -102,7 +121,7 @@ async function fetchCalendarMaps(calendarId, source) {
     }
   }
   // Hover reasons for the Month Wise Matrix (lib/moveReasons.js, 2026-09-25).
-  const moveInfo = buildMoveInfo(detail)
+  const moveInfo = { ...buildMoveInfo(detail), basis: splitBasis }
   return { detail, festivalByDate, refByCluster, refMonthsByCluster, fwdSplitByCluster, moveInfo }
 }
 

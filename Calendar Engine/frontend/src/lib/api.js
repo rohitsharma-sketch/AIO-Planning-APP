@@ -63,6 +63,7 @@ export async function importFestivals(file) {
 }
 
 // festival-reference (Google "Holidays in India" cache - see sync/festival_dates_sync.py)
+export const getClusterDaySales = () => fetchJson('/cluster-day-sales')
 export const getFestivalReference = (years) => fetchJson(`/festival-reference${years ? `?years=${years.join(',')}` : ''}`)
 export const syncFestivalReference = () => fetchJson('/festival-reference/sync', { method: 'POST' })
 

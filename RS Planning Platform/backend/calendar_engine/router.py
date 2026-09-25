@@ -180,6 +180,25 @@ def parse_festival_template(data, filename):
     return _festival_rows_from_table(_load_table_from_upload(data, filename))
 
 
+@router.get("/cluster-day-sales")
+def cluster_day_sales(user: dict = Depends(require_login)):
+    """{"days": {cluster: {YYYY-MM-DD: SL_V}}} from calendar.cluster_day_sales
+    (AOP's daily sync/day_weights_sync.py) - lets the Month Wise Matrix split a
+    month by the real sales of the days that moved, the same way AOP's
+    festival shift does (2026-09-25). {} until that sync has run once."""
+    from sqlalchemy import text
+    session = SessionLocal()
+    try:
+        if not session.execute(text("SELECT to_regclass('calendar.cluster_day_sales')")).scalar():
+            return {"days": {}}
+        out = {}
+        for cl, d, v in session.execute(text("SELECT cluster_name, sale_date, value FROM calendar.cluster_day_sales")):
+            out.setdefault(cl, {})[d.isoformat()] = float(v)
+        return {"days": out}
+    finally:
+        session.close()
+
+
 @router.get("/calendar-library")
 def list_calendars(user: dict = Depends(require_login)):
     session = SessionLocal()

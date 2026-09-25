@@ -1126,9 +1126,9 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
               </button>
             </div>
             <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
-              Each reference month's actual sales, split across TY months proportional to how many of that
-              month's calendar days landed in each - a month whose days split across two TY months (a festival
-              mid-month shift) shows a real split here, not a single guess. <b>Tinted cells moved to another month -
+              Each reference month's actual sales, split across TY months by the actual sales of the days that
+              landed in each (day-wise data; months without daily sales fall back to their share of days) - the
+              same split AOP's festival shift uses. <b>Tinted cells moved to another month -
               hover one to see which days moved and why</b> (a festival shifting, or ordinary days re-placed around it).
               Download covers every store, not just this preview.
             </div>
@@ -1167,7 +1167,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                                 const moved = r.cells[m] > 0 && m.slice(5) !== r.refMonth.slice(5)
                                 const why = moved && explainMove(moveInfo, sel.cluster, r.refMonth, m, {
                                   amount: r.cells[m],
-                                  refDays: Object.values(fwdSplitByCluster?.[sel.cluster]?.[r.refMonth] || {}).reduce((a, b) => a + b, 0) || undefined,
+                                  refDays: new Date(+r.refMonth.slice(0, 4), +r.refMonth.slice(5, 7), 0).getDate(),
                                 })
                                 return <td key={m} style={num} className={why ? 'mx-moved' : undefined} title={why || undefined}>{money(r.cells[m])}</td>
                               })}
