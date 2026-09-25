@@ -705,9 +705,9 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
   return (
     <div className="card">
       {result.isSnapshot && (
-        <div style={{ background: 'var(--navy2)', color: '#fff', borderRadius: '4px', padding: '6px 10px', marginBottom: '10px', fontSize: '11px' }}>
-          Showing last run's monthly summary - computed {new Date(result.computedAt).toLocaleString()}.
-          Run Reindex above to refresh. Festival labels are not available in cached snapshots.
+        <div style={{ background: 'rgba(47,85,151,0.08)', color: 'var(--navy2)', border: '1px solid rgba(47,85,151,0.25)', borderRadius: '6px', padding: '6px 10px', marginBottom: '10px', fontSize: '11px' }}
+             title="Run Reindex above to refresh. Festival labels are not available in cached snapshots.">
+          Last run's summary - computed {new Date(result.computedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}. Run Reindex to refresh.
         </div>
       )}
       <div className="tabs">
@@ -875,15 +875,12 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
       {activeSub === 'summary' && (
         <>
           <div className="scm-toolbar">
-            <div className="field">
-              <label htmlFor="rx-summary-search">Search</label>
-              <input id="rx-summary-search" type="text" style={{ width: '240px' }}
-                placeholder="store, division, cluster"
+            <input id="rx-summary-search" type="search" aria-label="Search" style={{ width: '240px' }}
+                placeholder="Search store, division, cluster"
                 value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
-            <button className="btn" onClick={downloadSummary} disabled={!summaryRows.length}>
+            <div className="scm-toolbar-right"><button className="btn" onClick={downloadSummary} disabled={!summaryRows.length}>
               Download CSV
-            </button>
+            </button></div>
           </div>
           <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
             {countText(summaryRows.length)} · {visibleMonthCols.length} month column(s)
@@ -922,13 +919,13 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                     {keyFields.map(f => <td key={f} style={{ fontWeight: f === 'store' ? 600 : 400 }}>{row[f]}</td>)}
                     {visibleMonthCols.map(m => hasActual ? (
                       <Fragment key={m}>
-                        <td style={num}>{round2(actualSums[m])}</td>
-                        <td style={num}>{round2(sums[m])}</td>
-                        <td style={num}>{round2((sums[m] || 0) - (actualSums[m] || 0))}</td>
+                        <td style={num}>{money(actualSums[m])}</td>
+                        <td style={num}>{money(sums[m])}</td>
+                        <td style={num}>{money((sums[m] || 0) - (actualSums[m] || 0))}</td>
                         <td style={num}>{fmtPct(pctDiff(actualSums[m], sums[m]))}</td>
                       </Fragment>
                     ) : (
-                      <td key={m} style={num}>{round2(sums[m])}</td>
+                      <td key={m} style={num}>{money(sums[m])}</td>
                     ))}
                   </tr>
                 ))}
@@ -941,9 +938,9 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
       {activeSub === 'cluster' && (
         <>
           <div className="scm-toolbar">
-            <button className="btn" onClick={downloadCluster} disabled={!clusterRows.length}>
+            <div className="scm-toolbar-right"><button className="btn" onClick={downloadCluster} disabled={!clusterRows.length}>
               Download CSV
-            </button>
+            </button></div>
           </div>
           <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
             {clusterRows.length} cluster(s) x {visibleColumns.length} column(s)
@@ -961,7 +958,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                 {clusterRows.map(r => (
                   <tr key={r.cluster}>
                     <td style={{ fontWeight: 600 }}>{r.cluster}</td>
-                    {visibleColumns.map(c => <td key={c} style={num}>{round2(r.vals[c])}</td>)}
+                    {visibleColumns.map(c => <td key={c} style={num}>{money(r.vals[c])}</td>)}
                   </tr>
                 ))}
               </tbody>
@@ -1000,13 +997,10 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
         return (
           <>
             <div className="scm-toolbar">
-              <div className="field">
-                <label htmlFor="rx-mwcomp-search">Search</label>
-                <input id="rx-mwcomp-search" type="text" style={{ width: '240px' }}
-                  placeholder="store, division, cluster"
+              <input id="rx-mwcomp-search" type="search" aria-label="Search" style={{ width: '240px' }}
+                  placeholder="Search store, division, cluster"
                   value={search} onChange={e => setSearch(e.target.value)} />
-              </div>
-              <button className="btn" onClick={downloadStoreMonth} disabled={!smRows.length}>Download CSV</button>
+              <div className="scm-toolbar-right"><button className="btn" onClick={downloadStoreMonth} disabled={!smRows.length}>Download CSV</button></div>
             </div>
             <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
               {countText(displayRows.length)} · Each month: <strong>{actualYear} Actual</strong> vs <strong>{rxYear} Reindexed</strong> (matched by month number - difference reflects festival/calendar shifts)
@@ -1063,8 +1057,8 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                         const diff = (a != null && r != null) ? r - a : null
                         return (
                           <Fragment key={ym}>
-                            <td style={{ ...num, borderLeft: '2px solid var(--border)' }}>{round2(a)}</td>
-                            <td style={{ ...num, color: diff == null ? undefined : diff > 0.005 ? 'var(--navy2)' : diff < -0.005 ? 'var(--red)' : undefined }}>{round2(r)}</td>
+                            <td style={{ ...num, borderLeft: '2px solid var(--border)' }}>{money(a)}</td>
+                            <td style={{ ...num, color: diff == null ? undefined : diff > 0.005 ? 'var(--navy2)' : diff < -0.005 ? 'var(--red)' : undefined }}>{money(r)}</td>
                           </Fragment>
                         )
                       })}
@@ -1078,8 +1072,8 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                       const a = grandActualMM[mm] || 0, r = grandRxYM[ym] || 0
                       return (
                         <Fragment key={ym}>
-                          <td style={{ ...num, borderLeft: '2px solid var(--border)' }}>{round2(a)}</td>
-                          <td style={{ ...num, color: r > a + 0.005 ? 'var(--navy2)' : r < a - 0.005 ? 'var(--red)' : undefined }}>{round2(r)}</td>
+                          <td style={{ ...num, borderLeft: '2px solid var(--border)' }}>{money(a)}</td>
+                          <td style={{ ...num, color: r > a + 0.005 ? 'var(--navy2)' : r < a - 0.005 ? 'var(--red)' : undefined }}>{money(r)}</td>
                         </Fragment>
                       )
                     })}
@@ -1163,8 +1157,8 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                           {sel.rows.map(r => (
                             <tr key={r.refMonth}>
                               <td style={{ fontWeight: 600 }}>{r.refMonth}</td>
-                              <td style={num}>{round2(r.total)}</td>
-                              {monthCols.map(m => <td key={m} style={num}>{round2(r.cells[m])}</td>)}
+                              <td style={num}>{money(r.total)}</td>
+                              {monthCols.map(m => <td key={m} style={num}>{money(r.cells[m])}</td>)}
                             </tr>
                           ))}
                         </tbody>
@@ -1187,12 +1181,9 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
         return (
           <>
             <div className="scm-toolbar">
-              <div className="field">
-                <label htmlFor="rx-daycomp-search">Search</label>
-                <input id="rx-daycomp-search" type="text" style={{ width: '240px' }}
-                  placeholder="store, division, cluster"
+              <input id="rx-daycomp-search" type="search" aria-label="Search" style={{ width: '240px' }}
+                  placeholder="Search store, division, cluster"
                   value={search} onChange={e => setSearch(e.target.value)} />
-              </div>
               {/* Download button with month-picker popover - DW date columns can
                   run to 365 per year; the popover lets the planner pick which
                   months to export before the (potentially very wide) CSV is built. */}
@@ -1285,7 +1276,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                           <td>{cluster}</td>
                           {keyFields.map(f => <td key={f} style={{ fontWeight: f === 'store' ? 600 : 400 }}>{meta[f]}</td>)}
                           <td style={{ fontSize: '10px', color: 'var(--muted)', fontStyle: 'italic' }}>Actual</td>
-                          {visibleColumns.map(c => <td key={`a-${c}`} style={num}>{round2(actualByMMDD[c.slice(5)])}</td>)}
+                          {visibleColumns.map(c => <td key={`a-${c}`} style={num}>{money(actualByMMDD[c.slice(5)])}</td>)}
                         </tr>
                         {/* Reindexed row - colour-coded vs actual */}
                         <tr>
@@ -1298,7 +1289,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                             const diff = (a != null && r != null) ? r - a : null
                             return (
                               <td key={`r-${c}`} style={{ ...num, color: diff == null ? undefined : diff > 0.005 ? 'var(--navy2)' : diff < -0.005 ? 'var(--red)' : undefined }}>
-                                {round2(r)}
+                                {money(r)}
                               </td>
                             )
                           })}
@@ -1309,12 +1300,12 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                   <tr style={{ borderTop: '2px solid var(--border)', fontWeight: 700, background: 'var(--light)' }}>
                     <td />{keyFields.map((f, i) => <td key={f}>{i === 0 ? 'Grand Total' : ''}</td>)}
                     <td style={{ fontSize: '10px', fontStyle: 'italic' }}>Actual</td>
-                    {visibleColumns.map(c => <td key={`ga-${c}`} style={num}>{round2(grandActualMMDD[c.slice(5)])}</td>)}
+                    {visibleColumns.map(c => <td key={`ga-${c}`} style={num}>{money(grandActualMMDD[c.slice(5)])}</td>)}
                   </tr>
                   <tr style={{ fontWeight: 700 }}>
                     <td />{keyFields.map(f => <td key={f} />)}
                     <td style={{ fontSize: '10px', color: 'var(--navy2)', fontStyle: 'italic' }}>Reindexed</td>
-                    {visibleColumns.map(c => <td key={`gr-${c}`} style={num}>{round2(grandRxDate[c])}</td>)}
+                    {visibleColumns.map(c => <td key={`gr-${c}`} style={num}>{money(grandRxDate[c])}</td>)}
                   </tr>
                 </tbody>
               </table>
@@ -1326,9 +1317,9 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
       {activeSub === 'p1p2' && (
         <>
           <div className="scm-toolbar">
-            <button className="btn" onClick={downloadP1P2} disabled={!p1p2Rows.length}>
+            <div className="scm-toolbar-right"><button className="btn" onClick={downloadP1P2} disabled={!p1p2Rows.length}>
               Download CSV
-            </button>
+            </button></div>
           </div>
           <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
             P1 = day 1-15, P2 = day 16-end of month. Actual is that month's own reference-year
@@ -1364,13 +1355,13 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                 {p1p2Rows.map(r => (
                   <tr key={r.month}>
                     <td style={{ fontWeight: 600 }}>{r.month}</td>
-                    <td style={num}>{round2(r.a1)}</td>
-                    <td style={num}>{round2(r.r1)}</td>
-                    <td style={num}>{round2(r.r1 - r.a1)}</td>
+                    <td style={num}>{money(r.a1)}</td>
+                    <td style={num}>{money(r.r1)}</td>
+                    <td style={num}>{money(r.r1 - r.a1)}</td>
                     <td style={num}>{fmtPct(pctDiff(r.a1, r.r1))}</td>
-                    <td style={num}>{round2(r.a2)}</td>
-                    <td style={num}>{round2(r.r2)}</td>
-                    <td style={num}>{round2(r.r2 - r.a2)}</td>
+                    <td style={num}>{money(r.a2)}</td>
+                    <td style={num}>{money(r.r2)}</td>
+                    <td style={num}>{money(r.r2 - r.a2)}</td>
                     <td style={num}>{fmtPct(pctDiff(r.a2, r.r2))}</td>
                   </tr>
                 ))}
