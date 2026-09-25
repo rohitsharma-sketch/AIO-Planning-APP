@@ -410,6 +410,14 @@ table tr:hover td { background: var(--accent-bg) !important; }
   opacity: 0.9;
 }
 .rx-ref-date-row + tr th { top: 28px; }
+/* compact cluster header (reference month + short festival line) */
+.rx-ref-sub { margin-left: 8px; font-size: 10.5px; font-weight: 500; opacity: .7; }
+.rx-ref-cell { min-width: 88px; max-width: 120px; vertical-align: top; }
+.rx-fest {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  margin-top: 2px; font-size: 10.5px; font-style: normal; font-weight: 600; line-height: 1.25;
+  white-space: normal; color: #BFE0CD;
+}
 
 /* Festive row tinting for the Day-by-Day table (OutputSection.jsx).
    Ported from table.dtbl tr.r-pre/.r-core/.r-post (calendar_engine.html lines

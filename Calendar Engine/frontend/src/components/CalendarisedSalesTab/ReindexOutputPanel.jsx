@@ -625,6 +625,10 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
   // Keyed by exact YYYY-MM-DD for day-wise columns and by the YYYY-MM prefix
   // for month-wise ones - a plain lookup by the column string works for both.
   const festivalOf = (cluster, c) => (festivalByCluster?.[cluster]?.[c] || []).join(', ')
+  // Preview only: each festival once, without the (Pre)/(Core)/(Post) parts -
+  // the full list stays in the cell's tooltip and in the CSV (2026-09-25).
+  const festivalShort = (cluster, c) => [...new Set((festivalByCluster?.[cluster]?.[c] || [])
+    .map(f => String(f).replace(/\s*\((Pre|Core|Post)\)\s*$/i, '').trim()))].join(' · ')
   const hasFestivalRow = !!festivalByCluster && Object.keys(festivalByCluster).length > 0
   const hasFestivalRowFor = (cluster) => Object.keys(festivalByCluster?.[cluster] || {}).length > 0
 
@@ -809,20 +813,26 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                     const out = []
                     for (const [cluster, rows] of wideByCluster) {
                       if (shown >= RX_CAP) break
+                      // ONE compact header per cluster: reference month + a short
+                      // festival line under it (was two rows whose long festival
+                      // text stretched month columns apart).
+                      const withFest = hasFestivalRowFor(cluster)
                       out.push(
                         <tr className="rx-ref-date-row" key={`ref-${cluster}`}>
-                          <th style={{ textAlign: 'left' }} colSpan={kfHeaders.length}>{cluster} - Reference Date</th>
-                          {visibleColumns.map(c => <th key={`ref-${cluster}-${c}`} style={num}>{refDateOf(cluster, c)}</th>)}
+                          <th style={{ textAlign: 'left' }} colSpan={kfHeaders.length}>
+                            {cluster}<span className="rx-ref-sub">{withFest ? 'Reference month · festivals' : 'Reference month'}</span>
+                          </th>
+                          {visibleColumns.map(c => {
+                            const fs = withFest ? festivalShort(cluster, c) : ''
+                            return (
+                              <th key={`ref-${cluster}-${c}`} style={num} className="rx-ref-cell" title={withFest && fs ? festivalOf(cluster, c) : undefined}>
+                                {refDateOf(cluster, c)}
+                                {fs && <span className="rx-fest">{fs}</span>}
+                              </th>
+                            )
+                          })}
                         </tr>
                       )
-                      if (hasFestivalRowFor(cluster)) {
-                        out.push(
-                          <tr className="rx-ref-date-row" key={`fest-${cluster}`}>
-                            <th style={{ textAlign: 'left' }} colSpan={kfHeaders.length}>{cluster} - Festival</th>
-                            {visibleColumns.map(c => <th key={`fest-${cluster}-${c}`} style={{ ...num, color: 'var(--warn)' }}>{festivalOf(cluster, c)}</th>)}
-                          </tr>
-                        )
-                      }
                       for (const r of rows) {
                         if (shown >= RX_CAP) break
                         out.push(
