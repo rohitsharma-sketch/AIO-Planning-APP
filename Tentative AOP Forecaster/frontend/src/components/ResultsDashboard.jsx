@@ -6,6 +6,7 @@ import {
 import OutputTab from './OutputTab'
 import { toLeaf, MONTHS, TYPES } from '../lib/tags'
 import { apiUrl } from '../lib/apiBase'
+import { useVisibleMonths } from '../lib/horizon'
 import './ResultsDashboard.css'
 
 // FY28_M = [Mar'27 (stub anchor), Apr'27..Jun'27 (Q1), Jul'27..Sep'27 (Q2),
@@ -59,6 +60,9 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
   const [monthFilter, setMonthFilter] = useState([])    // [] = all months
   const [divFilter, setDivFilter]     = useState([])    // [] = all divisions
   const [showLabels, setShowLabels] = useState(true)
+  // Rule 1 (2026-09-25): only months whose base month has closed are shown.
+  const VIS = useVisibleMonths()
+  const quarters = QUARTERS.map(q => ({ ...q, months: q.months.filter(m => VIS.includes(m)) })).filter(q => q.months.length)
 
   // Base source for the charts below: 'actual' is the DB's own actuals (what
   // the engine itself forecast against); 'reindexed' swaps in Calendar
@@ -149,11 +153,11 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
     return next.length === DIVS.length ? [] : next.length ? next : [d]
   })
 
-  const monthOn = m => monthFilter.length === 0 || monthFilter.includes(m)
+  const monthOn = m => VIS.includes(m) && (monthFilter.length === 0 || monthFilter.includes(m))
   const toggleMonth = m => setMonthFilter(f => {
-    const cur = f.length ? f : MONTHS
+    const cur = f.length ? f : VIS
     const next = cur.includes(m) ? cur.filter(x => x !== m) : [...cur, m]
-    return next.length === MONTHS.length ? [] : next.length ? next : [m]
+    return next.length === VIS.length ? [] : next.length ? next : [m]
   })
   const setQuarter = months => setMonthFilter(f =>
     f.length === months.length && months.every(m => f.includes(m)) ? [] : months
@@ -166,7 +170,7 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
   // filter exactly like the charts below already did, instead of always
   // showing the grand total regardless of which chips are toggled off.
   const charts = useMemo(() => {
-    if (!leaves) return { monthly: results.monthly, divisions: results.divisions, store_types: results.store_types, summary }
+    if (!leaves) return { monthly: (results.monthly || []).filter(r => !r.month || VIS.includes(r.month)), divisions: results.divisions, store_types: results.store_types, summary }
     const sel = leaves.filter(r => typeOn(r.Type) && divOn(r.Division))
     const monthIdx = MONTHS.map((m, i) => i).filter(i => monthOn(MONTHS[i]))
     // Sum only the selected months' base/forecast for one row — the Monthly
@@ -219,17 +223,18 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
       n_nso:  new Set(leaves.filter(r => r.Type === 'NSO'  && typeOn(r.Type)).map(r => r.Store)).size,
     }
     return { monthly, divisions, store_types, summary: filteredSummary }
-  }, [leaves, typeFilter, monthFilter, divFilter, results, summary, baseSource, reindexed])
+  }, [leaves, typeFilter, monthFilter, divFilter, results, summary, baseSource, reindexed, VIS])
 
   const { monthly, divisions, store_types, summary: kpiSummary } = charts
   const filterLabel = typeFilter.length ? typeFilter.join(' + ') : 'All store types'
   const monthsChrono = MONTHS.filter(m => monthOn(m))   // click order -> fiscal order
-  const monthLabel = monthFilter.length === 0 ? 'Mar\'27 – Mar\'28'
+  const fullSpan = `${VIS[0]} – ${VIS[VIS.length - 1]}`
+  const monthLabel = monthFilter.length === 0 ? `${fullSpan} (${VIS.length} mo)`
     : monthsChrono.length === 1 ? monthsChrono[0]
     : `${monthsChrono[0]} – ${monthsChrono[monthsChrono.length - 1]} (${monthsChrono.length} mo)`
   // Same-index LY month (Base column) is exactly one fiscal year behind its TY counterpart.
   const toLY = m => m.replace(/'(\d\d)$/, (_, yy) => `'${String(+yy - 1).padStart(2, '0')}`)
-  const baseLabel = monthFilter.length === 0 ? 'Mar\'26 – Mar\'27'
+  const baseLabel = monthFilter.length === 0 ? `${toLY(VIS[0])} – ${toLY(VIS[VIS.length - 1])}`
     : monthsChrono.length === 1 ? toLY(monthsChrono[0])
     : `${toLY(monthsChrono[0])} – ${toLY(monthsChrono[monthsChrono.length - 1])}`
   const typeCount = t => (leaves ? new Set(leaves.filter(r => r.Type === t).map(r => r.Store)).size : { LfL: summary.n_lfl, Ramp: summary.n_ramp, NSO: summary.n_nso }[t])
@@ -380,7 +385,7 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
       {/* ── Month filter: quarter shortcuts + individual month chips ── */}
       <div className="chart-filter-bar">
         <span className="sdt-tb-label">Month</span>
-        {QUARTERS.map(q => {
+        {quarters.map(q => {
           const on = q.months.every(m => monthOn(m)) && monthFilter.length > 0 && monthFilter.length <= q.months.length
           return (
             <button key={q.label} className={`sdt-chip${on ? ' on' : ''}`} onClick={() => setQuarter(q.months)}
@@ -390,13 +395,18 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
           )
         })}
         <span className="month-chip-sep" />
-        {MONTHS.map(m => (
+        {VIS.map(m => (
           <button key={m} className={`sdt-chip month-chip${monthOn(m) ? ' on' : ''}`} onClick={() => toggleMonth(m)}
                   disabled={!leaves && !dataErr} title={`${monthOn(m) ? 'Hide' : 'Show'} ${m}`}>
             {m}
           </button>
         ))}
-        {monthFilter.length > 0 && <button className="sdt-reset" onClick={() => setMonthFilter([])}>Full year</button>}
+        {monthFilter.length > 0 && <button className="sdt-reset" onClick={() => setMonthFilter([])}>All shown months</button>}
+        {VIS.length < MONTHS.length && (
+          <span className="chart-filter-note" title="A forecast month is shown once its base month (the same month last year) has closed in the synced actuals. Later months appear automatically as each month closes.">
+            {MONTHS[VIS.length]} onwards appear once {toLY(MONTHS[VIS.length])} closes
+          </span>
+        )}
       </div>
 
       {/* ── Monthly chart ── */}

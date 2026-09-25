@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import './OutputTab.css'
 import { tagClass, MONTHS, toLeaf } from '../lib/tags'
 import { apiUrl } from '../lib/apiBase'
+import { useVisibleMonths } from '../lib/horizon'
 import { LEVELS, LEVEL_KEYS, EMPTY_DIM, ALL_IDX, aggregate, buildTree, sortTree, flatten, dimOptions, filterLeaves, hasNum, HeaderFilter, Th, DimFilterHeaders, DrillToolbar, useDrill } from '../lib/drill'
 
 const DIVS = ["GM","KIDS","LADIES","MENS","RETAIL"]
@@ -139,7 +140,7 @@ function MultiSelect({ label, options, selected, onChange, colorMap, width }) {
 }
 
 // ── Month select — pivot style with H1/H2 presets ────────────────
-function MonthSelect({ selected, onChange }) {
+function MonthSelect({ selected, onChange, months = MONTHS }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
@@ -149,9 +150,9 @@ function MonthSelect({ selected, onChange }) {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const H1 = MONTHS.slice(0, 6)
-  const H2 = MONTHS.slice(6)
-  const allSelected = selected.length === MONTHS.length
+  const H1 = months.slice(0, 6)
+  const H2 = months.slice(6)
+  const allSelected = selected.length === months.length
   const display = allSelected ? 'All months'
     : selected.length === 1 ? selected[0]
     : `${selected.length} months`
@@ -162,7 +163,7 @@ function MonthSelect({ selected, onChange }) {
     if (selected.includes(m)) {
       if (selected.length > 1) onChange(selected.filter(x => x !== m))
     } else {
-      onChange([...selected, m].sort((a, b) => MONTHS.indexOf(a) - MONTHS.indexOf(b)))
+      onChange([...selected, m].sort((a, b) => months.indexOf(a) - months.indexOf(b)))
     }
   }
 
@@ -170,7 +171,7 @@ function MonthSelect({ selected, onChange }) {
   function selectOnly(m, e) {
     e.stopPropagation()
     if (selected.length === 1 && selected[0] === m) {
-      onChange([...MONTHS])
+      onChange([...months])
     } else {
       onChange([m])
     }
@@ -194,7 +195,7 @@ function MonthSelect({ selected, onChange }) {
           <div className="ms-pv-header">
             <span className="ms-pv-title">Months</span>
             <div className="ms-quick">
-              <button onClick={e => { e.stopPropagation(); onChange([...MONTHS]) }}>All</button>
+              <button onClick={e => { e.stopPropagation(); onChange([...months]) }}>All</button>
               <button onClick={e => { e.stopPropagation(); onChange([...H1]) }}>H1</button>
               <button onClick={e => { e.stopPropagation(); onChange([...H2]) }}>H2</button>
               {selected.length > 0 && (
@@ -206,7 +207,7 @@ function MonthSelect({ selected, onChange }) {
           <div className="ms-pv-options">
             <div
               className={`ms-pv-row ms-pv-all${allSelected ? ' ms-pv-row--checked' : ''}`}
-              onClick={() => onChange(allSelected ? [] : [...MONTHS])}
+              onClick={() => onChange(allSelected ? [] : [...months])}
             >
               <span className={`ms-pv-cb${allSelected ? ' ms-pv-cb--on' : ''}`} />
               <span className="ms-pv-row-label">(Select All)</span>
@@ -214,7 +215,7 @@ function MonthSelect({ selected, onChange }) {
             <div className="ms-pv-divider" />
             {/* 2-column grid of months */}
             <div className="ms-pv-month-grid">
-              {MONTHS.map(m => {
+              {months.map(m => {
                 const checked = isChecked(m)
                 const exclusive = selected.length === 1 && selected[0] === m
                 return (
@@ -263,7 +264,11 @@ export default function OutputTab({ sessionId, runKey }) {
 
   // View controls (original essence)
   const [viewMode, setViewMode]   = useState('summary')
-  const [selMonths, setSelMonths] = useState(MONTHS)
+  // Rule 1 (2026-09-25): only months whose base month has closed are shown.
+  const VIS = useVisibleMonths()
+  const VIS_IDX = useMemo(() => VIS.map(m => MONTHS.indexOf(m)), [VIS])
+  const [selMonths, setSelMonths] = useState(VIS)
+  useEffect(() => { setSelMonths(VIS) }, [VIS])
   const [colSet, setColSet]       = useState('fcst')
 
   // Drill-down structure (shared with the Summary tab's drill table)
@@ -273,7 +278,7 @@ export default function OutputTab({ sessionId, runKey }) {
   // Reset everything when a new run completes — keeps state across navigation
   useEffect(() => {
     setDivFilter([]); setTagFilter([]); setCluster(''); setStoreSearch('')
-    setViewMode('summary'); setSelMonths(MONTHS); setColSet('fcst'); setNumF(EMPTY_NUM)
+    setViewMode('summary'); setSelMonths(VIS); setColSet('fcst'); setNumF(EMPTY_NUM)
     d.setSortCol('fcst'); d.setSortDir(-1)
   }, [runKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -291,7 +296,7 @@ export default function OutputTab({ sessionId, runKey }) {
   const clusters = useMemo(() => Array.from(new Set(leaves.map(r => r.Cluster).filter(c => c && c !== '—'))).sort(), [leaves])
   const options  = useMemo(() => dimOptions(leaves), [leaves])
 
-  const idx = useMemo(() => viewMode === 'summary' ? ALL_IDX : selMonths.map(m => MONTHS.indexOf(m)), [viewMode, selMonths])
+  const idx = useMemo(() => viewMode === 'summary' ? VIS_IDX : selMonths.map(m => MONTHS.indexOf(m)), [viewMode, selMonths, VIS_IDX])
   // Division rollup keeps Division as the fixed top level
   const levels = useMemo(() => viewMode === 'division' ? ['Division', ...d.levels.filter(k => k !== 'Division')] : d.levels, [viewMode, d.levels])
 
@@ -474,7 +479,7 @@ export default function OutputTab({ sessionId, runKey }) {
             ))}
           </div>
         )}
-        {(viewMode === 'monthly' || viewMode === 'division') && <MonthSelect selected={selMonths} onChange={setSelMonths} />}
+        {(viewMode === 'monthly' || viewMode === 'division') && <MonthSelect selected={selMonths} onChange={setSelMonths} months={VIS} />}
       </div>
 
       {/* ── Drill-down table ── */}
@@ -483,7 +488,7 @@ export default function OutputTab({ sessionId, runKey }) {
           <DrillToolbar levels={levels} toggleLevel={d.toggleLevel} expandTo={n => d.expandTo(tree, n)} collapse={d.collapse}
                         lockedFirst={viewMode === 'division' ? 'Division' : undefined} />
           <span className="sdt-count" style={{ marginLeft: 'auto' }}>
-            {flat.length} rows shown · values in ₹ {unit === 'Cr' ? 'Crore' : 'Lakhs'}{viewMode !== 'summary' && selMonths.length < MONTHS.length ? ` · ${selMonths.length} of 13 months` : ''}
+            {flat.length} rows shown · values in ₹ {unit === 'Cr' ? 'Crore' : 'Lakhs'}{viewMode !== 'summary' && selMonths.length < VIS.length ? ` · ${selMonths.length} of ${VIS.length} months` : ''}{VIS.length < MONTHS.length ? ` · ${VIS[0]}–${VIS[VIS.length - 1]} shown (later months appear as their base month closes)` : ''}
           </span>
         </div>
 

@@ -251,7 +251,9 @@ export default function App() {
       // Full session (store counts, default growth, last run's inputs) so
       // Review isn't blank / 0% after opening a saved version (2026-09-25).
       let info = await fetch(apiUrl(`/api/session/${sessionId}`)).then(r => (r.ok ? r.json() : null)).catch(() => null)
-      let note = null
+      let note = info?.last_run?.derived
+        ? "This version was run before its growth inputs were recorded, so they were recovered from its saved forecast. Check them before running again."
+        : null
       if (info && !info.last_run) {
         // Run before its inputs were recorded: its saved version still holds
         // the Mar-Jun MENS/LADIES/KIDS growth (fingerprint "DIV|Mon'YY").

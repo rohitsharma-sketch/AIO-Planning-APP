@@ -163,6 +163,47 @@ async def run(session_id: str, body: RunRequest = RunRequest()):
     return {**results, "run_id": run_id}
 
 
+def _growth_from_detail(rows):
+    """{DIV: {month: rate%}} a run used, recovered from its detail rows: per
+    division x month the base-weighted most common per-LfL-store Engine
+    Forecast / Base - 1, on a 0.5% grid (typed-in rates are whole/half
+    numbers; a small store's rounding or a ref-store/cap effect is an outlier).
+    A month with no base yet carries the previous month's rate forward."""
+    from collections import Counter
+    from engine_v3 import FY28_M, LFL_TAGS
+    votes = {}
+    for r in rows:
+        if r.get("Tag") not in LFL_TAGS:
+            continue
+        div = str(r.get("Division") or "").upper()
+        for m in FY28_M:
+            b = r.get(f"{m} | Base") or 0
+            e = r.get(f"{m} | Engine Forecast", r.get(f"{m} | Forecast")) or 0
+            if b > 0 and e > 0:
+                votes.setdefault(div, {}).setdefault(m, Counter())[round((e / b - 1) * 200) / 2] += b
+    out = {}
+    for div, months in votes.items():
+        prev, out[div] = None, {}
+        for m in FY28_M:
+            prev = months[m].most_common(1)[0][0] if m in months else prev
+            if prev is not None:
+                out[div][m] = prev
+    # ponytail: a small division (RETAIL) can land 0.5 off the rate typed in;
+    # snap it to the value most divisions share that month when within 0.5.
+    # A genuine half-point difference on a small division is lost - fine for
+    # a recovered-inputs fallback, the notice tells the user to check.
+    for m in FY28_M:
+        vals = Counter(d[m] for d in out.values() if m in d)
+        if not vals:
+            continue
+        common, n = vals.most_common(1)[0]
+        if n >= 2:
+            for d in out.values():
+                if m in d and d[m] != common and abs(d[m] - common) <= 0.5:
+                    d[m] = common
+    return out
+
+
 @router.get("/api/session/{session_id}")
 def get_session(session_id: str):
     """Everything Review needs to reopen a saved session: store counts and
@@ -175,6 +216,12 @@ def get_session(session_id: str):
     if os.path.exists(_run_request_path(session_id)):
         with open(_run_request_path(session_id), encoding="utf-8") as f:
             last_run = json.load(f)
+    elif os.path.exists(_detail_path(session_id)):
+        # Run before run_request.json existed: read the growth it actually
+        # used back out of its own forecast (user 2026-09-25 - a version run
+        # at a flat 10% from Apr came back as 6% for Jul-Mar otherwise).
+        with open(_detail_path(session_id), encoding="utf-8") as f:
+            last_run = {"growth_overrides": _growth_from_detail(json.load(f)), "overall_override": None, "derived": True}
     return {"session_id": session_id,
             "from_db": os.path.exists(os.path.join(_session_dir(session_id), ".from_db")),
             **get_file_info(inp), "last_run": last_run}
@@ -1053,10 +1100,18 @@ def delete_plan_version(version_id: str):
     _ensure_plan_versions_table()
     from sqlalchemy import text
     from db.base import SessionLocal
+    from db.plan_version_labels import renumbered
     with SessionLocal() as db:
         db.execute(text(
             "DELETE FROM planning_inputs.plan_versions WHERE id = :id"
         ), {"id": version_id})
+        # Close the numbering gap the delete left ("Version N" labels only;
+        # last_modified_at untouched so list order / "Latest" don't change).
+        rest = [row[0] for row in db.execute(text("SELECT data FROM planning_inputs.plan_versions")).fetchall()]
+        for vid, label in renumbered(rest):
+            db.execute(text(
+                "UPDATE planning_inputs.plan_versions SET data = jsonb_set(data, '{label}', to_jsonb(CAST(:label AS text))) WHERE id = :id"
+            ), {"id": vid, "label": label})
         db.commit()
     return {"ok": True}
 

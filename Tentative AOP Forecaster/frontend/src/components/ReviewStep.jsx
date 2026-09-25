@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react'
 import './ReviewStep.css'
 import { apiUrl } from '../lib/apiBase'
+import { useVisibleMonths } from '../lib/horizon'
 
 const MONTHS  = ["Mar'27","Apr'27","May'27","Jun'27","Jul'27","Aug'27","Sep'27","Oct'27","Nov'27","Dec'27","Jan'28","Feb'28","Mar'28"]
 const DIVS    = ['GM','KIDS','LADIES','MENS','RETAIL']
@@ -10,6 +11,10 @@ function initQuick() { return Object.fromEntries(ALL_ROWS.map(r => [r, ''])) }
 
 export default function ReviewStep({ session, running, onRun, rates, setRates, cellLocks, setCellLocks, onBack, onGoToConfig }) {
   const { n_stores, n_lfl, n_ramp, n_nso, growth_rates, base_sales } = session
+  // Rule 1 (2026-09-25): columns/preview show only months whose base month has
+  // closed. Rates for the hidden months stay in the plan ("All months" fills
+  // them too) so they are ready the day those months close.
+  const VIS = useVisibleMonths()
 
   const [includeDebug, setIncludeDebug] = useState(false)
   const [quick,        setQuick]        = useState(initQuick)
@@ -137,7 +142,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
     { label: 'Q2',        months: ["Jul'27","Aug'27","Sep'27"] },
     { label: 'Q3',        months: ["Oct'27","Nov'27","Dec'27"] },
     { label: 'Q4',        months: ["Jan'28","Feb'28","Mar'28"] },
-  ]
+  ].map(q => ({ ...q, months: q.months.filter(m => VIS.includes(m)) })).filter(q => q.months.length)
   const QTR_LABELS = [...QTRS.map(q => q.label), 'Grand TTL']
 
   const livePreview = useMemo(() => {
@@ -203,14 +208,14 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
       const qFcst = DIVS.reduce((s, d) => s + months.reduce((ss, m) => ss + (lflByDiv[d]?.[m] ?? 0), 0), 0)
       gGrand[label] = qBase > 0 ? ((qFcst - qBase) / qBase) * 100 : 0
     }
-    const allBase = DIVS.reduce((s, d) => s + MONTHS.reduce((ss, m) => ss + (activeLflBase?.[d]?.[m] ?? 0), 0), 0)
-    const allFcst = DIVS.reduce((s, d) => s + MONTHS.reduce((ss, m) => ss + (lflByDiv[d]?.[m] ?? 0), 0), 0)
+    const allBase = DIVS.reduce((s, d) => s + VIS.reduce((ss, m) => ss + (activeLflBase?.[d]?.[m] ?? 0), 0), 0)
+    const allFcst = DIVS.reduce((s, d) => s + VIS.reduce((ss, m) => ss + (lflByDiv[d]?.[m] ?? 0), 0), 0)
     gGrand['Grand TTL'] = allBase > 0 ? ((allFcst - allBase) / allBase) * 100 : 0
 
     const fmtG = v => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
 
     return { rows, grandRow, gRows, gGrand, fmt, fmtG }
-  }, [rates, activeLflBase])
+  }, [rates, activeLflBase, VIS])
 
   const handleRun = () => {
     const { growth_overrides, overall_override } = buildOverrides()
@@ -241,7 +246,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
       </td>
 
       {/* Individual month cells */}
-      {MONTHS.map(m => {
+      {VIS.map(m => {
         const v      = rates[row]?.[m] ?? '0'
         const num    = parseFloat(v)
         const locked = isLocked(row, m)
@@ -333,7 +338,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
               <tr>
                 <th>Division</th>
                 <th className="th-quickset">All months</th>
-                {MONTHS.map(m => <th key={m}>{m}</th>)}
+                {VIS.map(m => <th key={m}>{m}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -393,10 +398,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
                 <thead>
                   <tr>
                     <th style={{textAlign:'left'}}>Division</th>
-                    <th>Q1<span className="qtr-sub">Apr–Jun</span></th>
-                    <th>Q2<span className="qtr-sub">Jul–Sep</span></th>
-                    <th>Q3<span className="qtr-sub">Oct–Dec</span></th>
-                    <th>Q4<span className="qtr-sub">Jan–Mar</span></th>
+                    {QTRS.map(q => <th key={q.label}>{q.label}<span className="qtr-sub">{q.months[0].slice(0, 3)}{q.months.length > 1 ? `–${q.months[q.months.length - 1].slice(0, 3)}` : ''}</span></th>)}
                     <th className="grand-ttl-col">Grand TTL</th>
                   </tr>
                 </thead>
@@ -404,13 +406,13 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
                   {livePreview.rows.map(({ div, qVals }) => (
                     <tr key={div} className="preview-div-row">
                       <td className="preview-div-cell">{div}</td>
-                      {['Q1','Q2','Q3','Q4'].map(q => <td key={q} className="preview-val">{livePreview.fmt(qVals[q])}</td>)}
+                      {QTRS.map(({ label: q }) => <td key={q} className="preview-val">{livePreview.fmt(qVals[q])}</td>)}
                       <td className="preview-val grand-ttl-val">{livePreview.fmt(qVals['Grand TTL'])}</td>
                     </tr>
                   ))}
                   <tr className="preview-grand-total">
                     <td>Grand TTL</td>
-                    {['Q1','Q2','Q3','Q4'].map(q => <td key={q}>{livePreview.fmt(livePreview.grandRow[q])}</td>)}
+                    {QTRS.map(({ label: q }) => <td key={q}>{livePreview.fmt(livePreview.grandRow[q])}</td>)}
                     <td>{livePreview.fmt(livePreview.grandRow['Grand TTL'])}</td>
                   </tr>
                 </tbody>
@@ -432,10 +434,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
                 <thead>
                   <tr>
                     <th style={{textAlign:'left'}}>Division</th>
-                    <th>Q1<span className="qtr-sub">Apr–Jun</span></th>
-                    <th>Q2<span className="qtr-sub">Jul–Sep</span></th>
-                    <th>Q3<span className="qtr-sub">Oct–Dec</span></th>
-                    <th>Q4<span className="qtr-sub">Jan–Mar</span></th>
+                    {QTRS.map(q => <th key={q.label}>{q.label}<span className="qtr-sub">{q.months[0].slice(0, 3)}{q.months.length > 1 ? `–${q.months[q.months.length - 1].slice(0, 3)}` : ''}</span></th>)}
                     <th className="grand-ttl-col">Grand TTL</th>
                   </tr>
                 </thead>
@@ -443,7 +442,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
                   {livePreview.gRows.map(({ div, gVals }) => (
                     <tr key={div} className="preview-div-row">
                       <td className="preview-div-cell">{div}</td>
-                      {['Q1','Q2','Q3','Q4'].map(q => (
+                      {QTRS.map(({ label: q }) => (
                         <td key={q} className={`preview-val growth-val ${gVals[q] >= 0 ? 'pos' : 'neg'}`}>
                           {livePreview.fmtG(gVals[q])}
                         </td>
@@ -455,7 +454,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
                   ))}
                   <tr className="preview-grand-total">
                     <td>Grand TTL</td>
-                    {['Q1','Q2','Q3','Q4'].map(q => <td key={q}>{livePreview.fmtG(livePreview.gGrand[q])}</td>)}
+                    {QTRS.map(({ label: q }) => <td key={q}>{livePreview.fmtG(livePreview.gGrand[q])}</td>)}
                     <td>{livePreview.fmtG(livePreview.gGrand['Grand TTL'])}</td>
                   </tr>
                 </tbody>
