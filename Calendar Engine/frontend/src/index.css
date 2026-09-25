@@ -1072,3 +1072,21 @@ input[type=number].year-input { width: 80px; font-size: 15px; font-weight: 600; 
 /* Combined Link Sales Data Source table (LinkStatusPanel rows, 2026-09-25) */
 .link-src-tbl th, .link-src-tbl td { padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 
+
+/* Run Reindex card (2026-09-25 revamp) */
+.rx-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.rx-controls select { flex: 0 1 auto; min-width: 180px; }
+.rx-hint { font-size: 11px; color: var(--muted); margin: 6px 0 0; }
+.rx-section { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.rx-label { font-size: 11px; font-weight: 700; color: var(--muted); display: flex; align-items: center; gap: 10px; margin-bottom: 6px; cursor: default; }
+details.rx-section > summary.rx-label { cursor: pointer; display: list-item; }
+.rx-legend { font-weight: 400; display: inline-flex; align-items: center; gap: 4px; }
+.rx-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-left: 6px; }
+.rx-dot.cached { background: var(--green); } .rx-dot.open { background: var(--warn); } .rx-dot.pending { background: var(--muted); }
+.rx-link { background: none; border: none; color: var(--navy2); font-size: 11px; font-weight: 600; cursor: pointer; padding: 0; }
+.rx-year { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 4px; }
+.rx-yr { min-width: 48px; font-size: 11px; font-weight: 700; background: none; border: none; color: var(--navy); cursor: pointer; text-align: left; }
+.rx-chip { font-size: 11px; padding: 3px 9px; border-radius: 12px; border: 1px solid var(--border); background: var(--white, #fff); color: var(--muted); cursor: pointer; border-bottom-width: 3px; }
+.rx-chip.cached { border-bottom-color: var(--green); } .rx-chip.open { border-bottom-color: var(--warn); } .rx-chip.pending { border-bottom-color: var(--muted); }
+.rx-chip.on { background: var(--navy2); border-color: var(--navy2); color: #fff; }
+.rx-chip.on.cached { border-bottom-color: var(--green); } .rx-chip.on.open { border-bottom-color: var(--warn); }

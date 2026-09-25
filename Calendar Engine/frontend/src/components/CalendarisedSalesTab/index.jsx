@@ -493,18 +493,32 @@ export default function CalendarisedSalesTab({ isPlanner }) {
 
       <div className="card">
         <h4>Run Reindex</h4>
-        <select value={source} onChange={e => setSource(e.target.value)}>
-          <option value="dw">Day-wise NETAMT</option>
-          <option value="mw">Month-wise Sales Value</option>
-        </select>
-        <select value={calendarId || ''} onChange={e => setCalendarId(e.target.value)}>
-          <option value="">Select a locked calendar...</option>
-          {calendars.map(c => <option key={c.id} value={c.id}>{c.name} ({c.refYear} -&gt; {c.futYear})</option>)}
-        </select>
+        {/* 2026-09-25 revamp: one control row, month chips grouped by year,
+            extra breakdown fields collapsed, long explanations moved to tooltips. */}
+        <div className="rx-controls">
+          <select value={source} onChange={e => setSource(e.target.value)} title="Sales source">
+            <option value="dw">Day-wise NETAMT</option>
+            <option value="mw">Month-wise Sales Value</option>
+          </select>
+          <select value={calendarId || ''} onChange={e => setCalendarId(e.target.value)} title="Locked calendar">
+            <option value="">Select a locked calendar...</option>
+            {calendars.map(c => <option key={c.id} value={c.id}>{c.name} ({c.refYear} -&gt; {c.futYear})</option>)}
+          </select>
+          {schema?.ok && schema.metrics.length > 1 && (
+            <select value={metric || schema.defaultMetric} onChange={e => changeMetric(e.target.value)}
+                    title="Metric - saved automatically; every later Run Reindex for this source reuses it">
+              {schema.metrics.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          )}
+          {isPlanner && (
+            <button className="btn" onClick={runRx} disabled={!!progress || activeRunMonths.size === 0}>
+              {progress ? 'Reindexing...' : `Run Reindex${activeRunMonths.size ? ` (${activeRunMonths.size} mo)` : ''}`}
+            </button>
+          )}
+        </div>
         {selectedCalendar && (
-          <p style={{ fontSize: '11px', color: 'var(--muted)', margin: '6px 0 0' }}>
-            Reindexes <strong>{selectedCalendar.refYear}</strong> sales onto <strong>{selectedCalendar.futYear}</strong> dates -
-            sync {selectedCalendar.refYear} months above (for {source === 'dw' ? 'Day-wise' : 'Month-wise'}) to use it.
+          <p className="rx-hint">
+            Reindexes <strong>{selectedCalendar.refYear}</strong> sales onto <strong>{selectedCalendar.futYear}</strong> dates.
           </p>
         )}
 
@@ -520,97 +534,57 @@ export default function CalendarisedSalesTab({ isPlanner }) {
             says so instead of leaving a blank gap where the checklist should
             be. */}
         {selectedCalendar && syncedMonths.length === 0 && (
-          <p style={{ fontSize: '11px', color: 'var(--warn)', margin: '6px 0 0', fontWeight: 600 }}>
-            No {selectedCalendar.refYear} months are synced yet for {source === 'dw' ? 'Day-wise' : 'Month-wise'} -
-            set the {source === 'dw' ? 'Day-wise' : 'Month-wise'} panel's year range above to include {selectedCalendar.refYear}
-            and click "Sync Selected Range" before this calendar can be reindexed.
+          <p className="rx-hint" style={{ color: 'var(--warn)', fontWeight: 600 }}>
+            No {selectedCalendar.refYear} months are synced for {source === 'dw' ? 'Day-wise' : 'Month-wise'} yet -
+            click "Sync all months" in Link Sales Data Source above.
           </p>
         )}
 
-        {/* Which synced months to actually reindex - previously always the full
-            365-day/12-month set. Narrowing this is the main lever for "shorten
-            the delay": fewer months means less raw data for the worker to read
-            and aggregate. */}
+        {/* Months to reindex, one row per year. Narrowing this is the main lever
+            for a faster run. Chip colour = cache state (see the tooltip). */}
         {syncedMonths.length > 0 && (
-          <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--muted)', marginBottom: '6px' }}>
-              MONTHS TO REINDEX
+          <div className="rx-section">
+            <div className="rx-label" title="A closed month reindexed once under this calendar and these output fields is cached - Run Reindex reuses it. Only Open (current month) and Pending (closed, not cached yet) months do real work.">
+              Months <span className="rx-legend"><i className="rx-dot cached" />cached <i className="rx-dot open" />open <i className="rx-dot pending" />pending</span>
+              <button className="rx-link" onClick={() => setRunMonths(new Set(syncedMonths))}>All</button>
+              <button className="rx-link" onClick={() => setRunMonths(new Set())}>None</button>
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '6px' }}>
-              A closed month reindexed once under this calendar and these output fields is cached -
-              Run Reindex reuses it instead of re-reading its sales. Only Open (the current month, still
-              accumulating sales) and Pending (closed, not cached yet) do real work.
-            </div>
-            <div className="scm-toolbar" style={{ flexWrap: 'wrap' }}>
-              {syncedMonths.map(m => {
-                const st = cacheStatusByMonth[m]
-                return (
-                  <label key={m} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={activeRunMonths.has(m)} onChange={() => toggleRunMonth(m)} />
-                    {m}
-                    {st?.status === 'cached' && (
-                      <span className="scm-pill scm-pill-ok" title={`Cached ${st.computedAt}`}>Cached</span>
-                    )}
-                    {st?.status === 'open' && <span className="scm-pill scm-pill-warn">Open</span>}
-                    {st?.status === 'pending' && <span className="scm-pill">Pending</span>}
-                  </label>
-                )
-              })}
-              <button onClick={() => setRunMonths(new Set(syncedMonths))}>All</button>
-              <button onClick={() => setRunMonths(new Set())}>None</button>
-            </div>
-          </div>
-        )}
-
-        {/* Customise output fields - real columns for the current source, so what's
-            offered here is always true to what that source actually has (day-wise
-            has far fewer than month-wise). Store (and Division, for month-wise) are
-            always included and not shown as options - only the extras are picked here. */}
-        {schema?.ok && (
-          <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--muted)', marginBottom: '2px' }}>
-              CUSTOMISE OUTPUT FIELDS
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '6px' }}>
-              Saved automatically - picked once here, every later Run Reindex for this source reuses it.
-            </div>
-            {schema.metrics.length > 1 && (
-              <div className="field" style={{ marginBottom: '8px' }}>
-                <label htmlFor="rx-metric">Metric</label>
-                <select id="rx-metric" value={metric || schema.defaultMetric} onChange={e => changeMetric(e.target.value)}>
-                  {schema.metrics.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
+            {Object.entries(syncedMonths.reduce((g, m) => ((g[m.slice(0, 4)] ||= []).push(m), g), {})).map(([yr, ms]) => (
+              <div key={yr} className="rx-year">
+                <button className="rx-yr" title={`Toggle all ${yr} months`}
+                        onClick={() => { const allOn = ms.every(m => activeRunMonths.has(m)); ms.forEach(m => activeRunMonths.has(m) === allOn && toggleRunMonth(m)) }}>{yr}</button>
+                {ms.map(m => {
+                  const st = cacheStatusByMonth[m]?.status
+                  return (
+                    <button key={m} className={`rx-chip${activeRunMonths.has(m) ? ' on' : ''} ${st || ''}`}
+                            title={`${m}${st ? ` - ${st}` : ''}${st === 'cached' ? ` ${cacheStatusByMonth[m].computedAt}` : ''}`}
+                            onClick={() => toggleRunMonth(m)}>
+                      {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m.slice(5) - 1]}
+                    </button>
+                  )
+                })}
               </div>
-            )}
-            {schema.dimensions.length > 0 ? (
-              <>
-                <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '6px' }}>
-                  Break the output out by additional fields (beyond Store{source === 'mw' ? ' + Division' : ''}):
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px' }}>
-                  {schema.dimensions.map(d => (
-                    <label key={d} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={extraDims.includes(d)} onChange={() => toggleDim(d)} />
-                      {d}
-                    </label>
-                  ))}
-                </div>
-                {extraDims.length > 0 && (
-                  <p style={{ fontSize: '11px', color: 'var(--warn)', marginTop: '6px' }}>
-                    High-cardinality fields (e.g. Article Name) can multiply the row count a lot.
-                  </p>
-                )}
-              </>
-            ) : (
-              <div style={{ fontSize: '11px', color: 'var(--muted)' }}>No extra fields available for this source.</div>
-            )}
+            ))}
           </div>
         )}
 
-        {isPlanner && (
-          <button className="btn" onClick={runRx} disabled={!!progress || activeRunMonths.size === 0} style={{ marginTop: '12px' }}>
-            {progress ? 'Reindexing...' : 'Run Reindex'}
-          </button>
+        {/* Extra breakdown fields (beyond Store[, Division]) - real columns of the
+            current source; saved automatically. Collapsed: most runs need none. */}
+        {schema?.ok && schema.dimensions.length > 0 && (
+          <details className="rx-section">
+            <summary className="rx-label">More breakdown fields{extraDims.length ? ` (${extraDims.length} selected)` : ''}</summary>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginTop: '6px' }}>
+              {schema.dimensions.map(d => (
+                <label key={d} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={extraDims.includes(d)} onChange={() => toggleDim(d)} />
+                  {d}
+                </label>
+              ))}
+            </div>
+            {extraDims.length > 0 && (
+              <p className="rx-hint" style={{ color: 'var(--warn)' }}>High-cardinality fields (e.g. Article Name) can multiply the row count a lot.</p>
+            )}
+          </details>
         )}
         {progress && (
           <div style={{ marginTop: '8px' }}>
@@ -620,21 +594,17 @@ export default function CalendarisedSalesTab({ isPlanner }) {
                 transition: 'width 0.3s ease',
               }} />
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}>
-              {displayPct}%{progress.filesTotal > 0 && ` - ${progress.filesDone} of ${progress.filesTotal} read batches`}
+            <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '4px' }}
+                 title={readInProgress
+                   ? 'Reading the source file in batches - the percentage is real progress through this run\'s data.'
+                   : 'Source fully read - only the final aggregation is left; the remaining time is projected from past runs of this size.'}>
+              {readInProgress ? 'Reading' : 'Aggregating'} {displayPct}%{progress.filesTotal > 0 && ` - ${progress.filesDone} of ${progress.filesTotal} batches`}
               {progress.elapsedSeconds != null && ` - elapsed ${fmtDuration(progress.elapsedSeconds)}`}
               {readInProgress
-                ? '' // real per-batch progress above already shows where this stands - no estimate needed
+                ? ''
                 : progress.etaSeconds != null
                   ? ` - about ${fmtDuration(progress.etaSeconds)} remaining`
                   : ' - estimating remaining time...'}
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--muted)' }}>
-              {readInProgress
-                ? 'Reading the source file in batches - the percentage above is real progress through this run\'s data, not an estimate.'
-                : 'The source file has been fully read - only the final aggregation is left, which has no sub-progress '
-                  + 'signal of its own, so the remaining-time estimate below is projected from how long past runs of this '
-                  + 'size took (firms up as more runs complete; reads "estimating..." until the first one finishes).'}
             </div>
           </div>
         )}
