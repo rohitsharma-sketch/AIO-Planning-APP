@@ -23,6 +23,7 @@ const DB_SYNC_LABELS = {
   store_master_xlsx:          'Store Master.xlsx',
   data_lake_day_shift:        'Day-shift calendar (data lake)',
   data_lake_sales:            'Store Actuals (day-shifted sales)',
+  data_lake_day_weights:      'Day sales per cluster (festival-shift weights)',
 }
 
 export default function DbSyncPanel({ onSynced }) {

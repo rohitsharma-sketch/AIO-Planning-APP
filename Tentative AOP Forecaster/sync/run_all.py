@@ -35,6 +35,9 @@ DB_SYNC_JOBS = [
     ("store_master_xlsx", "store_master_xlsx"),
     ("day_shift", "data_lake_day_shift"),
     ("store_actuals", "data_lake_sales"),
+    # Cluster x day sales from the day-wise export - weights the festival
+    # shift by real day sales (db/calendar_shift.py, option b 2026-09-25).
+    ("day_weights", "data_lake_day_weights"),
     ("calendar_reindex", "calendar_reindex"),
     # Not in app.py's list: Google "Holidays in India" -> festival_reference_dates,
     # then re-dates Festival Master + locked calendars' festival lists.

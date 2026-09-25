@@ -545,6 +545,9 @@ DB_SYNC_JOBS = [
     ("store_master_xlsx", "store_master_xlsx"),
     ("day_shift", "data_lake_day_shift"),
     ("store_actuals", "data_lake_sales"),
+    # Cluster x day sales from the day-wise export - weights the festival
+    # shift by real day sales (db/calendar_shift.py, option b 2026-09-25).
+    ("day_weights", "data_lake_day_weights"),
     # Runs Calendar Engine's own month-wise reindex (with ATTRIBUTE1) as a
     # subprocess and saves it to calendar.sales_snapshots - keeps the
     # "Calendar Engine Reindex" actuals-source toggle (ReviewStep.jsx) and

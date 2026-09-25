@@ -4,8 +4,11 @@ using the Calendar Engine's locked day maps (calendar.calendar_day_pairs).
 Method = the Calendar Engine's own Month Wise Matrix split (see
 ReindexOutputPanel.jsx / logic-base): month-level sales have no day field, so
 each REFERENCE month's total is divided across future months in proportion to
-how many future days that reference month's days feed, per the cluster's
-locked day map. E.g. if 9 of Oct'25's Diwali-window days map into Nov'27, that
+the SALES of the days that feed each future month (2026-09-25, option b:
+cluster day sales from calendar.cluster_day_sales, see
+sync/day_weights_sync.py), falling back to plain day COUNT for a cluster /
+month without day data. Day count alone valued every moved day at its
+month's average, which pulled the LfL KLM Mar'27 base 114.4 -> 109.8 Cr. E.g. if 9 of Oct'25's Diwali-window days map into Nov'27, that
 share of Oct'25's sales moves into Nov'27. Totals are conserved for every
 reference month the map covers.
 
@@ -15,16 +18,42 @@ the option-(b) FY26 placeholder bases (user decision 2026-09-24).
 from collections import Counter, defaultdict
 
 
-def month_shares(pairs):
+def month_shares(pairs, weights=None):
     """{ref 'YYYY-MM': {fut 'YYYY-MM': share}} from [(ref_date, fut_date)] -
-    each ref month's shares sum to 1."""
-    n = Counter((r.strftime("%Y-%m"), f.strftime("%Y-%m")) for r, f in pairs)
-    per_ref = Counter()
-    for (r, _f), k in n.items():
-        per_ref[r] += k
+    each ref month's shares sum to 1. With `weights` ({date: day sales} for
+    this cluster) a ref month is split by the sales of the days feeding each
+    future month; a ref month with any day missing from `weights` (or zero
+    total) keeps the day-count split."""
+    n, w = Counter(), Counter()
+    per_ref, per_ref_w, uncovered = Counter(), Counter(), set()
+    for r, f in pairs:
+        key = (r.strftime("%Y-%m"), f.strftime("%Y-%m"))
+        n[key] += 1
+        per_ref[key[0]] += 1
+        if weights is not None:
+            v = weights.get(r)
+            if v is None:
+                uncovered.add(key[0])
+            else:
+                w[key] += max(v, 0.0)
+                per_ref_w[key[0]] += max(v, 0.0)
     out = defaultdict(dict)
     for (r, f), k in n.items():
-        out[r][f] = k / per_ref[r]
+        weighted = weights is not None and r not in uncovered and per_ref_w[r] > 0
+        out[r][f] = w[(r, f)] / per_ref_w[r] if weighted else k / per_ref[r]
+    return dict(out)
+
+
+def load_day_weights(session):
+    """{cluster: {date: day sales}} from calendar.cluster_day_sales, {} when
+    the table doesn't exist yet (day-count fallback everywhere)."""
+    from sqlalchemy import text
+    exists = session.execute(text("SELECT to_regclass('calendar.cluster_day_sales')")).scalar()
+    if not exists:
+        return {}
+    out = defaultdict(dict)
+    for cl, d, v in session.execute(text("SELECT cluster_name, sale_date, value FROM calendar.cluster_day_sales")):
+        out[cl][d] = float(v)
     return dict(out)
 
 
@@ -58,6 +87,7 @@ def load_shift_maps(session, year_pairs=((2025, 2026), (2026, 2027))):
 
     store_cluster = dict(session.execute(text(
         "SELECT store_id, cluster_name FROM calendar.store_calendar_clusters")).all())
+    day_weights = load_day_weights(session)
     shares, calendars = {}, {}
     for ry, fy in year_pairs:
         cal = session.execute(text(
@@ -70,6 +100,15 @@ def load_shift_maps(session, year_pairs=((2025, 2026), (2026, 2027))):
                 "SELECT cluster_name, ref_date, fut_date FROM calendar.calendar_day_pairs WHERE calendar_id = :id"),
                 {"id": cal.calendar_id}):
             by_cluster[cl].append((r, f))
-        shares[(ry, fy)] = {cl: month_shares(p) for cl, p in by_cluster.items()}
+        shares[(ry, fy)] = {cl: month_shares(p, day_weights.get(cl)) for cl, p in by_cluster.items()}
+        # A future day with no actual sales yet (e.g. Sep-Dec'26, whose base is
+        # the 2025 placeholder shifted onto 2026) takes the weight of the ref
+        # day this map lands on it, so the NEXT year pair's split still sees
+        # where the festival value sits (Diwali'25 -> Nov'26 -> Oct'27).
+        for cl, p in by_cluster.items():
+            w = day_weights.setdefault(cl, {})
+            for r, f in p:
+                if f not in w and r in w:
+                    w[f] = w[r]
         calendars[(ry, fy)] = cal.name
     return {"store_cluster": store_cluster, "shares": shares, "calendars": calendars}
