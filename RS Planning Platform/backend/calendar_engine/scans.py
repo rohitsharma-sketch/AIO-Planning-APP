@@ -778,7 +778,7 @@ def _split_unknown_clusters(df, known_clusters):
         return df, [], []
     unknown = df.loc[unknown_mask]
     names = sorted(unknown["cluster"].unique().tolist())
-    stores = sorted(unknown["STORE_NAME"].unique().tolist())
+    stores = sorted(unknown["STORE_NAME"].dropna().unique().tolist())
     return df.loc[~unknown_mask], names, stores
 
 
@@ -846,7 +846,9 @@ def reindex_daywise(months, store_cluster, day_map, sync_id=None, progress=None,
     actual_columns = sorted(actual_grp["ref_iso"].unique().tolist())
 
     df["cluster"] = df["STORE_NAME"].map(store_cluster)
-    unmapped_stores = sorted(df.loc[df["cluster"].isna(), "STORE_NAME"].unique().tolist())
+    # dropna: a sales row can have a blank STORE_NAME (Feb-2024 month-wise FIXED
+    # ASSETS) - NaN beside str made sorted() raise and fail the whole run.
+    unmapped_stores = sorted(df.loc[df["cluster"].isna(), "STORE_NAME"].dropna().unique().tolist())
     df = df.dropna(subset=["cluster"])
 
     df, unknown_clusters, unknown_cluster_stores = _split_unknown_clusters(df, known_clusters)
@@ -918,7 +920,9 @@ def reindex_monthwise(months, store_cluster, day_map, sync_id=None, progress=Non
     actual_columns = sorted(actual_grp["ym"].unique().tolist())
 
     df["cluster"] = df["STORE_NAME"].map(store_cluster)
-    unmapped_stores = sorted(df.loc[df["cluster"].isna(), "STORE_NAME"].unique().tolist())
+    # dropna: a sales row can have a blank STORE_NAME (Feb-2024 month-wise FIXED
+    # ASSETS) - NaN beside str made sorted() raise and fail the whole run.
+    unmapped_stores = sorted(df.loc[df["cluster"].isna(), "STORE_NAME"].dropna().unique().tolist())
     df = df.dropna(subset=["cluster"])
 
     df, unknown_clusters, unknown_cluster_stores = _split_unknown_clusters(df, set(cluster_month_map))
