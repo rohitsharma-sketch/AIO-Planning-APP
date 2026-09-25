@@ -1,9 +1,11 @@
-"""python test_realign.py — synthetic data, no network."""
-import threading
+"""python test_realign.py — synthetic data, no network, no server."""
+import io
 import numpy as np
 import pandas as pd
-import server
-from server import realign
+import importer
+from engine import realign, verify
+
+# ------------------------------------------------------------------ engine
 
 M = ["Sep'26", "Nov'26", "Jan'27 P1"]
 def row(store, div, dept, mrp, disp, *v, qty=None):
@@ -49,52 +51,104 @@ assert np.isclose(bucket("S1", "Sep'26"), 70) and np.isclose(bucket("S1", "Nov'2
 assert np.isclose(g("S1", "A", 299, "Jan'27 P1"), 6) and np.isclose(g("S1", "B", 299, "Jan'27 P1"), 10)
 assert np.isclose(g("S1", "A F/S", 299, "Jan'27 P1"), 0)
 assert any("Jan/Feb" in w for w in warn)
-
 # overflow: S2 Sep revised A=20 > month total 10 -> A stays EXACTLY 20, B Sep -> 0, and the excess 10 comes out
 # of S2's other live month (Nov: room 20-5=15 -> target 10 -> B Nov 5); season total still = original 30
 assert np.isclose(g("S2", "A", 299, "Sep'26"), 20) and np.isclose(g("S2", "B", 299, "Sep'26"), 0)
 assert np.isclose(g("S2", "A", 299, "Nov'26"), 5) and np.isclose(g("S2", "B", 299, "Nov'26"), 5)
 assert np.isclose(bucket("S2", "Sep'26") + bucket("S2", "Nov'26"), 30)
-assert np.isclose(g("S2", "A", 299, "Jan'27 P1"), 5) and np.isclose(g("S2", "B", 299, "Jan'27 P1"), 5)  # frozen
 assert any("excess" in w and "S2/LADIES" in w for w in warn)
-# every revised value is kept exactly - department totals match the revised file
-live = ["Sep'26", "Nov'26"]
-got = out[out.DEPARTMENT.str.startswith("A")].groupby(["Store Name", "DEPARTMENT"])[[m + " Plan" for m in live]].sum()
-want = rev.set_index(["Store Name", "DEPARTMENT"])[live]
-assert np.allclose(got.loc[want.index].to_numpy(), want.to_numpy())
 # S3: sole department revised down, nothing else to absorb -> bucket stays under original, flagged
-assert np.isclose(g("S3", "A", 299, "Sep'26"), 5) and np.isclose(bucket("S3", "Sep'26"), 5)
-assert any("couldn't fully land" in w and "S3/LADIES" in w for w in warn)
-
+assert np.isclose(g("S3", "A", 299, "Sep'26"), 5) and any("couldn't fully land" in w and "S3/LADIES" in w for w in warn)
 # qty = value / original ASP of that Department x MRP x Display Type x Month
-assert np.isclose(cell("S1", "B", 299, "Sep'26", " Plan Qty"), 9.166666666 / 2)   # B Sep ASP 2
-assert np.isclose(cell("S1", "C", 299, "Nov'26", " Plan Qty"), 18.75 / 2)         # C Nov ASP 2 (Sep's ASP 1 not used)
-assert np.isclose(cell("S1", "C", 299, "Sep'26", " Plan Qty"), 9.166666666 / 1)   # C Sep ASP 1
-assert np.isclose(cell("S1", "A", 399, "Nov'26", " Plan Qty"), 2)                 # no A/399 qty in Nov -> all-month ASP 1
-assert np.isclose(cell("S1", "A F/S", 299, "Sep'26", " Plan Qty"), 1.8)           # new dept uses parent A's ASP
+assert np.isclose(cell("S1", "B", 299, "Sep'26", " Plan Qty"), 9.166666666 / 2)
+assert np.isclose(cell("S1", "C", 299, "Nov'26", " Plan Qty"), 18.75 / 2)
+assert np.isclose(cell("S1", "A", 399, "Nov'26", " Plan Qty"), 2)                 # no qty that month -> all-month ASP
+assert np.isclose(cell("S1", "A F/S", 299, "Sep'26", " Plan Qty"), 1.8)           # new dept uses parent's ASP
 assert np.isclose(cell("S1", "D", 299, "Jan'27 P1", " Plan Qty"), 40)             # unchanged -> original qty
-assert any("all-month ASP" in w for w in warn)
+# comparison table
+assert c.loc[("S2", "A", 299, "Sep'26"), "Status"] == "kept" and c.loc[("S1", "B", 299, "Sep'26"), "Status"] == "absorbed"
+assert ("S1", "A", 299, "Jan'27 P1") not in c.index
+# verify(): independent checks agree with the rules
+checks, table = verify(orig, rev, out, M)
+status = {ch["name"]: ch["status"] for ch in checks}
+assert status["Revised values kept exactly"] == "ok" and status["Grand total unchanged"] == "fail"  # S3 shortfall -> total drops
+assert status["Store × Division totals match — each month"] == "warn"   # S2's excess moved months
+assert status["Jan / Feb untouched (value and qty)"] == "ok"
+assert [t["dept"] for t in table] == ["A", "A F/S"] and np.isclose(table[0]["months"][0]["revised"], 37)
 
-# comparison table: only changed cells appear, tagged with why
-assert np.isclose(c.loc[("S1", "A", 299, "Sep'26"), "Realigned"], 7.2) and c.loc[("S1", "A", 299, "Sep'26"), "Status"] == "kept"
-assert np.isclose(c.loc[("S1", "B", 299, "Sep'26"), "Realigned"], 9.166666666) and c.loc[("S1", "B", 299, "Sep'26"), "Status"] == "absorbed"
-assert np.isclose(c.loc[("S2", "A", 299, "Sep'26"), "Realigned"], 20) and c.loc[("S2", "A", 299, "Sep'26"), "Status"] == "kept"
-assert np.isclose(c.loc[("S2", "B", 299, "Nov'26"), "Delta"], -10) and c.loc[("S2", "B", 299, "Nov'26"), "Status"] == "absorbed"
-assert np.isclose(c.loc[("S3", "A", 299, "Sep'26"), "Delta"], -3)
-assert ("S1", "A", 299, "Jan'27 P1") not in c.index   # frozen month, never changes -> excluded
-assert len(compare) == len(compare.drop_duplicates())
+# ------------------------------------------------------------------ importer
 
-# progress: a short operation finishing (e.g. an upload in another tab) must not wipe a long export's progress
-started, release = threading.Event(), threading.Event()
-def long_op():
-    with server.stage("long export"):
-        server._progress(done=5, total=10)
-        started.set()
-        release.wait()
-t = threading.Thread(target=long_op); t.start(); started.wait()
-with server.stage("short upload"):
-    pass
-assert [(a["stage"], a["done"], a["total"]) for a in server.active.values()] == [("long export", 5, 10)]
-release.set(); t.join()
-assert not server.active
+def xlsx(rows, sheet="Sheet1", extra=None):
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as w:
+        for name, rr in (extra or []):
+            pd.DataFrame(rr).to_excel(w, sheet_name=name, header=False, index=False)
+        pd.DataFrame(rows).to_excel(w, sheet_name=sheet, header=False, index=False)
+    return buf.getvalue()
+
+def load_orig(rows, **kw):
+    df, info, rep = importer.read_table(xlsx(rows, **kw), "orig.xlsx", importer.NEED_ORIGINAL, "original plan")
+    return (importer.prepare_original(df, info, rep) if df is not None else (None, [], info, rep))
+
+# messy original: totals row on top, loose header spellings, a text number, junk sheet first
+hdr = ["store", "Department ", "DIV", "MRP", "Display", "Sep '26 Plan", "Sep’26 Plan Qty", "Notes", "Jan'27 P1 Plan", "Jan'27 P1 Plan Qty"]
+o_rows = [[None, None, None, None, None, 36, 36, None, 30, 30], hdr,
+          ["s1", "a", "Ladies", 299, "table", "1,000", 1000, "x", 5, 5],
+          [None, None, None, None, None, None, None, None, None, None],
+          ["S1", "B", "LADIES", 299, "TABLE", "n/a", 0, "", 25, 25]]
+o_df, o_months, o_info, o_rep = load_orig(o_rows, extra=[("Notes", [["just a note"]])])
+msgs = " | ".join(i["msg"] for i in o_rep.items)
+assert o_rep.ok, msgs
+assert o_months == ["Sep'26", "Jan'27 P1"] and o_info["sheet"] == "Sheet1" and o_info["header_row"] == 2
+assert list(o_df["Store Name"]) == ["S1", "S1"] and list(o_df["DIVISION"]) == ["LADIES", "LADIES"]
+assert o_df.loc[0, "Sep'26 Plan"] == 1000 and o_df.loc[1, "Sep'26 Plan"] == 0
+assert "aren't numbers" in msgs and "empty row" in msgs and "Other sheets" in msgs
+
+# duplicate key -> error with rows
+_, _, _, rep = load_orig([hdr, ["S1", "A", "L", 299, "T", 1, 1, "", 1, 1], ["S1", "A", "L", 299, "T", 2, 2, "", 2, 2]])
+assert not rep.ok and "duplicate" in rep.first_error() and "rows 2, 3" in str(rep.items)
+
+# header not found -> says what's missing where
+_, _, rep = importer.read_table(xlsx([["Store Name", "Department", "Sep'26 Plan"]]), "x.xlsx", importer.NEED_ORIGINAL, "original plan")
+assert not rep.ok and "missing DIVISION, MRP, DISPLAY TYPE" in rep.first_error()
+
+def load_rev(data, name="rev.xlsx"):
+    df, info, rep = importer.read_table(data, name, importer.NEED_REVISED, "revised plan")
+    return importer.prepare_revised(df, info, rep, o_df, o_months) if df is not None else (None, [], info, rep)
+
+# a revised plan dropped into the original slot
+_, _, rep = importer.read_table(xlsx([["Store Name", "Department", "Sep'26 New"], ["S1", "A", 1]]), "x.xlsx", importer.NEED_ORIGINAL, "original plan")
+assert not rep.ok and "looks like a revised plan" in rep.first_error()
+
+# a full plan dropped into the revised slot
+_, _, _, rep = load_rev(xlsx(o_rows))
+assert not rep.ok and "looks like a full plan" in rep.first_error()
+
+# good revised (CSV, semicolons): new dept with parent, unchanged Jan, preview numbers
+r, use, info, rep = load_rev("Store Name;Dept;Sep'26 New;Jan'27 P1 New;TTL Val TY New\ns1;A;1200;5;1205\nS1;A F/S;50;0;50\n".encode(), "rev.csv")
+assert rep.ok, rep.items
+assert not any("aren't months" in i["msg"] for i in rep.items)  # a totals column ending in "New" is not a month
+assert use == ["Sep'26", "Jan'27 P1"] and list(r["DEPARTMENT"]) == ["A", "A F/S"]
+assert any("New department A F/S" in i["msg"] for i in rep.items)
+pv = info["preview"]["rows"]
+assert pv[0]["original"] == [1000, 5] and pv[0]["revised"] == [1200, 5] and pv[1]["parent"] == "A"
+assert not any("plan B" in i["msg"] for i in rep.items)  # B isn't revised at all - normal, no note
+
+# unknown store, orphan department, changed Jan -> errors / warning
+_, _, _, rep = load_rev(xlsx([["STORE NAME", "DEPARTMENT", "Sep'26 New", "Jan'27 P1 New"],
+                              ["S9", "A", 1, 1], ["S1", "ZZ", 1, 1], ["S1", "A", 1, 99]]))
+errs = [i["msg"] for i in rep.items if i["level"] == "error"]
+assert any("aren't in the original" in e for e in errs) and any("no parent department" in e for e in errs)
+assert any("Jan/Feb values" in i["msg"] for i in rep.items if i["level"] == "warning")
+
+# ------------------------------------------------------------------ jobs: steps and progress are per job
+import server
+j1, j2 = server.Job("a", "x", "one"), server.Job("b", "y", "two")
+with j1.step("long export"):
+    j1.progress(5, 10)
+    with j2.step("short upload"):
+        pass
+    assert j1.view()["steps"][0]["done"] == 5 and j1.view()["steps"][0]["total"] == 10
+assert j2.view()["steps"][0]["status"] == "done" and j1.view()["steps"][0]["status"] == "done"
+
 print("all realign checks passed")

@@ -5,211 +5,592 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AOP Realigner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--ac:#4F46E5;--ac-soft:#EEF2FF;--top:#312E81;--bg:#F8FAFC;--card:#fff;--bd:#E0E7FF;--tx:#1E1B4B;--mut:#64748B;
-  --up:#047857;--dn:#B91C1C;--warn-bg:#FEF3C7;--warn:#92400E}
+/* shadcn/ui design tokens (zinc base, indigo primary) - light + dark */
+:root{
+  --background:0 0% 100%;--foreground:240 10% 3.9%;--card:0 0% 100%;--card-foreground:240 10% 3.9%;
+  --muted:240 4.8% 95.9%;--muted-foreground:240 3.8% 46.1%;--border:240 5.9% 90%;--input:240 5.9% 90%;
+  --primary:243 75% 59%;--primary-foreground:0 0% 100%;--secondary:240 4.8% 95.9%;--secondary-foreground:240 5.9% 10%;
+  --accent:240 4.8% 95.9%;--destructive:0 72% 51%;--success:142 71% 36%;--warning:32 95% 44%;--info:217 91% 50%;
+  --ring:243 75% 59%;--radius:.625rem;--page:240 5% 97.5%;
+}
+@media (prefers-color-scheme:dark){:root{
+  --background:240 10% 3.9%;--foreground:0 0% 98%;--card:240 8% 7%;--card-foreground:0 0% 98%;
+  --muted:240 3.7% 15.9%;--muted-foreground:240 5% 64.9%;--border:240 3.7% 17%;--input:240 3.7% 20%;
+  --primary:239 84% 67%;--primary-foreground:240 10% 4%;--secondary:240 3.7% 15.9%;--secondary-foreground:0 0% 98%;
+  --accent:240 3.7% 15.9%;--destructive:0 70% 60%;--success:142 60% 50%;--warning:38 92% 55%;--info:213 94% 68%;
+  --ring:239 84% 67%;--page:240 10% 3.9%;
+}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 'Plus Jakarta Sans',system-ui,sans-serif}
 [hidden]{display:none!important}
-header{background:var(--top);color:#fff;padding:14px 24px}
-header h1{font-size:18px;margin:0}
-header p{margin:2px 0 0;opacity:.75;font-size:13px}
-main{max-width:1300px;margin:0 auto;padding:20px 16px 60px}
-.inputs{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-@media(max-width:760px){.inputs{grid-template-columns:1fr}}
-.drop{background:var(--card);border:2px dashed var(--bd);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:8px}
-.drop.ok{border-style:solid;border-color:var(--ac)}
-.drop h2{margin:0;font-size:14px}
-.drop small,.mut{color:var(--mut)}
-.status{font-size:13px;font-weight:600}
-input[type=file]:focus-visible,button:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
-.msg{padding:10px 14px;border-radius:8px;margin-top:14px}
-.err{background:#FEE2E2;color:var(--dn)}
-.warn{background:var(--warn-bg);color:var(--warn);margin:6px 0;padding:8px 12px;border-radius:8px;font-size:13px}
-.progress-wrap{margin-top:14px}
-.progress-label{font-size:12px;color:var(--mut);margin-bottom:4px;font-variant-numeric:tabular-nums}
-.progress-track{background:var(--ac-soft);border-radius:999px;height:10px;overflow:hidden}
-.progress-fill{background:var(--ac);height:100%;width:2%;transition:width .3s ease}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-top:18px}
-.card h3{margin:0 0 10px;font-size:15px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.dl{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
-.dl button{font:inherit;font-weight:600;border:0;cursor:pointer;border-radius:8px;padding:8px 14px;background:var(--ac);color:#fff}
-.dl button.ghost{background:var(--ac-soft);color:var(--ac)}
-.dl button:disabled{opacity:.5;cursor:not-allowed}
-.hint{color:var(--mut);font-size:12px;margin:-4px 0 10px}
-.scroll{overflow:auto}
-table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
-th,td{padding:6px 10px;border-bottom:1px solid #EEF2FF;text-align:right;white-space:nowrap}
-th{background:var(--top);color:#fff;font-weight:600}
-th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
-tbody tr:nth-child(even){background:#FAFBFF}
-.up{color:var(--up)}.dn{color:var(--dn)}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:hsl(var(--page));color:hsl(var(--foreground));font:14px/1.5 Inter,ui-sans-serif,system-ui,sans-serif;
+  font-feature-settings:"cv11","ss01";-webkit-font-smoothing:antialiased}
+.num,td,th,.stat-value{font-variant-numeric:tabular-nums}
+svg.i{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+svg.i.xs{width:12px;height:12px;vertical-align:-1px}
+.spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:3s}}
+:focus-visible{outline:2px solid hsl(var(--ring));outline-offset:2px}
+
+/* layout */
+.topbar{position:sticky;top:0;z-index:20;background:hsl(var(--background)/.85);backdrop-filter:blur(8px);border-bottom:1px solid hsl(var(--border))}
+.topbar-inner{max-width:1360px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:14px}
+.logo{width:34px;height:34px;border-radius:9px;background:hsl(var(--primary));color:hsl(var(--primary-foreground));display:grid;place-items:center;flex:none}
+.logo svg{width:19px;height:19px}
+.brand h1{margin:0;font-size:16px;font-weight:600;letter-spacing:-.01em}
+.brand p{margin:0;color:hsl(var(--muted-foreground));font-size:12.5px}
+.topbar .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.layout{max-width:1360px;margin:0 auto;padding:20px;display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:20px;align-items:start}
+@media (max-width:1080px){.layout{grid-template-columns:1fr}}
+@media (max-width:640px){.layout{padding:12px 16px}.brand p{display:none}}
+.stack{display:flex;flex-direction:column;gap:16px;min-width:0}
+.side{position:sticky;top:78px}
+@media (max-width:1080px){.side{position:static}}
+
+/* card */
+.card{background:hsl(var(--card));color:hsl(var(--card-foreground));border:1px solid hsl(var(--border));border-radius:calc(var(--radius) + 2px);box-shadow:0 1px 2px hsl(240 10% 4%/.04)}
+.card-header{padding:18px 20px 0;display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.card-title{margin:0;font-size:15px;font-weight:600;letter-spacing:-.01em;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.card-desc{margin:2px 0 0;color:hsl(var(--muted-foreground));font-size:13px;max-width:75ch}
+.card-content{padding:16px 20px 20px}
+.card-header .grow{flex:1;min-width:220px}
+.card-header .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.step-no{width:26px;height:26px;border-radius:999px;display:grid;place-items:center;font-size:12.5px;font-weight:600;flex:none;
+  background:hsl(var(--secondary));color:hsl(var(--secondary-foreground));border:1px solid hsl(var(--border))}
+.step-no svg.i{width:14px;height:14px}
+.step-no.done{background:hsl(var(--success));color:#fff;border-color:transparent}
+.step-no.current{background:hsl(var(--primary));color:hsl(var(--primary-foreground));border-color:transparent}
+.sep{height:1px;background:hsl(var(--border));margin:16px 0}
+
+/* button */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:36px;padding:0 14px;border-radius:calc(var(--radius) - 2px);
+  font:inherit;font-weight:500;font-size:13.5px;white-space:nowrap;cursor:pointer;border:1px solid transparent;transition:background .15s,opacity .15s;text-decoration:none}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-primary{background:hsl(var(--primary));color:hsl(var(--primary-foreground))}
+.btn-primary:hover:not(:disabled){background:hsl(var(--primary)/.9)}
+.btn-outline{background:hsl(var(--background));border-color:hsl(var(--input));color:hsl(var(--foreground))}
+.btn-outline:hover:not(:disabled){background:hsl(var(--accent))}
+.btn-ghost{background:transparent;color:hsl(var(--foreground))}
+.btn-ghost:hover:not(:disabled){background:hsl(var(--accent))}
+.btn-sm{height:32px;padding:0 11px;font-size:13px}
+.btn-lg{height:42px;padding:0 20px;font-size:14.5px}
+
+/* badge / chip */
+.badge{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:500;border:1px solid transparent;white-space:nowrap}
+.badge .dot{width:6px;height:6px;border-radius:999px;background:currentColor}
+.badge svg.i{width:12px;height:12px}
+.b-muted{background:hsl(var(--secondary));color:hsl(var(--muted-foreground));border-color:hsl(var(--border))}
+.b-success{background:hsl(var(--success)/.1);color:hsl(var(--success));border-color:hsl(var(--success)/.25)}
+.b-error{background:hsl(var(--destructive)/.1);color:hsl(var(--destructive));border-color:hsl(var(--destructive)/.25)}
+.b-info{background:hsl(var(--primary)/.1);color:hsl(var(--primary));border-color:hsl(var(--primary)/.25)}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:6px;font-size:12px;background:hsl(var(--secondary));
+  border:1px solid hsl(var(--border));color:hsl(var(--secondary-foreground))}
+
+/* alert / report */
+.alert{display:flex;gap:10px;padding:11px 13px;border-radius:var(--radius);border:1px solid hsl(var(--border));font-size:13px;line-height:1.45}
+.alert + .alert{margin-top:8px}
+.alert svg.i{margin-top:1px}
+.alert-error{border-color:hsl(var(--destructive)/.35);background:hsl(var(--destructive)/.06)}
+.alert-error svg.i{color:hsl(var(--destructive))}
+.alert-warning{border-color:hsl(var(--warning)/.35);background:hsl(var(--warning)/.07)}
+.alert-warning svg.i{color:hsl(var(--warning))}
+.alert-info{background:hsl(var(--muted)/.5)}
+.alert-info svg.i{color:hsl(var(--muted-foreground))}
+.alert .ex{margin:5px 0 0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:4px}
+.alert .ex li{font-size:11.5px;padding:1px 7px;border-radius:5px;background:hsl(var(--background));border:1px solid hsl(var(--border));color:hsl(var(--muted-foreground))}
+details.report{margin-top:12px}
+details.report summary{cursor:pointer;color:hsl(var(--muted-foreground));font-size:13px;list-style:none;display:inline-flex;align-items:center;gap:6px}
+details.report summary::-webkit-details-marker{display:none}
+details.report summary::before{content:"▸";font-size:11px;transition:transform .15s}
+details.report[open] summary::before{transform:rotate(90deg)}
+details.report .body{margin-top:10px}
+
+/* dropzone */
+.drop{border:1.5px dashed hsl(var(--input));border-radius:var(--radius);padding:22px;display:flex;align-items:center;gap:14px;cursor:pointer;
+  transition:border-color .15s,background .15s;background:hsl(var(--muted)/.35)}
+.drop:hover,.drop.over{border-color:hsl(var(--primary));background:hsl(var(--primary)/.05)}
+.drop.compact{padding:12px 14px}
+.drop.disabled{opacity:.55;cursor:not-allowed;pointer-events:none}
+.drop .ico{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;background:hsl(var(--background));border:1px solid hsl(var(--border));color:hsl(var(--primary));flex:none}
+.drop.compact .ico{width:32px;height:32px}
+.drop strong{font-weight:600}
+.drop small{display:block;color:hsl(var(--muted-foreground));font-size:12px}
+.drop input{display:none}
+
+/* file summary / stats */
+.file{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.file .fi{width:38px;height:38px;border-radius:9px;display:grid;place-items:center;background:hsl(var(--success)/.1);color:hsl(var(--success));flex:none}
+.file .fi.err{background:hsl(var(--destructive)/.1);color:hsl(var(--destructive))}
+.file .name{font-weight:600;word-break:break-all}
+.file .meta{color:hsl(var(--muted-foreground));font-size:12.5px}
+.file .end{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:14px}
+.stat{border:1px solid hsl(var(--border));border-radius:var(--radius);padding:10px 12px;background:hsl(var(--background))}
+.stat-label{font-size:12px;color:hsl(var(--muted-foreground))}
+.stat-value{font-size:19px;font-weight:600;letter-spacing:-.02em;margin-top:1px}
+.stat-sub{font-size:11.5px;color:hsl(var(--muted-foreground));overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:12px;align-items:center}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.muted{color:hsl(var(--muted-foreground))}
+.small{font-size:12.5px}
+.select{height:32px;border:1px solid hsl(var(--input));border-radius:calc(var(--radius) - 2px);background:hsl(var(--background));color:hsl(var(--foreground));
+  font:inherit;font-size:13px;padding:0 8px;max-width:230px}
+
+/* table */
+.table-wrap{overflow:auto;border:1px solid hsl(var(--border));border-radius:var(--radius);max-height:460px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:8px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid hsl(var(--border))}
+th{position:sticky;top:0;background:hsl(var(--muted));color:hsl(var(--muted-foreground));font-weight:500;font-size:12px;z-index:1}
+th:first-child,td:first-child{text-align:left}
+tbody tr:hover{background:hsl(var(--muted)/.5)}
+tr.total td{font-weight:600;background:hsl(var(--muted)/.4)}
+tr.grp td{border-top:2px solid hsl(var(--border))}
+td.frozen,th.frozen{color:hsl(var(--muted-foreground))}
+.up{color:hsl(var(--success))}.dn{color:hsl(var(--destructive))}
+.delta{display:block;font-size:11.5px}
+
+/* tabs */
+.tabs{display:inline-flex;padding:3px;border-radius:var(--radius);background:hsl(var(--muted));gap:2px;margin-bottom:12px}
+.tab{height:30px;padding:0 12px;border:0;border-radius:calc(var(--radius) - 3px);background:transparent;color:hsl(var(--muted-foreground));font:inherit;font-size:13px;font-weight:500;cursor:pointer}
+.tab[aria-selected=true]{background:hsl(var(--background));color:hsl(var(--foreground));box-shadow:0 1px 2px hsl(240 10% 4%/.08)}
+
+/* progress */
+.progress{height:6px;border-radius:999px;background:hsl(var(--secondary));overflow:hidden}
+.progress > div{height:100%;background:hsl(var(--primary));border-radius:999px;transition:width .4s ease}
+.progress.indet > div{width:35%!important;animation:indet 1.4s ease-in-out infinite}
+@keyframes indet{0%{transform:translateX(-100%)}100%{transform:translateX(290%)}}
+
+/* checks */
+.checks{display:grid;gap:8px}
+.check{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid hsl(var(--border));border-radius:var(--radius)}
+.check .t{font-weight:500}
+.check .d{font-size:12.5px;color:hsl(var(--muted-foreground))}
+.ok-i{color:hsl(var(--success))}.warn-i{color:hsl(var(--warning))}.fail-i{color:hsl(var(--destructive))}
+
+/* downloads */
+.dls{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.dl{border:1px solid hsl(var(--border));border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:10px}
+.dl h4{margin:0;font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:8px}
+.dl p{margin:0;font-size:12.5px;color:hsl(var(--muted-foreground))}
+.dl .foot{margin-top:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+/* activity */
+.act-job{border:1px solid hsl(var(--border));border-radius:var(--radius);padding:12px}
+.act-job + .act-job{margin-top:10px}
+.act-head{display:flex;align-items:center;gap:8px}
+.act-head .lbl{font-weight:600;font-size:13.5px}
+.act-head .t{margin-left:auto;font-size:12.5px;color:hsl(var(--muted-foreground))}
+.steps{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:8px}
+.steps li{display:grid;grid-template-columns:16px 1fr auto;gap:8px;align-items:center;font-size:13px}
+.steps li .tm{font-size:12px;color:hsl(var(--muted-foreground));text-align:right}
+.steps li .progress,.steps li .sub{grid-column:2 / 4}
+.steps li .sub{font-size:11.5px;color:hsl(var(--muted-foreground));margin-top:-4px}
+.hist{list-style:none;margin:0;padding:0}
+.hist li{border-top:1px solid hsl(var(--border))}
+.hist li:first-child{border-top:0}
+.hist details summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:16px 1fr auto;gap:8px;align-items:center;padding:9px 2px;font-size:13px}
+.hist details summary::-webkit-details-marker{display:none}
+.hist .when{font-size:11.5px;color:hsl(var(--muted-foreground))}
+.hist .brk{padding:0 0 10px 24px;font-size:12px;color:hsl(var(--muted-foreground));display:grid;gap:2px}
+.hist .brk div{display:flex;justify-content:space-between;gap:8px}
+.empty{color:hsl(var(--muted-foreground));font-size:13px;padding:6px 0;margin:0}
+
+/* toast */
+#toasts{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:8px;z-index:50;max-width:min(420px,calc(100vw - 40px))}
+.toast{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:var(--radius);border:1px solid hsl(var(--border));
+  background:hsl(var(--card));box-shadow:0 10px 30px hsl(240 10% 4%/.15);font-size:13px;animation:tin .2s ease}
+.toast.error{border-color:hsl(var(--destructive)/.4)}.toast.error svg.i{color:hsl(var(--destructive))}
+.toast.success svg.i{color:hsl(var(--success))}.toast.info svg.i{color:hsl(var(--primary))}
+@keyframes tin{from{opacity:0;transform:translateY(6px)}}
 </style>
 </head>
 <body>
-<header>
-  <h1>AOP Realigner</h1>
-  <p>Revised departments keep their values exactly; every other department in the store-division flexes so each Store × Division × Month lands back on the original plan (Jan/Feb untouched) — output at Store × Department × MRP × Display Type, qty at the original month-wise ASP per Department × MRP × Display Type.</p>
-</header>
-<main>
-  <section class="inputs">
-    <label class="drop" id="drop-orig">
-      <h2>1 · Original plan</h2>
-      <span class="status" id="orig-status">Checking…</span>
-      <input type="file" accept=".xlsx,.xlsb,.xls" id="orig">
-      <small>Store × Department × MRP × Display Type, "&lt;Month&gt; Plan" + "&lt;Month&gt; Plan Qty". Stays loaded — only re-upload when the original changes.</small>
-    </label>
-    <label class="drop" id="drop-rev">
-      <h2>2 · Revised plan</h2>
-      <span class="status mut" id="rev-status">Upload to realign</span>
-      <input type="file" accept=".xlsx,.xlsb,.xls" id="rev">
-      <small>Store × Department, "&lt;Month&gt; New" columns — only the departments you changed. A new department (e.g. LW_U_T-TOP F/S) borrows its parent's MRP/display rows.</small>
-    </label>
-  </section>
-  <div class="msg" id="msg" hidden></div>
-  <div class="progress-wrap" id="progress-wrap" hidden>
-    <div class="progress-label" id="progress-label"></div>
-    <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="logo" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg></div>
+    <div class="brand">
+      <h1>AOP Realigner</h1>
+      <p>Revised departments keep their values; everything else flexes so each store × division lands back on the original plan.</p>
+    </div>
+    <div class="right"><span id="conn" class="badge b-muted"><span class="dot"></span>Connecting…</span></div>
   </div>
+</header>
 
-  <section id="out" hidden>
-    <div id="warns"></div>
-    <div class="card">
-      <h3>Compare against original <span class="mut" id="changed-meta"></span>
-        <span class="dl">
-          <button id="dl-compare-xlsx">Comparison XLSX</button>
-          <button class="ghost" id="dl-compare-csv">Comparison CSV</button>
-        </span>
-      </h3>
-      <p class="hint">A Summary sheet (Division × Month, original vs. realigned) plus every Store × Department × MRP × Display Type cell that actually changed, with Original/Realigned/Delta/Status — the fast way to check the output is okay without opening the full plan.</p>
-      <div class="scroll"><table id="sum"></table></div>
-    </div>
-    <div class="card">
-      <h3>Full realigned plan <span class="mut" id="meta"></span>
-        <span class="dl">
-          <button class="ghost" id="dl-full-csv">Full plan CSV</button>
-          <button class="ghost" id="dl-full-xlsx">Full plan XLSX</button>
-        </span>
-      </h3>
-      <p class="hint">Every row of the original plan, Store × Department × MRP × Display Type — the file to actually load back into planning. XLSX takes a few minutes for the full ~680k rows; CSV is fast.</p>
-    </div>
-  </section>
+<main class="layout">
+  <div class="stack">
+    <section class="card" id="c-orig" aria-labelledby="t-orig"></section>
+    <section class="card" id="c-rev" aria-labelledby="t-rev"></section>
+    <section class="card" id="c-run" aria-labelledby="t-run"></section>
+    <section class="card" id="c-res" aria-labelledby="t-res" hidden></section>
+  </div>
+  <aside class="side">
+    <section class="card">
+      <div class="card-header"><div class="grow"><h2 class="card-title"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Activity</h2>
+        <p class="card-desc">Every step, timed as it runs. Estimates come from your previous runs.</p></div></div>
+      <div class="card-content">
+        <div id="now" aria-live="polite"></div>
+        <div class="sep"></div>
+        <div class="row" style="justify-content:space-between;margin-bottom:4px"><strong class="small">Recent</strong><span class="muted small">last 20</span></div>
+        <ol class="hist" id="hist"></ol>
+      </div>
+    </section>
+  </aside>
 </main>
+<div id="toasts" aria-live="assertive"></div>
+
 <script>
 const $ = s => document.querySelector(s);
-const fmt = v => v.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function msg(t, cls) { $('#msg').textContent = t; $('#msg').className = 'msg ' + (cls || ''); $('#msg').hidden = !t; }
-
-// Progress: the backend can't report true completion % for the fast steps (a single vectorized
-// pandas/calamine call, not row-by-row), so those use a rough elapsed-vs-typical-duration estimate.
-// The one truly slow step (xlsx export, minutes for the full plan) DOES report real rows-written
-// progress via /api/progress's done/total, which this uses whenever present.
-const TYPICAL_SECONDS = {reading: 30, realigning: 12, 'comparison (csv)': 4, 'full plan (csv)': 12};
-function etaFor(stage) {
-  const s = (stage || '').toLowerCase();
-  for (const k in TYPICAL_SECONDS) if (s.includes(k)) return TYPICAL_SECONDS[k];
-  return 20;
-}
-let progressTimer = null;
-function startProgress(label) {
-  msg('');
-  $('#progress-wrap').hidden = false;
-  $('#progress-label').textContent = label;
-  $('#progress-fill').style.width = '2%';
-  const t0 = Date.now();
-  clearInterval(progressTimer);
-  progressTimer = setInterval(async () => {
-    try {
-      const p = await (await fetch('/api/progress')).json();
-      const secs = Math.round((Date.now() - t0) / 1000);
-      const pct = p.total ? Math.min(99, (p.done / p.total) * 100) : Math.min(96, (secs / etaFor(p.stage)) * 100);
-      $('#progress-fill').style.width = pct.toFixed(0) + '%';
-      const rows = p.total ? ` · ${p.done.toLocaleString('en-IN')}/${p.total.toLocaleString('en-IN')} rows` : '';
-      $('#progress-label').textContent = `${p.stage || label} — ${secs}s${rows}`;
-    } catch { /* progress is best-effort */ }
-  }, 400);
-}
-function stopProgress() {
-  clearInterval(progressTimer);
-  $('#progress-fill').style.width = '100%';
-  setTimeout(() => { $('#progress-wrap').hidden = true; }, 300);
-}
-
-function showOrig(m) {
-  const ok = m && m.rows;
-  let name = ok ? m.name : '';
-  try { name = decodeURIComponent(name); } catch { /* already plain (older caches stored it encoded) */ }
-  $('#orig-status').textContent = ok ? `Loaded: ${name} · ${m.rows.toLocaleString('en-IN')} rows · ${m.loaded_at}` : 'Not loaded yet';
-  $('#drop-orig').classList.toggle('ok', !!ok);
-}
-fetch('/api/original').then(r => r.json()).then(showOrig);
-
-async function post(url, file, label) {
-  startProgress(label);
-  try {
-    const r = await fetch(url, {method: 'POST', body: file, headers: {'X-File-Name': encodeURIComponent(file.name)}});
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || r.statusText);
-    return j;
-  } finally { stopProgress(); }
-}
-
-$('#orig').onchange = async e => {
-  const f = e.target.files[0]; if (!f) return;
-  try { showOrig(await post('/api/original', f, `Reading ${f.name}`)); }
-  catch (err) { msg(err.message, 'err'); }
-  e.target.value = '';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const L = v => (v ?? 0).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const N = v => (v ?? 0).toLocaleString('en-IN');
+const secs = s => s == null ? '—' : s < 1 ? '<1 s' : s < 60 ? `${s.toFixed(s < 10 ? 1 : 0)} s` : `${Math.floor(s / 60)} m ${Math.round(s % 60)} s`;
+const bytes = b => b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`;
+const frozen = m => /^(Jan|Feb)/.test(m);
+const P = {
+  upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
+  sheet:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h2"/><path d="M14 13h2"/><path d="M8 17h2"/><path d="M14 17h2"/>',
+  ok:'<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>', check:'<path d="M20 6 9 17l-5-5"/>',
+  warn:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  error:'<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>', info:'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+  load:'<path d="M21 12a9 9 0 1 1-6.219-8.56"/>', dl:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+  play:'<polygon points="6 3 20 12 6 21 6 3"/>', trash:'<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+  lock:'<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  redo:'<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
 };
+const icon = (n, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${P[n]}</svg>`;
+// Replace an element's markup only when it actually changed - compared with what we last wrote, not with
+// el.innerHTML (the browser re-serializes that, so it never matches and the buttons would be rebuilt on every poll)
+function setHTML(el, h) { if (el && el._h !== h) { el._h = h; el.innerHTML = h; } }
+const LEVEL = {error: ['error', 'alert-error'], warning: ['warn', 'alert-warning'], info: ['info', 'alert-info']};
 
-$('#rev').onchange = async e => {
-  const f = e.target.files[0]; if (!f) return;
-  try {
-    const j = await post('/api/realign', f, `Realigning against ${f.name}`);
-    $('#rev-status').textContent = `Realigned: ${f.name} · ${j.revised_departments.join(', ')}`;
-    $('#drop-rev').classList.add('ok');
-    render(j);
-  } catch (err) { msg(err.message, 'err'); }
-  e.target.value = '';
-};
+let S = null, sig = '', tab = 'depts', timer = null, online = null, tplDept = '';
+const uploads = {};    // slot -> {name, size, loaded, t0}  (browser-side upload progress)
+const pending = {};    // "kind-fmt" -> job id: download automatically when built
+const opened = new Set();  // <details> the user opened, kept across re-renders
 
-async function download(kind, fmt, label) {
-  startProgress(label);
-  try {
-    const r = await fetch(`/api/download?type=${kind}&fmt=${fmt}`);
-    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || r.statusText); }
-    const blob = await r.blob();
-    const name = kind === 'compare' ? `Realigned Plan - Comparison.${fmt}` : `Realigned Plan.${fmt}`;
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
-  } catch (err) { msg(err.message, 'err'); }
-  stopProgress();
+function toast(msg, kind = 'error') {
+  const el = document.createElement('div');
+  el.className = `toast ${kind}`;
+  el.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+  el.innerHTML = icon(kind === 'error' ? 'error' : kind === 'success' ? 'ok' : 'info') + `<div>${esc(msg)}</div>`;
+  $('#toasts').append(el);
+  setTimeout(() => el.remove(), kind === 'error' ? 9000 : 4500);
 }
-$('#dl-compare-xlsx').onclick = () => download('compare', 'xlsx', 'Building comparison (xlsx)');
-$('#dl-compare-csv').onclick = () => download('compare', 'csv', 'Building comparison (csv)');
-$('#dl-full-csv').onclick = () => download('full', 'csv', 'Building full plan (csv)');
-$('#dl-full-xlsx').onclick = () => download('full', 'xlsx', 'Building full plan (xlsx) — several minutes for ~680k rows');
 
-function render(j) {
-  $('#warns').innerHTML = j.warnings.map(w => `<div class="warn">${esc(w)}</div>`).join('');
-  $('#meta').textContent = `${j.rows.toLocaleString('en-IN')} rows`;
-  $('#changed-meta').textContent = `${j.changed_rows.toLocaleString('en-IN')} cells changed`;
-  let h = '<thead><tr><th>Division</th><th>Month</th><th>Original</th><th>Realigned</th><th>Diff</th><th>Revised depts: before</th><th>after</th><th>Other depts: change</th></tr></thead><tbody>';
-  for (const s of j.summary) {
-    const diff = s.final - s.original, other = (s.final - s.revised_after) - (s.original - s.revised_before);
-    const cls = v => Math.abs(v) < 0.005 ? '' : v > 0 ? 'up' : 'dn';
-    h += `<tr><td>${esc(s.division)}</td><td>${esc(s.month)}</td><td>${fmt(s.original)}</td><td>${fmt(s.final)}</td>
-      <td class="${cls(diff)}">${fmt(diff)}</td><td>${fmt(s.revised_before)}</td><td>${fmt(s.revised_after)}</td><td class="${cls(other)}">${fmt(other)}</td></tr>`;
+async function api(path) {
+  const r = await fetch(path, {method: 'POST'});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `${r.status} ${r.statusText}`);
+  return j;
+}
+
+async function refresh() {
+  clearTimeout(timer);
+  try {
+    S = await (await fetch('/api/state', {cache: 'no-store'})).json();
+    setConn(true);
+    render();
+  } catch { setConn(false); }
+  const busy = !S || S.jobs.some(j => j.status === 'running') || Object.keys(uploads).length || Object.keys(pending).length;
+  timer = setTimeout(refresh, busy ? 700 : 5000);
+}
+
+function setConn(ok) {
+  if (ok === online) return;
+  online = ok;
+  $('#conn').className = `badge ${ok ? 'b-success' : 'b-error'}`;
+  $('#conn').innerHTML = `<span class="dot"></span>${ok ? 'Server connected' : 'Server offline — retrying'}`;
+}
+
+const running = kind => S.jobs.find(j => j.status === 'running' && (!kind || j.kind === kind));
+const dataBusy = () => S.jobs.some(j => j.status === 'running' && j.kind !== 'export') || Object.keys(uploads).length;
+
+// ------------------------------------------------------------------ render
+
+function render() {
+  const s = JSON.stringify([S.original, S.original_failed, S.revised, S.result && S.result.id, S.departments.length]);
+  if (s !== sig) { sig = s; renderOrig(); renderRev(); renderResults(); }
+  renderRun(); renderDownloads(); renderActivity(); autoDownload();
+  document.querySelectorAll('.drop').forEach(d => d.classList.toggle('disabled', !!dataBusy()));
+}
+
+function report(items, id, forceOpen) {
+  if (!items || !items.length) return '';
+  const order = ['error', 'warning', 'info'];
+  const sorted = [...items].sort((a, b) => order.indexOf(a.level) - order.indexOf(b.level));
+  const n = lv => sorted.filter(i => i.level === lv).length, errs = n('error'), warns = n('warning'), notes = n('info');
+  const body = sorted.map(i => `<div class="alert ${LEVEL[i.level][1]}">${icon(LEVEL[i.level][0])}<div>${esc(i.msg)}${
+    i.examples.length ? `<ul class="ex">${i.examples.map(e => `<li>${esc(e)}</li>`).join('')}</ul>` : ''}</div></div>`).join('');
+  const label = [errs && `${errs} problem${errs > 1 ? 's' : ''}`, warns && `${warns} warning${warns > 1 ? 's' : ''}`,
+                 notes && `${notes} note${notes > 1 ? 's' : ''}`].filter(Boolean).join(' · ');
+  const open = forceOpen || errs || warns || opened.has(id);
+  return `<details class="report" id="${id}" ${open ? 'open' : ''} ontoggle="toggleD(this)"><summary>What was read · ${label}</summary><div class="body">${body}</div></details>`;
+}
+function toggleD(el) { el.open ? opened.add(el.id) : opened.delete(el.id); }
+
+function dropzone(slot, title, compact) {
+  return `<label class="drop ${compact ? 'compact' : ''}" tabindex="0" role="button" aria-label="${esc(title)}"
+      ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="dropped(event,this,'${slot}')"
+      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.querySelector('input').click()}">
+    <span class="ico">${icon('upload')}</span>
+    <span><strong>${esc(title)}</strong><small>Drop a file here or click to browse · .xlsx, .xlsb, .xls or .csv · up to 400 MB</small></span>
+    <input type="file" accept=".xlsx,.xlsm,.xlsb,.xls,.csv" onchange="picked(this,'${slot}')">
+  </label>`;
+}
+function dropped(e, el, slot) { e.preventDefault(); el.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) upload(slot, f); }
+function picked(input, slot) { const f = input.files[0]; input.value = ''; if (f) upload(slot, f); }
+
+function sheetPicker(slot, sheets, current) {
+  if (!sheets || sheets.length < 2) return '';
+  return `<span class="row small"><label class="muted" for="sheet-${slot}">Sheet</label><select class="select" id="sheet-${slot}">${
+    sheets.map(s => `<option ${s === current ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>
+    <button class="btn btn-outline btn-sm" onclick="useSheet('${slot}')">${icon('redo')}Read this sheet</button></span>`;
+}
+
+const stepNo = (n, st) => `<span class="step-no ${st}">${st === 'done' ? icon('check') : n}</span>`;
+
+function renderOrig() {
+  const o = S.original, f = S.original_failed;
+  let h = `<div class="card-header">${stepNo(1, o ? 'done' : 'current')}<div class="grow"><h2 class="card-title" id="t-orig">Original plan
+      ${o ? '<span class="badge b-success"><span class="dot"></span>Loaded</span>' : '<span class="badge b-muted">Not loaded</span>'}</h2>
+    <p class="card-desc">The full plan to realign back to — Store × Department × MRP × Display Type with “&lt;Month&gt; Plan” and “&lt;Month&gt; Plan Qty” columns. Kept between sessions, so you only upload it when it changes.</p></div></div><div class="card-content">`;
+  if (f) h += `<div class="alert alert-error">${icon('error')}<div style="flex:1"><strong>${esc(f.name)} couldn't be loaded</strong> · ${esc(f.at)}.
+      ${o ? 'The previously loaded original is still in use.' : ''}<div style="margin-top:6px">${sheetPicker('original', f.sheets)}</div></div>
+      <button class="btn btn-ghost btn-sm" onclick="dismissOrig()" aria-label="Dismiss this notice">Dismiss</button></div>${report(f.report, 'rep-of', true)}<div class="sep"></div>`;
+  if (o) {
+    h += `<div class="file"><span class="fi">${icon('sheet')}</span><div><div class="name">${esc(o.name)}</div>
+      <div class="meta">Loaded ${esc(o.loaded_at || '—')}${o.parse_secs ? ` · read and checked in ${secs(o.parse_secs)}` : ''}${o.sheet ? ` · sheet “${esc(o.sheet)}”, header on row ${o.header_row}` : ''}</div></div>
+      <span class="end">${sheetPicker('original', o.sheets, o.sheet)}</span></div>
+      <div class="stats">
+        <div class="stat"><div class="stat-label">Rows</div><div class="stat-value">${N(o.rows)}</div></div>
+        <div class="stat"><div class="stat-label">Stores</div><div class="stat-value">${N(o.stores)}</div></div>
+        <div class="stat"><div class="stat-label">Departments</div><div class="stat-value">${N(o.departments)}</div></div>
+        <div class="stat"><div class="stat-label">Divisions</div><div class="stat-value">${(o.divisions || []).length}</div><div class="stat-sub">${esc((o.divisions || []).join(' · '))}</div></div>
+      </div>
+      <div class="chips">${(o.months || []).map(m => `<span class="chip">${frozen(m) ? icon('lock', 'xs') : ''}${esc(m)}</span>`).join('')}
+        <span class="muted small">${icon('lock', 'xs')} never changed (Jan / Feb)</span></div>
+      ${report(o.report, 'rep-o')}<div class="sep"></div>${dropzone('original', 'Replace the original plan', true)}`;
+  } else h += dropzone('original', f ? 'Try another file' : 'Upload the original plan', !!f);
+  $('#c-orig').innerHTML = h + '</div>';
+}
+
+function renderRev() {
+  const o = S.original, r = S.revised;
+  const badge = !r ? '<span class="badge b-muted">Not uploaded</span>' : r.ok
+    ? '<span class="badge b-success"><span class="dot"></span>Ready to run</span>' : '<span class="badge b-error"><span class="dot"></span>Needs fixing</span>';
+  let h = `<div class="card-header">${stepNo(2, !o ? '' : r && r.ok ? 'done' : 'current')}<div class="grow"><h2 class="card-title" id="t-rev">Revised plan ${badge}</h2>
+    <p class="card-desc">Only the departments you changed — Store × Department rows with “&lt;Month&gt; New” columns. Checked against the original the moment you upload it, before anything runs.</p></div>
+    ${o ? `<div class="actions"><select class="select" id="tpl-dept" aria-label="Department to pre-fill the template with" onchange="tplDept=this.value"><option value="">Blank template</option>${
+      S.departments.map(d => `<option ${d === tplDept ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select>
+      <button class="btn btn-outline btn-sm" onclick="template()" title="Excel file with the right headers, pre-filled with the original values of the chosen department">${icon('dl')}Template</button></div>` : ''}</div>
+    <div class="card-content">`;
+  if (!o) h += `<p class="empty">Load the original plan first — the revised plan is checked against it.</p>`;
+  if (r) {
+    const pv = r.preview;
+    h += `<div class="file"><span class="fi ${r.ok ? '' : 'err'}">${icon(r.ok ? 'sheet' : 'error')}</span><div><div class="name">${esc(r.name)}</div>
+      <div class="meta">Checked ${esc(r.loaded_at)}${r.rows ? ` · ${N(r.rows)} rows · ${r.departments} department${r.departments > 1 ? 's' : ''} · ${r.stores} stores` : ''}${r.sheet ? ` · sheet “${esc(r.sheet)}”, header on row ${r.header_row}` : ''}</div></div>
+      <span class="end">${sheetPicker('revised', r.sheets, r.sheet)}<button class="btn btn-ghost btn-sm" onclick="clearRev()">${icon('trash')}Remove</button></span></div>
+      ${report(r.report, 'rep-rev')}`;
+    if (pv && pv.rows.length) {
+      const live = j => !pv.frozen[j], sumLive = arr => arr.reduce((a, v, j) => a + (live(j) ? v : 0), 0);
+      const cellHtml = (o_, r_, fz) => { const d = r_ - o_, c = Math.abs(d) < .005 ? 'muted' : d > 0 ? 'up' : 'dn';
+        return `<td class="${fz ? 'frozen' : ''}">${L(r_)}<span class="delta ${fz ? '' : c}">${fz ? 'stays as original' : `${d >= 0 ? '+' : ''}${L(d)} vs orig.`}</span></td>`; };
+      const tot = pv.months.map((_, j) => [pv.rows.reduce((a, x) => a + x.original[j], 0), pv.rows.reduce((a, x) => a + x.revised[j], 0)]);
+      h += `<div class="sep"></div><div class="row" style="justify-content:space-between;margin-bottom:8px"><strong class="small">Preview — revised totals against the original, same stores</strong>
+        <span class="muted small">₹ lakhs</span></div><div class="table-wrap"><table><thead><tr><th>Department</th><th>Stores</th>${
+        pv.months.map((m, j) => `<th class="${pv.frozen[j] ? 'frozen' : ''}">${pv.frozen[j] ? icon('lock', 'xs') + ' ' : ''}${esc(m)}</th>`).join('')}<th>Total excl. Jan / Feb</th></tr></thead><tbody>${
+        pv.rows.map(x => `<tr><td><strong>${esc(x.dept)}</strong>${x.parent ? ` <span class="badge b-info">new · copies ${esc(x.parent)}</span>` : ''}</td><td>${N(x.stores)}</td>${
+          pv.months.map((m, j) => cellHtml(x.original[j], x.revised[j], pv.frozen[j])).join('')}${cellHtml(sumLive(x.original), sumLive(x.revised), false)}</tr>`).join('')}
+        ${pv.rows.length > 1 ? `<tr class="total"><td>All revised</td><td></td>${tot.map(([a, b], j) => cellHtml(a, b, pv.frozen[j])).join('')}${
+          cellHtml(sumLive(tot.map(t => t[0])), sumLive(tot.map(t => t[1])), false)}</tr>` : ''}</tbody></table></div>`;
+    }
+    h += `<div class="sep"></div>${dropzone('revised', 'Replace the revised plan', true)}`;
+  } else if (o) h += dropzone('revised', 'Upload the revised plan');
+  $('#c-rev').innerHTML = h + '</div>';
+}
+
+function renderRun() {
+  const o = S.original, r = S.revised, res = S.result, job = running('run');
+  const ready = o && r && r.ok;
+  let reason = !o ? 'Load the original plan first (step 1).' : !r ? 'Upload the revised plan (step 2).' : !r.ok ? 'Fix the problems listed in step 2 first.' : '';
+  const other = !job && dataBusy();
+  if (other && !reason) reason = 'Waiting for the current step to finish…';
+  const h = `<div class="card-header">${stepNo(3, res ? 'done' : ready ? 'current' : '')}<div class="grow"><h2 class="card-title" id="t-run">Realign</h2>
+    <p class="card-desc">Revised departments keep their values exactly. Every other department in the same store × division absorbs the difference pro-rata, so each store × division lands back on the original. Jan / Feb are never touched; qty is priced at the original month-wise ASP per Department × MRP × Display Type.</p></div></div>
+    <div class="card-content"><div class="row">
+      <button class="btn btn-primary btn-lg" onclick="run()" ${!ready || job || other ? 'disabled' : ''}>${job ? icon('load', 'spin') + 'Realigning…' : icon('play') + (res ? 'Run again' : 'Run realignment')}</button>
+      <span class="muted small">${job ? `Running for ${secs(job.secs)} — each step is timed in Activity.` : reason ||
+        `${r.departments} department${r.departments > 1 ? 's' : ''} across ${r.stores} stores · usually about ${secs(S.estimates.realign)}`}</span>
+      ${res && !job ? `<span class="badge b-muted" style="margin-left:auto">${icon('check')}Last run ${esc(res.finished_at)} · ${secs(res.secs)}</span>` : ''}
+    </div></div>`;
+  setHTML($('#c-run'), h);
+}
+
+function renderResults() {
+  const res = S.result, el = $('#c-res');
+  el.hidden = !res;
+  if (!res) return;
+  const sc = res.status_counts || {}, fails = res.checks.filter(c => c.status === 'fail').length;
+  const chk = res.checks.map(c => `<div class="check">${icon(c.status === 'ok' ? 'ok' : c.status === 'warn' ? 'warn' : 'error', c.status + '-i')}<div><div class="t">${esc(c.name)}</div><div class="d">${esc(c.detail)}</div></div></div>`).join('');
+  el.innerHTML = `<div class="card-header">${stepNo(4, 'done')}<div class="grow"><h2 class="card-title" id="t-res">Results
+      <span class="badge ${fails ? 'b-error' : 'b-success'}"><span class="dot"></span>${fails ? `${fails} check${fails > 1 ? 's' : ''} failed` : 'All checks passed'}</span></h2>
+    <p class="card-desc">Run ${esc(res.finished_at)} in ${secs(res.secs)} · ${esc(res.revised)} against ${esc(res.original)}</p></div></div>
+    <div class="card-content">
+      <div class="stats" style="margin-top:0">
+        <div class="stat"><div class="stat-label">Cells changed</div><div class="stat-value">${N(res.changed_rows)}</div><div class="stat-sub">${N(sc.kept || 0)} kept · ${N(sc.absorbed || 0)} absorbed</div></div>
+        <div class="stat"><div class="stat-label">Output rows</div><div class="stat-value">${N(res.rows)}</div><div class="stat-sub">Store × Dept × MRP × Display</div></div>
+        <div class="stat"><div class="stat-label">Revised departments</div><div class="stat-value">${res.dept_table.length}</div><div class="stat-sub" title="${esc(res.dept_table.map(d => d.dept).join(', '))}">${esc(res.dept_table.map(d => d.dept).join(', '))}</div></div>
+        <div class="stat"><div class="stat-label">Run time</div><div class="stat-value">${secs(res.secs)}</div><div class="stat-sub">realign + verify</div></div>
+      </div>
+      <div class="sep"></div><strong class="small">Checks — recomputed independently from the output</strong><div class="checks" style="margin-top:8px">${chk}</div>
+      ${res.warnings.length ? `<details class="report" id="rep-res" ${opened.has('rep-res') ? 'open' : ''} ontoggle="toggleD(this)"><summary>What the realign had to decide · ${res.warnings.length} note${res.warnings.length > 1 ? 's' : ''}</summary><div class="body">${
+        res.warnings.map(w => `<div class="alert alert-info">${icon('info')}<div>${esc(w)}</div></div>`).join('')}</div></details>` : ''}
+      <div class="sep"></div>
+      <div class="tabs" role="tablist"><button class="tab" role="tab" aria-selected="${tab === 'depts'}" onclick="setTab('depts')">Revised departments</button>
+        <button class="tab" role="tab" aria-selected="${tab === 'div'}" onclick="setTab('div')">Division × Month</button></div>
+      <div>${tab === 'depts' ? deptTable(res) : divTable(res)}</div>
+      <div class="sep"></div><div class="row" style="justify-content:space-between;margin-bottom:10px"><strong class="small">Downloads</strong>
+        <span class="muted small">Built once on the server, then instant — kept until the next run.</span></div>
+      <div class="dls" id="dls"></div>
+    </div>`;
+  renderDownloads();
+}
+function setTab(t) { tab = t; renderResults(); }
+
+function deptTable(res) {
+  if (!res.dept_table.length) return '<p class="empty">No revised departments.</p>';
+  const months = res.dept_table[0].months.map(m => m.month);
+  const lbl = {original: 'Original', revised: 'Revised (file)', realigned: 'Realigned (output)'};
+  return `<div class="table-wrap"><table><thead><tr><th>Department</th><th></th>${months.map(m => `<th class="${frozen(m) ? 'frozen' : ''}">${frozen(m) ? icon('lock', 'xs') + ' ' : ''}${esc(m)}</th>`).join('')}</tr></thead><tbody>${
+    res.dept_table.map(d => ['original', 'revised', 'realigned'].map((k, i) => `<tr class="${i === 0 ? 'grp' : ''}">${i === 0 ? `<td rowspan="3"><strong>${esc(d.dept)}</strong><div class="muted small">${N(d.stores)} stores</div></td>` : ''}
+      <td class="muted">${lbl[k]}</td>${d.months.map(m => {
+        const same = Math.abs(m.realigned - m.revised) < 1e-6, fz = frozen(m.month), mark = k === 'realigned' && !fz;
+        return `<td class="${fz ? 'frozen' : mark ? (same ? 'up' : 'dn') : ''}">${L(m[k])}${mark ? ' ' + icon(same ? 'check' : 'warn', 'xs') : ''}</td>`; }).join('')}</tr>`).join('')).join('')}
+    </tbody></table></div><p class="muted small" style="margin:6px 0 0">₹ lakhs. A tick means the output equals the revised file exactly. Jan / Feb stay as the original regardless of the file.</p>`;
+}
+
+function divTable(res) {
+  const cls = v => Math.abs(v) < .005 ? '' : v > 0 ? 'up' : 'dn';
+  return `<div class="table-wrap"><table><thead><tr><th>Division</th><th>Month</th><th>Original</th><th>Realigned</th><th>Difference</th><th>Revised depts before → after</th><th>Other depts change</th></tr></thead><tbody>${
+    res.summary.map(s => { const d = s.final - s.original, o = (s.final - s.revised_after) - (s.original - s.revised_before);
+      return `<tr><td>${esc(s.division)}</td><td>${esc(s.month)}</td><td>${L(s.original)}</td><td>${L(s.final)}</td><td class="${cls(d)}">${L(d)}</td>
+        <td>${L(s.revised_before)} → ${L(s.revised_after)}</td><td class="${cls(o)}">${L(o)}</td></tr>`; }).join('')}</tbody></table></div>`;
+}
+
+const DL = [
+  ['compare', 'xlsx', 'Comparison vs original', 'A Summary sheet plus every cell that moved — Original, Realigned, Delta, Delta % and why (kept / absorbed). The quick way to check the output is okay.'],
+  ['compare', 'csv', 'Comparison — CSV', 'Just the changed cells, as CSV. Builds in seconds and opens fastest.'],
+  ['full', 'xlsx', 'Full realigned plan', 'Every row in the original layout (Store × Department × MRP × Display Type), value and qty — the file to load back.'],
+  ['full', 'csv', 'Full realigned plan — CSV', 'The same as CSV — builds in seconds instead of minutes.'],
+];
+function renderDownloads() {
+  const el = $('#dls');
+  if (!el || !S.result) return;
+  const h = DL.map(([k, f, title, desc]) => {
+    const key = `${k}-${f}`, e = S.exports[key];
+    const job = S.jobs.find(j => j.kind === 'export' && j.status === 'running' && j.label.includes(k === 'full' ? 'full' : 'comparison') && j.label.includes(f.toUpperCase()));
+    let foot;
+    if (e) foot = `<button class="btn btn-primary btn-sm" onclick="exportFile('${k}','${f}')">${icon('dl')}Download</button><span class="muted small">${bytes(e.size)} · built ${esc(e.built_at.slice(-8))} in ${secs(e.secs)}</span>`;
+    else if (job) { const st = job.steps[job.steps.length - 1] || {}, pct = st.total ? st.done / st.total * 100 : null;
+      foot = `<div style="flex:1;min-width:180px"><div class="progress ${pct == null ? 'indet' : ''}" role="progressbar" aria-valuenow="${Math.round(pct || 0)}" aria-valuemin="0" aria-valuemax="100"><div style="width:${pct ?? 0}%"></div></div>
+        <div class="muted small" style="margin-top:4px">${st.total ? `${N(st.done)} / ${N(st.total)} rows · ` : ''}${secs(job.secs)} elapsed${st.left != null ? ` · ~${secs(st.left)} left` : ''} · downloads when done</div></div>`; }
+    else foot = `<button class="btn btn-outline btn-sm" onclick="exportFile('${k}','${f}')">${icon('dl')}Build &amp; download</button><span class="muted small">about ${secs(S.estimates[key])}</span>`;
+    return `<div class="dl"><h4>${icon('sheet')}${esc(title)} <span class="chip">${f.toUpperCase()}</span></h4><p>${esc(desc)}</p><div class="foot">${foot}</div></div>`;
+  }).join('');
+  setHTML(el, h);
+}
+
+function stepRow(st) {
+  const ic = st.status === 'done' ? icon('check', 'ok-i') : st.status === 'error' ? icon('error', 'fail-i') : icon('load', 'spin');
+  const pct = st.total ? st.done / st.total * 100 : st.eta ? Math.min(95, st.secs / st.eta * 100) : null;
+  const tm = st.status === 'running' ? `${secs(st.secs)}${st.left != null ? ` · ~${secs(st.left)} left` : ''}` : secs(st.secs);
+  return `<li>${ic}<span>${esc(st.name)}</span><span class="tm num">${tm}</span>${st.status === 'running' ? `<div class="progress ${pct == null ? 'indet' : ''}"><div style="width:${pct ?? 0}%"></div></div>
+    ${st.total ? `<div class="sub num">${N(st.done)} / ${N(st.total)} rows</div>` : st.eta ? `<div class="sub">usually ${secs(st.eta)} (from previous runs)</div>` : ''}` : ''}</li>`;
+}
+
+function renderActivity() {
+  let h = '';
+  for (const [slot, u] of Object.entries(uploads)) {
+    const el = (performance.now() - u.t0) / 1000, pct = u.size ? u.loaded / u.size * 100 : 0, rate = u.loaded / Math.max(el, .1);
+    h += `<div class="act-job"><div class="act-head">${icon('upload')}<span class="lbl">Uploading the ${slot} plan</span><span class="t num">${secs(el)}</span></div>
+      <ul class="steps"><li>${icon('load', 'spin')}<span>${esc(u.name)}</span><span class="tm num">${pct.toFixed(0)}%</span>
+      <div class="progress"><div style="width:${pct}%"></div></div><div class="sub num">${bytes(u.loaded)} of ${bytes(u.size)} · ${bytes(rate)}/s${rate > 0 && pct < 100 ? ` · ~${secs((u.size - u.loaded) / rate)} left` : ''}</div></li></ul></div>`;
   }
-  $('#sum').innerHTML = h + '</tbody>';
-  $('#out').hidden = false;
+  for (const j of S.jobs) {
+    const badge = j.status === 'running' ? '' : j.status === 'done' ? `<span class="badge b-success">Done</span>` : `<span class="badge b-error">Failed</span>`;
+    h += `<div class="act-job"><div class="act-head">${j.status === 'running' ? icon('load', 'spin') : j.status === 'done' ? icon('ok', 'ok-i') : icon('error', 'fail-i')}
+      <span class="lbl">${esc(j.label)}</span>${badge}<span class="t num">${secs(j.secs)}</span></div><ul class="steps">${j.steps.map(stepRow).join('')}</ul>
+      ${j.error ? `<div class="alert alert-error" style="margin-top:10px">${icon('error')}<div>${esc(j.error)}</div></div>` : ''}</div>`;
+  }
+  if (!h) h = `<p class="empty">Nothing running. Upload a file or run the realignment to see each step here.</p>`;
+  setHTML($('#now'), h);
+  const hist = S.history.map(j => `<li><details id="h-${j.id}" ${opened.has('h-' + j.id) ? 'open' : ''} ontoggle="toggleD(this)"><summary>${j.status === 'done' ? icon('check', 'ok-i') : icon('error', 'fail-i')}
+      <span>${esc(j.label)}<div class="when">${esc(j.started_at)}</div></span><span class="num small">${secs(j.secs)}</span></summary>
+      <div class="brk">${j.steps.map(s => `<div><span>${esc(s.name)}</span><span class="num">${secs(s.secs)}${s.status === 'error' ? ' · failed' : ''}</span></div>`).join('')}
+      ${j.error ? `<div style="color:hsl(var(--destructive))">${esc(j.error)}</div>` : ''}</div></details></li>`).join('') || '<li class="empty">No activity yet.</li>';
+  setHTML($('#hist'), hist);
 }
+
+// ------------------------------------------------------------------ actions
+
+function upload(slot, file) {
+  if (!/\.(xlsx|xlsm|xlsb|xls|csv)$/i.test(file.name)) return toast(`${file.name} isn't a spreadsheet — use .xlsx, .xlsb, .xls or .csv.`);
+  if (file.size > 400 * 1024 * 1024) return toast('That file is over 400 MB.');
+  if (dataBusy()) return toast('Please wait for the current step to finish.');
+  if (slot === 'revised' && file.size > 40e6 && !confirm(`${file.name} is ${bytes(file.size)} — large for a revised plan. Is it the full plan by mistake?\n\nUpload anyway?`)) return;
+  const xhr = new XMLHttpRequest();
+  uploads[slot] = {name: file.name, size: file.size, loaded: 0, t0: performance.now()};
+  xhr.upload.onprogress = e => { uploads[slot].loaded = e.loaded; renderActivity(); };
+  xhr.onload = () => {
+    delete uploads[slot];
+    let j = {}; try { j = JSON.parse(xhr.responseText || '{}'); } catch {}
+    if (xhr.status >= 400) toast(j.error || 'Upload failed.');
+    refresh();
+  };
+  xhr.onerror = () => { delete uploads[slot]; toast('Upload failed — is the server running?'); refresh(); };
+  xhr.open('POST', `/api/${slot}`);
+  xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
+  xhr.send(file);
+  refresh();
+}
+
+async function useSheet(slot) {
+  try { await api(`/api/sheet?slot=${slot}&sheet=${encodeURIComponent($(`#sheet-${slot}`).value)}`); } catch (e) { toast(e.message); }
+  refresh();
+}
+async function dismissOrig() { try { await api('/api/original/dismiss'); } catch (e) { toast(e.message); } refresh(); }
+async function clearRev() { try { await api('/api/revised/clear'); } catch (e) { toast(e.message); } refresh(); }
+async function run() { try { await api('/api/run'); } catch (e) { toast(e.message); } refresh(); }
+function template() { location.href = `/api/template${tplDept ? `?dept=${encodeURIComponent(tplDept)}` : ''}`; }
+
+function fetchFile(k, f) {
+  const a = document.createElement('a');
+  a.href = `/api/download?type=${k}&fmt=${f}`;
+  a.download = '';
+  document.body.append(a); a.click(); a.remove();
+}
+async function exportFile(k, f) {
+  try {
+    const j = await api(`/api/export?type=${k}&fmt=${f}`);
+    if (j.ready) fetchFile(k, f);
+    else { pending[`${k}-${f}`] = j.job; toast('Building on the server — it downloads automatically when ready.', 'info'); }
+  } catch (e) { toast(e.message); }
+  refresh();
+}
+function autoDownload() {
+  for (const [key, id] of Object.entries(pending)) {
+    const [k, f] = key.split('-');
+    if (S.exports[key]) { delete pending[key]; fetchFile(k, f); toast(`${S.exports[key].filename} is ready.`, 'success'); continue; }
+    const failed = [...S.jobs, ...S.history].find(j => j.id === id && j.status === 'error');
+    if (failed) { delete pending[key]; toast(failed.error || 'Build failed.'); }
+  }
+}
+
+document.addEventListener('dragover', e => e.preventDefault());   // a drop that misses the zone shouldn't open the file in the tab
+document.addEventListener('drop', e => e.preventDefault());
+refresh();
 </script>
 </body>
 </html>

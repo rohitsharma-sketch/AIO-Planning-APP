@@ -1,393 +1,404 @@
-﻿"""AOP Realigner - pull a revised department plan back onto the original plan.
+"""AOP Realigner - web app.  python server.py  ->  http://localhost:8070
 
-Original plan: Store x Department x MRP x Display Type rows, "<Month> Plan" value + "<Month> Plan Qty".
-Revised plan:  Store x Department rows, "<Month> New" values (only the departments the buyer changed).
-
-Per Store x Division x Month the original total is the target. Revised departments keep their new
-value exactly (split to MRP x Display Type by the original cont %); every other department in that
-bucket absorbs the difference pro-rata. If revised alone exceed a month's total, the excess comes out
-of the same store-division's other live months instead. Jan/Feb are never touched. Qty = value /
-the original ASP for that Department x MRP x Display Type x Month.
-Run: python server.py -> http://localhost:8070
+Every slow thing (reading a workbook, realigning, building an export) runs as a background job made of
+timed steps; GET /api/state shows them live with an ETA learned from previous runs, and finished jobs go
+to a persistent activity history. Requests never block on the work itself.
+Business logic lives in engine.py, file reading/validation in importer.py.
 """
 import contextlib
-import io
 import json
 import os
 import pickle
 import threading
 import time
+import traceback
 import urllib.parse
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-import numpy as np
-import pandas as pd
-import xlsxwriter
+import engine
+import importer
+from engine import DEPT, STORE
 
 PORT = int(os.environ.get("REALIGNER_PORT", 8070))
 HERE = os.path.dirname(os.path.abspath(__file__))
-CACHE = os.path.join(HERE, ".cache", "original.pkl")  # gitignored: real plan data
+CACHE_DIR = os.path.join(HERE, ".cache")  # gitignored: real plan data
+ORIG_PKL = os.path.join(CACHE_DIR, "original.pkl")
+TIMINGS_JSON = os.path.join(CACHE_DIR, "timings.json")
+HISTORY_JSON = os.path.join(CACHE_DIR, "history.json")
 MAX_BODY = 400 * 1024 * 1024
-TOL = 1e-9
-STORE, DIV, DEPT, MRP, DISP = "Store Name", "DIVISION", "DEPARTMENT", "MRP", "DISPLAY TYPE"
-FROZEN = ("Jan", "Feb")  # user rule: Jan & Feb plans stay exactly as the original
-
-state = {"orig": None, "months": None, "meta": None, "out": None, "summary": None, "compare": None}
-# One progress entry per running operation (keyed by request thread), so an upload finishing in
-# another tab can't wipe a long export's progress. /api/progress reports the newest still running.
-active = {}
+os.makedirs(CACHE_DIR, exist_ok=True)
 
 
-@contextlib.contextmanager
-def stage(name):
-    tid = threading.get_ident()
-    active[tid] = {"stage": name, "since": time.time(), "done": None, "total": None}
+class UserError(Exception):
+    """A problem the user can fix - shown as-is in the UI."""
+
+
+def stamp(t=None):
+    return time.strftime("%d %b %H:%M:%S", time.localtime(t or time.time()))
+
+
+def _load_json(path, default):
     try:
-        yield
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return default
+
+
+def _save_json(path, obj):
+    with open(path + ".tmp", "w", encoding="utf-8") as fh:
+        json.dump(obj, fh)
+    os.replace(path + ".tmp", path)
+
+
+class Timings:
+    """Last duration of each step (and the input size it had) -> ETA for the next run, scaled by size.
+    Seeded from measured runs on the real 674k-row plan so the very first run already has an estimate."""
+    SEED = {"read:original": [22.0, 126e6], "check:original": [6.0, 674478], "save:original": [3.0, 674478],
+            "read:revised": [1.0, 75e3], "check:revised": [2.0, 674478], "realign": [15.0, 674478],
+            "verify": [3.0, 674478], "export:full:xlsx": [150.0, 681732], "export:full:csv": [9.0, 681732],
+            "export:compare:xlsx": [38.0, 278545], "export:compare:csv": [4.0, 278545]}
+
+    def __init__(self):
+        self.d = {**self.SEED, **_load_json(TIMINGS_JSON, {})}
+        self.lock = threading.Lock()
+
+    def estimate(self, key, size=None):
+        secs, was = self.d.get(key, (None, None))
+        if secs is None:
+            return None
+        return secs * size / was if size and was else secs
+
+    def record(self, key, secs, size):
+        with self.lock:
+            self.d[key] = [secs, size]
+            _save_json(TIMINGS_JSON, {k: v for k, v in self.d.items() if self.SEED.get(k) != v})
+
+
+timings = Timings()
+
+
+class Job:
+    def __init__(self, group, kind, label):
+        self.id, self.group, self.kind, self.label = uuid.uuid4().hex[:10], group, kind, label
+        self.status, self.error, self.steps = "running", None, []
+        self.started, self.ended = time.time(), None
+
+    @contextlib.contextmanager
+    def step(self, name, key=None, size=None):
+        s = {"name": name, "status": "running", "started": time.time(), "ended": None,
+             "eta": timings.estimate(key, size) if key else None, "done": None, "total": None}
+        self.steps.append(s)
+        try:
+            yield s
+            s["status"] = "done"
+        except BaseException:
+            s["status"] = "error"
+            raise
+        finally:
+            s["ended"] = time.time()
+            if key and s["status"] == "done":
+                timings.record(key, s["ended"] - s["started"], size)
+
+    def progress(self, done, total):
+        if self.steps:
+            self.steps[-1].update(done=done, total=total)
+
+    def elapsed(self):
+        return (self.ended or time.time()) - self.started
+
+    def view(self):
+        now, steps = time.time(), []
+        for s in self.steps:
+            secs = (s["ended"] or now) - s["started"]
+            left = None
+            if s["status"] == "running":
+                if s["total"] and s["done"]:
+                    left = secs / s["done"] * (s["total"] - s["done"])
+                elif s["eta"] is not None:
+                    left = max(s["eta"] - secs, 0.0)
+            steps.append({"name": s["name"], "status": s["status"], "secs": round(secs, 1),
+                          "left": None if left is None else round(left, 1), "eta": s["eta"] and round(s["eta"], 1),
+                          "done": s["done"], "total": s["total"]})
+        return {"id": self.id, "kind": self.kind, "label": self.label, "status": self.status, "error": self.error,
+                "secs": round(self.elapsed(), 1), "started_at": stamp(self.started),
+                "ended_at": self.ended and stamp(self.ended), "steps": steps}
+
+
+jobs, jobs_lock = {}, threading.Lock()
+history = _load_json(HISTORY_JSON, [])
+
+
+def start_job(group, kind, label, fn, *args):
+    """Run fn(job, *args) in the background. One running job per group ("data" = anything that changes
+    the loaded plans or the result; each export has its own group)."""
+    with jobs_lock:
+        busy = next((j for j in jobs.values() if j.group == group and j.status == "running"), None)
+        if busy:
+            raise UserError(f"Please wait - {busy.label.lower()} is still running.")
+        job = Job(group, kind, label)
+        jobs[job.id] = job
+        for old in sorted(jobs.values(), key=lambda j: j.started)[:-40]:
+            if old.status != "running":
+                jobs.pop(old.id)
+    threading.Thread(target=_run, args=(job, fn, args), daemon=True).start()
+    return job
+
+
+def _run(job, fn, args):
+    try:
+        fn(job, *args)
+        job.status = "done"
+    except UserError as e:
+        job.status, job.error = "error", str(e)
+    except Exception as e:
+        job.status, job.error = "error", f"Unexpected error - {type(e).__name__}: {e}"
+        traceback.print_exc()
     finally:
-        active.pop(tid, None)
+        job.ended = time.time()
+        with jobs_lock:
+            history.insert(0, job.view())
+            del history[40:]
+            _save_json(HISTORY_JSON, history)
 
 
-def _progress(**kw):
-    """Update this thread's running operation, if any (no-op outside stage(), e.g. in tests)."""
-    cur = active.get(threading.get_ident())
-    if cur:
-        cur.update(kw)
+# ---------------------------------------------------------------- state
+
+NO_RESULT = {"result": None, "out": None, "compare": None, "summary": None, "exports": {}}
+state = {"orig": None, "months": [], "orig_info": None, "orig_report": [], "orig_failed": None,
+         "rev": None, "rev_months": [], "rev_info": None, "rev_report": [], "rev_upload": None, "orig_upload": None,
+         **NO_RESULT}
+lock = threading.RLock()
+
+if os.path.exists(ORIG_PKL):
+    try:
+        with open(ORIG_PKL, "rb") as fh:
+            saved = pickle.load(fh)
+        if isinstance(saved, tuple):  # cache written by the previous version: (df, months, meta)
+            df, months, meta = saved
+            saved = {"df": df, "months": months, "report": [], "info": {
+                "name": urllib.parse.unquote(meta.get("name", "original plan")), "loaded_at": meta.get("loaded_at"),
+                "rows": len(df), "stores": int(df[STORE].nunique()), "departments": int(df[DEPT].nunique()),
+                "divisions": sorted(df[engine.DIV].unique().tolist()), "months": months,
+                "colmap": {c: c for c in df.columns}, "sheets": [], "parse_secs": None}}
+        state.update(orig=saved["df"], months=saved["months"], orig_info=saved["info"], orig_report=saved["report"])
+    except Exception:
+        traceback.print_exc()
 
 
-def read_sheet(data, header_marker):
-    """First sheet; header = first row containing header_marker (the original has a totals row on top)."""
-    raw = pd.read_excel(io.BytesIO(data), header=None, engine="calamine")
-    hits = [i for i in range(min(10, len(raw)))
-            if header_marker in raw.iloc[i].astype(str).str.strip().str.upper().tolist()]
-    if not hits:
-        raise ValueError(f"Could not find a '{header_marker}' header in the first 10 rows.")
-    df = raw.iloc[hits[0] + 1:].reset_index(drop=True)
-    df.columns = [str(c).strip() for c in raw.iloc[hits[0]]]
-    return df
+def _fail(report, what):
+    errs = [i["msg"] for i in report.items if i["level"] == "error"]
+    raise UserError(f"{what}: {errs[0]}" + (f" (+{len(errs) - 1} more problem(s) - see the card)" if len(errs) > 1 else ""))
 
 
-def load_original(data):
-    o = read_sheet(data, "STORE NAME")
-    months = [c[:-5] for c in o.columns if c.endswith(" Plan")]
-    num = [m + " Plan" for m in months] + [m + " Plan Qty" for m in months]
-    missing = [c for c in [STORE, DIV, DEPT, MRP, DISP] + num if c not in o.columns]
-    if missing or not months:
-        raise ValueError(f"Original plan is missing columns: {missing or '<Month> Plan'}")
-    for c in num:
-        o[c] = pd.to_numeric(o[c], errors="coerce").fillna(0.0)
-    for c in (STORE, DIV, DEPT, DISP):
-        o[c] = o[c].astype(str).str.strip()
-    if o.duplicated([STORE, DEPT, MRP, DISP]).any():
-        raise ValueError("Original plan has duplicate Store x Department x MRP x Display Type rows.")
-    return o, months
+def job_original(job, data, name, sheet=None):
+    with job.step("Read workbook", "read:original", len(data)):
+        df, info, rep = importer.read_table(data, name, importer.NEED_ORIGINAL, "original plan", sheet)
+    months = []
+    if df is not None:
+        with job.step("Check columns and values", "check:original", len(df)):
+            df, months, info, rep = importer.prepare_original(df, info, rep)
+    info.update(name=name, loaded_at=stamp(), parse_secs=round(job.elapsed(), 1))
+    if not rep.ok:
+        with lock:
+            state["orig_failed"] = {"name": name, "at": stamp(), "report": rep.items, "sheets": info.get("sheets", [])}
+            state["orig_upload"] = (data, name) if len(info.get("sheets", [])) > 1 else None
+        _fail(rep, name)
+    with job.step("Save for next session", "save:original", len(df)):
+        with open(ORIG_PKL + ".tmp", "wb") as fh:
+            pickle.dump({"df": df, "months": months, "info": info, "report": rep.items}, fh)
+        os.replace(ORIG_PKL + ".tmp", ORIG_PKL)
+    with lock:
+        state.update(orig=df, months=months, orig_info=info, orig_report=rep.items, orig_failed=None,
+                     orig_upload=(data, name) if len(info["sheets"]) > 1 else None, **NO_RESULT)
+        rev = state["rev_upload"]
+    if rev:  # the revised plan was checked against the old original - check it again
+        with contextlib.suppress(UserError):  # its problems show on its own card; the original itself loaded fine
+            _check_revised(job, *rev)
 
 
-def load_revised(data, months):
-    r = read_sheet(data, "DEPARTMENT")
-    r.columns = [{"STORE NAME": STORE, "DEPARTMENT": DEPT}.get(c.upper(), c) for c in r.columns]
-    cols = [m for m in months if m + " New" in r.columns]
-    if not cols and any(m + " Plan" in r.columns for m in months):
-        raise ValueError("This file looks like a full plan ('<Month> Plan' columns, e.g. an original or a realigned "
-                         "output) - box 2 needs the revised plan: Store x Department rows with '<Month> New' columns.")
-    if STORE not in r.columns or DEPT not in r.columns or not cols:
-        raise ValueError("Revised plan needs STORE NAME, DEPARTMENT and '<Month> New' columns matching the original months.")
-    r = r.rename(columns={m + " New": m for m in cols})
-    for c in (STORE, DEPT):
-        r[c] = r[c].astype(str).str.strip()
-    for m in cols:
-        r[m] = pd.to_numeric(r[m], errors="coerce").fillna(0.0)
-    if r.duplicated([STORE, DEPT]).any():
-        raise ValueError("Revised plan has duplicate Store x Department rows.")
-    return r[[STORE, DEPT] + cols], cols
+def job_revised(job, data, name, sheet=None):
+    _check_revised(job, data, name, sheet)
 
 
-def add_new_departments(o, r, months):
-    """A revised dept a store never had (e.g. LW_U_T-TOP F/S) gets rows cloned from the longest original
-    dept name it starts with in that store (LW_U_T-TOP): same MRP/display rows, zero original value.
-    `_basis` = row whose values give the MRP/display mix and ASP (itself, or the parent row for a clone)."""
-    o = o.reset_index(drop=True)
-    o["_basis"] = np.arange(len(o))
-    have = set(zip(o[STORE], o[DEPT]))
-    by_store = dict(tuple(o.groupby(STORE)))
-    clones, unmatched = [], []
-    for s, d in zip(r[STORE], r[DEPT]):
-        if (s, d) in have:
-            continue
-        g = by_store.get(s)
-        parent = next((p for p in sorted(set(g[DEPT]), key=len, reverse=True) if d.startswith(p)), None) if g is not None else None
-        if parent is None:
-            unmatched.append(f"{s} / {d}")
-            continue
-        c = g[g[DEPT] == parent].copy()
-        c[DEPT] = d
-        c[[m + " Plan" for m in months] + [m + " Plan Qty" for m in months]] = 0.0
-        if "CONC - UDF" in c:
-            c["CONC - UDF"] = c[STORE] + d + c[MRP].astype(str) + c[DISP]
-        if "CONC - MRP" in c:
-            c["CONC - MRP"] = c[STORE] + d + c[MRP].astype(str)
-        if "Tag" in c:
-            c["Tag"] = "New Dept"
-        clones.append(c)
-    if unmatched:
-        raise ValueError("Revised departments with no original department to borrow MRP/display rows from: "
-                         + ", ".join(unmatched[:10]) + (" ..." if len(unmatched) > 10 else ""))
-    n = sum(len(c) for c in clones)
-    return (pd.concat([o, *clones], ignore_index=True) if clones else o), len(clones), n
+def _check_revised(job, data, name, sheet=None):
+    with lock:
+        orig, months = state["orig"], state["months"]
+    if orig is None:
+        raise UserError("Load the original plan first (step 1).")
+    with job.step("Read revised plan", "read:revised", len(data)):
+        df, info, rep = importer.read_table(data, name, importer.NEED_REVISED, "revised plan", sheet)
+    r, use = None, []
+    if df is not None:
+        with job.step("Check against the original", "check:revised", len(orig)):
+            r, use, info, rep = importer.prepare_revised(df, info, rep, orig, months)
+    info.update(name=name, loaded_at=stamp())
+    with lock:
+        state.update(rev=r if rep.ok else None, rev_months=use if rep.ok else [], rev_info=info,
+                     rev_report=rep.items, rev_upload=(data, name, sheet), **NO_RESULT)
+    if not rep.ok:
+        _fail(rep, name)
 
 
-def realign(o, r, months):
-    """o: original rows (numeric cols clean), r: revised Store x Dept values over `months`.
-    Returns (realigned rows in original layout, division x month summary, warnings,
-    a long-format table of every cell that actually changed - for the comparison download)."""
-    V = [m + " Plan" for m in months]
-    Q = [m + " Plan Qty" for m in months]
-    o, n_new_sd, n_new_rows = add_new_departments(o, r, months)
-    b = o.pop("_basis").to_numpy()
-    orig, qty = o[V].to_numpy(float), o[Q].to_numpy(float)
-    basis = orig[b]
-
-    keys = pd.MultiIndex.from_arrays([o[STORE], o[DEPT]])
-    rev = r.set_index([STORE, DEPT]).reindex(columns=months)
-    locked = keys.isin(rev.index)
-    R = np.nan_to_num(rev.reindex(keys).to_numpy(float))
-    frozen = np.array([m[:3] in FROZEN for m in months])
-    # a month absent from the revised file, or a frozen month (Jan/Feb), is never touched
-    lk = locked[:, None] & rev.notna().any().to_numpy()[None, :] & ~frozen[None, :]
-
-    # 1. split revised Store x Dept value to MRP x Display rows by that month's original cont %;
-    #    a month where the dept had no plan uses the row's average cont % across the months it did have
-    sd = (o[STORE] + "||" + o[DEPT]).to_numpy()
-    gsum = pd.DataFrame(basis).groupby(sd).transform("sum").to_numpy()
-    has = np.abs(gsum) > TOL
-    share = np.where(has, basis / np.where(has, gsum, 1), np.nan)
-    avg = np.nan_to_num(np.nanmean(np.where(has.any(1, keepdims=True), share, 0.0), axis=1))
-    cnt = pd.Series(avg).groupby(sd).transform("size").to_numpy()
-    avg = np.where(has.any(1), avg, 1.0 / cnt)  # dept never planned in this store -> equal split
-    mix = np.where(has, share, avg[:, None])
-    new = np.where(lk, R * mix, orig)
-    fb_cells = int((lk & ~has & (np.abs(R) > TOL)).sum())
-    ignored = int((locked[:, None] & frozen[None, :] & (np.abs(R - pd.DataFrame(orig).groupby(sd).transform("sum").to_numpy()) > 1e-6)).any(1).sum())
-
-    # 2. every other department in the Store x Division x Month absorbs the difference pro-rata. Revised
-    #    values are never changed: if they alone exceed a month's total, the other departments go to 0 that
-    #    month and the excess is taken from the same store-division's other live months (in proportion to
-    #    their room), so the store x division season total - and the grand total - still match the original.
-    grp = (o[STORE] + "||" + o[DIV]).to_numpy()
-    T = pd.DataFrame(orig).groupby(grp).transform("sum").to_numpy()
-    L = pd.DataFrame(np.where(lk, new, 0.0)).groupby(grp).transform("sum").to_numpy()
-    U = pd.DataFrame(np.where(lk, 0.0, orig)).groupby(grp).transform("sum").to_numpy()
-    live = (rev.notna().any().to_numpy() & ~frozen)[None, :]
-    has_u = np.abs(U) > TOL
-    over = live & (L > T + TOL)
-    excess = np.where(over, L - T, 0.0).sum(1, keepdims=True)
-    room = np.where(live & ~over & has_u, np.clip(T - L, 0, None), 0.0)
-    room_tot = room.sum(1, keepdims=True)
-    take = np.where(room_tot > TOL, room * np.minimum(excess / np.where(room_tot > TOL, room_tot, 1), 1.0), 0.0)
-    Tadj = T - take
-    f = np.where(has_u & ~over, (Tadj - L) / np.where(has_u, U, 1), 0.0)
-    new = np.where(lk, new, orig * f)
-    spilled = over.any(1)
-    unplaced = excess[:, 0] - take.sum(1)  # excess with no room left in any other month
-    # nothing left to absorb into (bucket stays under target), or excess that couldn't be placed (stays over)
-    short = ((~has_u) & live & (Tadj - L > 1e-6)).any(1) | (unplaced > 1e-6)
-
-    # 3. qty = new value / the original plan's ASP for that Department x MRP x Display Type x Month, pooled
-    #    across stores (in the original it's identical across stores anyway). A new dept uses its parent's.
-    #    No qty for that combo that month -> the combo's all-month ASP -> MRP. Unchanged cells keep their qty.
-    key = (pd.Series(o[DEPT].to_numpy()[b]) + "||" + o[MRP].astype(str) + "||" + o[DISP]).to_numpy()
-    qm = np.abs(qty) > TOL
-    num = pd.DataFrame(np.where(qm, orig, 0.0)).groupby(key).transform("sum").to_numpy()
-    den = pd.DataFrame(np.where(qm, qty, 0.0)).groupby(key).transform("sum").to_numpy()
-    def _ratio(n, d):
-        r = np.divide(n, d, out=np.zeros_like(n, dtype=float), where=np.abs(d) > TOL)
-        return np.where(r > TOL, r, np.nan)
-    asp_m, asp_all = _ratio(num, den), _ratio(num.sum(1), den.sum(1))
-    asp_all = np.where(np.isnan(asp_all), pd.to_numeric(o[MRP], errors="coerce").fillna(0).to_numpy() / 1e5, asp_all)
-    asp = np.where(np.isnan(asp_m), asp_all[:, None], asp_m)
-    moved = np.abs(new - orig) > 1e-12
-    new_qty = np.where(moved, np.divide(new, asp, out=np.zeros_like(new), where=asp > TOL), qty)
-    asp_fb = int((moved & np.isnan(asp_m) & (np.abs(new) > TOL)).sum())
-
-    # 4. comparison table: every cell that actually moved, tagged with why - the "did this come out
-    #    okay" check against the original. "kept" = a revised row; "absorbed" = everything else that
-    #    moved to make room (frozen months never change - f==1 there - so they're filtered out).
-    status = np.where(lk, "kept", np.where(np.abs(f - 1) > TOL, "absorbed", "unchanged"))
-    delta = new - orig
-    changed = np.abs(delta) > 1e-6
-    if changed.any():
-        ri, ci = np.nonzero(changed)
-        ov, nv = orig[ri, ci], new[ri, ci]
-        with np.errstate(divide="ignore", invalid="ignore"):
-            pct = np.where(np.abs(ov) > TOL, (nv - ov) / np.abs(ov) * 100, np.nan)
-        compare = pd.DataFrame({
-            STORE: o[STORE].to_numpy()[ri], DIV: o[DIV].to_numpy()[ri], DEPT: o[DEPT].to_numpy()[ri],
-            MRP: o[MRP].to_numpy()[ri], DISP: o[DISP].to_numpy()[ri], "Month": np.asarray(months)[ci],
-            "Original": ov, "Realigned": nv, "Delta": nv - ov, "Delta %": pct, "Status": status[ri, ci],
-        })
-    else:
-        compare = pd.DataFrame(columns=[STORE, DIV, DEPT, MRP, DISP, "Month", "Original", "Realigned", "Delta", "Delta %", "Status"])
-
-    o[V], o[Q] = new, new_qty
-
-    summ = []
-    for d, g in o.groupby(DIV):
-        i = g.index.to_numpy()
-        for j, m in enumerate(months):
-            summ.append({"division": d, "month": m, "original": float(orig[i, j].sum()), "final": float(new[i, j].sum()),
-                         "revised_before": float(orig[i, j][locked[i]].sum()), "revised_after": float(new[i, j][locked[i]].sum())})
-    spilled_sd = sorted({f"{s}/{d}" for s, d in zip(o[STORE][spilled], o[DIV][spilled])})
-    spilled_amt = float(pd.Series(excess[:, 0]).groupby(grp).first().sum())
-    short_sd = sorted({f"{s}/{d}" for s, d in zip(o[STORE][short], o[DIV][short])})
-    warn = []
-    if n_new_sd:
-        warn.append(f"{n_new_sd} new store-departments created ({n_new_rows} MRP/display rows) from their parent department's rows.")
-    if fb_cells:
-        warn.append(f"{fb_cells} revised row-months had no original plan that month; split by the row's average cont % across the other months.")
-    if ignored:
-        warn.append(f"{ignored} revised rows had Jan/Feb values different from the original - ignored, Jan/Feb stay as original.")
-    if spilled_sd:
-        warn.append(f"{len(spilled_sd)} store-division(s) had revised departments exceeding a month's original total - "
-                    f"revised kept exactly, other departments set to 0 that month, and the excess ({spilled_amt:.4f}) taken "
-                    f"from the same store-division's other live months, so its season total still matches: {', '.join(spilled_sd[:15])}")
-    if asp_fb:
-        warn.append(f"{asp_fb} changed row-months had no original qty for their Department x MRP x Display Type that month - "
-                    f"qty uses that combination's all-month ASP instead.")
-    if short_sd:
-        warn.append(f"{len(short_sd)} store-division(s) couldn't fully land on the original total (no other department "
-                    f"or month left to absorb into): {', '.join(short_sd[:15])}")
-    return o, summ, warn, compare
+def job_run(job):
+    with lock:
+        o, r, months = state["orig"], state["rev"], state["months"]
+        names = (state["orig_info"] or {}).get("name"), (state["rev_info"] or {}).get("name")
+    if o is None or r is None:
+        raise UserError("Load a valid original plan (step 1) and revised plan (step 2) first.")
+    with job.step("Realign", "realign", len(o)):
+        out, summ, warn, compare = engine.realign(o, r, months)
+    with job.step("Verify totals", "verify", len(o)):
+        checks, dept_table = engine.verify(o, r, out, months)
+    res = {"id": job.id, "finished_at": stamp(), "secs": round(job.elapsed(), 1), "original": names[0], "revised": names[1],
+           "rows": len(out), "changed_rows": len(compare), "summary": summ, "warnings": warn,
+           "checks": checks, "dept_table": dept_table,
+           "status_counts": compare["Status"].value_counts().to_dict() if len(compare) else {}}
+    with lock:
+        state.update(out=out, compare=compare, summary=summ, result=res, exports={})
 
 
-XLSX_CTYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+EXPORTS = {"compare": "Comparison vs original", "full": "Full realigned plan"}
 
 
-def _cell(v):
-    """numpy scalar -> native Python, and NaN/Inf -> blank (xlsxwriter can't write either directly)."""
-    if hasattr(v, "item"):
-        v = v.item()
-    return None if isinstance(v, float) and not np.isfinite(v) else v
+def job_export(job, kind, fmt):
+    with lock:
+        res, out, compare, summ = state["result"], state["out"], state["compare"], state["summary"]
+        colmap = (state["orig_info"] or {}).get("colmap") or {}
+    if not res:
+        raise UserError("Run the realignment first.")
+    size = len(out) if kind == "full" else len(compare) + len(summ)
+    with job.step(f"Build {EXPORTS[kind].lower()} ({fmt.upper()})", f"export:{kind}:{fmt}", size):
+        if kind == "full":
+            data, ctype, ext = engine.export(out.rename(columns={k: v for k, v in colmap.items() if k in out.columns}),
+                                             fmt, job.progress)
+        else:
+            data, ctype, ext = engine.export_compare(summ, compare, fmt, job.progress)
+    name = "Realigned Plan" + (" - Comparison" if kind == "compare" else "") + f".{ext}"
+    with lock:
+        if state["result"] and state["result"]["id"] == res["id"]:  # a newer run makes this build stale
+            state["exports"][f"{kind}-{fmt}"] = {"data": data, "ctype": ctype, "filename": name, "size": len(data),
+                                                 "built_at": stamp(), "secs": round(job.elapsed(), 1)}
 
 
-def _write_xlsx(sheets):
-    """sheets: [(name, df), ...]. Writes row-by-row via xlsxwriter's own API (not pandas' .to_excel
-    wrapper) so `progress` can be updated as it goes - the full plan is ~680k rows and takes minutes."""
-    _progress(done=0, total=sum(len(df) for _, df in sheets))
-    buf = io.BytesIO()
-    wb = xlsxwriter.Workbook(buf, {"in_memory": True, "constant_memory": True})
-    done = 0
-    for name, df in sheets:
-        ws = wb.add_worksheet(name[:31])  # Excel's own sheet-name length limit
-        for j, c in enumerate(df.columns):
-            ws.write(0, j, str(c))
-        for i, row in enumerate(df.itertuples(index=False, name=None)):
-            ws.write_row(i + 1, 0, [_cell(v) for v in row])
-            if i % 3000 == 0:
-                _progress(done=done + i)
-        done += len(df)
-        _progress(done=done)
-    wb.close()
-    return buf.getvalue()
+def public_state():
+    with lock:
+        s = dict(state)
+        exports = {k: {kk: vv for kk, vv in v.items() if kk != "data"} for k, v in s["exports"].items()}
+    now = time.time()
+    with jobs_lock:
+        live = [j.view() for j in sorted(jobs.values(), key=lambda j: j.started)
+                if j.status == "running" or now - (j.ended or now) < 8]
+        hist = history[:20]
+    o, res = s["orig"], s["result"]
+    est = {}
+    if o is not None:
+        est["realign"] = (timings.estimate("realign", len(o)) or 0) + (timings.estimate("verify", len(o)) or 0)
+    if res:
+        for kind in EXPORTS:
+            for fmt in ("xlsx", "csv"):
+                size = res["rows"] if kind == "full" else res["changed_rows"] + len(res["summary"])
+                est[f"{kind}-{fmt}"] = timings.estimate(f"export:{kind}:{fmt}", size)
+    return {
+        "original": s["orig_info"] and {**{k: v for k, v in s["orig_info"].items() if k != "colmap"}, "report": s["orig_report"]},
+        "original_failed": s["orig_failed"],
+        "revised": s["rev_info"] and {**{k: v for k, v in s["rev_info"].items() if k != "colmap"},
+                                      "report": s["rev_report"], "ok": s["rev"] is not None},
+        "result": res, "exports": exports, "jobs": live, "history": hist, "estimates": est,
+        "departments": sorted(o[DEPT].unique().tolist()) if o is not None else [],
+    }
 
 
-def export(df, fmt):
-    """csv ~3s; xlsx ~2.5 min for the full 680k-row plan (progress via the `progress` dict)."""
-    if fmt == "csv":
-        return df.round(6).to_csv(index=False).encode("utf-8-sig"), "text/csv", "csv"
-    return _write_xlsx([("Realigned Plan", df.round(6))]), XLSX_CTYPE, "xlsx"
-
-
-def export_compare(summ, compare, fmt):
-    """The "did this come out okay" file: a tiny Division x Month summary plus every cell that
-    actually changed vs. the original - far smaller than the full plan, so it's quick even as xlsx."""
-    if fmt == "csv":
-        return compare.round(4).to_csv(index=False).encode("utf-8-sig"), "text/csv", "csv"
-    return _write_xlsx([("Summary", pd.DataFrame(summ).round(4)), ("Changed Rows", compare.round(4))]), XLSX_CTYPE, "xlsx"
-
-
-def set_original(o, months, name):
-    state.update(orig=o, months=months, meta={"name": name, "rows": len(o), "months": months,
-                                               "loaded_at": time.strftime("%Y-%m-%d %H:%M")})
-    os.makedirs(os.path.dirname(CACHE), exist_ok=True)
-    with open(CACHE, "wb") as fh:
-        pickle.dump((o, months, state["meta"]), fh)
-
-
-if os.path.exists(CACHE):
-    with open(CACHE, "rb") as fh:
-        state["orig"], state["months"], state["meta"] = pickle.load(fh)
-
+# ---------------------------------------------------------------- HTTP
 
 class Handler(BaseHTTPRequestHandler):
+    def log_message(self, fmt, *args):  # keep the console quiet; /api/state is polled every second
+        pass
+
     def _send(self, code, body, ctype="application/json", extra=None):
-        data = body if isinstance(body, bytes) else json.dumps(body).encode()
+        data = body if isinstance(body, bytes) else json.dumps(body, default=str).encode()
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
         for k, v in (extra or {}).items():
             self.send_header(k, v)
         self.end_headers()
         self.wfile.write(data)
 
+    def _route(self):
+        u = urllib.parse.urlsplit(self.path)
+        return u.path, {k: v[0] for k, v in urllib.parse.parse_qs(u.query).items()}
+
     def do_GET(self):
-        p = self.path.split("?")[0]
-        if p in ("/", "/index.html"):
+        path, q = self._route()
+        if path in ("/", "/index.html"):
             with open(os.path.join(HERE, "index.html"), "rb") as fh:
                 return self._send(200, fh.read(), "text/html; charset=utf-8")
-        if p == "/api/original":
-            return self._send(200, state["meta"] or {})
-        if p == "/api/progress":
-            cur = max(list(active.values()), key=lambda a: a["since"], default=None)
-            if not cur:
-                return self._send(200, {"stage": None, "elapsed": 0, "done": None, "total": None})
-            return self._send(200, {**{k: cur[k] for k in ("stage", "done", "total")}, "elapsed": time.time() - cur["since"]})
-        if p == "/api/download":
-            q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
-            fmt, kind = q.get("fmt", ["csv"])[0], q.get("type", ["full"])[0]
-            try:
-                if kind == "compare":
-                    if state["compare"] is None:
-                        raise ValueError("Run a realign first.")
-                    with stage(f"Building comparison ({fmt})"):
-                        data, ctype, ext = export_compare(state["summary"], state["compare"], fmt)
-                    fname = f"Realigned Plan - Comparison.{ext}"
-                else:
-                    if state["out"] is None:
-                        raise ValueError("Run a realign first.")
-                    with stage(f"Building full plan ({fmt})"):
-                        data, ctype, ext = export(state["out"], fmt)
-                    fname = f"Realigned Plan.{ext}"
-            except ValueError as e:
-                return self._send(400, {"error": str(e)})
-            return self._send(200, data, ctype, {"Content-Disposition": f'attachment; filename="{fname}"'})
+        if path == "/api/state":
+            return self._send(200, public_state())
+        if path == "/api/download":
+            with lock:
+                e = state["exports"].get(f"{q.get('type')}-{q.get('fmt')}")
+            if not e:
+                return self._send(404, {"error": "That file hasn't been built yet - use the Build button first."})
+            return self._send(200, e["data"], e["ctype"], {"Content-Disposition": f'attachment; filename="{e["filename"]}"'})
+        if path == "/api/template":
+            with lock:
+                o, months = state["orig"], state["months"]
+            if o is None:
+                return self._send(400, {"error": "Load the original plan first."})
+            dept = q.get("dept") or None
+            df = importer.template(o, months, dept)
+            name = f"Revised plan template - {dept}.xlsx" if dept else "Revised plan template.xlsx"
+            return self._send(200, engine.write_xlsx([("Revised plan", df)]), engine.XLSX_CTYPE,
+                              {"Content-Disposition": f'attachment; filename="{name.replace("/", "-")}"'})
         self._send(404, {"error": "not found"})
 
     def do_POST(self):
+        path, q = self._route()
         n = int(self.headers.get("Content-Length") or 0)
         if n > MAX_BODY:
             return self._send(413, {"error": "File too large (400 MB max)."})
-        data = self.rfile.read(n)
+        data = self.rfile.read(n) if n else b""
         name = urllib.parse.unquote(self.headers.get("X-File-Name", "upload.xlsx"))
         try:
-            if self.path == "/api/original":
-                with stage(f"Reading {name}"):
-                    set_original(*load_original(data), name)
-                return self._send(200, state["meta"])
-            if self.path == "/api/realign":
-                if state["orig"] is None:
-                    raise ValueError("Upload the original plan first.")
-                r, _ = load_revised(data, state["months"])
-                with stage("Realigning"):
-                    out, summ, warn, compare = realign(state["orig"], r, state["months"])
-                state["out"], state["summary"], state["compare"] = out, summ, compare
-                return self._send(200, {"summary": summ, "warnings": warn, "rows": len(out),
-                                        "changed_rows": len(compare),
-                                        "revised_departments": sorted(r[DEPT].unique().tolist())})
-            self._send(404, {"error": "not found"})
-        except ValueError as e:
-            self._send(400, {"error": str(e)})
-        except Exception as e:  # bad/unsupported workbook -> tell the user, don't drop the connection
-            self._send(400, {"error": f"{type(e).__name__}: {e}"})
+            if path == "/api/original":
+                job = start_job("data", "original", "Loading original plan", job_original, data, name)
+            elif path == "/api/revised":
+                job = start_job("data", "revised", "Checking revised plan", job_revised, data, name)
+            elif path == "/api/sheet":  # re-read the last upload of a slot from a different sheet
+                with lock:
+                    up = state["orig_upload" if q.get("slot") == "original" else "rev_upload"]
+                if not up:
+                    raise UserError("Upload the file again to choose a sheet.")
+                fn, label = (job_original, "Loading original plan") if q.get("slot") == "original" else (job_revised, "Checking revised plan")
+                job = start_job("data", q.get("slot"), label, fn, up[0], up[1], q.get("sheet"))
+            elif path == "/api/original/dismiss":  # hide a failed-upload notice
+                with lock:
+                    state.update(orig_failed=None, orig_upload=None)
+                return self._send(200, {"ok": True})
+            elif path == "/api/revised/clear":
+                with lock:
+                    state.update(rev=None, rev_months=[], rev_info=None, rev_report=[], rev_upload=None, **NO_RESULT)
+                return self._send(200, {"ok": True})
+            elif path == "/api/run":
+                job = start_job("data", "run", "Realigning", job_run)
+            elif path == "/api/export":
+                kind, fmt = q.get("type"), q.get("fmt")
+                if kind not in EXPORTS or fmt not in ("xlsx", "csv"):
+                    raise UserError("Unknown export.")
+                with lock:
+                    if f"{kind}-{fmt}" in state["exports"]:
+                        return self._send(200, {"ready": True})
+                job = start_job(f"export:{kind}:{fmt}", "export", f"Building {EXPORTS[kind].lower()} ({fmt.upper()})",
+                                job_export, kind, fmt)
+            else:
+                return self._send(404, {"error": "not found"})
+            return self._send(202, {"job": job.id})
+        except UserError as e:
+            return self._send(409, {"error": str(e)})
 
 
 if __name__ == "__main__":
