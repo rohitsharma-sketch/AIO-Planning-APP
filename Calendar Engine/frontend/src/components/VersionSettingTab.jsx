@@ -28,10 +28,12 @@ const PRIORITY = {
   1: [...FESTIVE_STEPS, ...SAME_MONTH_STEPS,
       ['Nearest Available Date (Same-Month Reuse)', "month's days used up - reuse the nearest same-month day"]],
   2: [...FESTIVE_STEPS, ...SAME_MONTH_STEPS,
-      [null, 'adjacent month, unused day (Month Priority direction first) - non-festive days only'],
-      ['Nearest Available Date (Same-Month Reuse)', 'both months used up - reuse the nearest same-month day'],
-      ['Same/Adjacent Month Reuse (Exception)', 'safety net, never beyond the adjacent month']],
+      [null, "month's days used up - unused day from the adjacent month (Month Priority direction first), non-festive days only"],
+      [null, 'no last-year day is ever used twice']],
 }
+// V1 = same month only, reuses a day when a month runs short; V2 = never
+// reuses, borrows the adjacent month instead (user decision 2026-09-25 - both
+// kept as distinct options; see engine.js _v1Core / _v2Remap).
 
 // Ported from calendar_engine.html lines 573-577. The swatch colours are the
 // same --pre-*/--core-*/--post-* tokens the Day-by-Day badges use, so the
