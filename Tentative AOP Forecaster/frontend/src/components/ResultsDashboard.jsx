@@ -87,7 +87,8 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
   const handlePromote = async () => {
     setPromoteState('loading')
     try {
-      const res = await fetch(apiUrl('/api/promote-aop-targets'), { method: 'POST' })
+      // lock THIS version (the one on screen), not whatever ran last
+      const res = await fetch(apiUrl(`/api/promote-aop-targets${session?.session_id ? `?session_id=${encodeURIComponent(session.session_id)}` : ''}`), { method: 'POST' })
       if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Failed') }
       setPromoteState('done')
       await refreshLockStatus()

@@ -90,6 +90,23 @@ def test_lfl_growth_matches_bis_growth_vs_ly():
     assert lfl_growth_pct(None, target) is None
 
 
+def test_live_version_is_a_saved_version():
+    """One live AOP (2026-09-25): the latest SAVED version's publish, or the
+    version of the session on screen - never an unsaved/deleted-version run
+    (list_aop_history already only returns saved versions' publishes)."""
+    import publish_aop_targets as m
+    orig = m.list_aop_history
+    try:
+        m.list_aop_history = lambda s, limit=50: [{"id": 112, "session_id": "v2"}, {"id": 32, "session_id": "v1"}]
+        assert m.live_version(None)["id"] == 112
+        assert m.live_version(None, "v1")["id"] == 32          # lock the version on screen
+        assert m.live_version(None, "deleted-v3")["id"] == 112  # unknown session -> latest saved
+        m.list_aop_history = lambda s, limit=50: []
+        assert m.live_version(None) is None
+    finally:
+        m.list_aop_history = orig
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_")]
     for t in tests:

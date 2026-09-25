@@ -269,6 +269,42 @@ def list_aop_history(session, limit: int = 15) -> list[dict]:
         return []
 
 
+def live_version(session, session_id=None):
+    """THE AOP every consumer follows (2026-09-25, user: "one source yet so many
+    distinct numbers ... perma fix"): the publish of a SAVED plan version - that
+    session's version when `session_id` is given (e.g. the version on screen),
+    else the latest saved version. Unsaved what-if runs and runs of a deleted
+    version are never live: before this, BIS / the Planning Engine lock followed
+    "whichever run published last", so deleting Version 3 left its run (base
+    387.4 Cr) live while AOP showed Version 2 (388.8 Cr).
+    Returns a list_aop_history entry, or None when nothing is saved."""
+    hist = list_aop_history(session, limit=50)
+    if session_id:
+        for h in hist:
+            if h["session_id"] == session_id:
+                return h
+    return hist[0] if hist else None
+
+
+def restage_live(session):
+    """Staging (aop_division_target, what live readers get) := the live saved
+    version's publish. Called after every plan-version save / delete."""
+    h = live_version(session)
+    if not h:
+        return None
+    for div, periods in (h["division_totals"] or {}).items():
+        for pid, val in periods.items():
+            session.execute(text("""
+                INSERT INTO planning_inputs.input_values
+                    (lever_key, store_id, division_code, period_id, row_key, value, source)
+                VALUES (:lk, '', '', :pid, :rk, :val, 'aop_forecaster')
+                ON CONFLICT ON CONSTRAINT uq_input_values_identity
+                DO UPDATE SET value = EXCLUDED.value, source = EXCLUDED.source, updated_at = now()
+            """), {"lk": LEVER_KEY, "pid": int(pid), "rk": div, "val": float(val)})
+    session.commit()
+    return h
+
+
 def lfl_growth_pct(base_totals, target_totals):
     """MAMJ LFL growth % of one publish = sum(published target) / sum(base) - 1
     over MENS/LADIES/KIDS. This is AOP Summary's "Overall Growth" (Forecast vs

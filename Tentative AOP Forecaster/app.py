@@ -371,6 +371,14 @@ def aop_division_targets(version_id: int | None = None):
     try:
         if version_id is not None:
             return _aop_targets_for_version(db, version_id)
+        # Live = the latest SAVED plan version's publish (db.publish_aop_targets.
+        # live_version) - never an unsaved run or a deleted version's run.
+        from db.publish_aop_targets import live_version
+        live = live_version(db)
+        if live is not None:
+            payload = _aop_targets_for_version(db, live["id"])
+            payload["version_label"] = live["version_label"]   # the join can't tell 2 versions of one session apart
+            return payload
         rows = db.execute(text("""
             SELECT row_key, period_id, value, updated_at
             FROM planning_inputs.input_values
@@ -478,15 +486,22 @@ def get_buyer_department_growth(division: str | None = None):
 
 
 @router.post("/api/promote-aop-targets")
-def promote_aop_targets_endpoint():
-    """Promote current staging AOP targets → locked, making them visible to the
-    Planning Engine as the approved version."""
+def promote_aop_targets_endpoint(session_id: str | None = None):
+    """Lock AOP targets for the Planning Engine: the saved version of
+    `session_id` (the version on screen), else the latest saved version - the
+    same live_version() BIS follows (2026-09-25). Falls back to raw staging
+    only when no version has been saved at all."""
     from db.base import SessionLocal
-    from db.publish_aop_targets import promote_aop_targets
+    from db.publish_aop_targets import promote_aop_targets, promote_from_history, live_version
     from fastapi import HTTPException
     db = SessionLocal()
     try:
-        result = promote_aop_targets(db)
+        live = live_version(db, session_id)
+        if live is not None:
+            result = promote_from_history(db, live["id"])
+            result["version_label"] = live["version_label"]
+        else:
+            result = promote_aop_targets(db)
         if not result.get("ok"):
             raise HTTPException(status_code=400, detail=result.get("reason", "Promote failed"))
         return result
@@ -1064,6 +1079,16 @@ def _ensure_plan_versions_table():
     _plan_versions_ready = True
 
 
+def _restage_live(db):
+    """Staging := latest saved version's publish (non-fatal - a failure here must
+    not fail the save/delete itself)."""
+    try:
+        from db.publish_aop_targets import restage_live
+        restage_live(db)
+    except Exception:
+        db.rollback()
+
+
 @router.get("/api/plan-versions")
 def get_plan_versions():
     _ensure_plan_versions_table()
@@ -1092,6 +1117,7 @@ def upsert_plan_version(body: dict = Body(...)):
                 data = CAST(:data AS jsonb), last_modified_at = NOW()
         """), {"id": body["id"], "data": json.dumps(body)})
         db.commit()
+        _restage_live(db)
     return {"ok": True}
 
 
@@ -1113,6 +1139,7 @@ def delete_plan_version(version_id: str):
                 "UPDATE planning_inputs.plan_versions SET data = jsonb_set(data, '{label}', to_jsonb(CAST(:label AS text))) WHERE id = :id"
             ), {"id": vid, "label": label})
         db.commit()
+        _restage_live(db)   # a deleted version's run must not stay live
     return {"ok": True}
 
 
