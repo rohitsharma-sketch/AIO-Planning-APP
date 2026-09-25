@@ -3,7 +3,7 @@ import './OutputTab.css'
 import { tagClass, MONTHS, toLeaf } from '../lib/tags'
 import { apiUrl } from '../lib/apiBase'
 import { useVisibleMonths } from '../lib/horizon'
-import { LEVELS, LEVEL_KEYS, EMPTY_DIM, ALL_IDX, aggregate, buildTree, sortTree, flatten, dimOptions, filterLeaves, hasNum, HeaderFilter, Th, DimFilterHeaders, DrillToolbar, useDrill } from '../lib/drill'
+import { LEVELS, LEVEL_KEYS, EMPTY_DIM, aggregate, buildTree, sortTree, flatten, dimOptions, filterLeaves, HeaderFilter, useDrill } from '../lib/drill'
 
 const DIVS = ["GM","KIDS","LADIES","MENS","RETAIL"]
 const TAGS = ["LfL","Ramp","NSO"]
@@ -139,148 +139,74 @@ function MultiSelect({ label, options, selected, onChange, colorMap, width }) {
   )
 }
 
-// ── Month select — pivot style with H1/H2 presets ────────────────
-function MonthSelect({ selected, onChange, months = MONTHS }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef(null)
+// ── Pivot Output (2026-09-25, user: "combine the output summary into one,
+// make the headers expandable and collapsable on click, … a drag and drop
+// panel like we do it in excel pivot … keep everything on a month and total
+// rollup with gr% for all") ──────────────────────────────────────────────
+// One table replaces Store summary / Monthly detail / Division rollup:
+//  • rows    = the Rows fields in order (drag to reorder / add / remove);
+//              the header breadcrumb expands/collapses the table by level
+//  • columns = every shown month (rule 1, lib/horizon) grouped in quarters
+//              (click a quarter band to collapse it into one column) + Total
+//  • values  = Stores / Base / Forecast / Deviation (toggle) + Growth % always
+const VALUE_DEFS = {
+  stores: { label: 'Stores',    short: 'Stores' },
+  base:   { label: 'Base',      short: 'Base' },
+  fcst:   { label: 'Forecast',  short: 'Fcst' },
+  dev:    { label: 'Deviation', short: 'Dev' },
+  gr:     { label: 'Growth %',  short: 'Gr%', locked: true },
+}
+const VALUE_KEYS = Object.keys(VALUE_DEFS)
+const DEFAULT_LAYOUT = { rows: LEVEL_KEYS, values: ['base', 'fcst', 'gr'], unit: 'L', collapsedQ: [] }
+const QTR_DEF = [['Q1', [1, 2, 3]], ['Q2', [4, 5, 6]], ['Q3', [7, 8, 9]], ['Q4', [10, 11, 12]]]   // MONTHS idx; 0 = Mar'27
+const LAYOUT_KEY = 'aop.output.pivotLayout'
 
-  useEffect(() => {
-    function handler(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
-
-  const H1 = months.slice(0, 6)
-  const H2 = months.slice(6)
-  const allSelected = selected.length === months.length
-  const display = allSelected ? 'All months'
-    : selected.length === 1 ? selected[0]
-    : `${selected.length} months`
-
-  // Checkbox — multi-toggle (keep at least one selected)
-  function toggleCheck(m, e) {
-    e.stopPropagation()
-    if (selected.includes(m)) {
-      if (selected.length > 1) onChange(selected.filter(x => x !== m))
-    } else {
-      onChange([...selected, m].sort((a, b) => months.indexOf(a) - months.indexOf(b)))
-    }
-  }
-
-  // Label — exclusive select (click again to restore all)
-  function selectOnly(m, e) {
-    e.stopPropagation()
-    if (selected.length === 1 && selected[0] === m) {
-      onChange([...months])
-    } else {
-      onChange([m])
-    }
-  }
-
-  const isChecked = m => selected.includes(m)
-
-  return (
-    <div className="ms-wrap" ref={ref} style={{ minWidth: 130 }}>
-      <button
-        className={`ms-trigger${!allSelected ? ' has-sel' : ''}`}
-        onClick={() => setOpen(o => !o)}
-      >
-        <span className="ms-label-text">Months</span>
-        <span className={`ms-val${!allSelected ? ' ms-val--active' : ''}`}>{display}</span>
-        {!allSelected && <span className="ms-sel-badge">{selected.length}</span>}
-        <span className="ms-caret">{open ? '^' : 'v'}</span>
-      </button>
-      {open && (
-        <div className="ms-dropdown ms-dropdown--months">
-          <div className="ms-pv-header">
-            <span className="ms-pv-title">Months</span>
-            <div className="ms-quick">
-              <button onClick={e => { e.stopPropagation(); onChange([...months]) }}>All</button>
-              <button onClick={e => { e.stopPropagation(); onChange([...H1]) }}>H1</button>
-              <button onClick={e => { e.stopPropagation(); onChange([...H2]) }}>H2</button>
-              {selected.length > 0 && (
-                <button onClick={e => { e.stopPropagation(); onChange([]) }}>None</button>
-              )}
-            </div>
-          </div>
-          {/* (Select All) row */}
-          <div className="ms-pv-options">
-            <div
-              className={`ms-pv-row ms-pv-all${allSelected ? ' ms-pv-row--checked' : ''}`}
-              onClick={() => onChange(allSelected ? [] : [...months])}
-            >
-              <span className={`ms-pv-cb${allSelected ? ' ms-pv-cb--on' : ''}`} />
-              <span className="ms-pv-row-label">(Select All)</span>
-            </div>
-            <div className="ms-pv-divider" />
-            {/* 2-column grid of months */}
-            <div className="ms-pv-month-grid">
-              {months.map(m => {
-                const checked = isChecked(m)
-                const exclusive = selected.length === 1 && selected[0] === m
-                return (
-                  <div
-                    key={m}
-                    className={`ms-pv-row${checked ? ' ms-pv-row--checked' : ''}${exclusive ? ' ms-pv-row--only' : ''}`}
-                  >
-                    <span
-                      className={`ms-pv-cb${checked ? ' ms-pv-cb--on' : ''}`}
-                      onClick={e => toggleCheck(m, e)}
-                    />
-                    <span className="ms-pv-row-label" onClick={e => selectOnly(m, e)}>
-                      {m}
-                    </span>
-                    {exclusive && <span className="ms-pv-only-tag">only</span>}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-          <div className="ms-pv-footer">
-            <span className="ms-pv-hint">Checkbox = multi-select · label = only</span>
-          </div>
-        </div>
-      )}
-    </div>
-  )
+function loadLayout() {
+  try {
+    const l = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null')
+    if (!l) return DEFAULT_LAYOUT
+    const rows = (l.rows || []).filter(k => LEVEL_KEYS.includes(k))
+    const values = (l.values || []).filter(k => VALUE_KEYS.includes(k))
+    return { rows: rows.length ? rows : LEVEL_KEYS, values: values.includes('gr') ? values : [...values, 'gr'],
+             unit: l.unit === 'Cr' ? 'Cr' : 'L', collapsedQ: Array.isArray(l.collapsedQ) ? l.collapsedQ : [] }
+  } catch { return DEFAULT_LAYOUT }
 }
 
-const EMPTY_NUM  = { base: { min: '', max: '' }, fcst: { min: '', max: '' }, dev: { min: '', max: '' }, growth: { min: '', max: '' } }
-const NUM_TITLES = { base: 'Base', fcst: 'Forecast', dev: 'Deviation', growth: 'Growth %' }
-const COL_SETS   = { fcst: ['fcst'], base_fcst: ['base', 'fcst'], all: ['base', 'fcst', 'dev'] }
-const COL_LABEL  = { base: 'Base', fcst: 'Forecast', dev: 'Deviation', gr: 'Growth %' }
-const MONTH_RE   = /^m(\d+)\|(base|fcst|dev)$/
+const sumIdx = (arr, idx) => idx.reduce((s, i) => s + (arr[i] || 0), 0)
+function cellsFor(n, g) {
+  const b = sumIdx(n.mb, g.idx), f = sumIdx(n.m, g.idx)
+  return { stores: n.stores, base: b, fcst: f, dev: f - b, gr: b > 0 ? (f / b - 1) * 100 : null }
+}
+const fmtGr = v => (v == null ? 'new' : (v > 0 ? '+' : '') + v.toFixed(1) + '%')
 
 export default function OutputTab({ sessionId, runKey }) {
   const [rows, setRows]       = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
 
-  // Filter bar (original essence)
+  // Filter bar
   const [divFilter, setDivFilter]     = useState([])
   const [tagFilter, setTagFilter]     = useState([])
   const [clusterFilter, setCluster]   = useState('')
   const [storeSearch, setStoreSearch] = useState('')
 
-  // View controls (original essence)
-  const [viewMode, setViewMode]   = useState('summary')
-  // Rule 1 (2026-09-25): only months whose base month has closed are shown.
+  // Pivot layout (remembered per browser)
+  const [layout, setLayout] = useState(loadLayout)
+  useEffect(() => { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)) } catch {} }, [layout])
+  const { rows: rowFields, values: valueFields, unit } = layout
+  const collapsedQ = useMemo(() => new Set(layout.collapsedQ), [layout.collapsedQ])
+  const setL = patch => setLayout(l => ({ ...l, ...(typeof patch === 'function' ? patch(l) : patch) }))
+  const [panelOpen, setPanelOpen] = useState(true)
+  const [sort, setSort] = useState({ key: 'fcst', dir: -1 })     // Total-group value, or 'name'
+  const [depth, setDepth] = useState(2)                           // levels shown (top level opens expanded)
+  const [drag, setDrag] = useState(null)                          // { kind: 'row' | 'val', key }
+  const [over, setOver] = useState(null)
+
   const VIS = useVisibleMonths()
   const VIS_IDX = useMemo(() => VIS.map(m => MONTHS.indexOf(m)), [VIS])
-  const [selMonths, setSelMonths] = useState(VIS)
-  useEffect(() => { setSelMonths(VIS) }, [VIS])
-  const [colSet, setColSet]       = useState('fcst')
-
-  // Drill-down structure (shared with the Summary tab's drill table)
-  const [numF, setNumF] = useState(EMPTY_NUM)
   const d = useDrill({ defaultSort: 'fcst', resetKey: runKey })
 
-  // Reset everything when a new run completes — keeps state across navigation
-  useEffect(() => {
-    setDivFilter([]); setTagFilter([]); setCluster(''); setStoreSearch('')
-    setViewMode('summary'); setSelMonths(VIS); setColSet('fcst'); setNumF(EMPTY_NUM)
-    d.setSortCol('fcst'); d.setSortDir(-1)
-  }, [runKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setDivFilter([]); setTagFilter([]); setCluster(''); setStoreSearch(''); setDepth(2) }, [runKey])
 
   useEffect(() => {
     if (!sessionId) return
@@ -296,10 +222,6 @@ export default function OutputTab({ sessionId, runKey }) {
   const clusters = useMemo(() => Array.from(new Set(leaves.map(r => r.Cluster).filter(c => c && c !== '—'))).sort(), [leaves])
   const options  = useMemo(() => dimOptions(leaves), [leaves])
 
-  const idx = useMemo(() => viewMode === 'summary' ? VIS_IDX : selMonths.map(m => MONTHS.indexOf(m)), [viewMode, selMonths, VIS_IDX])
-  // Division rollup keeps Division as the fixed top level
-  const levels = useMemo(() => viewMode === 'division' ? ['Division', ...d.levels.filter(k => k !== 'Division')] : d.levels, [viewMode, d.levels])
-
   const barFiltered = useMemo(() => {
     let r = leaves
     if (divFilter.length)   r = r.filter(x => divFilter.includes(x.Division))
@@ -309,44 +231,104 @@ export default function OutputTab({ sessionId, runKey }) {
     if (q)                  r = r.filter(x => x.Store?.toLowerCase().includes(q))
     return r
   }, [leaves, divFilter, tagFilter, clusterFilter, storeSearch])
+  const filtered = useMemo(() => filterLeaves(barFiltered, { dimF: d.dimF, idx: VIS_IDX }), [barFiltered, d.dimF, VIS_IDX])
 
-  const filtered = useMemo(() => filterLeaves(barFiltered, { dimF: d.dimF, numF, idx }), [barFiltered, d.dimF, numF, idx])
-
-  const { sortCol, sortDir } = d
-  const tree = useMemo(() => {
-    const val = n => {
-      if (sortCol === 'name') return n.name
-      if (sortCol === 'growth') return n.growth
-      if (sortCol === 'lfl' || sortCol === 'ramp' || sortCol === 'nso') return n.typeCounts[{ lfl: 'LfL', ramp: 'Ramp', nso: 'NSO' }[sortCol]]
-      const mm = sortCol.match(MONTH_RE)
-      if (mm) { const i = +mm[1]; return mm[2] === 'base' ? n.mb[i] : mm[2] === 'fcst' ? n.m[i] : n.m[i] - n.mb[i] }
-      return n[sortCol]
+  // Column groups: Mar'27, then quarter bands (months, or one column when collapsed), then Total
+  const groups = useMemo(() => {
+    const vis = new Set(VIS_IDX), out = []
+    if (vis.has(0)) out.push({ key: 'm0', band: null, label: MONTHS[0], idx: [0] })
+    for (const [q, ids] of QTR_DEF) {
+      const inq = ids.filter(i => vis.has(i))
+      if (!inq.length) continue
+      const span = `${MONTHS[inq[0]].slice(0, 3)}–${MONTHS[inq[inq.length - 1]].slice(0, 3)}`
+      if (collapsedQ.has(q)) out.push({ key: q, band: q, bandLabel: `${q} · ${span}`, label: `${q} total`, idx: inq, collapsed: true })
+      else inq.forEach(i => out.push({ key: `m${i}`, band: q, bandLabel: `${q} · ${span}`, label: MONTHS[i], idx: [i] }))
     }
-    return sortTree(buildTree(filtered, levels, idx), val, sortDir)
-  }, [filtered, levels, idx, sortCol, sortDir])
-  const grand = useMemo(() => aggregate(filtered, idx), [filtered, idx])
+    out.push({ key: 'total', band: null, label: `Total · ${VIS[0]}–${VIS[VIS.length - 1]}`, idx: VIS_IDX, total: true })
+    return out
+  }, [VIS, VIS_IDX, collapsedQ])
+  const totalGroup = groups[groups.length - 1]
+  const valsFor = g => valueFields.filter(v => g.total || v !== 'stores')   // store count only in Total
+
+  const tree = useMemo(() => {
+    const val = n => (sort.key === 'name' ? n.name : cellsFor(n, totalGroup)[sort.key])
+    return sortTree(buildTree(filtered, rowFields, VIS_IDX), val, sort.dir)
+  }, [filtered, rowFields, VIS_IDX, sort, totalGroup])
+  const grand = useMemo(() => aggregate(filtered, VIS_IDX), [filtered, VIS_IDX])
   const exp   = d.expandedFor(tree)
   const flat  = useMemo(() => flatten(tree, exp), [tree, exp])
 
   // ── Helpers ────────────────────────────────────────────────────────────
-  const U    = viewMode === 'division' ? 0.01 : 1           // Division rollup is shown in ₹ Cr (original essence)
-  const unit = viewMode === 'division' ? 'Cr' : 'L'
-  const fU   = v => fmt1(v * U)
-  const fD   = v => fmtDev(v * U)
-  const monthCols = COL_SETS[colSet]
-  const cellVal = (n, i, c) => c === 'base' ? n.mb[i] : c === 'fcst' ? n.m[i]
-    : c === 'gr' ? (n.mb[i] > 0 ? (n.m[i] / n.mb[i] - 1) * 100 : null)
-    : n.m[i] - n.mb[i]
-
-  const hasFilter = col => LEVEL_KEYS.includes(col) ? d.dimF[col].length > 0 : hasNum(numF[col])
-  const drillFilters = [...LEVEL_KEYS, ...Object.keys(EMPTY_NUM)].filter(hasFilter).length
+  const U = unit === 'Cr' ? 0.01 : 1
+  const fmtVal = (v, key) => key === 'gr' ? fmtGr(v) : key === 'stores' ? v : key === 'dev' ? fmtDev(v * U) : fmt1(v * U)
+  const clsVal = (v, key) => key === 'gr' ? (v == null ? 'muted' : v >= 0 ? 'positive' : 'negative')
+    : key === 'dev' ? (v > 0 ? 'positive' : v < 0 ? 'negative' : '') : key === 'fcst' ? 'fw-bold' : ''
+  const levelLabel = k => LEVELS.find(l => l.key === k).label
+  const drillFilters = LEVEL_KEYS.filter(k => d.dimF[k].length).length
   const hasBarFilters = divFilter.length || tagFilter.length || clusterFilter || storeSearch
-  const resetAll = () => { setDivFilter([]); setTagFilter([]); setCluster(''); setStoreSearch(''); d.setDimF(EMPTY_DIM); setNumF(EMPTY_NUM) }
-  const th = { sortCol, sortDir, toggleSort: d.toggleSort, hasFilter, openF: d.openF }
-  const nameLabel = levels.map(k => LEVELS.find(l => l.key === k).label).join(' › ')
+  const resetAll = () => { setDivFilter([]); setTagFilter([]); setCluster(''); setStoreSearch(''); d.setDimF(EMPTY_DIM) }
+
+  // Breadcrumb header: click level i = show rows down to it; click the deepest
+  // shown level again = collapse one level up. `depth` = number of levels shown.
+  const crumbClick = i => {
+    const target = depth === i + 1 ? i : i + 1
+    if (target <= 1) { d.collapse(); setDepth(1) } else { d.expandTo(tree, target - 1); setDepth(target) }
+  }
+  const toggleQ = q => setL(l => ({ collapsedQ: l.collapsedQ.includes(q) ? l.collapsedQ.filter(x => x !== q) : [...l.collapsedQ, q] }))
+  const sortBy = key => setSort(s => (s.key === key ? { key, dir: -s.dir } : { key, dir: key === 'name' ? 1 : -1 }))
+
+  // ── Drag & drop (field panel) ──────────────────────────────────────────
+  const moveInto = (list, key, beforeKey) => {
+    const without = list.filter(k => k !== key)
+    const i = beforeKey && without.includes(beforeKey) ? without.indexOf(beforeKey) : without.length
+    return [...without.slice(0, i), key, ...without.slice(i)]
+  }
+  const dropRows = beforeKey => {
+    if (drag?.kind === 'row') setL(l => ({ rows: moveInto(l.rows, drag.key, beforeKey) }))
+    setDrag(null); setOver(null)
+  }
+  const dropRowPool = () => {
+    if (drag?.kind === 'row') setL(l => ({ rows: l.rows.length > 1 ? l.rows.filter(k => k !== drag.key) : l.rows }))
+    setDrag(null); setOver(null)
+  }
+  const dropValues = beforeKey => {
+    if (drag?.kind === 'val') setL(l => ({ values: moveInto(l.values, drag.key, beforeKey) }))
+    setDrag(null); setOver(null)
+  }
+  const dropValPool = () => {
+    if (drag?.kind === 'val' && !VALUE_DEFS[drag.key].locked) setL(l => ({ values: l.values.filter(k => k !== drag.key) }))
+    setDrag(null); setOver(null)
+  }
+  const dz = (id, onDrop) => ({
+    onDragOver: e => { e.preventDefault(); e.stopPropagation(); setOver(id) },
+    onDragLeave: () => setOver(o => (o === id ? null : o)),
+    onDrop: e => { e.preventDefault(); e.stopPropagation(); onDrop() },
+  })
+  const dragProps = (kind, key) => ({
+    draggable: true,
+    onDragStart: e => { setDrag({ kind, key }); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', key) },
+    onDragEnd: () => { setDrag(null); setOver(null) },
+  })
+
+  // ── Export exactly what is shown ───────────────────────────────────────
+  function exportCsv() {
+    const cols = groups.flatMap(g => valsFor(g).map(v => [g, v]))
+    const head = ['Row', 'Level', ...cols.map(([g, v]) => `${g.label} ${VALUE_DEFS[v].short}${v === 'gr' || v === 'stores' ? '' : ` (Rs ${unit})`}`)]
+    const line = (label, level, n) => [label, level, ...cols.map(([g, v]) => {
+      const c = cellsFor(n, g)[v]
+      return c == null ? '' : v === 'gr' ? c.toFixed(1) : v === 'stores' ? c : (c * U).toFixed(2)
+    })]
+    const out = [head, line('Grand total', '', grand), ...flat.map(n => line(`${'  '.repeat(n.depth)}${n.name}`, n.level, n))]
+    const csv = out.map(r => r.map(x => /[",\n]/.test(String(x)) ? `"${String(x).replace(/"/g, '""')}"` : x).join(',')).join('\r\n')
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
+    a.download = `AOP_output_${rowFields.join('-')}.csv`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000)
+  }
 
   const renderName = n => (
-    <td className="sdt-name">
+    <td className="sdt-name pv-sticky">
       <span className="sdt-indent" style={{ width: n.depth * 18 }} />
       <span className={`sdt-caret${!n.children.length ? ' none' : exp.has(n.id) ? ' open' : ''}`}>&gt;</span>
       {n.level === 'Division' ? <span className="div-pill" style={{ background: DIV_COLORS[n.name] }}>{n.name}</span>
@@ -357,83 +339,41 @@ export default function OutputTab({ sessionId, runKey }) {
       <span className="sdt-level-hint">{n.level}</span>
     </td>
   )
-  const growthCell = (v, bold) => <td className={`num ${bold ? 'fw-bold' : ''} ${v == null ? 'muted' : v >= 0 ? 'positive' : 'negative'}`}>{v == null ? 'new' : (v > 0 ? '+' : '') + v.toFixed(1) + '%'}</td>
-  const devCell    = (v, bold) => <td className={`num ${bold ? 'fw-bold' : ''} ${v >= 0 ? 'positive' : 'negative'}`}>{fD(v)}</td>
+  const valueCells = (n, bold) => groups.flatMap(g => {
+    const c = cellsFor(n, g), vs = valsFor(g)
+    return vs.map(v => (
+      <td key={`${g.key}|${v}`} className={`num ${clsVal(c[v], v)} ${bold ? 'fw-bold' : ''} ${g.total ? 'pv-total' : ''} ${v === vs[0] ? 'pv-gstart' : ''}`}>
+        {fmtVal(c[v], v)}
+      </td>
+    ))
+  })
 
-  // Per-view metric cells (everything after the name + dim-filter columns)
-  const metricCells = (n, isGrand) => {
-    const b = isGrand
-    if (viewMode === 'summary') return (<>
-      <td className="num">{n.stores}</td>
-      <td className={`num ${b ? 'fw-bold' : ''}`}>{fU(n.base)}</td>
-      <td className="num fw-bold">{fU(n.fcst)}</td>
-      {devCell(n.dev, b)}
-      {growthCell(n.growth, b)}
-    </>)
-    if (viewMode === 'monthly') return (<>
-      {selMonths.map(m => { const i = MONTHS.indexOf(m); return [...monthCols.map(c => {
-        const v = cellVal(n, i, c)
-        return <td key={`${m}|${c}`} className={`num ${c === 'fcst' ? 'fw-bold' : ''} ${c === 'dev' ? (v > 0 ? 'positive' : v < 0 ? 'negative' : '') : ''}`}>{c === 'dev' ? fD(v) : fU(v)}</td>
-      }), (() => {
-        // Growth% is always shown per month regardless of the Show toggle -
-        // same convention as Store summary's and Division rollup's own
-        // always-on growth column, not something worth hiding behind Show.
-        const gr = cellVal(n, i, 'gr')
-        return <td key={`${m}|gr`} className={`num ${gr == null ? 'muted' : gr >= 0 ? 'positive' : 'negative'}`}>{gr == null ? 'new' : (gr > 0 ? '+' : '') + gr.toFixed(1) + '%'}</td>
-      })()] })}
-      <td className="num fw-bold">{fU(n.fcst)}</td>
-      {growthCell(n.growth, true)}
-    </>)
-    return (<>
-      <td className="num">{n.stores}</td>
-      <td className="num">{n.typeCounts.LfL}</td>
-      <td className="num tag-lfl-num">{n.typeCounts.Ramp}</td>
-      <td className="num tag-nso-num">{n.typeCounts.NSO}</td>
-      <td className={`num ${b ? 'fw-bold' : ''}`}>{fU(n.base)}</td>
-      <td className="num fw-bold">{fU(n.fcst)}</td>
-      {devCell(n.dev, b)}
-      {growthCell(n.growth, b)}
-      {selMonths.map(m => { const i = MONTHS.indexOf(m); const gr = cellVal(n, i, 'gr'); return (
-        <td key={m} className="num sdt-month-cell">
-          <div className="fw-bold">{fU(n.m[i])}</div>
-          <div className="sdt-month-base">{fU(n.mb[i])}</div>
-          <div className={gr == null ? 'muted' : gr >= 0 ? 'positive' : 'negative'}>{gr == null ? 'new' : (gr > 0 ? '+' : '') + gr.toFixed(1) + '%'}</div>
-        </td>) })}
-    </>)
-  }
-
-  const metricHeaders = () => {
-    if (viewMode === 'summary') return (<>
-      <Th {...th} col="stores" label="Stores" num />
-      <Th {...th} col="base"   label={`Base (${unit})`}      num filterable />
-      <Th {...th} col="fcst"   label={`Forecast (${unit})`}  num filterable />
-      <Th {...th} col="dev"    label={`Deviation (${unit})`} num filterable />
-      <Th {...th} col="growth" label="Growth %" num filterable />
-    </>)
-    if (viewMode === 'monthly') return (<>
-      {selMonths.map(m => { const i = MONTHS.indexOf(m); return [
-        ...monthCols.map(c => <Th {...th} key={`${m}|${c}`} col={`m${i}|${c}`} label={m} sub={COL_LABEL[c]} num />),
-        <Th {...th} key={`${m}|gr`} col={`m${i}|gr`} label={m} sub="Growth %" num />,
-      ] })}
-      <Th {...th} col="fcst" label="Total" sub="Forecast" num filterable />
-      <Th {...th} col="growth" label="Total" sub="Growth %" num filterable />
-    </>)
-    return (<>
-      <Th {...th} col="stores" label="Stores" num />
-      <Th {...th} col="lfl"    label="LfL"    num />
-      <Th {...th} col="ramp"   label="Ramp"   num />
-      <Th {...th} col="nso"    label="NSO"    num />
-      <Th {...th} col="base"   label="Base (Cr)"      num filterable />
-      <Th {...th} col="fcst"   label="Forecast (Cr)"  num filterable />
-      <Th {...th} col="dev"    label="Deviation (Cr)" num filterable />
-      <Th {...th} col="growth" label="Growth %" num filterable />
-      {selMonths.map(m => <Th {...th} key={m} col={`m${MONTHS.indexOf(m)}|fcst`} label={m} sub="Fcst / Base / Gr%" num />)}
-    </>)
+  // Header row 1: quarter bands (clickable) / stand-alone groups
+  const bandCells = []
+  for (let i = 0; i < groups.length; i++) {
+    const g = groups[i]
+    if (!g.band) {
+      bandCells.push(<th key={g.key} rowSpan={2} colSpan={valsFor(g).length} className={`pv-group pv-gstart ${g.total ? 'pv-total-h' : ''}`}>{g.label}</th>)
+      continue
+    }
+    let span = 0, j = i
+    while (j < groups.length && groups[j].band === g.band) { span += valsFor(groups[j]).length; j++ }
+    const collapsed = collapsedQ.has(g.band)
+    bandCells.push(
+      <th key={g.band} colSpan={span} className="pv-band pv-gstart">
+        <button className="pv-band-btn" onClick={() => toggleQ(g.band)} title={collapsed ? 'Expand to months' : 'Collapse to one quarter column'}>
+          <span className="pv-tw">{collapsed ? '▸' : '▾'}</span>{g.bandLabel}
+        </button>
+      </th>)
+    i = j - 1
   }
 
   if (loading) return <div className="out-loading">Loading detail data…</div>
   if (error)   return <div className="out-error">Error: {error}</div>
   if (!rows)   return null
+
+  const available = LEVEL_KEYS.filter(k => !rowFields.includes(k))
+  const valuePool = VALUE_KEYS.filter(k => !valueFields.includes(k))
 
   return (
     <div className="out-wrap out-drill">
@@ -456,7 +396,7 @@ export default function OutputTab({ sessionId, runKey }) {
             {storeSearch && <button className="out-search-clear" onClick={() => setStoreSearch('')}>x</button>}
           </div>
           {(hasBarFilters || drillFilters > 0) && (
-            <button className="out-reset-btn" onClick={resetAll}>Reset filters{drillFilters ? ` (${drillFilters} in table)` : ''}</button>
+            <button className="out-reset-btn" onClick={resetAll}>Reset filters{drillFilters ? ` (${drillFilters} on fields)` : ''}</button>
           )}
           <span className="out-count">
             {grand.stores.toLocaleString()} <span className="out-count-label">stores</span> · {filtered.length.toLocaleString()} <span className="out-count-label">rows</span>
@@ -464,67 +404,155 @@ export default function OutputTab({ sessionId, runKey }) {
         </div>
       </div>
 
-      {/* ── View controls ── */}
-      <div className="out-view-bar">
-        <div className="out-view-toggle">
-          <button className={viewMode === 'summary'  ? 'active' : ''} onClick={() => setViewMode('summary')}>Store summary</button>
-          <button className={viewMode === 'monthly'  ? 'active' : ''} onClick={() => setViewMode('monthly')}>Monthly detail</button>
-          <button className={viewMode === 'division' ? 'active' : ''} onClick={() => setViewMode('division')}>Division rollup</button>
-        </div>
-        {viewMode === 'monthly' && (
-          <div className="out-col-opts">
-            <span className="out-inline-label">Show</span>
-            {[['fcst', 'Forecast'], ['base_fcst', 'Base + Forecast'], ['all', 'Base + Fcst + Dev']].map(([v, l]) => (
-              <button key={v} className={`out-col-btn ${colSet === v ? 'active' : ''}`} onClick={() => setColSet(v)}>{l}</button>
-            ))}
+      <div className={`pv-layout${panelOpen ? '' : ' pv-layout--closed'}`}>
+        {/* ── Pivot table ── */}
+        <div className="card out-table-card sdt-card pv-card">
+          <div className="pv-toolbar">
+            <span className="sdt-count">
+              {flat.length} rows · ₹ {unit === 'Cr' ? 'Crore' : 'Lakhs'}
+              {VIS.length < MONTHS.length ? ` · ${VIS[0]}–${VIS[VIS.length - 1]} shown (later months appear as their base month closes)` : ''}
+            </span>
+            <div className="pv-toolbar-actions">
+              <div className="pv-seg" role="group" aria-label="Unit">
+                {['L', 'Cr'].map(u => <button key={u} className={unit === u ? 'on' : ''} onClick={() => setL({ unit: u })}>₹ {u === 'L' ? 'Lakhs' : 'Crore'}</button>)}
+              </div>
+              <button className="btn-outline pv-btn" onClick={exportCsv}>Export view</button>
+              <button className="btn-outline pv-btn" onClick={() => setPanelOpen(o => !o)} aria-expanded={panelOpen}>{panelOpen ? 'Hide fields' : 'Fields'}</button>
+            </div>
           </div>
-        )}
-        {(viewMode === 'monthly' || viewMode === 'division') && <MonthSelect selected={selMonths} onChange={setSelMonths} months={VIS} />}
-      </div>
 
-      {/* ── Drill-down table ── */}
-      <div className="card out-table-card sdt-card">
-        <div className="sdt-toolbar">
-          <DrillToolbar levels={levels} toggleLevel={d.toggleLevel} expandTo={n => d.expandTo(tree, n)} collapse={d.collapse}
-                        lockedFirst={viewMode === 'division' ? 'Division' : undefined} />
-          <span className="sdt-count" style={{ marginLeft: 'auto' }}>
-            {flat.length} rows shown · values in ₹ {unit === 'Cr' ? 'Crore' : 'Lakhs'}{viewMode !== 'summary' && selMonths.length < VIS.length ? ` · ${selMonths.length} of ${VIS.length} months` : ''}{VIS.length < MONTHS.length ? ` · ${VIS[0]}–${VIS[VIS.length - 1]} shown (later months appear as their base month closes)` : ''}
-          </span>
-        </div>
-
-        <div className="table-scroll sdt-scroll">
-          <table className="stores-table sdt-table">
-            <thead>
-              <tr>
-                <Th {...th} col="name" label={nameLabel} />
-                <DimFilterHeaders hasFilter={hasFilter} openF={d.openF} />
-                {metricHeaders()}
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="sdt-grand">
-                <td className="sdt-name"><strong>Grand total</strong></td>
-                <td colSpan={LEVEL_KEYS.length} className="sdt-dim-cell" />
-                {metricCells(grand, true)}
-              </tr>
-              {flat.map(n => (
-                <tr key={n.id} className={`sdt-row d${n.depth}${!n.children.length ? ' leaf' : ''}`} onClick={() => n.children.length && d.toggleNode(tree, n.id)}>
-                  {renderName(n)}
-                  <td colSpan={LEVEL_KEYS.length} className="sdt-dim-cell" />
-                  {metricCells(n, false)}
+          <div className="table-scroll sdt-scroll">
+            <table className="stores-table sdt-table pv-table">
+              <thead>
+                <tr>
+                  <th rowSpan={3} className="pv-rowhead pv-sticky">
+                    <div className="pv-crumbs">
+                      {rowFields.map((k, i) => (
+                        <span key={k} className="pv-crumb-wrap">
+                          {i > 0 && <span className="pv-crumb-sep">›</span>}
+                          <button className={`pv-crumb${i < depth ? ' on' : ''}`} onClick={() => crumbClick(i)}
+                                  title={depth === i + 1 ? `Collapse ${levelLabel(k)}` : `Expand to ${levelLabel(k)}`}>
+                            {levelLabel(k)}
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    <button className="pv-sortname" onClick={() => sortBy('name')}>Sort A–Z{sort.key === 'name' ? (sort.dir > 0 ? ' ↑' : ' ↓') : ''}</button>
+                  </th>
+                  {bandCells}
                 </tr>
-              ))}
-              {!flat.length && <tr><td colSpan={40} className="sdt-empty">No rows match the current filters.</td></tr>}
-            </tbody>
-          </table>
+                <tr>
+                  {groups.filter(g => g.band).map(g => (
+                    <th key={g.key} colSpan={valsFor(g).length} className={`pv-month pv-gstart${g.collapsed ? ' pv-qcol' : ''}`}>{g.label}</th>
+                  ))}
+                </tr>
+                <tr>
+                  {groups.flatMap(g => { const vs = valsFor(g); return vs.map(v => (
+                    <th key={`${g.key}|${v}`} className={`num pv-val ${v === vs[0] ? 'pv-gstart' : ''} ${g.total ? 'pv-total-h' : ''}`}>
+                      {g.total
+                        ? <button className="pv-valsort" onClick={() => sortBy(v)} title={`Sort by total ${VALUE_DEFS[v].label}`}>
+                            {VALUE_DEFS[v].short}{sort.key === v ? (sort.dir < 0 ? ' ↓' : ' ↑') : ''}
+                          </button>
+                        : VALUE_DEFS[v].short}
+                    </th>
+                  )) })}
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="sdt-grand">
+                  <td className="sdt-name pv-sticky"><strong>Grand total</strong></td>
+                  {valueCells(grand, true)}
+                </tr>
+                {flat.map(n => (
+                  <tr key={n.id} className={`sdt-row d${n.depth}${!n.children.length ? ' leaf' : ''}`} onClick={() => n.children.length && d.toggleNode(tree, n.id)}>
+                    {renderName(n)}
+                    {valueCells(n, false)}
+                  </tr>
+                ))}
+                {!flat.length && <tr><td colSpan={200} className="sdt-empty">No rows match the current filters.</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
+
+        {/* ── Field panel (Excel PivotTable Fields) ── */}
+        {panelOpen && (
+          <aside className="pv-panel card" aria-label="Pivot fields">
+            <div className="pv-panel-hd">
+              <span>Pivot fields</span>
+              <button className="pv-reset" onClick={() => { setLayout(DEFAULT_LAYOUT); d.setDimF(EMPTY_DIM); d.collapse(); setDepth(1) }}>Reset layout</button>
+            </div>
+            <p className="pv-hint">Drag fields between areas. Rows builds the hierarchy top to bottom; ▾ filters a field.</p>
+
+            <div className="pv-area-label">Rows</div>
+            <div className={`pv-area${over === 'rows' ? ' pv-over' : ''}`} {...dz('rows', () => dropRows(null))}>
+              {rowFields.map((k, i) => (
+                <div key={k} className={`pv-chip pv-chip--row${d.dimF[k].length ? ' filtered' : ''}${over === `r:${k}` ? ' pv-before' : ''}`}
+                     {...dragProps('row', k)} {...dz(`r:${k}`, () => dropRows(k))}>
+                  <span className="pv-grip" aria-hidden>⋮⋮</span>
+                  <span className="pv-chip-n">{i + 1}</span>
+                  <span className="pv-chip-label">{levelLabel(k)}</span>
+                  <button className="pv-chip-btn" title={`Filter ${levelLabel(k)}`} onClick={e => d.openF(k, e)}>▾</button>
+                  <button className="pv-chip-btn" title="Remove from rows" disabled={rowFields.length === 1}
+                          onClick={() => setL(l => ({ rows: l.rows.filter(x => x !== k) }))}>✕</button>
+                </div>
+              ))}
+            </div>
+
+            <div className="pv-area-label">Available fields</div>
+            <div className={`pv-area pv-area--pool${over === 'pool' ? ' pv-over' : ''}`} {...dz('pool', dropRowPool)}>
+              {available.length ? available.map(k => (
+                <div key={k} className={`pv-chip${d.dimF[k].length ? ' filtered' : ''}`} {...dragProps('row', k)}
+                     onDoubleClick={() => setL(l => ({ rows: [...l.rows, k] }))} title="Drag to Rows (or double-click to add)">
+                  <span className="pv-grip" aria-hidden>⋮⋮</span>
+                  <span className="pv-chip-label">{levelLabel(k)}</span>
+                  <button className="pv-chip-btn" title={`Filter ${levelLabel(k)}`} onClick={e => d.openF(k, e)}>▾</button>
+                  <button className="pv-chip-btn" title="Add to rows" onClick={() => setL(l => ({ rows: [...l.rows, k] }))}>＋</button>
+                </div>
+              )) : <span className="pv-empty">All fields are in Rows</span>}
+            </div>
+
+            <div className="pv-area-label">Values <span className="pv-sub">(each month, quarter and Total)</span></div>
+            <div className={`pv-area${over === 'vals' ? ' pv-over' : ''}`} {...dz('vals', () => dropValues(null))}>
+              {valueFields.map(k => (
+                <div key={k} className={`pv-chip pv-chip--val${over === `v:${k}` ? ' pv-before' : ''}`}
+                     {...dragProps('val', k)} {...dz(`v:${k}`, () => dropValues(k))}>
+                  <span className="pv-grip" aria-hidden>⋮⋮</span>
+                  <span className="pv-chip-label">{VALUE_DEFS[k].label}</span>
+                  {VALUE_DEFS[k].locked
+                    ? <span className="pv-lock" title="Growth % is always shown">always</span>
+                    : <button className="pv-chip-btn" title="Remove value" onClick={() => setL(l => ({ values: l.values.filter(x => x !== k) }))}>✕</button>}
+                </div>
+              ))}
+            </div>
+            {valuePool.length > 0 && (
+              <div className={`pv-area pv-area--pool${over === 'vpool' ? ' pv-over' : ''}`} {...dz('vpool', dropValPool)}>
+                {valuePool.map(k => (
+                  <div key={k} className="pv-chip" {...dragProps('val', k)} title="Drag to Values (or click ＋)">
+                    <span className="pv-grip" aria-hidden>⋮⋮</span>
+                    <span className="pv-chip-label">{VALUE_DEFS[k].label}</span>
+                    <button className="pv-chip-btn" title="Add value" onClick={() => setL(l => ({ values: [...l.values.filter(x => x !== 'gr'), k, 'gr'] }))}>＋</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="pv-area-label">Columns</div>
+            <div className="pv-area pv-area--static">
+              <div className="pv-colrow"><span>Months</span><span className="pv-sub">{VIS[0]}–{VIS[VIS.length - 1]}</span></div>
+              <div className="pv-colrow">
+                <button className="pv-link" onClick={() => setL({ collapsedQ: QTR_DEF.map(([q]) => q) })}>Collapse quarters</button>
+                <button className="pv-link" onClick={() => setL({ collapsedQ: [] })}>Expand all</button>
+              </div>
+              <div className="pv-colrow"><span>Total</span><span className="pv-sub">always last</span></div>
+            </div>
+          </aside>
+        )}
       </div>
 
-      {d.openFilter && (LEVEL_KEYS.includes(d.openFilter.col)
-        ? <HeaderFilter title={d.openFilter.col} options={options[d.openFilter.col]} selected={d.dimF[d.openFilter.col]}
-            onChange={v => d.setDimF(f => ({ ...f, [d.openFilter.col]: v }))} onClose={d.closeF} anchor={d.openFilter.anchor} />
-        : <HeaderFilter title={NUM_TITLES[d.openFilter.col]} range={numF[d.openFilter.col]} hint={`Applies to store totals (₹ ${unit === 'Cr' ? 'Cr' : 'L'} / %)`}
-            onRange={v => setNumF(f => ({ ...f, [d.openFilter.col]: v }))} onClose={d.closeF} anchor={d.openFilter.anchor} />
+      {d.openFilter && LEVEL_KEYS.includes(d.openFilter.col) && (
+        <HeaderFilter title={levelLabel(d.openFilter.col)} options={options[d.openFilter.col]} selected={d.dimF[d.openFilter.col]}
+          onChange={v => d.setDimF(f => ({ ...f, [d.openFilter.col]: v }))} onClose={d.closeF} anchor={d.openFilter.anchor} />
       )}
     </div>
   )
