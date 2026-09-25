@@ -207,6 +207,10 @@ export default function OutputTab({ sessionId, runKey }) {
 
   const VIS = useVisibleMonths()
   const VIS_IDX = useMemo(() => VIS.map(m => MONTHS.indexOf(m)), [VIS])
+  // Month filter (2026-09-25): [] = every shown month. Narrows the month columns,
+  // quarter bands AND the Total (+ its Gr%) to the picked months.
+  const [monthF, setMonthF] = useState([])
+  const SEL_IDX = useMemo(() => (monthF.length ? VIS_IDX.filter(i => monthF.includes(MONTHS[i])) : VIS_IDX), [VIS_IDX, monthF])
   const d = useDrill({ defaultSort: 'fcst', resetKey: runKey })
 
   useEffect(() => { setDepth(2) }, [runKey])   // useDrill clears the layer filters on runKey
@@ -227,30 +231,33 @@ export default function OutputTab({ sessionId, runKey }) {
     for (const k of LEVEL_KEYS) out[k] = o[k].map(x => x.value).filter(v => v != null && v !== '' && v !== '—')
     return out
   }, [leaves])
-  const filtered = useMemo(() => filterLeaves(leaves, { dimF: d.dimF, idx: VIS_IDX }), [leaves, d.dimF, VIS_IDX])
+  const filtered = useMemo(() => filterLeaves(leaves, { dimF: d.dimF, idx: SEL_IDX }), [leaves, d.dimF, SEL_IDX])
 
   // Column groups: Mar'27, then quarter bands (months, or one column when folded), then Total
   const groups = useMemo(() => {
-    const vis = new Set(VIS_IDX), out = []
+    const vis = new Set(SEL_IDX), out = []
     if (vis.has(0)) out.push({ key: 'm0', band: null, label: MONTHS[0], idx: [0] })
     for (const [q, ids] of QTR_DEF) {
       const inq = ids.filter(i => vis.has(i))
       if (!inq.length) continue
-      const span = `${MONTHS[inq[0]].slice(0, 3)}–${MONTHS[inq[inq.length - 1]].slice(0, 3)}`
+      const span = inq.length === 1 ? MONTHS[inq[0]].slice(0, 3) : `${MONTHS[inq[0]].slice(0, 3)}–${MONTHS[inq[inq.length - 1]].slice(0, 3)}`
       if (collapsedQ.has(q)) out.push({ key: q, band: q, bandLabel: `${q} · ${span}`, label: `${q} total`, idx: inq, collapsed: true })
       else inq.forEach(i => out.push({ key: `m${i}`, band: q, bandLabel: `${q} · ${span}`, label: MONTHS[i], idx: [i] }))
     }
-    out.push({ key: 'total', band: null, label: `Total · ${VIS[0]}–${VIS[VIS.length - 1]}`, idx: VIS_IDX, total: true })
+    const sel = SEL_IDX.map(i => MONTHS[i])
+    const contiguous = SEL_IDX.every((v, i) => i === 0 || v === SEL_IDX[i - 1] + 1)
+    const span = sel.length === 1 ? sel[0] : contiguous ? `${sel[0]}–${sel[sel.length - 1]}` : `${sel.length} months`
+    out.push({ key: 'total', band: null, label: `Total · ${span}`, idx: SEL_IDX, total: true })
     return out
-  }, [VIS, VIS_IDX, collapsedQ])
+  }, [SEL_IDX, collapsedQ])
   const totalGroup = groups[groups.length - 1]
   const valsFor = g => valueFields.filter(v => g.total || v !== 'stores')   // store count only in Total
 
   const tree = useMemo(() => {
     const val = n => (sort.key === 'name' ? n.name : cellsFor(n, totalGroup)[sort.key])
-    return sortTree(buildTree(filtered, rowFields, VIS_IDX), val, sort.dir)
-  }, [filtered, rowFields, VIS_IDX, sort, totalGroup])
-  const grand = useMemo(() => aggregate(filtered, VIS_IDX), [filtered, VIS_IDX])
+    return sortTree(buildTree(filtered, rowFields, SEL_IDX), val, sort.dir)
+  }, [filtered, rowFields, SEL_IDX, sort, totalGroup])
+  const grand = useMemo(() => aggregate(filtered, SEL_IDX), [filtered, SEL_IDX])
   const exp   = d.expandedFor(tree)
   const flat  = useMemo(() => flatten(tree, exp), [tree, exp])
 
@@ -267,7 +274,7 @@ export default function OutputTab({ sessionId, runKey }) {
   const clsVal = (v, key) => key === 'gr' ? (v == null ? 'muted' : v >= 0 ? 'positive' : 'negative')
     : key === 'dev' ? (v > 0 ? 'positive' : v < 0 ? 'negative' : '') : key === 'fcst' ? 'fw-bold' : ''
   const levelLabel = k => LEVELS.find(l => l.key === k).label
-  const anyFilter = LEVEL_KEYS.some(k => d.dimF[k].length)
+  const anyFilter = monthF.length > 0 || LEVEL_KEYS.some(k => d.dimF[k].length)
 
   // One click on layer chip i = expand every node of that layer (show layer i+1),
   // click again = collapse them all. The last layer has nothing below it.
@@ -326,23 +333,6 @@ export default function OutputTab({ sessionId, runKey }) {
     },
   })
 
-  // ── Export exactly what is shown ───────────────────────────────────────
-  function exportCsv() {
-    const cols = groups.flatMap(g => valsFor(g).map(v => [g, v]))
-    const head = ['Row', 'Level', ...cols.map(([g, v]) => `${g.label} ${VALUE_DEFS[v].short}${v === 'gr' || v === 'stores' ? '' : ` (Rs ${unit})`}`)]
-    const line = (label, level, n) => [label, level, ...cols.map(([g, v]) => {
-      const c = cellsFor(n, g)[v]
-      return c == null ? '' : v === 'gr' ? c.toFixed(1) : v === 'stores' ? c : (c * U).toFixed(2)
-    })]
-    const out = [head, line('Grand total', '', grand), ...flat.map(n => line(`${'  '.repeat(n.depth)}${n.name}`, n.level, n))]
-    const csv = out.map(r => r.map(x => /[",\n]/.test(String(x)) ? `"${String(x).replace(/"/g, '""')}"` : x).join(',')).join('\r\n')
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
-    a.download = `AOP_output_${rowFields.join('-')}.csv`
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000)
-  }
-
   const renderName = n => (
     <td className="sdt-name pv-sticky">
       <span className="sdt-indent" style={{ width: n.depth * 14 }} />
@@ -392,6 +382,7 @@ export default function OutputTab({ sessionId, runKey }) {
       <div className="card pv-card">
         {/* ── One slim bar: filters · values · unit · export ── */}
         <div className={`pv-bar${over?.key === 'bar' ? ' pv-bar--drop' : ''}`} {...barDrop}>
+          <MultiSelect label="Month" options={VIS} selected={monthF} onChange={setMonthF} className="pv-mfilter" />
           {/* One filter per layer: hierarchy layers in chip order, then removed layers (dashed) -
               every one is a chip you can drag onto the header to place in the hierarchy */}
           {[...rowFields, ...LEVEL_KEYS.filter(k => !rowFields.includes(k))].map(k => (
@@ -400,7 +391,7 @@ export default function OutputTab({ sessionId, runKey }) {
                          className={`pv-fchip${rowFields.includes(k) ? '' : ' pv-fchip--off'}${drag === k ? ' dragging' : ''}`}
                          wrapProps={{ ...dragFrom(k), title: rowFields.includes(k) ? `Drag onto the header to move ${levelLabel(k)}` : `${levelLabel(k)} is not in the hierarchy - drag it onto the header to add it` }} />
           ))}
-          {anyFilter && <button className="pv-link" onClick={() => d.setDimF(EMPTY_DIM)}>Clear filters</button>}
+          {anyFilter && <button className="pv-link" onClick={() => { d.setDimF(EMPTY_DIM); setMonthF([]) }}>Clear filters</button>}
           <span className="pv-bar-gap" />
           <div className="pv-vals" role="group" aria-label="Values">
             {VALUE_KEYS.map(k => (
@@ -414,7 +405,6 @@ export default function OutputTab({ sessionId, runKey }) {
           <div className="pv-seg" role="group" aria-label="Unit">
             {['L', 'Cr'].map(u => <button key={u} className={unit === u ? 'on' : ''} onClick={() => setL({ unit: u })}>₹ {u === 'L' ? 'L' : 'Cr'}</button>)}
           </div>
-          <button className="pv-link" onClick={exportCsv} title="Download exactly this view as CSV">Export ↓</button>
         </div>
 
         <div className="table-scroll sdt-scroll">
