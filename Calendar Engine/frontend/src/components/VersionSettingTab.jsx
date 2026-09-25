@@ -44,6 +44,12 @@ const CATEGORY_LEGEND = [
   ['var(--light)', 'var(--border)', 'Non-Festive', 'same weekday, else weekend↔weekend / weekday↔weekday, same month first'],
 ]
 
+// engine.js: scoreMapping's proximity term and repairExcessiveShifts both key on maxShift.
+const MAX_SHIFT_TIP = 'Max Date Shift (days): how far a non-festive day should move from its reference date.\n'
+  + '- Within the limit, the closer the date the better it scores (after same weekday / day type).\n'
+  + '- Any mapping further than this gets swapped with a closer same-month day where possible.\n'
+  + 'It never overrides the month rules or festival anchors. Default 45.'
+
 export default function VersionSettingTab({ isPlanner, onNavigate }) {
   const [refYear, setRefYear] = useState('')
   const [futYear, setFutYear] = useState('')
@@ -137,8 +143,8 @@ export default function VersionSettingTab({ isPlanner, onNavigate }) {
               onChange={e => setFutYear(e.target.value)}
               onBlur={() => save({ futYear })} />
           </div>
-          <div className="field">
-            <label>Max Date Shift</label>
+          <div className="field" title={MAX_SHIFT_TIP}>
+            <label style={{ cursor: 'help' }}>Max Date Shift ⓘ</label>
             <input type="number" value={maxShift} disabled={!isPlanner}
               onChange={e => setMaxShift(e.target.value)}
               onBlur={() => save({ maxShift })} />
