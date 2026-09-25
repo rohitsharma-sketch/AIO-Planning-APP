@@ -44,16 +44,14 @@ const CATEGORY_LEGEND = [
   ['var(--light)', 'var(--border)', 'Non-Festive', 'same weekday, else weekend↔weekend / weekday↔weekday, same month first'],
 ]
 
-// engine.js: scoreMapping's proximity term and repairExcessiveShifts both key on maxShift.
-const MAX_SHIFT_TIP = 'Max Date Shift (days): how far a non-festive day should move from its reference date.\n'
-  + '- Within the limit, the closer the date the better it scores (after same weekday / day type).\n'
-  + '- Any mapping further than this gets swapped with a closer same-month day where possible.\n'
-  + 'It never overrides the month rules or festival anchors. Default 45.'
-
+// Max Date Shift and Month Priority are no longer user-editable (user decision
+// 2026-09-25): the version setting's month rules already bound every shift,
+// and a maxShift above getWeights().dayType (50) would let nearest-date beat
+// the weekend/weekday rule. Both stay as stored app_state values (45 / 'prev')
+// that the engine keeps reading; moPri is loaded only to label the V2 step.
 export default function VersionSettingTab({ isPlanner, onNavigate }) {
   const [refYear, setRefYear] = useState('')
   const [futYear, setFutYear] = useState('')
-  const [maxShift, setMaxShift] = useState('45')
   const [moPri, setMoPri] = useState('prev')
   const [status, setStatus] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -62,7 +60,6 @@ export default function VersionSettingTab({ isPlanner, onNavigate }) {
     getAppState().then(s => {
       if (s.refYear) setRefYear(s.refYear)
       if (s.futYear) setFutYear(s.futYear)
-      if (s.maxShift) setMaxShift(s.maxShift)
       if (s.moPri) setMoPri(s.moPri)
     }).catch(() => {})
   }, [])
@@ -143,12 +140,6 @@ export default function VersionSettingTab({ isPlanner, onNavigate }) {
               onChange={e => setFutYear(e.target.value)}
               onBlur={() => save({ futYear })} />
           </div>
-          <div className="field" title={MAX_SHIFT_TIP}>
-            <label style={{ cursor: 'help' }}>Max Date Shift ⓘ</label>
-            <input type="number" value={maxShift} disabled={!isPlanner}
-              onChange={e => setMaxShift(e.target.value)}
-              onBlur={() => save({ maxShift })} />
-          </div>
         </div>
         <div style={{ marginTop: '12px' }}>
           <button className="btn" onClick={createCalendar} disabled={!isPlanner || busy}>
@@ -158,32 +149,6 @@ export default function VersionSettingTab({ isPlanner, onNavigate }) {
             Re-syncs every cluster's festival dates to the years above using the multi-year
             festival date table, then opens the Calendarisation tab.
           </div>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-label">Month Priority (non-festive days)</div>
-        <div className="radio-group">
-          <label className="radio-opt">
-            <input type="radio" name="moPri" value="prev" checked={moPri === 'prev'} disabled={!isPlanner}
-              onChange={() => { setMoPri('prev'); save({ moPri: 'prev' }) }} />
-            Same -&gt; Previous -&gt; Next
-            <div className="radio-tip">
-              <strong>Shift backward first.</strong> When a non-festive day has no same-month match in
-              the future year, it tries the <code>previous</code> month before the next. Good when your
-              year runs Jan-Dec.
-            </div>
-          </label>
-          <label className="radio-opt">
-            <input type="radio" name="moPri" value="next" checked={moPri === 'next'} disabled={!isPlanner}
-              onChange={() => { setMoPri('next'); save({ moPri: 'next' }) }} />
-            Same -&gt; Next -&gt; Previous
-            <div className="radio-tip">
-              <strong>Shift forward first.</strong> When a non-festive day has no same-month match, it
-              tries the <code>next</code> month before the previous. Good for fiscal years running
-              April-March.
-            </div>
-          </label>
         </div>
       </div>
 
