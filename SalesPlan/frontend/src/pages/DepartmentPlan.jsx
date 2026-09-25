@@ -379,7 +379,7 @@ export default function DepartmentPlan() {
               <button key={attr} onClick={() => setAttrFilter(isActive ? null : attr)} style={{
                 padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
                 cursor: 'pointer', outline: 'none',
-                border: isActive ? 'none' : `1px solid ${s.bg === '#1E3A5F' ? '#334155' : theme.border}`,
+                border: isActive ? 'none' : `1px solid ${s.bg === '#1E3A5F' ? '#37423C' : theme.border}`,
                 background: isActive ? s.color : s.bg,
                 color: isActive ? (s.bg === '#1E3A5F' ? '#1E3A5F' : '#fff') : s.color,
                 transition: 'all 0.15s',

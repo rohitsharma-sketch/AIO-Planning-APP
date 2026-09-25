@@ -7,20 +7,20 @@
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-  /* RS Planning suite look (2026-09-25): navy chrome, light data area, burgundy
+  /* RS Planning suite look (2026-09-25): navy chrome, light data area, sage
      accent, Plus Jakarta Sans - the same palette as AOP / BIS / Sales Plan. */
   :root {
-    --navy: #0F2742;  --navy2: #1B3A5C;
-    --accent: #7A1F3D;  --accent-h: #5E1730;  --accent-bg: #F6E9EE;  --accent-bd: #E2BFCB;
-    --bg: #F5F3F4;  --white: #FFFFFF;  --surface2: #F8FAFC;
-    --char: #0F1B2D;  --text2: #334155;  --muted: #5B6B82;  --faint: #8A99AD;
-    --border: #E3E8EF;  --border2: #CFD8E3;
+    --navy: #34453F;  --navy2: #41564E;
+    --accent: #4F7A66;  --accent-h: #3F6453;  --accent-bg: #EAF3EE;  --accent-bd: #CBE2D5;
+    --bg: #F7F6F2;  --white: #FFFFFF;  --surface2: #FAF9F6;
+    --char: #1E2723;  --text2: #37423C;  --muted: #5F6B64;  --faint: #8C958F;
+    --border: #E5E3DA;  --border2: #D3D0C4;
     --up: #15803D;  --up-bg: #ECFDF3;  --up-bd: #A6E3BD;
     --down: #B42318;  --down-bg: #FEF3F2;  --down-bd: #F7C1BC;
     --checking: #B45309;  --checking-bg: #FFF7E8;  --checking-bd: #F5D39A;
-    --shadow-sm: 0 1px 2px rgba(15,27,45,.05);
-    --shadow: 0 1px 2px rgba(15,27,45,.05), 0 8px 24px rgba(15,27,45,.07);
-    --shadow-lg: 0 24px 60px rgba(15,27,45,.25);
+    --shadow-sm: 0 1px 2px rgba(30,39,35,.05);
+    --shadow: 0 1px 2px rgba(30,39,35,.05), 0 8px 24px rgba(30,39,35,.07);
+    --shadow-lg: 0 24px 60px rgba(30,39,35,.25);
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; }
@@ -151,14 +151,14 @@
     font-size: 12.5px; font-weight: 700; color: var(--accent); background: var(--accent-bg);
     border: 1px solid var(--accent-bd); border-radius: 8px; padding: 6px 12px; cursor: pointer;
   }
-  .btn-ghost:hover { background: #EFD9E1; }
+  .btn-ghost:hover { background: #DCEBE2; }
 
   footer { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--faint); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 
   /* ── Modals ── */
   .sync-modal-overlay {
     display: none; position: fixed; inset: 0; z-index: 100; padding: 24px;
-    background: rgba(15,27,45,.45); backdrop-filter: blur(3px);
+    background: rgba(30,39,35,.45); backdrop-filter: blur(3px);
     align-items: center; justify-content: center;
   }
   .sync-modal-overlay.open { display: flex; }
@@ -190,7 +190,7 @@
     font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
     padding: 4px 10px; border-radius: 7px; border: 1px solid var(--accent-bd); background: var(--accent-bg); color: var(--accent); cursor: pointer;
   }
-  .sync-now-btn:hover:not(:disabled) { background: #EFD9E1; }
+  .sync-now-btn:hover:not(:disabled) { background: #DCEBE2; }
   .sync-now-btn:disabled { opacity: .5; cursor: default; }
   .flow-resume-btn { display: inline-block; margin-top: 8px; padding: 6px 12px; border-radius: 8px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; text-decoration: none; }
   .flow-resume-btn:hover { background: var(--accent-h); }
@@ -204,7 +204,7 @@
   .lm-hdr { background: var(--navy); padding: 14px 20px 12px; flex-shrink: 0; }
   .lm-hdr-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
   .lm-logo { font-size: 18px; font-weight: 800; color: #fff; letter-spacing: -.01em; line-height: 1; margin: 0; }
-  .lm-logo em { color: #E8A9BE; font-style: normal; }
+  .lm-logo em { color: #BFE0CD; font-style: normal; }
   .lm-close { background: none; border: none; color: rgba(255,255,255,.6); font-size: 18px; line-height: 1; cursor: pointer; padding: 5px 7px; border-radius: 7px; }
   .lm-close:hover { color: #fff; background: rgba(255,255,255,.1); }
   .lm-hdr-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -266,9 +266,9 @@
   .lm-stbl tr:last-child td { border-bottom: none; }
   .lm-stbl td.c0 { color: var(--border2); }
   .lm-stbl td.cn { font-weight: 700; color: var(--text2); }
-  .lm-stbl td.h1 { background: #FBF3F6; }
-  .lm-stbl td.h2 { background: #F3DCE4; color: var(--navy); }
-  .lm-stbl td.h3 { background: #E6BCCB; color: var(--navy); }
+  .lm-stbl td.h1 { background: #F3F8F5; }
+  .lm-stbl td.h2 { background: #DCEBE2; color: var(--navy); }
+  .lm-stbl td.h3 { background: #BFD9CA; color: var(--navy); }
   .lm-stbl td.ctot { font-weight: 800; color: var(--accent); font-size: 14px; }
   .lm-stbl th.thot { color: var(--accent); }
   .lm-empty { text-align: center; padding: 60px 24px; color: var(--muted); }
@@ -845,12 +845,12 @@
       return rows.join('\r\n');
     }
     function showExportModal(title,csv){
-      var ov=document.createElement('div'); ov.style.cssText='position:fixed;inset:0;background:rgba(15,27,45,.45);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px';
+      var ov=document.createElement('div'); ov.style.cssText='position:fixed;inset:0;background:rgba(30,39,35,.45);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px';
       var safeTitle=title.replace(/</g,'&lt;');
-      ov.innerHTML='<div style="background:#FFFFFF;border:1px solid #CFD8E3;border-radius:12px;width:100%;max-width:540px;display:flex;flex-direction:column;overflow:hidden;max-height:80vh">'+
-        '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #E3E8EF"><span style="font-size:16px;font-weight:800;color:#0F2742">'+safeTitle+'</span><button id="lm-exp-close" style="background:none;border:none;color:#5B6B82;font-size:20px;cursor:pointer;padding:2px 6px">&#x2715;</button></div>'+
-        '<textarea readonly spellcheck="false" style="flex:1;margin:14px 18px;padding:10px;border:1.5px solid #CFD8E3;border-radius:7px;background:#F8FAFC;color:#0F1B2D;font-family:Consolas,monospace;font-size:11.5px;resize:none;outline:none;min-height:160px" id="lm-exp-ta"></textarea>'+
-        '<div style="padding:10px 18px 14px;border-top:1px solid #E3E8EF;display:flex;gap:10px;align-items:center"><span style="font-size:12px;color:#5B6B82;flex:1">Copy and save as .csv</span><button id="lm-exp-copy" style="background:#7A1F3D;color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer">Copy to Clipboard</button></div>'+
+      ov.innerHTML='<div style="background:#FFFFFF;border:1px solid #D3D0C4;border-radius:12px;width:100%;max-width:540px;display:flex;flex-direction:column;overflow:hidden;max-height:80vh">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #E5E3DA"><span style="font-size:16px;font-weight:800;color:#34453F">'+safeTitle+'</span><button id="lm-exp-close" style="background:none;border:none;color:#5F6B64;font-size:20px;cursor:pointer;padding:2px 6px">&#x2715;</button></div>'+
+        '<textarea readonly spellcheck="false" style="flex:1;margin:14px 18px;padding:10px;border:1.5px solid #D3D0C4;border-radius:7px;background:#FAF9F6;color:#1E2723;font-family:Consolas,monospace;font-size:11.5px;resize:none;outline:none;min-height:160px" id="lm-exp-ta"></textarea>'+
+        '<div style="padding:10px 18px 14px;border-top:1px solid #E5E3DA;display:flex;gap:10px;align-items:center"><span style="font-size:12px;color:#5F6B64;flex:1">Copy and save as .csv</span><button id="lm-exp-copy" style="background:#4F7A66;color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer">Copy to Clipboard</button></div>'+
         '</div>';
       document.body.appendChild(ov);
       var ta=ov.querySelector('#lm-exp-ta'); ta.value=csv;

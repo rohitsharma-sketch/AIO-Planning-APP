@@ -161,7 +161,7 @@ function PreviewTable({ rows, monthCols }) {
         <tbody>
           {rows.map((row, ri) => (
             <tr key={ri} style={{
-              background: ri % 2 === 0 ? 'transparent' : 'rgba(15,27,45,0.025)',
+              background: ri % 2 === 0 ? 'transparent' : 'rgba(30,39,35,0.025)',
               borderBottom: `1px solid ${theme.border}`,
             }}>
               {allCols.map(c => (

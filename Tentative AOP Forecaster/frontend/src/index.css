@@ -11,24 +11,24 @@
    component stylesheet reads them; only their values changed. */
 :root {
   /* brand */
-  --navy:     #0F2742;   /* top bar, headings, strong text */
-  --navy2:    #1B3A5C;   /* navy hover */
-  --navy3:    #7A1F3D;   /* accent (burgundy) - links, active states, primary actions */
-  --accent-h: #5E1730;   /* accent hover */
-  --light:    #F6E9EE;   /* accent tint - selected rows, soft fills */
-  --accent-b: #E2BFCB;   /* accent border */
+  --navy:     #34453F;   /* top bar, headings, strong text */
+  --navy2:    #41564E;   /* navy hover */
+  --navy3:    #4F7A66;   /* accent (sage) - links, active states, primary actions */
+  --accent-h: #3F6453;   /* accent hover */
+  --light:    #EAF3EE;   /* accent tint - selected rows, soft fills */
+  --accent-b: #CBE2D5;   /* accent border */
 
   /* surfaces & text */
-  --bg:       #F5F3F4;
+  --bg:       #F7F6F2;
   --white:    #FFFFFF;
-  --surface2: #F8FAFC;   /* zebra rows, table heads */
-  --surface3: #F1F4F8;
-  --char:     #0F1B2D;
-  --text2:    #334155;
-  --muted:    #5B6B82;
-  --faint:    #8A99AD;
-  --border:   #E3E8EF;
-  --border2:  #CFD8E3;
+  --surface2: #FAF9F6;   /* zebra rows, table heads */
+  --surface3: #F3F2EC;
+  --char:     #1E2723;
+  --text2:    #37423C;
+  --muted:    #5F6B64;
+  --faint:    #8C958F;
+  --border:   #E5E3DA;
+  --border2:  #D3D0C4;
 
   /* semantic */
   --green:    #15803D;  --green-bg: #ECFDF3;  --green-bd: #A6E3BD;
@@ -41,9 +41,9 @@
   --nso:  #15803D;  --nso-bg:  #ECFDF3;
 
   --radius:   8px;
-  --shadow-sm: 0 1px 2px rgba(15,27,45,.06);
-  --shadow:   0 1px 2px rgba(15,27,45,.05), 0 4px 14px rgba(15,27,45,.06);
-  --shadow-lg: 0 12px 40px rgba(15,27,45,.22);
+  --shadow-sm: 0 1px 2px rgba(30,39,35,.06);
+  --shadow:   0 1px 2px rgba(30,39,35,.05), 0 4px 14px rgba(30,39,35,.06);
+  --shadow-lg: 0 12px 40px rgba(30,39,35,.22);
   --font-ui:  'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-display: var(--font-ui);
 }

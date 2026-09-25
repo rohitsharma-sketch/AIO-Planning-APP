@@ -68,7 +68,7 @@
 /* Filter dropdown (position: fixed — escapes the scroll container) */
 .sdt-dd {
   position: fixed; z-index: 1000; width: 280px; background: var(--white); border: 1px solid var(--border);
-  border-radius: 8px; box-shadow: 0 8px 24px rgba(15,27,45,0.18); font-size: 13px; color: var(--char);
+  border-radius: 8px; box-shadow: 0 8px 24px rgba(30,39,35,0.18); font-size: 13px; color: var(--char);
   display: flex; flex-direction: column; overflow: hidden;
 }
 .sdt-dd-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--navy); border-bottom: 1px solid var(--border); }

@@ -4,23 +4,23 @@
   /* ── Brand palette: RS Planning suite (2026-09-25) - same navy chrome,
      accent and Plus Jakarta Sans as Landing / AOP / BIS / Sales Plan.
      Names unchanged (every component reads them); --navy3 is the accent. ── */
-  --navy:       #0F2742;   /* chrome, table heads, headings */
-  --navy2:      #1B3A5C;
-  --navy3:      #7A1F3D;   /* burgundy accent - focus, links, selection, primary buttons */
-  --accent-h:   #5E1730;
-  --navy-light: #E2BFCB;
-  --accent:     #7A1F3D;
-  --accent-bg:  #F6E9EE;
+  --navy:       #34453F;   /* chrome, table heads, headings */
+  --navy2:      #41564E;
+  --navy3:      #4F7A66;   /* sage accent - focus, links, selection, primary buttons */
+  --accent-h:   #3F6453;
+  --navy-light: #CBE2D5;
+  --accent:     #4F7A66;
+  --accent-bg:  #EAF3EE;
 
   /* ── Surfaces & text ───────────────────────────────────────── */
-  --light:  #F6E9EE;
-  --bg:     #F5F3F4;
+  --light:  #EAF3EE;
+  --bg:     #F7F6F2;
   --white:  #FFFFFF;
-  --char:   #0F1B2D;
-  --text:   #0F1B2D;
-  --muted:  #5B6B82;
-  --faint:  #8A99AD;
-  --border: #E3E8EF;
+  --char:   #1E2723;
+  --text:   #1E2723;
+  --muted:  #5F6B64;
+  --faint:  #8C958F;
+  --border: #E5E3DA;
 
   /* ── Semantic ───────────────────────────────────────────────── */
   --green: #15803D;
@@ -212,7 +212,7 @@ input[type=number], input[type=date], input:not([type]), select {
 }
 input[type=number]:focus, input[type=date]:focus, input:not([type]):focus, select:focus {
   border-color: var(--navy3);
-  box-shadow: 0 0 0 3px rgba(122,31,61,0.15);
+  box-shadow: 0 0 0 3px rgba(79,122,102,0.15);
 }
 input[type=number] { font-variant-numeric: tabular-nums; width: 70px; }
 input[type=checkbox], input[type=radio] { accent-color: var(--navy3); }
@@ -261,16 +261,16 @@ button:disabled { opacity: .45; cursor: default; box-shadow: none; }
   font-size: 13.5px;
   font-weight: 700;
   letter-spacing: .01em;
-  box-shadow: 0 1px 2px rgba(122,31,61,0.25), 0 3px 8px rgba(122,31,61,0.18);
+  box-shadow: 0 1px 2px rgba(79,122,102,0.25), 0 3px 8px rgba(79,122,102,0.18);
 }
 .btn:hover {
   background: var(--accent-h);
   color: #fff;
   border-color: transparent;
-  box-shadow: 0 2px 4px rgba(122,31,61,0.28), 0 5px 14px rgba(122,31,61,0.22);
+  box-shadow: 0 2px 4px rgba(79,122,102,0.28), 0 5px 14px rgba(79,122,102,0.22);
   opacity: 1;
 }
-.btn:active { transform: scale(.97); box-shadow: 0 1px 2px rgba(122,31,61,0.2); }
+.btn:active { transform: scale(.97); box-shadow: 0 1px 2px rgba(79,122,102,0.2); }
 
 /* ═══ Cluster tabs (CalendarisationTab/ClusterTabs.jsx) ═══════════════════
    Ported from calendar_engine.html lines 179-193. */
@@ -719,7 +719,7 @@ input[type=number].year-input { width: 80px; font-size: 15px; font-weight: 600; 
   cursor: pointer;
   transition: border-color .15s, box-shadow .15s;
 }
-.lib-card:hover { border-color: var(--navy-light); box-shadow: 0 2px 8px rgba(15, 39, 66, .10); }
+.lib-card:hover { border-color: var(--navy-light); box-shadow: 0 2px 8px rgba(52,69,63, .10); }
 .lib-card:focus-visible { outline: 2px solid var(--navy3); outline-offset: 2px; }
 .lib-card-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
 .lib-lock-icon {

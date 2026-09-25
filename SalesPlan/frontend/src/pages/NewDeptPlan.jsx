@@ -112,7 +112,7 @@ function PivotSelect({ options, value, onChange }) {
           borderRadius: 10, overflow: 'hidden',
           boxShadow: '0 8px 32px rgba(0,0,0,0.65)',
         }}>
-          <div style={{ padding: '10px 12px 8px', background: '#F8FAFC', borderBottom: `1px solid ${theme.border}` }}>
+          <div style={{ padding: '10px 12px 8px', background: '#FAF9F6', borderBottom: `1px solid ${theme.border}` }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.9, marginBottom: 7 }}>
               REFERENCE DEPARTMENT
             </div>
@@ -159,7 +159,7 @@ function PivotSelect({ options, value, onChange }) {
 
           <div style={{
             display: 'flex', justifyContent: 'flex-end', gap: 8,
-            padding: '8px 12px', borderTop: `1px solid ${theme.border}`, background: '#F8FAFC',
+            padding: '8px 12px', borderTop: `1px solid ${theme.border}`, background: '#FAF9F6',
           }}>
             <button
               onMouseDown={() => { setOpen(false); setQuery('') }}
@@ -265,7 +265,7 @@ function PivotFilter({ label, options, selected, onChange }) {
           borderRadius: 10, overflow: 'hidden',
           boxShadow: '0 8px 32px rgba(0,0,0,0.65)',
         }}>
-          <div style={{ padding: '10px 12px 8px', background: '#F8FAFC', borderBottom: `1px solid ${theme.border}` }}>
+          <div style={{ padding: '10px 12px 8px', background: '#FAF9F6', borderBottom: `1px solid ${theme.border}` }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.9, marginBottom: 7 }}>
               FILTER — {label.toUpperCase()}
             </div>
@@ -287,8 +287,8 @@ function PivotFilter({ label, options, selected, onChange }) {
           {/* Select All */}
           <div
             onMouseDown={toggleAll}
-            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', cursor: 'pointer', borderBottom: `1px solid rgba(15,27,45,0.05)` }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(15,27,45,0.04)'}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', cursor: 'pointer', borderBottom: `1px solid rgba(30,39,35,0.05)` }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(30,39,35,0.04)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
             <PivotCheckbox checked={allChecked} />
@@ -301,7 +301,7 @@ function PivotFilter({ label, options, selected, onChange }) {
                 key={opt}
                 onMouseDown={() => toggleItem(opt)}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 12px', cursor: 'pointer' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(15,27,45,0.04)'}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(30,39,35,0.04)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
                 <PivotCheckbox checked={draft.has(opt)} />
@@ -312,7 +312,7 @@ function PivotFilter({ label, options, selected, onChange }) {
 
           <div style={{
             display: 'flex', justifyContent: 'flex-end', gap: 8,
-            padding: '8px 12px', borderTop: `1px solid ${theme.border}`, background: '#F8FAFC',
+            padding: '8px 12px', borderTop: `1px solid ${theme.border}`, background: '#FAF9F6',
           }}>
             <button
               onMouseDown={() => setOpen(false)}

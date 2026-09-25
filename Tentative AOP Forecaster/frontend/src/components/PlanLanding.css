@@ -45,7 +45,7 @@
 }
 .pl-tile:hover:not(:disabled) {
   border-color: var(--navy3);
-  box-shadow: 0 6px 20px rgba(122,31,61,.14);
+  box-shadow: 0 6px 20px rgba(79,122,102,.14);
   transform: translateY(-1px);
 }
 .pl-tile:disabled { opacity: .55; }
@@ -156,7 +156,7 @@
 .pl-save-dialog-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15,27,45,.45);
+  background: rgba(30,39,35,.45);
   display: flex;
   align-items: center;
   justify-content: center;

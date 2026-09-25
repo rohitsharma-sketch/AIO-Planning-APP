@@ -109,7 +109,7 @@ function PlanSnapshot() {
           <div style={{ padding: '0 12px' }}>
             {Object.entries(data.divisions).map(([div, months_data]) => {
               const md = months_data[cur] || {}
-              const dot = DIV_DOT[div] || '#94A3B8'
+              const dot = DIV_DOT[div] || '#9AA39D'
               return (
                 <div key={div} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                   <div style={{ width: 6, height: 6, borderRadius: '50%', background: dot, flexShrink: 0 }} />
@@ -131,8 +131,8 @@ function PlanSnapshot() {
           <Link to="/department-plan/final-results" style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
             margin: '10px 12px 4px', padding: '7px', borderRadius: 6,
-            background: 'rgba(232,169,190,0.14)', border: '1px solid rgba(232,169,190,0.25)',
-            color: 'rgba(232,169,190,0.9)', fontSize: 11, fontWeight: 700,
+            background: 'rgba(191,224,205,0.14)', border: '1px solid rgba(191,224,205,0.25)',
+            color: 'rgba(191,224,205,0.9)', fontSize: 11, fontWeight: 700,
             textDecoration: 'none', letterSpacing: 0.3,
           }}>
             View Full Results →
@@ -225,7 +225,7 @@ export default function Sidebar() {
                       background: isActive ? theme.sidebarActive : 'transparent',
                       fontSize: 12.5, textDecoration: 'none',
                       fontWeight: isActive ? 700 : 500,
-                      borderLeft: isActive ? `3px solid ${'#D98BA5'}` : '3px solid transparent',
+                      borderLeft: isActive ? `3px solid ${'#A8CBB7'}` : '3px solid transparent',
                       transition: 'background 0.15s',
                     })}
                   >
@@ -234,7 +234,7 @@ export default function Sidebar() {
                       <span style={{ fontSize: 9, background: 'rgba(255,255,255,0.10)', color: 'rgba(255,255,255,0.45)', borderRadius: 4, padding: '1px 5px', letterSpacing: 0.3, marginLeft: 4 }}>opt</span>
                     )}
                     {sub.final && (
-                      <span style={{ fontSize: 9, background: 'rgba(232,169,190,0.18)', color: 'rgba(232,169,190,0.9)', borderRadius: 4, padding: '1px 5px', letterSpacing: 0.3, marginLeft: 4, fontWeight: 700 }}>out</span>
+                      <span style={{ fontSize: 9, background: 'rgba(191,224,205,0.18)', color: 'rgba(191,224,205,0.9)', borderRadius: 4, padding: '1px 5px', letterSpacing: 0.3, marginLeft: 4, fontWeight: 700 }}>out</span>
                     )}
                   </NavLink>
                 ))}
@@ -251,7 +251,7 @@ export default function Sidebar() {
                 background: isActive ? theme.sidebarActive : 'transparent',
                 fontSize: 13.5, textDecoration: 'none',
                 fontWeight: isActive ? 700 : 500,
-                borderLeft: isActive ? `3px solid ${'#D98BA5'}` : '3px solid transparent',
+                borderLeft: isActive ? `3px solid ${'#A8CBB7'}` : '3px solid transparent',
                 transition: 'background 0.15s',
               })}
             >

@@ -591,7 +591,7 @@ export default function DepartmentGrowthMatrix() {
               <button key={attr} onClick={() => setAttrFilter(isActive ? null : attr)} style={{
                 padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
                 cursor: 'pointer', outline: 'none',
-                border: isActive ? 'none' : `1px solid ${s.bg === '#1E3A5F' ? '#334155' : theme.border}`,
+                border: isActive ? 'none' : `1px solid ${s.bg === '#1E3A5F' ? '#37423C' : theme.border}`,
                 background: isActive ? s.color : s.bg,
                 color: isActive ? (s.bg === '#1E3A5F' ? '#1E3A5F' : '#fff') : s.color,
               }}>
@@ -687,7 +687,7 @@ export default function DepartmentGrowthMatrix() {
                   return (
                     <tr key={dept.name} style={{
                       borderBottom: `1px solid #EEF2F8`,
-                      background: i % 2 === 0 ? 'transparent' : 'rgba(15,27,45,0.025)',
+                      background: i % 2 === 0 ? 'transparent' : 'rgba(30,39,35,0.025)',
                     }}>
                       <td style={{
                         padding: '5px 10px 5px 20px',
