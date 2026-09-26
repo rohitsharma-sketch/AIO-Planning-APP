@@ -48,3 +48,7 @@ Tentative AOP Forecaster/auto_sync.log
 
 # Suite theme choice picked on Landing - local state, not source
 RS Planning Platform/backend/data/suite_theme.json
+
+# Listing/Delisting (additional app): source workbooks and generated data - business data, never in git
+data/listing/
+Listing Delisting/app/*.json

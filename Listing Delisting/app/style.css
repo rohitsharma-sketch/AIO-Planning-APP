@@ -1,0 +1,376 @@
+:root {
+  /* Enterprise-dashboard palette (Minimalism & Swiss Style) */
+  /* RS Planning suite (2026-09-26): colours follow the theme picked on Landing
+     (var(--st-*), sage fallback) - same chrome, page and accent as the other apps. */
+  --color-primary: var(--st-accent,#4F7A66);
+  --color-secondary: var(--st-accent-dark,#3F6453);
+  --color-accent: #B45309;
+  --color-background: var(--st-page,#F7F6F2);
+  --color-foreground: var(--st-ink,#1E2723);
+  --color-card: #ffffff;
+  --color-muted: var(--st-surface-3,#F3F2EC);
+  --color-muted-foreground: var(--st-muted,#5F6B64);
+  --color-border: var(--st-line,#E5E3DA);
+  --color-destructive: #dc2626;
+
+  /* Domain meaning: listing status */
+  --y: #15803d;
+  --n: var(--color-destructive);
+  --dot: #cbd5e1;
+
+  --ink: var(--st-ink,#1E2723);
+  --bg: var(--color-background);
+  --line: var(--color-border);
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: 'Plus Jakarta Sans', system-ui, sans-serif;   /* suite font; numbers use tabular figures */
+
+  /* Chrome band (2026-09-25): a dark navy header+tab strip so the app doesn't read as
+     "whole white" — same family as the sibling CityKart planning tools' navy chrome.
+     Everything below the chrome (controls, grids, tables) stays on --bg/--color-card
+     for data legibility; only the header/tab strip deepens. */
+  --color-chrome: var(--st-chrome,#34453F);
+  --color-chrome-tint: rgba(255, 255, 255, .08);
+  --color-chrome-border: rgba(255, 255, 255, .12);
+  --color-chrome-text: #ffffff;
+  --color-chrome-text-muted: rgba(255, 255, 255, .55);
+  --color-onchrome-accent: var(--st-rail,#BFE0CD);
+  --color-onchrome-accent-bg: rgba(var(--st-rail-rgb,191,224,205), .16);
+  --btn: var(--st-btn,#A8CBB7); --btn-t: var(--st-btn-text,#1F4D3A);
+}
+body { font-variant-numeric: tabular-nums; }
+/* suite brand row inside the chrome band */
+.appbar header { display: flex; align-items: center; gap: 12px; }
+.appbar .brand-mark { width: 34px; height: 34px; border-radius: 9px; background: var(--btn); color: var(--btn-t);
+  display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; flex: none; }
+.appbar .brand-text { flex: 1; min-width: 0; }
+.appbar .home { flex: none; white-space: nowrap; font-size: 12.5px; font-weight: 700; color: #fff; text-decoration: none;
+  padding: 6px 13px; border-radius: 999px; background: var(--color-chrome-tint); border: 1px solid rgba(255,255,255,.18); }
+.appbar .home:hover { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.3); }
+.drill-sub { margin: -4px 0 10px; font-size: 13px; color: var(--color-muted-foreground); }
+.drill-sub:empty { display: none; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; } /* author display:flex/table rules below would otherwise beat this */
+body {
+  font-family: var(--font-sans);
+  margin: 0;
+  padding: 24px;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.appbar {
+  background: var(--color-chrome);
+  margin: -24px -24px 20px;
+  padding: 20px 24px 0;
+  box-shadow: 0 1px 0 rgba(255,255,255,.06);
+}
+.appbar header h1 { color: #fff; }
+.appbar .subtitle { color: var(--color-chrome-text-muted); }
+header h1 { margin: 0 0 2px; font-size: 22px; font-weight: 700; color: var(--color-foreground); }
+.subtitle { margin: 0 0 16px; color: var(--color-muted-foreground); font-size: 14px; }
+
+.appbar .tabs { margin-bottom: 0; }
+.tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.appbar .tab-btn {
+  border: none;
+  border-bottom: 3px solid transparent;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--color-chrome-text-muted);
+}
+.appbar .tab-btn:hover { background: var(--color-chrome-tint); color: #fff; border-color: transparent; }
+.appbar .tab-btn.active { background: transparent; color: var(--color-onchrome-accent); border-bottom-color: var(--color-onchrome-accent); }
+.tab-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  background: var(--color-card);
+  color: var(--color-foreground);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+  transition: background-color 200ms, color 200ms, border-color 200ms;
+}
+.tab-btn:hover { border-color: var(--color-secondary); }
+.tab-btn.active { background: var(--btn); color: var(--btn-t); border-color: var(--btn); }
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.controls input, .controls select {
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+  width: 280px;
+  background: var(--color-card);
+  color: var(--ink);
+}
+.controls select { width: auto; }
+.controls input[type="checkbox"] { width: auto; padding: 0; }
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: normal;
+  cursor: pointer;
+}
+.legend { font-size: 13px; color: var(--color-muted-foreground); margin-left: auto; }
+.shade-scale {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 8px;
+  font-size: 11px;
+  color: var(--color-muted-foreground);
+  vertical-align: middle;
+}
+.shade-scale .bar {
+  width: 60px;
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid var(--line);
+  background: linear-gradient(to right, rgba(var(--st-accent-rgb,79,122,102),0.12), rgba(var(--st-accent-rgb,79,122,102),0.87));
+}
+.chip {
+  display: inline-block;
+  width: 18px; height: 14px;
+  border-radius: 2px;
+  text-align: center;
+  font-size: 10px;
+  line-height: 14px;
+  color: #fff;
+  margin-right: 3px;
+}
+.chip.y { background: var(--y); }
+.chip.n { background: var(--n); }
+.chip.dot { background: var(--dot); color: #64748b; }
+
+/* In-season / Off-season badge (2026-09-21 rework): replaces the earlier static 6-category
+   season_category badge. Two colors only now -- the underlying category is still named in the
+   badge's title tooltip, just de-emphasized as the primary label. Same chip shape/convention as
+   before, deliberately not --y/--n so it never reads as listing status. */
+.season-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  color: #fff;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.season-badge.season-in { background: var(--color-primary); }
+.season-badge.season-off { background: var(--dot); color: #334155; }
+
+/* Risk-severity badge: same chip shape as season-badge, but deliberately a traffic-light
+   green/amber/red family -- this is severity, a genuinely different semantic dimension from
+   season category, and red-for-high-risk is the standard, expected convention here (the
+   red/green-avoidance rule for season-badge was about not colliding with listing-status
+   meaning in the SAME grid cell; this table has no listing-status color to collide with). */
+.risk-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  color: #fff;
+  white-space: nowrap;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+.risk-badge.risk-low { background: var(--y); }
+.risk-badge.risk-medium { background: var(--color-accent); }
+.risk-badge.risk-high { background: var(--n); }
+
+#grid-wrap { overflow-x: auto; }
+#status { color: var(--color-muted-foreground); font-size: 14px; }
+.hint { color: var(--color-muted-foreground); font-size: 12px; margin: 0 0 8px; }
+
+/* Keyboard-visible focus states (mouse users don't see this; :focus-visible skips them) */
+.tab-btn:focus-visible,
+.controls input:focus-visible, .controls select:focus-visible,
+.multiselect-toggle:focus-visible,
+#drill-close:focus-visible,
+#grid tbody tr.drillable:focus-visible, #events-table tbody tr.drillable:focus-visible, #risk-table tbody tr.drillable:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+#grid tbody tr.drillable:hover, #events-table tbody tr.drillable:hover, #risk-table tbody tr.drillable:hover { outline: 2px solid var(--color-secondary); outline-offset: -1px; cursor: pointer; }
+#grid tbody tr.drillable:hover td.row-label, #events-table tbody tr.drillable:hover td.row-label { background: var(--color-muted); }
+
+#grid, #events-table, #risk-table, #season-growth-table, #season-weak-table {
+  border-collapse: collapse;
+  font-size: 11px;
+  white-space: nowrap;
+}
+#grid th, #grid td, #events-table th, #events-table td, #risk-table th, #risk-table td,
+#season-growth-table th, #season-growth-table td, #season-weak-table th, #season-weak-table td {
+  border: 1px solid var(--line);
+  padding: 0;
+}
+#grid th, #events-table th, #risk-table th, #season-growth-table th, #season-weak-table th {
+  background: var(--color-card);
+  color: var(--color-foreground);
+  padding: 4px 6px;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  box-shadow: 0 1px 0 var(--line);
+}
+/* Sortable column headers: click to sort, click again to flip direction (▲/▼ shown in the
+   label itself, added in JS, so it's announced to screen readers as ordinary text). */
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { background: var(--color-muted); }
+th.sortable.sorted { color: var(--color-primary); }
+#grid th.row-label, #grid td.row-label {
+  position: sticky;
+  left: 0;
+  background: var(--color-card);
+  text-align: left;
+  padding: 4px 8px;
+  z-index: 2;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#events-table td, #risk-table td, #season-growth-table td, #season-weak-table td { padding: 4px 8px; }
+#events-table td.num, #risk-table td.num, #season-growth-table td.num, #season-weak-table td.num {
+  text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+}
+#risk-table td:nth-child(3) { color: var(--n); font-weight: 600; font-family: var(--font-mono); }
+#season-growth-table td:nth-child(2) { color: var(--y); font-weight: 600; font-family: var(--font-mono); }
+#season-weak-table td:nth-child(2) { color: var(--n); font-weight: 600; font-family: var(--font-mono); }
+
+#season-chart { margin-bottom: 16px; }
+#season-chart svg { display: block; overflow: visible; font-family: var(--font-mono); }
+.season-columns { display: flex; gap: 24px; flex-wrap: wrap; }
+.season-columns > div { flex: 1 1 360px; min-width: 320px; }
+.season-columns h3 { font-size: 14px; margin: 0 0 8px; color: var(--color-foreground); font-weight: 600; }
+.season-columns h3 .hint { display: inline; font-weight: normal; margin: 0; }
+.season-columns table { width: 100%; }
+
+.multiselect { position: relative; display: inline-block; }
+.multiselect-toggle {
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--color-card);
+  color: var(--ink);
+  font-size: 14px;
+  font-family: inherit;
+  width: 220px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 200ms, color 200ms;
+}
+.multiselect-toggle.has-selection { border-color: var(--color-secondary); color: var(--color-primary); font-weight: 500; }
+.multiselect-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 260px;
+  max-height: 320px;
+  background: var(--color-card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.12);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+}
+.multiselect-search {
+  margin: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+}
+.multiselect-options { overflow-y: auto; padding: 0 4px 8px; }
+.multiselect-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: normal;
+  cursor: pointer;
+  white-space: nowrap;
+  border-radius: 4px;
+}
+.multiselect-options label input[type="checkbox"] {
+  margin: 0;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}
+.multiselect-options label:hover { background: var(--color-muted); }
+.multiselect-options .no-match { color: var(--color-muted-foreground); padding: 4px 8px; font-size: 13px; }
+
+/* Single-select variant (setupSingleSelect): plain clickable rows, no checkbox. */
+.multiselect-options .option {
+  padding: 4px 8px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  border-radius: 4px;
+}
+.multiselect-options .option:hover { background: var(--color-muted); }
+.multiselect-options .option.selected { background: var(--btn); color: var(--btn-t); }
+#grid td.cell {
+  width: 20px;
+  height: 20px;
+  text-align: center;
+  background: var(--color-card); /* overridden inline per-cell by sales-value shading */
+  border-bottom: 4px solid var(--dot); /* listing status tag */
+}
+#grid td.cell.y { border-bottom-color: var(--y); }
+#grid td.cell.n { border-bottom-color: var(--n); }
+#grid td.cell.dot { border-bottom-color: var(--dot); }
+
+#drill-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  padding: 24px;
+}
+#drill-card {
+  background: var(--color-card);
+  border-radius: 8px;
+  padding: 20px 24px;
+  max-width: 960px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: auto;
+  position: relative;
+  box-shadow: 0 10px 40px rgba(15, 23, 42, 0.25);
+}
+#drill-close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  border: none;
+  background: none;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--color-muted-foreground);
+  transition: color 200ms;
+}
+#drill-close:hover { color: var(--ink); }
+#drill-title { margin: 0 32px 8px 0; font-size: 17px; color: var(--color-foreground); font-weight: 600; }
+#drill-chart svg { display: block; overflow: visible; font-family: var(--font-mono); }

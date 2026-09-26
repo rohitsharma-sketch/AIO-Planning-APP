@@ -62,6 +62,11 @@ APPS = [
     {"name": "AOP Realigner", "port": 8070,
      "cmd": [sys.executable, "server.py"],
      "cwd": os.path.join(_REPO_ROOT, "AOP Realigner")},
+    # Additional app (joined 2026-09-26): static site over its app/*.json, rebuilt by the
+    # daily data-lake sync (sync/listing_delisting_sync.py). Linked directly on the LAN like 8060/8070.
+    {"name": "Listing / Delisting", "port": 8123,
+     "cmd": [sys.executable, "serve.py"],   # static app/ with no-cache (data files change daily)
+     "cwd": os.path.join(_REPO_ROOT, "Listing Delisting")},
 ]
 
 # Proxy route table — (path_prefix, target_base, strip_prefix).

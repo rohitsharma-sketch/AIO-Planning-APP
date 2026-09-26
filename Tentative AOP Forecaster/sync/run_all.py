@@ -42,6 +42,9 @@ DB_SYNC_JOBS = [
     # Not in app.py's list: Google "Holidays in India" -> festival_reference_dates,
     # then re-dates Festival Master + locked calendars' festival lists.
     ("festival_dates", "festival_dates"),
+    # Additional app (2026-09-26): Listing/Delisting rebuilds its app/*.json from the same
+    # data lake + planning store master. Last, so the core sources are never delayed by it (~3 min).
+    ("listing_delisting", "listing_delisting"),
 ]
 
 
