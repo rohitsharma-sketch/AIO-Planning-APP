@@ -4,8 +4,9 @@
 - the header row may sit anywhere in the first SCAN_ROWS rows (the original has a totals row on top)
 - column names match loosely: case, extra spaces, curly quotes, "Sep '26" vs "Sep'26" vs "Sept 2026",
   STORE vs STORE NAME, DEPT vs DEPARTMENT
-- one reader per revision method: prepare_listing (1 - store listing changes), prepare_revised
-  (2 - existing departments; also 3 - new departments, with an optional COPY FROM column), prepare_split (3 - split)
+- one reader per revision method: prepare_listing (1 - store listing changes; 4 - the same shifted to a chosen
+  target), prepare_revised (2 - existing departments; also 3 - new departments, with an optional COPY FROM column),
+  prepare_split (3 - split), prepare_growth (5 - growth changes vs last year)
 - nothing is coerced or dropped silently: blank rows, non-numeric cells, duplicate keys, unknown stores
   and departments all land in the report as an error (blocks the run), a warning, or a note - with rows
 """
@@ -17,9 +18,11 @@ import re
 import numpy as np
 import pandas as pd
 
-from engine import DEPT, DISP, DIV, FROZEN, MRP, STORE, listing_targets, parent_for, split_targets
+from engine import (DEPT, DISP, DIV, FROZEN, MRP, STORE, growth_targets, listing_targets, ly_label, parent_for,
+                    shift_targets, split_targets)
 
 LIST, FROMM, PARENT, NEWD, SHARE = "LISTING", "FROM MONTH", "PARENT DEPARTMENT", "NEW DEPARTMENT", "SHARE %"
+TARGET, GROWTH = "TARGET", "NEW GROWTH %"
 
 SCAN_ROWS = 15
 XL_EXT = (".xlsx", ".xlsm", ".xlsb", ".xls")
@@ -34,13 +37,18 @@ ALIASES = {
     PARENT: {"PARENT DEPARTMENT", "PARENT DEPT", "PARENT", "COPY FROM", "SPLIT FROM", "OLD DEPARTMENT", "FROM DEPARTMENT"},
     NEWD: {"NEW DEPARTMENT", "NEW DEPT", "CHILD DEPARTMENT", "SPLIT INTO"},
     SHARE: {"SHARE %", "SHARE", "SHARE%", "SPLIT %", "SPLIT%", "SHARE (%)"},
+    TARGET: {"TARGET", "TARGET DEPARTMENT", "TARGET SECTION", "TARGET DEPT", "TARGET (DEPARTMENT / SECTION)", "SHIFT TO", "SHIFT FROM"},
+    GROWTH: {"NEW GROWTH %", "NEW GROWTH", "GROWTH %", "GROWTH", "GROWTH%", "NEW GROWTH%"},
 }
 SHOWN = {STORE: "STORE NAME", DEPT: "DEPARTMENT", DIV: "DIVISION", MRP: "MRP", DISP: "DISPLAY TYPE",
-         LIST: "LISTING", FROMM: "FROM MONTH", PARENT: "PARENT DEPARTMENT", NEWD: "NEW DEPARTMENT", SHARE: "SHARE %"}
+         LIST: "LISTING", FROMM: "FROM MONTH", PARENT: "PARENT DEPARTMENT", NEWD: "NEW DEPARTMENT", SHARE: "SHARE %",
+         TARGET: "TARGET", GROWTH: "NEW GROWTH %"}
 NEED_ORIGINAL = {STORE, DEPT, DIV, MRP, DISP}
 NEED_REVISED = {STORE, DEPT}
 NEED_LISTING = {STORE, DEPT, LIST}
 NEED_SPLIT = {PARENT, NEWD, SHARE}
+NEED_SHIFT = {DEPT, LIST, TARGET}                  # STORE NAME optional: blank = every store it applies to
+NEED_GROWTH = {DEPT, GROWTH}                       # STORE NAME optional: blank = the department in every store
 YES = {"Y", "YES", "LISTED", "LIST", "RELIST", "RELISTED", "1"}
 NO = {"N", "NO", "DELISTED", "DELIST", "-", "0"}
 MONTH_ONLY = re.compile(r"^(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*[\s'\-]*(\d{4}|\d{2})(?:\s*-?\s*P\s*([12]))?$")
@@ -395,11 +403,18 @@ def from_month(v, months):
     return next((i for i, x in enumerate(months) if x == label or x.startswith(label + " ")), None)
 
 
-def prepare_listing(df, info, rep, orig, months):
+def prepare_listing(df, info, rep, orig, months, shift=False, section_of=None):
     """Method 1 - store listing changes: STORE NAME, DEPARTMENT, LISTING (Y/N), optional FROM MONTH and optional
-    '<Month> New' values for new listings -> (revised Store x Dept rows, months, source rows, info, report)."""
+    '<Month> New' values for new listings -> (revised Store x Dept rows, months, source rows, info, report).
+    shift=True is Method 4: every row also names a TARGET (a department, or a section of the Attribute Master) that
+    the change is shifted into / out of, and STORE NAME may be blank (= every store the change applies to)."""
+    section_of = section_of or {}
     raw_from = df[FROMM] if FROMM in df.columns else None
-    df = _keys(df, [STORE, DEPT, LIST], rep, "listing change")
+    if shift:
+        df = _keys(df, [DEPT, LIST, TARGET], rep, "listing change")
+        df[STORE] = _clean(df[STORE]) if STORE in df.columns else ""
+    else:
+        df = _keys(df, [STORE, DEPT, LIST], rep, "listing change")
     _dups(df, [STORE, DEPT], rep, "listing change")
     if not len(df):
         rep.error("The file has no listing changes.")
@@ -410,6 +425,12 @@ def prepare_listing(df, info, rep, orig, months):
                   [f'row {i + 1}: "{v}"' for i, v in df[LIST][bad].head(6).items()])
     _known(df, rep, [(STORE, set(orig[STORE]), ("store(s)", "")),
                      (DEPT, set(orig[DEPT]), ("department(s)", " - a brand-new department is Method 3"))])
+    if shift:
+        _known(df, rep, [(TARGET, set(orig[DEPT]) | set(section_of.values()),
+                          ("target(s)", " as a department or a section (Attribute Master)"))])
+        same_t = df[df[TARGET] == df[DEPT]]
+        if len(same_t):
+            rep.error("A department can't be shifted into itself.", list(same_t[DEPT].unique()))
     starts = pd.Series(0, index=df.index)
     if raw_from is not None:
         starts = raw_from.reindex(df.index).map(lambda v: from_month(v, months))
@@ -426,13 +447,25 @@ def prepare_listing(df, info, rep, orig, months):
     sd = orig.groupby([STORE, DEPT])[[m + " Plan" for m in months]].sum().abs().sum(axis=1)
     planned = set(sd[sd > 1e-9].index)
     changes, same = [], {"N": [], "Y": []}
+    stores_of = {}
+    for st, dep in planned:
+        stores_of.setdefault(dep, set()).add(st)
     for i, s, d, ls in zip(df.index, df[STORE], df[DEPT], df[LIST]):
         y = "Y" if ls in YES else "N"
-        if (y == "Y") == ((s, d) in planned):  # listed & already planned / delisted & not planned: nothing moves
-            same[y].append(f"{s} / {d}")
-            continue
-        vals = [float(df.at[i, m + " New"]) if m in vcols else 0.0 for m in months] if given[i] else None
-        changes.append({"store": s, "dept": d, "listing": y, "start": int(starts[i]), "values": vals})
+        t = df.at[i, TARGET] if shift else None
+        if s:
+            scope = [s]
+        elif y == "N":                                   # blank store: every store planning the department ...
+            scope = sorted(stores_of.get(d, ()))
+        else:                                            # ... or, for a listing, every store planning the target
+            tg = {t} | {x for x, sec in section_of.items() if sec == t}
+            scope = sorted({st for x in tg for st in stores_of.get(x, ())} - stores_of.get(d, set()))
+        for st in scope:
+            if (y == "Y") == ((st, d) in planned):  # listed & already planned / delisted & not planned: nothing moves
+                same[y].append(f"{st} / {d}")
+                continue
+            vals = [float(df.at[i, m + " New"]) if m in vcols else 0.0 for m in months] if given[i] else None
+            changes.append({"store": st, "dept": d, "listing": y, "start": int(starts[i]), "values": vals, "target": t})
     if same["N"]:
         rep.info(f"{len(same['N'])} delisting(s) have no plan in the original anyway - nothing to move.", same["N"])
     if same["Y"]:
@@ -442,6 +475,27 @@ def prepare_listing(df, info, rep, orig, months):
         rep.error("None of the rows changes the plan - every delisted department is already unplanned and every "
                   "listed one already planned.")
         return None, [], {}, info, rep
+    if shift:
+        try:
+            r, source, notes = shift_targets(orig, changes, months, section_of)
+        except ValueError as e:
+            rep.error(str(e))
+            return None, [], {}, info, rep
+        n_del = sum(c["listing"] == "N" for c in changes)
+        rep.info(f"{n_del} delisting(s) move their plan into the named target only; {len(changes) - n_del} listing(s) take "
+                 f"theirs out of the target only (sized from same-cluster stores unless values are given). Nothing else "
+                 f"moves - every store x division x month stays as in the original.")
+        if notes["capped"]:
+            rep.warn(f"{len(notes['capped'])} listing(s) wanted more than their target had in some month - capped at the "
+                     f"target's value there (the target goes to 0 that month).", notes["capped"])
+        tags = {}
+        for c in changes:
+            tags[c["dept"]] = f"{'delisted' if c['listing'] == 'N' else 'listed'} → {c['target']}"
+            tags.setdefault(c["target"], "target")
+        info.update(rows=len(df), stores=int(r[STORE].nunique()), months=months, preview=_preview(r, orig, months, tags))
+        info["departments"] = len(info["preview"]["rows"])
+        rep.info(f"{len(changes)} change(s) · {info['departments']} department(s) incl. targets · {info['stores']} stores.")
+        return r, months, source, info, rep
     try:
         r, source, counts = listing_targets(orig, changes, months)
     except ValueError as e:
@@ -466,23 +520,67 @@ def prepare_listing(df, info, rep, orig, months):
     return r, months, source, info, rep
 
 
+def _percent(raw, rep, what, allow_negative=False):
+    """A % column -> fractions: "40" or "40%" = 40%; a file holding only values within +/-1 and no "%" (Excel
+    %-formatted cells) = fractions already. The reading used is reported."""
+    raw = raw.astype(str).str.strip()
+    pct = raw.str.contains("%")
+    num = pd.to_numeric(raw.str.replace(r"[%\s,]", "", regex=True), errors="coerce")
+    bad = num.isna() | ((num <= -100) if allow_negative else (num <= 0))
+    if bad.any():
+        rep.error(f"{int(bad.sum())} {what} value(s) aren't valid numbers.", [f'row {i + 1}: "{raw[i]}"' for i in raw.index[bad][:6]])
+    as_pct = pct | bool((num[~pct].abs() > 1).any())
+    rep.info(f"{what} read as " + ("percentages (12 = 12%)." if bool(np.all(as_pct)) else "fractions (0.12 = 12%)."))
+    return pd.Series(np.where(as_pct, num / 100, num), index=raw.index)
+
+
+def prepare_growth(df, info, rep, orig, months, ly):
+    """Method 5 - growth changes: DEPARTMENT, NEW GROWTH % (vs last year), optional STORE NAME (blank = every
+    store; a store's own row overrides) -> (revised Store x Dept rows, months, {}, info, report).
+    ly: {(store, dept): {"Sep'25": value}} from the month-wise data-lake export, in the plan's units."""
+    raw = df[GROWTH].copy()
+    df = _keys(df, [DEPT], rep, "growth")
+    df = df[~_blank(raw.reindex(df.index))]                 # a department with no new growth is left as it is
+    df[STORE] = _clean(df[STORE]) if STORE in df.columns else ""
+    if not len(df):
+        rep.error("No NEW GROWTH % filled in - nothing to change.")
+        return None, [], {}, info, rep
+    g = _percent(raw.reindex(df.index), rep, "NEW GROWTH %", allow_negative=True)
+    _dups(df, [DEPT, STORE], rep, "growth")
+    _known(df, rep, [(STORE, set(orig[STORE]), ("store(s)", "")), (DEPT, set(orig[DEPT]), ("department(s)", ""))])
+    if not ly:
+        rep.error("Last year's sales aren't available (the Listing / Delisting app's sales.json) - can't measure growth.")
+    if not rep.ok:
+        return None, [], {}, info, rep
+    rows = [{"dept": d, "store": s or None, "growth": float(x)} for d, s, x in zip(df[DEPT], df[STORE], g)]
+    try:
+        r, detail = growth_targets(orig, rows, months, ly)
+    except ValueError as e:
+        rep.error(str(e))
+        return None, [], {}, info, rep
+    lm = [m for m in months if m[:3] not in FROZEN and ly_label(m)]
+    for x in detail:
+        rep.info(f"{x['dept']}{' / ' + x['store'] if x['store'] else ''}: {len(lm)} live months, {x['comparable']} of {x['stores']} "
+                 f"store(s) with last year's sales - plan {x['plan']:,.2f} vs last year {x['ly']:,.2f} = {x['current']:+.1%} now → "
+                 f"{x['new']:+.1%} (plan × {x['factor']:.4f} in every live month).")
+        if abs(x["current"]) > 2:
+            rep.warn(f"{x['dept']}: current growth {x['current']:+.0%} looks like last year isn't comparable "
+                     f"(renamed or split department?) - check before running.")
+    info.update(rows=len(df), stores=int(r[STORE].nunique()), months=months,
+                preview=_preview(r, orig, months, {x["dept"]: f"{x['current']:+.0%} → {x['new']:+.0%}" for x in detail}))
+    info["departments"] = len(info["preview"]["rows"])
+    rep.info(f"Months compared: {', '.join(lm)} vs {', '.join(ly_label(m) for m in lm)}. The rest of each store x division "
+             f"absorbs the change (capped at store x division x month); other divisions are not touched.")
+    return r, months, {}, info, rep
+
+
 def prepare_split(df, info, rep, orig, months):
     """Method 3 - split: PARENT DEPARTMENT, NEW DEPARTMENT, SHARE %, optional STORE NAME (blank = every store)
     -> (revised Store x Dept rows, months, source rows, info, report)."""
     raw = df[SHARE].copy()
     df = _keys(df, [PARENT, NEWD], rep, "split")
     df[STORE] = _clean(df[STORE]) if STORE in df.columns else ""
-    raw = raw.reindex(df.index).astype(str).str.strip()
-    pct = raw.str.contains("%")
-    num = pd.to_numeric(raw.str.replace(r"[%\s]", "", regex=True), errors="coerce")
-    bad = num.isna() | (num <= 0)
-    if bad.any():
-        rep.error(f"{int(bad.sum())} SHARE % value(s) aren't positive numbers.",
-                  [f'row {i + 1}: "{raw[i]}"' for i in df.index[bad][:6]])
-    # 40 or "40%" = 40%; a file holding only fractions (0.4 - e.g. Excel %-formatted cells) = fractions
-    as_pct = pct | bool((num[~pct] > 1).any())
-    df["_share"] = np.where(as_pct, num / 100, num)
-    rep.info("Shares read as " + ("percentages (40 = 40%)." if bool(np.all(as_pct)) else "fractions (0.4 = 40%)."))
+    df["_share"] = _percent(raw.reindex(df.index), rep, "Shares")
     _dups(df, [PARENT, NEWD, STORE], rep, "split")
     _known(df, rep, [(STORE, set(orig[STORE]), ("store(s)", "")), (PARENT, set(orig[DEPT]), ("parent department(s)", ""))])
     same = df[df[PARENT] == df[NEWD]]
@@ -570,3 +668,26 @@ def template_split():
 
 def template_newdept(months):
     return pd.DataFrame(columns=[STORE, DIV, DEPT, "COPY FROM"] + [m + " New" for m in live_months(months)])
+
+
+def template_shift(orig, months, kb=None):
+    """Method 4 template: the Method 1 columns plus TARGET; with kb, pre-filled like Method 1 (TARGET left for the user)."""
+    t, skipped = template_listing(orig, months, kb)
+    t.insert(t.columns.get_loc(FROMM) + 1, TARGET, "")
+    return t, skipped
+
+
+def template_growth(orig, months, ly):
+    """Method 5 template: every department with its plan and last year's sales over the live months (stores that have
+    both) and the growth that gives today; fill NEW GROWTH % for the ones to change (blank = unchanged)."""
+    lm = [m for m in months if m[:3] not in FROZEN and ly_label(m)]
+    g = orig.groupby([STORE, DIV, DEPT])[[m + " Plan" for m in lm]].sum().sum(axis=1).rename("plan").reset_index()
+    g["ly"] = [sum(float(ly.get((s, d), {}).get(ly_label(m), 0.0)) for m in lm) for s, d in zip(g[STORE], g[DEPT])]
+    c = g[(g["plan"] > 1e-9) & (g["ly"] > 1e-9)].groupby([DIV, DEPT])[["plan", "ly"]].sum()
+    a = g.groupby([DIV, DEPT]).agg(stores=(STORE, "size")).join(c).reset_index()
+    span = f"{lm[0]}-{lm[-1]}" if lm else ""
+    out = pd.DataFrame({DIV: a[DIV], DEPT: a[DEPT], STORE: "", "STORES": a["stores"],
+                        f"PLAN {span} (comparable stores)": a["plan"].round(4),
+                        f"LAST YEAR {ly_label(lm[0]) if lm else ''}-{ly_label(lm[-1]) if lm else ''}": a["ly"].round(4),
+                        "CURRENT GROWTH %": ((a["plan"] / a["ly"] - 1) * 100).round(2), GROWTH: ""})
+    return out.sort_values([DIV, DEPT]).reset_index(drop=True)

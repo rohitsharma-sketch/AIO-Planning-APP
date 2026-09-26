@@ -29,7 +29,43 @@ HISTORY_JSON = os.path.join(CACHE_DIR, "history.json")
 MAX_BODY = 400 * 1024 * 1024
 KB_JSON = os.path.join(HERE, "..", "Listing Delisting", "app", "kb.json")  # Listing / Delisting app's listing history
 # the three ways to revise an existing plan (engine.py); each has its own step-2 file and template
-METHODS = {"listing": "Store listing changes", "dept": "Existing department changes", "newdept": "New or split departments"}
+METHODS = {"listing": "Store listing changes", "dept": "Existing department changes", "newdept": "New or split departments",
+           "shift": "Listing / delisting shifted to a target", "growth": "Growth changes"}
+SALES_JSON = os.path.join(HERE, "..", "Listing Delisting", "app", "sales.json")   # month-wise SL_V, rebuilt by the daily sync
+ATT_MASTER = os.path.join(HERE, "..", "SalesPlan", "Attribute Master", "att master.xlsx")  # DEPARTMENT -> SECTION
+_ref_cache = {}
+
+
+def _cached(path, build):
+    """Read a reference file once; read it again only when the file changes."""
+    try:
+        mt = os.path.getmtime(path)
+    except OSError:
+        return {}
+    hit = _ref_cache.get(path)
+    if not hit or hit[0] != mt:
+        hit = _ref_cache[path] = (mt, build(path))
+    return hit[1]
+
+
+def sections():
+    """Attribute Master (the planning one): department -> section, names normalised like the importer."""
+    def build(path):
+        import pandas as pd
+        am = pd.read_excel(path, engine="calamine")
+        am.columns = [str(c).strip().upper() for c in am.columns]
+        n = lambda x: " ".join(str(x).split()).upper()
+        return {n(d): n(sc) for d, sc in zip(am["DEPARTMENT"], am["SECTION"]) if str(sc).strip() and str(d).strip()}
+    return _cached(ATT_MASTER, build)
+
+
+def last_year():
+    """{(store, dept): {"Sep'25": value in lakhs}} from the Listing app's month-wise sales (SL_V in rupees)."""
+    def build(path):
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)["data"]
+        return {(st, d): {m[:6]: v / 1e5 for m, v in mm.items()} for st, dd in data.items() for d, mm in dd.items()}
+    return _cached(SALES_JSON, build)
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 
@@ -237,6 +273,14 @@ def _check_revised(job, data, name, sheet=None, method="dept"):
         if method == "listing":
             df, info, rep = importer.read_table(data, name, importer.NEED_LISTING, "listing changes", sheet)
             prep = importer.prepare_listing
+        elif method == "shift":
+            df, info, rep = importer.read_table(data, name, importer.NEED_SHIFT, "listing / delisting shift", sheet)
+            sec = sections()
+            prep = lambda df, info, rep, orig, months: importer.prepare_listing(df, info, rep, orig, months, True, sec)
+        elif method == "growth":
+            df, info, rep = importer.read_table(data, name, importer.NEED_GROWTH, "growth changes", sheet)
+            ly = last_year()
+            prep = lambda df, info, rep, orig, months: importer.prepare_growth(df, info, rep, orig, months, ly)
         elif method == "newdept":  # either a split file or a new-department values file
             df, info, rep = importer.read_table(data, name, importer.NEED_SPLIT, "split file", sheet)
             prep = importer.prepare_split
@@ -381,17 +425,23 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(400, {"error": "Load the original plan first."})
             method, kind, dept = q.get("method") or "dept", q.get("kind"), q.get("dept") or None
             sheets = None
-            if method == "listing":
+            if method in ("listing", "shift"):
                 kb = None
                 if kind == "kb":
                     if not os.path.exists(KB_JSON):
                         return self._send(404, {"error": "The Listing / Delisting app's data isn't built yet."})
                     with open(KB_JSON, encoding="utf-8") as fh:
                         kb = json.load(fh)
-                df, skipped = importer.template_listing(o, months, kb)
-                name = "Listing changes - from Listing app.xlsx" if kb else "Listing changes template.xlsx"
+                df, skipped = (importer.template_shift if method == "shift" else importer.template_listing)(o, months, kb)
+                what = "Listing shifts" if method == "shift" else "Listing changes"
+                name = f"{what} - from Listing app.xlsx" if kb else f"{what} template.xlsx"
                 if len(skipped):
                     sheets = [("Listing changes", df), ("Not included", skipped)]
+            elif method == "growth":
+                ly = last_year()
+                if not ly:
+                    return self._send(404, {"error": "Last year's sales (the Listing / Delisting app's sales.json) aren't built yet."})
+                df, name = importer.template_growth(o, months, ly), "Growth changes template.xlsx"
             elif method == "newdept":
                 df, name = ((importer.template_split(), "Department split template.xlsx") if kind == "split"
                             else (importer.template_newdept(months), "New department template.xlsx"))

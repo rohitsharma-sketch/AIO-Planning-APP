@@ -7,6 +7,10 @@ Three ways to revise an existing plan, all ending in the same realign (a revised
   1. store listing changes  - listing_targets(): delisted -> 0, newly listed -> sized from same-cluster peers
   2. existing dept changes  - the buyer's revised values as uploaded
   3. new / split depts      - split_targets() (parent shared out by %), or new-dept values with a COPY FROM dept
+  4. listing shift          - shift_targets(): a delisted dept moves into a chosen dept / section, a listed one comes
+                              out of it - nothing else moves
+  5. growth changes         - growth_targets(): the dept's plan scaled to its new growth over last year
+Every method's output follows the original plan's display-type cont % (verify() checks it).
 
 Per Store x Division x Month the original total is the target. Revised departments keep their new
 value exactly (split to MRP x Display Type by the original cont %); every other department in that
@@ -169,6 +173,106 @@ def split_targets(o, splits, months):
     return r, source
 
 
+def shift_targets(o, changes, months, section_of=None):
+    """Method 4 - listing / delisting shifted to a chosen target -> (revised Store x Dept values, source rows, notes).
+    changes: [{store, dept, listing "Y"/"N", start, values (list or None), target}]; target = a department, or a
+    section (every department of that section the store plans in the same division). Delisted: its value (from
+    `start`, live months) moves into the target, split by the target departments' own value that month. Listed:
+    its value (sized from same-cluster peers as Method 1, or given) comes out of the target only, capped at what
+    the target has. Nothing else moves, so every store x division x month total is unchanged."""
+    section_of = section_of or {}
+    n = len(months)
+    live = ~np.array([m[:3] in FROZEN for m in months])
+    sd = _sd_totals(o, months)
+    div_sd = o.groupby([STORE, DEPT])[DIV].first().to_dict()
+    div_of = o.groupby(DEPT)[DIV].agg(lambda s: s.mode().iat[0]).to_dict()
+    planned = {}
+    for (s, d), v in sd.items():
+        if np.abs(v).sum() > TOL:
+            planned.setdefault(s, set()).add(d)
+    ys = [c for c in changes if c["listing"] == "Y"]
+    sized, source = {}, {}
+    if ys:
+        r1, source, _ = listing_targets(o, ys, months)
+        sized = {(s, d): np.asarray(v, float) for s, d, *v in r1.itertuples(index=False)}
+    target, capped, errors, moved = {}, [], [], 0.0
+    get = lambda k: target.setdefault(k, sd.get(k, np.zeros(n)).copy())
+    for c in changes:
+        s, d, t = c["store"], c["dept"], c["target"]
+        div = div_sd.get((s, d), div_of.get(d))
+        have = planned.get(s, set())
+        tg = [t] if t in have else sorted(x for x in have if section_of.get(x) == t and x != d and div_sd[(s, x)] == div)
+        if not tg:
+            errors.append(f"{s} / {d}: target {t} isn't planned in this store")
+            continue
+        if any(div_sd[(s, x)] != div for x in tg):
+            errors.append(f"{s} / {d}: target {t} is in another division ({div_sd[(s, tg[0])]}) - a shift must stay inside {div}")
+            continue
+        apply = (np.arange(n) >= c["start"]) & live
+        vec = get((s, d))
+        if c["listing"] == "N":
+            add = np.where(apply, vec, 0.0)
+            vec[apply] = 0.0
+        else:
+            want = np.where(apply, sized[(s, d)], 0.0)
+            take = np.minimum(want, np.maximum(sum(get((s, x)) for x in tg), 0.0))
+            if (want - take > 1e-9).any():
+                capped.append(f"{s} / {d}")
+            vec[apply] = take[apply]
+            add = -take
+        cur = np.array([get((s, x)) for x in tg])
+        tot, season = cur.sum(0), cur[:, live].sum(1)
+        w = np.where(np.abs(tot) > TOL, cur / np.where(np.abs(tot) > TOL, tot, 1),
+                     (season / season.sum())[:, None] if season.sum() > TOL else 1.0 / len(tg))
+        for i, x in enumerate(tg):
+            get((s, x))[:] += add * w[i]
+        moved += float(np.abs(add).sum())
+    if errors:
+        raise ValueError("; ".join(errors[:10]) + (" ..." if len(errors) > 10 else ""))
+    r = pd.DataFrame([{STORE: s, DEPT: d, **dict(zip(months, v))} for (s, d), v in target.items()], columns=[STORE, DEPT, *months])
+    return r, source, {"capped": capped, "moved": moved}
+
+
+def ly_label(m):
+    """Plan month -> the same month last year ("Sep'26" -> "Sep'25"); frozen P1/P2 halves have none."""
+    return None if " " in m else f"{m[:4]}{int(m[4:6]) - 1:02d}"
+
+
+def growth_targets(o, rows, months, ly):
+    """Method 5 - growth changes -> (revised Store x Dept values, per-row detail).
+    rows: [{dept, growth (0.12 = 12%), store (None = the department in every store)}]; a store's own row replaces
+    the department row for that store. ly: {(store, dept): {"Sep'25": value in the plan's units}}.
+    Current growth = plan / last year over the live months, on the stores that have both (store-level for a store
+    row); the department's plan in scope is scaled by (1 + new) / (1 + current) in every live month, so its month
+    phasing is kept. The rest of the store x division absorbs it in realign (capped at store x division x month)."""
+    live = [j for j, m in enumerate(months) if m[:3] not in FROZEN and ly_label(m)]
+    sd = _sd_totals(o, months)
+    plan_live = {k: float(v[live].sum()) for k, v in sd.items()}
+    ly_live = lambda s, d: sum(float(ly.get((s, d), {}).get(ly_label(months[j]), 0.0)) for j in live)
+    own = {(x["store"], x["dept"]) for x in rows if x["store"]}
+    out, detail, errors = {}, [], []
+    for x in rows:
+        d = x["dept"]
+        scope = [x["store"]] if x["store"] else [s for (s, dd), v in plan_live.items() if dd == d and abs(v) > TOL and (s, d) not in own]
+        comp = [s for s in scope if plan_live.get((s, d), 0) > TOL and ly_live(s, d) > TOL]
+        p, l = sum(plan_live[(s, d)] for s in comp), sum(ly_live(s, d) for s in comp)
+        if not comp or l <= TOL:
+            errors.append(f"{x['store'] or 'all stores'} / {d}: no last-year sales to grow from")
+            continue
+        cur = p / l - 1
+        f = (1 + x["growth"]) / (1 + cur)
+        for s in scope:
+            v = sd[(s, d)].copy()
+            v[live] *= f
+            out[(s, d)] = v
+        detail.append({"store": x["store"], "dept": d, "stores": len(scope), "comparable": len(comp), "ly": l, "plan": p,
+                       "current": cur, "new": x["growth"], "factor": f})
+    if errors:
+        raise ValueError("; ".join(errors[:10]) + (" ..." if len(errors) > 10 else ""))
+    r = pd.DataFrame([{STORE: s, DEPT: d, **dict(zip(months, v))} for (s, d), v in out.items()], columns=[STORE, DEPT, *months])
+    return r, detail
+
+
 def realign(o, r, months, source=None):
     """o: original rows (numeric cols clean), r: revised Store x Dept values over `months`, source: where a new
     store-dept's rows come from (see add_new_departments).
@@ -325,6 +429,17 @@ def verify(o, r, out, months):
         a = o.set_index(k)[cols]
         fd = float(np.abs(out.set_index(k)[cols].reindex(a.index).fillna(0.0).to_numpy() - a.to_numpy()).max())
         add("Jan / Feb untouched (value and qty)", "ok" if fd < 1e-9 else "fail", f"largest change {fd:.2g}")
+    # user rule for every method: the output follows the ORIGINAL plan's display-type cont % in each
+    # store x department x month that has a plan both before and after
+    k = [STORE, DEPT, DISP]
+    a = o.groupby(k)[V].sum()
+    b = out.groupby(k)[V].sum().reindex(a.index).fillna(0.0)
+    at, bt = a.groupby(level=[0, 1]).transform("sum"), b.groupby(level=[0, 1]).transform("sum")
+    both = (at.abs() > 1e-9) & (bt.abs() > 1e-9)
+    dd = float(np.abs((a / at.where(both, 1) - b / bt.where(both, 1)).where(both, 0.0)).to_numpy().max()) if len(a) else 0.0
+    n_sdm = int(((a.groupby(level=[0, 1]).sum().abs() > 1e-9) & (b.groupby(level=[0, 1]).sum().abs() > 1e-9)).to_numpy().sum())
+    add("Display-type cont % kept as in the original", "ok" if dd < 1e-6 else "fail",
+        f"{n_sdm:,} store-department-months checked · largest share difference {dd:.2g}")
 
     table = []
     rv = r.set_index([STORE, DEPT])

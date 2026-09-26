@@ -28,14 +28,37 @@ const RULES_NOW = [
     "Split: PARENT DEPARTMENT, NEW DEPARTMENT, SHARE % (optional STORE NAME; a store's own row overrides the all-store row). The parent keeps what is not shared out, the new departments take their share with the parent's MRP × display mix and ASPs; nothing else moves. Shares over 100% are refused.",
     "New department: \"&lt;Month&gt; New\" values with COPY FROM (whose MRP × display rows it takes); without it, a new name must start with an existing department's (LW_U_T-TOP F/S).",
   ]],
+  ['Method 4 - listing / delisting shifted to a target', [
+    'One row per change: DEPARTMENT, LISTING (Y / N), TARGET (a department, or a whole section from the Attribute Master, in the same division), optional FROM MONTH and STORE NAME (blank = every store it applies to).',
+    "A delisted department's plan moves <b>only into the target</b>, split by the target departments' own plan that month; a newly listed one (sized like Method 1, or given) is taken <b>only out of the target</b>, capped at what the target has.",
+    'Nothing else moves, so every store × division × month stays exactly as in the original.',
+  ]],
+  ['Method 5 - growth changes', [
+    "DEPARTMENT and NEW GROWTH % over last year, optional STORE NAME (blank = every store; a store's own row overrides). Last year = the month-wise data-lake sales (Listing / Delisting app).",
+    'Current growth = plan ÷ last year over the live months, on the stores with both; the plan is scaled by (1 + new) ÷ (1 + current) in every live month, keeping its month phasing.',
+    'The rest of the same store × division absorbs it (capped at store × division × month); other divisions are not touched. A current growth beyond ±200% is flagged as "last year not comparable".',
+  ]],
+  ['Display-type cont % (every method)', [
+    "The final plan is split to MRP × display rows by the <b>original plan's display-type cont %</b> in every store × department × month; the other departments are scaled as a whole, so theirs is kept too. Every run checks it.",
+  ]],
   ['Checks on every run', [
-    'Recomputed from the output: kept values exact, store × division season and month totals, grand total, Jan / Feb untouched. Any input error blocks the run; warnings and notes are listed with row examples.',
+    'Recomputed from the output: kept values exact, store × division season and month totals, grand total, Jan / Feb untouched, display-type cont % as the original. Any input error blocks the run; warnings and notes are listed with row examples.',
   ]],
 ];
 
 const RULE_LOG = [
   {
-    version: '3.0', date: '2026-09-26', status: 'in force', commit: '15d590e',
+    version: '4.0', date: '2026-09-26', status: 'in force', commit: 'this change',
+    title: 'Method 4 (listing shift to a target), Method 5 (growth changes), display cont % rule for all',
+    changes: [
+      "Method 4: a delisted department's plan moves only into a chosen department or section; a new listing is taken only out of it - nothing else moves, store × division × month unchanged.",
+      "Method 5: a department's new growth over last year (month-wise data-lake sales) scales its plan in every live month; only its own store × division absorbs it, capped at store × division × month.",
+      "All methods: the final plan follows the original plan's display-type cont %; a new check proves it on every run.",
+    ],
+    why: 'User: "Shift will happen to the targeted choice and will only affect the target" / "the change should happen on the target\'s division and not all division" / "The final plan should be generated as per the original display plan cont % … This is for all methods".',
+  },
+  {
+    version: '3.0', date: '2026-09-26', status: 'superseded', commit: '15d590e',
     title: 'Three revision methods; renamed AOP Re-Aligner',
     changes: [
       'Method 1 store listing changes (delist to 0 from a month; new listings sized from same-cluster peers), pre-filled from the Listing / Delisting app.',

@@ -118,6 +118,45 @@ try:
 except ValueError as e:
     assert "more than 100%" in str(e)
 
+# ------------------------------------------------------------------ method 4: listing / delisting shifted to a target
+from engine import growth_targets, shift_targets
+sec = {"B": "SEC1", "C": "SEC1"}
+ch4 = [{"store": "S1", "dept": "D", "listing": "N", "start": 1, "values": None, "target": "B"},      # D -> B from Nov
+       {"store": "S1", "dept": "A", "listing": "N", "start": 0, "values": None, "target": "SEC1"},   # A -> section B + C
+       {"store": "S2", "dept": "C", "listing": "Y", "start": 0, "values": None, "target": "B"},      # C listed out of B
+       {"store": "S3", "dept": "B", "listing": "Y", "start": 0, "values": [50, 0, 0], "target": "A"}]  # wants more than A has
+r4, src4, notes4 = shift_targets(orig, ch4, M, sec)
+v4 = r4.set_index(["Store Name", "DEPARTMENT"])
+assert list(v4.loc[("S1", "D")]) == [40, 0, 40] and list(v4.loc[("S1", "A")]) == [0, 0, 10]
+assert np.allclose(v4.loc[("S1", "B")], [15, 60, 10]) and np.allclose(v4.loc[("S1", "C")], [15, 20, 10])  # +5/+5 Sep, +40 Nov to B
+assert np.allclose(v4.loc[("S2", "C")], [10 / 7, 5, 0]) and np.allclose(v4.loc[("S2", "B")], [5 - 10 / 7, 10, 5])
+assert list(v4.loc[("S3", "B")]) == [8, 0, 0] and list(v4.loc[("S3", "A")]) == [0, 8, 8] and notes4["capped"] == ["S3 / B"]
+out4, _, _, cmp4 = realign(orig, r4, M, src4)
+for st, m in [("S1", "Sep'26"), ("S1", "Nov'26"), ("S2", "Sep'26"), ("S3", "Sep'26")]:   # store x division x month untouched
+    assert np.isclose(out4[out4["Store Name"] == st][m + " Plan"].sum(), orig[orig["Store Name"] == st][m + " Plan"].sum())
+assert not len(cmp4[cmp4["Status"] == "absorbed"])                                         # nothing outside the targets moved
+try:
+    shift_targets(orig, [{"store": "S1", "dept": "D", "listing": "N", "start": 0, "values": None, "target": "ZZ"}], M, sec)
+    raise AssertionError("an unplanned target must fail")
+except ValueError as e:
+    assert "isn't planned" in str(e)
+
+# ------------------------------------------------------------------ method 5: growth vs last year
+ly = {("S1", "B"): {"Sep'25": 5, "Nov'25": 10}, ("S2", "B"): {"Sep'25": 5, "Nov'25": 5}}
+r5, det5 = growth_targets(orig, [{"dept": "B", "store": None, "growth": 0.2}], M, ly)   # now +100% (50 vs 25) -> +20%
+v5 = r5.set_index(["Store Name", "DEPARTMENT"])
+assert np.isclose(det5[0]["current"], 1.0) and np.isclose(det5[0]["factor"], 0.6)
+assert np.allclose(v5.loc[("S1", "B")], [6, 12, 10]) and np.allclose(v5.loc[("S2", "B")], [3, 9, 5])   # Jan frozen
+r5b, _ = growth_targets(orig, [{"dept": "B", "store": None, "growth": 0.2}, {"dept": "B", "store": "S2", "growth": 0.5}], M, ly)
+v5b = r5b.set_index(["Store Name", "DEPARTMENT"])
+assert np.allclose(v5b.loc[("S2", "B")], [3.75, 11.25, 5]) and np.allclose(v5b.loc[("S1", "B")], [6, 12, 10])  # store row wins
+out5, _, _, _ = realign(orig, r5, M)
+assert np.isclose(out5[out5["Store Name"] == "S1"]["Sep'26 Plan"].sum(), 70)                 # capped at store x division
+checks5, _ = verify(orig, r5, out5, M)
+assert {c["name"]: c["status"] for c in checks5}["Display-type cont % kept as in the original"] == "ok"
+checks4, _ = verify(orig, r4, out4, M)
+assert {c["name"]: c["status"] for c in checks4}["Display-type cont % kept as in the original"] == "ok"
+
 # ------------------------------------------------------------------ importer
 
 def xlsx(rows, sheet="Sheet1", extra=None):

@@ -197,8 +197,7 @@ td.frozen,th.frozen{color:var(--muted-foreground)}
 .empty{color:var(--muted-foreground);font-size:13px;padding:6px 0;margin:0}
 
 /* revision method picker (step 2) */
-.methods{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px}
-@media (max-width:760px){.methods{grid-template-columns:1fr}}
+.methods{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:14px}
 .method{text-align:left;font:inherit;color:inherit;cursor:pointer;border:1px solid var(--border);border-radius:var(--radius);background:var(--background);
   padding:11px 13px;display:flex;flex-direction:column;gap:3px;transition:border-color .15s,background .15s}
 .method:hover{border-color:var(--input);background:var(--accent)}
@@ -245,7 +244,7 @@ dialog.rules::backdrop{background:rgba(15,23,42,.45)}
     <div class="logo" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg></div>
     <div class="brand">
       <h1>AOP Re-Aligner</h1>
-      <p>Revise an existing plan three ways — listing changes, department changes, new or split departments — while every store × division stays on the original.</p>
+      <p>Revise an existing plan — listing changes, department changes, new or split departments, shifts to a target, growth — while every store × division stays on the original.</p>
     </div>
     <div class="right"><span id="conn" class="badge b-muted"><span class="dot"></span>Connecting…</span><button class="rules-btn" type="button" onclick="openRules()">Rules <span id="rules-ver"></span></button><a class="home" id="home-link" href="/">&larr; Landing</a></div>
   </div>
@@ -305,8 +304,20 @@ const METHODS = {
     howto: `<b>Split</b> — <code>PARENT DEPARTMENT</code>, <code>NEW DEPARTMENT</code>, <code>SHARE %</code> and an optional <code>STORE NAME</code> (blank = every store; a store's own row overrides). The parent's plan is shared out with its MRP × display mix and ASPs; nothing else moves.
       <b>New department</b> — Store × Department rows with <code>COPY FROM</code> (the department whose MRP / display rows it takes) and “&lt;Month&gt; New” values; the rest of the store × division makes room for it.`,
     run: 'Split: each parent keeps what isn\'t shared out and the new departments take the rest — nothing else moves. New: the new department takes its values and the rest of the store × division makes room.'},
+  shift: {no: 4, title: 'Listing / delisting to a target', short: 'Move a delisted department\'s plan into a chosen department or section — or take a new one out of it.',
+    drop: 'Upload the listing shifts',
+    howto: `One row per change: <code>DEPARTMENT</code>, <code>LISTING</code> (Y / N), <code>TARGET</code> — a department or a whole section (Attribute Master) in the same division — an optional <code>FROM MONTH</code> and an optional <code>STORE NAME</code> (blank = every store it applies to).
+      A <b>delisted</b> department's plan moves <b>only into the target</b>, split by the target departments' own plan that month. A <b>newly listed</b> one (sized from same-cluster stores, or your “&lt;Month&gt; New” figures) is taken <b>only out of the target</b>, capped at what the target has.
+      Nothing else moves, so every store × division × month stays exactly as in the original.`,
+    run: 'Delisted departments move into their target only and new listings come out of their target only — every other department is untouched and every store × division × month stays as the original.'},
+  growth: {no: 5, title: 'Growth changes', short: 'Set a department\'s new growth over last year; the rest of its division re-aligns.',
+    drop: 'Upload the growth changes',
+    howto: `<code>DEPARTMENT</code> and <code>NEW GROWTH %</code> (over last year), optional <code>STORE NAME</code> (blank = the department in every store; a store's own row overrides).
+      Current growth = the plan ÷ last year's sales over the live months, on the stores that have both (last year = the month-wise data-lake export). The department's plan is scaled by (1 + new) ÷ (1 + current) in every live month, keeping its month phasing.
+      The rest of the <b>same store × division</b> re-aligns around it (capped at store × division × month); other divisions are not touched. The template lists every department with its current growth.`,
+    run: 'The target department takes its new growth over last year in every live month; the rest of its own store × division absorbs the change pro-rata — other divisions are untouched.'},
 };
-const RUN_TAIL = ' Jan / Feb are never touched; qty is priced at the original month-wise ASP per Department × MRP × Display Type.';
+const RUN_TAIL = ' Every method splits to MRP × display rows by the original plan\'s display-type cont %; Jan / Feb are never touched; qty is priced at the original month-wise ASP per Department × MRP × Display Type.';
 const method = () => METHODS[S.method] || METHODS.dept;
 const P = {
   upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
@@ -439,6 +450,9 @@ function renderOrig() {
 function templateActions() {
   if (S.method === 'listing') return `<button class="btn btn-outline btn-sm" onclick="template('listing')">${icon('dl')}Blank template</button>${S.listing_app
     ? `<button class="btn btn-outline btn-sm" onclick="template('listing','kb')" title="Every planned department the Listing / Delisting app now shows as delisted, and every listed one with no plan">${icon('dl')}From Listing / Delisting</button>` : ''}`;
+  if (S.method === 'shift') return `<button class="btn btn-outline btn-sm" onclick="template('shift')">${icon('dl')}Blank template</button>${S.listing_app
+    ? `<button class="btn btn-outline btn-sm" onclick="template('shift','kb')" title="The Listing / Delisting app's changes vs this plan, with an empty TARGET column to fill">${icon('dl')}From Listing / Delisting</button>` : ''}`;
+  if (S.method === 'growth') return `<button class="btn btn-outline btn-sm" onclick="template('growth')" title="Every department with its plan, last year's sales and current growth">${icon('dl')}Growth template</button>`;
   if (S.method === 'newdept') return `<button class="btn btn-outline btn-sm" onclick="template('newdept','split')">${icon('dl')}Split template</button>
     <button class="btn btn-outline btn-sm" onclick="template('newdept','new')">${icon('dl')}New-department template</button>`;
   return `<select class="select" id="tpl-dept" aria-label="Department to pre-fill the template with" onchange="tplDept=this.value"><option value="">Blank template</option>${
