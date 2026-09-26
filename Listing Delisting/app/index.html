@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <script>/* suite colour theme - one choice for every app, picked on Landing */(function(){var p=location.port,o=(p==='7800'||p==='8010')?'':'//'+location.hostname+':8010';document.write('<script src="'+o+'/api/suite-theme.js"><\/script>')})()</script>
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Listing / Delisting · RS Planning</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20260926b">
+<link rel="stylesheet" href="style.css?v=20260926c">
 </head>
 <body>
 <div class="appbar">
@@ -15,161 +16,35 @@
     <span class="brand-mark">L/D</span>
     <div class="brand-text">
       <h1>Listing / Delisting Impact Analysis</h1>
-      <p class="subtitle">Store &times; Department listing history, 2023&ndash;2026 &middot; RS Planning &middot; CityKart</p>
+      <p class="subtitle">Store &times; Department listing history &middot; festival- and season-aware suggestions &middot; RS Planning &middot; CityKart</p>
     </div>
     <a class="home" id="home-link" href="/">&larr; Landing</a>
   </header>
   <script>document.getElementById('home-link').href='//'+location.hostname+':7800/';</script>
-
-  <nav class="tabs">
+  <nav class="tabs" role="tablist" aria-label="Views">
     <button class="tab-btn active" data-mode="overview">Overview</button>
-    <button class="tab-btn" data-mode="by-dept">By Department (compare stores)</button>
-    <button class="tab-btn" data-mode="by-store">By Store (compare departments)</button>
+    <button class="tab-btn" data-mode="suggestions">Suggestions</button>
+    <button class="tab-btn" data-mode="by-dept">By Department</button>
+    <button class="tab-btn" data-mode="by-store">By Store</button>
     <button class="tab-btn" data-mode="events">Change Events</button>
-    <button class="tab-btn" data-mode="risk">Delisting Risk</button>
     <button class="tab-btn" data-mode="seasonality">Seasonality</button>
+    <button class="tab-btn" data-mode="data">Data &amp; checks</button>
   </nav>
 </div>
 
-<section class="controls">
-  <label id="dept-picker-wrap">
-    Department:
-    <input id="dept-input" list="dept-list" placeholder="Type to search a department&hellip;">
-    <datalist id="dept-list"></datalist>
-  </label>
-  <label id="store-picker-wrap" hidden>
-    Store:
-    <input id="store-input" list="store-list" placeholder="Type to search a store&hellip;">
-    <datalist id="store-list"></datalist>
-  </label>
-  <span id="grid-legend" class="legend">
-    Sales value, relative to that row:
-    <span class="shade-scale">Low <span class="bar"></span> High</span>
-    &middot; listing status border:
-    <span class="chip y">&nbsp;</span> Listed
-    <span class="chip n">&nbsp;</span> Unlisted
-    <span class="chip dot">&nbsp;</span> No listing data
-  </span>
-</section>
-
-<section id="events-controls" class="controls" hidden>
-  <label>Store:
-    <div class="multiselect" id="store-ms">
-      <button type="button" class="multiselect-toggle" id="store-ms-toggle">All stores</button>
-      <div class="multiselect-panel" id="store-ms-panel" hidden>
-        <input type="text" class="multiselect-search" placeholder="Search stores&hellip;">
-        <div class="multiselect-options"></div>
-      </div>
-    </div>
-  </label>
-  <label>Department:
-    <div class="multiselect" id="dept-ms">
-      <button type="button" class="multiselect-toggle" id="dept-ms-toggle">All departments</button>
-      <div class="multiselect-panel" id="dept-ms-panel" hidden>
-        <input type="text" class="multiselect-search" placeholder="Search departments&hellip;">
-        <div class="multiselect-options"></div>
-      </div>
-    </div>
-  </label>
-  <label>Change:
-    <select id="events-type-filter">
-      <option value="all">All</option>
-      <option value="N">Delisted only</option>
-      <option value="Y">Relisted only</option>
-    </select>
-  </label>
-  <label>Sort:
-    <select id="events-sort">
-      <option value="recent">Most recent</option>
-      <option value="impact">Biggest sales impact</option>
-    </select>
-  </label>
-  <label>Season:
-    <select id="events-season-filter">
-      <option value="all">All</option>
-      <option value="in">In season</option>
-      <option value="off">Off season</option>
-    </select>
-  </label>
-  <label class="checkbox-label">
-    <input type="checkbox" id="events-show-zero-impact">
-    Show zero-impact events (₹0 both before and after)
-  </label>
-</section>
-
-<section id="risk-controls" class="controls" hidden>
-  <label>Search:
-    <input id="risk-search" placeholder="Filter by store or department&hellip;">
-  </label>
-  <label>Severity:
-    <select id="risk-tier-filter">
-      <option value="all">All</option>
-      <option value="High">High</option>
-      <option value="Medium">Medium</option>
-      <option value="Low">Low</option>
-    </select>
-  </label>
-  <span class="legend">
-    Risk = how far a combo's recent in-season months (of the last 3 complete months) have
-    fallen vs. its own prior in-season average, using fixed calendar-month in-season windows
-    per department. An off-season dip is not scored at all &mdash; every row here already
-    involves at least one in-season month, which is why this list doesn't repeat that as a
-    per-row badge. Flagged at 50%+ shortfall. Severity (Low/Medium/High) splits the flagged
-    combos into thirds by score, not fixed cutoffs. See PRD_LOGIC.md for the exact rule.
-  </span>
-</section>
-
-<section id="seasonality-controls" class="controls" hidden>
-  <label>Department:
-    <div class="multiselect" id="season-dept-ss">
-      <button type="button" class="multiselect-toggle" id="season-dept-toggle">Pick a department&hellip;</button>
-      <div class="multiselect-panel" id="season-dept-panel" hidden>
-        <input type="text" class="multiselect-search" placeholder="Search departments&hellip;">
-        <div class="multiselect-options"></div>
-      </div>
-    </div>
-  </label>
-  <span class="legend">
-    Pools each calendar month's sales across all available years to reveal this department's
-    typical yearly pattern &mdash; its best growth window and its weak, delist-candidate months.
-    Full method and caveats in PRD_LOGIC.md.
-  </span>
-</section>
-
-<main id="grid-wrap">
-  <div id="overview-wrap" hidden></div>
-  <p id="status">Loading knowledge base&hellip;</p>
-  <p id="grid-hint" class="hint">Click any row to drill into that store &times; department's monthly trend.</p>
-  <table id="grid"></table>
-  <p id="events-count" class="hint" hidden></p>
-  <table id="events-table" hidden></table>
-  <p id="risk-count" class="hint" hidden></p>
-  <table id="risk-table" hidden></table>
-  <div id="season-wrap" hidden>
-    <p id="season-status" class="hint">Pick a department above to see its seasonality.</p>
-    <div id="season-chart"></div>
-    <div class="season-columns">
-      <div>
-        <h3>Best growth periods <span class="hint">(bank on this window)</span></h3>
-        <table id="season-growth-table"></table>
-      </div>
-      <div>
-        <h3>Historically weak periods <span class="hint">(delist/relist candidates)</span></h3>
-        <table id="season-weak-table"></table>
-      </div>
-    </div>
-  </div>
-</main>
+<main id="view"><p class="muted">Loading the knowledge base&hellip;</p></main>
+<datalist id="dept-list"></datalist>
+<datalist id="store-list"></datalist>
 
 <div id="drill-modal" hidden>
-  <div id="drill-card">
+  <div id="drill-card" role="dialog" aria-modal="true" aria-labelledby="drill-title">
     <button id="drill-close" aria-label="Close">&times;</button>
     <h2 id="drill-title"></h2>
     <p id="drill-sub" class="drill-sub"></p>
-    <div id="drill-chart"></div>
+    <div id="drill-body"></div>
   </div>
 </div>
 
-<script src="app.js?v=20260926b"></script>
+<script src="app.js?v=20260926c"></script>
 </body>
 </html>

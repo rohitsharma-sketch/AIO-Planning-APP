@@ -24,14 +24,27 @@ def planning_session():
     return SessionLocal()
 
 
-def sales_dir():
+FALLBACK_DAYWISE_DIR = (r"\\10.0.1.85\Users\Citykart\Desktop\AI_WORK\INVENTORY AUTOMATION\data_lake\raw"
+                        r"\rs_19_to_26_day_wise_sales_data_compiled")
+
+
+def _source_path(key, fallback):
     try:
         from sqlalchemy import text
         with planning_session() as s:
-            path = s.execute(text(
-                "SELECT config->>'path' FROM sync.sources WHERE source_key = 'data_lake_sales'")).scalar()
+            path = s.execute(text("SELECT config->>'path' FROM sync.sources WHERE source_key = :k"), {"k": key}).scalar()
         if path:
             return path
     except Exception as e:  # DB down / not configured: keep working on the known location
         print(f"[paths] planning DB unavailable ({type(e).__name__}); using the default data-lake path")
-    return FALLBACK_SALES_DIR
+    return fallback
+
+
+def sales_dir():
+    """Month-wise sales export (build_sales.py)."""
+    return _source_path("data_lake_sales", FALLBACK_SALES_DIR)
+
+
+def daywise_dir():
+    """Day-wise sales export - the same folder the core day-weights sync reads (build_daily.py)."""
+    return _source_path("data_lake_day_weights", FALLBACK_DAYWISE_DIR)

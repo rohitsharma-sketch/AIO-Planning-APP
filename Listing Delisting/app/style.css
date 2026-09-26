@@ -124,283 +124,111 @@ header h1 { margin: 0 0 2px; font-size: 22px; font-weight: 700; color: var(--col
 .ov-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
 .ov-empty { color: var(--color-muted-foreground); font-size: 13px; padding: 6px 0; }
 
-.controls {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
+/* --- Revamp (2026-09-26): one control bar, one table style, season-window colours ---------------- */
+:root {
+  --w-in: #B45309; --w-in-bg: #FEF3C7;          /* in-season: warm */
+  --w-off: #475569; --w-off-bg: #E2E8F0;        /* off-season: cool slate - never red / green, those mean listing */
+  --w-normal: var(--st-accent-dark,#3F6453); --w-normal-bg: #E7F0EA;
 }
-.controls input, .controls select {
-  padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  font-size: 14px;
-  font-family: inherit;
-  width: 280px;
-  background: var(--color-card);
-  color: var(--ink);
-}
-.controls select { width: auto; }
-.controls input[type="checkbox"] { width: auto; padding: 0; }
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: normal;
-  cursor: pointer;
-}
-.legend { font-size: 13px; color: var(--color-muted-foreground); margin-left: auto; }
-.shade-scale {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin: 0 8px;
-  font-size: 11px;
-  color: var(--color-muted-foreground);
-  vertical-align: middle;
-}
-.shade-scale .bar {
-  width: 60px;
-  height: 10px;
-  border-radius: 2px;
-  border: 1px solid var(--line);
-  background: linear-gradient(to right, rgba(var(--st-accent-rgb,79,122,102),0.12), rgba(var(--st-accent-rgb,79,122,102),0.87));
-}
-.chip {
-  display: inline-block;
-  width: 18px; height: 14px;
-  border-radius: 2px;
-  text-align: center;
-  font-size: 10px;
-  line-height: 14px;
-  color: #fff;
-  margin-right: 3px;
-}
-.chip.y { background: var(--y); }
-.chip.n { background: var(--n); }
-.chip.dot { background: var(--dot); color: #64748b; }
+.muted { color: var(--color-muted-foreground); }
+.up { color: var(--y); font-weight: 700; }
+.dn { color: var(--n); font-weight: 700; }
+.err { color: var(--n); font-weight: 600; }
+.sub { display: block; font-size: 11px; color: var(--color-muted-foreground); font-weight: 500; white-space: nowrap; }
+td .sub:empty { display: none; }
+.row-label .sub { display: inline; margin-left: 4px; }
+code { font-size: 11.5px; background: var(--color-muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
 
-/* In-season / Off-season badge (2026-09-21 rework): replaces the earlier static 6-category
-   season_category badge. Two colors only now -- the underlying category is still named in the
-   badge's title tooltip, just de-emphasized as the primary label. Same chip shape/convention as
-   before, deliberately not --y/--n so it never reads as listing status. */
-.season-badge {
-  display: inline-block;
-  padding: 1px 7px;
-  border-radius: 10px;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 16px;
-  color: #fff;
-  white-space: nowrap;
-  vertical-align: middle;
-}
-.season-badge.season-in { background: var(--color-primary); }
-.season-badge.season-off { background: var(--dot); color: #334155; }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
+.bar input, .bar select { height: 34px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; font-size: 13.5px;
+  background: var(--color-card); color: var(--ink); }
+.bar input:not([type]) { width: 260px; }
+.bar input[list] { width: 300px; }
+.check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+.btn, .linkish { font: inherit; cursor: pointer; }
+.btn { height: 34px; padding: 0 14px; border-radius: 8px; border: 0; background: var(--btn); color: var(--btn-t); font-weight: 700; font-size: 13px; margin-left: auto; }
+.btn:hover { filter: brightness(.96); }
+.linkish { background: none; border: 0; padding: 0; color: var(--color-primary); font-weight: 700; font-size: inherit; }
+.seg { display: inline-flex; padding: 3px; border-radius: 10px; background: var(--color-muted); gap: 2px; }
+.seg-btn { height: 30px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; font: inherit; font-size: 13px; font-weight: 600;
+  color: var(--color-muted-foreground); cursor: pointer; }
+.seg-btn.on { background: var(--color-card); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.seg-btn b { margin-left: 4px; font-weight: 800; }
+.rule { margin: 0 0 12px; padding: 10px 13px; border-radius: 10px; background: var(--color-card); border: 1px solid var(--line); font-size: 12.8px; line-height: 1.55; max-width: 1200px; }
+.count { margin: 0 0 8px; font-size: 13px; }
+.h2 { margin: 4px 0 10px; font-size: 17px; font-weight: 800; }
 
-/* Risk-severity badge: same chip shape as season-badge, but deliberately a traffic-light
-   green/amber/red family -- this is severity, a genuinely different semantic dimension from
-   season category, and red-for-high-risk is the standard, expected convention here (the
-   red/green-avoidance rule for season-badge was about not colliding with listing-status
-   meaning in the SAME grid cell; this table has no listing-status color to collide with). */
-.risk-badge {
-  display: inline-block;
-  padding: 1px 7px;
-  border-radius: 10px;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 16px;
-  color: #fff;
-  white-space: nowrap;
-  vertical-align: middle;
-  margin-left: 4px;
-}
-.risk-badge.risk-low { background: var(--y); }
-.risk-badge.risk-medium { background: var(--color-accent); }
-.risk-badge.risk-high { background: var(--n); }
+.wchip { display: inline-block; padding: 0 7px; border-radius: 999px; font-size: 10.5px; font-weight: 700; line-height: 17px; white-space: nowrap; vertical-align: 1px; }
+.wchip.w-in { background: var(--w-in-bg); color: var(--w-in); }
+.wchip.w-off { background: var(--w-off-bg); color: var(--w-off); }
+.wchip.w-normal { background: var(--w-normal-bg); color: var(--w-normal); }
+.sug-badge { display: inline-block; margin-left: 5px; padding: 0 6px; border-radius: 5px; font-size: 10px; font-weight: 800; line-height: 16px; vertical-align: 1px; }
+.sug-delist { background: #FDE2E1; color: #B42318; }
+.sug-held { background: var(--w-off-bg); color: var(--w-off); }
+.sug-relist { background: #DCFCE7; color: #166534; }
+.chip { display: inline-block; width: 16px; height: 12px; border-radius: 2px; margin: 0 3px 0 6px; vertical-align: -1px; }
+.chip.y { background: var(--y); } .chip.n { background: var(--n); } .chip.dot { background: var(--dot); }
+.risk-badge { display: inline-block; padding: 0 7px; border-radius: 10px; font-size: 10px; font-weight: 700; line-height: 17px; color: #fff; white-space: nowrap; }
+.risk-badge.risk-low { background: #64748B; } .risk-badge.risk-medium { background: var(--color-accent); } .risk-badge.risk-high { background: var(--n); }
 
-#grid-wrap { overflow-x: auto; }
-#status { color: var(--color-muted-foreground); font-size: 14px; }
-.hint { color: var(--color-muted-foreground); font-size: 12px; margin: 0 0 8px; }
-
-/* Keyboard-visible focus states (mouse users don't see this; :focus-visible skips them) */
-.tab-btn:focus-visible,
-.controls input:focus-visible, .controls select:focus-visible,
-.multiselect-toggle:focus-visible,
-#drill-close:focus-visible,
-#grid tbody tr.drillable:focus-visible, #events-table tbody tr.drillable:focus-visible, #risk-table tbody tr.drillable:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-#grid tbody tr.drillable:hover, #events-table tbody tr.drillable:hover, #risk-table tbody tr.drillable:hover { outline: 2px solid var(--color-secondary); outline-offset: -1px; cursor: pointer; }
-#grid tbody tr.drillable:hover td.row-label, #events-table tbody tr.drillable:hover td.row-label { background: var(--color-muted); }
-
-#grid, #events-table, #risk-table, #season-growth-table, #season-weak-table {
-  border-collapse: collapse;
-  font-size: 11px;
-  white-space: nowrap;
-}
-#grid th, #grid td, #events-table th, #events-table td, #risk-table th, #risk-table td,
-#season-growth-table th, #season-growth-table td, #season-weak-table th, #season-weak-table td {
-  border: 1px solid var(--line);
-  padding: 0;
-}
-#grid th, #events-table th, #risk-table th, #season-growth-table th, #season-weak-table th {
-  background: var(--color-card);
-  color: var(--color-foreground);
-  padding: 4px 6px;
-  font-weight: 600;
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  box-shadow: 0 1px 0 var(--line);
-}
-/* Sortable column headers: click to sort, click again to flip direction (▲/▼ shown in the
-   label itself, added in JS, so it's announced to screen readers as ordinary text). */
+.tbl-wrap { overflow: auto; max-height: 68vh; border: 1px solid var(--line); border-radius: 12px; background: var(--color-card); }
+.tbl-wrap.short { max-height: 300px; }
+.tbl, .grid, .ov-card .tbl-wrap table { border-collapse: collapse; width: 100%; font-size: 12.8px; }
+.tbl th, .grid th, .ov-card .tbl-wrap th { position: sticky; top: 0; z-index: 1; text-align: left; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--color-muted-foreground); background: var(--st-surface-2, #FAF9F6); padding: 7px 9px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.tbl td { padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.tbl td:nth-child(-n+2) { white-space: nowrap; }
+.ov-kpi .val { white-space: nowrap; }
+.tbl th.num, .tbl td.num, .grid th.num, .grid td.num { text-align: right; }
 th.sortable { cursor: pointer; user-select: none; }
-th.sortable:hover { background: var(--color-muted); }
+th.sortable:hover { color: var(--ink); }
 th.sortable.sorted { color: var(--color-primary); }
-#grid th.row-label, #grid td.row-label {
-  position: sticky;
-  left: 0;
-  background: var(--color-card);
-  text-align: left;
-  padding: 4px 8px;
-  z-index: 2;
-  max-width: 260px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-#events-table td, #risk-table td, #season-growth-table td, #season-weak-table td { padding: 4px 8px; }
-#events-table td.num, #risk-table td.num, #season-growth-table td.num, #season-weak-table td.num {
-  text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums;
-}
-#risk-table td:nth-child(3) { color: var(--n); font-weight: 600; font-family: var(--font-mono); }
-#season-growth-table td:nth-child(2) { color: var(--y); font-weight: 600; font-family: var(--font-mono); }
-#season-weak-table td:nth-child(2) { color: var(--n); font-weight: 600; font-family: var(--font-mono); }
+tr.drillable { cursor: pointer; }
+tr.drillable:hover td { background: var(--st-tint-e, #F3F8F5); }
+tr.drillable:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+tr.warnrow td { background: #FFF7ED; }
+.w-cell { font-weight: 600; }
+td.w-cell.w-in { background: var(--w-in-bg); color: var(--w-in); } td.w-cell.w-off { background: var(--w-off-bg); color: var(--w-off); } td.w-cell.w-normal { background: var(--w-normal-bg); color: var(--w-normal); }
 
-#season-chart { margin-bottom: 16px; }
-#season-chart svg { display: block; overflow: visible; font-family: var(--font-mono); }
-.season-columns { display: flex; gap: 24px; flex-wrap: wrap; }
-.season-columns > div { flex: 1 1 360px; min-width: 320px; }
-.season-columns h3 { font-size: 14px; margin: 0 0 8px; color: var(--color-foreground); font-weight: 600; }
-.season-columns h3 .hint { display: inline; font-weight: normal; margin: 0; }
-.season-columns table { width: 100%; }
+/* store x department grid */
+.grid-wrap { max-height: 72vh; }
+.grid { font-size: 11px; width: auto; }
+.grid th { padding: 5px 6px; font-size: 10px; text-transform: none; letter-spacing: 0; border-top: 3px solid transparent; }
+.grid th.wt-in { border-top-color: var(--w-in); } .grid th.wt-off { border-top-color: #94A3B8; } .grid th.wt-normal { border-top-color: var(--w-normal-bg); }
+.grid td { border: 1px solid var(--line); }
+.grid td.cell { min-width: 38px; height: 26px; padding: 0 4px; text-align: center; font-size: 10.5px; color: var(--ink);
+  border-bottom: 4px solid var(--dot); border-top: 3px solid transparent; }
+.grid td.cell.y { border-bottom-color: var(--y); } .grid td.cell.n { border-bottom-color: var(--n); }
+.grid td.cell.wt-in { border-top-color: var(--w-in); } .grid td.cell.wt-off { border-top-color: #94A3B8; }
+.grid .row-label, .grid th.row-label { position: sticky; left: 0; z-index: 2; background: var(--color-card); text-align: left; padding: 4px 8px; max-width: 320px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grid th.row-label { z-index: 3; background: var(--st-surface-2, #FAF9F6); }
+.grid td.tot { padding: 0 8px; font-weight: 700; white-space: nowrap; background: var(--st-surface-2, #FAF9F6); }
 
-.multiselect { position: relative; display: inline-block; }
-.multiselect-toggle {
-  padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--color-card);
-  color: var(--ink);
-  font-size: 14px;
-  font-family: inherit;
-  width: 220px;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 200ms, color 200ms;
-}
-.multiselect-toggle.has-selection { border-color: var(--color-secondary); color: var(--color-primary); font-weight: 500; }
-.multiselect-panel {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  width: 260px;
-  max-height: 320px;
-  background: var(--color-card);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.12);
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-}
-.multiselect-search {
-  margin: 8px;
-  padding: 6px 8px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  font-size: 13px;
-  font-family: inherit;
-}
-.multiselect-options { overflow-y: auto; padding: 0 4px 8px; }
-.multiselect-options label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  font-size: 13px;
-  font-weight: normal;
-  cursor: pointer;
-  white-space: nowrap;
-  border-radius: 4px;
-}
-.multiselect-options label input[type="checkbox"] {
-  margin: 0;
-  flex-shrink: 0;
-  width: 14px;
-  height: 14px;
-}
-.multiselect-options label:hover { background: var(--color-muted); }
-.multiselect-options .no-match { color: var(--color-muted-foreground); padding: 4px 8px; font-size: 13px; }
+/* charts */
+svg .band-in { fill: var(--w-in-bg); opacity: .55; } svg .band-off { fill: var(--w-off-bg); opacity: .5; } svg .band-normal { fill: transparent; }
+svg .bar-in { fill: var(--w-in); opacity: .8; } svg .bar-off { fill: #94A3B8; } svg .bar-normal { fill: var(--color-primary); opacity: .8; }
 
-/* Single-select variant (setupSingleSelect): plain clickable rows, no checkbox. */
-.multiselect-options .option {
-  padding: 4px 8px;
-  font-size: 13px;
-  cursor: pointer;
-  white-space: nowrap;
-  border-radius: 4px;
-}
-.multiselect-options .option:hover { background: var(--color-muted); }
-.multiselect-options .option.selected { background: var(--btn); color: var(--btn-t); }
-#grid td.cell {
-  width: 20px;
-  height: 20px;
-  text-align: center;
-  background: var(--color-card); /* overridden inline per-cell by sales-value shading */
-  border-bottom: 4px solid var(--dot); /* listing status tag */
-}
-#grid td.cell.y { border-bottom-color: var(--y); }
-#grid td.cell.n { border-bottom-color: var(--n); }
-#grid td.cell.dot { border-bottom-color: var(--dot); }
-
-#drill-modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-  padding: 24px;
-}
-#drill-card {
-  background: var(--color-card);
-  border-radius: 8px;
-  padding: 20px 24px;
-  max-width: 960px;
-  width: 100%;
-  max-height: 90vh;
-  overflow: auto;
-  position: relative;
-  box-shadow: 0 10px 40px rgba(15, 23, 42, 0.25);
-}
-#drill-close {
-  position: absolute;
-  top: 12px;
-  right: 16px;
-  border: none;
-  background: none;
-  font-size: 22px;
-  line-height: 1;
-  cursor: pointer;
-  color: var(--color-muted-foreground);
-  transition: color 200ms;
-}
+/* drill-down */
+#drill-modal { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.5); display: flex; align-items: center; justify-content: center; z-index: 10; padding: 24px; }
+#drill-card { background: var(--color-card); border-radius: 12px; padding: 20px 24px; max-width: 980px; width: 100%; max-height: 92vh; overflow: auto; position: relative;
+  box-shadow: 0 10px 40px rgba(15, 23, 42, 0.25); }
+#drill-close { position: absolute; top: 12px; right: 16px; border: none; background: none; font-size: 22px; line-height: 1; cursor: pointer; color: var(--color-muted-foreground); }
 #drill-close:hover { color: var(--ink); }
-#drill-title { margin: 0 32px 8px 0; font-size: 17px; color: var(--color-foreground); font-weight: 600; }
-#drill-chart svg { display: block; overflow: visible; font-family: var(--font-mono); }
+#drill-title { margin: 0 32px 8px 0; font-size: 17px; font-weight: 800; }
+#drill-body svg { display: block; overflow: visible; }
+.why { margin-top: 14px; padding: 12px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--st-surface-2, #FAF9F6); font-size: 13px; line-height: 1.55; }
+.why h3 { margin: 0 0 6px; font-size: 14px; font-weight: 800; }
+.why ol { margin: 0; padding-left: 20px; }
+.why li { margin: 4px 0; }
+.mini { border-collapse: collapse; margin: 6px 0; font-size: 12px; background: var(--color-card); }
+.mini th, .mini td { padding: 4px 9px; border: 1px solid var(--line); text-align: left; }
+.mini .num { text-align: right; }
+.mini tr.tot td { font-weight: 800; }
+.src { margin: 10px 0 0; font-size: 11.5px; color: var(--color-muted-foreground); }
+.tab-btn:focus-visible, .bar input:focus-visible, .bar select:focus-visible, .btn:focus-visible, .seg-btn:focus-visible, #drill-close:focus-visible {
+  outline: 2px solid var(--color-primary); outline-offset: 2px; }
+@media (max-width: 700px) {
+  body { padding: 16px; } .appbar { margin: -16px -16px 16px; padding: 16px 16px 0; }
+  .bar input:not([type]), .bar input[list] { width: 100%; } .btn { margin-left: 0; } .tabs { overflow-x: auto; }
+}

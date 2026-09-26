@@ -333,3 +333,17 @@ with their previous listing histories tagged, using simplistic graphical notions
   KPIs and "See all" jump to the full tab. Delists/relists exclude zero-sales flag flips — the
   Change Events default — so both views agree (Aug'26: 276 + 456 = 732 on both). No data-file
   changes.
+- **2026-09-26 (all tabs revamped)** — User: "revamp the other existing tabs also to a more high functional
+  tab easier to understand". app.js rewritten around one control bar per tab (native inputs / selects /
+  datalists; the custom multiselect widgets are gone) and one table style. Tabs: Overview (KPIs incl.
+  delist / relist / held, "Season windows now" per category, by-division incl. suggestions, top delist /
+  relist, listing over time), **Suggestions** (replaces Delisting Risk: Delist / Relist / Held switch,
+  search + division + season category + cluster + severity filters, sortable, CSV export; every row opens a
+  "Why" trace with the window dates, trading days, sales, each benchmark year, peers and the festival
+  windows removed), By Department / By Store (₹ in cells or shading only, last-12-month totals, order by
+  total / latest / A-Z, cluster or division + category filters, top border = season window, suggestion
+  badges), Change Events (window at the change, division filter, ₹ totals, CSV, header sort only),
+  Seasonality (festival-free ₹ per store-day by month vs its own window benchmark, festival lift table),
+  new **Data & checks** (every source file with rows and dates, the rules in force, the day-wise vs
+  month-wise reconciliation, the category window index, all festival windows by cluster / year). Drill-down
+  chart shades each month by its season window. Reads kb / sales / windows / suggestions / stores.json.

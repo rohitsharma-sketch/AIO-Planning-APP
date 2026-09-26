@@ -23,8 +23,11 @@ from sync.common import sync_run
 
 SOURCE_KEY = "listing_delisting"
 APP_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "Listing Delisting"))
+# build_daily.py (store x dept x DAY cache, rebuilt only when a newer day-wise export lands) and
+# build_suggestions.py (festival / season windows + like-for-like delist & relist, 2026-09-26) replace
+# the old month-level build_risk_scores.py.
 STEPS = ["build_knowledge_base.py", "build_sales.py", "build_seasonality.py",
-         "build_season_category.py", "build_risk_scores.py", "build_stores.py"]
+         "build_season_category.py", "build_stores.py", "build_daily.py", "build_suggestions.py"]  # suggestions read stores.json
 _ready = False
 
 

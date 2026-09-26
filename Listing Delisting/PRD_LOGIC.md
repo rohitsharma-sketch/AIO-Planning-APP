@@ -515,3 +515,33 @@ mean (109.6%) precisely because there's no outlier to correct for.
   data-lake sync (`Tentative AOP Forecaster/sync/listing_delisting_sync.py`, ~3 min), visible in
   Landing's Data sync panel. First rebuild: kb / sales / seasonality identical to the previous
   files, risk identical except its date (4,093 of 61,257 flagged).
+- **2026-09-26 (festival- and season-aware suggestions; replaces the risk score)** — User: "rebuild the
+  delisting relisting suggestions around seasonality complexes of in season and off season windows so
+  that no attribute can be having a suggestion which is either driven by some festive period or some
+  other surge … every window … should be having their own benchmark … analysed on the basis of calendar
+  dates … data should be accurate and bound to omnisource". `build_risk_scores.py` / `risk.json` are
+  retired. New: (1) `scripts/build_daily.py` -> `data/listing/cache/daily.parquet`: store x department x
+  DAY SL_V from the day-wise data-lake export (source `sync.sources['data_lake_day_weights']`, the same
+  folder the core day-weights sync reads), 2022-01-01 on, apparel scope, rebuilt only when a newer
+  export lands; file name / rows / dates kept in the parquet metadata (first build: 87,295,920 rows ->
+  15,702,541 store-dept-days, 2022-01-01 to 2026-08-27, 101 s). Reconciles with the month-wise export to
+  0.00% for most months (Nov'23 -1.37%, Sep'25 -1.81%; Aug'26 partial). (2) `scripts/build_suggestions.py`
+  -> `app/windows.json` + `app/suggestions.json`: festival days per store on DATES = Calendar app Festival
+  Master (`calendar.cluster_profile_festivals` Pre/Core/Post per cluster) on each year's
+  `calendar.festival_reference_dates` (Bihu 14 April if missing), store -> cluster from
+  `calendar.store_calendar_clusters` (unmapped store: every cluster's festival days). Rates = SL_V per
+  festival-free open store-day ("open" = the store sold anything that day). Season windows per season
+  category from the festival-free chain index 2022-2025: in-season >= 1.15, off-season <= 0.85, else normal
+  (summer in Mar-Aug, off Sep-Feb; light winter in Oct-Jan; heavy winter Nov-Jan; pre-winter Sep-Nov;
+  occasional in Apr-May + Oct). Delist = listed through the latest window run (21-90 days) at <= 50% of
+  its own rate on the SAME dates in earlier years it sold, and <= 60% of its cluster peers' change (>= 3
+  peers, else all stores); a window counts only if the store traded >= 70% of its festival-free days AND
+  had been open >= 12 months before it began (no launch surges); benchmark >= Rs 2,000/month; severity by
+  own ratio (<= 20% High, <= 35% Medium, else Low). Off-season reads with the in-season <= 75 days away are
+  HELD, not suggested. Relist = delisted now, in-season / normal window starting <= 75 days, last time in
+  that window (mature store, >= 70% trading) it sold >= 80% of its cluster peers' median; expected = own
+  rate x festival-free days + festival days x the department's festival lift. Every row carries its dates,
+  days, sums and years; independently recomputed from daily.parquet to the rupee. First run (anchor 27 Aug
+  2026): 41,945 listed -> 12,647 with a clean mature benchmark -> 329 delist (145 High), 335 held, 115
+  relist. Per-department window benchmarks + festival lift also in windows.json. Pipeline order now
+  KB -> sales -> seasonality -> season category -> stores -> daily -> suggestions (~3-4 min).
