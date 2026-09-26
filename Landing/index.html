@@ -322,6 +322,26 @@
   .lm-empty-icon { color: var(--accent); margin-bottom: 10px; line-height: 1; }
   .lm-empty-icon svg { width: 36px; height: 36px; }
   .lm-empty p { font-size: 14px; }
+
+  /* Suite-app frame for the Lagan Calendar (user, 2026-09-26): same header row, brand mark,
+     close pill, white control bar and card radii as NSO / Realigner / Listing. */
+  .lagan-modal { max-width: 1040px; border-radius: 14px; font-variant-numeric: tabular-nums; }
+  .lm-hdr { padding: 16px 22px 14px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .lm-hdr-top { margin-bottom: 12px; gap: 12px; }
+  .lm-brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+  .lm-mark { width: 32px; height: 32px; border-radius: 9px; flex: none; display: flex; align-items: center; justify-content: center;
+    background: var(--st-btn,#A8CBB7); color: var(--st-btn-text,#1F4D3A); font-size: 11px; font-weight: 800; letter-spacing: .02em; }
+  .lm-logo { font-size: 15px; line-height: 1.2; }
+  .lm-sub { margin: 2px 0 0; font-size: 12px; color: rgba(255,255,255,.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lm-close { flex: none; width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+    font-size: 13px; color: #fff; border-radius: 999px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.18); }
+  .lm-close:hover { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.3); }
+  .lm-ctrl { background: var(--white); padding: 12px 22px; }
+  .lm-content { padding: 22px; }
+  .lm-yr-num { font-size: 24px; }
+  .lm-mo-card, .lm-tbl-wrap, .lm-method-note { box-shadow: var(--shadow-sm); }
+  .lm-mo-card, .lm-tbl-wrap { border-radius: 12px; }
+  @media (max-width: 620px) { .lm-sub { display: none; } .lm-hdr, .lm-ctrl, .lm-content { padding-left: 16px; padding-right: 16px; } }
 </style>
 </head>
 <body>
@@ -478,7 +498,13 @@
     <div class="lagan-modal" id="lagan-modal" role="dialog" aria-modal="true" aria-label="Lagan Calendar">
       <div class="lm-hdr">
         <div class="lm-hdr-top">
-          <h2 class="lm-logo">Lagan <em>Calendar</em></h2>
+          <div class="lm-brand">
+            <span class="lm-mark" aria-hidden="true">LC</span>
+            <div>
+              <h2 class="lm-logo">Lagan Calendar</h2>
+              <p class="lm-sub">Auspicious dates 2000&#x2013;2030 &#xB7; Drik astronomical method &#xB7; RS Planning &#xB7; CityKart</p>
+            </div>
+          </div>
           <button class="lm-close" id="lagan-modal-close" type="button" aria-label="Close">&#x2715;</button>
         </div>
         <div class="lm-hdr-row">
