@@ -143,8 +143,19 @@ function PlanSnapshot() {
   )
 }
 
+const FOLD_KEY = 'sp.nav.collapsed'
+
 export default function Sidebar() {
   const location = useLocation()
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(FOLD_KEY) || '[]')) } catch { return new Set() }
+  })
+  const toggleFold = label => setCollapsed(prev => {
+    const next = new Set(prev)
+    next.has(label) ? next.delete(label) : next.add(label)
+    try { localStorage.setItem(FOLD_KEY, JSON.stringify([...next])) } catch { /* storage blocked */ }
+    return next
+  })
 
   return (
     <div style={{
@@ -189,9 +200,16 @@ export default function Sidebar() {
 
           if (item.subItems) {
             const isParentActive = location.pathname.startsWith(item.to)
+            const open = !collapsed.has(item.label)
             return (
               <div key={item.label}>
-                <div style={{
+                <div role="button" tabIndex={0} aria-expanded={open}
+                  title={open ? 'Collapse' : 'Expand'}
+                  onClick={() => toggleFold(item.label)}
+                  onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), toggleFold(item.label))}
+                  className="sp-navlink"
+                  style={{
+                  position: 'relative',
                   display: 'flex', alignItems: 'center', gap: 10,
                   padding: '9px 18px',
                   color: isParentActive ? theme.sidebarText : 'rgba(255,255,255,0.72)',
@@ -199,12 +217,18 @@ export default function Sidebar() {
                   fontSize: 13.5, fontWeight: isParentActive ? 700 : 500,
                   borderLeft: '3px solid transparent',
                   marginTop: 6,
-                  userSelect: 'none',
+                  userSelect: 'none', cursor: 'pointer',
                 }}>
+                  {/* chevron sits in the left padding so icons stay aligned with Home / Sales Sync */}
+                  <span aria-hidden style={{
+                    position: 'absolute', left: 3, top: '50%', fontSize: 9, lineHeight: 1,
+                    color: 'rgba(255,255,255,0.55)', transition: 'transform 0.15s',
+                    transform: `translateY(-50%) rotate(${open ? 90 : 0}deg)`,
+                  }}>▶</span>
                   <Icon name={item.icon} />
                   {item.label}
                 </div>
-                {item.subItems.map(sub => sub.soon ? (
+                {open && item.subItems.map(sub => sub.soon ? (
                   <div key={sub.to} style={{
                     display: 'flex', alignItems: 'center',
                     paddingLeft: 36, paddingRight: 20, paddingTop: 7, paddingBottom: 7,
