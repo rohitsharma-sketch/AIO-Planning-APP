@@ -27,6 +27,9 @@ ORIG_PKL = os.path.join(CACHE_DIR, "original.pkl")
 TIMINGS_JSON = os.path.join(CACHE_DIR, "timings.json")
 HISTORY_JSON = os.path.join(CACHE_DIR, "history.json")
 MAX_BODY = 400 * 1024 * 1024
+KB_JSON = os.path.join(HERE, "..", "Listing Delisting", "app", "kb.json")  # Listing / Delisting app's listing history
+# the three ways to revise an existing plan (engine.py); each has its own step-2 file and template
+METHODS = {"listing": "Store listing changes", "dept": "Existing department changes", "newdept": "New or split departments"}
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 
@@ -168,6 +171,7 @@ def _run(job, fn, args):
 NO_RESULT = {"result": None, "out": None, "compare": None, "summary": None, "exports": {}}
 state = {"orig": None, "months": [], "orig_info": None, "orig_report": [], "orig_failed": None,
          "rev": None, "rev_months": [], "rev_info": None, "rev_report": [], "rev_upload": None, "orig_upload": None,
+         "rev_source": {}, "method": "dept",
          **NO_RESULT}
 lock = threading.RLock()
 
@@ -177,6 +181,8 @@ if os.path.exists(ORIG_PKL):
             saved = pickle.load(fh)
         if isinstance(saved, tuple):  # cache written by the previous version: (df, months, meta)
             df, months, meta = saved
+            for c in (STORE, DEPT, engine.DIV, engine.DISP):  # the old reader kept double spaces; today's importer collapses them
+                df[c] = df[c].astype(str).str.replace(r"\s+", " ", regex=True).str.strip()
             saved = {"df": df, "months": months, "report": [], "info": {
                 "name": urllib.parse.unquote(meta.get("name", "original plan")), "loaded_at": meta.get("loaded_at"),
                 "rows": len(df), "stores": int(df[STORE].nunique()), "departments": int(df[DEPT].nunique()),
@@ -218,40 +224,60 @@ def job_original(job, data, name, sheet=None):
             _check_revised(job, *rev)
 
 
-def job_revised(job, data, name, sheet=None):
-    _check_revised(job, data, name, sheet)
+def job_revised(job, data, name, sheet=None, method="dept"):
+    _check_revised(job, data, name, sheet, method)
 
 
-def _check_revised(job, data, name, sheet=None):
+def _check_revised(job, data, name, sheet=None, method="dept"):
     with lock:
         orig, months = state["orig"], state["months"]
     if orig is None:
         raise UserError("Load the original plan first (step 1).")
-    with job.step("Read revised plan", "read:revised", len(data)):
-        df, info, rep = importer.read_table(data, name, importer.NEED_REVISED, "revised plan", sheet)
-    r, use = None, []
+    with job.step("Read the file", "read:revised", len(data)):
+        if method == "listing":
+            df, info, rep = importer.read_table(data, name, importer.NEED_LISTING, "listing changes", sheet)
+            prep = importer.prepare_listing
+        elif method == "newdept":  # either a split file or a new-department values file
+            df, info, rep = importer.read_table(data, name, importer.NEED_SPLIT, "split file", sheet)
+            prep = importer.prepare_split
+            if df is None:
+                df, info, rep2 = importer.read_table(data, name, importer.NEED_REVISED, "new-department file", sheet)
+                prep = importer.prepare_revised
+                if df is None:
+                    rep.error("Method 3 takes a split file (PARENT DEPARTMENT, NEW DEPARTMENT, SHARE %) or a new-department "
+                              "file (STORE NAME, DEPARTMENT, COPY FROM, '<Month> New') - this is neither.")
+                else:
+                    rep = rep2
+        else:
+            df, info, rep = importer.read_table(data, name, importer.NEED_REVISED, "revised plan", sheet)
+            prep = importer.prepare_revised
+    r, use, source = None, [], {}
     if df is not None:
         with job.step("Check against the original", "check:revised", len(orig)):
-            r, use, info, rep = importer.prepare_revised(df, info, rep, orig, months)
-    info.update(name=name, loaded_at=stamp())
+            r, use, source, info, rep = prep(df, info, rep, orig, months)
+    info.update(name=name, loaded_at=stamp(), method=method)
     with lock:
-        state.update(rev=r if rep.ok else None, rev_months=use if rep.ok else [], rev_info=info,
-                     rev_report=rep.items, rev_upload=(data, name, sheet), **NO_RESULT)
+        state.update(rev=r if rep.ok else None, rev_months=use if rep.ok else [], rev_info=info, rev_source=source if rep.ok else {},
+                     rev_report=rep.items, rev_upload=(data, name, sheet, method), **NO_RESULT)
     if not rep.ok:
         _fail(rep, name)
 
 
 def job_run(job):
     with lock:
-        o, r, months = state["orig"], state["rev"], state["months"]
+        o, r, months, source = state["orig"], state["rev"], state["months"], state["rev_source"]
+        method = (state["rev_info"] or {}).get("method", "dept")
         names = (state["orig_info"] or {}).get("name"), (state["rev_info"] or {}).get("name")
     if o is None or r is None:
         raise UserError("Load a valid original plan (step 1) and revised plan (step 2) first.")
     with job.step("Realign", "realign", len(o)):
-        out, summ, warn, compare = engine.realign(o, r, months)
+        try:
+            out, summ, warn, compare = engine.realign(o, r, months, source)
+        except ValueError as e:
+            raise UserError(str(e))
     with job.step("Verify totals", "verify", len(o)):
         checks, dept_table = engine.verify(o, r, out, months)
-    res = {"id": job.id, "finished_at": stamp(), "secs": round(job.elapsed(), 1), "original": names[0], "revised": names[1],
+    res = {"id": job.id, "method": method, "finished_at": stamp(), "secs": round(job.elapsed(), 1), "original": names[0], "revised": names[1],
            "rows": len(out), "changed_rows": len(compare), "summary": summ, "warnings": warn,
            "checks": checks, "dept_table": dept_table,
            "status_counts": compare["Status"].value_counts().to_dict() if len(compare) else {}}
@@ -307,6 +333,7 @@ def public_state():
                                       "report": s["rev_report"], "ok": s["rev"] is not None},
         "result": res, "exports": exports, "jobs": live, "history": hist, "estimates": est,
         "departments": sorted(o[DEPT].unique().tolist()) if o is not None else [],
+        "method": s["method"], "listing_app": os.path.exists(KB_JSON),
     }
 
 
@@ -349,10 +376,26 @@ class Handler(BaseHTTPRequestHandler):
                 o, months = state["orig"], state["months"]
             if o is None:
                 return self._send(400, {"error": "Load the original plan first."})
-            dept = q.get("dept") or None
-            df = importer.template(o, months, dept)
-            name = f"Revised plan template - {dept}.xlsx" if dept else "Revised plan template.xlsx"
-            return self._send(200, engine.write_xlsx([("Revised plan", df)]), engine.XLSX_CTYPE,
+            method, kind, dept = q.get("method") or "dept", q.get("kind"), q.get("dept") or None
+            sheets = None
+            if method == "listing":
+                kb = None
+                if kind == "kb":
+                    if not os.path.exists(KB_JSON):
+                        return self._send(404, {"error": "The Listing / Delisting app's data isn't built yet."})
+                    with open(KB_JSON, encoding="utf-8") as fh:
+                        kb = json.load(fh)
+                df, skipped = importer.template_listing(o, months, kb)
+                name = "Listing changes - from Listing app.xlsx" if kb else "Listing changes template.xlsx"
+                if len(skipped):
+                    sheets = [("Listing changes", df), ("Not included", skipped)]
+            elif method == "newdept":
+                df, name = ((importer.template_split(), "Department split template.xlsx") if kind == "split"
+                            else (importer.template_newdept(months), "New department template.xlsx"))
+            else:
+                df = importer.template(o, months, dept)
+                name = f"Revised plan template - {dept}.xlsx" if dept else "Revised plan template.xlsx"
+            return self._send(200, engine.write_xlsx(sheets or [("Revised plan", df)]), engine.XLSX_CTYPE,
                               {"Content-Disposition": f'attachment; filename="{name.replace("/", "-")}"'})
         self._send(404, {"error": "not found"})
 
@@ -364,27 +407,37 @@ class Handler(BaseHTTPRequestHandler):
         data = self.rfile.read(n) if n else b""
         name = urllib.parse.unquote(self.headers.get("X-File-Name", "upload.xlsx"))
         try:
+            method = q.get("method") or state["method"]
+            if method not in METHODS:
+                raise UserError("Unknown revision method.")
             if path == "/api/original":
                 job = start_job("data", "original", "Loading original plan", job_original, data, name)
             elif path == "/api/revised":
-                job = start_job("data", "revised", "Checking revised plan", job_revised, data, name)
+                job = start_job("data", "revised", f"Checking {METHODS[method].lower()}", job_revised, data, name, None, method)
             elif path == "/api/sheet":  # re-read the last upload of a slot from a different sheet
                 with lock:
                     up = state["orig_upload" if q.get("slot") == "original" else "rev_upload"]
                 if not up:
                     raise UserError("Upload the file again to choose a sheet.")
-                fn, label = (job_original, "Loading original plan") if q.get("slot") == "original" else (job_revised, "Checking revised plan")
-                job = start_job("data", q.get("slot"), label, fn, up[0], up[1], q.get("sheet"))
+                if q.get("slot") == "original":
+                    job = start_job("data", "original", "Loading original plan", job_original, up[0], up[1], q.get("sheet"))
+                else:
+                    job = start_job("data", "revised", f"Checking {METHODS[up[3]].lower()}", job_revised, up[0], up[1], q.get("sheet"), up[3])
             elif path == "/api/original/dismiss":  # hide a failed-upload notice
                 with lock:
                     state.update(orig_failed=None, orig_upload=None)
                 return self._send(200, {"ok": True})
-            elif path == "/api/revised/clear":
+            elif path in ("/api/revised/clear", "/api/method"):  # switching method drops the other method's file
+                with jobs_lock:
+                    if any(j.group == "data" and j.status == "running" for j in jobs.values()):
+                        raise UserError("Please wait for the current step to finish.")
                 with lock:
-                    state.update(rev=None, rev_months=[], rev_info=None, rev_report=[], rev_upload=None, **NO_RESULT)
+                    if path == "/api/method":
+                        state["method"] = method
+                    state.update(rev=None, rev_months=[], rev_info=None, rev_report=[], rev_upload=None, rev_source={}, **NO_RESULT)
                 return self._send(200, {"ok": True})
             elif path == "/api/run":
-                job = start_job("data", "run", "Realigning", job_run)
+                job = start_job("data", "run", f"Realigning · {METHODS[method].lower()}", job_run)
             elif path == "/api/export":
                 kind, fmt = q.get("type"), q.get("fmt")
                 if kind not in EXPORTS or fmt not in ("xlsx", "csv"):
@@ -402,5 +455,5 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print(f"AOP Realigner on http://localhost:{PORT}")
+    print(f"AOP Re-Aligner on http://localhost:{PORT}")
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()   # loopback only - via Landing /realigner/

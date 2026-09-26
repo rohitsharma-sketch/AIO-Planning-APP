@@ -3,7 +3,7 @@ import io
 import numpy as np
 import pandas as pd
 import importer
-from engine import realign, verify
+from engine import listing_targets, realign, split_targets, verify
 
 # ------------------------------------------------------------------ engine
 
@@ -76,6 +76,48 @@ assert status["Store × Division totals match — each month"] == "warn"   # S2'
 assert status["Jan / Feb untouched (value and qty)"] == "ok"
 assert [t["dept"] for t in table] == ["A", "A F/S"] and np.isclose(table[0]["months"][0]["revised"], 37)
 
+# ------------------------------------------------------------------ method 1: store listing changes
+o1 = orig.assign(CLUSTER=orig["Store Name"].map({"S1": "X", "S2": "X", "S3": "Y"}), **{"REF Name": "R-" + orig["Store Name"]})
+changes = [{"store": "S1", "dept": "D", "listing": "N", "start": 1, "values": None},   # delisted from Nov
+           {"store": "S2", "dept": "C", "listing": "Y", "start": 0, "values": None}]   # newly listed, sized from S1
+r1, src1, counts = listing_targets(o1, changes, M)
+assert src1 == {("S2", "C"): ("S1", "C")} and counts == {"delisted": 1, "estimated": 1, "given": 0}
+rv = r1.set_index(["Store Name", "DEPARTMENT"])
+assert list(rv.loc[("S1", "D")]) == [40, 0, 40]                    # Sep before FROM, Jan frozen
+assert np.allclose(rv.loc[("S2", "C")], [10 * 10 / 70, 20 * 20 / 80, 0])  # C's share of LADIES in S1 x S2's LADIES
+out1, _, warn1, _ = realign(o1, r1, M, src1)
+g1 = lambda s, d, m, col=" Plan": out1[(out1["Store Name"] == s) & (out1.DEPARTMENT == d)][m + col].sum()
+assert g1("S1", "D", "Nov'26") == 0 and np.isclose(g1("S1", "D", "Sep'26"), 40)
+assert np.isclose(out1[out1["Store Name"] == "S1"]["Nov'26 Plan"].sum(), 80)   # the rest of S1 LADIES absorbed D
+assert np.isclose(g1("S2", "C", "Sep'26"), 10 / 7) and np.isclose(out1[out1["Store Name"] == "S2"]["Sep'26 Plan"].sum(), 10)
+cl = out1[(out1["Store Name"] == "S2") & (out1.DEPARTMENT == "C")]
+assert list(cl["REF Name"]) == ["R-S2"] and list(cl["CLUSTER"]) == ["X"]      # borrowed rows take the new store's own tags
+assert np.isclose(g1("S2", "C", "Nov'26", " Plan Qty"), 5 / 2)                 # priced at C's own Nov ASP
+try:
+    listing_targets(o1, [{"store": "S1", "dept": "NOPE", "listing": "Y", "start": 0, "values": None}], M)
+    raise AssertionError("a listing nobody plans must fail")
+except ValueError as e:
+    assert "Method 3" in str(e)
+
+# ------------------------------------------------------------------ method 3: split an existing department
+splits = [{"parent": "B", "child": "B H/S", "share": 0.4, "store": None},
+          {"parent": "B", "child": "B H/S", "share": 1.0, "store": "S2"}]  # S2: B moves entirely
+r3, src3 = split_targets(orig, splits, M)
+assert src3 == {("S1", "B H/S"): ("S1", "B"), ("S2", "B H/S"): ("S2", "B")}
+out3, _, _, cmp3 = realign(orig, r3, M, src3)
+g3 = lambda s, d, m, col=" Plan": out3[(out3["Store Name"] == s) & (out3.DEPARTMENT == d)][m + col].sum()
+assert np.isclose(g3("S1", "B", "Sep'26"), 6) and np.isclose(g3("S1", "B H/S", "Sep'26"), 4)
+assert np.isclose(g3("S1", "B", "Jan'27 P1"), 10) and g3("S1", "B H/S", "Jan'27 P1") == 0    # Jan stays on the parent
+assert g3("S2", "B", "Nov'26") == 0 and np.isclose(g3("S2", "B H/S", "Nov'26"), 15)
+assert np.isclose(g3("S1", "B H/S", "Sep'26", " Plan Qty"), 2)                 # parent's ASP (B/299/TABLE Sep = 2)
+assert set(cmp3["DEPARTMENT"]) == {"B", "B H/S"}                             # nothing else moved
+try:
+    split_targets(orig, [{"parent": "B", "child": "X", "share": 0.7, "store": None},
+                         {"parent": "B", "child": "Y", "share": 0.5, "store": None}], M)
+    raise AssertionError("shares over 100% must fail")
+except ValueError as e:
+    assert "more than 100%" in str(e)
+
 # ------------------------------------------------------------------ importer
 
 def xlsx(rows, sheet="Sheet1", extra=None):
@@ -114,32 +156,78 @@ assert not rep.ok and "missing DIVISION, MRP, DISPLAY TYPE" in rep.first_error()
 
 def load_rev(data, name="rev.xlsx"):
     df, info, rep = importer.read_table(data, name, importer.NEED_REVISED, "revised plan")
-    return importer.prepare_revised(df, info, rep, o_df, o_months) if df is not None else (None, [], info, rep)
+    return importer.prepare_revised(df, info, rep, o_df, o_months) if df is not None else (None, [], {}, info, rep)
 
 # a revised plan dropped into the original slot
 _, _, rep = importer.read_table(xlsx([["Store Name", "Department", "Sep'26 New"], ["S1", "A", 1]]), "x.xlsx", importer.NEED_ORIGINAL, "original plan")
 assert not rep.ok and "looks like a revised plan" in rep.first_error()
 
 # a full plan dropped into the revised slot
-_, _, _, rep = load_rev(xlsx(o_rows))
+_, _, _, _, rep = load_rev(xlsx(o_rows))
 assert not rep.ok and "looks like a full plan" in rep.first_error()
 
 # good revised (CSV, semicolons): new dept with parent, unchanged Jan, preview numbers
-r, use, info, rep = load_rev("Store Name;Dept;Sep'26 New;Jan'27 P1 New;TTL Val TY New\ns1;A;1200;5;1205\nS1;A F/S;50;0;50\n".encode(), "rev.csv")
+r, use, src, info, rep = load_rev("Store Name;Dept;Sep'26 New;Jan'27 P1 New;TTL Val TY New\ns1;A;1200;5;1205\nS1;A F/S;50;0;50\n".encode(), "rev.csv")
 assert rep.ok, rep.items
 assert not any("aren't months" in i["msg"] for i in rep.items)  # a totals column ending in "New" is not a month
 assert use == ["Sep'26", "Jan'27 P1"] and list(r["DEPARTMENT"]) == ["A", "A F/S"]
 assert any("New department A F/S" in i["msg"] for i in rep.items)
 pv = info["preview"]["rows"]
-assert pv[0]["original"] == [1000, 5] and pv[0]["revised"] == [1200, 5] and pv[1]["parent"] == "A"
+assert pv[0]["original"] == [1000, 5] and pv[0]["revised"] == [1200, 5] and pv[1]["tag"] == "new · copies A"
 assert not any("plan B" in i["msg"] for i in rep.items)  # B isn't revised at all - normal, no note
 
 # unknown store, orphan department, changed Jan -> errors / warning
-_, _, _, rep = load_rev(xlsx([["STORE NAME", "DEPARTMENT", "Sep'26 New", "Jan'27 P1 New"],
+_, _, _, _, rep = load_rev(xlsx([["STORE NAME", "DEPARTMENT", "Sep'26 New", "Jan'27 P1 New"],
                               ["S9", "A", 1, 1], ["S1", "ZZ", 1, 1], ["S1", "A", 1, 99]]))
 errs = [i["msg"] for i in rep.items if i["level"] == "error"]
-assert any("aren't in the original" in e for e in errs) and any("no parent department" in e for e in errs)
+assert any("aren't in the original" in e for e in errs) and any("no department to copy" in e for e in errs)
 assert any("Jan/Feb values" in i["msg"] for i in rep.items if i["level"] == "warning")
+
+# method 3, new department with an explicit COPY FROM
+r, use, src, info, rep = load_rev(b"Store Name,Department,Copy From,Sep'26 New\nS1,ZZ NEW,B,5\n", "new.csv")
+assert rep.ok, rep.items
+assert src == {("S1", "ZZ NEW"): ("S1", "B")} and info["preview"]["rows"][0]["tag"] == "new · copies B"
+_, _, _, _, rep = load_rev(b"Store Name,Department,Copy From,Sep'26 New\nS1,ZZ NEW,QQ,5\n", "new.csv")
+assert not rep.ok and "COPY FROM QQ" in str(rep.items)
+
+def read_as(data, need, prep, name="x.csv"):
+    df, info, rep = importer.read_table(data, name, need, "file")
+    return prep(df, info, rep, o_df, o_months) if df is not None else (None, [], {}, info, rep)
+
+# method 1 via the importer: loose headers, FROM MONTH as text, bad values reported
+r, use, src, info, rep = read_as(b"Store,Dept,MC_Listing,From\nS1,A,N,September 2026\nS1,B,Y,\n",
+                                 importer.NEED_LISTING, importer.prepare_listing)
+assert rep.ok, rep.items
+assert r.set_index("DEPARTMENT").loc["A", "Sep'26"] == 0 and r.set_index("DEPARTMENT").loc["A", "Jan'27 P1"] == 5
+assert any("already planned" in i["msg"] for i in rep.items)       # B is planned (Jan) - listing it changes nothing
+# value columns: a row with a value is "given"; a row whose value cells are blank is sized from peers
+df_, info_, rep_ = importer.read_table(b"Store,Dept,Listing,Sep'26 New\nS1,A,N,\nS3,A,Y,7\n", "x.csv", importer.NEED_LISTING, "file")
+_, _, _, _, rep_ = importer.prepare_listing(df_, info_, rep_, o_df, o_months)
+assert not rep_.ok and "S3" in str(rep_.items)                       # S3 isn't a store of the original
+df_, info_, rep_ = importer.read_table(b"Store,Dept,Listing,Sep'26 New\nS1,A,N,\n", "x.csv", importer.NEED_LISTING, "file")
+r_, _, _, _, rep_ = importer.prepare_listing(df_, info_, rep_, o_df, o_months)
+assert rep_.ok and r_.loc[0, "Sep'26"] == 0, rep_.items
+_, _, _, _, rep = read_as(b"Store,Dept,Listing,From\nS1,A,X,Mar'27\n", importer.NEED_LISTING, importer.prepare_listing)
+errs = " | ".join(i["msg"] for i in rep.items if i["level"] == "error")
+assert "isn't Y or N" in errs and "FROM MONTH" in errs
+assert [importer.from_month(v, M) for v in ("", "Nov '26", "Jan'27", "Mar'27")] == [0, 1, 2, None]
+import datetime
+assert importer.from_month(datetime.datetime(2026, 11, 1), M) == 1
+
+# method 3 split via the importer: shares as percentages
+r, use, src, info, rep = read_as(b"Parent Department,New Department,Share %\nA,A2,40\n", importer.NEED_SPLIT, importer.prepare_split)
+assert rep.ok, rep.items
+rv = r.set_index("DEPARTMENT")
+assert rv.loc["A", "Sep'26"] == 600 and rv.loc["A2", "Sep'26"] == 400 and src == {("S1", "A2"): ("S1", "A")}
+assert any("percentages" in i["msg"] for i in rep.items)
+
+# templates
+t, _ = importer.template_listing(o_df, o_months, {"months": ["Aug'26", "Sep'26(Till Date)"],
+                                               "data": {"S1": {"A": "YN", "B": "YY", "C": "NY"}}})
+assert list(zip(t["DEPARTMENT"], t["LISTING"])) == [("A", "N")]     # C isn't a plan department; B is planned and listed
+t, sk = importer.template_listing(o_df, o_months, {"months": ["Sep'26(Till Date)"], "data": {"S1": {"A": "N", "B": "N"}}})
+assert not len(t) and list(sk["DEPARTMENT"]) == ["A", "B"]          # whole store x division delisted -> not included
+assert list(importer.template_split().columns) == ["PARENT DEPARTMENT", "NEW DEPARTMENT", "SHARE %", "Store Name"]
 
 # ------------------------------------------------------------------ jobs: steps and progress are per job
 import server

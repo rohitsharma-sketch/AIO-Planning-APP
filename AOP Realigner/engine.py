@@ -3,6 +3,11 @@
 Original plan: Store x Department x MRP x Display Type rows, "<Month> Plan" value + "<Month> Plan Qty".
 Revised plan:  Store x Department values per month (only the departments the buyer changed).
 
+Three ways to revise an existing plan, all ending in the same realign (a revised Store x Dept table):
+  1. store listing changes  - listing_targets(): delisted -> 0, newly listed -> sized from same-cluster peers
+  2. existing dept changes  - the buyer's revised values as uploaded
+  3. new / split depts      - split_targets() (parent shared out by %), or new-dept values with a COPY FROM dept
+
 Per Store x Division x Month the original total is the target. Revised departments keep their new
 value exactly (split to MRP x Display Type by the original cont %); every other department in that
 bucket absorbs the difference pro-rata. If revised alone exceed a month's total, the excess comes out
@@ -26,11 +31,21 @@ def parent_for(dept, depts):
     return next((p for p in sorted(depts, key=len, reverse=True) if p != dept and dept.startswith(p)), None)
 
 
-def add_new_departments(o, r, months):
-    """A revised dept a store never had (e.g. LW_U_T-TOP F/S) gets rows cloned from its parent dept in that
-    store (parent_for): same MRP/display rows, zero original value. `_basis` = the row whose values give the
-    MRP/display mix and ASP (itself, or the parent row for a clone)."""
+KEEP_ROW_COLS = {DIV, DEPT, MRP, DISP, "ATTRIBUTE", "Tag", "CONC - UDF", "CONC - MRP", "_basis"}
+
+
+def add_new_departments(o, r, months, source=None):
+    """A revised dept a store never had (e.g. LW_U_T-TOP F/S) gets rows cloned from another dept's rows: same
+    MRP/display rows, zero original value. The rows come from source[(store, dept)] = (from_store, from_dept)
+    when given (a split parent, a COPY FROM dept, or the same dept in a peer store for a new listing), else
+    from the parent_for() dept in the same store. `_basis` = the row whose values give the MRP/display mix and
+    ASP (itself, or the source row for a clone). A sourced store-dept whose rows are all zero is rebuilt too."""
+    source = source or {}
     o = o.reset_index(drop=True)
+    if source:
+        V = [m + " Plan" for m in months]
+        empty = o[V].abs().sum(axis=1).groupby([o[STORE], o[DEPT]]).transform("sum").to_numpy() <= TOL
+        o = o[~(pd.MultiIndex.from_arrays([o[STORE], o[DEPT]]).isin(list(source)) & empty)].reset_index(drop=True)
     o["_basis"] = np.arange(len(o))
     have = set(zip(o[STORE], o[DEPT]))
     by_store = dict(tuple(o.groupby(STORE)))
@@ -38,13 +53,20 @@ def add_new_departments(o, r, months):
     for s, d in zip(r[STORE], r[DEPT]):
         if (s, d) in have:
             continue
-        g = by_store.get(s)
-        parent = parent_for(d, set(g[DEPT])) if g is not None else None
-        if parent is None:
+        fs, fd = source.get((s, d), (s, None))
+        g = by_store.get(fs)
+        if fd is None:
+            fd = parent_for(d, set(g[DEPT])) if g is not None else None
+        c = g[g[DEPT] == fd].copy() if g is not None and fd else None
+        if c is None or not len(c):
             unmatched.append(f"{s} / {d}")
             continue
-        c = g[g[DEPT] == parent].copy()
         c[DEPT] = d
+        if fs != s:  # rows borrowed from another store: take this store's own name, ref, cluster and tags
+            t = by_store[s]
+            for col in c.columns:
+                if col not in KEEP_ROW_COLS and not pd.api.types.is_numeric_dtype(c[col]):
+                    c[col] = t[col].mode().iat[0]
         c[[m + " Plan" for m in months] + [m + " Plan Qty" for m in months]] = 0.0
         if "CONC - UDF" in c:
             c["CONC - UDF"] = c[STORE] + d + c[MRP].astype(str) + c[DISP]
@@ -60,13 +82,101 @@ def add_new_departments(o, r, months):
     return (pd.concat([o, *clones], ignore_index=True) if clones else o), len(clones), n
 
 
-def realign(o, r, months):
-    """o: original rows (numeric cols clean), r: revised Store x Dept values over `months`.
+def _sd_totals(o, months, by=DEPT):
+    """{(store, dept or division): per-month original values}."""
+    g = o.groupby([STORE, by])[[m + " Plan" for m in months]].sum()
+    return dict(zip(g.index, g.to_numpy(float)))
+
+
+def listing_targets(o, changes, months):
+    """Method 1 - store listing changes -> (revised Store x Dept values, source rows, counts).
+    changes: [{store, dept, listing "Y"/"N", start (first month index it applies from), values (list or None)}].
+    Delisted: the dept goes to 0 from `start`. Newly listed: from `start` it gets the share its department has of
+    the division in same-cluster stores that plan it (pooled per month; all stores if no cluster peer) x this
+    store's division total - or the given values. Its MRP/display rows come from the peer store that plans the
+    most of it. Frozen months (Jan/Feb) and months before `start` keep the original."""
+    n = len(months)
+    fz = np.array([m[:3] in FROZEN for m in months])
+    sd, dv = _sd_totals(o, months), _sd_totals(o, months, DIV)
+    div_of = o.groupby(DEPT)[DIV].agg(lambda s: s.mode().iat[0]).to_dict()
+    cluster = o.groupby(STORE)["CLUSTER"].first().to_dict() if "CLUSTER" in o else {}
+    planners = {}
+    for (s, d), v in sd.items():
+        if np.abs(v).sum() > TOL:
+            planners.setdefault(d, []).append(s)
+    rows, source, counts, nopeer = [], {}, {"delisted": 0, "estimated": 0, "given": 0}, []
+    for c in changes:
+        s, d = c["store"], c["dept"]
+        base = sd.get((s, d), np.zeros(n))
+        apply = (np.arange(n) >= c["start"]) & ~fz
+        if c["listing"] == "N":
+            vec = np.where(apply, 0.0, base)
+            counts["delisted"] += 1
+        else:
+            peers = [p for p in planners.get(d, []) if p != s]
+            peers = [p for p in peers if cluster.get(p) == cluster.get(s)] or peers
+            if not peers:
+                nopeer.append(f"{s} / {d}")
+                continue
+            source[(s, d)] = (max(peers, key=lambda p: sd[(p, d)].sum()), d)
+            if c.get("values") is not None:
+                vec = np.asarray(c["values"], float)
+                counts["given"] += 1
+            else:
+                num = np.sum([sd[(p, d)] for p in peers], axis=0)
+                den = np.sum([dv.get((p, div_of[d]), np.zeros(n)) for p in peers], axis=0)
+                vec = np.divide(num, den, out=np.zeros(n), where=np.abs(den) > TOL) * dv.get((s, div_of[d]), np.zeros(n))
+                counts["estimated"] += 1
+            vec = np.where(apply, vec, base)
+        rows.append({STORE: s, DEPT: d, **dict(zip(months, vec))})
+    if nopeer:
+        raise ValueError("No store plans these departments, so there is nothing to size or copy a new listing from "
+                         "(add them with Method 3 instead): " + ", ".join(nopeer[:10]) + (" ..." if len(nopeer) > 10 else ""))
+    return pd.DataFrame(rows, columns=[STORE, DEPT, *months]), source, counts
+
+
+def split_targets(o, splits, months):
+    """Method 3 (split) -> (revised Store x Dept values, source rows).
+    splits: [{parent, child, share (0..1), store (None = every store that has the parent)}]; a store-specific row
+    replaces the all-store rows of that parent in that store. In live months the parent keeps (1 - sum of shares)
+    of its original value and each child gets share x the parent (on top of its own original, if it already has
+    one). A new child copies the parent's MRP/display rows, so its mix and ASPs are the parent's; nothing else
+    moves. Jan/Feb stay on the parent (frozen rule)."""
+    n = len(months)
+    live = ~np.array([m[:3] in FROZEN for m in months])
+    sd = _sd_totals(o, months)
+    target, source, over = {}, {}, []
+    get = lambda k: target.setdefault(k, sd.get(k, np.zeros(n)).copy())
+    for p in dict.fromkeys(x["parent"] for x in splits):
+        rows = [x for x in splits if x["parent"] == p]
+        for s in [s for (s, d) in sd if d == p]:
+            kids = [x for x in rows if x["store"] == s] or [x for x in rows if x["store"] is None]
+            if not kids:
+                continue
+            tot = sum(x["share"] for x in kids)
+            if tot > 1 + 1e-9:
+                over.append(f"{s} / {p} ({tot:.0%})")
+                continue
+            pv = sd[(s, p)]
+            get((s, p))[live] -= pv[live] * tot
+            for x in kids:
+                get((s, x["child"]))[live] += pv[live] * x["share"]
+                if np.abs(sd.get((s, x["child"]), np.zeros(n))).sum() <= TOL:
+                    source[(s, x["child"])] = (s, p)
+    if over:
+        raise ValueError("Shares add up to more than 100% of the parent: " + ", ".join(over[:10]) + (" ..." if len(over) > 10 else ""))
+    r = pd.DataFrame([{STORE: s, DEPT: d, **dict(zip(months, v))} for (s, d), v in target.items()], columns=[STORE, DEPT, *months])
+    return r, source
+
+
+def realign(o, r, months, source=None):
+    """o: original rows (numeric cols clean), r: revised Store x Dept values over `months`, source: where a new
+    store-dept's rows come from (see add_new_departments).
     Returns (realigned rows in original layout, division x month summary, warnings,
     a long-format table of every cell that actually changed - for the comparison download)."""
     V = [m + " Plan" for m in months]
     Q = [m + " Plan Qty" for m in months]
-    o, n_new_sd, n_new_rows = add_new_departments(o, r, months)
+    o, n_new_sd, n_new_rows = add_new_departments(o, r, months, source)
     b = o.pop("_basis").to_numpy()
     orig, qty = o[V].to_numpy(float), o[Q].to_numpy(float)
     basis = orig[b]
@@ -211,7 +321,9 @@ def verify(o, r, out, months):
     add("Grand total unchanged", "ok" if abs(g1 - g0) < 1e-6 else "fail", f"{g0:,.2f} → {g1:,.2f}")
     if fz:
         cols = [m + " Plan" for m in fz] + [m + " Plan Qty" for m in fz]
-        fd = float(np.abs(out.iloc[:len(o)][cols].to_numpy() - o[cols].to_numpy()).max())
+        k = [STORE, DEPT, MRP, DISP]  # by key: a rebuilt empty store-dept can move rows around
+        a = o.set_index(k)[cols]
+        fd = float(np.abs(out.set_index(k)[cols].reindex(a.index).fillna(0.0).to_numpy() - a.to_numpy()).max())
         add("Jan / Feb untouched (value and qty)", "ok" if fd < 1e-9 else "fail", f"largest change {fd:.2g}")
 
     table = []

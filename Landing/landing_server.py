@@ -63,7 +63,7 @@ APPS = [
      "cmd": [sys.executable, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", "8010"],
      "cwd": os.path.join(_REPO_ROOT, "RS Planning Platform", "backend")},
     # Linked directly (not proxied): its xlsx export outruns the 60s proxy timeout.
-    {"name": "AOP Realigner", "port": 8070,
+    {"name": "AOP Re-Aligner", "port": 8070,
      "cmd": [sys.executable, "server.py"],
      "cwd": os.path.join(_REPO_ROOT, "AOP Realigner")},
     # Additional app (joined 2026-09-26): static site over its app/*.json, rebuilt by the

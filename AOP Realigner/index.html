@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>/* suite colour theme - one choice for every app, picked on Landing */(function(){var p=location.port,o=(p==='7800'||p==='8010')?'':'//'+location.hostname+':8010';document.write('<script src="'+o+'/api/suite-theme.js"><\/script>')})()</script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AOP Realigner</title>
+<title>AOP Re-Aligner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -196,6 +196,20 @@ td.frozen,th.frozen{color:var(--muted-foreground)}
 .hist .brk div{display:flex;justify-content:space-between;gap:8px}
 .empty{color:var(--muted-foreground);font-size:13px;padding:6px 0;margin:0}
 
+/* revision method picker (step 2) */
+.methods{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px}
+@media (max-width:760px){.methods{grid-template-columns:1fr}}
+.method{text-align:left;font:inherit;color:inherit;cursor:pointer;border:1px solid var(--border);border-radius:var(--radius);background:var(--background);
+  padding:11px 13px;display:flex;flex-direction:column;gap:3px;transition:border-color .15s,background .15s}
+.method:hover{border-color:var(--input);background:var(--accent)}
+.method[aria-pressed=true]{border-color:var(--primary);background:color-mix(in srgb,var(--btn) 22%,var(--background));box-shadow:0 0 0 1px var(--primary) inset}
+.method .mn{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted-foreground)}
+.method[aria-pressed=true] .mn{color:var(--primary)}
+.method .mt{font-weight:800;font-size:13.5px}
+.method .md{font-size:12px;color:var(--muted-foreground);line-height:1.4}
+.howto{margin:0 0 14px;padding:10px 13px;border-radius:var(--radius);background:color-mix(in srgb,var(--muted) 55%,transparent);font-size:12.5px;line-height:1.55}
+.howto code{font-size:11.5px;background:var(--background);border:1px solid var(--border);border-radius:4px;padding:0 4px}
+
 /* toast */
 #toasts{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:8px;z-index:50;max-width:min(420px,calc(100vw - 40px))}
 .toast{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:var(--radius);border:1px solid var(--border);
@@ -210,8 +224,8 @@ td.frozen,th.frozen{color:var(--muted-foreground)}
   <div class="topbar-inner">
     <div class="logo" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg></div>
     <div class="brand">
-      <h1>AOP Realigner</h1>
-      <p>Revised departments keep their values; everything else flexes so each store × division lands back on the original plan.</p>
+      <h1>AOP Re-Aligner</h1>
+      <p>Revise an existing plan three ways — listing changes, department changes, new or split departments — while every store × division stays on the original.</p>
     </div>
     <div class="right"><span id="conn" class="badge b-muted"><span class="dot"></span>Connecting…</span><a class="home" id="home-link" href="/">&larr; Landing</a></div>
   </div>
@@ -248,6 +262,26 @@ const N = v => (v ?? 0).toLocaleString('en-IN');
 const secs = s => s == null ? '—' : s < 1 ? '<1 s' : s < 60 ? `${s.toFixed(s < 10 ? 1 : 0)} s` : `${Math.floor(s / 60)} m ${Math.round(s % 60)} s`;
 const bytes = b => b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`;
 const frozen = m => /^(Jan|Feb)/.test(m);
+// the three ways to revise an existing plan (server METHODS / engine.py) - step 2 takes one file of the chosen kind
+const METHODS = {
+  listing: {no: 1, title: 'Store listing changes', short: 'A department delisted from a store, or newly listed in one.',
+    drop: 'Upload the listing changes',
+    howto: `One row per change: <code>STORE NAME</code>, <code>DEPARTMENT</code>, <code>LISTING</code> (Y / N) and an optional <code>FROM MONTH</code> (blank = the first month).
+      A <b>delisted</b> department goes to 0 from that month. A <b>newly listed</b> one is sized from same-cluster stores — its share of the division there × this store's division plan, month by month — or from your own figures in the “&lt;Month&gt; New” columns.
+      The rest of the store × division flexes to stay on the original. “From Listing / Delisting” pre-fills every difference between this plan and the latest listing month.`,
+    run: 'Delisted departments go to 0 from their month and new listings take their sized value; every other department in the same store × division absorbs the difference pro-rata.'},
+  dept: {no: 2, title: 'Existing department changes', short: 'New values for departments already in the plan.',
+    drop: 'Upload the revised plan',
+    howto: `Only the departments you changed — Store × Department rows with “&lt;Month&gt; New” columns. Pick a department and download the template: it comes pre-filled with that department's original values in every store, ready to edit.`,
+    run: 'Revised departments keep their values exactly; every other department in the same store × division absorbs the difference pro-rata, so each store × division lands back on the original.'},
+  newdept: {no: 3, title: 'New or split departments', short: 'A department added late, or one split into several.',
+    drop: 'Upload the split or new-department file',
+    howto: `<b>Split</b> — <code>PARENT DEPARTMENT</code>, <code>NEW DEPARTMENT</code>, <code>SHARE %</code> and an optional <code>STORE NAME</code> (blank = every store; a store's own row overrides). The parent's plan is shared out with its MRP × display mix and ASPs; nothing else moves.
+      <b>New department</b> — Store × Department rows with <code>COPY FROM</code> (the department whose MRP / display rows it takes) and “&lt;Month&gt; New” values; the rest of the store × division makes room for it.`,
+    run: 'Split: each parent keeps what isn\'t shared out and the new departments take the rest — nothing else moves. New: the new department takes its values and the rest of the store × division makes room.'},
+};
+const RUN_TAIL = ' Jan / Feb are never touched; qty is priced at the original month-wise ASP per Department × MRP × Display Type.';
+const method = () => METHODS[S.method] || METHODS.dept;
 const P = {
   upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
   sheet:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h2"/><path d="M14 13h2"/><path d="M8 17h2"/><path d="M14 17h2"/>',
@@ -310,7 +344,7 @@ const dataBusy = () => S.jobs.some(j => j.status === 'running' && j.kind !== 'ex
 // ------------------------------------------------------------------ render
 
 function render() {
-  const s = JSON.stringify([S.original, S.original_failed, S.revised, S.result && S.result.id, S.departments.length]);
+  const s = JSON.stringify([S.original, S.original_failed, S.revised, S.result && S.result.id, S.departments.length, S.method, S.listing_app]);
   if (s !== sig) { sig = s; renderOrig(); renderRev(); renderResults(); }
   renderRun(); renderDownloads(); renderActivity(); autoDownload();
   document.querySelectorAll('.drop').forEach(d => d.classList.toggle('disabled', !!dataBusy()));
@@ -376,17 +410,28 @@ function renderOrig() {
   $('#c-orig').innerHTML = h + '</div>';
 }
 
+function templateActions() {
+  if (S.method === 'listing') return `<button class="btn btn-outline btn-sm" onclick="template('listing')">${icon('dl')}Blank template</button>${S.listing_app
+    ? `<button class="btn btn-outline btn-sm" onclick="template('listing','kb')" title="Every planned department the Listing / Delisting app now shows as delisted, and every listed one with no plan">${icon('dl')}From Listing / Delisting</button>` : ''}`;
+  if (S.method === 'newdept') return `<button class="btn btn-outline btn-sm" onclick="template('newdept','split')">${icon('dl')}Split template</button>
+    <button class="btn btn-outline btn-sm" onclick="template('newdept','new')">${icon('dl')}New-department template</button>`;
+  return `<select class="select" id="tpl-dept" aria-label="Department to pre-fill the template with" onchange="tplDept=this.value"><option value="">Blank template</option>${
+      S.departments.map(d => `<option ${d === tplDept ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select>
+    <button class="btn btn-outline btn-sm" onclick="template('dept')" title="Excel file with the right headers, pre-filled with the original values of the chosen department">${icon('dl')}Template</button>`;
+}
+
 function renderRev() {
-  const o = S.original, r = S.revised;
+  const o = S.original, r = S.revised, M = method();
   const badge = !r ? '<span class="badge b-muted">Not uploaded</span>' : r.ok
     ? '<span class="badge b-success"><span class="dot"></span>Ready to run</span>' : '<span class="badge b-error"><span class="dot"></span>Needs fixing</span>';
-  let h = `<div class="card-header">${stepNo(2, !o ? '' : r && r.ok ? 'done' : 'current')}<div class="grow"><h2 class="card-title" id="t-rev">Revised plan ${badge}</h2>
-    <p class="card-desc">Only the departments you changed — Store × Department rows with “&lt;Month&gt; New” columns. Checked against the original the moment you upload it, before anything runs.</p></div>
-    ${o ? `<div class="actions"><select class="select" id="tpl-dept" aria-label="Department to pre-fill the template with" onchange="tplDept=this.value"><option value="">Blank template</option>${
-      S.departments.map(d => `<option ${d === tplDept ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select>
-      <button class="btn btn-outline btn-sm" onclick="template()" title="Excel file with the right headers, pre-filled with the original values of the chosen department">${icon('dl')}Template</button></div>` : ''}</div>
+  let h = `<div class="card-header">${stepNo(2, !o ? '' : r && r.ok ? 'done' : 'current')}<div class="grow"><h2 class="card-title" id="t-rev">What changed ${badge}</h2>
+    <p class="card-desc">Pick how the plan is being revised, then upload one file for it. It is checked against the original the moment you upload it, before anything runs.</p></div>
+    ${o ? `<div class="actions">${templateActions()}</div>` : ''}</div>
     <div class="card-content">`;
-  if (!o) h += `<p class="empty">Load the original plan first — the revised plan is checked against it.</p>`;
+  if (!o) h += `<p class="empty">Load the original plan first — the revision is checked against it.</p>`;
+  else h += `<div class="methods" role="group" aria-label="How is the plan being revised?">${Object.entries(METHODS).map(([k, m]) =>
+      `<button type="button" class="method" aria-pressed="${k === S.method}" onclick="setMethod('${k}')"><span class="mn">Method ${m.no}</span><span class="mt">${esc(m.title)}</span><span class="md">${esc(m.short)}</span></button>`).join('')}</div>
+    <p class="howto">${M.howto}</p>`;
   if (r) {
     const pv = r.preview;
     h += `<div class="file"><span class="fi ${r.ok ? '' : 'err'}">${icon(r.ok ? 'sheet' : 'error')}</span><div><div class="name">${esc(r.name)}</div>
@@ -401,24 +446,24 @@ function renderRev() {
       h += `<div class="sep"></div><div class="row" style="justify-content:space-between;margin-bottom:8px"><strong class="small">Preview — revised totals against the original, same stores</strong>
         <span class="muted small">₹ lakhs</span></div><div class="table-wrap"><table><thead><tr><th>Department</th><th>Stores</th>${
         pv.months.map((m, j) => `<th class="${pv.frozen[j] ? 'frozen' : ''}">${pv.frozen[j] ? icon('lock', 'xs') + ' ' : ''}${esc(m)}</th>`).join('')}<th>Total excl. Jan / Feb</th></tr></thead><tbody>${
-        pv.rows.map(x => `<tr><td><strong>${esc(x.dept)}</strong>${x.parent ? ` <span class="badge b-info">new · copies ${esc(x.parent)}</span>` : ''}</td><td>${N(x.stores)}</td>${
+        pv.rows.map(x => `<tr><td><strong>${esc(x.dept)}</strong>${x.tag ? ` <span class="badge b-info">${esc(x.tag)}</span>` : ''}</td><td>${N(x.stores)}</td>${
           pv.months.map((m, j) => cellHtml(x.original[j], x.revised[j], pv.frozen[j])).join('')}${cellHtml(sumLive(x.original), sumLive(x.revised), false)}</tr>`).join('')}
         ${pv.rows.length > 1 ? `<tr class="total"><td>All revised</td><td></td>${tot.map(([a, b], j) => cellHtml(a, b, pv.frozen[j])).join('')}${
           cellHtml(sumLive(tot.map(t => t[0])), sumLive(tot.map(t => t[1])), false)}</tr>` : ''}</tbody></table></div>`;
     }
-    h += `<div class="sep"></div>${dropzone('revised', 'Replace the revised plan', true)}`;
-  } else if (o) h += dropzone('revised', 'Upload the revised plan');
+    h += `<div class="sep"></div>${dropzone('revised', 'Replace this file', true)}`;
+  } else if (o) h += dropzone('revised', M.drop);
   $('#c-rev').innerHTML = h + '</div>';
 }
 
 function renderRun() {
   const o = S.original, r = S.revised, res = S.result, job = running('run');
   const ready = o && r && r.ok;
-  let reason = !o ? 'Load the original plan first (step 1).' : !r ? 'Upload the revised plan (step 2).' : !r.ok ? 'Fix the problems listed in step 2 first.' : '';
+  let reason = !o ? 'Load the original plan first (step 1).' : !r ? 'Upload the file for this method (step 2).' : !r.ok ? 'Fix the problems listed in step 2 first.' : '';
   const other = !job && dataBusy();
   if (other && !reason) reason = 'Waiting for the current step to finish…';
   const h = `<div class="card-header">${stepNo(3, res ? 'done' : ready ? 'current' : '')}<div class="grow"><h2 class="card-title" id="t-run">Realign</h2>
-    <p class="card-desc">Revised departments keep their values exactly. Every other department in the same store × division absorbs the difference pro-rata, so each store × division lands back on the original. Jan / Feb are never touched; qty is priced at the original month-wise ASP per Department × MRP × Display Type.</p></div></div>
+    <p class="card-desc"><strong>Method ${method().no} · ${esc(method().title)}.</strong> ${esc(method().run)}${RUN_TAIL}</p></div></div>
     <div class="card-content"><div class="row">
       <button class="btn btn-primary btn-lg" onclick="run()" ${!ready || job || other ? 'disabled' : ''}>${job ? icon('load', 'spin') + 'Realigning…' : icon('play') + (res ? 'Run again' : 'Run realignment')}</button>
       <span class="muted small">${job ? `Running for ${secs(job.secs)} — each step is timed in Activity.` : reason ||
@@ -436,7 +481,7 @@ function renderResults() {
   const chk = res.checks.map(c => `<div class="check">${icon(c.status === 'ok' ? 'ok' : c.status === 'warn' ? 'warn' : 'error', c.status + '-i')}<div><div class="t">${esc(c.name)}</div><div class="d">${esc(c.detail)}</div></div></div>`).join('');
   el.innerHTML = `<div class="card-header">${stepNo(4, 'done')}<div class="grow"><h2 class="card-title" id="t-res">Results
       <span class="badge ${fails ? 'b-error' : 'b-success'}"><span class="dot"></span>${fails ? `${fails} check${fails > 1 ? 's' : ''} failed` : 'All checks passed'}</span></h2>
-    <p class="card-desc">Run ${esc(res.finished_at)} in ${secs(res.secs)} · ${esc(res.revised)} against ${esc(res.original)}</p></div></div>
+    <p class="card-desc">${METHODS[res.method] ? `Method ${METHODS[res.method].no} · ${esc(METHODS[res.method].title)} · ` : ''}Run ${esc(res.finished_at)} in ${secs(res.secs)} · ${esc(res.revised)} against ${esc(res.original)}</p></div></div>
     <div class="card-content">
       <div class="stats" style="margin-top:0">
         <div class="stat"><div class="stat-label">Cells changed</div><div class="stat-value">${N(res.changed_rows)}</div><div class="stat-sub">${N(sc.kept || 0)} kept · ${N(sc.absorbed || 0)} absorbed</div></div>
@@ -550,7 +595,7 @@ function upload(slot, file) {
     refresh();
   };
   xhr.onerror = () => { delete uploads[slot]; toast('Upload failed — is the server running?'); refresh(); };
-  xhr.open('POST', `api/${slot}`);
+  xhr.open('POST', slot === 'revised' ? `api/revised?method=${S.method}` : `api/${slot}`);
   xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
   xhr.send(file);
   refresh();
@@ -563,7 +608,18 @@ async function useSheet(slot) {
 async function dismissOrig() { try { await api('api/original/dismiss'); } catch (e) { toast(e.message); } refresh(); }
 async function clearRev() { try { await api('api/revised/clear'); } catch (e) { toast(e.message); } refresh(); }
 async function run() { try { await api('api/run'); } catch (e) { toast(e.message); } refresh(); }
-function template() { location.href = `api/template${tplDept ? `?dept=${encodeURIComponent(tplDept)}` : ''}`; }
+function template(m = 'dept', kind = '') {
+  const q = new URLSearchParams({method: m});
+  if (kind) q.set('kind', kind);
+  if (m === 'dept' && tplDept) q.set('dept', tplDept);
+  location.href = `api/template?${q}`;
+}
+async function setMethod(m) {
+  if (m === S.method) return;
+  if (S.revised && !confirm('Switching method removes the file loaded for the current one. Continue?')) return;
+  try { await api(`api/method?method=${m}`); } catch (e) { toast(e.message); }
+  refresh();
+}
 
 function fetchFile(k, f) {
   const a = document.createElement('a');

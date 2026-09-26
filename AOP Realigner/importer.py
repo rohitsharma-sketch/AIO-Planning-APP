@@ -4,6 +4,8 @@
 - the header row may sit anywhere in the first SCAN_ROWS rows (the original has a totals row on top)
 - column names match loosely: case, extra spaces, curly quotes, "Sep '26" vs "Sep'26" vs "Sept 2026",
   STORE vs STORE NAME, DEPT vs DEPARTMENT
+- one reader per revision method: prepare_listing (1 - store listing changes), prepare_revised
+  (2 - existing departments; also 3 - new departments, with an optional COPY FROM column), prepare_split (3 - split)
 - nothing is coerced or dropped silently: blank rows, non-numeric cells, duplicate keys, unknown stores
   and departments all land in the report as an error (blocks the run), a warning, or a note - with rows
 """
@@ -15,7 +17,9 @@ import re
 import numpy as np
 import pandas as pd
 
-from engine import DEPT, DISP, DIV, FROZEN, MRP, STORE, parent_for
+from engine import DEPT, DISP, DIV, FROZEN, MRP, STORE, listing_targets, parent_for, split_targets
+
+LIST, FROMM, PARENT, NEWD, SHARE = "LISTING", "FROM MONTH", "PARENT DEPARTMENT", "NEW DEPARTMENT", "SHARE %"
 
 SCAN_ROWS = 15
 XL_EXT = (".xlsx", ".xlsm", ".xlsb", ".xls")
@@ -25,10 +29,21 @@ ALIASES = {
     DIV: {"DIVISION", "DIV"},
     MRP: {"MRP"},
     DISP: {"DISPLAY TYPE", "DISPLAY", "DISPLAYTYPE", "DISPLAY_TYPE"},
+    LIST: {"LISTING", "LISTING (Y/N)", "LISTED", "MC_LISTING", "MC LISTING", "MC_LISTING(REV)", "LISTING STATUS"},
+    FROMM: {"FROM MONTH", "FROM", "EFFECTIVE FROM", "EFFECTIVE MONTH", "FROM (MONTH)"},
+    PARENT: {"PARENT DEPARTMENT", "PARENT DEPT", "PARENT", "COPY FROM", "SPLIT FROM", "OLD DEPARTMENT", "FROM DEPARTMENT"},
+    NEWD: {"NEW DEPARTMENT", "NEW DEPT", "CHILD DEPARTMENT", "SPLIT INTO"},
+    SHARE: {"SHARE %", "SHARE", "SHARE%", "SPLIT %", "SPLIT%", "SHARE (%)"},
 }
-SHOWN = {STORE: "STORE NAME", DEPT: "DEPARTMENT", DIV: "DIVISION", MRP: "MRP", DISP: "DISPLAY TYPE"}
+SHOWN = {STORE: "STORE NAME", DEPT: "DEPARTMENT", DIV: "DIVISION", MRP: "MRP", DISP: "DISPLAY TYPE",
+         LIST: "LISTING", FROMM: "FROM MONTH", PARENT: "PARENT DEPARTMENT", NEWD: "NEW DEPARTMENT", SHARE: "SHARE %"}
 NEED_ORIGINAL = {STORE, DEPT, DIV, MRP, DISP}
 NEED_REVISED = {STORE, DEPT}
+NEED_LISTING = {STORE, DEPT, LIST}
+NEED_SPLIT = {PARENT, NEWD, SHARE}
+YES = {"Y", "YES", "LISTED", "LIST", "RELIST", "RELISTED", "1"}
+NO = {"N", "NO", "DELISTED", "DELIST", "-", "0"}
+MONTH_ONLY = re.compile(r"^(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*[\s'\-]*(\d{4}|\d{2})(?:\s*-?\s*P\s*([12]))?$")
 MONTH_RE = re.compile(r"^(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*[\s'\-]*(\d{4}|\d{2})"
                       r"(?:\s*-?\s*P\s*([12]))?[\s\-_]+(PLAN\s*QTY|PLAN|NEW|QTY)$")
 CANON_MONTH = re.compile(r"^[A-Z][a-z]{2}'\d{2}(?: P[12])? (Plan|Plan Qty|New)$")  # what canon() produces
@@ -260,7 +275,10 @@ def prepare_original(df, info, rep):
 
 
 def prepare_revised(df, info, rep, orig, months):
-    """Validate a revised plan against the loaded original -> (revised Store x Dept rows, months used, info, report).
+    """Methods 2 and 3 (new departments): validate a revised plan against the loaded original ->
+    (revised Store x Dept rows, months used, source rows for new depts, info, report).
+    An optional COPY FROM (PARENT DEPARTMENT) column names the department whose MRP / display rows and ASPs a new
+    department takes; without it a new department must start with an existing one's name (LW_U_T-TOP F/S).
     info["preview"] compares original vs revised totals per department for the same stores."""
     new = month_cols(df, "New")
     if not new:
@@ -269,39 +287,44 @@ def prepare_revised(df, info, rep, orig, months):
                       "Step 2 needs the revised plan: Store x Department rows with '<Month> New' columns.")
         else:
             rep.error("No '<Month> New' columns found - expected headers like \"Sep'26 New\", \"Jan'27 P1 New\".")
-        return None, [], info, rep
+        return None, [], {}, info, rep
     extra = [m for m in new if m not in months]
     if extra:
         rep.warn(f"{', '.join(extra)} aren't months in the original plan - ignored.")
     use = [m for m in months if m in new]
     if not use:
         rep.error(f"None of the file's months match the original's ({', '.join(months)}).")
-        return None, [], info, rep
+        return None, [], {}, info, rep
+    explicit = PARENT in df.columns
     df = _keys(df, [STORE, DEPT], rep, "revised plan")
+    if explicit:
+        df[PARENT] = _clean(df[PARENT])
     df = df.rename(columns={m + " New": m for m in use})
     df = _numbers(df, use, rep)
     _dups(df, [STORE, DEPT], rep, "revised plan")
     if not len(df):
         rep.error("The revised plan has no data rows.")
-        return None, [], info, rep
+        return None, [], {}, info, rep
 
     depts_by_store = orig.groupby(STORE)[DEPT].agg(set).to_dict()
     unknown = sorted(set(df[STORE]) - set(depts_by_store))
     if unknown:
         rep.error(f"{len(unknown)} store(s) aren't in the original plan, so their values can't be placed.", unknown)
-    parents, orphans = {}, []
-    for s, d in zip(df[STORE], df[DEPT]):
+    parents, orphans, source = {}, [], {}
+    for s, d, cp in zip(df[STORE], df[DEPT], df[PARENT] if explicit else [""] * len(df)):
         have = depts_by_store.get(s)
         if have is None or d in have:
             continue
-        p = parent_for(d, have)
+        p = (cp if cp in have else None) if cp else parent_for(d, have)
         if p is None:
-            orphans.append(f"{s} / {d}")
+            orphans.append(f"{s} / {d}" + (f" (COPY FROM {cp} isn't planned in that store)" if cp else ""))
         else:
             parents.setdefault(d, [p, 0])[1] += 1
+            source[(s, d)] = (s, p)
     if orphans:
-        rep.error(f"{len(orphans)} store-department(s) don't exist in the original and have no parent department to copy "
-                  f"MRP / display rows from (a new department must start with an existing one's name).", orphans)
+        rep.error(f"{len(orphans)} store-department(s) don't exist in the original and have no department to copy "
+                  f"MRP / display rows from - name one in a COPY FROM column, or start the new name with an "
+                  f"existing department's (LW_U_T-TOP F/S).", orphans)
     for d, (p, n) in parents.items():
         rep.info(f"New department {d} will be created in {n} store(s), using {p}'s MRP / display rows and ASPs.")
 
@@ -325,16 +348,175 @@ def prepare_revised(df, info, rep, orig, months):
             rep.info(f"{len(left_out)} store(s) plan {d} in the original but aren't in this file - they stay as original.",
                      sorted(left_out))
 
-    rows = []
-    for d, g in df.assign(**{f"_o{j}": base[:, j] for j in range(len(use))}).groupby(DEPT, sort=False):
-        rows.append({"dept": d, "stores": len(g), "parent": parents.get(d, [None])[0],
-                     "original": [float(g[f"_o{j}"].sum()) for j in range(len(use))],
-                     "revised": [float(g[m].sum()) for m in use]})
-    info.update(rows=len(df), stores=int(df[STORE].nunique()), departments=len(rows), months=use,
-                preview={"months": use, "frozen": [m[:3] in FROZEN for m in use], "rows": rows})
-    rep.info(f"{len(df):,} store-department rows · {len(rows)} department(s) · {info['stores']} stores · "
+    r = df[[STORE, DEPT] + use].reset_index(drop=True)
+    info.update(rows=len(df), stores=int(df[STORE].nunique()), months=use,
+                preview=_preview(r, orig, use, {d: f"new · copies {p}" for d, (p, _) in parents.items()}))
+    info["departments"] = len(info["preview"]["rows"])
+    rep.info(f"{len(df):,} store-department rows · {info['departments']} department(s) · {info['stores']} stores · "
              f"{len(use)} month(s) ({use[0]} to {use[-1]}).")
-    return df[[STORE, DEPT] + use].reset_index(drop=True), use, info, rep
+    return r, use, source, info, rep
+
+
+def _clean(s):
+    """A key-like text column where blank is allowed (COPY FROM, STORE NAME in a split file)."""
+    return s.where(~_blank(s), "").astype(str).str.replace(r"\s+", " ", regex=True).str.strip().str.upper()
+
+
+def _preview(r, orig, use, tags=None):
+    """Original vs revised totals per department (same stores) - the table under step 2."""
+    base = (orig.groupby([STORE, DEPT])[[m + " Plan" for m in use]].sum()
+            .reindex(pd.MultiIndex.from_frame(r[[STORE, DEPT]])).fillna(0.0).to_numpy())
+    vals = r[use].to_numpy(float)
+    rows = [{"dept": d, "stores": len(ix), "tag": (tags or {}).get(d),
+             "original": base[ix].sum(0).tolist(), "revised": vals[ix].sum(0).tolist()}
+            for d, ix in r.groupby(DEPT, sort=False).indices.items()]
+    return {"months": use, "frozen": [m[:3] in FROZEN for m in use], "rows": rows}
+
+
+def _known(df, rep, checks):
+    """Stores / departments that aren't in the original at all -> errors. checks: [(column, known set, (what, hint))]."""
+    for col, have, what in checks:
+        bad = sorted(set(df[col][df[col] != ""]) - have)
+        if bad:
+            rep.error(f"{len(bad)} {what[0]} aren't in the original plan{what[1]}.", bad)
+
+
+def from_month(v, months):
+    """FROM MONTH cell -> index into `months` (0 = from the first month when blank), None if it isn't one of them.
+    "Oct'26", "October 2026", a date cell, "Jan'27" (= Jan'27 P1) all work."""
+    n = v.strftime("%b'%y").upper() if hasattr(v, "strftime") else norm(v)
+    if not n:
+        return 0
+    m = MONTH_ONLY.match(n)
+    if not m:
+        return None
+    mon, yy, p = m.groups()
+    label = f"{mon.title()}'{yy[-2:]}" + (f" P{p}" if p else "")
+    return next((i for i, x in enumerate(months) if x == label or x.startswith(label + " ")), None)
+
+
+def prepare_listing(df, info, rep, orig, months):
+    """Method 1 - store listing changes: STORE NAME, DEPARTMENT, LISTING (Y/N), optional FROM MONTH and optional
+    '<Month> New' values for new listings -> (revised Store x Dept rows, months, source rows, info, report)."""
+    raw_from = df[FROMM] if FROMM in df.columns else None
+    df = _keys(df, [STORE, DEPT, LIST], rep, "listing change")
+    _dups(df, [STORE, DEPT], rep, "listing change")
+    if not len(df):
+        rep.error("The file has no listing changes.")
+        return None, [], {}, info, rep
+    bad = ~df[LIST].isin(YES | NO)
+    if bad.any():
+        rep.error(f"{int(bad.sum())} row(s) have a LISTING value that isn't Y or N.",
+                  [f'row {i + 1}: "{v}"' for i, v in df[LIST][bad].head(6).items()])
+    _known(df, rep, [(STORE, set(orig[STORE]), ("store(s)", "")),
+                     (DEPT, set(orig[DEPT]), ("department(s)", " - a brand-new department is Method 3"))])
+    starts = pd.Series(0, index=df.index)
+    if raw_from is not None:
+        starts = raw_from.reindex(df.index).map(lambda v: from_month(v, months))
+        nf = starts.isna()
+        if nf.any():
+            rep.error(f"{int(nf.sum())} FROM MONTH value(s) aren't months of the plan ({months[0]} to {months[-1]}).",
+                      [f'row {i + 1}: "{raw_from[i]}"' for i in df.index[nf][:6]])
+    vcols = [m for m in months if m + " New" in df.columns and m[:3] not in FROZEN]
+    given = pd.concat([~_blank(df[m + " New"]) for m in vcols], axis=1).any(axis=1) if vcols else pd.Series(False, index=df.index)
+    df = _numbers(df, [m + " New" for m in vcols], rep)
+    if not rep.ok:
+        return None, [], {}, info, rep
+
+    sd = orig.groupby([STORE, DEPT])[[m + " Plan" for m in months]].sum().abs().sum(axis=1)
+    planned = set(sd[sd > 1e-9].index)
+    changes, same = [], {"N": [], "Y": []}
+    for i, s, d, ls in zip(df.index, df[STORE], df[DEPT], df[LIST]):
+        y = "Y" if ls in YES else "N"
+        if (y == "Y") == ((s, d) in planned):  # listed & already planned / delisted & not planned: nothing moves
+            same[y].append(f"{s} / {d}")
+            continue
+        vals = [float(df.at[i, m + " New"]) if m in vcols else 0.0 for m in months] if given[i] else None
+        changes.append({"store": s, "dept": d, "listing": y, "start": int(starts[i]), "values": vals})
+    if same["N"]:
+        rep.info(f"{len(same['N'])} delisting(s) have no plan in the original anyway - nothing to move.", same["N"])
+    if same["Y"]:
+        rep.info(f"{len(same['Y'])} listing(s) are already planned - left as they are "
+                 f"(to change their values use Method 2).", same["Y"])
+    if not changes:
+        rep.error("None of the rows changes the plan - every delisted department is already unplanned and every "
+                  "listed one already planned.")
+        return None, [], {}, info, rep
+    try:
+        r, source, counts = listing_targets(orig, changes, months)
+    except ValueError as e:
+        rep.error(str(e))
+        return None, [], {}, info, rep
+    if counts["delisted"]:
+        rep.info(f"{counts['delisted']} delisting(s): the department goes to 0 from its FROM MONTH (the first month if "
+                 f"blank); the rest of that store x division absorbs it.")
+    if counts["estimated"]:
+        rep.info(f"{counts['estimated']} new listing(s) sized from same-cluster stores: the department's share of "
+                 f"its division there x this store's division plan, month by month.")
+    if counts["given"]:
+        rep.info(f"{counts['given']} new listing(s) use the values given in the file.")
+    ch = pd.DataFrame(changes)
+    tags = {}
+    for d, g in ch.groupby("dept", sort=False):
+        n_del, n_add = int((g.listing == "N").sum()), int((g.listing == "Y").sum())
+        tags[d] = " · ".join(x for x in (n_del and f"delisted in {n_del}", n_add and f"listed in {n_add}") if x)
+    info.update(rows=len(df), stores=int(r[STORE].nunique()), months=months, preview=_preview(r, orig, months, tags))
+    info["departments"] = len(info["preview"]["rows"])
+    rep.info(f"{len(changes)} listing change(s) · {info['departments']} department(s) · {info['stores']} stores.")
+    return r, months, source, info, rep
+
+
+def prepare_split(df, info, rep, orig, months):
+    """Method 3 - split: PARENT DEPARTMENT, NEW DEPARTMENT, SHARE %, optional STORE NAME (blank = every store)
+    -> (revised Store x Dept rows, months, source rows, info, report)."""
+    raw = df[SHARE].copy()
+    df = _keys(df, [PARENT, NEWD], rep, "split")
+    df[STORE] = _clean(df[STORE]) if STORE in df.columns else ""
+    raw = raw.reindex(df.index).astype(str).str.strip()
+    pct = raw.str.contains("%")
+    num = pd.to_numeric(raw.str.replace(r"[%\s]", "", regex=True), errors="coerce")
+    bad = num.isna() | (num <= 0)
+    if bad.any():
+        rep.error(f"{int(bad.sum())} SHARE % value(s) aren't positive numbers.",
+                  [f'row {i + 1}: "{raw[i]}"' for i in df.index[bad][:6]])
+    # 40 or "40%" = 40%; a file holding only fractions (0.4 - e.g. Excel %-formatted cells) = fractions
+    as_pct = pct | bool((num[~pct] > 1).any())
+    df["_share"] = np.where(as_pct, num / 100, num)
+    rep.info("Shares read as " + ("percentages (40 = 40%)." if bool(np.all(as_pct)) else "fractions (0.4 = 40%)."))
+    _dups(df, [PARENT, NEWD, STORE], rep, "split")
+    _known(df, rep, [(STORE, set(orig[STORE]), ("store(s)", "")), (PARENT, set(orig[DEPT]), ("parent department(s)", ""))])
+    same = df[df[PARENT] == df[NEWD]]
+    if len(same):
+        rep.error("A department can't be split into itself.", list(same[PARENT].unique()))
+    if not len(df):
+        rep.error("The file has no split rows.")
+    if not rep.ok:
+        return None, [], {}, info, rep
+    has = set(zip(orig[STORE], orig[DEPT]))
+    lone = [f"{s} / {p}" for s, p in zip(df[STORE], df[PARENT]) if s and (s, p) not in has]
+    if lone:
+        rep.warn(f"{len(lone)} store-specific row(s) name a store that doesn't have the parent department - skipped.", lone)
+    splits = [{"parent": p, "child": c, "share": float(x), "store": s or None}
+              for p, c, x, s in zip(df[PARENT], df[NEWD], df["_share"], df[STORE])]
+    try:
+        r, source = split_targets(orig, splits, months)
+    except ValueError as e:
+        rep.error(str(e))
+        return None, [], {}, info, rep
+    if not len(r):
+        rep.error("No store plans any of the parent departments - nothing to split.")
+        return None, [], {}, info, rep
+    kids = df.groupby(PARENT, sort=False)[NEWD].agg(lambda x: ", ".join(dict.fromkeys(x))).to_dict()
+    tags = {p: f"split into {k}" for p, k in kids.items()}
+    tags.update({c: f"from {p}" for p, c in zip(df[PARENT], df[NEWD])})
+    rep.info("Each parent keeps what isn't shared out; each new department takes its share of the parent in every live "
+             "month, with the parent's MRP / display mix and ASPs. Jan / Feb stay on the parent (never changed).")
+    info.update(rows=len(df), stores=int(r[STORE].nunique()), months=months, preview=_preview(r, orig, months, tags))
+    info["departments"] = len(info["preview"]["rows"])
+    rep.info(f"{len(df)} split row(s) · {len(kids)} parent department(s) · {info['stores']} stores.")
+    return r, months, source, info, rep
+
+
 
 
 def template(orig, months, dept=None):
@@ -345,3 +527,46 @@ def template(orig, months, dept=None):
         return pd.DataFrame(columns=cols)
     g = orig[orig[DEPT] == dept].groupby([STORE, DIV, DEPT], sort=False)[[m + " Plan" for m in months]].sum().reset_index()
     return g.rename(columns={m + " Plan": m + " New" for m in months})[cols]
+
+
+def live_months(months):
+    return [m for m in months if m[:3] not in FROZEN]
+
+
+def template_listing(orig, months, kb=None):
+    """Method 1 template. With `kb` (the Listing / Delisting app's kb.json) it is pre-filled with every difference
+    between the plan and the latest listing month: planned departments now delisted (N) and listed departments
+    with no plan (Y). Leave '<Month> New' blank to size a new listing from same-cluster stores.
+    -> (template rows, skipped rows). A store x division whose EVERY planned department is delisted (a store
+    closing or not open yet, e.g. an upcoming store flipped to N) is left out: nothing would be left there to
+    absorb its plan. Those rows come back separately for the "Not included" sheet."""
+    cols = [STORE, DIV, DEPT, LIST, FROMM, "NOTE"] + [m + " New" for m in live_months(months)]
+    if not kb:
+        return pd.DataFrame(columns=cols), pd.DataFrame()
+    tot = orig.groupby([STORE, DEPT])[[m + " Plan" for m in months]].sum().abs().sum(axis=1)
+    planned = set(tot[tot > 1e-9].index)
+    season = orig.groupby([STORE, DEPT])[[m + " Plan" for m in live_months(months)]].sum().sum(axis=1)
+    div_of = orig.groupby(DEPT)[DIV].agg(lambda s: s.mode().iat[0]).to_dict()
+    li, last = len(kb["months"]) - 1, kb["months"][-1]
+    flag = lambda s, d: (kb["data"].get(s, {}).get(d) or "")[li:li + 1]
+    rows = [{STORE: s, DIV: div_of[d], DEPT: d, LIST: "N", FROMM: months[0],
+             "NOTE": f"Listing app {last}: delisted - plan {season.get((s, d), 0):.2f} L in live months"}
+            for s, d in sorted(planned) if flag(s, d) == "N"]
+    per_sd = pd.Series(1, index=pd.MultiIndex.from_tuples(sorted(planned))).groupby(lambda k: (k[0], div_of[k[1]])).size()
+    gone = pd.DataFrame(rows).groupby([STORE, DIV]).size() if rows else pd.Series(dtype=int)
+    whole = {k for k, n in gone.items() if n == per_sd.get(k)}
+    skipped = [dict(r, NOTE=f"not included - every planned {r[DIV]} department of {r[STORE]} is delisted (store closing / not open?)")
+               for r in rows if (r[STORE], r[DIV]) in whole]
+    rows = [r for r in rows if (r[STORE], r[DIV]) not in whole]
+    rows += [{STORE: s, DIV: div_of[d], DEPT: d, LIST: "Y", FROMM: months[0], "NOTE": f"Listing app {last}: listed - not in the plan"}
+             for s in sorted(set(orig[STORE]) & set(kb["data"])) for d, f in sorted(kb["data"][s].items())
+             if f[li:li + 1] == "Y" and d in div_of and (s, d) not in planned]
+    return pd.DataFrame(rows, columns=cols), pd.DataFrame(skipped, columns=cols[:6])
+
+
+def template_split():
+    return pd.DataFrame(columns=[PARENT, NEWD, SHARE, STORE])
+
+
+def template_newdept(months):
+    return pd.DataFrame(columns=[STORE, DIV, DEPT, "COPY FROM"] + [m + " New" for m in live_months(months)])
