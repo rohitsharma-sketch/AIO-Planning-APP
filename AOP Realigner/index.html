@@ -289,7 +289,7 @@ async function api(path) {
 async function refresh() {
   clearTimeout(timer);
   try {
-    S = await (await fetch('/api/state', {cache: 'no-store'})).json();
+    S = await (await fetch('api/state', {cache: 'no-store'})).json();
     setConn(true);
     render();
   } catch { setConn(false); }
@@ -550,30 +550,30 @@ function upload(slot, file) {
     refresh();
   };
   xhr.onerror = () => { delete uploads[slot]; toast('Upload failed — is the server running?'); refresh(); };
-  xhr.open('POST', `/api/${slot}`);
+  xhr.open('POST', `api/${slot}`);
   xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
   xhr.send(file);
   refresh();
 }
 
 async function useSheet(slot) {
-  try { await api(`/api/sheet?slot=${slot}&sheet=${encodeURIComponent($(`#sheet-${slot}`).value)}`); } catch (e) { toast(e.message); }
+  try { await api(`api/sheet?slot=${slot}&sheet=${encodeURIComponent($(`#sheet-${slot}`).value)}`); } catch (e) { toast(e.message); }
   refresh();
 }
-async function dismissOrig() { try { await api('/api/original/dismiss'); } catch (e) { toast(e.message); } refresh(); }
-async function clearRev() { try { await api('/api/revised/clear'); } catch (e) { toast(e.message); } refresh(); }
-async function run() { try { await api('/api/run'); } catch (e) { toast(e.message); } refresh(); }
-function template() { location.href = `/api/template${tplDept ? `?dept=${encodeURIComponent(tplDept)}` : ''}`; }
+async function dismissOrig() { try { await api('api/original/dismiss'); } catch (e) { toast(e.message); } refresh(); }
+async function clearRev() { try { await api('api/revised/clear'); } catch (e) { toast(e.message); } refresh(); }
+async function run() { try { await api('api/run'); } catch (e) { toast(e.message); } refresh(); }
+function template() { location.href = `api/template${tplDept ? `?dept=${encodeURIComponent(tplDept)}` : ''}`; }
 
 function fetchFile(k, f) {
   const a = document.createElement('a');
-  a.href = `/api/download?type=${k}&fmt=${f}`;
+  a.href = `api/download?type=${k}&fmt=${f}`;
   a.download = '';
   document.body.append(a); a.click(); a.remove();
 }
 async function exportFile(k, f) {
   try {
-    const j = await api(`/api/export?type=${k}&fmt=${f}`);
+    const j = await api(`api/export?type=${k}&fmt=${f}`);
     if (j.ready) fetchFile(k, f);
     else { pending[`${k}-${f}`] = j.job; toast('Building on the server — it downloads automatically when ready.', 'info'); }
   } catch (e) { toast(e.message); }

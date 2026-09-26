@@ -1067,4 +1067,5 @@ if __name__ == '__main__':
     import os as _os
     port = int(_os.environ.get('PORT', PORT))
     print(f"Starting NSO Plan Distributor v2 on http://localhost:{port}")
-    app.run(host='0.0.0.0', port=port, debug=False)
+    app.run(host='127.0.0.1', port=port,   # reached via Landing /nso/ (one address)
+            debug=False)

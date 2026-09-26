@@ -4129,7 +4129,7 @@ async function syncData(){
   const orig=btn?btn.textContent:'';
   if(btn){btn.disabled=true;btn.textContent='⟳ Syncing…';}
   try{
-    const res=await fetch('http://localhost:5050/api/sync/sales',
+    const res=await fetch(SYNC_BASE+'/api/sync/sales',
       {signal:AbortSignal.timeout?AbortSignal.timeout(30000):undefined});
     if(!res.ok)throw new Error('Server returned '+res.status);
     const data=await res.json();
@@ -4348,7 +4348,8 @@ function exportCSV(){
 }
 /* ── DATA SYNC ─────────────────────────────────── */
 const _syncState={sales:{s:'idle',t:null},hist:{s:'idle',t:null},st:{s:'idle',t:null}};
-const SYNC_BASE='http://localhost:5050';
+// Through Landing (any PC on the LAN) BIS lives under /buyer; on its own port it is its own origin (2026-09-26)
+const SYNC_BASE=location.pathname.startsWith('/buyer')?'/buyer':(location.port==='5050'?'':'http://localhost:5050');
 
 // Tooltip is position:fixed so it is not clipped by .cstrip{overflow-x:auto}; place it under the button on hover
 function _placeSyncTip(){

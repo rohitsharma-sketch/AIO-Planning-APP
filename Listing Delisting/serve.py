@@ -21,4 +21,5 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     handler = functools.partial(NoCacheHandler, directory=APP_DIR)
-    http.server.ThreadingHTTPServer(("", PORT), handler).serve_forever()
+    # loopback only - reached via Landing /listing/ (one address)
+    http.server.ThreadingHTTPServer(("127.0.0.1", PORT), handler).serve_forever()

@@ -814,4 +814,5 @@ if __name__ == "__main__":
     print("    GET /api/sync/history   - FY19 + FY26 full year -> JSON")
     print("    GET /api/sync/sellthru  - pull latest ST file  -> JSON")
     print()
-    app.run(host="0.0.0.0", port=5050, debug=False, threaded=True)
+    app.run(host="127.0.0.1", port=5050,   # reached via Landing /buyer/ (one address)
+            debug=False, threaded=True)

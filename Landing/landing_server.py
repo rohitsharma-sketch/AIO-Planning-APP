@@ -2,13 +2,17 @@
 RS Planning landing page — static file server + reverse proxy, port 7800.
 Run: python landing_server.py
 
-All sub-apps are exposed through this single port so the whole platform
-is reachable at http://<host>:7800 from anywhere on the LAN.  Only port
-7800 needs a firewall rule; the sub-app ports (5050, 8000, 8010) stay
-loopback-only.
+ONE ADDRESS for the whole suite (user, 2026-09-26): every app - core and
+additional - is exposed through this single port, so the platform is reachable
+at http://<host>:7800 from anywhere on the LAN, and one start of this server
+launches (and its watchdog keeps up) every app. Only port 7800 needs a firewall
+rule; every sub-app port (5050, 8000, 8010, 8060, 8070, 8123) is loopback-only.
 
 Proxy routing (first match wins):
   /buyer/*                       → http://127.0.0.1:5050  (BIS, prefix stripped)
+  /nso/*                         → http://127.0.0.1:8060  (NSO Plan Distributor, prefix stripped)
+  /realigner/*                   → http://127.0.0.1:8070  (AOP Realigner, prefix stripped)
+  /listing/*                     → http://127.0.0.1:8123  (Listing / Delisting, prefix stripped)
   /api/otb/*, /api/status,
     /api/config/aop-div-targets  → http://127.0.0.1:5050  (BIS API, same path)
   /api/config/db-sync*           → http://127.0.0.1:8000  (AOP standalone, no auth)
@@ -64,6 +68,11 @@ APPS = [
      "cwd": os.path.join(_REPO_ROOT, "AOP Realigner")},
     # Additional app (joined 2026-09-26): static site over its app/*.json, rebuilt by the
     # daily data-lake sync (sync/listing_delisting_sync.py). Linked directly on the LAN like 8060/8070.
+    # Additional app: was started by its own "NSO Distributor Server" scheduled task
+    # (local copy); now one start of Landing covers it too (2026-09-26).
+    {"name": "NSO Plan Distributor", "port": 8060,
+     "cmd": [sys.executable, "nso_distributor.py"],
+     "cwd": os.path.join(_REPO_ROOT, "Buyer's Input Sheet")},
     {"name": "Listing / Delisting", "port": 8123,
      "cmd": [sys.executable, "serve.py"],   # static app/ with no-cache (data files change daily)
      "cwd": os.path.join(_REPO_ROOT, "Listing Delisting")},
@@ -75,6 +84,11 @@ APPS = [
 PROXY_ROUTES = [
     # BIS HTML — /buyer/* maps to / at 5050 (strip the /buyer prefix)
     ('/buyer',                           'http://127.0.0.1:5050', '/buyer'),
+    # Additional apps (2026-09-26) - their pages use relative api/ paths, so they
+    # work both here under the prefix and on their own loopback port.
+    ('/nso',                             'http://127.0.0.1:8060', '/nso'),
+    ('/realigner',                       'http://127.0.0.1:8070', '/realigner'),
+    ('/listing',                         'http://127.0.0.1:8123', '/listing'),
     # BIS API routes — same path at 5050
     ('/api/otb/',                        'http://127.0.0.1:5050', ''),
     ('/api/status',                      'http://127.0.0.1:5050', ''),
@@ -99,6 +113,23 @@ PROXY_ROUTES = [
 
 _SKIP_REQ_HEADERS  = {'host', 'content-length'}
 _SKIP_RESP_HEADERS = {'transfer-encoding', 'connection', 'content-length'}
+PROXY_IDLE_TIMEOUT = 600   # s of upstream silence before giving up (was a flat 60 s for the whole response)
+# Prefixed apps must be opened with a trailing slash so their relative api/ paths resolve under the prefix
+_SLASH_REDIRECT = {'/buyer', '/nso', '/realigner', '/listing'}
+
+
+class _BodyReader:
+    """Hands the request body to urllib in blocks, stopping at Content-Length."""
+    def __init__(self, f, n):
+        self.f, self.n = f, n
+
+    def read(self, size=-1):
+        if self.n <= 0:
+            return b''
+        size = self.n if size is None or size < 0 else min(size, self.n)
+        b = self.f.read(size)
+        self.n -= len(b)
+        return b
 
 
 def _find_proxy(path):
@@ -207,23 +238,33 @@ class Handler(SimpleHTTPRequestHandler):
         return target + new_path + q
 
     def _proxy(self, target_url):
+        # Streamed both ways (2026-09-26): uploads up to 400 MB (Realigner), live
+        # progress streams (NSO text/event-stream) and multi-minute exports all pass
+        # through without being buffered whole or cut off at a fixed 60 s.
         body = None
         cl = self.headers.get('Content-Length')
         if cl:
-            body = self.rfile.read(int(cl))
+            body = _BodyReader(self.rfile, int(cl))
 
         req = urllib.request.Request(target_url, data=body, method=self.command)
         for k, v in self.headers.items():
             if k.lower() not in _SKIP_REQ_HEADERS:
                 req.add_header(k, v)
+        if cl:
+            req.add_header('Content-Length', cl)
 
         try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                self._send_proxy_response(resp.status, resp.headers, resp.read())
+            with urllib.request.urlopen(req, timeout=PROXY_IDLE_TIMEOUT) as resp:
+                self._stream_proxy_response(resp.status, resp.headers, resp)
         except urllib.error.HTTPError as e:
             self._send_proxy_response(e.code, e.headers, e.read())
+        except (BrokenPipeError, ConnectionResetError):
+            pass    # the browser went away mid-stream (closed tab / EventSource) - nothing to answer
         except Exception as e:
-            self.send_error(502, f'Proxy error: {e}')
+            try:
+                self.send_error(502, f'Proxy error: {e}')
+            except Exception:
+                pass
 
     # Internal backend origins that must never appear in a response sent to the
     # browser — any absolute URL pointing at these would break a remote client
@@ -242,6 +283,24 @@ class Handler(SimpleHTTPRequestHandler):
             if value.startswith(origin):
                 return public + value[len(origin):]
         return value
+
+    def _stream_proxy_response(self, status, headers, resp):
+        self.send_response(status)
+        for k, v in headers.items():
+            if k.lower() not in _SKIP_RESP_HEADERS:
+                if k.lower() == 'location':
+                    v = self._rewrite_location(v)
+                self.send_header(k, v)
+        if headers.get('Content-Length'):
+            self.send_header('Content-Length', headers['Content-Length'])
+        # else: HTTP/1.0 - the body simply ends when this connection closes
+        SimpleHTTPRequestHandler.end_headers(self)
+        while True:
+            chunk = resp.read1(65536)
+            if not chunk:
+                break
+            self.wfile.write(chunk)
+            self.wfile.flush()          # SSE events reach the browser as they happen
 
     def _send_proxy_response(self, status, headers, body):
         self.send_response(status)
@@ -317,6 +376,13 @@ class Handler(SimpleHTTPRequestHandler):
             dest = '/login?next=' + self.path
             self.send_response(302)
             self.send_header('Location', dest)
+            self.end_headers()
+            return
+
+        if self.path.split('?')[0] in _SLASH_REDIRECT:
+            q = self.path[len(self.path.split('?')[0]):]
+            self.send_response(301)
+            self.send_header('Location', self.path.split('?')[0] + '/' + q)
             self.end_headers()
             return
 
