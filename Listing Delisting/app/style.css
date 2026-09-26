@@ -94,6 +94,36 @@ header h1 { margin: 0 0 2px; font-size: 22px; font-weight: 700; color: var(--col
 .tab-btn:hover { border-color: var(--color-secondary); }
 .tab-btn.active { background: var(--btn); color: var(--btn-t); border-color: var(--btn); }
 
+/* --- Overview dashboard (2026-09-26) ------------------------------------------------------ */
+.ov-month { margin: 0 0 14px; font-size: 13px; color: var(--color-muted-foreground); }
+.ov-month strong { color: var(--ink); }
+.ov-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.ov-kpi { background: var(--color-card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.ov-kpi.link { cursor: pointer; }
+.ov-kpi.link:hover { border-color: var(--color-primary); }
+.ov-kpi .lbl { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--color-muted-foreground); }
+.ov-kpi .val { font-size: 26px; font-weight: 800; color: var(--ink); line-height: 1.15; margin-top: 4px; }
+.ov-kpi .sub { font-size: 12.5px; color: var(--color-muted-foreground); margin-top: 3px; }
+.ov-kpi .up { color: var(--y); font-weight: 700; }
+.ov-kpi .dn { color: var(--n); font-weight: 700; }
+.ov-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 900px) { .ov-grid { grid-template-columns: minmax(0, 1fr); } }
+.ov-card { background: var(--color-card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; min-width: 0; }
+.ov-card.wide { grid-column: 1 / -1; }
+.ov-card h3 { margin: 0 0 10px; font-size: 14px; font-weight: 800; color: var(--ink); display: flex; align-items: baseline; gap: 8px; }
+.ov-card h3 .hint { font-weight: 500; font-size: 12px; }
+.ov-card h3 .more { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--color-primary); cursor: pointer; background: none; border: 0; font-family: inherit; padding: 0; }
+.ov-card table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ov-card th { text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--color-muted-foreground);
+  padding: 6px 8px; border-bottom: 1px solid var(--line); background: var(--st-surface-2, #FAF9F6); }
+.ov-card td { padding: 7px 8px; border-bottom: 1px solid var(--line); }
+.ov-card tr:last-child td { border-bottom: 0; }
+.ov-card th.num, .ov-card td.num { text-align: right; }
+.ov-card tr.drillable:hover td { background: var(--st-tint-e, #F3F8F5); cursor: pointer; }
+.ov-legend { display: flex; gap: 14px; font-size: 12px; color: var(--color-muted-foreground); margin-top: 6px; }
+.ov-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.ov-empty { color: var(--color-muted-foreground); font-size: 13px; padding: 6px 0; }
+
 .controls {
   display: flex;
   align-items: center;

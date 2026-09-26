@@ -321,3 +321,15 @@ with their previous listing histories tagged, using simplistic graphical notions
   `var(--st-*)`), Plus Jakarta Sans, "← Landing" link, pastel active tab. Asset links carry a
   `?v=` tag. Drill-down shows the store's planning-DB details (name, cluster, LfL/Ramp/NSO,
   opening date, status) from `stores.json`; store pickers label stores the same way.
+
+- **2026-09-26 (Overview dashboard)** — New first/default tab "Overview" (user: "revamp the
+  functionality", chose the Overview dashboard). Anchored on the latest COMPLETE month (same as
+  the risk score): KPIs (listed combos with change vs previous month; delists and relists that
+  month with the sales involved; flagged at-risk combos, high count and their monthly prior
+  sales; active stores/departments), a 42-month trend chart (listed combos line + delist/relist
+  bars), a by-division table (Mens/Ladies/Kids/Other from the department prefix), the month's
+  biggest changes, top risks by sales shortfall and the most-changed departments over the last
+  3 months. Every row opens the drill-down (department rows open that department's store grid);
+  KPIs and "See all" jump to the full tab. Delists/relists exclude zero-sales flag flips — the
+  Change Events default — so both views agree (Aug'26: 276 + 456 = 732 on both). No data-file
+  changes.

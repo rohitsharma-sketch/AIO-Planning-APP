@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20260926">
+<link rel="stylesheet" href="style.css?v=20260926b">
 </head>
 <body>
 <div class="appbar">
@@ -22,7 +22,8 @@
   <script>document.getElementById('home-link').href='//'+location.hostname+':7800/';</script>
 
   <nav class="tabs">
-    <button class="tab-btn active" data-mode="by-dept">By Department (compare stores)</button>
+    <button class="tab-btn active" data-mode="overview">Overview</button>
+    <button class="tab-btn" data-mode="by-dept">By Department (compare stores)</button>
     <button class="tab-btn" data-mode="by-store">By Store (compare departments)</button>
     <button class="tab-btn" data-mode="events">Change Events</button>
     <button class="tab-btn" data-mode="risk">Delisting Risk</button>
@@ -136,6 +137,7 @@
 </section>
 
 <main id="grid-wrap">
+  <div id="overview-wrap" hidden></div>
   <p id="status">Loading knowledge base&hellip;</p>
   <p id="grid-hint" class="hint">Click any row to drill into that store &times; department's monthly trend.</p>
   <table id="grid"></table>
@@ -168,6 +170,6 @@
   </div>
 </div>
 
-<script src="app.js?v=20260926"></script>
+<script src="app.js?v=20260926b"></script>
 </body>
 </html>

@@ -45,7 +45,7 @@ function wireSortableHeaders(tableEl, state, onSort) {
     onSort();
   });
 }
-let mode = 'by-dept';
+let mode = 'overview';
 
 const statusEl = document.getElementById('status');
 const gridEl = document.getElementById('grid');
@@ -83,6 +83,7 @@ Promise.all([
       options: kb.departments, placeholder: 'Pick a department…',
       onChange: renderSeasonality,
     });
+    document.querySelector('.tab-btn[data-mode="overview"]').click();   // Overview is the landing view
   })
   .catch(err => {
     statusEl.textContent = 'Failed to load data: ' + err;
@@ -106,7 +107,11 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     riskTableEl.hidden = mode !== 'risk';
     document.getElementById('risk-count').hidden = mode !== 'risk';
     document.getElementById('season-wrap').hidden = mode !== 'seasonality';
-    if (mode === 'events') {
+    document.getElementById('overview-wrap').hidden = mode !== 'overview';
+    if (mode === 'overview') {
+      statusEl.hidden = true;
+      renderOverview();
+    } else if (mode === 'events') {
       statusEl.hidden = true;
       renderEvents();
     } else if (mode === 'risk') {
@@ -695,6 +700,165 @@ function seasonBarSvg(bars) {
 
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}">${yTicks}${rects}${xLabels}</svg>`;
 }
+
+// --- Overview dashboard (2026-09-26) -----------------------------------------
+// The landing view: where listing stands in the latest COMPLETE month (same anchor as the risk
+// score), what changed, what is at risk and by how much money, split by division - every row
+// opens the existing drill-down. Delists/relists exclude zero-sales flag flips, the Change Events
+// tab's own default, so the two views always agree.
+
+const overviewEl = document.getElementById('overview-wrap');
+const DIVISION_OF_PREFIX = {
+  M: 'Mens', ME: 'Mens', ML: 'Mens', MSE: 'Mens', MU: 'Mens', MW: 'Mens',
+  L: 'Ladies', LW: 'Ladies', LWW: 'Ladies',
+  KB: 'Kids', KBW: 'Kids', KG: 'Kids', KGW: 'Kids', KI: 'Kids', KIW: 'Kids', KW: 'Kids',
+  'BOYS DESIGNER': 'Kids', 'GIRLS DESIGNER': 'Kids',
+};
+const DIVISIONS = ['Mens', 'Ladies', 'Kids', 'Other'];
+function divisionOf(dept) {
+  return DIVISION_OF_PREFIX[dept.split('_')[0].trim().toUpperCase()] || 'Other';   // Accessories, Raincoat, Fabric…
+}
+
+function fmtRupees(v) {
+  const a = Math.abs(v);
+  if (a >= 1e7) return `₹${(v / 1e7).toFixed(2)} Cr`;
+  if (a >= 1e5) return `₹${(v / 1e5).toFixed(1)} L`;
+  return `₹${Math.round(v).toLocaleString('en-IN')}`;
+}
+const fmtN = n => n.toLocaleString('en-IN');
+const isRealEvent = e => !(e.salesBefore === 0 && e.salesAfter === 0);
+
+let overviewCache = null;
+function overviewData() {
+  if (overviewCache) return overviewCache;
+  if (!allEvents) allEvents = computeEvents();
+  const L = latestCompleteMonth(), li = kb.months.indexOf(L);
+  const nM = kb.months.length;
+  const listedByMonth = new Array(nM).fill(0);
+  const byDiv = Object.fromEntries(DIVISIONS.map(d => [d, { listed: 0, delists: 0, relists: 0, risk: 0, stake: 0 }]));
+  const activeStores = new Set(), activeDepts = new Set();
+  let listedPrev = 0;
+  for (const store of kb.stores) {
+    const depts = kb.data[store];
+    if (!depts) continue;
+    for (const dept in depts) {
+      const h = depts[dept];
+      for (let i = 0; i < h.length; i++) if (h[i] === 'Y') listedByMonth[i]++;
+      if (h[li] === 'Y') { byDiv[divisionOf(dept)].listed++; activeStores.add(store); activeDepts.add(dept); }
+      if (h[li - 1] === 'Y') listedPrev++;
+    }
+  }
+  const delistsByMonth = new Array(nM).fill(0), relistsByMonth = new Array(nM).fill(0);
+  const real = allEvents.filter(isRealEvent);
+  for (const e of real) (e.toStatus === 'N' ? delistsByMonth : relistsByMonth)[e.monthIdx]++;
+  const monthEvents = real.filter(e => e.monthIdx === li);
+  for (const e of monthEvents) byDiv[divisionOf(e.dept)][e.toStatus === 'N' ? 'delists' : 'relists']++;
+  for (const r of risk.flagged) { const d = byDiv[divisionOf(r.dept)]; d.risk++; d.stake += r.baseline_avg; }
+
+  // departments that changed most over the last 3 complete months
+  const recent = new Map();
+  for (const e of real) {
+    if (e.monthIdx < li - 2 || e.monthIdx > li) continue;
+    const c = recent.get(e.dept) || { dept: e.dept, delists: 0, relists: 0, before: 0, after: 0 };
+    c[e.toStatus === 'N' ? 'delists' : 'relists']++; c.before += e.salesBefore; c.after += e.salesAfter;
+    recent.set(e.dept, c);
+  }
+  overviewCache = {
+    L, li, listedByMonth, delistsByMonth, relistsByMonth, byDiv, listedPrev,
+    listedNow: listedByMonth[li], activeStores: activeStores.size, activeDepts: activeDepts.size,
+    delists: monthEvents.filter(e => e.toStatus === 'N'), relists: monthEvents.filter(e => e.toStatus === 'Y'),
+    monthEvents: monthEvents.slice().sort((a, b) => b.impact - a.impact),
+    topRisks: risk.flagged.slice().sort((a, b) => (b.baseline_avg - b.recent_avg) - (a.baseline_avg - a.recent_avg)),
+    stake: risk.flagged.reduce((s, r) => s + r.baseline_avg, 0),
+    highRisk: risk.flagged.filter(r => r.risk_tier === 'High').length,
+    recentDepts: [...recent.values()].sort((a, b) => (b.delists + b.relists) - (a.delists + a.relists)),
+    window: `${kb.months[Math.max(0, li - 2)]} – ${L}`,
+  };
+  return overviewCache;
+}
+
+function renderOverview() {
+  if (!kb || !sales || !risk) { overviewEl.innerHTML = '<p class="ov-empty">Loading…</p>'; return; }
+  const o = overviewData();
+  const delta = o.listedNow - o.listedPrev;
+  const sum = (arr, k) => arr.reduce((s, e) => s + e[k], 0);
+  const kpi = (lbl, val, sub, go) =>
+    `<div class="ov-kpi${go ? ' link' : ''}"${go ? ` data-go="${go}" title="Open ${go}"` : ''}><div class="lbl">${lbl}</div><div class="val">${val}</div><div class="sub">${sub}</div></div>`;
+  const kpis = [
+    kpi('Listed combos', fmtN(o.listedNow),
+      `<span class="${delta >= 0 ? 'up' : 'dn'}">${delta >= 0 ? '+' : ''}${fmtN(delta)}</span> vs ${escapeHtml(kb.months[o.li - 1])}`, 'by-dept'),
+    kpi(`Delisted in ${escapeHtml(o.L)}`, fmtN(o.delists.length), `${fmtRupees(sum(o.delists, 'salesBefore'))} sales the month before`, 'events'),
+    kpi(`Relisted in ${escapeHtml(o.L)}`, fmtN(o.relists.length), `${fmtRupees(sum(o.relists, 'salesAfter'))} sales after relisting`, 'events'),
+    kpi('At delisting risk', fmtN(risk.flagged_count), `${fmtN(o.highRisk)} high · ${fmtRupees(o.stake)}/month prior sales`, 'risk'),
+    kpi('Active network', `${fmtN(o.activeStores)} stores`, `${fmtN(o.activeDepts)} departments listed somewhere`, null),
+  ].join('');
+
+  const divRows = DIVISIONS.map(d => { const v = o.byDiv[d]; return `<tr><td>${d}</td><td class="num">${fmtN(v.listed)}</td>
+    <td class="num">${fmtN(v.delists)}</td><td class="num">${fmtN(v.relists)}</td><td class="num">${fmtN(v.risk)}</td><td class="num">${fmtRupees(v.stake)}</td></tr>`; }).join('');
+
+  const changeRows = o.monthEvents.slice(0, 8).map(e => `<tr class="drillable" data-store="${escapeAttr(e.store)}" data-dept="${escapeAttr(e.dept)}">
+    <td>${escapeHtml(e.store)}</td><td>${escapeHtml(e.dept)}</td>
+    <td><span class="chip ${e.toStatus === 'N' ? 'n' : 'y'}">&nbsp;</span> ${e.toStatus === 'N' ? 'Delisted' : 'Relisted'}</td>
+    <td class="num">${fmtRupees(e.salesBefore)} → ${fmtRupees(e.salesAfter)}</td></tr>`).join('');
+
+  const riskRows = o.topRisks.slice(0, 8).map(r => `<tr class="drillable" data-store="${escapeAttr(r.store)}" data-dept="${escapeAttr(r.dept)}">
+    <td>${escapeHtml(r.store)}</td><td>${escapeHtml(r.dept)}</td><td>${riskBadge(r.risk_tier)}</td>
+    <td class="num">${fmtRupees(r.baseline_avg)} → ${fmtRupees(r.recent_avg)}</td><td class="num dn">−${fmtRupees(r.baseline_avg - r.recent_avg)}</td></tr>`).join('');
+
+  const deptRows = o.recentDepts.slice(0, 8).map(c => `<tr class="drillable" data-dept-only="${escapeAttr(c.dept)}">
+    <td>${escapeHtml(c.dept)}</td><td>${divisionOf(c.dept)}</td><td class="num">${fmtN(c.delists)}</td><td class="num">${fmtN(c.relists)}</td>
+    <td class="num">${fmtRupees(c.before)} → ${fmtRupees(c.after)}</td></tr>`).join('');
+
+  overviewEl.innerHTML = `
+    <p class="ov-month">Latest complete month <strong>${escapeHtml(o.L)}</strong> · ${kb.stores.length} stores × ${kb.departments.length} departments · ${kb.months.length} months of history (${escapeHtml(kb.months[0])} – ${escapeHtml(kb.months[kb.months.length - 1])}) · risk scored ${escapeHtml(risk.generated_at)}</p>
+    <div class="ov-kpis">${kpis}</div>
+    <div class="ov-grid">
+      <div class="ov-card wide"><h3>Listing over time <span class="hint">listed combos per month, with delists and relists</span></h3>${overviewTrendSvg(o)}
+        <div class="ov-legend"><span><i style="background:var(--color-primary)"></i>Listed combos</span><span><i style="background:var(--n)"></i>Delisted</span><span><i style="background:var(--y)"></i>Relisted</span><span>excl. zero-sales flag flips</span></div></div>
+      <div class="ov-card"><h3>By division <span class="hint">${escapeHtml(o.L)}</span></h3>
+        <table><thead><tr><th>Division</th><th class="num">Listed</th><th class="num">Delisted</th><th class="num">Relisted</th><th class="num">At risk</th><th class="num">Prior sales at risk</th></tr></thead><tbody>${divRows}</tbody></table></div>
+      <div class="ov-card"><h3>Biggest changes in ${escapeHtml(o.L)} <button class="more" data-go="events">See all →</button></h3>
+        ${changeRows ? `<table><thead><tr><th>Store</th><th>Department</th><th>Change</th><th class="num">Sales before → after</th></tr></thead><tbody>${changeRows}</tbody></table>` : '<p class="ov-empty">No listing changes with sales in this month.</p>'}</div>
+      <div class="ov-card"><h3>Top risks by sales at stake <button class="more" data-go="risk">See all →</button></h3>
+        <table><thead><tr><th>Store</th><th>Department</th><th>Severity</th><th class="num">Prior → recent avg</th><th class="num">Shortfall / mo</th></tr></thead><tbody>${riskRows}</tbody></table></div>
+      <div class="ov-card"><h3>Most-changed departments <span class="hint">${escapeHtml(o.window)}</span></h3>
+        ${deptRows ? `<table><thead><tr><th>Department</th><th>Division</th><th class="num">Delisted</th><th class="num">Relisted</th><th class="num">Sales before → after</th></tr></thead><tbody>${deptRows}</tbody></table>` : '<p class="ov-empty">No changes in the last 3 months.</p>'}</div>
+    </div>`;
+}
+
+function overviewTrendSvg(o) {
+  const W = 1000, H = 190, padL = 46, padR = 40, padT = 10, padB = 34, n = kb.months.length;
+  const x = i => padL + (i + 0.5) * ((W - padL - padR) / n), bw = Math.max(2, (W - padL - padR) / n / 3);
+  const maxL = Math.max(1, ...o.listedByMonth), maxE = Math.max(1, ...o.delistsByMonth, ...o.relistsByMonth);
+  const yL = v => padT + (H - padT - padB) * (1 - v / maxL), yE = v => padT + (H - padT - padB) * (1 - v / maxE);
+  const base = H - padB;
+  const bars = kb.months.map((m, i) =>
+    `<rect x="${x(i) - bw}" y="${yE(o.delistsByMonth[i])}" width="${bw}" height="${base - yE(o.delistsByMonth[i])}" fill="var(--n)" opacity=".75"><title>${escapeHtml(m)}: ${o.delistsByMonth[i]} delisted</title></rect>` +
+    `<rect x="${x(i)}" y="${yE(o.relistsByMonth[i])}" width="${bw}" height="${base - yE(o.relistsByMonth[i])}" fill="var(--y)" opacity=".75"><title>${escapeHtml(m)}: ${o.relistsByMonth[i]} relisted</title></rect>`).join('');
+  const line = o.listedByMonth.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${yL(v).toFixed(1)}`).join(' ');
+  const dots = o.listedByMonth.map((v, i) => `<circle cx="${x(i)}" cy="${yL(v)}" r="${i === o.li ? 4 : 2}" fill="var(--color-primary)"><title>${escapeHtml(kb.months[i])}: ${fmtN(v)} listed</title></circle>`).join('');
+  const labels = kb.months.map((m, i) => (i % 3 === 0 || i === n - 1)
+    ? `<text x="${x(i)}" y="${H - 12}" text-anchor="middle" font-size="10" fill="var(--color-muted-foreground)">${escapeHtml(m.replace('(Till Date)', '*'))}</text>` : '').join('');
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Listed combos per month with delists and relists">
+    <text x="${padL - 6}" y="${padT + 8}" text-anchor="end" font-size="10" fill="var(--color-muted-foreground)">${fmtN(maxL)}</text>
+    <text x="${W - padR + 6}" y="${padT + 8}" font-size="10" fill="var(--color-muted-foreground)">${fmtN(maxE)}</text>
+    <line x1="${padL}" x2="${W - padR}" y1="${base}" y2="${base}" stroke="var(--line)"/>
+    ${bars}<path d="${line}" fill="none" stroke="var(--color-primary)" stroke-width="2"/>${dots}${labels}</svg>`;
+}
+
+overviewEl.addEventListener('click', e => {
+  const go = e.target.closest('[data-go]');
+  if (go) { document.querySelector(`.tab-btn[data-mode="${go.dataset.go}"]`).click(); return; }
+  const deptOnly = e.target.closest('tr[data-dept-only]');
+  if (deptOnly) {                                   // a department row -> its store grid
+    document.querySelector('.tab-btn[data-mode="by-dept"]').click();
+    deptInput.value = deptOnly.dataset.deptOnly;
+    renderByDept(deptInput.value);
+    return;
+  }
+  const tr = e.target.closest('tr[data-store]');
+  if (tr) openDrilldown(tr.dataset.store, tr.dataset.dept);
+});
 
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
