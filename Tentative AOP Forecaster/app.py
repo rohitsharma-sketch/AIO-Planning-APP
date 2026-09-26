@@ -654,8 +654,11 @@ def db_sync_status():
     from db.models.sync import SyncRun
 
     with SessionLocal() as session:
+        # "superseded" = a duplicate run stopped while a parallel run did the
+        # real work (2026-09-26) - kept for the record, never shown as latest.
         latest_ids = session.execute(
-            select(func.max(SyncRun.sync_run_id)).group_by(SyncRun.source_key)
+            select(func.max(SyncRun.sync_run_id)).where(SyncRun.status != "superseded")
+            .group_by(SyncRun.source_key)
         ).scalars().all()
         if not latest_ids:
             return {"runs": []}
