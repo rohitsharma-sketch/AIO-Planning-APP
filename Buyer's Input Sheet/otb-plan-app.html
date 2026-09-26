@@ -2438,8 +2438,11 @@ function buildHeader(defs,noC1=false){
   const c1html=noC1?'': `<th class="c1 hdim" rowspan="3" data-ci="1">${dim1}</th>`;
   let hr0=`<tr class="hr0 hr-sg"><th class="c0 hdim" rowspan="3" data-ci="0">${dim0}${cfb(c0ft)}</th>${c1html}`;
   if(stDefs.length){
-    const stToggle=S.showSTDetail?'&#x25B2; Collapse':'&#x25BC; Show Monthly';
-    hr0+=`<th colspan="${stDefs.length}" class="hblk hblk-st">&#x2460; Avg Weekly Sell Thru | All Stores <button class="htoggle" onclick="S.showSTDetail=!S.showSTDetail;refresh()">${stToggle}</button></th>`;
+    // Collapsed = one narrow (overflow-hidden) column, so the whole header becomes the expand button
+    const stTgl='onclick="S.showSTDetail=!S.showSTDetail;refresh()"';
+    hr0+=S.showSTDetail
+      ?`<th colspan="${stDefs.length}" class="hblk hblk-st">&#x2460; Avg Weekly Sell Thru | All Stores <button class="htoggle" ${stTgl}>&#x25B2; Collapse</button></th>`
+      :`<th colspan="${stDefs.length}" class="hblk hblk-st" title="Avg Weekly Sell Thru | All Stores - show monthly"><button class="htoggle" style="margin-left:0" ${stTgl}>&#x25BC; &#x2460; ST%</button></th>`;
   }
   if(S.report==='buyers'||S.report==='attr'){
     hr0+=`<th colspan="${histDefs.length}" class="hblk hblk-hist">&#x2461; Historical Growth% | LY Actual Sales <button class="htoggle" onclick="S.showHistDetail=!S.showHistDetail;refresh()">${toggleLbl}</button></th>`;
