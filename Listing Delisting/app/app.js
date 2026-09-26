@@ -271,7 +271,7 @@ const VIEWS = {
           ${s.kind !== 'relist' ? `<select data-f="sug.tier" aria-label="Severity">${options(['High', 'Medium', 'Low'], s.tier, 'All severities')}</select>` : ''}
           <button class="btn" data-act="sug-csv">Export CSV</button>
         </section>
-        <p class="rule">${rule} <span class="muted">Click a row for the exact dates, days and sums behind it.</span> <button class="linkish" data-go="rules">Full rules (v${esc(RULE_LOG[0].version)}) →</button></p>
+        <p class="rule">${rule} <span class="muted">Click a row for the exact dates, days and sums behind it.</span> <button class="linkish" data-go="rules">Full rules →</button></p>
         <div id="res"></div>`;
     },
     results() {
@@ -384,15 +384,12 @@ const VIEWS = {
   rules: {
     controls() { view.innerHTML = '<div id="res"></div>'; },
     results() {
-      const p = sug.params, cur = RULE_LOG[0];
+      const p = sug.params, cur = RULES_LATEST;
       const byType = (v, t) => MON.filter(m => v.type[m] === t).join(', ') || '—';
       const wins = Object.entries(win.categories).sort().map(([c, v]) => `<tr><td>${esc(CAT[c] || c)}</td><td>${byType(v, 'in')}</td><td>${byType(v, 'normal')}</td><td>${byType(v, 'off')}</td></tr>`).join('');
       const sec = (n, title, items) => `<div class="ov-card rule-card"><h3><span class="rule-no">${n}</span>${title}</h3><ul>${items.map(i => `<li>${i}</li>`).join('')}</ul></div>`;
-      const log = RULE_LOG.map(v => `<div class="ov-card ver${v.status === 'in force' ? ' now' : ''}"><h3>v${esc(v.version)} · ${esc(v.title)}
-          <span class="ver-tag">${v.status === 'in force' ? 'in force' : 'superseded'}</span><span class="hint">${dmy(v.date)}${v.replaces ? ` · replaced v${esc(v.replaces)}` : ''}</span></h3>
-        <ul>${v.changes.map(c => `<li>${esc(c)}</li>`).join('')}</ul><p class="why-line"><b>Why:</b> ${esc(v.why)}</p></div>`).join('');
       $('#res').innerHTML = `
-        <p class="ov-month">Rules in force: <strong>version ${esc(cur.version)}</strong>, since ${dmy(cur.date)} · the numbers below are read from the latest build (${esc(sug.generated_at.replace('T', ' '))}), so they always match what the suggestions used.</p>
+        <p class="ov-month">Rules in force since <strong>${dmy(cur.date)}</strong> · the numbers below are read from the latest build (${esc(sug.generated_at.replace('T', ' '))}), so they always match what the suggestions used.</p>
         <div class="ov-grid">
           ${sec(1, 'What the numbers are', [
             'Sales = SL_V from the data lake. Suggestions use the <b>day-wise</b> export, so every window is cut on exact calendar dates.',
@@ -437,8 +434,8 @@ const VIEWS = {
             'Data &amp; checks lists every source file with its rows and dates, and reconciles the day-wise export against the month-wise one.',
           ])}
         </div>
-        <h2 class="h2" style="margin-top:22px">Version log <span class="muted">· newest first · every change of rule gets a new version here</span></h2>
-        <div class="ver-list">${log}</div>`;
+        <div class="ov-card ver now" style="margin-top:14px"><h3>Latest rule change <span class="hint">${dmy(cur.date)}</span></h3>
+          <ul>${cur.changes.map(c => `<li>${esc(c)}</li>`).join('')}</ul></div>`;
     },
   },
 
@@ -462,7 +459,7 @@ const VIEWS = {
           <tr><td>Listing</td><td>kb.json · ${esc(kb.months[0])} – ${esc(kb.months.at(-1))} · ${fmtN(kb.stores.length)} stores × ${fmtN(kb.departments.length)} departments<div class="sub">yearly Directory Listing workbooks (data/listing)</div></td></tr>
           <tr><td>Festivals</td><td>Calendar app: <code>${esc(cal.festival_master)}</code> (Pre / Core / Post per cluster) on <code>${esc(cal.dates)}</code><div class="sub">${cal.clusters.length} clusters · ${fmtN(cal.stores_mapped)} stores mapped via <code>${esc(cal.store_clusters)}</code> · ${esc(cal.unmapped_rule)}${cal.missing_dates.length ? ` · missing dates: ${esc(cal.missing_dates.join(', '))}` : ''}</div></td></tr>
           <tr><td>Season category</td><td>${esc(s.season_category)}</td></tr>
-          <tr><td>Suggestions</td><td>built ${esc(sug.generated_at.replace('T', ' '))} · anchor ${dmy(sug.anchor)} · benchmark years ${p.years.join(', ')} · rules v${esc(RULE_LOG[0].version)} <button class="linkish" data-go="rules">see the rules →</button></td></tr>
+          <tr><td>Suggestions</td><td>built ${esc(sug.generated_at.replace('T', ' '))} · anchor ${dmy(sug.anchor)} · benchmark years ${p.years.join(', ')} · <button class="linkish" data-go="rules">see the rules →</button></td></tr>
         </tbody></table></div>
         <div class="ov-card"><h3>Check: day-wise vs month-wise export <span class="hint">${bad.length ? `${bad.length} month(s) differ by > 0.5%` : 'all complete months within 0.5%'}</span></h3>
           <div class="tbl-wrap short"><table><thead><tr><th>Month</th><th class="num">Day-wise</th><th class="num">Month-wise</th><th class="num">Difference</th></tr></thead><tbody>${recon}</tbody></table></div></div>

@@ -150,6 +150,13 @@ assert np.allclose(v5.loc[("S1", "B")], [6, 12, 10]) and np.allclose(v5.loc[("S2
 r5b, _ = growth_targets(orig, [{"dept": "B", "store": None, "growth": 0.2}, {"dept": "B", "store": "S2", "growth": 0.5}], M, ly)
 v5b = r5b.set_index(["Store Name", "DEPARTMENT"])
 assert np.allclose(v5b.loc[("S2", "B")], [3.75, 11.25, 5]) and np.allclose(v5b.loc[("S1", "B")], [6, 12, 10])  # store row wins
+# per-month growth: Nov judged on its own plan (20 + 15) vs its own last year (10 + 5); Sep has no value -> unchanged
+r5m, det5m = growth_targets(orig, [{"dept": "B", "store": None, "growth": None, "months": {1: 0.0}}], M, ly)
+v5m = r5m.set_index(["Store Name", "DEPARTMENT"])
+assert np.allclose(v5m.loc[("S1", "B")], [10, 20 * 15 / 35, 10]) and np.allclose(v5m.loc[("S2", "B")], [5, 15 * 15 / 35, 5])
+assert np.isclose(det5m[0]["months"][0]["current"], 35 / 15 - 1)
+r5c, _ = growth_targets(orig, [{"dept": "B", "store": None, "growth": 0.2, "months": {1: 0.0}}], M, ly)   # season + one month
+assert np.allclose(r5c.set_index(["Store Name", "DEPARTMENT"]).loc[("S1", "B")], [6, 20 * 15 / 35, 10])
 out5, _, _, _ = realign(orig, r5, M)
 assert np.isclose(out5[out5["Store Name"] == "S1"]["Sep'26 Plan"].sum(), 70)                 # capped at store x division
 checks5, _ = verify(orig, r5, out5, M)
@@ -259,6 +266,16 @@ assert rep.ok, rep.items
 rv = r.set_index("DEPARTMENT")
 assert rv.loc["A", "Sep'26"] == 600 and rv.loc["A2", "Sep'26"] == 400 and src == {("S1", "A2"): ("S1", "A")}
 assert any("percentages" in i["msg"] for i in rep.items)
+
+# method 5 via the importer: a per-month growth column only (NEW GROWTH % blank)
+lyi = {("S1", "A"): {"Sep'25": 500}, ("S1", "B"): {"Sep'25": 1}}
+df_, info_, rep_ = importer.read_table(b"Department,New Growth %,Sep '26 Growth %\nA,,10\n", "g.csv", importer.NEED_GROWTH, "file")
+r_, _, _, info_, rep_ = importer.prepare_growth(df_, info_, rep_, o_df, o_months, lyi)
+assert rep_.ok, rep_.items
+assert np.isclose(r_.set_index("DEPARTMENT").loc["A", "Sep'26"], 550) and r_.set_index("DEPARTMENT").loc["A", "Jan'27 P1"] == 5
+assert any("Per-month growth" in i["msg"] for i in rep_.items)
+tg = importer.template_growth(o_df, o_months, lyi)
+assert "Sep'26 GROWTH %" in tg.columns and np.isclose(tg.set_index("DEPARTMENT").loc["A", "Sep'26 CURRENT %"], 100)
 
 # templates
 t, _ = importer.template_listing(o_df, o_months, {"months": ["Aug'26", "Sep'26(Till Date)"],

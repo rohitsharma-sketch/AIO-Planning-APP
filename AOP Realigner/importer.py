@@ -53,8 +53,8 @@ YES = {"Y", "YES", "LISTED", "LIST", "RELIST", "RELISTED", "1"}
 NO = {"N", "NO", "DELISTED", "DELIST", "-", "0"}
 MONTH_ONLY = re.compile(r"^(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*[\s'\-]*(\d{4}|\d{2})(?:\s*-?\s*P\s*([12]))?$")
 MONTH_RE = re.compile(r"^(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*[\s'\-]*(\d{4}|\d{2})"
-                      r"(?:\s*-?\s*P\s*([12]))?[\s\-_]+(PLAN\s*QTY|PLAN|NEW|QTY)$")
-CANON_MONTH = re.compile(r"^[A-Z][a-z]{2}'\d{2}(?: P[12])? (Plan|Plan Qty|New)$")  # what canon() produces
+                      r"(?:\s*-?\s*P\s*([12]))?[\s\-_]+(PLAN\s*QTY|PLAN|NEW|QTY|GROWTH\s*%?)$")
+CANON_MONTH = re.compile(r"^[A-Z][a-z]{2}'\d{2}(?: P[12])? (Plan|Plan Qty|New|Growth)$")  # what canon() produces
 
 
 def month_cols(df, kind):
@@ -102,8 +102,8 @@ def canon(v):
         return None
     mon, yy, p, kind = m.groups()
     label = f"{mon.title()}'{yy[-2:]}" + (f" P{p}" if p else "")
-    kind = kind.replace(" ", "")
-    return label + {"NEW": " New", "PLAN": " Plan"}.get(kind, " Plan Qty")
+    kind = kind.replace(" ", "").rstrip("%")
+    return label + {"NEW": " New", "PLAN": " Plan", "GROWTH": " Growth"}.get(kind, " Plan Qty")
 
 
 def _blank(s):
@@ -538,21 +538,34 @@ def prepare_growth(df, info, rep, orig, months, ly):
     """Method 5 - growth changes: DEPARTMENT, NEW GROWTH % (vs last year), optional STORE NAME (blank = every
     store; a store's own row overrides) -> (revised Store x Dept rows, months, {}, info, report).
     ly: {(store, dept): {"Sep'25": value}} from the month-wise data-lake export, in the plan's units."""
-    raw = df[GROWTH].copy()
+    gcols = [m for m in month_cols(df, "Growth") if m in months and m[:3] not in FROZEN and ly_label(m)]
+    cols = [GROWTH] + [m + " Growth" for m in gcols]         # NEW GROWTH % (season) + optional '<Month> GROWTH %'
+    raw = df[cols].copy()
     df = _keys(df, [DEPT], rep, "growth")
-    df = df[~_blank(raw.reindex(df.index))]                 # a department with no new growth is left as it is
+    raw = raw.reindex(df.index)
+    filled = pd.concat([~_blank(raw[c]) for c in cols], axis=1)
+    df, raw, filled = df[filled.any(axis=1)], raw[filled.any(axis=1)], filled[filled.any(axis=1)]  # nothing filled = unchanged
     df[STORE] = _clean(df[STORE]) if STORE in df.columns else ""
     if not len(df):
-        rep.error("No NEW GROWTH % filled in - nothing to change.")
+        rep.error("No growth filled in (NEW GROWTH % or a '<Month> GROWTH %' column) - nothing to change.")
         return None, [], {}, info, rep
-    g = _percent(raw.reindex(df.index), rep, "NEW GROWTH %", allow_negative=True)
+    stacked = raw.stack()                                     # one % reading for every growth cell in the file
+    stacked = stacked[filled.stack().reindex(stacked.index).fillna(False).astype(bool)]
+    gv = _percent(stacked.reset_index(drop=True), rep, "Growth", allow_negative=True).to_numpy()
+    vals = {k: v for k, v in zip(stacked.index, gv)}
+    if gcols:
+        rep.info(f"Per-month growth columns found ({', '.join(gcols)}) - a month with a value is judged on its own plan vs its own "
+                 f"last-year month (a festival that moved month, e.g. Diwali, shows up there); other months use NEW GROWTH %.")
     _dups(df, [DEPT, STORE], rep, "growth")
     _known(df, rep, [(STORE, set(orig[STORE]), ("store(s)", "")), (DEPT, set(orig[DEPT]), ("department(s)", ""))])
     if not ly:
         rep.error("Last year's sales aren't available (the Listing / Delisting app's sales.json) - can't measure growth.")
     if not rep.ok:
         return None, [], {}, info, rep
-    rows = [{"dept": d, "store": s or None, "growth": float(x)} for d, s, x in zip(df[DEPT], df[STORE], g)]
+    jm = {m: j for j, m in enumerate(months)}
+    rows = [{"dept": d, "store": s or None, "growth": vals.get((i, GROWTH)),
+             "months": {jm[m]: vals[(i, m + " Growth")] for m in gcols if (i, m + " Growth") in vals}}
+            for i, d, s in zip(df.index, df[DEPT], df[STORE])]
     try:
         r, detail = growth_targets(orig, rows, months, ly)
     except ValueError as e:
@@ -560,14 +573,17 @@ def prepare_growth(df, info, rep, orig, months, ly):
         return None, [], {}, info, rep
     lm = [m for m in months if m[:3] not in FROZEN and ly_label(m)]
     for x in detail:
-        rep.info(f"{x['dept']}{' / ' + x['store'] if x['store'] else ''}: {len(lm)} live months, {x['comparable']} of {x['stores']} "
-                 f"store(s) with last year's sales - plan {x['plan']:,.2f} vs last year {x['ly']:,.2f} = {x['current']:+.1%} now → "
-                 f"{x['new']:+.1%} (plan × {x['factor']:.4f} in every live month).")
+        mm = "".join(f"; {y['month']} {y['current']:+.1%} → {y['new']:+.1%}" for y in x["months"])
+        season = (f"{x['current']:+.1%} now → {x['new']:+.1%} (plan × {x['factor']:.4f})" if x["new"] is not None
+                  else f"{x['current']:+.1%} now, other months unchanged")
+        rep.info(f"{x['dept']}{' / ' + x['store'] if x['store'] else ''}: {x['comparable']} of {x['stores']} store(s) with last year's "
+                 f"sales - season plan {x['plan']:,.2f} vs last year {x['ly']:,.2f} = {season}{mm}.")
         if abs(x["current"]) > 2:
             rep.warn(f"{x['dept']}: current growth {x['current']:+.0%} looks like last year isn't comparable "
                      f"(renamed or split department?) - check before running.")
     info.update(rows=len(df), stores=int(r[STORE].nunique()), months=months,
-                preview=_preview(r, orig, months, {x["dept"]: f"{x['current']:+.0%} → {x['new']:+.0%}" for x in detail}))
+                preview=_preview(r, orig, months, {x["dept"]: (f"{x['current']:+.0%} → {x['new']:+.0%}" if x["new"] is not None else "")
+                                                   + (" · by month" if x["months"] else "") for x in detail}))
     info["departments"] = len(info["preview"]["rows"])
     rep.info(f"Months compared: {', '.join(lm)} vs {', '.join(ly_label(m) for m in lm)}. The rest of each store x division "
              f"absorbs the change (capped at store x division x month); other divisions are not touched.")
@@ -690,4 +706,13 @@ def template_growth(orig, months, ly):
                         f"PLAN {span} (comparable stores)": a["plan"].round(4),
                         f"LAST YEAR {ly_label(lm[0]) if lm else ''}-{ly_label(lm[-1]) if lm else ''}": a["ly"].round(4),
                         "CURRENT GROWTH %": ((a["plan"] / a["ly"] - 1) * 100).round(2), GROWTH: ""})
+    # per month: that month's current growth (same comparable stores) and an empty column to set it
+    comp = g[(g["plan"] > 1e-9) & (g["ly"] > 1e-9)][[STORE, DEPT]]
+    for m in lm:
+        pm = orig.groupby([STORE, DEPT])[m + " Plan"].sum().reindex(pd.MultiIndex.from_frame(comp)).fillna(0.0)
+        lym = pd.Series([float(ly.get((s, d), {}).get(ly_label(m), 0.0)) for s, d in zip(comp[STORE], comp[DEPT])], index=pm.index)
+        cur = (pm.groupby(level=1).sum() / lym.groupby(level=1).sum().replace(0, np.nan) - 1) * 100
+        out[f"{m} CURRENT %"] = out[DEPT].map(cur).round(2)
+    for m in lm:
+        out[f"{m} GROWTH %"] = ""
     return out.sort_values([DIV, DEPT]).reset_index(drop=True)

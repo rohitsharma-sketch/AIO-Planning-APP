@@ -240,7 +240,9 @@ def ly_label(m):
 
 def growth_targets(o, rows, months, ly):
     """Method 5 - growth changes -> (revised Store x Dept values, per-row detail).
-    rows: [{dept, growth (0.12 = 12%), store (None = the department in every store)}]; a store's own row replaces
+    rows: [{dept, growth (0.12 = 12%, or None), months ({month index: growth} - optional per-month growth, each
+    month judged on its own plan vs its own last year), store (None = the department in every store)}]; months
+    without their own value take `growth` (season-level, keeps the phasing) or stay as planned. A store's own row replaces
     the department row for that store. ly: {(store, dept): {"Sep'25": value in the plan's units}}.
     Current growth = plan / last year over the live months, on the stores that have both (store-level for a store
     row); the department's plan in scope is scaled by (1 + new) / (1 + current) in every live month, so its month
@@ -260,13 +262,23 @@ def growth_targets(o, rows, months, ly):
             errors.append(f"{x['store'] or 'all stores'} / {d}: no last-year sales to grow from")
             continue
         cur = p / l - 1
-        f = (1 + x["growth"]) / (1 + cur)
+        f = (1 + x["growth"]) / (1 + cur) if x.get("growth") is not None else 1.0
+        fm, per_month = {}, []                       # per-month growth: that month's own plan vs its own last year
+        for j, g in sorted((x.get("months") or {}).items()):
+            pj = sum(float(sd[(s, d)][j]) for s in comp)
+            lj = sum(float(ly.get((s, d), {}).get(ly_label(months[j]), 0.0)) for s in comp)
+            if lj <= TOL or pj <= TOL:
+                errors.append(f"{x['store'] or 'all stores'} / {d} / {months[j]}: {'no last-year sales' if lj <= TOL else 'no plan'} that month")
+                continue
+            fm[j] = (1 + g) * lj / pj
+            per_month.append({"month": months[j], "current": pj / lj - 1, "new": g, "factor": fm[j]})
         for s in scope:
             v = sd[(s, d)].copy()
-            v[live] *= f
+            for j in live:
+                v[j] *= fm.get(j, f)
             out[(s, d)] = v
         detail.append({"store": x["store"], "dept": d, "stores": len(scope), "comparable": len(comp), "ly": l, "plan": p,
-                       "current": cur, "new": x["growth"], "factor": f})
+                       "current": cur, "new": x.get("growth"), "factor": f, "months": per_month})
     if errors:
         raise ValueError("; ".join(errors[:10]) + (" ..." if len(errors) > 10 else ""))
     r = pd.DataFrame([{STORE: s, DEPT: d, **dict(zip(months, v))} for (s, d), v in out.items()], columns=[STORE, DEPT, *months])

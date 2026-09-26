@@ -246,7 +246,7 @@ dialog.rules::backdrop{background:rgba(15,23,42,.45)}
       <h1>AOP Re-Aligner</h1>
       <p>Revise an existing plan — listing changes, department changes, new or split departments, shifts to a target, growth — while every store × division stays on the original.</p>
     </div>
-    <div class="right"><span id="conn" class="badge b-muted"><span class="dot"></span>Connecting…</span><button class="rules-btn" type="button" onclick="openRules()">Rules <span id="rules-ver"></span></button><a class="home" id="home-link" href="/">&larr; Landing</a></div>
+    <div class="right"><span id="conn" class="badge b-muted"><span class="dot"></span>Connecting…</span><button class="rules-btn" type="button" onclick="openRules()">Rules</button><a class="home" id="home-link" href="/">&larr; Landing</a></div>
   </div>
 </header>
 
@@ -312,7 +312,7 @@ const METHODS = {
     run: 'Delisted departments move into their target only and new listings come out of their target only — every other department is untouched and every store × division × month stays as the original.'},
   growth: {no: 5, title: 'Growth changes', short: 'Set a department\'s new growth over last year; the rest of its division re-aligns.',
     drop: 'Upload the growth changes',
-    howto: `<code>DEPARTMENT</code> and <code>NEW GROWTH %</code> (over last year), optional <code>STORE NAME</code> (blank = the department in every store; a store's own row overrides).
+    howto: `<code>DEPARTMENT</code> and <code>NEW GROWTH %</code> (over last year, for the season) and / or per-month <code>&lt;Month&gt; GROWTH %</code> columns, optional <code>STORE NAME</code> (blank = the department in every store; a store's own row overrides). A month with its own growth is judged on its own plan vs its own last-year month; the others take NEW GROWTH % or stay as planned.
       Current growth = the plan ÷ last year's sales over the live months, on the stores that have both (last year = the month-wise data-lake export). The department's plan is scaled by (1 + new) ÷ (1 + current) in every live month, keeping its month phasing.
       The rest of the <b>same store × division</b> re-aligns around it (capped at store × division × month); other divisions are not touched. The template lists every department with its current growth.`,
     run: 'The target department takes its new growth over last year in every live month; the rest of its own store × division absorbs the change pro-rata — other divisions are untouched.'},
@@ -686,16 +686,11 @@ function autoDownload() {
 
 // Rules dialog: rules in force + version log (rules.js; update it whenever a rule changes)
 function openRules() {
-  const cur = RULE_LOG[0];
-  $('#rules-now').textContent = `v${cur.version} in force since ${cur.date}`;
+  $('#rules-now').textContent = `in force since ${RULES_LATEST.date}`;
   $('#rules-body').innerHTML = RULES_NOW.map(([h, items]) => `<h3>${h}</h3><ul>${items.map(i => `<li>${i}</li>`).join('')}</ul>`).join('') +
-    `<h3>Version log <span class="muted small">· newest first · every rule change gets a new version</span></h3>` +
-    RULE_LOG.map(v => `<div class="ver${v.status === 'in force' ? ' now' : ''}"><h4>v${esc(v.version)} · ${esc(v.title)}
-        <span class="badge ${v.status === 'in force' ? 'b-success' : 'b-muted'}">${esc(v.status)}</span><span class="muted small">${esc(v.date)} · commit ${esc(v.commit)}</span></h4>
-      <ul>${v.changes.map(c => `<li>${esc(c)}</li>`).join('')}</ul><p class="why"><b>Why:</b> ${esc(v.why)}</p></div>`).join('');
+    `<div class="ver now"><h4>Latest change <span class="muted small">${esc(RULES_LATEST.date)}</span></h4><ul>${RULES_LATEST.changes.map(c => `<li>${esc(c)}</li>`).join('')}</ul></div>`;
   $('#rules').showModal();
 }
-if (typeof RULE_LOG !== 'undefined') $('#rules-ver').textContent = `v${RULE_LOG[0].version}`;
 
 document.addEventListener('dragover', e => e.preventDefault());   // a drop that misses the zone shouldn't open the file in the tab
 document.addEventListener('drop', e => e.preventDefault());
