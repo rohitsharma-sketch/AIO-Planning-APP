@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { theme } from '../theme'
+import { theme, alpha } from '../theme'
 import PipelineBanner from '../components/PipelineBanner'
 import { currentEngineKey, advancePipeline } from '../pipelineState'
 
@@ -433,7 +433,7 @@ export default function AttributeCorrection() {
                             onClick={() => toggleLock(activeDiv, attr)}
                             title={locked ? 'Locked — click to unlock' : 'Unlocked — click to lock'}
                             style={{
-                              background: locked ? `${color}28` : 'none',
+                              background: locked ? `${alpha(color,'28')}` : 'none',
                               border: `1px solid ${locked ? color : theme.border}`,
                               borderRadius: 5,
                               padding: '2px 6px',
@@ -467,7 +467,7 @@ export default function AttributeCorrection() {
                             <td style={{ ...CELL, borderLeft: `1px solid ${theme.border}`, color: changed ? theme.accent : color, opacity: changed ? 1 : 0.75 }}>
                               {corrTy.toFixed(2)}
                             </td>
-                            <td style={{ ...CELL, padding: '4px 6px', background: `${color}0A` }}>
+                            <td style={{ ...CELL, padding: '4px 6px', background: `${alpha(color,'0A')}` }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                                 <input
                                   type="number"
@@ -477,9 +477,9 @@ export default function AttributeCorrection() {
                                   disabled={locked}
                                   style={{
                                     width: 58,
-                                    background: locked ? `${color}20` : changed ? `${color}30` : `${color}18`,
-                                    color: changed ? color : `${color}CC`,
-                                    border: `1px solid ${changed ? color : `${color}55`}`,
+                                    background: locked ? `${alpha(color,'20')}` : changed ? `${alpha(color,'30')}` : `${alpha(color,'18')}`,
+                                    color: changed ? color : `${alpha(color,'CC')}`,
+                                    border: `1px solid ${changed ? color : `${alpha(color,'55')}`}`,
                                     borderRadius: 5,
                                     padding: '3px 5px',
                                     fontSize: 11,

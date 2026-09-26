@@ -7,10 +7,10 @@ export const theme = {
   fontMono: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",   // numbers use tabular figures (index.css)
 
   // Brand
-  navy:         '#34453F',   // chrome (sidebar + page header), strong headings
-  primary:      '#4F7A66',   // sage accent - links, active states, primary actions
-  primaryLight: '#EAF3EE',   // accent tint
-  primaryDark:  '#3F6453',   // accent hover
+  navy:         'var(--st-chrome,#34453F)',   // chrome (sidebar + page header), strong headings
+  primary:      'var(--st-accent,#4F7A66)',   // sage accent - links, active states, primary actions
+  primaryLight: 'var(--st-tint,#EAF3EE)',   // accent tint
+  primaryDark:  'var(--st-accent-dark,#3F6453)',   // accent hover
 
   // Accent (positive)
   accent:       '#15803D',
@@ -23,20 +23,23 @@ export const theme = {
 
   // Surfaces
   surface:    '#FFFFFF',   // cards, panels
-  surfaceAlt: '#F7F6F2',   // page background
-  surfaceUp:  '#FAF9F6',   // table heads, toolbars inside a card
+  surfaceAlt: 'var(--st-page,#F7F6F2)',   // page background
+  surfaceUp:  'var(--st-surface-2,#FAF9F6)',   // table heads, toolbars inside a card
 
   // Borders
-  border:       '#E5E3DA',
-  borderStrong: '#D3D0C4',
+  border:       'var(--st-line,#E5E3DA)',
+  borderStrong: 'var(--st-line-2,#D3D0C4)',
 
   // Text
-  textPrimary:   '#1E2723',
-  textSecondary: '#5F6B64',
-  textMuted:     '#6E7872',
+  textPrimary:   'var(--st-ink,#1E2723)',
+  textSecondary: 'var(--st-muted,#5F6B64)',
+  textMuted:     'var(--st-faint,#6E7872)',
 
   // Sidebar (same navy as the page header, so the chrome reads as one frame)
-  sidebar:       '#34453F',
+  sidebar:       'var(--st-chrome,#34453F)',
   sidebarText:   '#FFFFFF',
   sidebarActive: 'rgba(255,255,255,0.10)',
 }
+
+// `${color}22`-style hex alpha can't wrap a CSS var (suite theme), so fade via color-mix instead.
+export const alpha = (c, hh) => `color-mix(in srgb, ${c} ${Math.round(parseInt(hh, 16) / 2.55)}%, transparent)`

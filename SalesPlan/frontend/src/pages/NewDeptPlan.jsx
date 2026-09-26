@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { theme } from '../theme'
+import { theme, alpha } from '../theme'
 import PipelineBanner from '../components/PipelineBanner'
 import { currentEngineKey, advancePipeline } from '../pipelineState'
 
@@ -88,7 +88,7 @@ function PivotSelect({ options, value, onChange }) {
         onClick={handleOpen}
         style={{
           display: 'flex', alignItems: 'center', gap: 6,
-          background: value ? `${theme.primary}15` : theme.surfaceUp,
+          background: value ? `${alpha(theme.primary,'15')}` : theme.surfaceUp,
           border: `1px solid ${value ? theme.primary : theme.border}`,
           borderRadius: 6, padding: '5px 8px 5px 10px',
           color: value ? theme.textPrimary : theme.textMuted,
@@ -112,7 +112,7 @@ function PivotSelect({ options, value, onChange }) {
           borderRadius: 10, overflow: 'hidden',
           boxShadow: '0 8px 32px rgba(0,0,0,0.65)',
         }}>
-          <div style={{ padding: '10px 12px 8px', background: '#FAF9F6', borderBottom: `1px solid ${theme.border}` }}>
+          <div style={{ padding: '10px 12px 8px', background: 'var(--st-surface-2,#FAF9F6)', borderBottom: `1px solid ${theme.border}` }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.9, marginBottom: 7 }}>
               REFERENCE DEPARTMENT
             </div>
@@ -142,7 +142,7 @@ function PivotSelect({ options, value, onChange }) {
                 key={opt}
                 onMouseDown={() => { onChange(opt); setOpen(false); setQuery('') }}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 12px', cursor: 'pointer' }}
-                onMouseEnter={e => e.currentTarget.style.background = `${theme.primary}18`}
+                onMouseEnter={e => e.currentTarget.style.background = `${alpha(theme.primary,'18')}`}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
                 <PivotCheckbox checked={opt === value} />
@@ -159,7 +159,7 @@ function PivotSelect({ options, value, onChange }) {
 
           <div style={{
             display: 'flex', justifyContent: 'flex-end', gap: 8,
-            padding: '8px 12px', borderTop: `1px solid ${theme.border}`, background: '#FAF9F6',
+            padding: '8px 12px', borderTop: `1px solid ${theme.border}`, background: 'var(--st-surface-2,#FAF9F6)',
           }}>
             <button
               onMouseDown={() => { setOpen(false); setQuery('') }}
@@ -167,7 +167,7 @@ function PivotSelect({ options, value, onChange }) {
             >Cancel</button>
             <button
               onMouseDown={() => { setOpen(false); setQuery('') }}
-              style={{ padding: '4px 14px', borderRadius: 6, background: '#A8CBB7', color: '#1F4D3A', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+              style={{ padding: '4px 14px', borderRadius: 6, background: 'var(--st-btn,#A8CBB7)', color: 'var(--st-btn-text,#1F4D3A)', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
             >OK</button>
           </div>
         </div>
@@ -239,7 +239,7 @@ function PivotFilter({ label, options, selected, onChange }) {
         style={{
           display: 'flex', alignItems: 'center', gap: 7,
           padding: '6px 12px',
-          background: filterActive ? `${theme.primary}15` : theme.surface,
+          background: filterActive ? `${alpha(theme.primary,'15')}` : theme.surface,
           border: `1px solid ${filterActive ? theme.primary : theme.border}`,
           borderRadius: 7, cursor: 'pointer',
           color: filterActive ? theme.primary : theme.textSecondary,
@@ -249,7 +249,7 @@ function PivotFilter({ label, options, selected, onChange }) {
         <span style={{ fontSize: 12 }}>⊞</span>
         <span>{label}</span>
         {filterActive && (
-          <span style={{ fontSize: 10, background: '#A8CBB7', color: '#1F4D3A', borderRadius: 8, padding: '1px 6px', fontWeight: 700 }}>
+          <span style={{ fontSize: 10, background: 'var(--st-btn,#A8CBB7)', color: 'var(--st-btn-text,#1F4D3A)', borderRadius: 8, padding: '1px 6px', fontWeight: 700 }}>
             {selected.size}/{options.length}
           </span>
         )}
@@ -265,7 +265,7 @@ function PivotFilter({ label, options, selected, onChange }) {
           borderRadius: 10, overflow: 'hidden',
           boxShadow: '0 8px 32px rgba(0,0,0,0.65)',
         }}>
-          <div style={{ padding: '10px 12px 8px', background: '#FAF9F6', borderBottom: `1px solid ${theme.border}` }}>
+          <div style={{ padding: '10px 12px 8px', background: 'var(--st-surface-2,#FAF9F6)', borderBottom: `1px solid ${theme.border}` }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.9, marginBottom: 7 }}>
               FILTER — {label.toUpperCase()}
             </div>
@@ -287,8 +287,8 @@ function PivotFilter({ label, options, selected, onChange }) {
           {/* Select All */}
           <div
             onMouseDown={toggleAll}
-            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', cursor: 'pointer', borderBottom: `1px solid rgba(30,39,35,0.05)` }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(30,39,35,0.04)'}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', cursor: 'pointer', borderBottom: `1px solid rgba(var(--st-ink-rgb,30,39,35),0.05)` }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(var(--st-ink-rgb,30,39,35),0.04)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
             <PivotCheckbox checked={allChecked} />
@@ -301,7 +301,7 @@ function PivotFilter({ label, options, selected, onChange }) {
                 key={opt}
                 onMouseDown={() => toggleItem(opt)}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 12px', cursor: 'pointer' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(30,39,35,0.04)'}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(var(--st-ink-rgb,30,39,35),0.04)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
                 <PivotCheckbox checked={draft.has(opt)} />
@@ -312,7 +312,7 @@ function PivotFilter({ label, options, selected, onChange }) {
 
           <div style={{
             display: 'flex', justifyContent: 'flex-end', gap: 8,
-            padding: '8px 12px', borderTop: `1px solid ${theme.border}`, background: '#FAF9F6',
+            padding: '8px 12px', borderTop: `1px solid ${theme.border}`, background: 'var(--st-surface-2,#FAF9F6)',
           }}>
             <button
               onMouseDown={() => setOpen(false)}
@@ -320,7 +320,7 @@ function PivotFilter({ label, options, selected, onChange }) {
             >Cancel</button>
             <button
               onMouseDown={handleOK}
-              style={{ padding: '4px 14px', borderRadius: 6, background: '#A8CBB7', color: '#1F4D3A', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+              style={{ padding: '4px 14px', borderRadius: 6, background: 'var(--st-btn,#A8CBB7)', color: 'var(--st-btn-text,#1F4D3A)', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
             >OK</button>
           </div>
         </div>
@@ -620,8 +620,8 @@ export default function NewDeptPlan() {
             disabled={syncing || !syncStatus?.file_found}
             style={{
               padding: '6px 18px', borderRadius: 7, fontSize: 12, fontWeight: 600,
-              background: syncStatus?.file_found ? '#A8CBB7' : theme.border,
-              color: syncStatus?.file_found ? '#1F4D3A' : theme.textMuted,
+              background: syncStatus?.file_found ? 'var(--st-btn,#A8CBB7)' : theme.border,
+              color: syncStatus?.file_found ? 'var(--st-btn-text,#1F4D3A)' : theme.textMuted,
               border: 'none', cursor: (syncing || !syncStatus?.file_found) ? 'default' : 'pointer',
               opacity: syncing ? 0.7 : 1,
             }}
@@ -647,7 +647,7 @@ export default function NewDeptPlan() {
               style={{
                 padding: '7px 18px', borderRadius: 8,
                 border: `1.5px solid ${active ? c : theme.border}`,
-                background: active ? `${c}22` : theme.surface,
+                background: active ? `${alpha(c,'22')}` : theme.surface,
                 color: active ? c : theme.textSecondary,
                 fontWeight: active ? 700 : 500, fontSize: 13, cursor: 'pointer',
                 display: 'flex', alignItems: 'center', gap: 8,
@@ -678,7 +678,7 @@ export default function NewDeptPlan() {
           onClick={handleSave} disabled={saving}
           style={{
             padding: '7px 20px', borderRadius: 8,
-            background: '#A8CBB7', color: '#1F4D3A',
+            background: 'var(--st-btn,#A8CBB7)', color: 'var(--st-btn-text,#1F4D3A)',
             border: 'none', fontWeight: 600, fontSize: 13,
             cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.7 : 1,
           }}
@@ -787,7 +787,7 @@ export default function NewDeptPlan() {
                 const stripeBg        = isEven ? 'transparent' : 'rgba(0,0,0,0.06)'
 
                 return [
-                  <tr key={`new-${newDept}`} style={{ background: stripeBg, borderBottom: `1px solid ${theme.border}18` }}>
+                  <tr key={`new-${newDept}`} style={{ background: stripeBg, borderBottom: `1px solid ${alpha(theme.border,'18')}` }}>
                     <td style={{ padding: '9px 12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{
@@ -897,7 +897,7 @@ export default function NewDeptPlan() {
 
               {/* Draft add-row form */}
               {adding && (
-                <tr style={{ background: `__TPL<'#A8CBB7'>__0D`, borderBottom: `1px solid ${theme.border}` }}>
+                <tr style={{ background: `${alpha('var(--st-btn,#A8CBB7)','0D')}`, borderBottom: `1px solid ${theme.border}` }}>
                   <td style={{ padding: '10px 12px' }}>
                     <input
                       autoFocus
@@ -1081,7 +1081,7 @@ export default function NewDeptPlan() {
                     </thead>
                     <tbody>
                       {storeRows.map((row, i) => (
-                        <tr key={row.store} style={{ borderBottom: `1px solid ${theme.border}18`, background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.04)' }}>
+                        <tr key={row.store} style={{ borderBottom: `1px solid ${alpha(theme.border,'18')}`, background: i % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.04)' }}>
                           <td style={{ padding: '6px 12px', fontFamily: theme.fontMono, fontSize: 12, color: theme.textPrimary, fontWeight: 600 }}>
                             {row.store}
                           </td>

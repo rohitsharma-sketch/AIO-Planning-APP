@@ -198,10 +198,10 @@
 .quickset-input:focus { outline: none; border-color: var(--navy3); }
 .quickset-btn {
   padding: 3px 7px;
-  border: 1px solid #95BFA7;
+  border: 1px solid var(--st-btn-hover,#95BFA7);
   border-radius: 0 4px 4px 0;
-  background: #A8CBB7;
-  color: #1F4D3A;
+  background: var(--st-btn,#A8CBB7);
+  color: var(--st-btn-text,#1F4D3A);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -329,7 +329,7 @@
 
 .running-overlay {
   position: fixed; inset: 0;
-  background: rgba(30,39,35,0.25);
+  background: rgba(var(--st-ink-rgb,30,39,35),0.25);
   display: flex; align-items: center; justify-content: center;
   z-index: 200;
 }

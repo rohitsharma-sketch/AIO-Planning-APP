@@ -264,6 +264,7 @@ class Handler(SimpleHTTPRequestHandler):
     _NO_AUTH_PREFIXES = (
         '/login', '/auth/', '/static/', '/api/auth/',
         '/reset-password', '/change-password', '/api/port-status/',
+        '/api/suite-theme.js',   # suite colour theme - every page (login too) loads it first
     )
 
     def _requires_auth(self):

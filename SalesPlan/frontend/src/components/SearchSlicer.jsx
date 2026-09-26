@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { theme } from '../theme'
+import { theme, alpha } from '../theme'
 
 /**
  * Pivot-style multi-select slicer with search-inside.
@@ -118,7 +118,7 @@ export default function SearchSlicer({
                 display: 'flex', alignItems: 'center', gap: 9,
                 padding: '7px 14px', cursor: 'pointer', fontSize: 12,
                 color: isChecked(item) ? theme.textPrimary : theme.textMuted,
-                background: selected.has(item) ? `${color}12` : 'transparent',
+                background: selected.has(item) ? `${alpha(color,'12')}` : 'transparent',
                 borderBottom: `1px solid ${theme.border}`,
               }}>
                 <input

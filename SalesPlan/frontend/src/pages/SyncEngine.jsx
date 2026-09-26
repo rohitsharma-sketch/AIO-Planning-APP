@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { theme } from '../theme'
+import { theme, alpha } from '../theme'
 
 const API = '/api/planning/sync'
 
@@ -119,8 +119,8 @@ function DataTable({ data }) {
           <tbody>
             {rows.map((row, i) => (
               <tr key={i} style={{
-                borderBottom: `1px solid ${theme.border}50`,
-                background: i % 2 === 0 ? 'transparent' : `${theme.surfaceAlt}80`,
+                borderBottom: `1px solid ${alpha(theme.border,'50')}`,
+                background: i % 2 === 0 ? 'transparent' : `${alpha(theme.surfaceAlt,'80')}`,
               }}>
                 {cols.map(c => (
                   <td key={c} style={{
@@ -202,8 +202,8 @@ export default function SyncEngine() {
           style={{
             padding: '10px 26px', borderRadius: 8, border: 'none', fontSize: 14,
             fontWeight: 700, cursor: syncing ? 'default' : 'pointer',
-            background: syncing ? theme.border : '#A8CBB7',
-            color: '#1F4D3A', display: 'flex', alignItems: 'center', gap: 8,
+            background: syncing ? theme.border : 'var(--st-btn,#A8CBB7)',
+            color: 'var(--st-btn-text,#1F4D3A)', display: 'flex', alignItems: 'center', gap: 8,
           }}
         >
           <span style={syncing ? { animation: 'spin 0.8s linear infinite', display: 'inline-block' } : {}}>↺</span>

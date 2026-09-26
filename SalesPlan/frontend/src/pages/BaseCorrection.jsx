@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { theme } from '../theme'
+import { theme, alpha } from '../theme'
 import PipelineBanner from '../components/PipelineBanner'
 import SearchSlicer from '../components/SearchSlicer'
 import { currentEngineKey, advancePipeline } from '../pipelineState'
@@ -116,7 +116,7 @@ export default function BaseCorrection() {
             {inPipeline && checkData && !applied && !applying && (
               <button
                 onClick={handleApply}
-                style={{ background: '#A8CBB7', border: 'none', color: '#1F4D3A', borderRadius: 8, padding: '8px 20px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                style={{ background: 'var(--st-btn,#A8CBB7)', border: 'none', color: 'var(--st-btn-text,#1F4D3A)', borderRadius: 8, padding: '8px 20px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
               >Apply & Continue →</button>
             )}
             {checkData && !applied && !inPipeline && (
@@ -137,7 +137,7 @@ export default function BaseCorrection() {
               onClick={handleCheck}
               disabled={checking}
               style={{
-                background: '#A8CBB7', border: 'none', color: '#1F4D3A', borderRadius: 8,
+                background: 'var(--st-btn,#A8CBB7)', border: 'none', color: 'var(--st-btn-text,#1F4D3A)', borderRadius: 8,
                 padding: '8px 20px', cursor: checking ? 'default' : 'pointer',
                 fontSize: 13, fontWeight: 600, opacity: checking ? 0.7 : 1,
               }}
@@ -195,7 +195,7 @@ export default function BaseCorrection() {
               {Object.entries(checkData.by_division).sort((a, b) => b[1] - a[1]).map(([div, cnt]) => (
                 <div key={div} style={{
                   padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-                  background: `${DIV_COLOR[div] || theme.border}22`,
+                  background: `${alpha(DIV_COLOR[div] || theme.border,'22')}`,
                   color: DIV_COLOR[div] || theme.textMuted,
                   border: `1px solid ${DIV_COLOR[div] || theme.border}`,
                 }}>
@@ -217,7 +217,7 @@ export default function BaseCorrection() {
             <>
               {/* Applied banner */}
               {applied && (
-                <div style={{ padding: '10px 16px', background: `${theme.success}22`, border: `1px solid ${theme.success}`, borderRadius: 8, fontSize: 12, color: theme.success, marginBottom: 14, fontWeight: 600 }}>
+                <div style={{ padding: '10px 16px', background: `${alpha(theme.success,'22')}`, border: `1px solid ${theme.success}`, borderRadius: 8, fontSize: 12, color: theme.success, marginBottom: 14, fontWeight: 600 }}>
                   ✓ {checkData.gap_count} corrections applied — base_corrected_plan.json written. Export the review sheet for a full audit trail.
                 </div>
               )}
@@ -269,7 +269,7 @@ export default function BaseCorrection() {
                             <td style={{ ...CELL, textAlign: 'center' }}>
                               <span style={{
                                 fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 600,
-                                background: g.is_ssg ? `${theme.success}22` : `${theme.accent}22`,
+                                background: g.is_ssg ? `${alpha(theme.success,'22')}` : `${alpha(theme.accent,'22')}`,
                                 color: g.is_ssg ? theme.success : theme.accent,
                               }}>{g.is_ssg ? (g.store === 'ANG' ? 'SSG - ANG' : 'SSG') : 'NSO'}</span>
                             </td>

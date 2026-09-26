@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { theme } from '../theme'
+import { theme, alpha } from '../theme'
 
 const mono = { fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }
 
@@ -87,7 +87,7 @@ function GroupRow({ group, overrides, onChange }) {
       </div>
 
       {/* Discontinued MRPs */}
-      <div style={{ padding: '8px 16px 6px', borderBottom: `1px solid ${theme.border}22` }}>
+      <div style={{ padding: '8px 16px 6px', borderBottom: `1px solid ${alpha(theme.border,'22')}` }}>
         <div style={{ fontSize: 10, color: theme.textMuted, marginBottom: 4, fontWeight: 600, letterSpacing: 0.3 }}>
           DISCONTINUED (redistributed away)
         </div>
@@ -95,7 +95,7 @@ function GroupRow({ group, overrides, onChange }) {
           {disc_mrps.map(m => (
             <span key={m} style={{
               padding: '2px 8px', borderRadius: 4, fontSize: 11, ...mono,
-              background: `${theme.danger}15`, color: theme.danger, border: `1px solid ${theme.danger}30`,
+              background: `${alpha(theme.danger,'15')}`, color: theme.danger, border: `1px solid ${alpha(theme.danger,'30')}`,
             }}>₹{m}</span>
           ))}
         </div>
@@ -110,7 +110,7 @@ function GroupRow({ group, overrides, onChange }) {
           {valid_mrps.map((mrp, idx) => (
             <div key={mrp} style={{
               display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px',
-              borderRadius: 7, background: `${theme.accent}0d`, border: `1px solid ${theme.accent}30`,
+              borderRadius: 7, background: `${alpha(theme.accent,'0d')}`, border: `1px solid ${alpha(theme.accent,'30')}`,
             }}>
               <span style={{ fontSize: 11, color: theme.accent, ...mono, minWidth: 36 }}>₹{mrp}</span>
               <input
@@ -161,7 +161,7 @@ function PreviewTable({ rows, monthCols }) {
         <tbody>
           {rows.map((row, ri) => (
             <tr key={ri} style={{
-              background: ri % 2 === 0 ? 'transparent' : 'rgba(30,39,35,0.025)',
+              background: ri % 2 === 0 ? 'transparent' : 'rgba(var(--st-ink-rgb,30,39,35),0.025)',
               borderBottom: `1px solid ${theme.border}`,
             }}>
               {allCols.map(c => (
@@ -310,8 +310,8 @@ export default function MrpReapportionment() {
       {lastRun && !result && (
         <div style={{
           marginBottom: 18, padding: '10px 18px', borderRadius: 10,
-          background: lastRun.val_pass ? `${theme.accent}10` : `${theme.danger}10`,
-          border: `1px solid ${lastRun.val_pass ? theme.accent : theme.danger}33`,
+          background: lastRun.val_pass ? `${alpha(theme.accent,'10')}` : `${alpha(theme.danger,'10')}`,
+          border: `1px solid ${alpha(lastRun.val_pass ? theme.accent : theme.danger,'33')}`,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
         }}>
           <div>
@@ -328,7 +328,7 @@ export default function MrpReapportionment() {
           </div>
           <a href="/api/planning/mrp-reapportionment/download" style={{
             padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 600,
-            background: '#A8CBB7', color: '#1F4D3A', textDecoration: 'none', flexShrink: 0,
+            background: 'var(--st-btn,#A8CBB7)', color: 'var(--st-btn-text,#1F4D3A)', textDecoration: 'none', flexShrink: 0,
           }}>↓ Download</a>
         </div>
       )}
@@ -350,8 +350,8 @@ export default function MrpReapportionment() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
               <div style={{
                 padding: '12px 14px', borderRadius: 8,
-                background: salesInfo?.file_found ? `${theme.accent}0d` : `${theme.danger}0d`,
-                border: `1px solid ${salesInfo?.file_found ? theme.accent : theme.danger}33`,
+                background: salesInfo?.file_found ? `${alpha(theme.accent,'0d')}` : `${alpha(theme.danger,'0d')}`,
+                border: `1px solid ${alpha(salesInfo?.file_found ? theme.accent : theme.danger,'33')}`,
               }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: salesInfo?.file_found ? theme.accent : theme.danger, marginBottom: 3 }}>
                   {salesInfo?.file_found ? '✓' : '✗'} Actual Sales
@@ -366,8 +366,8 @@ export default function MrpReapportionment() {
               </div>
               <div style={{
                 padding: '12px 14px', borderRadius: 8,
-                background: status?.mapping_file_found ? `${theme.accent}0d` : `${theme.danger}0d`,
-                border: `1px solid ${status?.mapping_file_found ? theme.accent : theme.danger}33`,
+                background: status?.mapping_file_found ? `${alpha(theme.accent,'0d')}` : `${alpha(theme.danger,'0d')}`,
+                border: `1px solid ${alpha(status?.mapping_file_found ? theme.accent : theme.danger,'33')}`,
               }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: status?.mapping_file_found ? theme.accent : theme.danger, marginBottom: 3 }}>
                   {status?.mapping_file_found ? '✓' : '✗'} MRP Mapping Master
@@ -406,7 +406,7 @@ export default function MrpReapportionment() {
               <div style={{ flex: 1 }} />
               <button onClick={loadGroups} style={{
                 padding: '7px 14px', borderRadius: 7, fontSize: 11, cursor: 'pointer',
-                background: '#A8CBB7', border: 'none', color: '#1F4D3A', fontWeight: 600,
+                background: 'var(--st-btn,#A8CBB7)', border: 'none', color: 'var(--st-btn-text,#1F4D3A)', fontWeight: 600,
               }}>
                 ↻ Load Groups
               </button>
@@ -426,7 +426,7 @@ export default function MrpReapportionment() {
                 {groupsErr && (
                   <div style={{
                     padding: '10px 14px', borderRadius: 8, fontSize: 12,
-                    background: `${theme.danger}12`, border: `1px solid ${theme.danger}44`, color: theme.danger,
+                    background: `${alpha(theme.danger,'12')}`, border: `1px solid ${alpha(theme.danger,'44')}`, color: theme.danger,
                   }}>✗ {groupsErr}</div>
                 )}
                 {groups && (
@@ -499,7 +499,7 @@ export default function MrpReapportionment() {
                   <div style={{ flex: 1 }} />
                   <a href="/api/planning/mrp-reapportionment/download" style={{
                     display: 'flex', alignItems: 'center', padding: '6px 14px', borderRadius: 7,
-                    fontSize: 12, fontWeight: 700, background: '#A8CBB7', color: '#1F4D3A',
+                    fontSize: 12, fontWeight: 700, background: 'var(--st-btn,#A8CBB7)', color: 'var(--st-btn-text,#1F4D3A)',
                     textDecoration: 'none', margin: '8px 0',
                   }}>↓ Download Excel</a>
                 </div>
@@ -543,8 +543,8 @@ export default function MrpReapportionment() {
                 width: '100%', padding: '13px 0', borderRadius: 9,
                 fontSize: 14, fontWeight: 700, letterSpacing: 0.3,
                 cursor: canRun ? 'pointer' : 'not-allowed',
-                background: canRun ? '#A8CBB7' : theme.surfaceUp,
-                color: canRun ? '#1F4D3A' : theme.textMuted, border: canRun ? 'none' : `1px solid ${theme.border}`,
+                background: canRun ? 'var(--st-btn,#A8CBB7)' : theme.surfaceUp,
+                color: canRun ? 'var(--st-btn-text,#1F4D3A)' : theme.textMuted, border: canRun ? 'none' : `1px solid ${theme.border}`,
               }}
             >
               {running ? '⟳  Running engine…' : '▶  Run Re-apportionment'}
@@ -552,7 +552,7 @@ export default function MrpReapportionment() {
             {error && (
               <div style={{
                 marginTop: 10, padding: '10px 14px', borderRadius: 8, fontSize: 12,
-                background: `${theme.danger}12`, border: `1px solid ${theme.danger}44`, color: theme.danger,
+                background: `${alpha(theme.danger,'12')}`, border: `1px solid ${alpha(theme.danger,'44')}`, color: theme.danger,
               }}>✗ {error}</div>
             )}
           </div>

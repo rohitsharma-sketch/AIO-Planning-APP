@@ -45,3 +45,6 @@ RS Planning Platform/backend/calendar_engine/Local DB/reindex_timing_stats.json
 
 # Auto-sync scheduled task's run log — regenerated daily, never source.
 Tentative AOP Forecaster/auto_sync.log
+
+# Suite theme choice picked on Landing - local state, not source
+RS Planning Platform/backend/data/suite_theme.json

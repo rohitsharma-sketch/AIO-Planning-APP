@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { theme } from '../theme'
+import { theme, alpha } from '../theme'
 
 const DIVISIONS = ['KIDS', 'LADIES', 'MENS', 'GM', 'RETAIL']
 
@@ -219,7 +219,7 @@ export default function DepartmentPlan() {
               {aopDivisionAops.map(d => (
                 <div key={d.division} style={{
                   padding: '6px 12px', borderRadius: 7, background: theme.surface,
-                  border: `1px solid ${DIV_COLOR[d.division] || theme.border}44`,
+                  border: `1px solid ${alpha(DIV_COLOR[d.division] || theme.border,'44')}`,
                 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: DIV_COLOR[d.division] || theme.textSecondary }}>{d.division}</div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: theme.textPrimary }}>₹{d.annual_target.toLocaleString('en-IN', { maximumFractionDigits: 1 })} L</div>
@@ -247,7 +247,7 @@ export default function DepartmentPlan() {
           return (
             <div style={{ marginTop: 14, border: `1px solid ${theme.border}`, borderRadius: 10, overflow: 'hidden' }}>
               <div style={{
-                padding: '10px 18px', background: `${DIV_COLOR[activeDiv]}0F`,
+                padding: '10px 18px', background: `${alpha(DIV_COLOR[activeDiv],'0F')}`,
                 borderBottom: `1px solid ${theme.border}`, display: 'flex', justifyContent: 'space-between', fontSize: 12,
               }}>
                 <strong style={{ color: theme.textPrimary }}>{activeDiv} — calculated department plan</strong>
@@ -294,7 +294,7 @@ export default function DepartmentPlan() {
               background: activeDiv === div ? DIV_COLOR[div] : theme.surface,
               color: activeDiv === div ? '#fff' : theme.textPrimary,
               fontWeight: 600, fontSize: 13,
-              boxShadow: activeDiv === div ? `0 2px 8px ${DIV_COLOR[div]}44` : 'none',
+              boxShadow: activeDiv === div ? `0 2px 8px ${alpha(DIV_COLOR[div],'44')}` : 'none',
               outline: 'none',
             }}>
               {div}
@@ -379,7 +379,7 @@ export default function DepartmentPlan() {
               <button key={attr} onClick={() => setAttrFilter(isActive ? null : attr)} style={{
                 padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
                 cursor: 'pointer', outline: 'none',
-                border: isActive ? 'none' : `1px solid ${s.bg === '#1E3A5F' ? '#37423C' : theme.border}`,
+                border: isActive ? 'none' : `1px solid ${s.bg === '#1E3A5F' ? 'var(--st-ink-2,#37423C)' : theme.border}`,
                 background: isActive ? s.color : s.bg,
                 color: isActive ? (s.bg === '#1E3A5F' ? '#1E3A5F' : '#fff') : s.color,
                 transition: 'all 0.15s',
@@ -556,7 +556,7 @@ export default function DepartmentPlan() {
 
                 <button onClick={handleAddDept} style={{
                   padding: '7px 20px', borderRadius: 6, cursor: 'pointer',
-                  background: '#A8CBB7', color: '#1F4D3A', border: 'none',
+                  background: 'var(--st-btn,#A8CBB7)', color: 'var(--st-btn-text,#1F4D3A)', border: 'none',
                   fontSize: 13, fontWeight: 600,
                 }}>
                   Add

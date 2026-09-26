@@ -45,7 +45,7 @@
 }
 .pl-tile:hover:not(:disabled) {
   border-color: var(--navy3);
-  box-shadow: 0 6px 20px rgba(79,122,102,.14);
+  box-shadow: 0 6px 20px rgba(var(--st-accent-rgb,79,122,102),.14);
   transform: translateY(-1px);
 }
 .pl-tile:disabled { opacity: .55; }
@@ -55,7 +55,7 @@
   border-radius: 10px;
   font-size: 20px; font-weight: 600;
 }
-.pl-tile--new .pl-tile-icon   { background: #A8CBB7; color: #1F4D3A; }
+.pl-tile--new .pl-tile-icon   { background: var(--st-btn,#A8CBB7); color: var(--st-btn-text,#1F4D3A); }
 .pl-tile--saved .pl-tile-icon { background: var(--light); color: var(--navy3); }
 .pl-tile-body { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .pl-tile-title { font-size: 15px; font-weight: 700; color: var(--navy); }
@@ -104,7 +104,7 @@
 }
 .pl-log-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
 .pl-log-cur-badge {
-  background: #A8CBB7; color: #1F4D3A;
+  background: var(--st-btn,#A8CBB7); color: var(--st-btn-text,#1F4D3A);
   padding: 1px 8px; border-radius: 999px;
   font-weight: 700; font-size: 10px; letter-spacing: .04em; text-transform: uppercase;
 }
@@ -120,12 +120,12 @@
 .pl-load-btn {
   padding: 7px 18px;
   border-radius: 7px;
-  background: #A8CBB7;
-  color: #1F4D3A;
+  background: var(--st-btn,#A8CBB7);
+  color: var(--st-btn-text,#1F4D3A);
   font-size: 13px;
   font-weight: 600;
 }
-.pl-load-btn:hover { background: #95BFA7; color: #1F4D3A; }
+.pl-load-btn:hover { background: var(--st-btn-hover,#95BFA7); color: var(--st-btn-text,#1F4D3A); }
 .pl-rename-btn {
   padding: 7px 12px;
   border-radius: 7px;
@@ -156,7 +156,7 @@
 .pl-save-dialog-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(30,39,35,.45);
+  background: rgba(var(--st-ink-rgb,30,39,35),.45);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -184,5 +184,5 @@
   color: var(--char);
 }
 .pl-save-dialog-btns button:hover:not(.pl-btn-save) { background: var(--surface2); }
-.pl-save-dialog-btns .pl-btn-save { background: #A8CBB7; color: #1F4D3A; border-color: #95BFA7; }
-.pl-save-dialog-btns .pl-btn-save:hover { background: #95BFA7; color: #1F4D3A; }
+.pl-save-dialog-btns .pl-btn-save { background: var(--st-btn,#A8CBB7); color: var(--st-btn-text,#1F4D3A); border-color: var(--st-btn-hover,#95BFA7); }
+.pl-save-dialog-btns .pl-btn-save:hover { background: var(--st-btn-hover,#95BFA7); color: var(--st-btn-text,#1F4D3A); }

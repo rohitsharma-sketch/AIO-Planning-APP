@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script>/* suite colour theme - one choice for every app, picked on Landing */(function(){var p=location.port,o=(p==='7800'||p==='8010')?'':'//'+location.hostname+':8010';document.write('<script src="'+o+'/api/suite-theme.js"><\/script>')})()</script>
 <title>RS Planning · CityKart</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
@@ -10,17 +11,17 @@
   /* RS Planning suite look (2026-09-25): navy chrome, light data area, sage
      accent, Plus Jakarta Sans - the same palette as AOP / BIS / Sales Plan. */
   :root {
-    --navy: #34453F;  --navy2: #41564E;
-    --accent: #4F7A66;  --accent-h: #3F6453;  --accent-bg: #EAF3EE;  --accent-bd: #CBE2D5;
-    --bg: #F7F6F2;  --white: #FFFFFF;  --surface2: #FAF9F6;
-    --char: #1E2723;  --text2: #37423C;  --muted: #5F6B64;  --faint: #6E7872;
-    --border: #E5E3DA;  --border2: #D3D0C4;
+    --navy: var(--st-chrome,#34453F);  --navy2: var(--st-chrome-2,#41564E);
+    --accent: var(--st-accent,#4F7A66);  --accent-h: var(--st-accent-dark,#3F6453);  --accent-bg: var(--st-tint,#EAF3EE);  --accent-bd: var(--st-tint-b,#CBE2D5);
+    --bg: var(--st-page,#F7F6F2);  --white: #FFFFFF;  --surface2: var(--st-surface-2,#FAF9F6);
+    --char: var(--st-ink,#1E2723);  --text2: var(--st-ink-2,#37423C);  --muted: var(--st-muted,#5F6B64);  --faint: var(--st-faint,#6E7872);
+    --border: var(--st-line,#E5E3DA);  --border2: var(--st-line-2,#D3D0C4);
     --up: #15803D;  --up-bg: #ECFDF3;  --up-bd: #A6E3BD;
     --down: #B42318;  --down-bg: #FEF3F2;  --down-bd: #F7C1BC;
     --checking: #B45309;  --checking-bg: #FFF7E8;  --checking-bd: #F5D39A;
-    --shadow-sm: 0 1px 2px rgba(30,39,35,.05);
-    --shadow: 0 1px 2px rgba(30,39,35,.05), 0 8px 24px rgba(30,39,35,.07);
-    --shadow-lg: 0 24px 60px rgba(30,39,35,.25);
+    --shadow-sm: 0 1px 2px rgba(var(--st-ink-rgb,30,39,35),.05);
+    --shadow: 0 1px 2px rgba(var(--st-ink-rgb,30,39,35),.05), 0 8px 24px rgba(var(--st-ink-rgb,30,39,35),.07);
+    --shadow-lg: 0 24px 60px rgba(var(--st-ink-rgb,30,39,35),.25);
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; }
@@ -49,9 +50,9 @@
   }
   .brand { display: flex; align-items: center; gap: 11px; text-decoration: none; }
   .brand-mark {
-    width: 32px; height: 32px; border-radius: 9px; background: #A8CBB7;
+    width: 32px; height: 32px; border-radius: 9px; background: var(--st-btn,#A8CBB7);
     display: flex; align-items: center; justify-content: center;
-    font-size: 12.5px; font-weight: 800; letter-spacing: .02em; color: #1F4D3A; }
+    font-size: 12.5px; font-weight: 800; letter-spacing: .02em; color: var(--st-btn-text,#1F4D3A); }
   .brand-name { font-size: 15px; font-weight: 800; letter-spacing: -.01em; }
   .brand-sub { font-size: 12.5px; color: rgba(255,255,255,.55); padding-left: 11px; border-left: 1px solid rgba(255,255,255,.18); }
   .topbar-gap { flex: 1; }
@@ -74,6 +75,26 @@
   .breaker-knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .25s; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
   .breaker.on .breaker-knob { transform: translateX(16px); }
   .breaker-label { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+  /* Suite theme picker - one choice recolours every app (suite-theme.js) */
+  .theme-wrap { position: relative; }
+  .theme-panel {
+    position: absolute; top: calc(100% + 10px); right: 0; z-index: 50; width: 300px;
+    background: var(--white); color: var(--char); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: var(--shadow); padding: 12px;
+  }
+  .theme-panel[hidden] { display: none; }
+  .theme-hd { font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin: 2px 4px 8px; }
+  .theme-opt {
+    display: flex; align-items: center; gap: 11px; width: 100%; text-align: left;
+    padding: 8px; border-radius: 9px; border: 1px solid transparent; background: none; cursor: pointer; font: inherit; color: inherit;
+  }
+  .theme-opt:hover { background: var(--st-surface-3,#F3F2EC); }
+  .theme-opt[aria-checked="true"] { border-color: var(--accent-bd); background: var(--accent-bg); }
+  .theme-sw { display: flex; width: 46px; height: 30px; border-radius: 7px; overflow: hidden; flex: none; border: 1px solid rgba(0,0,0,.08); }
+  .theme-sw i { flex: 1; }
+  .theme-name { font-size: 13px; font-weight: 700; }
+  .theme-desc { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+  .theme-note { font-size: 11.5px; color: var(--faint); margin: 8px 4px 2px; line-height: 1.4; }
   .corner-msg:empty { display: none; }
   .corner-msg {
     position: fixed; top: 70px; right: 28px; z-index: 45; max-width: 340px;
@@ -150,14 +171,14 @@
     font-size: 12.5px; font-weight: 700; color: var(--accent); background: var(--accent-bg);
     border: 1px solid var(--accent-bd); border-radius: 8px; padding: 6px 12px; cursor: pointer;
   }
-  .btn-ghost:hover { background: #DCEBE2; }
+  .btn-ghost:hover { background: var(--st-tint-c,#DCEBE2); }
 
   footer { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--faint); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 
   /* ── Modals ── */
   .sync-modal-overlay {
     display: none; position: fixed; inset: 0; z-index: 100; padding: 24px;
-    background: rgba(30,39,35,.45); backdrop-filter: blur(3px);
+    background: rgba(var(--st-ink-rgb,30,39,35),.45); backdrop-filter: blur(3px);
     align-items: center; justify-content: center;
   }
   .sync-modal-overlay.open { display: flex; }
@@ -185,14 +206,15 @@
   .sync-badge { font-size: 10px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; margin-right: 4px; }
   .sync-badge.ok { color: var(--up); background: var(--up-bg); }
   .sync-badge.fail { color: var(--down); background: var(--down-bg); }
+  .sync-badge.warn { color: var(--checking); background: var(--checking-bg); }
   .sync-now-btn {
     font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
     padding: 4px 10px; border-radius: 7px; border: 1px solid var(--accent-bd); background: var(--accent-bg); color: var(--accent); cursor: pointer;
   }
-  .sync-now-btn:hover:not(:disabled) { background: #DCEBE2; }
+  .sync-now-btn:hover:not(:disabled) { background: var(--st-tint-c,#DCEBE2); }
   .sync-now-btn:disabled { opacity: .5; cursor: default; }
-  .flow-resume-btn { display: inline-block; margin-top: 8px; padding: 6px 12px; border-radius: 8px; background: #A8CBB7; color: #1F4D3A; font-size: 12px; font-weight: 700; text-decoration: none; }
-  .flow-resume-btn:hover { background: #95BFA7; color: #1F4D3A; }
+  .flow-resume-btn { display: inline-block; margin-top: 8px; padding: 6px 12px; border-radius: 8px; background: var(--st-btn,#A8CBB7); color: var(--st-btn-text,#1F4D3A); font-size: 12px; font-weight: 700; text-decoration: none; }
+  .flow-resume-btn:hover { background: var(--st-btn-hover,#95BFA7); color: var(--st-btn-text,#1F4D3A); }
 
   /* ── Lagan Calendar modal (suite palette) ── */
   .lagan-modal {
@@ -203,7 +225,7 @@
   .lm-hdr { background: var(--navy); padding: 14px 20px 12px; flex-shrink: 0; }
   .lm-hdr-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
   .lm-logo { font-size: 18px; font-weight: 800; color: #fff; letter-spacing: -.01em; line-height: 1; margin: 0; }
-  .lm-logo em { color: #BFE0CD; font-style: normal; }
+  .lm-logo em { color: var(--st-rail,#BFE0CD); font-style: normal; }
   .lm-close { background: none; border: none; color: rgba(255,255,255,.6); font-size: 18px; line-height: 1; cursor: pointer; padding: 5px 7px; border-radius: 7px; }
   .lm-close:hover { color: #fff; background: rgba(255,255,255,.1); }
   .lm-hdr-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -228,11 +250,11 @@
   .lm-ctrl { display: flex; align-items: center; gap: 8px; padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--surface2); flex-shrink: 0; flex-wrap: wrap; }
   .lm-view-tog { display: flex; background: var(--white); border: 1px solid var(--border2); border-radius: 8px; overflow: hidden; }
   .lm-vtb { padding: 6px 14px; border: none; background: transparent; font-size: 12.5px; font-weight: 600; color: var(--muted); cursor: pointer; font-family: inherit; }
-  .lm-vtb.active { background: #A8CBB7; color: #1F4D3A; }
+  .lm-vtb.active { background: var(--st-btn,#A8CBB7); color: var(--st-btn-text,#1F4D3A); }
   .lm-vtb:not(.active):hover { background: var(--surface2); color: var(--char); }
   .lm-btn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; font-family: inherit; }
-  .lm-btn-pri { background: #A8CBB7; color: #1F4D3A; border: 1px solid #95BFA7; }
-  .lm-btn-pri:hover { background: #95BFA7; border-color: var(--accent-h); color: #1F4D3A; }
+  .lm-btn-pri { background: var(--st-btn,#A8CBB7); color: var(--st-btn-text,#1F4D3A); border: 1px solid var(--st-btn-hover,#95BFA7); }
+  .lm-btn-pri:hover { background: var(--st-btn-hover,#95BFA7); border-color: var(--accent-h); color: var(--st-btn-text,#1F4D3A); }
   .lm-btn-sec { background: var(--white); color: var(--text2); border: 1px solid var(--border2); }
   .lm-btn-sec:hover { border-color: var(--accent-bd); color: var(--accent); }
   .lm-res-count { margin-left: auto; font-size: 12px; color: var(--muted); }
@@ -249,7 +271,7 @@
   .lm-mo-card.has { border-top: 3px solid var(--accent); }
   .lm-mo-hdr { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; }
   .lm-mo-name { font-size: 13.5px; font-weight: 700; color: var(--navy); }
-  .lm-mo-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 11px; background: #A8CBB7; color: #1F4D3A; font-size: 11px; font-weight: 800; }
+  .lm-mo-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 11px; background: var(--st-btn,#A8CBB7); color: var(--st-btn-text,#1F4D3A); font-size: 11px; font-weight: 800; }
   .lm-mo-badge.z { background: var(--surface2); color: var(--faint); border: 1px solid var(--border); }
   .lm-mo-body { padding: 5px 12px 11px; min-height: 40px; }
   .lm-d-grid { display: flex; flex-wrap: wrap; gap: 3px; }
@@ -265,9 +287,9 @@
   .lm-stbl tr:last-child td { border-bottom: none; }
   .lm-stbl td.c0 { color: var(--border2); }
   .lm-stbl td.cn { font-weight: 700; color: var(--text2); }
-  .lm-stbl td.h1 { background: #F3F8F5; }
-  .lm-stbl td.h2 { background: #DCEBE2; color: var(--navy); }
-  .lm-stbl td.h3 { background: #BFD9CA; color: var(--navy); }
+  .lm-stbl td.h1 { background: var(--st-tint-e,#F3F8F5); }
+  .lm-stbl td.h2 { background: var(--st-tint-c,#DCEBE2); color: var(--navy); }
+  .lm-stbl td.h3 { background: var(--st-tint-f,#BFD9CA); color: var(--navy); }
   .lm-stbl td.ctot { font-weight: 800; color: var(--accent); font-size: 14px; }
   .lm-stbl th.thot { color: var(--accent); }
   .lm-empty { text-align: center; padding: 60px 24px; color: var(--muted); }
@@ -297,6 +319,18 @@
     </a>
     <span class="topbar-gap"></span>
     <span class="sys-pill" id="sys-pill"><span class="dot" id="sys-dot"></span><span id="sys-label">Checking services…</span></span>
+    <!-- Suite theme picker: one colour theme for every app -->
+    <div class="theme-wrap">
+      <button id="theme-btn" class="breaker" type="button" aria-haspopup="true" aria-expanded="false" title="Colour theme for every RS Planning app">
+        <span class="theme-sw" id="theme-btn-sw" style="width:28px;height:20px;border-radius:999px"></span>
+        <span class="breaker-label">Theme</span>
+      </button>
+      <div id="theme-panel" class="theme-panel" role="menu" hidden>
+        <div class="theme-hd">Colour theme · all apps</div>
+        <div id="theme-list" role="radiogroup" aria-label="Colour theme"></div>
+        <div class="theme-note" id="theme-note">Applies to Landing, AOP, BIS, Sales Plan, Calendar and the sign-in pages. Open apps update when you switch back to them.</div>
+      </div>
+    </div>
     <!-- Master Switch -->
     <button id="launch-all-btn" class="breaker" type="button" title="Start or stop all planning servers">
       <span class="breaker-track"><span class="breaker-knob"></span></span>
@@ -562,11 +596,21 @@
       var el = document.getElementById('extraction-rows');
       var runs = data.runs || [];
       if (!runs.length) { el.innerHTML = '<div class="sync-empty">No syncs run yet.</div>'; return; }
+      // Only a real failure is red: "running" = in progress, "offline" = source
+      // machine unreachable, last good data still in use (was all shown as FAILED).
       el.innerHTML = runs.map(function (r) {
-        var ok = r.status === 'success';
-        return '<div class="sync-row">' +
+        var st = r.status, cls = 'fail', label = 'failed', when = r.completed_at || r.started_at, tip = r.error_message || '';
+        if (st === 'success') { cls = 'ok'; label = 'ok'; }
+        else if (st === 'running') {
+          var hrs = (Date.now() - new Date(r.started_at).getTime()) / 36e5;
+          if (hrs < 8) { cls = 'warn'; label = 'running'; tip = 'In progress since ' + fmtWhen(r.started_at); }
+          else { label = 'stalled'; tip = 'Started ' + fmtWhen(r.started_at) + ' and never finished - run Sync now'; }
+        }
+        else if (st === 'offline') { cls = 'warn'; label = 'offline'; if (r.last_success_at) { when = r.last_success_at; tip = 'Source unreachable - last good data from ' + fmtWhen(r.last_success_at) + ' still in use. ' + tip; } }
+        else if (st === 'partial') { cls = 'warn'; label = 'partial'; }
+        return '<div class="sync-row" title="' + tip.replace(/"/g, '&quot;') + '">' +
           '<span class="sync-name">' + r.source_key + '</span>' +
-          '<span class="sync-when"><span class="sync-badge ' + (ok ? 'ok' : 'fail') + '">' + (ok ? 'ok' : 'failed') + '</span>' + fmtWhen(r.completed_at || r.started_at) + '</span>' +
+          '<span class="sync-when"><span class="sync-badge ' + cls + '">' + label + '</span>' + fmtWhen(when) + '</span>' +
         '</div>';
       }).join('');
     })
@@ -844,12 +888,12 @@
       return rows.join('\r\n');
     }
     function showExportModal(title,csv){
-      var ov=document.createElement('div'); ov.style.cssText='position:fixed;inset:0;background:rgba(30,39,35,.45);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px';
+      var ov=document.createElement('div'); ov.style.cssText='position:fixed;inset:0;background:rgba(var(--st-ink-rgb,30,39,35),.45);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px';
       var safeTitle=title.replace(/</g,'&lt;');
-      ov.innerHTML='<div style="background:#FFFFFF;border:1px solid #D3D0C4;border-radius:12px;width:100%;max-width:540px;display:flex;flex-direction:column;overflow:hidden;max-height:80vh">'+
-        '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #E5E3DA"><span style="font-size:16px;font-weight:800;color:#34453F">'+safeTitle+'</span><button id="lm-exp-close" style="background:none;border:none;color:#5F6B64;font-size:20px;cursor:pointer;padding:2px 6px">&#x2715;</button></div>'+
-        '<textarea readonly spellcheck="false" style="flex:1;margin:14px 18px;padding:10px;border:1.5px solid #D3D0C4;border-radius:7px;background:#FAF9F6;color:#1E2723;font-family:Consolas,monospace;font-size:11.5px;resize:none;outline:none;min-height:160px" id="lm-exp-ta"></textarea>'+
-        '<div style="padding:10px 18px 14px;border-top:1px solid #E5E3DA;display:flex;gap:10px;align-items:center"><span style="font-size:12px;color:#5F6B64;flex:1">Copy and save as .csv</span><button id="lm-exp-copy" style="background:#A8CBB7;color:#1F4D3A;border:none;border-radius:7px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer">Copy to Clipboard</button></div>'+
+      ov.innerHTML='<div style="background:#FFFFFF;border:1px solid var(--st-line-2,#D3D0C4);border-radius:12px;width:100%;max-width:540px;display:flex;flex-direction:column;overflow:hidden;max-height:80vh">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--st-line,#E5E3DA)"><span style="font-size:16px;font-weight:800;color:var(--st-chrome,#34453F)">'+safeTitle+'</span><button id="lm-exp-close" style="background:none;border:none;color:var(--st-muted,#5F6B64);font-size:20px;cursor:pointer;padding:2px 6px">&#x2715;</button></div>'+
+        '<textarea readonly spellcheck="false" style="flex:1;margin:14px 18px;padding:10px;border:1.5px solid var(--st-line-2,#D3D0C4);border-radius:7px;background:var(--st-surface-2,#FAF9F6);color:var(--st-ink,#1E2723);font-family:Consolas,monospace;font-size:11.5px;resize:none;outline:none;min-height:160px" id="lm-exp-ta"></textarea>'+
+        '<div style="padding:10px 18px 14px;border-top:1px solid var(--st-line,#E5E3DA);display:flex;gap:10px;align-items:center"><span style="font-size:12px;color:var(--st-muted,#5F6B64);flex:1">Copy and save as .csv</span><button id="lm-exp-copy" style="background:var(--st-btn,#A8CBB7);color:var(--st-btn-text,#1F4D3A);border:none;border-radius:7px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer">Copy to Clipboard</button></div>'+
         '</div>';
       document.body.appendChild(ov);
       var ta=ov.querySelector('#lm-exp-ta'); ta.value=csv;
@@ -883,6 +927,36 @@
     closeBtn.addEventListener('click', closeModal);
     overlay.addEventListener('click',function(e){if(e.target===overlay)closeModal();});
     document.addEventListener('keydown',function(e){if(e.key==='Escape'&&overlay.classList.contains('open'))closeModal();});
+  })();
+
+  // ── Suite theme picker (one colour theme for every app; saved on 8010) ──
+  (function(){
+    var ST=window.SuiteTheme, btn=document.getElementById('theme-btn'), panel=document.getElementById('theme-panel'),
+        list=document.getElementById('theme-list'), note=document.getElementById('theme-note'), noteText=note.textContent;
+    if(!ST){ btn.disabled=true; btn.title='Theme service offline - start the servers'; return; }
+    function sw(t){ return '<i style="background:'+t.chrome+'"></i><i style="background:'+t.btn+'"></i><i style="background:'+t.page+'"></i>'; }
+    function render(){
+      var cur=ST.current;
+      document.getElementById('theme-btn-sw').innerHTML=sw(ST.themes[cur]);
+      list.innerHTML=Object.keys(ST.themes).map(function(id){
+        var t=ST.themes[id];
+        return '<button type="button" class="theme-opt" role="radio" aria-checked="'+(id===cur)+'" data-id="'+id+'">'
+          +'<span class="theme-sw">'+sw(t)+'</span><span><div class="theme-name">'+t.name+'</div><div class="theme-desc">'+t.desc+'</div></span></button>';
+      }).join('');
+    }
+    function toggle(open){ panel.hidden=!open; btn.setAttribute('aria-expanded',String(open)); if(open) render(); }
+    btn.addEventListener('click',function(e){ e.stopPropagation(); toggle(panel.hidden); });
+    document.addEventListener('click',function(e){ if(!panel.hidden&&!panel.contains(e.target)) toggle(false); });
+    document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&!panel.hidden){ toggle(false); btn.focus(); } });
+    list.addEventListener('click',function(e){
+      var o=e.target.closest('.theme-opt'); if(!o) return;
+      var prev=ST.current;
+      ST.save(o.dataset.id).then(function(){ note.textContent=noteText; render(); })
+        .catch(function(err){ ST.apply(prev); render(); note.textContent=err.message+' - sign in again and retry.'; });
+      render();
+    });
+    window.addEventListener('suitethemechange',function(){ document.getElementById('theme-btn-sw').innerHTML=sw(ST.themes[ST.current]); });
+    render();
   })();
 </script>
 </body>

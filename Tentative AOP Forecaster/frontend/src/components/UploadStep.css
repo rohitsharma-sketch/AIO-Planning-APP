@@ -39,9 +39,9 @@
 .us-card-primary {
   background: linear-gradient(135deg, var(--navy) 0%, #13405F 100%);
   color: #fff;
-  box-shadow: 0 4px 18px rgba(52,69,63,.25);
+  box-shadow: 0 4px 18px rgba(var(--st-chrome-rgb,52,69,63),.25);
 }
-.us-card-primary:hover:not(:disabled) { box-shadow: 0 10px 26px rgba(52,69,63,.32); }
+.us-card-primary:hover:not(:disabled) { box-shadow: 0 10px 26px rgba(var(--st-chrome-rgb,52,69,63),.32); }
 
 .us-card-secondary {
   background: var(--white);
@@ -49,7 +49,7 @@
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
 }
-.us-card-secondary:hover:not(:disabled) { border-color: var(--navy3); box-shadow: 0 6px 20px rgba(79,122,102,.12); }
+.us-card-secondary:hover:not(:disabled) { border-color: var(--navy3); box-shadow: 0 6px 20px rgba(var(--st-accent-rgb,79,122,102),.12); }
 
 .us-card-header { display: flex; align-items: center; }
 .us-card-chip {
@@ -59,8 +59,8 @@
   text-transform: uppercase;
   padding: 2px 9px;
   border-radius: 999px;
-  background: #A8CBB7;
-  color: #1F4D3A;
+  background: var(--st-btn,#A8CBB7);
+  color: var(--st-btn-text,#1F4D3A);
 }
 .us-chip-outline { background: var(--surface3); color: var(--muted); border: 1px solid var(--border); }
 

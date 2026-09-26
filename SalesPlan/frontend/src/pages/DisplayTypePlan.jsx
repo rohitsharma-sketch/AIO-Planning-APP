@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { theme } from '../theme'
+import { theme, alpha } from '../theme'
 
 const API = '/api/planning/display-type'
 
@@ -46,7 +46,7 @@ function UploadBox({ label, subtitle, endpoint, onDone, imported, rows, date, co
     <div style={{
       flex: 1, border: `2px dashed ${drag ? c : imported ? theme.success : theme.border}`,
       borderRadius: 10, padding: '20px 22px',
-      background: imported ? `${theme.success}08` : theme.surface,
+      background: imported ? `${alpha(theme.success,'08')}` : theme.surface,
       cursor: 'pointer', transition: 'border 0.15s',
     }}
       onClick={() => ref.current?.click()}
@@ -193,7 +193,7 @@ export default function DisplayTypePlan() {
             <div key={label} style={{
               display: 'flex', alignItems: 'center', gap: 7,
               padding: '6px 12px', borderRadius: 7,
-              background: ok ? `${theme.success}14` : theme.surface,
+              background: ok ? `${alpha(theme.success,'14')}` : theme.surface,
               border: `1px solid ${ok ? theme.success : theme.border}`,
               fontSize: 11,
             }}>
@@ -246,7 +246,7 @@ export default function DisplayTypePlan() {
         )}
 
         {valResult && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 8, background: valResult.gate_open ? `${theme.success}14` : `${theme.danger}14`, border: `1px solid ${valResult.gate_open ? theme.success : theme.danger}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 8, background: valResult.gate_open ? `${alpha(theme.success,'14')}` : `${alpha(theme.danger,'14')}`, border: `1px solid ${valResult.gate_open ? theme.success : theme.danger}` }}>
             <span style={{ fontSize: 13 }}>{valResult.gate_open ? '🟢' : '🔴'}</span>
             <span style={{ fontSize: 12, fontWeight: 700, color: valResult.gate_open ? theme.success : theme.danger }}>
               {valResult.gate_open ? 'Gate Open' : 'Gate Blocked'}
@@ -264,7 +264,7 @@ export default function DisplayTypePlan() {
         )}
 
         {status?.qty_run && (
-          <a href={`${API}/export`} style={btnStyle(true, '#4F7A66', true)}>↓ Export Excel</a>
+          <a href={`${API}/export`} style={btnStyle(true, 'var(--st-accent,#4F7A66)', true)}>↓ Export Excel</a>
         )}
       </div>
 
@@ -344,7 +344,7 @@ function PlanView({ rows, months, curMonth, setFMonth, stores, fStore, setFStore
             padding: '5px 14px', borderRadius: 7, fontSize: 11, cursor: 'pointer',
             fontWeight: curMonth === m ? 700 : 400,
             border: `1.5px solid ${curMonth === m ? theme.primary : theme.border}`,
-            background: curMonth === m ? `${theme.primary}22` : theme.surface,
+            background: curMonth === m ? `${alpha(theme.primary,'22')}` : theme.surface,
             color: curMonth === m ? theme.primary : theme.textSecondary,
           }}>{m}</button>
         ))}
@@ -415,7 +415,7 @@ function PlanView({ rows, months, curMonth, setFMonth, stores, fStore, setFStore
               {rows.map((r, i) => (
                 <tr key={`${r.store}-${r.dept}-${r.mrp}-${i}`} style={{
                   borderBottom: `1px solid ${theme.border}`,
-                  background: !r.has_contrib ? `${theme.danger}0a` : i % 2 === 0 ? 'transparent' : theme.surfaceAlt,
+                  background: !r.has_contrib ? `${alpha(theme.danger,'0a')}` : i % 2 === 0 ? 'transparent' : theme.surfaceAlt,
                 }}>
                   <td style={{ ...CELL, textAlign: 'left', paddingLeft: 14, fontWeight: 600 }}>{r.store}</td>
                   <td style={{ ...CELL, textAlign: 'left', color: theme.textMuted }}>{r.division}</td>

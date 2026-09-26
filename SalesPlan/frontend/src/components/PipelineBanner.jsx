@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { theme } from '../theme'
+import { theme, alpha } from '../theme'
 import { ENGINE_META, getPipeline, clearPipeline } from '../pipelineState'
 
 export default function PipelineBanner({ currentKey }) {
@@ -10,7 +10,7 @@ export default function PipelineBanner({ currentKey }) {
   return (
     <div style={{
       marginBottom: 20, padding: '10px 18px', borderRadius: 9,
-      background: `__TPL<'#A8CBB7'>__12`, border: `1px solid __TPL<'#95BFA7'>__55`,
+      background: `${alpha('var(--st-btn,#A8CBB7)','12')}`, border: `1px solid ${alpha('var(--st-btn-hover,#95BFA7)','55')}`,
       display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
     }}>
       <span style={{ fontSize: 11, color: theme.primary, fontWeight: 700, letterSpacing: 0.4 }}>PIPELINE</span>
@@ -23,7 +23,7 @@ export default function PipelineBanner({ currentKey }) {
             {i > 0 && <span style={{ color: theme.border, fontSize: 13 }}>→</span>}
             <span style={{
               fontSize: 11, padding: '2px 10px', borderRadius: 5, fontWeight: 600,
-              background: done ? `${theme.success}22` : active ? `${theme.primary}22` : theme.surfaceAlt,
+              background: done ? `${alpha(theme.success,'22')}` : active ? `${alpha(theme.primary,'22')}` : theme.surfaceAlt,
               color: done ? theme.success : active ? theme.primary : theme.textMuted,
               border: `1px solid ${done ? theme.success : active ? theme.primary : theme.border}`,
             }}>

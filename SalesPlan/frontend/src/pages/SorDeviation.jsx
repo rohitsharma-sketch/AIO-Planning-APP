@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { theme } from '../theme'
+import { theme, alpha } from '../theme'
 
 const API = '/api/planning/deviation/sor'
 
 const RULE_BADGE = {
-  avg:       { label: 'AVG',       bg: '#4F7A66', color: '#fff' },
+  avg:       { label: 'AVG',       bg: 'var(--st-accent,#4F7A66)', color: '#fff' },
   plan_only: { label: 'PLAN ONLY', bg: '#B45309', color: '#fff' },
   ppo_only:  { label: 'PPO ONLY',  bg: '#8B5CF6', color: '#fff' },
   zero:      { label: 'ZERO',      bg: '#6B7280', color: '#fff' },
@@ -50,7 +50,7 @@ function UploadBox({ label, subtitle, onFile, imported, importedDate, importedRo
   return (
     <div style={{
       border: `2px dashed ${dragging ? theme.accent : imported ? theme.success : theme.border}`,
-      borderRadius: 12, padding: 24, background: imported ? `${theme.success}0a` : theme.surface,
+      borderRadius: 12, padding: 24, background: imported ? `${alpha(theme.success,'0a')}` : theme.surface,
       cursor: 'pointer', transition: 'border 0.2s', flex: 1,
     }}
       onClick={() => ref.current?.click()}
@@ -217,8 +217,8 @@ export default function SorDeviation() {
           disabled={!canRunAvg}
           style={{
             padding: '10px 24px', borderRadius: 8, border: 'none', cursor: canRunAvg ? 'pointer' : 'not-allowed',
-            background: canRunAvg ? '#A8CBB7' : theme.surfaceAlt,
-            color: canRunAvg ? '#1F4D3A' : theme.textMuted, fontWeight: 700, fontSize: 13,
+            background: canRunAvg ? 'var(--st-btn,#A8CBB7)' : theme.surfaceAlt,
+            color: canRunAvg ? 'var(--st-btn-text,#1F4D3A)' : theme.textMuted, fontWeight: 700, fontSize: 13,
           }}
         >
           {running ? 'Computing…' : status?.avg_run ? '↻ Re-run Average' : '▶ Run Average'}
@@ -230,8 +230,8 @@ export default function SorDeviation() {
             disabled={!canReapp}
             style={{
               padding: '10px 24px', borderRadius: 8, border: 'none', cursor: canReapp ? 'pointer' : 'not-allowed',
-              background: canReapp ? '#A8CBB7' : theme.surfaceAlt,
-              color: canReapp ? '#1F4D3A' : theme.textMuted, fontWeight: 700, fontSize: 13,
+              background: canReapp ? 'var(--st-btn,#A8CBB7)' : theme.surfaceAlt,
+              color: canReapp ? 'var(--st-btn-text,#1F4D3A)' : theme.textMuted, fontWeight: 700, fontSize: 13,
             }}
           >
             {reapping ? 'Reapportioning…' : status?.reapp_run ? '↻ Re-reapportion' : '⇄ Reapportion'}
@@ -264,7 +264,7 @@ export default function SorDeviation() {
                 disabled={k === 'reapp' && !reappResult}
                 style={{
                   padding: '7px 18px', borderRadius: 8, border: `1.5px solid ${viewMode === k ? theme.primary : theme.border}`,
-                  background: viewMode === k ? `${theme.primary}22` : theme.surface,
+                  background: viewMode === k ? `${alpha(theme.primary,'22')}` : theme.surface,
                   color: viewMode === k ? theme.primary : theme.textSecondary,
                   fontWeight: viewMode === k ? 700 : 400, fontSize: 12, cursor: 'pointer',
                 }}>{lbl}</button>
@@ -283,7 +283,7 @@ export default function SorDeviation() {
                   <button key={a} onClick={() => setSelAttr(a)} style={{
                     padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: active ? 700 : 400,
                     border: `1.5px solid ${active ? c : theme.border}`,
-                    background: active ? `${c}22` : theme.surface,
+                    background: active ? `${alpha(c,'22')}` : theme.surface,
                     color: active ? c : theme.textSecondary, cursor: 'pointer',
                   }}>{a}</button>
                 )
@@ -308,7 +308,7 @@ export default function SorDeviation() {
               <button key={m} onClick={() => setSelMonth(m)} style={{
                 padding: '5px 14px', borderRadius: 7, fontSize: 11, fontWeight: curMonth === m ? 700 : 400,
                 border: `1.5px solid ${curMonth === m ? theme.primary : theme.border}`,
-                background: curMonth === m ? `${theme.primary}22` : theme.surface,
+                background: curMonth === m ? `${alpha(theme.primary,'22')}` : theme.surface,
                 color: curMonth === m ? theme.primary : theme.textSecondary, cursor: 'pointer',
               }}>{m}</button>
             ))}
@@ -332,7 +332,7 @@ export default function SorDeviation() {
                   style={{
                     display: 'flex', alignItems: 'center', gap: 12,
                     padding: '10px 16px', cursor: 'pointer',
-                    background: isExpanded ? `__TPL<'#A8CBB7'>__12` : theme.surfaceAlt,
+                    background: isExpanded ? `${alpha('var(--st-btn,#A8CBB7)','12')}` : theme.surfaceAlt,
                     borderBottom: isExpanded ? `1px solid ${theme.border}` : 'none',
                   }}
                 >
@@ -343,7 +343,7 @@ export default function SorDeviation() {
                     Avg total: {total.toFixed(2)}%
                   </span>
                   {reappSum !== null && (
-                    <span style={{ fontFamily: theme.fontMono, fontSize: 12, color: '#4F7A66', minWidth: 90, textAlign: 'right' }}>
+                    <span style={{ fontFamily: theme.fontMono, fontSize: 12, color: 'var(--st-accent,#4F7A66)', minWidth: 90, textAlign: 'right' }}>
                       Reapp Σ: {reappSum.toFixed(1)}%
                     </span>
                   )}
@@ -361,7 +361,7 @@ export default function SorDeviation() {
                           <th style={{ ...HDR }}>Plan %</th>
                           <th style={{ ...HDR }}>PPO %</th>
                           <th style={{ ...HDR }}>Avg %</th>
-                          {viewMode === 'reapp' && <th style={{ ...HDR, color: '#4F7A66' }}>Reapp %</th>}
+                          {viewMode === 'reapp' && <th style={{ ...HDR, color: 'var(--st-accent,#4F7A66)' }}>Reapp %</th>}
                           <th style={{ ...HDR, textAlign: 'center' }}>Rule</th>
                         </tr>
                       </thead>
@@ -375,7 +375,7 @@ export default function SorDeviation() {
                               background: i % 2 === 0 ? 'transparent' : theme.surfaceAlt,
                             }}>
                               <td style={{ ...CELL, textAlign: 'left', paddingLeft: 16 }}>
-                                <span style={{ fontSize: 10, fontWeight: 700, color: ac, background: `${ac}18`, padding: '2px 7px', borderRadius: 5 }}>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: ac, background: `${alpha(ac,'18')}`, padding: '2px 7px', borderRadius: 5 }}>
                                   {row.attr || '—'}
                                 </span>
                               </td>
@@ -385,7 +385,7 @@ export default function SorDeviation() {
                               <td style={{ ...CELL }}>{md.ppo_cont?.toFixed(2) ?? '—'}</td>
                               <td style={{ ...CELL, fontWeight: 700, color: theme.textPrimary }}>{md.avg_cont?.toFixed(4) ?? '—'}</td>
                               {viewMode === 'reapp' && (
-                                <td style={{ ...CELL, fontWeight: 700, color: '#4F7A66' }}>{md.reapp_cont?.toFixed(4) ?? '—'}</td>
+                                <td style={{ ...CELL, fontWeight: 700, color: 'var(--st-accent,#4F7A66)' }}>{md.reapp_cont?.toFixed(4) ?? '—'}</td>
                               )}
                               <td style={{ ...CELL, textAlign: 'center' }}><RuleBadge rule={md.rule} /></td>
                             </tr>

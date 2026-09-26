@@ -45,7 +45,29 @@ DB_SYNC_JOBS = [
 ]
 
 
+def _single_instance():
+    """Exclusive lock for the whole run, so a second trigger (two "Sync now"
+    calls a second apart, Landing's after-launch sync + the daily task, ...)
+    exits instead of running every job twice in parallel (seen 2026-09-26:
+    two runs 1 s apart, each a multi-hour data_lake_sales pass). The OS drops
+    the lock when this process ends, even on a crash, so it never goes stale."""
+    import tempfile
+    fh = open(os.path.join(tempfile.gettempdir(), "rs_planning_run_all.lock"), "a+")
+    try:
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        print("Another sync run is already in progress - not starting a second one.")
+        sys.exit(0)
+    return fh   # keep the handle (and the lock) for the life of the process
+
+
 def main():
+    _lock = _single_instance()  # noqa: F841 - held until exit
     ok = True
     for module_name, source_key in DB_SYNC_JOBS:
         try:

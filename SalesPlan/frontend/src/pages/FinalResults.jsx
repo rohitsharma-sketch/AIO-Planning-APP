@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { theme } from '../theme'
+import { theme, alpha } from '../theme'
 import SearchSlicer from '../components/SearchSlicer'
 
 const CELL = { fontFamily: theme.fontMono, fontSize: 12, textAlign: 'right', padding: '5px 10px', whiteSpace: 'nowrap' }
@@ -16,7 +16,7 @@ const DIV_COLOR = {
 
 // ── Pipeline node ──────────────────────────────────────────────────────────────
 function PipelineNode({ label, done, active, optional }) {
-  const bg    = done   ? (active ? theme.accent : `${theme.success}22`) : theme.surfaceAlt
+  const bg    = done   ? (active ? theme.accent : `${alpha(theme.success,'22')}`) : theme.surfaceAlt
   const border = done  ? (active ? theme.accent : theme.success)         : theme.border
   const color  = done  ? (active ? '#fff'       : theme.success)         : theme.textMuted
   return (
@@ -192,7 +192,7 @@ export default function FinalResults() {
             <div style={{
               padding: '8px 14px', borderRadius: 8,
               border: `1px solid ${buyerSynced ? theme.success : theme.border}`,
-              background: buyerSynced ? `${theme.success}18` : theme.surfaceAlt,
+              background: buyerSynced ? `${alpha(theme.success,'18')}` : theme.surfaceAlt,
               color: buyerSynced ? theme.success : theme.textMuted,
               fontSize: 12, fontWeight: 600, textAlign: 'center',
             }}>
@@ -210,7 +210,7 @@ export default function FinalResults() {
           <PipelineNode label="Base Correction"  done={pipeline.base_correction} active={active_source === 'base_corrected_plan.json'} optional />
           <div style={{ marginLeft: 16, alignSelf: 'center', marginBottom: 16 }}>
             <div style={{
-              padding: '8px 14px', borderRadius: 8, background: `${theme.accent}18`,
+              padding: '8px 14px', borderRadius: 8, background: `${alpha(theme.accent,'18')}`,
               border: `1px solid ${theme.accent}`, fontSize: 11, color: theme.accent, fontWeight: 600,
             }}>
               Active source:<br />
@@ -277,7 +277,7 @@ export default function FinalResults() {
               {allDivs.map(d => (
                 <button key={d} onClick={() => setExpandedDiv(expandedDiv === d ? null : d)} style={{
                   padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                  background: expandedDiv === d ? `${DIV_COLOR[d] || theme.primary}33` : 'transparent',
+                  background: expandedDiv === d ? `${alpha(DIV_COLOR[d] || theme.primary,'33')}` : 'transparent',
                   color: DIV_COLOR[d] || theme.textMuted,
                   border: `1px solid ${expandedDiv === d ? (DIV_COLOR[d] || theme.primary) : theme.border}`,
                 }}>{d}</button>
@@ -310,7 +310,7 @@ export default function FinalResults() {
                     <tr key={s.store} style={{ borderBottom: `1px solid ${theme.border}`, background: i % 2 === 0 ? 'transparent' : theme.surfaceAlt }}>
                       <td style={{ ...CELL, textAlign: 'left', fontWeight: 600 }}>{s.store}</td>
                       <td style={{ ...CELL, textAlign: 'center' }}>
-                        <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 600, background: s.is_ssg ? `${theme.success}22` : `${theme.accent}22`, color: s.is_ssg ? theme.success : theme.accent }}>
+                        <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 600, background: s.is_ssg ? `${alpha(theme.success,'22')}` : `${alpha(theme.accent,'22')}`, color: s.is_ssg ? theme.success : theme.accent }}>
                           {s.is_ssg ? (s.store === 'ANG' ? 'SSG - ANG' : 'SSG') : 'NSO'}
                         </span>
                       </td>
@@ -352,7 +352,7 @@ export default function FinalResults() {
               {allDivs.map(d => (
                 <button key={d} onClick={() => { setDeptDiv(d); setDeptFilters(new Set()); setDeptStoreFilters(new Set()) }} style={{
                   padding: '5px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                  background: deptDiv === d ? `${DIV_COLOR[d]}33` : 'transparent',
+                  background: deptDiv === d ? `${alpha(DIV_COLOR[d],'33')}` : 'transparent',
                   color: DIV_COLOR[d] || theme.textMuted,
                   border: `1.5px solid ${deptDiv === d ? DIV_COLOR[d] : theme.border}`,
                 }}>{d}</button>
@@ -392,7 +392,7 @@ export default function FinalResults() {
             {/* Degrowth toggle */}
             <button onClick={() => setShowDegrowthOnly(v => !v)} style={{
               padding: '5px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-              background: showDegrowthOnly ? `${theme.danger}22` : 'transparent',
+              background: showDegrowthOnly ? `${alpha(theme.danger,'22')}` : 'transparent',
               color: showDegrowthOnly ? theme.danger : theme.textMuted,
               border: `1.5px solid ${showDegrowthOnly ? theme.danger : theme.border}`,
               display: 'flex', alignItems: 'center', gap: 6,
@@ -448,13 +448,13 @@ export default function FinalResults() {
                         style={{
                           borderBottom: `1px solid ${theme.border}`,
                           background: isDegrowth
-                            ? `${theme.danger}0d`
+                            ? `${alpha(theme.danger,'0d')}`
                             : i % 2 === 0 ? 'transparent' : theme.surfaceAlt,
                         }}>
                         <td style={{ ...CELL, textAlign: 'left', fontWeight: 600, color: DIV_COLOR[deptDiv] || theme.textPrimary }}>{r.dept}</td>
                         <td style={{ ...CELL, textAlign: 'left', fontWeight: 600 }}>{r.store}</td>
                         <td style={{ ...CELL, textAlign: 'center' }}>
-                          <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 600, background: r.is_ssg ? `${theme.success}22` : `${theme.accent}22`, color: r.is_ssg ? theme.success : theme.accent }}>
+                          <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, fontWeight: 600, background: r.is_ssg ? `${alpha(theme.success,'22')}` : `${alpha(theme.accent,'22')}`, color: r.is_ssg ? theme.success : theme.accent }}>
                             {r.is_ssg ? (r.store === 'ANG' ? 'SSG - ANG' : 'SSG') : 'NSO'}
                           </span>
                         </td>
@@ -520,7 +520,7 @@ export default function FinalResults() {
                       <button key={cl} onClick={() => setActiveCluster(cl)} style={{
                         padding: '5px 14px', borderRadius: 7, cursor: 'pointer', fontSize: 11, fontWeight: active ? 700 : 400,
                         border: `1.5px solid ${active ? theme.accent : theme.border}`,
-                        background: active ? `${theme.accent}22` : theme.surface,
+                        background: active ? `${alpha(theme.accent,'22')}` : theme.surface,
                         color: active ? theme.accent : theme.textSecondary,
                       }}>{cl}</button>
                     )
@@ -537,7 +537,7 @@ export default function FinalResults() {
                       <button key={div} onClick={() => setClusterDiv(div)} style={{
                         padding: '5px 14px', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: active ? 700 : 500,
                         border: `1.5px solid ${active ? c : theme.border}`,
-                        background: active ? `${c}22` : theme.surface,
+                        background: active ? `${alpha(c,'22')}` : theme.surface,
                         color: active ? c : theme.textSecondary,
                       }}>{div}</button>
                     )
@@ -555,7 +555,7 @@ export default function FinalResults() {
                         padding: '5px 14px', borderRadius: 7, cursor: 'pointer', fontSize: 11,
                         fontWeight: active ? 700 : 400,
                         border: `1.5px solid ${active ? theme.primary : theme.border}`,
-                        background: active ? `${theme.primary}22` : theme.surface,
+                        background: active ? `${alpha(theme.primary,'22')}` : theme.surface,
                         color: active ? theme.primary : theme.textSecondary,
                         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
                       }}>
@@ -615,7 +615,7 @@ export default function FinalResults() {
                             <tr key={dept} style={{
                               borderBottom: `1px solid ${theme.border}`,
                               background: growth !== null && growth < 0
-                                ? `${theme.danger}0a`
+                                ? `${alpha(theme.danger,'0a')}`
                                 : i % 2 === 0 ? 'transparent' : theme.surfaceAlt,
                             }}>
                               <td style={{ ...CELL, textAlign: 'left', paddingLeft: 16, fontWeight: 600, color: c }}>{dept}</td>
@@ -658,7 +658,7 @@ export default function FinalResults() {
                   const isActive = dashDiv === div
                   return (
                     <div key={div} onClick={() => setDashDiv(div)} style={{
-                      background: isActive ? `${DIV_COLOR[div] || theme.primary}18` : theme.surface,
+                      background: isActive ? `${alpha(DIV_COLOR[div] || theme.primary,'18')}` : theme.surface,
                       borderRadius: 12, padding: '16px 18px', cursor: 'pointer',
                       border: `1.5px solid ${isActive ? (DIV_COLOR[div] || theme.primary) : theme.border}`,
                     }}>
@@ -674,7 +674,7 @@ export default function FinalResults() {
                           {d.growth !== null ? `${d.growth > 0 ? '+' : ''}${d.growth}%` : '—'}
                         </span>
                         {d.degrowth_stores > 0 && (
-                          <span style={{ fontSize: 10, color: theme.danger, background: `${theme.danger}18`, border: `1px solid ${theme.danger}33`, borderRadius: 4, padding: '1px 6px' }}>
+                          <span style={{ fontSize: 10, color: theme.danger, background: `${alpha(theme.danger,'18')}`, border: `1px solid ${alpha(theme.danger,'33')}`, borderRadius: 4, padding: '1px 6px' }}>
                             {d.degrowth_stores} ↓
                           </span>
                         )}
@@ -733,7 +733,7 @@ export default function FinalResults() {
                                 const share = divData.ty > 0 ? (av.ty / divData.ty * 100) : 0
                                 const aColor = ATTR_COLOR[attr] || theme.textMuted
                                 return (
-                                  <tr key={attr} style={{ borderBottom: `1px solid ${theme.border}`, background: isDegrow ? `${theme.danger}08` : i % 2 === 0 ? 'transparent' : theme.surfaceAlt }}>
+                                  <tr key={attr} style={{ borderBottom: `1px solid ${theme.border}`, background: isDegrow ? `${alpha(theme.danger,'08')}` : i % 2 === 0 ? 'transparent' : theme.surfaceAlt }}>
                                     <td style={{ ...CELL, textAlign: 'left', fontWeight: 600 }}>
                                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
                                         <span style={{ width: 8, height: 8, borderRadius: '50%', background: aColor, display: 'inline-block', flexShrink: 0 }} />

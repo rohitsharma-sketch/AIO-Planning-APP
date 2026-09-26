@@ -5,27 +5,27 @@
 html, body { margin: 0; }
 body {
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: #F7F6F2;
-  color: #1E2723;
+  background: var(--st-page,#F7F6F2);
+  color: var(--st-ink,#1E2723);
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   font-variant-numeric: tabular-nums;   /* numbers line up in every table */
 }
 button, input, select, textarea { font-family: inherit; }
-h1, h2, h3, h4 { color: #34453F; letter-spacing: -0.01em; }
-a { color: #4F7A66; }
-::selection { background: #DCEBE2; }
-:focus-visible { outline: 2px solid #4F7A66; outline-offset: 2px; }
+h1, h2, h3, h4 { color: var(--st-chrome,#34453F); letter-spacing: -0.01em; }
+a { color: var(--st-accent,#4F7A66); }
+::selection { background: var(--st-tint-c,#DCEBE2); }
+:focus-visible { outline: 2px solid var(--st-accent,#4F7A66); outline-offset: 2px; }
 
 /* thin, quiet scrollbars (the default white bar sat on the navy sidebar) */
-* { scrollbar-width: thin; scrollbar-color: #D3D0C4 transparent; }
+* { scrollbar-width: thin; scrollbar-color: var(--st-line-2,#D3D0C4) transparent; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: #D3D0C4; border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb { background: var(--st-line-2,#D3D0C4); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
 ::-webkit-scrollbar-track { background: transparent; }
 .sp-nav { scrollbar-color: rgba(255,255,255,.18) transparent; }
 .sp-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,.18); background-clip: content-box; }
 
 .sp-navlink:hover { background: rgba(255,255,255,.06) !important; color: #fff !important; }
-.sp-card:hover { border-color: #CBE2D5 !important; box-shadow: 0 1px 2px rgba(30,39,35,.05), 0 8px 24px rgba(30,39,35,.08) !important; transform: translateY(-1px); }
-.sp-card:hover .sp-card-go { color: #3F6453 !important; }
+.sp-card:hover { border-color: var(--st-tint-b,#CBE2D5) !important; box-shadow: 0 1px 2px rgba(var(--st-ink-rgb,30,39,35),.05), 0 8px 24px rgba(var(--st-ink-rgb,30,39,35),.08) !important; transform: translateY(-1px); }
+.sp-card:hover .sp-card-go { color: var(--st-accent-dark,#3F6453) !important; }

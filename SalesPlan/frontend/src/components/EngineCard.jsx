@@ -17,7 +17,7 @@ export default function EngineCard({ title, description, status, icon, onClick }
         borderRadius: 12,
         padding: '20px 22px',
         cursor: isActive ? 'pointer' : 'default',
-        boxShadow: '0 1px 2px rgba(30,39,35,0.05)',
+        boxShadow: '0 1px 2px rgba(var(--st-ink-rgb,30,39,35),0.05)',
         transition: 'box-shadow 0.15s, transform 0.15s, border-color 0.15s',
         display: 'flex',
         gap: 16,

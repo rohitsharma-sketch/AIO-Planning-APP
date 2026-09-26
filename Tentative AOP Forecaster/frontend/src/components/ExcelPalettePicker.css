@@ -60,7 +60,7 @@
   transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
 }
 .epp-card:hover    { border-color: var(--navy3); transform: translateY(-1px); }
-.epp-card.selected { border-color: var(--navy); box-shadow: 0 0 0 3px rgba(30,39,35,0.14); }
+.epp-card.selected { border-color: var(--navy); box-shadow: 0 0 0 3px rgba(var(--st-ink-rgb,30,39,35),0.14); }
 
 .epp-preview {
   width: 68px;

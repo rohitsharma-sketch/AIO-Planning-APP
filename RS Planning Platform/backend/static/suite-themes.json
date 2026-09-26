@@ -1,0 +1,51 @@
+{
+  "_doc": "Suite-wide colour themes (one source for every RS Planning app). Role -> hex; *_rgb roles are 'r,g,b' for rgba(). Served by GET /api/suite-theme.js; the chosen theme is saved by POST /api/suite-theme. Category colours, semantic green/red/amber, festival tints and Excel export palettes are NOT themed.",
+  "default": "sage",
+  "themes": {
+    "sage": {
+      "name": "Sage and sand", "desc": "Deep sage chrome, soft sage accent, warm sand page.",
+      "chrome": "#34453F", "chrome-2": "#41564E", "accent": "#4F7A66", "accent-dark": "#3F6453",
+      "tint": "#EAF3EE", "tint-b": "#CBE2D5", "tint-c": "#DCEBE2", "tint-d": "#A9C2B5", "tint-e": "#F3F8F5", "tint-f": "#BFD9CA",
+      "rail": "#BFE0CD", "btn": "#A8CBB7", "btn-hover": "#95BFA7", "btn-hover-2": "#BFDCCB", "btn-text": "#1F4D3A",
+      "page": "#F7F6F2", "line": "#E5E3DA", "line-2": "#D3D0C4", "surface-2": "#FAF9F6", "surface-3": "#F3F2EC", "surface-4": "#F4F3EE",
+      "ink": "#1E2723", "ink-2": "#37423C", "muted": "#5F6B64", "faint": "#6E7872", "faint-2": "#9AA39D",
+      "accent_rgb": "79,122,102", "rail_rgb": "191,224,205", "chrome_rgb": "52,69,63", "ink_rgb": "30,39,35"
+    },
+    "lavender": {
+      "name": "Lavender mist", "desc": "Soft plum-grey chrome, lavender accent, near-white violet page.",
+      "chrome": "#3B3553", "chrome-2": "#4A4366", "accent": "#6A5AA8", "accent-dark": "#564892",
+      "tint": "#F1EDFB", "tint-b": "#D9CFF4", "tint-c": "#E6DFF8", "tint-d": "#B9ADD9", "tint-e": "#F7F4FD", "tint-f": "#CFC3EE",
+      "rail": "#D8CCFA", "btn": "#B9A9E8", "btn-hover": "#A996DF", "btn-hover-2": "#CABDEE", "btn-text": "#2E2466",
+      "page": "#F7F6FB", "line": "#E4E1EC", "line-2": "#D2CDDD", "surface-2": "#FAF9FD", "surface-3": "#F2F0F7", "surface-4": "#F4F2F8",
+      "ink": "#211E2B", "ink-2": "#3A3647", "muted": "#625D70", "faint": "#736E80", "faint-2": "#9D98A8",
+      "accent_rgb": "106,90,168", "rail_rgb": "216,204,250", "chrome_rgb": "59,53,83", "ink_rgb": "33,30,43"
+    },
+    "powder": {
+      "name": "Powder blue and peach", "desc": "Dusky slate chrome, powder-blue accent, peach highlights.",
+      "chrome": "#2F3F58", "chrome-2": "#3C4F6C", "accent": "#3F6A99", "accent-dark": "#335781",
+      "tint": "#EAF2FA", "tint-b": "#C9DDF2", "tint-c": "#DCE8F5", "tint-d": "#A7BFD9", "tint-e": "#F3F8FC", "tint-f": "#BCD3EC",
+      "rail": "#F6CDB5", "btn": "#A9C8E8", "btn-hover": "#96BBE2", "btn-hover-2": "#BDD5EE", "btn-text": "#1E3A5F",
+      "page": "#F7F8FA", "line": "#E2E6EC", "line-2": "#CDD4DE", "surface-2": "#FAFBFC", "surface-3": "#F1F3F7", "surface-4": "#F3F5F8",
+      "ink": "#1C2430", "ink-2": "#36404F", "muted": "#5C6778", "faint": "#6D7788", "faint-2": "#99A2B0",
+      "accent_rgb": "63,106,153", "rail_rgb": "246,205,181", "chrome_rgb": "47,63,88", "ink_rgb": "28,36,48"
+    },
+    "navy": {
+      "name": "Classic navy", "desc": "Deep navy chrome, soft blue accent, cool grey page.",
+      "chrome": "#1F2F4A", "chrome-2": "#2A3D5E", "accent": "#3B5B8C", "accent-dark": "#2F4A74",
+      "tint": "#E9EEF6", "tint-b": "#C8D4E8", "tint-c": "#DAE2EF", "tint-d": "#A5B5CF", "tint-e": "#F3F6FA", "tint-f": "#BACADF",
+      "rail": "#BCD0EE", "btn": "#B3C6E4", "btn-hover": "#A0B7DC", "btn-hover-2": "#C4D3EA", "btn-text": "#1B2F52",
+      "page": "#F6F7F9", "line": "#E1E5EB", "line-2": "#CCD3DD", "surface-2": "#FAFBFC", "surface-3": "#F0F2F6", "surface-4": "#F2F4F7",
+      "ink": "#1A2231", "ink-2": "#343D4D", "muted": "#5A6577", "faint": "#6B7586", "faint-2": "#98A1AF",
+      "accent_rgb": "59,91,140", "rail_rgb": "188,208,238", "chrome_rgb": "31,47,74", "ink_rgb": "26,34,49"
+    },
+    "burgundy": {
+      "name": "Royal burgundy", "desc": "Deep wine chrome, rose accent, warm stone page.",
+      "chrome": "#3E2530", "chrome-2": "#4E303D", "accent": "#8A3A57", "accent-dark": "#732F48",
+      "tint": "#F8ECF0", "tint-b": "#EBCBD6", "tint-c": "#F2DCE4", "tint-d": "#CFA3B3", "tint-e": "#FBF5F7", "tint-f": "#E3BFCC",
+      "rail": "#EBC3D1", "btn": "#E3B5C5", "btn-hover": "#DAA0B5", "btn-hover-2": "#EAC5D2", "btn-text": "#5A1F36",
+      "page": "#F8F6F5", "line": "#E8E2E2", "line-2": "#D8CFD0", "surface-2": "#FBFAF9", "surface-3": "#F4F0EF", "surface-4": "#F5F2F1",
+      "ink": "#261D20", "ink-2": "#40353A", "muted": "#685B61", "faint": "#786B71", "faint-2": "#A3979C",
+      "accent_rgb": "138,58,87", "rail_rgb": "235,195,209", "chrome_rgb": "62,37,48", "ink_rgb": "38,29,32"
+    }
+  }
+}

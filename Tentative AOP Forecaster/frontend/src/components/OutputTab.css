@@ -554,7 +554,7 @@
 .pv-vals, .pv-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
 .pv-vals button, .pv-seg button { background: var(--white); color: var(--muted); font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 0; }
 .pv-vals button + button, .pv-seg button + button { border-left: 1px solid var(--border); }
-.pv-vals button.on, .pv-seg button.on { background: #A8CBB7; color: #1F4D3A; }
+.pv-vals button.on, .pv-seg button.on { background: var(--st-btn,#A8CBB7); color: var(--st-btn-text,#1F4D3A); }
 .pv-vals button:disabled { cursor: default; opacity: 1; }
 .pv-link { background: none; color: var(--navy3); font-size: 11.5px; font-weight: 600; padding: 2px 4px; }
 .pv-link:hover { text-decoration: underline; }
@@ -569,7 +569,7 @@
 .pv-table thead th.pv-val { font-size: 9.5px; letter-spacing: .05em; text-transform: uppercase; opacity: .9; }
 .pv-table .pv-gstart { border-left: 1px solid rgba(255,255,255,.14); }
 .pv-table tbody td.pv-gstart { border-left: 1px solid var(--border); }
-.pv-table th.pv-total-h { background: #A8CBB7; color: #1F4D3A; }
+.pv-table th.pv-total-h { background: var(--st-btn,#A8CBB7); color: var(--st-btn-text,#1F4D3A); }
 .pv-table td.pv-total { background: var(--light); }
 .pv-table .sdt-grand td.pv-total { background: var(--navy2); }
 .pv-table .sdt-grand td { position: static; }

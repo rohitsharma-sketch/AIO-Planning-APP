@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { theme } from '../theme'
+import { theme, alpha } from '../theme'
 import SearchSlicer from '../components/SearchSlicer'
 
 const DIV_COLOR = {
@@ -37,9 +37,9 @@ function StepBar({ pipeline }) {
         const isOpt     = step.optional
 
         const bg = isCurrent
-          ? `${theme.primary}18`
+          ? `${alpha(theme.primary,'18')}`
           : isDone
-            ? `${theme.success}10`
+            ? `${alpha(theme.success,'10')}`
             : isOpt
               ? 'transparent'
               : 'transparent'
@@ -61,8 +61,8 @@ function StepBar({ pipeline }) {
                 width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 9, fontWeight: 800,
-                background: isCurrent ? '#A8CBB7' : isDone ? theme.success : theme.border,
-                color: isCurrent ? '#1F4D3A' : isDone ? '#fff' : theme.textMuted,
+                background: isCurrent ? 'var(--st-btn,#A8CBB7)' : isDone ? theme.success : theme.border,
+                color: isCurrent ? 'var(--st-btn-text,#1F4D3A)' : isDone ? '#fff' : theme.textMuted,
               }}>
                 {isCurrent ? '→' : isDone ? '✓' : isOpt ? '○' : String(i + 1)}
               </span>
@@ -72,7 +72,7 @@ function StepBar({ pipeline }) {
               {isOpt && (
                 <span style={{
                   fontSize: 9, padding: '1px 5px', borderRadius: 3, marginLeft: 'auto',
-                  background: isDone ? `${theme.success}18` : 'rgba(30,39,35,0.05)',
+                  background: isDone ? `${alpha(theme.success,'18')}` : 'rgba(var(--st-ink-rgb,30,39,35),0.05)',
                   color: isDone ? theme.success : theme.textMuted, fontWeight: 700,
                 }}>
                   {isDone ? 'applied' : 'opt'}
@@ -124,7 +124,7 @@ function DeviationPrompt({ pwwDone, sorDone, onProceed }) {
               style={{
                 width: '100%', padding: '12px 16px', borderRadius: 9, cursor: 'pointer',
                 border: `1.5px solid ${item.done ? theme.success : theme.border}`,
-                background: item.done ? `${theme.success}10` : theme.surfaceAlt,
+                background: item.done ? `${alpha(theme.success,'10')}` : theme.surfaceAlt,
                 display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
               }}
             >
@@ -151,7 +151,7 @@ function DeviationPrompt({ pwwDone, sorDone, onProceed }) {
           onClick={onProceed}
           style={{
             width: '100%', padding: '12px', borderRadius: 9, border: `1.5px solid ${theme.border}`,
-            background: '#A8CBB7', color: '#1F4D3A', fontWeight: 700, fontSize: 14, cursor: 'pointer',
+            background: 'var(--st-btn,#A8CBB7)', color: 'var(--st-btn-text,#1F4D3A)', fontWeight: 700, fontSize: 14, cursor: 'pointer',
           }}
         >
           Proceed with Imported Cont&nbsp;% →
@@ -273,7 +273,7 @@ export default function MrpOutput() {
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           {!data.has_plan && (
-            <span style={{ fontSize: 11, color: theme.accent, background: `${theme.accent}18`, border: `1px solid ${theme.accent}44`, borderRadius: 6, padding: '4px 10px' }}>
+            <span style={{ fontSize: 11, color: theme.accent, background: `${alpha(theme.accent,'18')}`, border: `1px solid ${alpha(theme.accent,'44')}`, borderRadius: 6, padding: '4px 10px' }}>
               No dept plan — TY values will show 0
             </span>
           )}
@@ -312,7 +312,7 @@ export default function MrpOutput() {
             <button key={div} onClick={() => { setActiveDiv(div); setDeptFilters(new Set()); setShowBad(false); setExpandedDept(null) }} style={{
               padding: '8px 18px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
               border: `2px solid ${isActive ? DIV_COLOR[div] : theme.border}`,
-              background: isActive ? `${DIV_COLOR[div]}18` : theme.surface,
+              background: isActive ? `${alpha(DIV_COLOR[div],'18')}` : theme.surface,
               color: isActive ? DIV_COLOR[div] : theme.textMuted,
               fontWeight: isActive ? 700 : 400, fontSize: 12,
             }}>
@@ -341,8 +341,8 @@ export default function MrpOutput() {
               {[['contrib', 'Contrib %'], ['ty', 'TY Split (₹L)']].map(([mode, label]) => (
                 <button key={mode} onClick={() => setViewMode(mode)} style={{
                   padding: '5px 14px', fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none',
-                  background: viewMode === mode ? '#A8CBB7' : theme.surface,
-                  color: viewMode === mode ? '#1F4D3A' : theme.textMuted,
+                  background: viewMode === mode ? 'var(--st-btn,#A8CBB7)' : theme.surface,
+                  color: viewMode === mode ? 'var(--st-btn-text,#1F4D3A)' : theme.textMuted,
                 }}>{label}</button>
               ))}
             </div>
@@ -350,7 +350,7 @@ export default function MrpOutput() {
             {badDepts.length > 0 && (
               <button onClick={() => setShowBad(v => !v)} style={{
                 padding: '5px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                background: showBad ? `${theme.danger}22` : 'transparent',
+                background: showBad ? `${alpha(theme.danger,'22')}` : 'transparent',
                 color: showBad ? theme.danger : theme.textMuted,
                 border: `1.5px solid ${showBad ? theme.danger : theme.border}`,
                 display: 'flex', alignItems: 'center', gap: 6,
@@ -398,7 +398,7 @@ export default function MrpOutput() {
                         <th key={p} style={{
                           ...HDR, textAlign: 'center', padding: '4px 6px', fontSize: 9,
                           color: p.endsWith('P1') ? theme.success : theme.accent,
-                          borderRight: pi === mps.length - 1 ? `1px solid ${theme.border}` : `1px dashed ${theme.border}22`,
+                          borderRight: pi === mps.length - 1 ? `1px solid ${theme.border}` : `1px dashed ${alpha(theme.border,'22')}`,
                           minWidth: 52,
                         }}>
                           {p.endsWith('P1') ? 'P1' : 'P2'}
@@ -420,7 +420,7 @@ export default function MrpOutput() {
                         onClick={() => setExpandedDept(isExpanded ? null : dept)}
                         style={{
                           borderBottom: isExpanded ? 'none' : `1px solid ${theme.border}`,
-                          background: isBad ? `${theme.danger}08` : `${divColor}0a`,
+                          background: isBad ? `${alpha(theme.danger,'08')}` : `${alpha(divColor,'0a')}`,
                           cursor: 'pointer',
                         }}
                       >
@@ -431,7 +431,7 @@ export default function MrpOutput() {
                         }}>
                           <span style={{ fontSize: 11, color: theme.textMuted, fontWeight: 400 }}>{isExpanded ? '▾' : '▸'}</span>
                           {dept}
-                          {isBad && <span style={{ fontSize: 10, color: theme.danger, fontWeight: 600, background: `${theme.danger}18`, borderRadius: 4, padding: '1px 5px' }}>⚠</span>}
+                          {isBad && <span style={{ fontSize: 10, color: theme.danger, fontWeight: 600, background: `${alpha(theme.danger,'18')}`, borderRadius: 4, padding: '1px 5px' }}>⚠</span>}
                           <span style={{ fontSize: 10, color: theme.textMuted, fontWeight: 400, marginLeft: 'auto' }}>{d.bands.length} bands</span>
                         </td>
                         <td style={{ ...CELL, fontWeight: 700, color: theme.primary, borderRight: `2px solid ${theme.border}` }}>
@@ -446,7 +446,7 @@ export default function MrpOutput() {
                           return (
                             <td key={p} style={{
                               ...CELL, textAlign: 'center', fontWeight: 600, fontSize: 10,
-                              borderRight: isLastInMonth ? `1px solid ${theme.border}` : `1px dashed ${theme.border}44`,
+                              borderRight: isLastInMonth ? `1px solid ${theme.border}` : `1px dashed ${alpha(theme.border,'44')}`,
                               color: viewMode === 'ty'
                                 ? (periodTotal > 0 ? theme.textPrimary : theme.textMuted)
                                 : (contribOk ? theme.textMuted : theme.danger),
@@ -466,8 +466,8 @@ export default function MrpOutput() {
                       /* Expanded band rows */
                       ...(isExpanded ? d.bands.map((band, bi) => (
                         <tr key={`${dept}-${band.mrp}`} style={{
-                          borderBottom: bi === d.bands.length - 1 ? `2px solid ${theme.border}` : `1px solid ${theme.border}22`,
-                          background: bi % 2 === 0 ? `${divColor}04` : 'transparent',
+                          borderBottom: bi === d.bands.length - 1 ? `2px solid ${theme.border}` : `1px solid ${alpha(theme.border,'22')}`,
+                          background: bi % 2 === 0 ? `${alpha(divColor,'04')}` : 'transparent',
                         }}>
                           <td style={{
                             padding: '4px 14px 4px 36px', fontSize: 11,
@@ -485,7 +485,7 @@ export default function MrpOutput() {
                             return (
                               <td key={p} style={{
                                 ...CELL, textAlign: 'center',
-                                borderRight: isLastInMonth ? `1px solid ${theme.border}` : `1px dashed ${theme.border}44`,
+                                borderRight: isLastInMonth ? `1px solid ${theme.border}` : `1px dashed ${alpha(theme.border,'44')}`,
                                 color: isZero ? theme.textMuted
                                   : viewMode === 'ty'
                                     ? (isP1 ? theme.success : theme.accent)

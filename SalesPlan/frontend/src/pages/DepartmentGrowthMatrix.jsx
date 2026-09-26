@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { theme } from '../theme'
+import { theme, alpha } from '../theme'
 import { ENGINE_META, startPipeline } from '../pipelineState'
 import SearchSlicer from '../components/SearchSlicer'
 
@@ -283,7 +283,7 @@ export default function DepartmentGrowthMatrix() {
                 <label key={key} style={{
                   display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer',
                   padding: '10px 14px', borderRadius: 9,
-                  background: pipelineChecked[key] ? `${theme.primary}12` : theme.surfaceAlt,
+                  background: pipelineChecked[key] ? `${alpha(theme.primary,'12')}` : theme.surfaceAlt,
                   border: `1px solid ${pipelineChecked[key] ? theme.primary : theme.border}`,
                   transition: 'all 0.12s',
                 }}>
@@ -308,7 +308,7 @@ export default function DepartmentGrowthMatrix() {
               >Skip to Final Results</button>
               <button
                 onClick={() => { setShowPipelineModal(false); handleStartPipeline() }}
-                style={{ flex: 1, padding: '9px 0', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', background: '#A8CBB7', border: 'none', color: '#1F4D3A' }}
+                style={{ flex: 1, padding: '9px 0', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', background: 'var(--st-btn,#A8CBB7)', border: 'none', color: 'var(--st-btn-text,#1F4D3A)' }}
               >
                 {Object.values(pipelineChecked).some(Boolean) ? 'Run Pipeline →' : 'Go to Final Results'}
               </button>
@@ -342,7 +342,7 @@ export default function DepartmentGrowthMatrix() {
             disabled={buyerSyncing}
             style={{
               padding: '8px 18px', borderRadius: 8, border: `1.5px solid ${theme.success}`,
-              background: buyerSyncing ? 'transparent' : `${theme.success}12`,
+              background: buyerSyncing ? 'transparent' : `${alpha(theme.success,'12')}`,
               color: theme.success, fontWeight: 700, fontSize: 12, cursor: buyerSyncing ? 'default' : 'pointer',
               display: 'flex', alignItems: 'center', gap: 7,
             }}
@@ -353,7 +353,7 @@ export default function DepartmentGrowthMatrix() {
           {buyerSyncResult && (
             <div style={{
               fontSize: 11, padding: '4px 10px', borderRadius: 5,
-              background: buyerSyncResult.ok ? `${theme.success}14` : '#FEE2E2',
+              background: buyerSyncResult.ok ? `${alpha(theme.success,'14')}` : '#FEE2E2',
               color: buyerSyncResult.ok ? theme.success : '#991B1B',
               border: `1px solid ${buyerSyncResult.ok ? theme.success + '44' : '#F7C1BC'}`,
             }}>
@@ -372,7 +372,7 @@ export default function DepartmentGrowthMatrix() {
             background: activeDiv === div ? DIV_COLOR[div] : theme.surface,
             color: activeDiv === div ? '#fff' : theme.textPrimary,
             fontWeight: 600, fontSize: 13, outline: 'none',
-            boxShadow: activeDiv === div ? `0 2px 8px ${DIV_COLOR[div]}44` : 'none',
+            boxShadow: activeDiv === div ? `0 2px 8px ${alpha(DIV_COLOR[div],'44')}` : 'none',
           }}>{div}</button>
         ))}
       </div>
@@ -414,7 +414,7 @@ export default function DepartmentGrowthMatrix() {
             disabled={generating}
             style={{
               padding: '6px 16px', borderRadius: 6, fontSize: 12, cursor: generating ? 'default' : 'pointer',
-              background: '#A8CBB7', border: 'none', color: '#1F4D3A',
+              background: 'var(--st-btn,#A8CBB7)', border: 'none', color: 'var(--st-btn-text,#1F4D3A)',
               fontWeight: 700, opacity: generating ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 6,
             }}
           >
@@ -591,7 +591,7 @@ export default function DepartmentGrowthMatrix() {
               <button key={attr} onClick={() => setAttrFilter(isActive ? null : attr)} style={{
                 padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
                 cursor: 'pointer', outline: 'none',
-                border: isActive ? 'none' : `1px solid ${s.bg === '#1E3A5F' ? '#37423C' : theme.border}`,
+                border: isActive ? 'none' : `1px solid ${s.bg === '#1E3A5F' ? 'var(--st-ink-2,#37423C)' : theme.border}`,
                 background: isActive ? s.color : s.bg,
                 color: isActive ? (s.bg === '#1E3A5F' ? '#1E3A5F' : '#fff') : s.color,
               }}>
@@ -687,7 +687,7 @@ export default function DepartmentGrowthMatrix() {
                   return (
                     <tr key={dept.name} style={{
                       borderBottom: `1px solid #EEF2F8`,
-                      background: i % 2 === 0 ? 'transparent' : 'rgba(30,39,35,0.025)',
+                      background: i % 2 === 0 ? 'transparent' : 'rgba(var(--st-ink-rgb,30,39,35),0.025)',
                     }}>
                       <td style={{
                         padding: '5px 10px 5px 20px',

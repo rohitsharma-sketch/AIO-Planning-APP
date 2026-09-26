@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { theme } from '../theme'
+import { theme, alpha } from '../theme'
 
 // Global counter so multiple concurrent fetches each register
 let _pending = 0
@@ -93,7 +93,7 @@ export default function TopBar() {
           ? 'width 0.2s ease, opacity 0.3s ease 0.1s'
           : 'width 0.25s ease',
         opacity: fading ? 0 : 1,
-        boxShadow: `0 0 8px ${theme.primary}88`,
+        boxShadow: `0 0 8px ${alpha(theme.primary,'88')}`,
         borderRadius: '0 2px 2px 0',
       }} />
     </div>

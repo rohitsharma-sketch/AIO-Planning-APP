@@ -42,7 +42,7 @@ export default function Home() {
           {/* Hero - same landing pattern as the AOP Forecaster */}
           <span style={{
             display: 'inline-block', fontSize: 11, fontWeight: 800, letterSpacing: 1.2, textTransform: 'uppercase',
-            color: theme.primary, background: theme.primaryLight, border: '1px solid #CBE2D5',
+            color: theme.primary, background: theme.primaryLight, border: '1px solid var(--st-tint-b,#CBE2D5)',
             borderRadius: 999, padding: '4px 12px',
           }}>Sales Plan · FY 2027–28</span>
           <h1 style={{ fontSize: 30, fontWeight: 800, color: theme.navy, margin: '14px 0 8px', letterSpacing: '-0.02em' }}>

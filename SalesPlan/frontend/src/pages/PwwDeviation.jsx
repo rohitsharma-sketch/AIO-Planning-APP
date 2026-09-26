@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { theme } from '../theme'
+import { theme, alpha } from '../theme'
 
 // ── Block search combobox ──────────────────────────────────────────────────────
 function BlockSearch({ blocks, value, onChange }) {
@@ -77,7 +77,7 @@ function BlockSearch({ blocks, value, onChange }) {
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10,
                     padding: '7px 14px', cursor: 'pointer',
-                    background: active ? `${theme.primary}22` : 'transparent',
+                    background: active ? `${alpha(theme.primary,'22')}` : 'transparent',
                     borderLeft: `3px solid ${active ? theme.primary : 'transparent'}`,
                   }}
                 >
@@ -366,7 +366,7 @@ export default function PwwDeviation() {
                 <button key={div} onClick={() => setActiveDiv(div)} style={{
                   padding: '7px 18px', borderRadius: 8, cursor: 'pointer',
                   border: `1.5px solid ${active ? c : theme.border}`,
-                  background: active ? `${c}22` : theme.surface,
+                  background: active ? `${alpha(c,'22')}` : theme.surface,
                   color: active ? c : theme.textSecondary,
                   fontWeight: active ? 700 : 500, fontSize: 13,
                   display: 'flex', alignItems: 'center', gap: 8,
@@ -406,7 +406,7 @@ export default function PwwDeviation() {
                   return (
                     <>
                       <tr key={dept} style={{
-                        background: i % 2 === 0 ? 'transparent' : `${theme.surfaceUp}66`,
+                        background: i % 2 === 0 ? 'transparent' : `${alpha(theme.surfaceUp,'66')}`,
                         borderTop: `1px solid ${theme.border}`,
                         cursor: 'pointer',
                       }} onClick={() => toggleExpand(dept)}>
@@ -416,7 +416,7 @@ export default function PwwDeviation() {
                         </td>
                         <td style={{ ...CELL, textAlign: 'right' }}>
                           <span style={{
-                            background: d.block_cont_pct < 2.5 ? `${theme.textMuted}22` : `__TPL<'#A8CBB7'>__22`,
+                            background: d.block_cont_pct < 2.5 ? `${alpha(theme.textMuted,'22')}` : `${alpha('var(--st-btn,#A8CBB7)','22')}`,
                             color: d.block_cont_pct < 2.5 ? theme.textMuted : theme.primary,
                             borderRadius: 4, padding: '1px 6px', fontFamily: theme.fontMono, fontSize: 11,
                           }}>{fmtP(d.block_cont_pct)}</span>
@@ -431,7 +431,7 @@ export default function PwwDeviation() {
                             <span style={{ fontSize: 10, color: theme.warning }}>no plan</span>
                           ) : (
                             <span style={{
-                              background: `${theme.accent}18`, color: theme.accent,
+                              background: `${alpha(theme.accent,'18')}`, color: theme.accent,
                               borderRadius: 4, padding: '1px 8px', fontFamily: theme.fontMono, fontSize: 11, fontWeight: 600,
                             }}>{d.deviation_ratio?.toFixed(4)}×</span>
                           )}
@@ -442,7 +442,7 @@ export default function PwwDeviation() {
 
                       {isExp && mrpRows.map((r, j) => (
                         <tr key={`${dept}-mrp-${j}`} style={{
-                          background: `${theme.surfaceUp}44`, borderTop: `1px solid ${theme.border}22`,
+                          background: `${alpha(theme.surfaceUp,'44')}`, borderTop: `1px solid ${alpha(theme.border,'22')}`,
                         }}>
                           <td style={{ ...CELL, textAlign: 'left', paddingLeft: 36, color: theme.textSecondary, fontSize: 11 }}>
                             ↳ {r.article_name || 'MRP ' + r.mrp}
@@ -450,7 +450,7 @@ export default function PwwDeviation() {
                           <td style={{ ...CELL, textAlign: 'right', color: theme.textMuted, fontSize: 11 }}>MRP ₹{fmt(r.mrp)}</td>
                           <td style={{ ...CELL, textAlign: 'right' }}>
                             <span style={{
-                              background: `${theme.accent}18`, color: theme.accent,
+                              background: `${alpha(theme.accent,'18')}`, color: theme.accent,
                               borderRadius: 4, padding: '1px 6px', fontFamily: theme.fontMono, fontSize: 10,
                             }}>{fmtP(r.ppo_cont_pct)}</span>
                           </td>
@@ -468,7 +468,7 @@ export default function PwwDeviation() {
           {result.unmatched_depts?.length > 0 && (
             <div style={{
               marginTop: 16, padding: '10px 16px', borderRadius: 8,
-              background: `${theme.warning}18`, border: `1px solid ${theme.warning}44`,
+              background: `${alpha(theme.warning,'18')}`, border: `1px solid ${alpha(theme.warning,'44')}`,
               fontSize: 12, color: theme.warning,
             }}>
               <strong>{result.unmatched_depts.length} dept(s) in PPO file have no LY actuals</strong>:{' '}
@@ -495,7 +495,7 @@ export default function PwwDeviation() {
                 <button key={cl} onClick={() => { setReappCluster(cl); setReappDiv(null); setExpandedReapp(new Set()) }} style={{
                   padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: active ? 700 : 400,
                   border: `1.5px solid ${active ? theme.accent : theme.border}`,
-                  background: active ? `${theme.accent}22` : theme.surface,
+                  background: active ? `${alpha(theme.accent,'22')}` : theme.surface,
                   color: active ? theme.accent : theme.textSecondary,
                 }}>{cl}</button>
               )
@@ -515,7 +515,7 @@ export default function PwwDeviation() {
                   <button onClick={() => setReappDiv(null)} style={{
                     padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: !reappDiv ? 700 : 400,
                     border: `1.5px solid ${!reappDiv ? theme.primary : theme.border}`,
-                    background: !reappDiv ? `${theme.primary}22` : theme.surface,
+                    background: !reappDiv ? `${alpha(theme.primary,'22')}` : theme.surface,
                     color: !reappDiv ? theme.primary : theme.textSecondary,
                   }}>All</button>
                   {divSet.map(div => {
@@ -525,7 +525,7 @@ export default function PwwDeviation() {
                       <button key={div} onClick={() => setReappDiv(div)} style={{
                         padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: active ? 700 : 400,
                         border: `1.5px solid ${active ? c : theme.border}`,
-                        background: active ? `${c}22` : theme.surface,
+                        background: active ? `${alpha(c,'22')}` : theme.surface,
                         color: active ? c : theme.textSecondary,
                       }}>{div}</button>
                     )
@@ -553,7 +553,7 @@ export default function PwwDeviation() {
                         return (
                           <>
                             <tr key={rowKey} style={{
-                              background: i % 2 === 0 ? 'transparent' : `${theme.surfaceUp}66`,
+                              background: i % 2 === 0 ? 'transparent' : `${alpha(theme.surfaceUp,'66')}`,
                               borderTop: `1px solid ${theme.border}`,
                               cursor: 'pointer',
                             }} onClick={() => {
@@ -563,11 +563,11 @@ export default function PwwDeviation() {
                             }}>
                               <td style={{ ...CELL2, textAlign: 'left', paddingLeft: 16, fontWeight: 600, color: theme.textPrimary }}>{dept}</td>
                               <td style={{ ...CELL2, textAlign: 'center' }}>
-                                <span style={{ fontSize: 9, background: `${c}22`, color: c, borderRadius: 4, padding: '1px 5px', fontWeight: 700 }}>{dd.div}</span>
+                                <span style={{ fontSize: 9, background: `${alpha(c,'22')}`, color: c, borderRadius: 4, padding: '1px 5px', fontWeight: 700 }}>{dd.div}</span>
                               </td>
                               <td style={{ ...CELL2, textAlign: 'right' }}>
                                 <span style={{
-                                  background: dd.dept_block_final_pct > 0 ? `__TPL<'#A8CBB7'>__18` : `${theme.textMuted}18`,
+                                  background: dd.dept_block_final_pct > 0 ? `${alpha('var(--st-btn,#A8CBB7)','18')}` : `${alpha(theme.textMuted,'18')}`,
                                   color: dd.dept_block_final_pct > 0 ? theme.primary : theme.textMuted,
                                   borderRadius: 4, padding: '1px 6px', fontFamily: theme.fontMono, fontSize: 10,
                                 }}>{fmtP(dd.dept_block_final_pct)}</span>
@@ -587,7 +587,7 @@ export default function PwwDeviation() {
 
                             {isExp && (
                               <>
-                                <tr style={{ background: `${theme.surfaceUp}99` }}>
+                                <tr style={{ background: `${alpha(theme.surfaceUp,'99')}` }}>
                                   <td style={{ ...CELL2, paddingLeft: 36, fontSize: 9, color: theme.textMuted, fontWeight: 600, letterSpacing: 0.5 }}>ARTICLE / MRP</td>
                                   <td style={{ ...CELL2, textAlign: 'right', fontSize: 9, color: theme.textMuted, fontWeight: 600, letterSpacing: 0.5 }}>PPO MIX%</td>
                                   <td style={{ ...CELL2, textAlign: 'right', fontSize: 9, color: theme.textMuted, fontWeight: 600, letterSpacing: 0.5 }}>BLOCK FINAL%</td>
@@ -595,7 +595,7 @@ export default function PwwDeviation() {
                                   <td></td>
                                 </tr>
                                 {mrpEntries.map(([mrpKey, mr]) => (
-                                  <tr key={`${rowKey}-${mrpKey}`} style={{ background: `${theme.surfaceUp}44`, borderTop: `1px solid ${theme.border}22` }}>
+                                  <tr key={`${rowKey}-${mrpKey}`} style={{ background: `${alpha(theme.surfaceUp,'44')}`, borderTop: `1px solid ${alpha(theme.border,'22')}` }}>
                                     <td style={{ ...CELL2, paddingLeft: 36, color: theme.textSecondary, fontSize: 11 }}>
                                       ↳ {mr.article_name || 'MRP'} <span style={{ color: theme.textMuted }}>₹{fmt(mr.mrp)}</span>
                                     </td>
@@ -644,7 +644,7 @@ export default function PwwDeviation() {
                 <button key={m} onClick={() => setActiveMonth(m)} style={{
                   padding: '5px 14px', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: active ? 700 : 500,
                   border: `1.5px solid ${active ? theme.primary : theme.border}`,
-                  background: active ? `${theme.primary}22` : theme.surface,
+                  background: active ? `${alpha(theme.primary,'22')}` : theme.surface,
                   color: active ? theme.primary : theme.textSecondary,
                 }}>{m}</button>
               )
@@ -660,7 +660,7 @@ export default function PwwDeviation() {
                 <button key={cl} onClick={() => setActiveCluster(cl)} style={{
                   padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: active ? 700 : 400,
                   border: `1.5px solid ${active ? theme.accent : theme.border}`,
-                  background: active ? `${theme.accent}22` : theme.surface,
+                  background: active ? `${alpha(theme.accent,'22')}` : theme.surface,
                   color: active ? theme.accent : theme.textSecondary,
                 }}>{cl}</button>
               )
@@ -673,7 +673,7 @@ export default function PwwDeviation() {
             <button onClick={() => setActiveDiv2(null)} style={{
               padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: !activeDiv2 ? 700 : 400,
               border: `1.5px solid ${!activeDiv2 ? theme.primary : theme.border}`,
-              background: !activeDiv2 ? `${theme.primary}22` : theme.surface,
+              background: !activeDiv2 ? `${alpha(theme.primary,'22')}` : theme.surface,
               color: !activeDiv2 ? theme.primary : theme.textSecondary,
             }}>All</button>
             {p2Divs.map(div => {
@@ -683,7 +683,7 @@ export default function PwwDeviation() {
                 <button key={div} onClick={() => setActiveDiv2(div)} style={{
                   padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: active ? 700 : 400,
                   border: `1.5px solid ${active ? c : theme.border}`,
-                  background: active ? `${c}22` : theme.surface,
+                  background: active ? `${alpha(c,'22')}` : theme.surface,
                   color: active ? c : theme.textSecondary,
                 }}>{div}</button>
               )
@@ -712,13 +712,13 @@ export default function PwwDeviation() {
                   return (
                     <>
                       <tr key={rowKey} style={{
-                        background: i % 2 === 0 ? 'transparent' : `${theme.surfaceUp}66`,
+                        background: i % 2 === 0 ? 'transparent' : `${alpha(theme.surfaceUp,'66')}`,
                         borderTop: `1px solid ${theme.border}`,
                         cursor: 'pointer',
                       }} onClick={() => toggleExpand2(rowKey)}>
                         <td style={{ ...CELL2, textAlign: 'left', paddingLeft: 16, fontWeight: 600, color: theme.textPrimary }}>{dept}</td>
                         <td style={{ ...CELL2, textAlign: 'center' }}>
-                          <span style={{ fontSize: 9, background: `${c}22`, color: c, borderRadius: 4, padding: '1px 5px', fontWeight: 700 }}>{dd.div}</span>
+                          <span style={{ fontSize: 9, background: `${alpha(c,'22')}`, color: c, borderRadius: 4, padding: '1px 5px', fontWeight: 700 }}>{dd.div}</span>
                         </td>
                         <td style={{ ...CELL2, textAlign: 'right', color: theme.textSecondary }}>{fmtP2(dd.ly_dept_cont_pct)}</td>
                         <td style={{ ...CELL2, textAlign: 'right' }}>
@@ -737,7 +737,7 @@ export default function PwwDeviation() {
                       {isExp && (
                         <>
                           {/* MRP sub-header */}
-                          <tr style={{ background: `${theme.surfaceUp}99` }}>
+                          <tr style={{ background: `${alpha(theme.surfaceUp,'99')}` }}>
                             <td style={{ ...CELL2, paddingLeft: 36, fontSize: 9, color: theme.textMuted, fontWeight: 600, letterSpacing: 0.5 }}>ARTICLE / MRP</td>
                             <td style={{ ...CELL2, textAlign: 'right', fontSize: 9, color: theme.textMuted, fontWeight: 600, letterSpacing: 0.5 }}>PPO MIX%</td>
                             <td style={{ ...CELL2, textAlign: 'right', fontSize: 9, color: theme.textMuted, fontWeight: 600, letterSpacing: 0.5 }}>LY MRP%</td>
@@ -749,7 +749,7 @@ export default function PwwDeviation() {
                           </tr>
                           {mrpEntries.map(([mrpKey, mr]) => (
                             <tr key={`${rowKey}-${mrpKey}`} style={{
-                              background: `${theme.surfaceUp}44`, borderTop: `1px solid ${theme.border}22`,
+                              background: `${alpha(theme.surfaceUp,'44')}`, borderTop: `1px solid ${alpha(theme.border,'22')}`,
                             }}>
                               <td style={{ ...CELL2, paddingLeft: 36, color: theme.textSecondary, fontSize: 11 }}>
                                 ↳ {mr.article_name || 'MRP'} <span style={{ color: theme.textMuted }}>₹{fmt(mr.mrp)}</span>
@@ -811,9 +811,9 @@ function btnStyle(variant, disabled) {
     cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1,
     border: 'none', transition: 'opacity 0.15s',
   }
-  if (variant === 'primary')   return { ...base, background: '#A8CBB7',  color: '#1F4D3A' }
+  if (variant === 'primary')   return { ...base, background: 'var(--st-btn,#A8CBB7)',  color: 'var(--st-btn-text,#1F4D3A)' }
   if (variant === 'secondary') return { ...base, background: theme.accent,   color: '#fff' }
   if (variant === 'accent')    return { ...base, background: '#0EA5E9',      color: '#fff' }
-  if (variant === 'teal')     return { ...base, background: '#A8CBB7',      color: '#1F4D3A' }
+  if (variant === 'teal')     return { ...base, background: 'var(--st-btn,#A8CBB7)',      color: 'var(--st-btn-text,#1F4D3A)' }
   return { ...base, background: 'none', color: theme.textSecondary, border: `1px solid ${theme.border}` }
 }

@@ -1,5 +1,6 @@
 """RS Planning Platform — unified backend. Port 8010.
 Mounts AOP Forecaster + SalesPlan's existing routers, adds auth/workflow/audit."""
+import json
 import os
 import sys
 
@@ -10,9 +11,9 @@ sys.path.insert(0, _HERE)
 sys.path.insert(0, _AOP_DIR)
 sys.path.insert(0, _SALESPLAN_DIR)
 
-from fastapi import FastAPI, Depends, Request
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -112,6 +113,50 @@ _NO_CACHE_HEADERS = {"Cache-Control": "no-store, no-cache, must-revalidate", "Pr
 
 def _html_no_cache(path: str) -> FileResponse:
     return FileResponse(path, headers=_NO_CACHE_HEADERS)
+
+
+# Suite colour theme (user, 2026-09-26): ONE choice for every app, picked on
+# Landing. Palettes live in static/suite-themes.json; the choice in
+# data/suite_theme.json (local state, gitignored). The script GET is public -
+# each app (even on the login screen) loads it before first paint.
+_THEMES_FILE = os.path.join(_HERE, "static", "suite-themes.json")
+_THEME_CHOICE = os.path.join(_HERE, "data", "suite_theme.json")
+
+
+def _suite_themes() -> dict:
+    with open(_THEMES_FILE, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _suite_theme_choice(themes: dict) -> str:
+    try:
+        with open(_THEME_CHOICE, encoding="utf-8") as f:
+            choice = json.load(f).get("theme")
+    except (OSError, ValueError):
+        choice = None
+    return choice if choice in themes["themes"] else themes["default"]
+
+
+@app.get("/api/suite-theme.js", include_in_schema=False)
+def suite_theme_js():
+    themes = _suite_themes()
+    with open(os.path.join(_HERE, "static", "suite-theme.js"), encoding="utf-8") as f:
+        runtime = f.read()
+    body = (f"window.__SUITE_THEMES__={json.dumps(themes)};"
+            f"window.__SUITE_THEME__={json.dumps(_suite_theme_choice(themes))};\n{runtime}")
+    return Response(body, media_type="application/javascript", headers=_NO_CACHE_HEADERS)
+
+
+@app.post("/api/suite-theme")
+def save_suite_theme(payload: dict, user: dict = Depends(require_login)):
+    themes = _suite_themes()
+    theme = payload.get("theme")
+    if theme not in themes["themes"]:
+        raise HTTPException(400, f"Unknown theme {theme!r}")
+    os.makedirs(os.path.dirname(_THEME_CHOICE), exist_ok=True)
+    with open(_THEME_CHOICE, "w", encoding="utf-8") as f:
+        json.dump({"theme": theme, "by": user.get("username") or user.get("email")}, f)
+    return {"theme": theme}
 
 
 # Bare root has no page of its own — route by session state instead of 404ing.

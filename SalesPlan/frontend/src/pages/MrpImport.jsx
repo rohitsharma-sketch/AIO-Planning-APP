@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { theme } from '../theme'
+import { theme, alpha } from '../theme'
 
 const DIV_COLOR = {
   KIDS: '#C85A12', LADIES: '#7420B8', MENS: '#077A4A', GM: '#1E54C0', RETAIL: '#B22620',
@@ -54,7 +54,7 @@ export default function MrpImport() {
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: theme.textPrimary }}>Integrated Buyer's Input</h1>
           <span style={{
             fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 4, letterSpacing: 0.6,
-            background: `__TPL<'#A8CBB7'>__18`, color: theme.primary, border: `1px solid __TPL<'#95BFA7'>__33`,
+            background: `${alpha('var(--st-btn,#A8CBB7)','18')}`, color: theme.primary, border: `1px solid ${alpha('var(--st-btn-hover,#95BFA7)','33')}`,
           }}>MRP PLAN SOURCE</span>
         </div>
         <p style={{ margin: '0 0 10px', fontSize: 13, color: theme.textMuted }}>
@@ -63,7 +63,7 @@ export default function MrpImport() {
         </p>
         <div style={{
           display: 'inline-flex', alignItems: 'center', gap: 7, padding: '6px 12px',
-          borderRadius: 6, background: `${theme.accent}12`, border: `1px solid ${theme.accent}33`,
+          borderRadius: 6, background: `${alpha(theme.accent,'12')}`, border: `1px solid ${alpha(theme.accent,'33')}`,
           fontSize: 11, color: theme.accent, fontWeight: 600,
         }}>
           ↺ Always re-sync when the buyer updates their plan
@@ -74,7 +74,7 @@ export default function MrpImport() {
       {status?.imported && (
         <div style={{
           marginBottom: 20, padding: '14px 20px', borderRadius: 10,
-          background: `${theme.success}12`, border: `1px solid ${theme.success}44`,
+          background: `${alpha(theme.success,'12')}`, border: `1px solid ${alpha(theme.success,'44')}`,
           display: 'flex', alignItems: 'center', gap: 14,
         }}>
           <span style={{ fontSize: 20 }}>✓</span>
@@ -102,8 +102,8 @@ export default function MrpImport() {
             <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.5, marginBottom: 10 }}>SOURCE FILE</div>
             <div style={{
               padding: '14px 18px', borderRadius: 9,
-              background: fileInfo?.file_found ? `${theme.success}0e` : `${theme.danger}0e`,
-              border: `1px solid ${fileInfo?.file_found ? theme.success : theme.danger}44`,
+              background: fileInfo?.file_found ? `${alpha(theme.success,'0e')}` : `${alpha(theme.danger,'0e')}`,
+              border: `1px solid ${alpha(fileInfo?.file_found ? theme.success : theme.danger,'44')}`,
               display: 'flex', alignItems: 'center', gap: 14,
             }}>
               <span style={{ fontSize: 22 }}>{fileInfo?.file_found ? '📄' : '📭'}</span>
@@ -135,8 +135,8 @@ export default function MrpImport() {
             style={{
               width: '100%', padding: '13px 0', borderRadius: 9, fontSize: 14,
               fontWeight: 700, cursor: (syncing || !fileInfo?.file_found) ? 'not-allowed' : 'pointer',
-              background: (syncing || !fileInfo?.file_found) ? theme.border : '#A8CBB7',
-              color: '#1F4D3A', border: 'none', letterSpacing: 0.3,
+              background: (syncing || !fileInfo?.file_found) ? theme.border : 'var(--st-btn,#A8CBB7)',
+              color: 'var(--st-btn-text,#1F4D3A)', border: 'none', letterSpacing: 0.3,
             }}
           >
             {syncing ? '⟳  Syncing…' : '⟳  Sync from Folder'}
@@ -152,8 +152,8 @@ export default function MrpImport() {
           {result && (
             <div style={{
               marginTop: 18, padding: '14px 18px', borderRadius: 8, fontSize: 12,
-              background: result.ok ? `${theme.success}12` : `${theme.danger}12`,
-              border: `1px solid ${result.ok ? theme.success : theme.danger}44`,
+              background: result.ok ? `${alpha(theme.success,'12')}` : `${alpha(theme.danger,'12')}`,
+              border: `1px solid ${alpha(result.ok ? theme.success : theme.danger,'44')}`,
               color: result.ok ? theme.success : theme.danger,
             }}>
               {result.ok ? (
@@ -224,7 +224,7 @@ export default function MrpImport() {
               {['KIDS', 'LADIES', 'MENS'].map(d => (
                 <span key={d} style={{
                   fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 6,
-                  background: `${DIV_COLOR[d]}18`, border: `1px solid ${DIV_COLOR[d]}44`,
+                  background: `${alpha(DIV_COLOR[d],'18')}`, border: `1px solid ${alpha(DIV_COLOR[d],'44')}`,
                   color: DIV_COLOR[d],
                 }}>{d}</span>
               ))}

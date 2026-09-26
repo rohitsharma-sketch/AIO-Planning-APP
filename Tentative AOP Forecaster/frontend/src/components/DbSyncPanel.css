@@ -49,8 +49,8 @@
   border-radius: 7px;
   font-weight: 600;
 }
-.cfg-btn--primary { background: #A8CBB7; color: #1F4D3A; border: 1px solid #95BFA7; }
-.cfg-btn--primary:hover:not(:disabled) { background: #95BFA7; color: #1F4D3A; border-color: var(--accent-h); }
+.cfg-btn--primary { background: var(--st-btn,#A8CBB7); color: var(--st-btn-text,#1F4D3A); border: 1px solid var(--st-btn-hover,#95BFA7); }
+.cfg-btn--primary:hover:not(:disabled) { background: var(--st-btn-hover,#95BFA7); color: var(--st-btn-text,#1F4D3A); border-color: var(--accent-h); }
 
 /* Details panel */
 .cfg-sync-details {
