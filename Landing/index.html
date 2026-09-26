@@ -292,6 +292,14 @@
   .lm-stbl td.h3 { background: var(--st-tint-f,#BFD9CA); color: var(--navy); }
   .lm-stbl td.ctot { font-weight: 800; color: var(--accent); font-size: 14px; }
   .lm-stbl th.thot { color: var(--accent); }
+  /* P1 (days 1-15) / P2 (16-end) split table */
+  .lm-half-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 22px 2px 10px; }
+  .lm-half-hd strong { font-size: 13.5px; font-weight: 800; color: var(--navy); }
+  .lm-half-hd span { font-size: 12px; color: var(--muted); }
+  .lm-stbl.half th, .lm-stbl.half td { padding: 9px 5px; min-width: 30px; }
+  .lm-stbl.half th.mo { border-left: 1px solid var(--border); }
+  .lm-stbl.half tr.sub th { font-size: 9.5px; letter-spacing: .04em; padding-top: 0; }
+  .lm-stbl.half td.p1 { border-left: 1px solid var(--border); }
   .lm-empty { text-align: center; padding: 60px 24px; color: var(--muted); }
   .lm-empty-icon { color: var(--accent); margin-bottom: 10px; line-height: 1; }
   .lm-empty-icon svg { width: 36px; height: 36px; }
@@ -864,7 +872,26 @@
         var ms=allData[i],tot=ms.reduce(function(s,m){return s+m.length;},0);
         return'<tr><td>'+y+'</td>'+ms.map(function(m){return'<td class="'+hc(m.length)+'">'+(m.length||'&#x2014;')+'</td>';}).join('')+'<td class="ctot">'+tot+'</td></tr>';
       }).join('');
-      return'<div class="lm-tbl-wrap"><table class="lm-stbl"><thead><tr><th>Year</th>'+ths+'<th class="thot">Total</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+      return'<div class="lm-tbl-wrap"><table class="lm-stbl"><thead><tr><th>Year</th>'+ths+'<th class="thot">Total</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+halfHtml(allData);
+    }
+
+    // P1 = days 1-15, P2 = day 16 to month-end (user, 2026-09-26): how the Lagan
+    // dates of each month split between its first and second half.
+    function halves(m){ var p1=m.filter(function(d){return d<=15;}).length; return [p1,m.length-p1]; }
+    function halfHtml(allData){
+      var mx=0; allData.forEach(function(ms){ms.forEach(function(m){halves(m).forEach(function(n){if(n>mx)mx=n;});});});
+      function hc(n){ return n===0?'c0':n<mx*.34?'cn h1':n<mx*.67?'cn h2':'cn h3'; }
+      var top=MSHORT.map(function(m){return'<th class="mo" colspan="2">'+m+'</th>';}).join('');
+      var sub=MSHORT.map(function(){return'<th>P1</th><th>P2</th>';}).join('');
+      var rows=selYears.map(function(y,i){
+        var t1=0,t2=0;
+        var cells=allData[i].map(function(m){ var h=halves(m); t1+=h[0]; t2+=h[1];
+          return '<td class="p1 '+hc(h[0])+'">'+(h[0]||'&#x2014;')+'</td><td class="'+hc(h[1])+'">'+(h[1]||'&#x2014;')+'</td>'; }).join('');
+        return '<tr><td>'+y+'</td>'+cells+'<td class="ctot p1">'+t1+'</td><td class="ctot">'+t2+'</td></tr>';
+      }).join('');
+      return '<div class="lm-half-hd"><strong>First vs second half of each month</strong><span>P1 = 1st&#x2013;15th &#xB7; P2 = 16th&#x2013;month end</span></div>'+
+        '<div class="lm-tbl-wrap"><table class="lm-stbl half"><thead><tr><th rowspan="2">Year</th>'+top+'<th class="thot mo" colspan="2">Total</th></tr>'+
+        '<tr class="sub">'+sub+'<th class="thot">P1</th><th class="thot">P2</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
     }
 
     function renderContent(){
@@ -885,6 +912,11 @@
       if(!selYears.length) return 'No years selected';
       var rows=[['Year'].concat(MSHORT).concat(['Total']).join(',')];
       selYears.forEach(function(y){ var ms=ld(y),tot=ms.reduce(function(s,m){return s+m.length;},0); rows.push([y].concat(ms.map(function(m){return m.length;})).concat([tot]).join(',')); });
+      // P1 (1st-15th) / P2 (16th-end) split, same years
+      rows.push('');
+      rows.push(['Year'].concat([].concat.apply([],MSHORT.map(function(m){return[m+' P1',m+' P2'];}))).concat(['Total P1','Total P2']).join(','));
+      selYears.forEach(function(y){ var t1=0,t2=0, cells=[].concat.apply([],ld(y).map(function(m){var h=halves(m);t1+=h[0];t2+=h[1];return h;}));
+        rows.push([y].concat(cells).concat([t1,t2]).join(',')); });
       return rows.join('\r\n');
     }
     function showExportModal(title,csv){
