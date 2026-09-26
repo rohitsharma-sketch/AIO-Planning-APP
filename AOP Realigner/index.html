@@ -210,6 +210,26 @@ td.frozen,th.frozen{color:var(--muted-foreground)}
 .howto{margin:0 0 14px;padding:10px 13px;border-radius:var(--radius);background:color-mix(in srgb,var(--muted) 55%,transparent);font-size:12.5px;line-height:1.55}
 .howto code{font-size:11.5px;background:var(--background);border:1px solid var(--border);border-radius:4px;padding:0 4px}
 
+/* rules dialog (2026-09-26): rules in force + version log from rules.js */
+.rules-btn{white-space:nowrap;flex:none;display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:12.5px;font-weight:700;color:#fff;cursor:pointer;
+  padding:6px 13px;border-radius:999px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18)}
+.rules-btn:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.3)}
+dialog.rules{width:min(920px,calc(100vw - 32px));max-height:88vh;padding:0;border:1px solid var(--border);border-radius:calc(var(--radius) + 4px);
+  background:var(--card);color:var(--foreground);box-shadow:0 20px 60px rgba(var(--st-ink-rgb,30,39,35),.25)}
+dialog.rules::backdrop{background:rgba(15,23,42,.45)}
+.rules-head{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:10px;padding:14px 20px;background:var(--card);border-bottom:1px solid var(--border)}
+.rules-head h2{margin:0;font-size:16px;font-weight:800}
+.rules-head .x{margin-left:auto}
+.rules-body{padding:16px 20px 20px}
+.rules-body h3{margin:16px 0 6px;font-size:13.5px;font-weight:800}
+.rules-body h3:first-child{margin-top:0}
+.rules-body ul{margin:0;padding-left:18px;font-size:13px;line-height:1.55}
+.rules-body li{margin:3px 0}
+.ver{border:1px solid var(--border);border-radius:var(--radius);padding:11px 14px;margin-top:10px}
+.ver.now{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary) inset}
+.ver h4{margin:0 0 5px;font-size:13.5px;font-weight:800;display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.ver .why{margin:6px 0 0;font-size:12.5px;color:var(--muted-foreground)}
+
 /* toast */
 #toasts{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:8px;z-index:50;max-width:min(420px,calc(100vw - 40px))}
 .toast{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:var(--radius);border:1px solid var(--border);
@@ -227,7 +247,7 @@ td.frozen,th.frozen{color:var(--muted-foreground)}
       <h1>AOP Re-Aligner</h1>
       <p>Revise an existing plan three ways — listing changes, department changes, new or split departments — while every store × division stays on the original.</p>
     </div>
-    <div class="right"><span id="conn" class="badge b-muted"><span class="dot"></span>Connecting…</span><a class="home" id="home-link" href="/">&larr; Landing</a></div>
+    <div class="right"><span id="conn" class="badge b-muted"><span class="dot"></span>Connecting…</span><button class="rules-btn" type="button" onclick="openRules()">Rules <span id="rules-ver"></span></button><a class="home" id="home-link" href="/">&larr; Landing</a></div>
   </div>
 </header>
 
@@ -253,6 +273,12 @@ td.frozen,th.frozen{color:var(--muted-foreground)}
   </aside>
 </main>
 <div id="toasts" aria-live="assertive"></div>
+<dialog class="rules" id="rules" aria-labelledby="rules-title">
+  <div class="rules-head"><h2 id="rules-title">Rules</h2><span class="badge b-info" id="rules-now"></span>
+    <button class="btn btn-ghost btn-sm x" type="button" onclick="document.getElementById('rules').close()" aria-label="Close">Close</button></div>
+  <div class="rules-body" id="rules-body"></div>
+</dialog>
+<script src="rules.js"></script>
 
 <script>
 const $ = s => document.querySelector(s);
@@ -643,6 +669,19 @@ function autoDownload() {
     if (failed) { delete pending[key]; toast(failed.error || 'Build failed.'); }
   }
 }
+
+// Rules dialog: rules in force + version log (rules.js; update it whenever a rule changes)
+function openRules() {
+  const cur = RULE_LOG[0];
+  $('#rules-now').textContent = `v${cur.version} in force since ${cur.date}`;
+  $('#rules-body').innerHTML = RULES_NOW.map(([h, items]) => `<h3>${h}</h3><ul>${items.map(i => `<li>${i}</li>`).join('')}</ul>`).join('') +
+    `<h3>Version log <span class="muted small">· newest first · every rule change gets a new version</span></h3>` +
+    RULE_LOG.map(v => `<div class="ver${v.status === 'in force' ? ' now' : ''}"><h4>v${esc(v.version)} · ${esc(v.title)}
+        <span class="badge ${v.status === 'in force' ? 'b-success' : 'b-muted'}">${esc(v.status)}</span><span class="muted small">${esc(v.date)} · commit ${esc(v.commit)}</span></h4>
+      <ul>${v.changes.map(c => `<li>${esc(c)}</li>`).join('')}</ul><p class="why"><b>Why:</b> ${esc(v.why)}</p></div>`).join('');
+  $('#rules').showModal();
+}
+if (typeof RULE_LOG !== 'undefined') $('#rules-ver').textContent = `v${RULE_LOG[0].version}`;
 
 document.addEventListener('dragover', e => e.preventDefault());   // a drop that misses the zone shouldn't open the file in the tab
 document.addEventListener('drop', e => e.preventDefault());

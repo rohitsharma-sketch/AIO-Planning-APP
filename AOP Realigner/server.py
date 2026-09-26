@@ -363,6 +363,9 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/", "/index.html"):
             with open(os.path.join(HERE, "index.html"), "rb") as fh:
                 return self._send(200, fh.read(), "text/html; charset=utf-8")
+        if path == "/rules.js":  # rules in force + version log, shown by the page's Rules button
+            with open(os.path.join(HERE, "rules.js"), "rb") as fh:
+                return self._send(200, fh.read(), "text/javascript; charset=utf-8")
         if path == "/api/state":
             return self._send(200, public_state())
         if path == "/api/download":
