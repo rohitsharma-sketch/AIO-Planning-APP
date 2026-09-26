@@ -53,6 +53,7 @@ MIN_DAYS, MAX_DAYS = 21, 90               # a window run must have >= 21 days; e
 DELIST_AT, REL_AT = 0.5, 0.6              # <= 50% of its own same-window benchmark AND <= 60% of its peers' change
 MIN_BENCH_MONTHLY = 2000                  # benchmark must be worth >= Rs 2,000 a month (noise floor, as before)
 MIN_PEERS = 3
+SEV_HIGH, SEV_MEDIUM = 0.2, 0.35           # severity by own ratio: <= 20% High, <= 35% Medium, else Low
 MATURE_DAYS = 365                         # ...and had been open >= 12 months before that window began
 COVER = 0.7                               # a store must have traded on >= 70% of a window's festival-free days
 LOOKAHEAD, RELIST_AT, MIN_RELIST_VALUE = 75, 0.8, 10000
@@ -276,7 +277,7 @@ def build():
                               "years": [{"year": y, "from": iso(ya), "to": iso(yb), "days": dd, "sales": r2(v)} for y, ya, yb, v, dd in x.yrs]},
                 "ratio": round(ratio, 3), "peers": {"basis": basis, "stores": n, "ratio": round(peer_ratio, 3)},
                 "relative": round(rel, 3), "shortfall_month": r2((brate - rate) * 30),
-                "tier": "High" if ratio <= 0.2 else "Medium" if ratio <= 0.35 else "Low",
+                "tier": "High" if ratio <= SEV_HIGH else "Medium" if ratio <= SEV_MEDIUM else "Low",
                 "next_window": w["next"],
             })
 
@@ -397,7 +398,7 @@ def build():
     now = datetime.datetime.now().isoformat(timespec="seconds")
     params = {"years": YEARS, "in_season_index": IN_AT, "off_season_index": OFF_AT, "min_window_days": MIN_DAYS,
               "max_window_days": MAX_DAYS, "delist_ratio": DELIST_AT, "delist_relative": REL_AT,
-              "min_benchmark_monthly": MIN_BENCH_MONTHLY, "coverage": COVER, "mature_days": MATURE_DAYS, "min_peers": MIN_PEERS, "relist_lookahead_days": LOOKAHEAD,
+              "min_benchmark_monthly": MIN_BENCH_MONTHLY, "coverage": COVER, "mature_days": MATURE_DAYS, "severity_high": SEV_HIGH, "severity_medium": SEV_MEDIUM, "min_peers": MIN_PEERS, "relist_lookahead_days": LOOKAHEAD,
               "relist_vs_peers": RELIST_AT, "min_relist_value": MIN_RELIST_VALUE}
     sources = {"daily": trace_daily, "calendar": cal_notes, "listing": {"file": "kb.json", "latest_month": kb["months"][-1]},
                "season_category": "seasonality.json season_category (ATTRIBUTE1); missing = regular"}

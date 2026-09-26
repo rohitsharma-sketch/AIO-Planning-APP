@@ -271,7 +271,7 @@ const VIEWS = {
           ${s.kind !== 'relist' ? `<select data-f="sug.tier" aria-label="Severity">${options(['High', 'Medium', 'Low'], s.tier, 'All severities')}</select>` : ''}
           <button class="btn" data-act="sug-csv">Export CSV</button>
         </section>
-        <p class="rule">${rule} <span class="muted">Click a row for the exact dates, days and sums behind it.</span></p>
+        <p class="rule">${rule} <span class="muted">Click a row for the exact dates, days and sums behind it.</span> <button class="linkish" data-go="rules">Full rules (v${esc(RULE_LOG[0].version)}) →</button></p>
         <div id="res"></div>`;
     },
     results() {
@@ -380,6 +380,68 @@ const VIEWS = {
     },
   },
 
+  // ------------------------------------------------ Rules (plain-language rules in force + version log, rules.js)
+  rules: {
+    controls() { view.innerHTML = '<div id="res"></div>'; },
+    results() {
+      const p = sug.params, cur = RULE_LOG[0];
+      const byType = (v, t) => MON.filter(m => v.type[m] === t).join(', ') || '—';
+      const wins = Object.entries(win.categories).sort().map(([c, v]) => `<tr><td>${esc(CAT[c] || c)}</td><td>${byType(v, 'in')}</td><td>${byType(v, 'normal')}</td><td>${byType(v, 'off')}</td></tr>`).join('');
+      const sec = (n, title, items) => `<div class="ov-card rule-card"><h3><span class="rule-no">${n}</span>${title}</h3><ul>${items.map(i => `<li>${i}</li>`).join('')}</ul></div>`;
+      const log = RULE_LOG.map(v => `<div class="ov-card ver${v.status === 'in force' ? ' now' : ''}"><h3>v${esc(v.version)} · ${esc(v.title)}
+          <span class="ver-tag">${v.status === 'in force' ? 'in force' : 'superseded'}</span><span class="hint">${dmy(v.date)}${v.replaces ? ` · replaced v${esc(v.replaces)}` : ''}</span></h3>
+        <ul>${v.changes.map(c => `<li>${esc(c)}</li>`).join('')}</ul><p class="why-line"><b>Why:</b> ${esc(v.why)}</p></div>`).join('');
+      $('#res').innerHTML = `
+        <p class="ov-month">Rules in force: <strong>version ${esc(cur.version)}</strong>, since ${dmy(cur.date)} · the numbers below are read from the latest build (${esc(sug.generated_at.replace('T', ' '))}), so they always match what the suggestions used.</p>
+        <div class="ov-grid">
+          ${sec(1, 'What the numbers are', [
+            'Sales = SL_V from the data lake. Suggestions use the <b>day-wise</b> export, so every window is cut on exact calendar dates.',
+            'A <b>rate</b> is sales per <b>festival-free trading day</b> of that store (a day the store sold anything) - closed days never count as zero-sale days.',
+            `Benchmark years: ${p.years.join(', ')}. Only apparel departments are covered.`,
+          ])}
+          ${sec(2, 'Festival days', [
+            "Taken from the Calendar app's Festival Master: each cluster's festivals with their Pre / Core / Post days, placed on that year's festival date.",
+            "Those days are removed from every benchmark and every suggestion, for the stores in that cluster. A store with no calendar cluster has every cluster's festival days removed.",
+            "Festivals are benchmarked on their own: the festival lift = festival-day rate vs the same stores' normal days in the same months (Seasonality tab).",
+          ])}
+          ${sec(3, 'Season windows', [
+            `For each season category, every month's festival-free rate is compared with that category's yearly average: <b>in-season</b> at ≥ ${p.in_season_index}×, <b>off-season</b> at ≤ ${p.off_season_index}×, otherwise <b>normal</b>.`,
+            'The windows are worked out from the data again on every daily build - nobody types them.',
+            'A window is never compared with a different window: in-season only with in-season, off-season only with off-season.',
+            `<table class="mini"><thead><tr><th>Category</th><th>In-season</th><th>Normal</th><th>Off-season</th></tr></thead><tbody>${wins}</tbody></table>`,
+          ])}
+          ${sec(4, 'Delist', [
+            `The combo is listed today and was listed through its latest window (the most recent run of one window type, ${p.min_window_days}-${p.max_window_days} days).`,
+            `Its rate there is ≤ <b>${pct(p.delist_ratio)}</b> of its <b>own</b> rate on the <b>same dates</b> in earlier years it was selling…`,
+            `…and ≤ <b>${pct(p.delist_relative)}</b> of how the same department moved in its cluster's other stores over those dates (at least ${p.min_peers} stores, else all stores) - so the fall is the store's, not the department's or the region's.`,
+            `A window or benchmark year counts only if the store traded on ≥ ${pct(p.coverage)} of its festival-free days and had been open ≥ ${Math.round(p.mature_days / 30.4)} months before it began (no launch surges). The benchmark must be worth ≥ ₹${fmtN(p.min_benchmark_monthly)} a month.`,
+            `Severity from its own ratio: <b>High</b> ≤ ${pct(p.severity_high)}, <b>Medium</b> ≤ ${pct(p.severity_medium)}, otherwise <b>Low</b>. Shortfall = (benchmark − now) × 30 days.`,
+          ])}
+          ${sec(5, 'Held - not a delist', [
+            `Would qualify as delist, but only on an <b>off-season</b> read, and the department's in-season starts within ${p.relist_lookahead_days} days.`,
+            'Review it once the season is running - an off-season dip right before the season is never a reason to delist.',
+          ])}
+          ${sec(6, 'Relist', [
+            `Delisted today, and the department's in-season (or normal) window starts within ${p.relist_lookahead_days} days.`,
+            `The last time this store sold it in that window (store open 12+ months, trading most days), it sold at ≥ <b>${pct(p.relist_vs_peers)}</b> of its cluster peers' median.`,
+            `Expected = its own rate then × the window's festival-free days + its festival days × the department's festival lift; shown only if ≥ ₹${fmtN(p.min_relist_value)}.`,
+          ])}
+          ${sec(7, 'Listing conventions', [
+            'Listing = MC_LISTING (Rev) from the yearly Directory Listing workbooks, one flag per store × department × month; "-" in older files means No.',
+            'Monthly counts use the latest <b>complete</b> month (a "Till Date" month is partial).',
+            'Change counts leave out zero-sales flag flips (₹0 before and after) - listing noise, not a merchandising change.',
+            'Division comes from the department prefix (M… Mens, L… Ladies, K… Kids, else Other).',
+          ])}
+          ${sec(8, 'Where to check', [
+            'Every suggestion row opens a "Why" panel with its dates, trading days, sales, each benchmark year, the peers and the festival windows removed.',
+            'Data &amp; checks lists every source file with its rows and dates, and reconciles the day-wise export against the month-wise one.',
+          ])}
+        </div>
+        <h2 class="h2" style="margin-top:22px">Version log <span class="muted">· newest first · every change of rule gets a new version here</span></h2>
+        <div class="ver-list">${log}</div>`;
+    },
+  },
+
   // ------------------------------------------------ Data & checks
   data: {
     controls() {
@@ -400,14 +462,7 @@ const VIEWS = {
           <tr><td>Listing</td><td>kb.json · ${esc(kb.months[0])} – ${esc(kb.months.at(-1))} · ${fmtN(kb.stores.length)} stores × ${fmtN(kb.departments.length)} departments<div class="sub">yearly Directory Listing workbooks (data/listing)</div></td></tr>
           <tr><td>Festivals</td><td>Calendar app: <code>${esc(cal.festival_master)}</code> (Pre / Core / Post per cluster) on <code>${esc(cal.dates)}</code><div class="sub">${cal.clusters.length} clusters · ${fmtN(cal.stores_mapped)} stores mapped via <code>${esc(cal.store_clusters)}</code> · ${esc(cal.unmapped_rule)}${cal.missing_dates.length ? ` · missing dates: ${esc(cal.missing_dates.join(', '))}` : ''}</div></td></tr>
           <tr><td>Season category</td><td>${esc(s.season_category)}</td></tr>
-          <tr><td>Suggestions</td><td>built ${esc(sug.generated_at.replace('T', ' '))} · anchor ${dmy(sug.anchor)} · benchmark years ${p.years.join(', ')}</td></tr>
-        </tbody></table></div>
-        <div class="ov-card"><h3>Rules in force</h3><table><tbody>
-          <tr><td>Season windows</td><td>in-season if a month's index ≥ ${p.in_season_index}, off-season if ≤ ${p.off_season_index}, else normal</td></tr>
-          <tr><td>Window judged</td><td>the latest run of one window type, ≥ ${p.min_window_days} and ≤ ${p.max_window_days} days; the store must trade on ≥ ${pct(p.coverage)} of its festival-free days, and a benchmark year counts only if the store had been open ≥ 12 months before it began (no launch surges)</td></tr>
-          <tr><td>Delist</td><td>≤ ${pct(p.delist_ratio)} of its own same-dates benchmark and ≤ ${pct(p.delist_relative)} of its peers' change; benchmark ≥ ₹${fmtN(p.min_benchmark_monthly)}/month; ≥ ${p.min_peers} peers in the cluster, else all stores</td></tr>
-          <tr><td>Held</td><td>an off-season read when the in-season starts within ${p.relist_lookahead_days} days</td></tr>
-          <tr><td>Relist</td><td>≥ ${pct(p.relist_vs_peers)} of its cluster peers' median the last time it sold in that window; expected ≥ ₹${fmtN(p.min_relist_value)}</td></tr>
+          <tr><td>Suggestions</td><td>built ${esc(sug.generated_at.replace('T', ' '))} · anchor ${dmy(sug.anchor)} · benchmark years ${p.years.join(', ')} · rules v${esc(RULE_LOG[0].version)} <button class="linkish" data-go="rules">see the rules →</button></td></tr>
         </tbody></table></div>
         <div class="ov-card"><h3>Check: day-wise vs month-wise export <span class="hint">${bad.length ? `${bad.length} month(s) differ by > 0.5%` : 'all complete months within 0.5%'}</span></h3>
           <div class="tbl-wrap short"><table><thead><tr><th>Month</th><th class="num">Day-wise</th><th class="num">Month-wise</th><th class="num">Difference</th></tr></thead><tbody>${recon}</tbody></table></div></div>

@@ -347,3 +347,12 @@ with their previous listing histories tagged, using simplistic graphical notions
   new **Data & checks** (every source file with rows and dates, the rules in force, the day-wise vs
   month-wise reconciliation, the category window index, all festival windows by cluster / year). Drill-down
   chart shades each month by its season window. Reads kb / sales / windows / suggestions / stores.json.
+- **2026-09-26 (Rules tab + rule version log)** — User: "keep a version rule log somewhere on the front so
+  that its easier for the others to understand the rules". New last tab **Rules**: the rules in force in plain
+  words (8 sections: what the numbers are, festival days, season windows with the live window table, delist,
+  held, relist, listing conventions, where to check), every number read from suggestions.json `params`, plus
+  the **version log** (v1.0 first risk score -> v1.1 severity thirds -> v2.0 ATTRIBUTE1 + seasonal index ->
+  v3.0 fixed month windows -> v4.0 festival- and season-aware, in force). The log lives in `app/rules.js`
+  (`RULE_LOG`, newest first): any rule change adds a new entry at the top and marks the old one superseded.
+  The Data & checks rules card moved here; Suggestions and Data link to it. Severity cut-offs now published
+  as params (`severity_high` / `severity_medium`).
