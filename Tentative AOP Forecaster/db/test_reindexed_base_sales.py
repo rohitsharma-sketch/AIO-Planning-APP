@@ -26,13 +26,18 @@ class _Res:
     def all(self):
         return self._rows
 
+    def scalar(self):
+        return self._rows[0][0] if self._rows else None
+
 
 class _Session:
-    def __init__(self, mw_rows):
-        self.mw_rows = mw_rows
+    def __init__(self, mw_rows, dw_last="2026-08-31"):
+        self.mw_rows, self.dw_last = mw_rows, dw_last
 
     def execute(self, stmt, params=None):
         sql = str(stmt)
+        if "columns->>-1" in sql:                     # last day of the day-wise ACTUALS
+            return _Res([(self.dw_last,)])
         if "SELECT key_fields" in sql:
             return _Res([(["store"], ["2027-04-01"])])
         if "masterdata.stores" in sql:
@@ -50,4 +55,9 @@ assert {d: out[d]["Apr'27"] for d in out} == {"GM": 2.0, "KIDS": 3.0, "LADIES": 
 res = get_reindexed_lfl_base_sales(_Session([("GM", "2027-04", 9.0), ("RETAIL", "2027-04", 1.0)]))
 assert all(v == 0.0 for d in res["base_sales"].values() for v in d.values()), res["base_sales"]
 assert res["availableMonths"] == [] and "KIDS/LADIES/MENS" in res["note"], res
+
+# Day-wise export ends mid-April 2026 -> Apr'27 is incomplete: left out with a note, not shown short.
+res = get_reindexed_lfl_base_sales(_Session(mw, dw_last="2026-04-27"))
+assert res["base_sales"]["KIDS"]["Apr'27"] == 0.0 and "Apr'27" not in res["availableMonths"], res
+assert "Apr'27 left out" in res["note"] and "2026-04-27" in res["note"], res["note"]
 print("test_reindexed_base_sales: OK")

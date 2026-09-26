@@ -81,6 +81,31 @@ def _col_to_fy28_label(col):
         return None
 
 
+def _dw_incomplete_months(session):
+    """(FY28 labels whose last-year month the day-wise ACTUALS don't fully cover, last actual day).
+    The day-wise export can end mid-month (e.g. 27 Aug 2026 while month-wise has all of August),
+    and its reindexed month then comes back ~12% short - a data gap, not a festival shift
+    (found 2026-09-26: Aug'27 -1,199 L vs month-wise). Such months are left out, with a note."""
+    import calendar
+    last = session.execute(text(
+        "SELECT columns->>-1 FROM calendar.sales_snapshots WHERE source_type = 'dw' AND kind = 'actual'")).scalar()
+    if not last:
+        return set(), None
+    ly, lm, ld = (int(x) for x in last.split("-")[:3])
+    out = set()
+    for label in FY28_M:
+        mon = next(k for k, v in MON_NAMES.items() if v == label[:3])
+        ref_y = 2000 + int(label[-2:]) - 1                     # same month, one year earlier
+        if (ref_y, mon) > (ly, lm) or ((ref_y, mon) == (ly, lm) and ld < calendar.monthrange(ly, lm)[1]):
+            out.add(label)
+    return out, last
+
+
+def _gap_note(gap, last):
+    return (f" {', '.join(gap)} left out - the day-wise export ends {last}, so "
+            f"{'that month is' if len(gap) == 1 else 'those months are'} incomplete there.") if gap else ""
+
+
 def get_reindexed_lfl_base_sales(session):
     """Returns {"base_sales": {div: {fy28_month: value}}, "hasAttribute": bool,
     "availableMonths": [...], "note": str | None}. `note` is set (not raised)
@@ -177,14 +202,16 @@ def get_reindexed_lfl_base_sales(session):
                 base_sales[div][m] = dw_total * share / LAKH
 
         open_months = _open_months()
-        closed_fy28_months = {fy28 for fy27, fy28 in zip(FY27_M, FY28_M) if fy27 not in open_months}
+        gap, last = _dw_incomplete_months(session)
+        closed_fy28_months = {fy28 for fy27, fy28 in zip(FY27_M, FY28_M) if fy27 not in open_months} - gap
         for div in base_sales:
             for m in base_sales[div]:
                 base_sales[div][m] = round(base_sales[div][m], 2) if m in closed_fy28_months else 0.0
         available_fy28_months = sorted([m for m in dw_total_by_month if m in closed_fy28_months])
 
         note = ("Day-wise reindex has no Division breakdown — division split estimated from "
-                "month-wise reindex proportions. Monthly totals (festival shifts) are from day-wise output.")
+                "month-wise reindex proportions. Monthly totals (festival shifts) are from day-wise output."
+                + _gap_note(sorted(gap & set(dw_total_by_month), key=FY28_M.index), last))
 
         return {"base_sales": base_sales, "hasAttribute": has_attribute,
                 "availableMonths": available_fy28_months, "note": note}
@@ -236,11 +263,14 @@ def get_reindexed_lfl_base_sales(session):
     # 'own' actuals source, making an artificial gap look like a genuine
     # reindex effect when it was really just an apples-to-oranges month set.
     open_months = _open_months()
-    closed_fy28_months = {fy28 for fy27, fy28 in zip(FY27_M, FY28_M) if fy27 not in open_months}
+    gap, last = _dw_incomplete_months(session)
+    closed_fy28_months = {fy28 for fy27, fy28 in zip(FY27_M, FY28_M) if fy27 not in open_months} - gap
     for div in base_sales:
         for m in base_sales[div]:
             base_sales[div][m] = round(base_sales[div][m], 2) if m in closed_fy28_months else 0.0
+    shown = set(available_fy28_months)
     available_fy28_months = [m for m in available_fy28_months if m in closed_fy28_months]
 
     return {"base_sales": base_sales, "hasAttribute": has_attribute,
-            "availableMonths": available_fy28_months, "note": None}
+            "availableMonths": available_fy28_months,
+            "note": _gap_note(sorted(gap & shown, key=FY28_M.index), last).strip() or None}
