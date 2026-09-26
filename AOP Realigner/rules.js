@@ -48,7 +48,7 @@ const RULES_NOW = [
 
 const RULE_LOG = [
   {
-    version: '4.0', date: '2026-09-26', status: 'in force', commit: 'this change',
+    version: '4.0', date: '2026-09-26', status: 'in force', commit: '8c8f4b8',
     title: 'Method 4 (listing shift to a target), Method 5 (growth changes), display cont % rule for all',
     changes: [
       "Method 4: a delisted department's plan moves only into a chosen department or section; a new listing is taken only out of it - nothing else moves, store × division × month unchanged.",
