@@ -2,70 +2,63 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script>/* suite colour theme - one choice for every app, picked on Landing */(function(){var p=location.port,o=(p==='7800'||p==='8010')?'':'//'+location.hostname+':8010';document.write('<script src="'+o+'/api/suite-theme.js"><\/script>')})()</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NSO Plan Distributor</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
+/* RS Planning suite look (2026-09-26): chrome + sand page + pastel buttons,
+   colours from the suite theme picked on Landing (var(--st-*), sage fallback). */
 :root {
-  --top:#312E81; --ac:#4F46E5; --ac-h:#4338CA;
-  --al:#EEF2FF; --am:#C7D2FE;
-  --bg:#F5F5FA; --card:#FFFFFF;
-  --bdr:#E5E7EB; --bdr2:#D1D5DB;
-  --txt:#111827; --sub:#374151; --mu:#6B7280;
-  --ok:#059669; --ok-l:#D1FAE5;
-  --warn:#D97706; --warn-l:#FEF3C7;
-  --err:#DC2626; --err-l:#FEE2E2;
-  --r:10px; --r2:6px;
-  --shadow:0 1px 4px rgba(0,0,0,.08),0 0 0 1px rgba(0,0,0,.04);
-}
-@media(prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){
-    --bg:#0F0E1A;--card:#1A1933;--bdr:#2D2B4E;--bdr2:#3D3B5E;
-    --txt:#F3F4F6;--sub:#D1D5DB;--mu:#9CA3AF;
-    --al:#1E1B4B;--am:#3730A3;
-    --ok-l:#065F46;--warn-l:#78350F;--err-l:#7F1D1D;
-    --shadow:0 1px 4px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.2);
-  }
-}
-:root[data-theme="dark"]{
-  --bg:#0F0E1A;--card:#1A1933;--bdr:#2D2B4E;--bdr2:#3D3B5E;
-  --txt:#F3F4F6;--sub:#D1D5DB;--mu:#9CA3AF;
-  --al:#1E1B4B;--am:#3730A3;
-  --ok-l:#065F46;--warn-l:#78350F;--err-l:#7F1D1D;
-  --shadow:0 1px 4px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.2);
+  --top:var(--st-chrome,#34453F); --ac:var(--st-accent,#4F7A66); --ac-h:var(--st-accent-dark,#3F6453);
+  --al:var(--st-tint,#EAF3EE); --am:var(--st-tint-b,#CBE2D5);
+  --btn:var(--st-btn,#A8CBB7); --btn-h:var(--st-btn-hover,#95BFA7); --btn-t:var(--st-btn-text,#1F4D3A);
+  --bg:var(--st-page,#F7F6F2); --card:#FFFFFF; --head:var(--st-surface-2,#FAF9F6);
+  --bdr:var(--st-line,#E5E3DA); --bdr2:var(--st-line-2,#D3D0C4);
+  --txt:var(--st-ink,#1E2723); --sub:var(--st-ink-2,#37423C); --mu:var(--st-muted,#5F6B64);
+  --ok:#15803D; --ok-l:#ECFDF3;
+  --warn:#B45309; --warn-l:#FFF7E8;
+  --err:#B42318; --err-l:#FEF3F2;
+  --r:12px; --r2:8px;
+  --shadow:0 1px 2px rgba(var(--st-ink-rgb,30,39,35),.05),0 0 0 1px rgba(var(--st-ink-rgb,30,39,35),.04);
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;padding-inline:16px}
 
 /* top bar */
-.topbar{background:var(--top);color:#fff;padding:0 24px;display:flex;align-items:center;gap:12px;height:52px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.25);margin-inline:-16px}
-.topbar h1{font-size:15px;font-weight:700;letter-spacing:.02em}
-.topbar .badge{background:rgba(255,255,255,.18);font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px}
+.topbar{background:var(--top);color:#fff;padding:0 28px;display:flex;align-items:center;gap:11px;height:60px;position:sticky;top:0;z-index:100;border-bottom:1px solid rgba(255,255,255,.06);margin-inline:-16px}
+.brand-mark{width:32px;height:32px;border-radius:9px;background:var(--btn);color:var(--btn-t);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;letter-spacing:.02em;flex:none}
+.topbar h1{white-space:nowrap;font-size:15px;font-weight:800;letter-spacing:-.01em}
+.topbar .brand-sub{font-size:12.5px;color:rgba(255,255,255,.55);padding-left:11px;border-left:1px solid rgba(255,255,255,.18)}
 .topbar .spacer{flex:1}
-.topbar .hint{font-size:12px;opacity:.65}
+.topbar .home{white-space:nowrap;flex:none;display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:#fff;text-decoration:none;padding:6px 13px;border-radius:999px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18)}
+.topbar .home:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.3)}
+@media(max-width:620px){.topbar .brand-sub{display:none}}
 
 /* layout */
-.wrap{max-width:960px;margin:0 auto;padding:24px 0 60px}
-.section{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);margin-bottom:16px;overflow:hidden}
+.wrap{max-width:1000px;margin:0 auto;padding:28px 0 64px}
+.page-hd{margin:0 0 18px}.page-hd h2{font-size:24px;font-weight:800;color:var(--top);letter-spacing:-.02em}
+.page-hd p{font-size:13.5px;color:var(--mu);margin-top:4px;line-height:1.55;max-width:640px}
+.section{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);box-shadow:0 1px 2px rgba(var(--st-ink-rgb,30,39,35),.04);margin-bottom:16px;overflow:hidden}
 .sec-head{padding:16px 20px 14px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:10px}
-.sec-num{width:24px;height:24px;border-radius:50%;background:var(--ac);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.sec-title{font-size:14px;font-weight:700}
+.sec-num{width:26px;height:26px;border-radius:50%;background:var(--btn);color:var(--btn-t);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sec-title{font-size:14.5px;font-weight:800;color:var(--txt)}
 .sec-sub{font-size:12px;color:var(--mu);margin-left:auto}
 .sec-body{padding:20px}
 
 /* folder row */
 .folder-row{display:flex;gap:8px;align-items:center}
 .folder-input{flex:1;height:40px;padding:0 14px;border:1.5px solid var(--bdr2);border-radius:var(--r2);font-size:13px;font-family:inherit;background:var(--card);color:var(--txt);outline:none;transition:.15s}
-.folder-input:focus{border-color:var(--ac);box-shadow:0 0 0 3px rgba(79,70,229,.12)}
+.folder-input:focus{border-color:var(--ac);box-shadow:0 0 0 3px rgba(var(--st-accent-rgb,79,122,102),.15)}
 
 /* buttons */
-.btn{height:40px;padding:0 20px;border-radius:var(--r2);font-size:13px;font-weight:600;cursor:pointer;border:none;transition:.15s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-.btn-ac{background:var(--ac);color:#fff}
-.btn-ac:hover{background:var(--ac-h)}
+.btn{height:40px;padding:0 20px;border-radius:var(--r2);font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;border:none;transition:.15s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn-ac{background:var(--btn);color:var(--btn-t)}
+.btn-ac:hover{background:var(--btn-h)}
 .btn-ac:disabled{opacity:.5;cursor:not-allowed}
-.btn-outline{background:transparent;border:1.5px solid var(--bdr2);color:var(--sub)}
+.btn-outline{background:var(--card);border:1px solid var(--bdr2);color:var(--sub)}
 .btn-outline:hover{border-color:var(--ac);color:var(--ac)}
 .btn-lg{height:44px;padding:0 28px;font-size:14px;font-weight:700}
 
@@ -105,28 +98,28 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
 /* AOP table */
 .aop-wrap{overflow-x:auto}
 .aop-table{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
-.aop-table th{background:var(--top);color:#fff;font-weight:700;padding:8px 10px;text-align:left;white-space:nowrap}
+.aop-table th{background:var(--head);color:var(--mu);font-weight:700;font-size:11px;letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid var(--bdr);padding:8px 10px;text-align:left;white-space:nowrap}
 .aop-table th.num{text-align:right}
 .aop-table td{padding:6px 10px;border-bottom:1px solid var(--bdr);vertical-align:middle}
 .aop-table tr:last-child td{border-bottom:none}
 .aop-table tr:hover td{background:var(--al)}
 .aop-table td.num{text-align:right}
 .aop-input{width:80px;border:1.5px solid var(--bdr2);border-radius:4px;padding:3px 6px;font-size:12px;font-family:inherit;text-align:right;background:var(--card);color:var(--txt);outline:none}
-.aop-input:focus{border-color:var(--ac);box-shadow:0 0 0 2px rgba(79,70,229,.12)}
+.aop-input:focus{border-color:var(--ac);box-shadow:0 0 0 2px rgba(var(--st-accent-rgb,79,122,102),.15)}
 .aop-total td{font-weight:700;background:var(--al)!important}
-.grade-badge{display:inline-block;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:700;background:var(--am);color:var(--ac)}
+.grade-badge{display:inline-block;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:700;background:var(--al);border:1px solid var(--am);color:var(--btn-t)}
 
 /* progress */
 .progress-wrap{display:none;margin-top:20px}
 .progress-track{height:10px;background:var(--bdr);border-radius:99px;overflow:hidden;margin-bottom:8px}
-.progress-fill{height:100%;width:0%;background:linear-gradient(90deg,#4F46E5,#7C3AED);border-radius:99px;transition:width .4s ease;position:relative}
+.progress-fill{height:100%;width:0%;background:var(--ac);border-radius:99px;transition:width .4s ease;position:relative}
 .progress-fill.shim::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.3),transparent);background-size:200% 100%;animation:shim 1.5s infinite}
 @keyframes shim{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .prog-row{display:flex;justify-content:space-between;font-size:13px;color:var(--sub)}
 .prog-msg{font-size:12px;color:var(--mu);margin-top:4px}
 .stage-pills{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
 .stage-pill{padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600;border:1px solid var(--bdr);color:var(--mu)}
-.stage-pill.active{background:var(--ac);border-color:var(--ac);color:#fff}
+.stage-pill.active{background:var(--btn);border-color:var(--btn-h);color:var(--btn-t)}
 .stage-pill.done-s{background:var(--ok);border-color:var(--ok);color:#fff}
 
 /* result / error */
@@ -144,20 +137,23 @@ body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:var(--bg);c
 .gen-dot.ok{background:var(--ok)} .gen-dot.no{background:var(--bdr2)}
 .gen-actions{display:flex;gap:10px;align-items:center}
 .sep{height:1px;background:var(--bdr);margin:16px 0}
-.alert{font-size:12px;padding:10px 14px;border-radius:var(--r2);border:1px solid var(--am);background:var(--al);color:#3730A3;display:flex;align-items:flex-start;gap:8px}
-code{background:rgba(79,70,229,.12);padding:1px 5px;border-radius:3px;font-size:11px;color:var(--ac)}
+.alert{font-size:12px;padding:10px 14px;border-radius:var(--r2);border:1px solid var(--am);background:var(--al);color:var(--btn-t);display:flex;align-items:flex-start;gap:8px}
+code{background:rgba(var(--st-accent-rgb,79,122,102),.12);padding:1px 5px;border-radius:3px;font-size:11px;color:var(--ac)}
 </style>
 </head>
 <body>
 
 <div class="topbar">
+  <span class="brand-mark">NSO</span>
   <h1>NSO Plan Distributor</h1>
-  <span class="badge">v2</span>
+  <span class="brand-sub">RS Planning · CityKart</span>
   <div class="spacer"></div>
-  <span class="hint">Port 8060</span>
+  <a class="home" id="home-link" href="/">&larr; Landing</a>
 </div>
+<script>document.getElementById('home-link').href='//'+location.hostname+':7800/';</script>
 
 <div class="wrap">
+<div class="page-hd"><h2>NSO Plan Distributor</h2><p>Scan a folder of NSO inputs, adjust the monthly AOP targets, then generate the store-level plan workbook.</p></div>
 
 <!-- ── 1. Import Source ── -->
 <div class="section">
