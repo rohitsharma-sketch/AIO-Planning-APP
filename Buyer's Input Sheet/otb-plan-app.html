@@ -2118,6 +2118,7 @@ function magLive(mi,inp){
 }
 function magCommit(mi,inp){
   if(!_magSec)return;
+  if(inp.value===inp.defaultValue)return; // untouched: don't overwrite the exact value with its 2 dp display
   const k=_magSec.id+'__'+mi;
   const gr=parseFloat(inp.value);
   if(!isNaN(gr)){S.inputs[k]=gr;S.locked.add(k);}else{delete S.inputs[k];S.locked.delete(k);}
@@ -2518,7 +2519,7 @@ function cellVal(row,def){
       const v=S.inputs[k];
       const isLk=S.locked.has(k);
       const cls='gi'+(v==null?'':v<0?' neg':' has');
-      return `<input class="${cls}" data-key="${k}" type="number" step="1" placeholder="%" value="${v!=null?v:''}" oninput="setGrowth('${row._key}',${def.mi},this.value)" onblur="refresh()">`;
+      return `<input class="${cls}" data-key="${k}" type="number" step="1" placeholder="%" value="${v!=null?+(+v).toFixed(2):''}" oninput="setGrowth('${row._key}',${def.mi},this.value)" onblur="refresh()">`;
     }
     case 'block_input': {
       // Division grphd row — show effective block growth% (read-only summary)
@@ -4037,12 +4038,12 @@ function _divReappAttr(dv,mi,tempLockAttr=null){
   if(!totalUnlockedLY)return;
   unlockedAttrs.forEach(g=>{
     const targetTY=remaining*(g.ly/totalUnlockedLY);
-    const newG=g.ly>0?parseFloat(((targetTY/g.ly-1)*100).toFixed(2)):0;
+    const newG=g.ly>0?(targetTY/g.ly-1)*100:0; // unrounded: a 2 dp growth missed AOP by up to 0.21 L (deep check 2026-09-26)
     g.secs.forEach(sec=>{
       const k=sec.id+'__'+mi;
       S.inputs[k]=newG;
       const inp=document.querySelector(`input[data-key="${k}"]`);
-      if(inp){inp.value=newG;inp.className='gi'+(newG<0?' neg':' has');}
+      if(inp){inp.value=+newG.toFixed(2);inp.className='gi'+(newG<0?' neg':' has');}
     });
   });
 }
@@ -4070,11 +4071,11 @@ function _divReapp(dv,mi,tempLock=null){
   if(!totalUnlockedLY)return;
   unlocked.forEach(({sec,ly})=>{
     const targetTY=remaining*(ly/totalUnlockedLY);
-    const newG=ly>0?parseFloat(((targetTY/ly-1)*100).toFixed(2)):0;
+    const newG=ly>0?(targetTY/ly-1)*100:0; // unrounded: a 2 dp growth missed AOP by up to 0.21 L (deep check 2026-09-26)
     const k=sec.id+'__'+mi;
     S.inputs[k]=newG;
     const inp=document.querySelector(`input[data-key="${k}"]`);
-    if(inp){inp.value=newG;inp.className='gi'+(newG<0?' neg':' has');}
+    if(inp){inp.value=+newG.toFixed(2);inp.className='gi'+(newG<0?' neg':' has');}
   });
 }
 
@@ -4112,7 +4113,7 @@ function revertToLyCont(){
       activeSecs.forEach(sec=>{
         const ly=_secMonLY(sec,dv,mi,activeDivAnnual);
         const targetTY=aopMon*(ly/totalMonLY);
-        const newG=ly>0?parseFloat(((targetTY/ly-1)*100).toFixed(2)):0;
+        const newG=ly>0?(targetTY/ly-1)*100:0; // unrounded: a 2 dp growth missed AOP by up to 0.21 L (deep check 2026-09-26)
         const k=sec.id+'__'+mi;
         S.inputs[k]=newG;
         S.locked.delete(k);
@@ -4207,7 +4208,7 @@ function resetPlanToAop(){
 /* ── SAVE & EXPORT ─────────────────────────────── */
 function saveState(logVersion=false){
   const now=new Date();
-  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopVersionId:S.aopVersionId,aopUnit:S.aopUnit,locked:[...S.locked],aopSeeds:S.aopSeeds,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],customDepts:S.customDepts,at:now.toISOString()}))}catch(e){}
+  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopVersionId:S.aopVersionId,aopUnit:S.aopUnit,locked:[...S.locked],aopSeeds:S.aopSeeds,aopSeededFrom:S.aopSeededFrom,aopSeedFp:S.aopSeedFp,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],customDepts:S.customDepts,at:now.toISOString()}))}catch(e){}
   _updateSaveLabel(now);
   if(logVersion)_maybeSaveVersion(now);
   pushBuyerGrowthLive();
@@ -4218,15 +4219,22 @@ function saveState(logVersion=false){
 // per the standing instruction, so any month the buyer has actually worked
 // on floats through, not just the AOP-matched ones). Fire-and-forget: a
 // SalesPlan/AOP outage must never block or error out the buyer's own save.
+// Only RECORDED months go (user, 2026-09-26: months not recorded in BIS stay hidden in Sales Plan): a month is
+// recorded when AOP seeded it or the buyer set any cell in it; the rest only hold seedPlanDefaults' LY YoY fill.
+// The server replaces the whole set, so a month that stops being recorded drops out; hence no push until the AOP
+// has been applied (a partial picture would wipe the MAMJ rows). Each row carries the AOP publish it was seeded from.
 async function pushBuyerGrowthLive(){
   try{
+    if(!S.aopLocked)return;
+    const recorded=new Set();
+    Object.keys(S.aopSeeds).concat([...S.locked]).forEach(k=>recorded.add(+k.split('__').pop()));
     const rows=[];
     DVDATA.forEach(dv=>{
       dv.secs.forEach(sec=>{
         if(S.hiddenSecs.has(sec.id))return; // inactive dept — nothing to float
         for(let mi=0;mi<12;mi++){
           const v=S.inputs[sec.id+'__'+mi];
-          if(v==null||v==='')continue;
+          if(v==null||v===''||!recorded.has(mi))continue;
           rows.push({division:dv.nm,department:sec.nm,mi,growth_pct:Number(v)});
         }
       });
@@ -4234,9 +4242,9 @@ async function pushBuyerGrowthLive(){
     if(!rows.length)return;
     await fetch('/api/config/buyer-department-growth',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({rows}),
-    });
-  }catch(e){/* SalesPlan/AOP unreachable — never block the buyer's own save on this */}
+      body:JSON.stringify({rows,aop_publish_id:S.aopSeededFrom??null}),
+    }).then(r=>{if(!r.ok)toast('Growth NOT sent to Sales Plan ('+r.status+(r.status===401?' - sign in again':'')+')');});
+  }catch(e){toast('Growth NOT sent to Sales Plan (AOP unreachable)');} // never block the buyer's own save on this
 }
 function _updateSaveLabel(d){
   const el=document.getElementById('autosave-lbl');
@@ -4312,8 +4320,12 @@ function loadState(){
     const p=JSON.parse(localStorage.getItem('ck_otb_state')||'{}');
     if(p.inputs)S.inputs=p.inputs;
     if(p.selM)S.selM=new Set(p.selM);
-    // S.aop / S.aopLocked / S.aopSeeds are NOT restored from localStorage —
-    // they are always overwritten by fresh data from the AOP Forecaster API on startup
+    // S.aop / S.aopLocked are NOT restored from localStorage — they are always overwritten by fresh
+    // data from the AOP Forecaster API on startup. The seeds and the AOP they came from ARE restored
+    // (2026-09-26): opening BIS only re-seeds when that AOP changed, so the buyer's edits survive a reload.
+    if(p.aopSeeds)S.aopSeeds=p.aopSeeds;
+    if(p.aopSeededFrom!=null)S.aopSeededFrom=p.aopSeededFrom;
+    if(p.aopSeedFp)S.aopSeedFp=p.aopSeedFp;
     if(p.aopUnit)S.aopUnit=p.aopUnit;
     // The pinned AOP version IS restored (unlike S.aop): it decides WHICH AOP publish the startup fetch applies.
     if(p.aopVersionId!=null)S.aopVersionId=p.aopVersionId;
@@ -4970,8 +4982,7 @@ function syncFromAop(){
   const aopMonths=new Set();
   AOP_DIVS.forEach(d=>{for(let mi=0;mi<12;mi++){if((S.aop[d.id]?.[mi]||0)>0)aopMonths.add(mi);}});
   if(aopMonths.size>0)S.selM=aopMonths;
-  saveState();
-  seedPlanFromAop();
+  seedPlanFromAop(true); // saves + pushes itself (a saveState() before it pushed the OLD seeds, 2026-09-26); locked cells kept
   syncAopLockUI();
   buildAopGrid();
   syncAopLockStatus();
@@ -5015,8 +5026,9 @@ function _autoApplyAop(){
   const aopMonths=new Set();
   AOP_DIVS.forEach(d=>{for(let mi=0;mi<12;mi++){if((S.aop[d.id]?.[mi]||0)>0)aopMonths.add(mi);}});
   if(aopMonths.size>0)S.selM=aopMonths;
-  saveState();
-  seedPlanFromAop();
+  // Opening BIS keeps the buyer's growth and pushes nothing (user, 2026-09-26: the last browser to open used to
+  // overwrite everyone's edits in Sales Plan); it re-seeds - locked cells kept - only when the live AOP changed.
+  if(_aopSeedFp()!==S.aopSeedFp||!Object.keys(S.aopSeeds||{}).length)seedPlanFromAop(true);
   syncAopLockUI();
   syncAopLockStatus();
   buildPills();
@@ -5059,7 +5071,12 @@ function toggleMenu(id,ev){
 }
 function closeMenus(){document.querySelectorAll('.tmenu.open').forEach(m=>m.classList.remove('open'));}
 document.addEventListener('click',e=>{if(!e.target.closest('.tmenu'))closeMenus();});
-function seedPlanFromAop(){
+// Fingerprint of the AOP a seed is built on (targets + bases of the AOP months).
+function _aopSeedFp(){return JSON.stringify([S.aop,S.aopBase]);}
+// keepLocked (page open with a changed AOP, Sync AOP): the buyer's locked cells stay and the other departments
+// are re-balanced so each division x month still equals AOP. Without it (the "Re-seed plan" button) every cell
+// is reset to AOP and its lock cleared (it used to keep the lock flag on a value it had overwritten).
+function seedPlanFromAop(keepLocked=false){
   if(!S.aopLocked){toast('Lock AOP first');return;}
   let seeded=0;
   S.aopSeeds={};
@@ -5073,22 +5090,34 @@ function seedPlanFromAop(){
       // out of step with AOP's continuously-updated actuals. Falls back to
       // the old local base only when an AOP-synced base isn't available
       // (older publish, or synced before this fix).
-      const divLYMon=S.aopBase?.[dv.id]?.[mi]??DEPT_ACTUAL_LY?.[dv.id]?.[mi]??dv.secs.reduce((a,sec)=>a+monLY(sec.ly,mi,sec.lyMo),0); // Rs. Crore
-      if(!divLYMon)continue;
+      // _secMonLY uses that same base (S.aopBase, then DEPT_ACTUAL_LY, then the local split).
+      // Only ACTIVE departments carry the plan (hidden ones are left out of every division
+      // total, as in _divReapp), so the growth is set on their LY: with a department hidden,
+      // growth on the whole division's LY missed AOP by that department's share
+      // (deep check 2026-09-26, e.g. 528.82 L for ML_JEANS in MENS Mar'27).
+      const divAnn=dv.secs.reduce((a,s)=>a+s.ly,0);
+      const activeLY=dv.secs.filter(s=>!S.hiddenSecs.has(s.id)).reduce((a,s)=>a+_secMonLY(s,dv,mi,divAnn),0); // Rs. Crore
+      if(!activeLY)continue;
       // Growth% = AOP TARGET / base - 1, so Plan money (LY x growth) lands on
       // the AOP target itself: the handshake. 2026-09-25: the engine-only
       // forecast used before (2026-09-23) leaves out AOP's ref-store deviation
       // layer (8.7 Cr, all March), so BIS planned 423.1 vs a 431.9 target and
-      // showed +8.8% vs AOP Summary's +11.1%.
-      const gr=parseFloat(((aopCr/divLYMon-1)*100).toFixed(2));
+      // showed +8.8% vs AOP Summary's +11.1%. Kept unrounded (2026-09-26 audit):
+      // a 2 dp growth missed the target by up to 0.15 L per division x month.
+      const gr=(aopCr/activeLY-1)*100;
       dv.secs.forEach(sec=>{
         const k=sec.id+'__'+mi;
-        S.inputs[k]=gr;
         S.aopSeeds[k]=gr;
+        if(keepLocked&&S.locked.has(k))return;
+        S.inputs[k]=gr;
+        S.locked.delete(k);
         seeded++;
       });
+      if(keepLocked&&dv.secs.some(sec=>S.locked.has(sec.id+'__'+mi)))_divReapp(dv,mi);
     }
   });
+  S.aopSeededFrom=_aopCache?.version_id??null; // the publish these seeds came from (stamped on every push)
+  S.aopSeedFp=_aopSeedFp();
   saveState();
   refresh();
   toast('Plan seeded from AOP — '+seeded+' cells set ✓');

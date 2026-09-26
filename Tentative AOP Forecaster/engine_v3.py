@@ -18,16 +18,17 @@ from openpyxl.utils import get_column_letter
 import xlsxwriter
 
 
-def _round2(value):
-    """Round to 2 decimals for display/export.
+def _round4(value):
+    """Round a store row value to 4 decimals (user, 2026-09-26; was 2, whose 148 LfL rows summed to division bases
+    up to 0.045 L away from the raw export, beyond the 0.01 L audit tolerance). Screens and Excel still show 1-2.
 
     Python's built-in round() uses banker's rounding, which can push a
     number up OR down unpredictably at the boundary depending on float
     representation noise accumulated through the ramp/MoM forecast chain.
     Business rule: forecasts must never be inflated by a rounding tie, so
-    exact .xx5 ties round DOWN (toward zero), same as ROUND_HALF_DOWN.
+    exact ties round DOWN (toward zero), same as ROUND_HALF_DOWN.
     """
-    return float(Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_DOWN))
+    return float(Decimal(str(value)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_DOWN))
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 DIVS        = ["GM", "KIDS", "LADIES", "MENS", "RETAIL"]
@@ -396,7 +397,8 @@ def apply_festival_shift(actuals_pivot, proxy, store_info, open_months, base_piv
     if not maps or (2026, 2027) not in maps["shares"]:
         return base_pivot, proxy_cells, {}
     sh25, sh26 = maps["shares"].get((2025, 2026), {}), maps["shares"][(2026, 2027)]
-    cal_name = maps["calendars"][(2026, 2027)]
+    # Both maps shape the base (2025->2026 builds the not-yet-closed 2026 months), so both are recorded (2026-09-26).
+    cal_name = maps["calendars"][(2026, 2027)] + (f" + {maps['calendars'][(2025, 2026)]}" if (2025, 2026) in maps["calendars"] else "")
     base = {s: {d: dict(v) for d, v in divs.items()} for s, divs in base_pivot.items()}
     cells, shifted = set(proxy_cells), {}
     targets = [(L, f"2027-{_lbl_ym(L)[5:]}", FY28_M[i]) for i, L in enumerate(FY27_M) if _lbl_ym(L).startswith("2026-")]
@@ -882,9 +884,9 @@ def build_df(store_info, actuals_pivot, all_fc, aop_overrides=None, proxy_cells=
                 else:
                     fcst = engine_val + adjustments.get(key, 0.0)
 
-                base       = _round2(base)
-                engine_val = _round2(engine_val)
-                fcst       = _round2(fcst)
+                base       = _round4(base)
+                engine_val = _round4(engine_val)
+                fcst       = _round4(fcst)
 
                 row[f"{fy28m} | Base"]            = base
                 row[f"{fy28m} | Engine Forecast"] = engine_val   # pre-adjustment, exact growth%
@@ -892,7 +894,7 @@ def build_df(store_info, actuals_pivot, all_fc, aop_overrides=None, proxy_cells=
                 if is_named(store) and base > 0 and (fcst - base) / base > ANOMALY_DEV_THRESHOLD:
                     row[f"{fy28m} | Deviation"] = 0.0
                 else:
-                    row[f"{fy28m} | Deviation"] = _round2(fcst - base)
+                    row[f"{fy28m} | Deviation"] = _round4(fcst - base)
             row["Proxy Base Months"] = ", ".join(m for m in FY28_M if (store, div, m) in proxy_cells)
             row["Base Calendar"] = (shifted or {}).get(store, "")  # festival-shifted Mar'27..Dec'27 bases (apply_festival_shift)
             rows.append(row)

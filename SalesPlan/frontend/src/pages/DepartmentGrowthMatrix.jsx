@@ -627,6 +627,13 @@ export default function DepartmentGrowthMatrix() {
           <span style={{ color: theme.textMuted }}>
             🔗 <span style={{ color: '#1D4ED8' }}>Live from Buyer's Input</span> — read-only here, edit there
           </span>
+          {/* User, 2026-09-26: GM / RETAIL stay editable with every month - BIS doesn't cover them, so the
+              "hide months BIS hasn't recorded" rule applies to KIDS / LADIES / MENS only. */}
+          {data?.division && !['KIDS', 'LADIES', 'MENS'].includes(String(data.division).toUpperCase()) && (
+            <span style={{ color: theme.textMuted }}>
+              Buyer's Input covers KIDS, LADIES and MENS only — every {String(data.division).toUpperCase()} month is entered here
+            </span>
+          )}
           <span style={{ marginLeft: 'auto', color: theme.textMuted, fontStyle: 'italic' }}>
             Click a P1/P2 header to fill entire column
           </span>

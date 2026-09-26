@@ -400,10 +400,12 @@ def _save_growth(data: dict):
         json.dump(data, f, indent=2)
 
 
-AOP_FORECASTER_BASE = os.environ.get("AOP_FORECASTER_URL", "http://localhost:8000")
+# 127.0.0.1, not localhost: on Windows 'localhost' tries IPv6 first and each call waited ~10 s (deep check 2026-09-26).
+AOP_FORECASTER_BASE = os.environ.get("AOP_FORECASTER_URL", "http://127.0.0.1:8000")
+BIS_DIVISIONS = ("KIDS", "LADIES", "MENS")   # BIS covers these only; GM / RETAIL growth is entered in Sales Plan
 
 
-def _fetch_buyer_growth_live(division: str) -> list[dict]:
+def _fetch_buyer_growth_live(division: str, strict: bool = False) -> list[dict]:
     """Live pull from Buyer's Input Sheet (via AOP Forecaster's shared-DB
     endpoint — see Tentative AOP Forecaster/db/buyer_department_growth.py).
     Called on every GET, not cached: this is the "automatic, live" half of
@@ -416,11 +418,14 @@ def _fetch_buyer_growth_live(division: str) -> list[dict]:
     try:
         with urllib.request.urlopen(url, timeout=5) as resp:
             return json.loads(resp.read()).get("rows", [])
-    except Exception:
+    except Exception as e:
+        if strict:   # a plan run must not quietly fall back to 0% growth (deep check 2026-09-26)
+            raise RuntimeError(f"Buyer's Input growth for {division} is unavailable (AOP Forecaster at "
+                               f"{AOP_FORECASTER_BASE} unreachable: {e}) - the plan was not run, so it isn't made at 0% growth.")
         return []
 
 
-def _get_growth_matrix(division: str) -> tuple[list, list]:
+def _get_growth_matrix(division: str, strict: bool = False) -> tuple[list, list]:
     """Returns ([{name, attribute, periods: {period: float}, buyer_periods:
     [period]}], buyer_months) for a division. Any period the buyer has
     actually entered in BIS overrides the saved/manual value for BOTH P1 and
@@ -434,7 +439,7 @@ def _get_growth_matrix(division: str) -> tuple[list, list]:
     depts  = master.get(division, [])
     saved  = _load_growth().get(division, {})
 
-    buyer_rows = _fetch_buyer_growth_live(division)
+    buyer_rows = _fetch_buyer_growth_live(division, strict)
     # {dept_name: {month_label: growth_pct}}
     buyer_by_dept: dict[str, dict[str, float]] = {}
     buyer_months: set[str] = set()
@@ -460,6 +465,21 @@ def _get_growth_matrix(division: str) -> tuple[list, list]:
             "periods": periods, "buyer_periods": buyer_periods,
         })
     return result, sorted(buyer_months)
+
+
+def live_growth_matrix() -> dict:
+    """{division: {dept: {period: index}}} - exactly what the Growth Matrix screen shows (saved values with BIS's
+    live growth on P1 and P2 of each BIS month). The plan engines read this, so BIS growth reaches the plan itself,
+    not just the screen (user, 2026-09-26; before, they read only department_growth.json, which was {}).
+    Only departments with a BIS or saved value are listed; the engines give the rest 100 per department as before,
+    and a division average (non-SSG / NSO stores) is no longer pulled down by the KLM departments BIS doesn't have.
+    Raises if BIS growth can't be fetched for a BIS division, so a plan is never run at 0% by accident."""
+    saved = _load_growth()
+    out = {}
+    for div in _build_master():
+        rows, _ = _get_growth_matrix(div, strict=div in BIS_DIVISIONS)
+        out[div] = {d["name"]: d["periods"] for d in rows if d["buyer_periods"] or d["name"] in saved.get(div, {})}
+    return out
 
 
 class GrowthUpdate(BaseModel):

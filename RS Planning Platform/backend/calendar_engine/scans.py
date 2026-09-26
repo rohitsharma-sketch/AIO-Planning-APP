@@ -1070,13 +1070,15 @@ def _is_month_closed(ym, today=None):
     return today >= first_of_next
 
 
-def _calendar_fingerprint(day_map):
-    """Hashes the day-map actually used for a reindex - not a calendar id -
-    so editing an existing locked calendar's mappings self-invalidates every
-    cache entry that calendar produced, instead of a stale cache silently
-    surviving an in-place edit. sort_keys makes this stable regardless of
-    dict/list ordering."""
-    blob = json.dumps(day_map, sort_keys=True, separators=(",", ":"))
+def _calendar_fingerprint(day_map, store_cluster=None):
+    """Hashes the day-map AND the store -> cluster map actually used for a
+    reindex - not a calendar id - so editing either self-invalidates every
+    cache entry built on it, instead of a stale cache silently surviving an
+    in-place edit. The store map was left out until 2026-09-26: after the
+    'Kashmir' -> 'KASHMIR' rename the closed months cached while those 4
+    stores were an unknown cluster kept being served (-1,558.61 L in the mw
+    snapshot). sort_keys makes this stable regardless of dict/list ordering."""
+    blob = json.dumps([day_map, store_cluster or {}], sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:32]
 
 
@@ -1149,14 +1151,14 @@ def _cached_months_status(source, months, calendar_fp, fields_key):
         session.close()
 
 
-def reindex_month_cache_status(source, months, day_map, extra_dims, metric_col):
+def reindex_month_cache_status(source, months, day_map, extra_dims, metric_col, store_cluster=None):
     """Per-requested-month status for the Run Reindex UI, computed BEFORE any
     actual run: 'open' (current/future month - always recomputed, never
     cached), 'cached' (closed and already reindexed under these exact
     calendar/fields/metric settings - the next run reuses it for free), or
     'pending' (closed but never cached under this combination - the next run
     will do real work for it, same as before this feature existed)."""
-    calendar_fp = _calendar_fingerprint(day_map)
+    calendar_fp = _calendar_fingerprint(day_map, store_cluster)
     fields_key = _reindex_fields_key(extra_dims, metric_col)
     closed = [m for m in months if _is_month_closed(m)]
     cached = _cached_months_status(source, closed, calendar_fp, fields_key) if closed else {}
@@ -1250,7 +1252,7 @@ def run_reindex(payload, progress=None):
         # run - only the open/current month (which can still change) needs
         # fresh work every time. This is the main lever for "every login
         # doesn't have to re-run the same months" - see ReindexMonthCache.
-        calendar_fp = _calendar_fingerprint(day_map)
+        calendar_fp = _calendar_fingerprint(day_map, store_cluster)
         fields_key = _reindex_fields_key(extra_dims, metric_col)
         cached_status = _cached_months_status(
             source, [m for m in months if _is_month_closed(m)], calendar_fp, fields_key)

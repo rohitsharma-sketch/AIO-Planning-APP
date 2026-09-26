@@ -39,13 +39,24 @@ def _ensure_lever(session):
     """), {"k": LEVER_KEY})
 
 
-def upsert_buyer_growth(session, rows: list[dict]) -> int:
+def upsert_buyer_growth(session, rows: list[dict], aop_publish_id=None) -> int:
     """rows: [{division, department, mi, growth_pct}]. Silently skips any mi
     outside MI_TO_PERIOD (rather than raising) so one bad row never fails the
-    whole save."""
+    whole save.
+
+    The push is BIS's full set of recorded months, so it REPLACES the lever (user, 2026-09-26: months not recorded
+    in BIS stay hidden in Sales Plan - a month that stops being recorded must drop out). One transaction; a push
+    with no valid row changes nothing. source = 'buyer_input|aop:<publish id>' so a Sales Plan growth traces back
+    to the AOP publish BIS seeded it from."""
     _ensure_lever(session)
+    source = f"buyer_input|aop:{aop_publish_id}" if aop_publish_id is not None else "buyer_input"
+    valid = [r for r in rows if MI_TO_PERIOD.get(r.get("mi")) is not None and r.get("growth_pct") is not None
+             and str(r.get("division", "")).strip() and str(r.get("department", "")).strip()]
+    if not valid:
+        return 0
+    session.execute(text("DELETE FROM planning_inputs.input_values WHERE lever_key = :lk"), {"lk": LEVER_KEY})
     updated = 0
-    for r in rows:
+    for r in valid:
         period_id = MI_TO_PERIOD.get(r.get("mi"))
         if period_id is None:
             continue
@@ -57,12 +68,12 @@ def upsert_buyer_growth(session, rows: list[dict]) -> int:
         session.execute(text("""
             INSERT INTO planning_inputs.input_values
                 (lever_key, store_id, division_code, period_id, row_key, value, source)
-            VALUES (:lk, '', '', :pid, :rk, :val, 'buyer_input')
+            VALUES (:lk, '', '', :pid, :rk, :val, :src)
             ON CONFLICT ON CONSTRAINT uq_input_values_identity
             DO UPDATE SET value = EXCLUDED.value,
                           source = EXCLUDED.source,
                           updated_at = now()
-        """), {"lk": LEVER_KEY, "pid": period_id, "rk": row_key, "val": r["growth_pct"]})
+        """), {"lk": LEVER_KEY, "pid": period_id, "rk": row_key, "val": r["growth_pct"], "src": source})
         updated += 1
     session.commit()
     return updated
@@ -76,13 +87,13 @@ def get_buyer_growth(session, division: str | None = None) -> list[dict]:
         where += " AND row_key LIKE :prefix"
         params["prefix"] = f"{division.strip().upper()}|%"
     rows = session.execute(text(f"""
-        SELECT row_key, period_id, value, updated_at
+        SELECT row_key, period_id, value, updated_at, source
         FROM planning_inputs.input_values
         {where}
         ORDER BY row_key, period_id
     """), params).all()
     out = []
-    for row_key, period_id, value, updated_at in rows:
+    for row_key, period_id, value, updated_at, source in rows:
         div, _, dept = row_key.partition("|")
         month = PERIOD_TO_LABEL.get(period_id)
         if month is None or value is None:
@@ -91,5 +102,6 @@ def get_buyer_growth(session, division: str | None = None) -> list[dict]:
             "division": div, "department": dept, "period_id": period_id,
             "month": month, "growth_pct": float(value),
             "updated_at": updated_at.isoformat() if updated_at else None,
+            "aop_publish_id": source.split("aop:", 1)[1] if source and "aop:" in source else None,
         })
     return out

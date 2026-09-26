@@ -31,3 +31,47 @@ export function useVisibleMonths() {
   }, [])
   return useMemo(() => visibleMonths(ct), [ct])
 }
+
+// Month selection (user, 2026-09-26): the closed months by default, or the months picked by hand in Review - a
+// future one too. Review and Results both read it, so they always show the same months. Remembered in this
+// browser only; the 'aop-months' event keeps screens that are open at the same time in step.
+// The pick also stores which months were closed when it was made, so a month that closes later still appears on
+// its own. Anything unreadable (old format, no valid month) counts as "no pick" rather than crashing Results.
+const PICK_KEY = 'aop_review_months'
+function readPick() {
+  try {
+    const v = JSON.parse(localStorage.getItem(PICK_KEY))
+    const months = (Array.isArray(v) ? v : v?.months || []).filter(m => MONTHS.includes(m))
+    return months.length ? { months, closedAtPick: Array.isArray(v?.closedAtPick) ? v.closedAtPick : null } : null
+  } catch { return null }
+}
+
+export function useShownMonths() {
+  const closed = useVisibleMonths()
+  const [picked, setPicked] = useState(readPick)
+  useEffect(() => {
+    const on = () => setPicked(readPick())
+    window.addEventListener('aop-months', on)
+    return () => window.removeEventListener('aop-months', on)
+  }, [])
+  const shown = useMemo(() => {
+    if (!picked) return closed
+    const newlyClosed = picked.closedAtPick ? closed.filter(m => !picked.closedAtPick.includes(m)) : []
+    return MONTHS.filter(m => picked.months.includes(m) || newlyClosed.includes(m))
+  }, [picked, closed])
+  const pick = next => {   // [months] or null = back to the closed months
+    const v = next ? { months: next, closedAtPick: closed } : null
+    try { v ? localStorage.setItem(PICK_KEY, JSON.stringify(v)) : localStorage.removeItem(PICK_KEY) } catch { /* private window */ }
+    setPicked(v)
+    window.dispatchEvent(new Event('aop-months'))
+  }
+  return { shown, closed, picked: !!picked, pick }
+}
+
+// "Mar'27 – Jun'27" for a run of consecutive months, else the months listed (a pick can skip months, 2026-09-26).
+export function monthSpan(list, fmt = m => m) {
+  if (!list.length) return ''
+  const idx = list.map(m => MONTHS.indexOf(m))
+  const contiguous = idx.every((v, i) => i === 0 || v === idx[i - 1] + 1)
+  return contiguous ? (list.length === 1 ? fmt(list[0]) : `${fmt(list[0])} – ${fmt(list[list.length - 1])}`) : list.map(fmt).join(', ')
+}

@@ -95,6 +95,8 @@ PROXY_ROUTES = [
     # AOP standalone — sync endpoints and division targets (no auth required)
     ('/api/config/aop-division-targets', 'http://127.0.0.1:8000', ''),
     ('/api/config/aop-versions',         'http://127.0.0.1:8000', ''),
+    # BIS growth push -> Sales Plan (fell through to 8010's /api/ and 404'd, audit 2026-09-26)
+    ('/api/config/buyer-department-growth', 'http://127.0.0.1:8000', ''),
     ('/api/config/db-sync',              'http://127.0.0.1:8000', ''),
     # Unified RS Planning Platform
     ('/calendar/',                       'http://127.0.0.1:8010', ''),

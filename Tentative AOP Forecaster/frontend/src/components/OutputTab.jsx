@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import './OutputTab.css'
 import { tagClass, MONTHS, toLeaf } from '../lib/tags'
 import { apiUrl } from '../lib/apiBase'
-import { useVisibleMonths } from '../lib/horizon'
+import { useShownMonths, monthSpan } from '../lib/horizon'
 import { LEVELS, LEVEL_KEYS, EMPTY_DIM, aggregate, buildTree, sortTree, flatten, dimOptions, filterLeaves, useDrill } from '../lib/drill'
 
 
@@ -205,7 +205,7 @@ export default function OutputTab({ sessionId, runKey }) {
   const [over, setOver] = useState(null)                          // { key, side: -1 | 1 }
   const reapply = useRef(false)                                   // re-open `depth` layers after a re-order
 
-  const VIS = useVisibleMonths()
+  const { shown: VIS, picked: monthsPicked } = useShownMonths()   // the month selection made in Review
   const VIS_IDX = useMemo(() => VIS.map(m => MONTHS.indexOf(m)), [VIS])
   // Month filter (2026-09-25): [] = every shown month. Narrows the month columns,
   // quarter bands AND the Total (+ its Gr%) to the picked months.
@@ -459,7 +459,7 @@ export default function OutputTab({ sessionId, runKey }) {
             </tbody>
           </table>
         </div>
-        {VIS.length < MONTHS.length && <div className="pv-foot">{VIS[0]}–{VIS[VIS.length - 1]} shown · later months appear as their base month closes</div>}
+        {VIS.length < MONTHS.length && <div className="pv-foot">{monthSpan(VIS)} shown · {monthsPicked ? 'months as picked in Review' : 'later months appear as their base month closes'}</div>}
       </div>
 
     </div>

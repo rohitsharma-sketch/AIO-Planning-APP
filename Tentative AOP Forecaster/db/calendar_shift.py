@@ -110,5 +110,7 @@ def load_shift_maps(session, year_pairs=((2025, 2026), (2026, 2027))):
             for r, f in p:
                 if f not in w and r in w:
                     w[f] = w[r]
-        calendars[(ry, fy)] = cal.name
+        # The id, not just the name: a re-save keeps the name but gets a new id, so the name alone can't say
+        # which day map a run used (audit 2026-09-26). This label is each store's "Base Calendar" in the run.
+        calendars[(ry, fy)] = f"{cal.name} (id {cal.calendar_id})"
     return {"store_cluster": store_cluster, "shares": shares, "calendars": calendars}

@@ -463,7 +463,7 @@ def post_buyer_department_growth(body: dict = Body(...)):
     rows = body.get("rows") or []
     db = SessionLocal()
     try:
-        updated = upsert_buyer_growth(db, rows)
+        updated = upsert_buyer_growth(db, rows, body.get("aop_publish_id"))
         return {"ok": True, "updated": updated}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -490,13 +490,19 @@ def promote_aop_targets_endpoint(session_id: str | None = None):
     """Lock AOP targets for the Planning Engine: the saved version of
     `session_id` (the version on screen), else the latest saved version - the
     same live_version() BIS follows (2026-09-25). Falls back to raw staging
-    only when no version has been saved at all."""
+    only when no version has been saved at all. A session with no saved version
+    (unsaved run, or its version deleted) is refused, never swapped for another
+    version (2026-09-26)."""
     from db.base import SessionLocal
     from db.publish_aop_targets import promote_aop_targets, promote_from_history, live_version
     from fastapi import HTTPException
     db = SessionLocal()
     try:
         live = live_version(db, session_id)
+        if live is None and session_id and live_version(db) is not None:
+            raise HTTPException(status_code=400, detail=(
+                "This plan is not a saved version (unsaved, or its version was deleted), so it can't be locked. "
+                "Save it as a version first, or open the version you want to lock."))
         if live is not None:
             result = promote_from_history(db, live["id"])
             result["version_label"] = live["version_label"]

@@ -100,7 +100,7 @@ def test_live_version_is_a_saved_version():
         m.list_aop_history = lambda s, limit=50: [{"id": 112, "session_id": "v2"}, {"id": 32, "session_id": "v1"}]
         assert m.live_version(None)["id"] == 112
         assert m.live_version(None, "v1")["id"] == 32          # lock the version on screen
-        assert m.live_version(None, "deleted-v3")["id"] == 112  # unknown session -> latest saved
+        assert m.live_version(None, "deleted-v3") is None       # unsaved/deleted session -> nothing to lock
         m.list_aop_history = lambda s, limit=50: []
         assert m.live_version(None) is None
     finally:

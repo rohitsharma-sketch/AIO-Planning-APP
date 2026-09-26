@@ -62,10 +62,9 @@ def _load_source_plan() -> dict:
 
 
 def _load_growth_matrix() -> dict:
-    if os.path.exists(DEPT_GROWTH_PATH):
-        with open(DEPT_GROWTH_PATH) as f:
-            return json.load(f)
-    return {}
+    # Saved matrix + BIS's live growth, the same values the Growth Matrix screen shows (user, 2026-09-26).
+    from engines.department_plan import live_growth_matrix
+    return live_growth_matrix()
 
 
 # ── Zone × Grade helpers ──────────────────────────────────────────────────────

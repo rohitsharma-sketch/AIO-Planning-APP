@@ -6,7 +6,7 @@ import {
 import OutputTab from './OutputTab'
 import { toLeaf, MONTHS, TYPES } from '../lib/tags'
 import { apiUrl } from '../lib/apiBase'
-import { useVisibleMonths } from '../lib/horizon'
+import { useShownMonths, monthSpan } from '../lib/horizon'
 import './ResultsDashboard.css'
 
 // FY28_M = [Mar'27 (stub anchor), Apr'27..Jun'27 (Q1), Jul'27..Sep'27 (Q2),
@@ -61,7 +61,7 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
   const [divFilter, setDivFilter]     = useState([])    // [] = all divisions
   const [showLabels, setShowLabels] = useState(true)
   // Rule 1 (2026-09-25): only months whose base month has closed are shown.
-  const VIS = useVisibleMonths()
+  const { shown: VIS, picked: monthsPicked } = useShownMonths()   // the month selection made in Review
   const quarters = QUARTERS.map(q => ({ ...q, months: q.months.filter(m => VIS.includes(m)) })).filter(q => q.months.length)
 
   // Base source for the charts below: 'actual' is the DB's own actuals (what
@@ -92,8 +92,9 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
       if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Failed') }
       setPromoteState('done')
       await refreshLockStatus()
-    } catch {
+    } catch (e) {
       setPromoteState('error')
+      if (e?.message && e.message !== 'Failed') window.alert(e.message)   // e.g. "This plan is not a saved version ..."
     }
   }
 
@@ -229,13 +230,13 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
   const { monthly, divisions, store_types, summary: kpiSummary } = charts
   const filterLabel = typeFilter.length ? typeFilter.join(' + ') : 'All store types'
   const monthsChrono = MONTHS.filter(m => monthOn(m))   // click order -> fiscal order
-  const fullSpan = `${VIS[0]} – ${VIS[VIS.length - 1]}`
+  const fullSpan = monthSpan(VIS)
   const monthLabel = monthFilter.length === 0 ? `${fullSpan} (${VIS.length} mo)`
     : monthsChrono.length === 1 ? monthsChrono[0]
     : `${monthsChrono[0]} – ${monthsChrono[monthsChrono.length - 1]} (${monthsChrono.length} mo)`
   // Same-index LY month (Base column) is exactly one fiscal year behind its TY counterpart.
   const toLY = m => m.replace(/'(\d\d)$/, (_, yy) => `'${String(+yy - 1).padStart(2, '0')}`)
-  const baseLabel = monthFilter.length === 0 ? `${toLY(VIS[0])} – ${toLY(VIS[VIS.length - 1])}`
+  const baseLabel = monthFilter.length === 0 ? monthSpan(VIS, toLY)
     : monthsChrono.length === 1 ? toLY(monthsChrono[0])
     : `${toLY(monthsChrono[0])} – ${toLY(monthsChrono[monthsChrono.length - 1])}`
   const typeCount = t => (leaves ? new Set(leaves.filter(r => r.Type === t).map(r => r.Store)).size : { LfL: summary.n_lfl, Ramp: summary.n_ramp, NSO: summary.n_nso }[t])
@@ -405,7 +406,7 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
         {monthFilter.length > 0 && <button className="sdt-reset" onClick={() => setMonthFilter([])}>All shown months</button>}
         {VIS.length < MONTHS.length && (
           <span className="chart-filter-note" title="A forecast month is shown once its base month (the same month last year) has closed in the synced actuals. Later months appear automatically as each month closes.">
-            {MONTHS[VIS.length]} onwards appear once {toLY(MONTHS[VIS.length])} closes
+            {monthsPicked ? `${VIS.length} of ${MONTHS.length} months, as picked in Review` : `${MONTHS[VIS.length]} onwards appear once ${toLY(MONTHS[VIS.length])} closes`}
           </span>
         )}
       </div>

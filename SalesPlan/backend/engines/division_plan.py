@@ -212,33 +212,49 @@ def get_config():
     }
 
 
+def _monthly_split(div_name, annual, seasonality_index, fy_start_month, plan_year, aop):
+    """[(month_name, planned, index)] over the plan year. A month the live AOP targets (aop = {div: {period_id:
+    lakhs}}) is planned at exactly that target; the rest of the annual target is spread over the other months by
+    the seasonality curve (audit 2026-09-26: every month came off the curve, KIDS Jun'27 4,311.88 vs AOP 2,875.35).
+    When the AOP months alone exceed the annual target, the others get 0 and the annual becomes their sum.
+    MONTH_NAMES / SEASONALITY_CURVE start at April, so the FY starts at index fy_start_month - 4 (it was
+    fy_start_month - 1, which made the Apr-Mar plan run Jul-Jun)."""
+    start = (fy_start_month - 4) % 12
+    months = []
+    for i in range(12):
+        month_idx = (start + i) % 12
+        m = (month_idx + 3) % 12 + 1
+        pid = (plan_year + (1 if m < fy_start_month else 0)) * 100 + m
+        months.append((MONTH_NAMES[month_idx], SEASONALITY_CURVE[month_idx] * seasonality_index,
+                       (aop or {}).get(div_name, {}).get(pid)))
+    pinned = sum(round(t, 2) for _, _, t in months if t is not None)
+    rest = max(annual - pinned, 0.0)
+    free = [i for i, (_, _, t) in enumerate(months) if t is None]
+    raw_sum = sum(months[i][1] for i in free)
+    out, running = [], 0.0
+    for i, (name, idx, t) in enumerate(months):
+        if t is not None:
+            planned = round(t, 2)
+        elif i == free[-1]:
+            planned = max(round(rest - running, 2), 0.0)   # cent rounding can't make the last month negative
+        else:
+            planned = round(idx / raw_sum * rest, 2)
+            running += planned
+        out.append((name, planned, round(idx, 4)))
+    return out
+
+
 @router.post("/calculate", response_model=DivisionPlanOutput)
 def calculate_plan(payload: DivisionPlanInput):
     results = []
     total = 0.0
+    aop, _ = _load_aop_targets()
 
     for div in payload.divisions:
-        annual_target = div.base_sales * (1 + div.growth_pct / 100)
-        start = div.fy_start_month - 1
-
-        raw = []
-        for i in range(12):
-            month_idx = (start + i) % 12
-            raw.append(SEASONALITY_CURVE[month_idx] * div.seasonality_index)
-
-        raw_sum = sum(raw)
-        monthly = []
-        running = 0.0
-        for i in range(12):
-            month_idx = (start + i) % 12
-            month_name = MONTH_NAMES[month_idx]
-            idx = raw[i]
-            if i < 11:
-                planned = round((idx / raw_sum) * annual_target, 2)
-                running += planned
-            else:
-                planned = round(annual_target - running, 2)
-            monthly.append(MonthlyBreakdown(month=month_name, planned_sales=planned, index=round(idx, 4)))
+        split = _monthly_split(div.division_name, div.base_sales * (1 + div.growth_pct / 100),
+                               div.seasonality_index, div.fy_start_month, payload.plan_year, aop)
+        annual_target = sum(p for _, p, _ in split)
+        monthly = [MonthlyBreakdown(month=n, planned_sales=p, index=ix) for n, p, ix in split]
 
         results.append(DivisionResult(
             division_name=div.division_name,
@@ -258,24 +274,11 @@ def calculate_plan(payload: DivisionPlanInput):
 @router.get("/export")
 def export_csv(plan_name: str = "FY27 Division Plan", plan_year: int = 2027):
     divisions = _build_default_divisions()
+    aop, _ = _load_aop_targets()
     lines = ["Plan Name,Plan Year,Division,Month,Planned Sales (Lakhs)"]
     for div in divisions:
-        annual = div["base_sales"] * (1 + div["growth_pct"] / 100)
-        start = div["fy_start_month"] - 1
-        raw = []
-        for i in range(12):
-            month_idx = (start + i) % 12
-            raw.append(SEASONALITY_CURVE[month_idx] * div["seasonality_index"])
-        raw_sum = sum(raw)
-        running = 0.0
-        for i in range(12):
-            month_idx = (start + i) % 12
-            mn = MONTH_NAMES[month_idx]
-            if i < 11:
-                val = round((raw[i] / raw_sum) * annual, 2)
-                running += val
-            else:
-                val = round(annual - running, 2)
+        for mn, val, _ in _monthly_split(div["division_name"], div["base_sales"] * (1 + div["growth_pct"] / 100),
+                                         div["seasonality_index"], div["fy_start_month"], plan_year, aop):
             lines.append(f"{plan_name},{plan_year},{div['division_name']},{mn},{val}")
 
     content = "\n".join(lines)

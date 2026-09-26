@@ -277,12 +277,12 @@ def live_version(session, session_id=None):
     version are never live: before this, BIS / the Planning Engine lock followed
     "whichever run published last", so deleting Version 3 left its run (base
     387.4 Cr) live while AOP showed Version 2 (388.8 Cr).
-    Returns a list_aop_history entry, or None when nothing is saved."""
+    Returns a list_aop_history entry, or None when nothing is saved - and None when `session_id` has no saved
+    version (2026-09-26: it used to fall back to the latest saved version, so "Lock to Planning" on a just-deleted
+    Version 3 silently locked Version 2)."""
     hist = list_aop_history(session, limit=50)
     if session_id:
-        for h in hist:
-            if h["session_id"] == session_id:
-                return h
+        return next((h for h in hist if h["session_id"] == session_id), None)
     return hist[0] if hist else None
 
 

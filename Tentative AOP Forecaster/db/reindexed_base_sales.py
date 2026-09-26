@@ -177,10 +177,14 @@ def get_reindexed_lfl_base_sales(session):
             if label not in FY28_M:
                 continue
             div = _norm_div(raw_div)
+            # The share's denominator is every division the DAY-wise total also holds - DND / CDIT / CONSIGNMENT
+            # included - so their sales are not spread into the merchandise divisions (audit 2026-09-26: +4-9 L
+            # a month). NON-TRADING and FIXED ASSETS are not in the day-wise export at all.
+            if " ".join(str(raw_div or "").upper().split()) not in ("NON-TRADING", "FIXED ASSETS"):
+                mw_month_total[label] = mw_month_total.get(label, 0.0) + float(total)
             if div is None:
                 continue
             mw_div_total[(div, label)] = mw_div_total.get((div, label), 0.0) + float(total)
-            mw_month_total[label] = mw_month_total.get(label, 0.0) + float(total)
 
         # No KIDS/LADIES/MENS rows means the MW snapshot has no usable division
         # breakdown (missing, or saved without 'division') - any split from it

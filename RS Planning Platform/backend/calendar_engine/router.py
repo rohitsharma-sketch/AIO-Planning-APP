@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text, update
 
 from auth.deps import require_login, require_role
 from calendar_engine.cluster_names import resolve_cluster_name
@@ -36,6 +36,31 @@ from db.models.calendar import (
 )
 
 router = APIRouter()
+
+
+# Every table that keys a cluster by its name string (downstream syncs join on it exactly):
+# (table, name column, the other columns of its unique key).
+_CLUSTER_NAME_TABLES = [
+    ("cluster_profiles", "name", ()), ("store_calendar_clusters", "cluster_name", ()),
+    ("calendar_clusters", "cluster_name", ("calendar_id",)), ("calendar_day_pairs", "cluster_name", ("calendar_id", "seq")),
+    ("festival_changelog", "cluster_name", ("range_key", "festival_name")), ("cluster_day_sales", "cluster_name", ("sale_date",)),
+]
+
+
+def adopt_cluster_spelling(session, names):
+    """Cluster names are case-insensitive (user, 2026-09-26): the spelling the user just saved is written to every
+    table that holds that cluster, so 'Kashmir' vs 'KASHMIR' can never split a cluster again (it silently dropped
+    4 Kashmir stores from calendarisation). Where a row with the saved spelling already exists for the same key, the
+    old-spelling duplicate is dropped first (the latest input wins), so the save can't fail on a unique key.
+    Runs inside the caller's transaction."""
+    for n in {str(x).strip() for x in names if x and str(x).strip()}:
+        for table, col, keys in _CLUSTER_NAME_TABLES:
+            old = f"lower(trim(o.{col})) = lower(:n) AND o.{col} <> :n"
+            if keys:
+                same = " AND ".join(f"k.{c} = o.{c}" for c in keys)
+                session.execute(text(f"DELETE FROM calendar.{table} o WHERE {old} AND EXISTS "
+                                     f"(SELECT 1 FROM calendar.{table} k WHERE k.{col} = :n AND {same})"), {"n": n})
+            session.execute(text(f"UPDATE calendar.{table} o SET {col} = :n WHERE {old}"), {"n": n})
 
 
 # ─── Store / Cluster template parsing (ported verbatim from Calendar Engine/local_server.py) ──
@@ -293,6 +318,7 @@ def create_calendar(body: dict = Body(...), actor: dict = Depends(require_role("
         if rows:
             session.execute(CalendarDayPair.__table__.insert(), rows)
 
+        adopt_cluster_spelling(session, [cl["name"] for cl in body.get("clusters", [])] + list(body.get("dayMap", {})))
         session.commit()
         return {"ok": True, "id": calendar_id}
     finally:
@@ -333,6 +359,7 @@ def update_calendar_festivals(calendar_id: int, body: dict = Body(...), actor: d
                     independent=fest.get("independent", False),
                 ))
 
+        adopt_cluster_spelling(session, [cl["name"] for cl in body.get("clusters", [])])
         session.commit()
         return {"ok": True, "id": calendar_id}
     finally:
@@ -500,6 +527,7 @@ def put_store_cluster_map(body: dict = Body(...), actor: dict = Depends(require_
                 added=len(added), removed=len(removed), reassigned=len(reassigned), details=details,
             ))
 
+        adopt_cluster_spelling(session, after.values())
         session.commit()
         return {"ok": True, "added": len(added), "removed": len(removed), "reassigned": len(reassigned)}
     finally:
@@ -616,6 +644,7 @@ def put_cluster_profiles(body: dict = Body(...), actor: dict = Depends(require_r
                     pre=fest["pre"], core=fest["core"], post=fest["post"],
                     independent=fest.get("independent", False),
                 ))
+        adopt_cluster_spelling(session, [p["name"] for p in body.get("profiles", [])])
         session.commit()
         return {"ok": True}
     finally:
@@ -735,6 +764,7 @@ def put_festival_changelog(body: dict = Body(...), actor: dict = Depends(require
             set_={"ref_date": stmt.excluded.ref_date, "fut_date": stmt.excluded.fut_date, "saved_at": stmt.excluded.saved_at},
         )
         session.execute(stmt)
+        adopt_cluster_spelling(session, [body["clusterName"]])
         session.commit()
         return {"ok": True}
     finally:
@@ -898,6 +928,10 @@ def salesdata_reindex_cache_status(payload: dict = Body(...), user: dict = Depen
             select(CalendarDayPair.cluster_name, CalendarDayPair.ref_date, CalendarDayPair.fut_date)
             .where(CalendarDayPair.calendar_id == calendar_id)
         ).all()
+        # The cache key includes the store -> cluster map too (scans._calendar_fingerprint); the payload may carry
+        # the map the run will use, else it is the saved one.
+        store_cluster = payload.get("storeCluster") or dict(session.execute(
+            select(StoreCalendarCluster.store_id, StoreCalendarCluster.cluster_name)).all())
     finally:
         session.close()
     if not pairs:
@@ -905,7 +939,7 @@ def salesdata_reindex_cache_status(payload: dict = Body(...), user: dict = Depen
     day_map = {}
     for cluster, ref_date, fut_date in pairs:
         day_map.setdefault(cluster, []).append([ref_date.isoformat(), fut_date.isoformat()])
-    return reindex_month_cache_status(source, months, day_map, extra_dims, metric)
+    return reindex_month_cache_status(source, months, day_map, extra_dims, metric, store_cluster)
 
 
 @router.get("/salesdata/snapshot/{source_type}/{kind}")

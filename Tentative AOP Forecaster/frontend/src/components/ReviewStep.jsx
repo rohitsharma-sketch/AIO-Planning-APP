@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react'
 import './ReviewStep.css'
 import { apiUrl } from '../lib/apiBase'
-import { useVisibleMonths } from '../lib/horizon'
+import { useShownMonths } from '../lib/horizon'
 
 const MONTHS  = ["Mar'27","Apr'27","May'27","Jun'27","Jul'27","Aug'27","Sep'27","Oct'27","Nov'27","Dec'27","Jan'28","Feb'28","Mar'28"]
 const DIVS    = ['GM','KIDS','LADIES','MENS','RETAIL']
@@ -14,7 +14,27 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
   // Rule 1 (2026-09-25): columns/preview show only months whose base month has
   // closed. Rates for the hidden months stay in the plan ("All months" fills
   // them too) so they are ready the day those months close.
-  const VIS = useVisibleMonths()
+  // Month selector (user, 2026-09-26): the closed months are the default, and any month - a future one too - can be
+  // picked by hand to set its growth ahead of a future forecast. The pick is remembered in this browser only.
+  // Results follows the same selection (lib/horizon.js useShownMonths).
+  const { shown: VIS, closed: CLOSED, picked, pick: pickMonths } = useShownMonths()
+  const togglePick = m => {
+    const next = VIS.includes(m) ? VIS.filter(x => x !== m) : MONTHS.filter(x => x === m || VIS.includes(x))
+    if (next.length) pickMonths(next)
+  }
+
+  // AOP Overrides (Configure -> Edit Growth % / NSO / AOP) are the user's own figures for those store x division x
+  // month cells and replace base x growth there (user, 2026-09-26: keep them, they are optional inputs). Shown here
+  // so a growth % typed for an overridden month isn't mistaken for what the run will use.
+  const [aopOv, setAopOv] = useState({})   // {month: {cells, lakhs}}
+  useEffect(() => {
+    fetch(apiUrl('/api/config/aop-overrides')).then(r => (r.ok ? r.json() : []))
+      .then(rows => {
+        const by = {}
+        for (const r of rows) { const b = (by[r.month] ||= { cells: 0, lakhs: 0 }); b.cells++; b.lakhs += r.value }
+        setAopOv(by)
+      }).catch(() => {})
+  }, [])
 
   const [includeDebug, setIncludeDebug] = useState(false)
   const [quick,        setQuick]        = useState(initQuick)
@@ -241,7 +261,8 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
             className="quickset-btn"
             onClick={() => applyQuick(row)}
             disabled={quick[row].trim() === ''}
-          >-&gt;</button>
+            title="Apply to every unlocked month, shown or not"
+          >Apply</button>
         </div>
       </td>
 
@@ -332,13 +353,25 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
             <span className="lock-all-label">{allLocked ? 'Unlock all' : 'Lock all'}</span>
           </button>
         </div>
+        <div className="rv-month-picker" role="group" aria-label="Months shown">
+          <span className="rv-month-picker-lbl">Months</span>
+          {MONTHS.map(m => (
+            <button key={m} type="button"
+              className={`rv-month-chip ${VIS.includes(m) ? 'rv-month-chip--on' : ''} ${CLOSED.includes(m) ? '' : 'rv-month-chip--future'}`}
+              aria-pressed={VIS.includes(m)}
+              title={CLOSED.includes(m) ? m : `${m} - its base month has not closed yet (future forecast)`}
+              onClick={() => togglePick(m)}>{m}</button>
+          ))}
+          <button type="button" className="link-btn rv-month-picker-reset" onClick={() => pickMonths(MONTHS)}>All</button>
+          {picked && <button type="button" className="link-btn rv-month-picker-reset" onClick={() => pickMonths(null)}>Closed months only</button>}
+        </div>
         <div className="table-scroll">
           <table className="growth-table">
             <thead>
               <tr>
                 <th>Division</th>
                 <th className="th-quickset">All months</th>
-                {VIS.map(m => <th key={m}>{m}</th>)}
+                {VIS.map(m => <th key={m}>{m}{aopOv[m] && <span className="th-aop-ov" title="Has AOP Overrides - see the note below">AOP</span>}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -354,9 +387,16 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
               <button className="link-btn" onClick={resetRates}>Reset to uploaded values</button>
             </p>
           : <p className="growth-note">
-              Hover any cell to reveal its lock control. Locked cells are skipped by "All months". Divisions and Overall are independent.
+              Hover any cell to reveal its lock control. Locked cells are skipped by "All months", which also fills months not shown. Divisions and Overall are independent.
             </p>
         }
+        {Object.entries(aopOv).map(([m, o]) => (
+          <p key={m} className="growth-note growth-note--aop">
+            <b>{m}:</b> {o.cells.toLocaleString('en-IN')} store × division cells use your AOP Overrides
+            ({(o.lakhs / 100).toLocaleString('en-IN', { maximumFractionDigits: 1 })} Cr, all store types) instead of base × growth.
+            Change or clear them in Configure → Edit Growth % / NSO / AOP → AOP Overrides.
+          </p>
+        ))}
       </div>
 
       <div className="actuals-source-toggle">

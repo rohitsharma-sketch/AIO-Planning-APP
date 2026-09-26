@@ -191,12 +191,11 @@ def apply_new_dept_adjustments(plan_result: dict, new_dept_map: dict) -> dict:
 
 def _load_growth_matrix():
     """
-    Returns {division: {dept: {period: float}}} from saved JSON.
+    Returns {division: {dept: {period: float}}}: the saved matrix with BIS's live growth on top (see
+    department_plan.live_growth_matrix).
     """
-    if os.path.exists(DEPT_GROWTH_PATH):
-        with open(DEPT_GROWTH_PATH) as f:
-            return json.load(f)
-    return {}
+    from engines.department_plan import live_growth_matrix
+    return live_growth_matrix()
 
 
 def _load_dept_config():

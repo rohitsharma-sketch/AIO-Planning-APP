@@ -156,7 +156,9 @@
 
 /* Growth table */
 .table-scroll { overflow-x: auto; }
-.growth-table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+/* Fixed-width columns (2026-09-26): with 100% width a few months stretched each cell across the card. */
+.growth-table { width: auto; border-collapse: collapse; white-space: nowrap; }
+.growth-table th:not(:first-child):not(.th-quickset) { width: 84px; min-width: 84px; }
 .growth-table th {
   background: var(--navy);
   color: #fff;
@@ -165,7 +167,7 @@
   padding: 7px 10px;
   text-align: center;
 }
-.growth-table th:first-child { text-align: left; min-width: 80px; }
+.growth-table th:first-child { text-align: left; min-width: 96px; }
 .growth-table td {
   padding: 4px 4px;
   font-size: 12px;
@@ -175,19 +177,15 @@
 .growth-table tbody tr:hover { background: var(--light); }
 .div-cell { font-weight: 600; color: var(--navy); text-align: left !important; padding: 4px 10px !important; }
 
-/* Per-division quick-set column */
-.th-quickset {
-  min-width: 110px;
-  background: var(--navy2) !important;
-  font-style: italic;
-  letter-spacing: 0;
-}
-.quickset-cell { padding: 3px 6px !important; background: var(--light); }
-.quickset-wrap { display: flex; align-items: center; gap: 3px; }
+/* Per-division quick-set column - plain, same header as the months, divided from them by one rule */
+.th-quickset { width: 118px; min-width: 118px; border-right: 1px solid rgba(255,255,255,.25); }
+.quickset-cell { padding: 3px 8px !important; border-right: 1px solid var(--border); }
+.quickset-wrap { display: flex; align-items: center; }
 .quickset-input {
-  width: 58px;
+  width: 56px;
   padding: 3px 6px;
   border: 1px solid var(--border);
+  border-right: none;
   border-radius: 4px 0 0 4px;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
@@ -197,19 +195,34 @@
 }
 .quickset-input:focus { outline: none; border-color: var(--navy3); }
 .quickset-btn {
-  padding: 3px 7px;
-  border: 1px solid var(--st-btn-hover,#95BFA7);
+  padding: 3px 8px;
+  border: 1px solid var(--border);
   border-radius: 0 4px 4px 0;
-  background: var(--st-btn,#A8CBB7);
-  color: var(--st-btn-text,#1F4D3A);
-  font-size: 12px;
-  font-weight: 700;
+  background: transparent;
+  color: var(--navy);
+  font-size: 11px;
+  font-weight: 600;
   cursor: pointer;
-  line-height: 1.4;
-  transition: background 0.1s;
+  line-height: 1.45;
+  transition: background 0.1s, color 0.1s;
 }
-.quickset-btn:hover    { background: var(--navy); border-color: var(--navy); }
-.quickset-btn:disabled { opacity: 0.35; cursor: default; }
+.quickset-btn:hover:not(:disabled) { background: var(--navy); border-color: var(--navy); color: #fff; }
+.quickset-btn:disabled { color: var(--faint); cursor: default; }
+
+/* Month selector above the grid */
+.rv-month-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; }
+.rv-month-picker-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-right: 4px; }
+.rv-month-chip {
+  padding: 3px 10px; border: 1px solid var(--border); border-radius: 999px;
+  background: transparent; color: var(--muted); font-size: 12px; cursor: pointer;
+  transition: background .1s, color .1s, border-color .1s;
+}
+.rv-month-chip:hover { border-color: var(--navy3); color: var(--navy); }
+.rv-month-chip--on { background: var(--navy); border-color: var(--navy); color: #fff; }
+.rv-month-chip--on:hover { color: #fff; }
+.rv-month-chip--future { border-style: dashed; }
+.rv-month-chip:focus-visible { outline: 2px solid var(--navy3); outline-offset: 1px; }
+.rv-month-picker-reset { font-size: 12px; margin-left: 6px; }
 .quickset-input::-webkit-outer-spin-button,
 .quickset-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .quickset-input[type=number] { -moz-appearance: textfield; }
@@ -302,10 +315,14 @@
 .overall-row-tr { border-top: 2px solid var(--navy3); }
 .overall-row-tr td { background: var(--light); }
 .overall-div-label { font-weight: 700 !important; color: var(--navy) !important; font-style: italic; }
-.overall-quickset-cell { background: var(--border) !important; }
 
 .growth-note { font-size: 12px; color: var(--muted); margin-top: 14px; }
 .growth-note strong { color: var(--char); }
+.growth-note--aop { margin-top: 6px; color: var(--char); }
+.th-aop-ov {
+  margin-left: 5px; padding: 0 4px; border: 1px solid rgba(255,255,255,.55); border-radius: 3px;
+  font-size: 9px; font-weight: 700; letter-spacing: .04em; vertical-align: 1px;
+}
 
 .run-spinner { animation: spin 1s linear infinite; display: inline-block; }
 

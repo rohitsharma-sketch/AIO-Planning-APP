@@ -154,22 +154,23 @@ export default function DivisionPlan() {
     setRows(prev => prev.filter((_, i) => i !== idx))
   }
 
+  const buildPayload = () => ({
+    divisions: rows.map(r => ({
+      ...r,
+      base_sales: parseFloat(r.base_sales) || 0,
+      growth_pct: parseFloat(r.growth_pct) || 0,
+      seasonality_index: parseFloat(r.seasonality_index) || 1,
+      fy_start_month: parseInt(r.fy_start_month) || 4,
+    })),
+    plan_year: planYear,
+    plan_name: planName,
+  })
+
   const calculate = async () => {
     setLoading(true)
     setError(null)
     try {
-      const payload = {
-        divisions: rows.map(r => ({
-          ...r,
-          base_sales: parseFloat(r.base_sales) || 0,
-          growth_pct: parseFloat(r.growth_pct) || 0,
-          seasonality_index: parseFloat(r.seasonality_index) || 1,
-          fy_start_month: parseInt(r.fy_start_month) || 4,
-        })),
-        plan_year: planYear,
-        plan_name: planName,
-      }
-      const res = await axios.post('/api/planning/division-plan/calculate', payload)
+      const res = await axios.post('/api/planning/division-plan/calculate', buildPayload())
       setResults(res.data)
     } catch {
       setError('Calculation failed. Check that the backend is running.')
@@ -178,10 +179,14 @@ export default function DivisionPlan() {
     }
   }
 
+  // Exports the plan on screen (the growth shown here, e.g. the locked AOP's), not a server-side default:
+  // GET /export re-read inputs.xlsx's 6% while the screen showed 11.1% (audit 2026-09-26).
   const exportCSV = async () => {
     try {
-      const res = await axios.get('/api/planning/division-plan/export', { responseType: 'blob' })
-      const url = URL.createObjectURL(res.data)
+      const plan = results || (await axios.post('/api/planning/division-plan/calculate', buildPayload())).data
+      const lines = ['Plan Name,Plan Year,Division,Month,Planned Sales (Lakhs)', ...plan.divisions.flatMap(d =>
+        d.monthly_breakdown.map(m => `${plan.plan_name},${plan.plan_year},${d.division_name},${m.month},${m.planned_sales}`))]
+      const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }))
       const a = document.createElement('a')
       a.href = url
       a.download = 'division_plan.csv'
