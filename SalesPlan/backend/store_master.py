@@ -6,12 +6,11 @@
 # writes to. Previously read a standalone Excel file that could drift out of
 # sync with Postgres edits; switched to the shared DB 2026-09-21 so a ref_store
 # edit anywhere (UI or API) is visible to every app immediately.
-# SSG rule: STORE TAG ends with "- Stores" (e.g. "032 - Stores", "080 - Stores")
+# SSG rule = AOP's plan LfL (user, 2026-09-28): engine_v3.auto_tag - a trading store (SAME/NEW STORE)
+# opened by 31 Dec before the LY window - so Sales Plan and AOP/BIS plan on the same 148 stores.
+# Was: tag ends with "- Stores" + ANG override = 121, which missed the FY26 Q1-Q3 openings.
 
 from functools import lru_cache
-
-SSG_OVERRIDE_STORES: set[str] = {"ANG"}
-
 
 @lru_cache(maxsize=1)
 def load_store_master() -> tuple[dict, ...]:
@@ -24,6 +23,7 @@ def load_store_master() -> tuple[dict, ...]:
         from sqlalchemy import select
         from db.base import SessionLocal
         from db.models.masterdata import Store as StoreRow
+        from engine_v3 import auto_tag, LFL_TAGS
 
         with SessionLocal() as session:
             rows = session.execute(
@@ -35,6 +35,7 @@ def load_store_master() -> tuple[dict, ...]:
                     "Ref Store": (r.ref_store or "").strip(),
                     "Cluster": (r.cluster_key or "").strip(),
                     "Tag": (r.tag or "").strip(),
+                    "SSG": auto_tag((r.tag or "").strip(), r.opening_date, r.store_current_status) in LFL_TAGS,
                 }
                 for r in rows if r.store_id
             )
@@ -43,17 +44,17 @@ def load_store_master() -> tuple[dict, ...]:
 
 
 def is_ssg(tag: str, store: str = "") -> bool:
-    if store and store in SSG_OVERRIDE_STORES:
-        return True
-    return str(tag).strip().endswith("- Stores")
+    """AOP's LfL class for the store (tag kept for the callers' signature; the rule needs the opening date)."""
+    return store in get_ssg_stores()
 
 
 def get_clusters() -> list[str]:
-    return sorted({r["Cluster"] for r in load_store_master() if is_ssg(r["Tag"], r["Store"])})
+    return sorted({r["Cluster"] for r in load_store_master() if r["SSG"]})
 
 
-def get_ssg_stores() -> set[str]:
-    return {r["Store"] for r in load_store_master() if is_ssg(r["Tag"], r["Store"])}
+@lru_cache(maxsize=1)
+def get_ssg_stores() -> frozenset[str]:
+    return frozenset(r["Store"] for r in load_store_master() if r["SSG"])
 
 
 def get_store_cluster_map() -> dict[str, str]:
@@ -64,3 +65,4 @@ def get_store_cluster_map() -> dict[str, str]:
 def reload():
     """Force re-read from Postgres (clears lru_cache)."""
     load_store_master.cache_clear()
+    get_ssg_stores.cache_clear()

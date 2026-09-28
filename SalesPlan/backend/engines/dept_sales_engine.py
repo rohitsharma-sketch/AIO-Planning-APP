@@ -3,7 +3,7 @@ Department Sales Plan Engine
 =============================
 Breaks store-division TY targets down to department level.
 
-SSG stores  (Tag ends with '- Stores', or listed in SSG_OVERRIDE_STORES):
+SSG stores  (= AOP's plan LfL, store_master.is_ssg - 148 stores on 28 Sep 2026):
     dept_TY = dept_LY × avg(P1_growth, P2_growth) / 100
     TY cont% re-derived from active dept values (sums to 100%)
     Inactive departments → TY = 0, excluded from total
