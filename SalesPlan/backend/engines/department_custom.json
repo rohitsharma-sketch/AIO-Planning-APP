@@ -1510,63 +1510,8 @@
     "attribute": "REGULAR"
   },
   {
-    "division": "KIDS",
-    "name": "KB_HSR BERMUDA",
-    "attribute": "REGULAR"
-  },
-  {
-    "division": "KIDS",
-    "name": "KB_POLO T-SHIRT H/S",
-    "attribute": "REGULAR"
-  },
-  {
-    "division": "KIDS",
-    "name": "KB_R/N T-SHIRT H/S",
-    "attribute": "REGULAR"
-  },
-  {
-    "division": "KIDS",
-    "name": "KB_TXTL BERMUDA",
-    "attribute": "REGULAR"
-  },
-  {
-    "division": "LADIES",
-    "name": "LW_L_DNM JOGGER",
-    "attribute": "REGULAR"
-  },
-  {
-    "division": "LADIES",
-    "name": "LW_L_ETH PALAZZO",
-    "attribute": "REGULAR"
-  },
-  {
-    "division": "LADIES",
-    "name": "LW_L_WES PALAZZO",
-    "attribute": "REGULAR"
-  },
-  {
-    "division": "LADIES",
-    "name": "LW_L_WVN JOGGER",
-    "attribute": "REGULAR"
-  },
-  {
-    "division": "LADIES",
-    "name": "L_IN_SPRT BRA",
-    "attribute": "REGULAR"
-  },
-  {
     "division": "LADIES",
     "name": "LW_U_CORD SETS",
-    "attribute": "REGULAR"
-  },
-  {
-    "division": "MENS",
-    "name": "MSE_HSR PYJAMA",
-    "attribute": "REGULAR"
-  },
-  {
-    "division": "MENS",
-    "name": "MSE_TXTL PYJAMA",
     "attribute": "REGULAR"
   },
   {

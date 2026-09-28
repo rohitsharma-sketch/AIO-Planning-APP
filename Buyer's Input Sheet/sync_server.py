@@ -38,7 +38,9 @@ LOCAL_CACHE = os.path.join(tempfile.gettempdir(), "citykart_otb_cache")
 # Set to an absolute path to freeze the parquet used by ALL jobs.
 # Server will ignore any newer files on the network until this is set to None.
 # Set to None to resume auto-pick (latest file in SALES_DIR).
-PINNED_SALES_FILE = os.path.join(LOCAL_CACHE, "rs_sales_latest.parquet")  # pinned: Aug-17 2026
+# 28 Sep 2026: re-pinned to the 5 Sep export - the data lake re-classified departments (MSE_PYJAMA ->
+# MSE_HSR/TXTL PYJAMA etc., back to 2019; totals unchanged), and the Calendar / Sales Plan already read it.
+PINNED_SALES_FILE = os.path.join(LOCAL_CACHE, "rs_sales_20260905.parquet")  # pinned: Sep-05 2026 (was rs_sales_latest = Aug-17)
 
 # ── LFL STORES (user rules, 2026-09-25) ──────────────────────────────────────
 # Plan base (26V27, the BIS LY): auto-detected - a trading store (SAME/NEW STORE)

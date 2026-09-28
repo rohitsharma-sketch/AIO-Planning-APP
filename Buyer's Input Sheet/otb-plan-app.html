@@ -686,7 +686,8 @@ const DVDATA = [
     {id:'mse_jamaican',nm:'MSE_JAMAICAN',attr:'PEAK SUMMER',ly:2.0},
     {id:'mse_mix',nm:'MSE_MIX',attr:'REGULAR',ly:0.03},
     {id:'mse_polo_t_shirt_h_s',nm:'MSE_POLO T-SHIRT H/S',attr:'SUMMER',ly:24.21},
-    {id:'mse_pyjama',nm:'MSE_PYJAMA',attr:'REGULAR',ly:35.87},
+    {id:'mse_hsr_pyjama',nm:'MSE_HSR PYJAMA',attr:'REGULAR',ly:25.46},
+    {id:'mse_txtl_pyjama',nm:'MSE_TXTL PYJAMA',attr:'REGULAR',ly:10.41},
     {id:'mse_r_n_t_shirt_h_s',nm:'MSE_R/N T-SHIRT H/S',attr:'SUMMER',ly:41.76},
     {id:'mse_raincoat',nm:'MSE_RAINCOAT',attr:'OCCASIONAL',ly:0.28},
     {id:'mse_sando',nm:'MSE_SANDO',attr:'PEAK SUMMER',ly:4.14},
@@ -737,15 +738,18 @@ const DVDATA = [
     {id:'l_ew_saree_silk',nm:'L_EW_SAREE_SILK',attr:'OCCASIONAL',ly:7.54},
     {id:'l_ew_saree_tant',nm:'L_EW_SAREE_TANT',attr:'OCCASIONAL',ly:0.83},
     {id:'l_ew_short_kurta',nm:'L_EW_SHORT KURTA',attr:'REGULAR',ly:5.79},
-    {id:'l_in_bra',nm:'L_IN_BRA',attr:'REGULAR',ly:4.51},
+    {id:'l_in_bra',nm:'L_IN_BRA',attr:'REGULAR',ly:3.43},
+    {id:'l_in_sprt_bra',nm:'L_IN_SPRT BRA',attr:'REGULAR',ly:1.08},
     {id:'l_in_panty',nm:'L_IN_PANTY',attr:'REGULAR',ly:2.15},
     {id:'l_in_slips',nm:'L_IN_SLIPS',attr:'REGULAR',ly:0.59},
     {id:'lw_l_capri',nm:'LW_L_CAPRI',attr:'SUMMER',ly:1.99},
     {id:'lw_l_culottes',nm:'LW_L_CULOTTES',attr:'REGULAR',ly:1.7},
     {id:'lw_l_harem_dhoti',nm:'LW_L_HAREM_DHOTI',attr:'REGULAR',ly:0.12},
     {id:'lw_l_jeans',nm:'LW_L_JEANS',attr:'REGULAR',ly:15.95},
-    {id:'lw_l_jegging',nm:'LW_L_JEGGING',attr:'REGULAR',ly:10.94},
-    {id:'lw_l_palazzo',nm:'LW_L_PALAZZO',attr:'REGULAR',ly:10.73},
+    {id:'lw_l_dnm_jogger',nm:'LW_L_DNM JOGGER',attr:'REGULAR',ly:6.28},
+    {id:'lw_l_wvn_jogger',nm:'LW_L_WVN JOGGER',attr:'REGULAR',ly:4.66},
+    {id:'lw_l_wes_palazzo',nm:'LW_L_WES PALAZZO',attr:'REGULAR',ly:6.37},
+    {id:'lw_l_eth_palazzo',nm:'LW_L_ETH PALAZZO',attr:'REGULAR',ly:4.36},
     {id:'lw_l_parallel',nm:'LW_L_PARALLEL',attr:'REGULAR',ly:0.02},
     {id:'lw_l_pyjama',nm:'LW_L_PYJAMA',attr:'REGULAR',ly:6.81},
     {id:'lw_l_sets',nm:'LW_L_SETS',attr:'REGULAR',ly:0.0},
@@ -789,7 +793,8 @@ const DVDATA = [
     {id:'kb_baba_suit_hsr_f_s',nm:'KB_BABA SUIT HSR F/S',attr:'PREWINTER',ly:0.0},
     {id:'kb_baba_suit_hsr_h_s',nm:'KB_BABA SUIT HSR H/S',attr:'PEAK SUMMER',ly:3.99},
     {id:'kb_baba_suit_txtl_h_s',nm:'KB_BABA SUIT TXTL H/S',attr:'SUMMER',ly:1.0},
-    {id:'kb_bermuda',nm:'KB_BERMUDA',attr:'SUMMER',ly:6.74},
+    {id:'kb_hsr_bermuda',nm:'KB_HSR BERMUDA',attr:'SUMMER',ly:3.26},
+    {id:'kb_txtl_bermuda',nm:'KB_TXTL BERMUDA',attr:'SUMMER',ly:3.48},
     {id:'kb_blazer',nm:'KB_BLAZER',attr:'OCCASIONAL',ly:0.0},
     {id:'kb_blazer_suit',nm:'KB_BLAZER SUIT',attr:'OCCASIONAL',ly:0.46},
     {id:'kb_casual_shirt_f_s',nm:'KB_CASUAL SHIRT F/S',attr:'REGULAR',ly:4.0},
@@ -808,7 +813,8 @@ const DVDATA = [
     {id:'kb_sando',nm:'KB_SANDO',attr:'PEAK SUMMER',ly:2.56},
     {id:'kb_sando_set',nm:'KB_SANDO SET',attr:'SUMMER',ly:3.51},
     {id:'kb_t_shirt_f_s',nm:'KB_T-SHIRT F/S',attr:'PREWINTER',ly:6.22},
-    {id:'kb_t_shirt_h_s',nm:'KB_T-SHIRT H/S',attr:'SUMMER',ly:16.99},
+    {id:'kb_r_n_t_shirt_h_s',nm:'KB_R/N T-SHIRT H/S',attr:'SUMMER',ly:12.75},
+    {id:'kb_polo_t_shirt_h_s',nm:'KB_POLO T-SHIRT H/S',attr:'SUMMER',ly:4.24},
     {id:'kb_y_ctn_trouser',nm:'KB_Y_CTN TROUSER',attr:'REGULAR',ly:3.5},
     {id:'kb_y_jeans',nm:'KB_Y_JEANS',attr:'REGULAR',ly:8.6},
     {id:'kbw_baba_suit',nm:'KBW_BABA SUIT',attr:'LT WINTER',ly:0.0},
@@ -4262,7 +4268,7 @@ function resetPlanToAop(){
 /* ── SAVE & EXPORT ─────────────────────────────── */
 function saveState(logVersion=false){
   const now=new Date();
-  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopVersionId:S.aopVersionId,aopUnit:S.aopUnit,locked:[...S.locked],aopSeeds:S.aopSeeds,aopSeededFrom:S.aopSeededFrom,aopSeedFp:S.aopSeedFp,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],customDepts:S.customDepts,at:now.toISOString()}))}catch(e){}
+  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopVersionId:S.aopVersionId,aopUnit:S.aopUnit,locked:[...S.locked],aopSeeds:S.aopSeeds,aopSeededFrom:S.aopSeededFrom,aopSeedFp:S.aopSeedFp,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],customDepts:S.customDepts,deptSplit:1,at:now.toISOString()}))}catch(e){}
   _updateSaveLabel(now);
   if(logVersion)_maybeSaveVersion(now);
   pushBuyerGrowthLive();
@@ -4370,6 +4376,32 @@ function loadSyncCache(){
       .catch(()=>{}); // server not reachable → keep cached data as-is
   }, 500);
 }
+// Data-lake department re-classification (5 Sep 2026 export, applied 28 Sep): five departments were split in two
+// and Sports Bra carved out of Bras, back to 2019 (the parts sum exactly to the old department, store x month).
+// A saved plan / version made on the old names hands each old department's growth, lock and hide state to its parts,
+// so division totals are unchanged. Old id -> new ids (an id may keep itself, e.g. l_in_bra).
+const DEPT_SPLITS={
+  mse_pyjama:['mse_hsr_pyjama','mse_txtl_pyjama'], l_in_bra:['l_in_bra','l_in_sprt_bra'],
+  lw_l_jegging:['lw_l_dnm_jogger','lw_l_wvn_jogger'], lw_l_palazzo:['lw_l_wes_palazzo','lw_l_eth_palazzo'],
+  kb_bermuda:['kb_hsr_bermuda','kb_txtl_bermuda'], kb_t_shirt_h_s:['kb_r_n_t_shirt_h_s','kb_polo_t_shirt_h_s'],
+};
+// st: {inputs, aopSeeds} objects and {locked, hiddenSecs, manualInactive} Sets, keyed 'secId' or 'secId__mi'.
+// Returns true when anything moved. A part that already has its own value keeps it. Runs only on state saved
+// before the split (no deptSplit stamp), else L_IN_BRA's lock / hide would keep being copied onto Sports Bra.
+function _migrateDeptIds(st){
+  let moved=false;
+  const split=k=>{const i=k.indexOf('__');const id=i<0?k:k.slice(0,i);return [id,i<0?'':k.slice(i)];};
+  ['inputs','aopSeeds'].forEach(f=>{const o=st[f];if(!o)return;
+    Object.keys(o).forEach(k=>{const [id,sfx]=split(k);const to=DEPT_SPLITS[id];if(!to)return;
+      if(!to.every(n=>o[n+sfx]!=null)){to.forEach(n=>{if(o[n+sfx]==null)o[n+sfx]=o[k];});moved=true;}
+      if(!to.includes(id)){delete o[k];moved=true;}});});
+  ['locked','hiddenSecs','manualInactive'].forEach(f=>{const set=st[f];if(!set)return;
+    [...set].forEach(k=>{const [id,sfx]=split(k);const to=DEPT_SPLITS[id];if(!to)return;
+      to.forEach(n=>{if(!set.has(n+sfx)){set.add(n+sfx);moved=true;}});
+      if(!to.includes(id)){set.delete(k);moved=true;}});});
+  return moved;
+}
+var _deptMigrated=false;
 function loadState(){
   try{
     const p=JSON.parse(localStorage.getItem('ck_otb_state')||'{}');
@@ -4389,6 +4421,7 @@ function loadState(){
     if(p.hiddenSecs)S.hiddenSecs=new Set(p.hiddenSecs);
     if(p.manualInactive)S.manualInactive=new Set(p.manualInactive);
     if(p.customDepts)S.customDepts=p.customDepts;
+    if(!p.deptSplit)_deptMigrated=_migrateDeptIds(S); // once: saved state is stamped deptSplit from then on
     _applyCustomDepts();
   }catch(e){}
 }
@@ -5086,6 +5119,9 @@ function _autoApplyAop(){
   // Opening BIS keeps the buyer's growth and pushes nothing (user, 2026-09-26: the last browser to open used to
   // overwrite everyone's edits in Sales Plan); it re-seeds - locked cells kept - only when the live AOP changed.
   if(_aopSeedFp()!==S.aopSeedFp||!Object.keys(S.aopSeeds||{}).length)seedPlanFromAop(true);
+  // A plan saved on the pre-split department names was just carried onto the new ones: save it once so
+  // Sales Plan's growth matrix switches to the new names too (the server replaces the whole set).
+  else if(_deptMigrated){_deptMigrated=false;saveState();}
   syncAopLockUI();
   syncAopLockStatus();
   buildPills();
@@ -5252,6 +5288,7 @@ function _vlFmtDate(now){
 }
 function _vlSnapshot(){
   return {
+    deptSplit:1,
     inputs:{...S.inputs},
     locked:[...S.locked],
     hiddenSecs:[...S.hiddenSecs],
@@ -5338,6 +5375,7 @@ function loadVersion(idx){
   // The plan inputs ARE restored exactly, so Save right after Load is a no-op.
   if(snap.aopUnit)S.aopUnit=snap.aopUnit;
   if(snap.aopSeeds)S.aopSeeds=snap.aopSeeds;
+  if(!snap.deptSplit)_migrateDeptIds(S);
   _vlSetActive(v.id);
   saveState();
   refresh();
