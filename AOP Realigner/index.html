@@ -293,7 +293,7 @@ const METHODS = {
     drop: 'Upload the listing changes',
     howto: `One row per change: <code>STORE NAME</code>, <code>DEPARTMENT</code>, <code>LISTING</code> (Y / N) and an optional <code>FROM MONTH</code> (blank = the first month).
       A <b>delisted</b> department goes to 0 from that month. A <b>newly listed</b> one is sized from same-cluster stores — its share of the division there × this store's division plan, month by month — or from your own figures in the “&lt;Month&gt; New” columns.
-      The rest of the store × division flexes to stay on the original. “From Listing / Delisting” pre-fills every difference between this plan and the latest listing month.`,
+      The rest of the store × division flexes to stay on the original. “From Listing / Delisting Analyser” pre-fills every difference between this plan and the latest listing month.`,
     run: 'Delisted departments go to 0 from their month and new listings take their sized value; every other department in the same store × division absorbs the difference pro-rata.'},
   dept: {no: 2, title: 'Existing department changes', short: 'New values for departments already in the plan.',
     drop: 'Upload the revised plan',
@@ -449,9 +449,9 @@ function renderOrig() {
 
 function templateActions() {
   if (S.method === 'listing') return `<button class="btn btn-outline btn-sm" onclick="template('listing')">${icon('dl')}Blank template</button>${S.listing_app
-    ? `<button class="btn btn-outline btn-sm" onclick="template('listing','kb')" title="Every planned department the Listing / Delisting app now shows as delisted, and every listed one with no plan">${icon('dl')}From Listing / Delisting</button>` : ''}`;
+    ? `<button class="btn btn-outline btn-sm" onclick="template('listing','kb')" title="Every planned department the Listing / Delisting Analyser now shows as delisted, and every listed one with no plan">${icon('dl')}From Listing / Delisting Analyser</button>` : ''}`;
   if (S.method === 'shift') return `<button class="btn btn-outline btn-sm" onclick="template('shift')">${icon('dl')}Blank template</button>${S.listing_app
-    ? `<button class="btn btn-outline btn-sm" onclick="template('shift','kb')" title="The Listing / Delisting app's changes vs this plan, with an empty TARGET column to fill">${icon('dl')}From Listing / Delisting</button>` : ''}`;
+    ? `<button class="btn btn-outline btn-sm" onclick="template('shift','kb')" title="The Listing / Delisting Analyser's changes vs this plan, with an empty TARGET column to fill">${icon('dl')}From Listing / Delisting Analyser</button>` : ''}`;
   if (S.method === 'growth') return `<button class="btn btn-outline btn-sm" onclick="template('growth')" title="Every department with its plan, last year's sales and current growth">${icon('dl')}Growth template</button>`;
   if (S.method === 'newdept') return `<button class="btn btn-outline btn-sm" onclick="template('newdept','split')">${icon('dl')}Split template</button>
     <button class="btn btn-outline btn-sm" onclick="template('newdept','new')">${icon('dl')}New-department template</button>`;

@@ -559,7 +559,7 @@ def prepare_growth(df, info, rep, orig, months, ly):
     _dups(df, [DEPT, STORE], rep, "growth")
     _known(df, rep, [(STORE, set(orig[STORE]), ("store(s)", "")), (DEPT, set(orig[DEPT]), ("department(s)", ""))])
     if not ly:
-        rep.error("Last year's sales aren't available (the Listing / Delisting app's sales.json) - can't measure growth.")
+        rep.error("Last year's sales aren't available (the Listing / Delisting Analyser's sales.json) - can't measure growth.")
     if not rep.ok:
         return None, [], {}, info, rep
     jm = {m: j for j, m in enumerate(months)}
@@ -648,7 +648,7 @@ def live_months(months):
 
 
 def template_listing(orig, months, kb=None):
-    """Method 1 template. With `kb` (the Listing / Delisting app's kb.json) it is pre-filled with every difference
+    """Method 1 template. With `kb` (the Listing / Delisting Analyser's kb.json) it is pre-filled with every difference
     between the plan and the latest listing month: planned departments now delisted (N) and listed departments
     with no plan (Y). Leave '<Month> New' blank to size a new listing from same-cluster stores.
     -> (template rows, skipped rows). A store x division whose EVERY planned department is delisted (a store

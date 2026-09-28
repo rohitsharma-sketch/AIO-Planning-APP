@@ -18,7 +18,7 @@ const RULES_NOW = [
   ['Method 1 - store listing changes', [
     'LISTING = N: the department goes to 0 from FROM MONTH (blank = the first month).',
     "LISTING = Y (not planned there): sized, month by month, as its share of the division in same-cluster stores that plan it × this store's division plan - or your own values - with rows borrowed from the peer store that plans it most.",
-    'The "From Listing / Delisting" template leaves out a store × division whose every department is delisted (a closing or not-yet-open store): nothing would be left to absorb it.',
+    'The "From Listing / Delisting Analyser" template leaves out a store × division whose every department is delisted (a closing or not-yet-open store): nothing would be left to absorb it.',
   ]],
   ['Method 2 - existing department changes', [
     'Store × Department rows with "&lt;Month&gt; New" values; months not in the file stay as original.',
@@ -33,7 +33,7 @@ const RULES_NOW = [
     'Nothing else moves, so every store × division × month stays exactly as in the original.',
   ]],
   ['Method 5 - growth changes', [
-    "DEPARTMENT and NEW GROWTH % (season) and / or per-month growth columns over last year, optional STORE NAME (blank = every store; a store's own row overrides). Last year = the month-wise data-lake sales (Listing / Delisting app).",
+    "DEPARTMENT and NEW GROWTH % (season) and / or per-month growth columns over last year, optional STORE NAME (blank = every store; a store's own row overrides). Last year = the month-wise data-lake sales (Listing / Delisting Analyser app).",
     'Current growth = plan ÷ last year over the live months, on the stores with both; the plan is scaled by (1 + new) ÷ (1 + current) in every live month, keeping its month phasing.',
     'Per month: a "&lt;Month&gt; GROWTH %" column sets that month on its own - its plan vs its own last-year month (so a festival that moved month, e.g. Diwali, shows up there). Months without one take NEW GROWTH %, or stay as planned if that is blank too.',
     'The rest of the same store × division absorbs it (capped at store × division × month); other divisions are not touched. A current growth beyond ±200% is flagged as "last year not comparable".',

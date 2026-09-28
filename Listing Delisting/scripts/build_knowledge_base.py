@@ -29,6 +29,29 @@ def month_sort_key(m):
     return (yy, MONTH_ORDER.index(mon))
 
 
+# Data-lake department split (5 Sep 2026 export, back to 2019): the listing sheets use the new names from Jan'26
+# and the old ones before. Each part takes its old department's listing for the months it has no record of its own,
+# so its history is continuous; an old name that is not one of its own parts then drops out (user, 2026-09-28).
+DEPT_SPLITS = {
+    "MSE_PYJAMA": ["MSE_HSR PYJAMA", "MSE_TXTL PYJAMA"], "KB_T-SHIRT H/S": ["KB_R/N T-SHIRT H/S", "KB_POLO T-SHIRT H/S"],
+    "KB_BERMUDA": ["KB_HSR BERMUDA", "KB_TXTL BERMUDA"], "LW_L_PALAZZO": ["LW_L_WES PALAZZO", "LW_L_ETH PALAZZO"],
+    "LW_L_JEGGING": ["LW_L_DNM JOGGER", "LW_L_WVN JOGGER"], "L_IN_BRA": ["L_IN_BRA", "L_IN_SPRT BRA"],
+}
+
+
+def apply_dept_splits(combos):
+    """combos {(store, dept): {month: rev}} -> the same, on the new department names."""
+    for (store, dept) in [k for k in combos if k[1] in DEPT_SPLITS]:
+        old = combos[(store, dept)]
+        for part in DEPT_SPLITS[dept]:
+            own = combos.setdefault((store, part), {})
+            for month, rev in old.items():
+                own.setdefault(month, rev)
+        if dept not in DEPT_SPLITS[dept]:
+            del combos[(store, dept)]
+    return combos
+
+
 def build():
     combos = {}  # (store, dept) -> {month: rev}
     months_seen = set()
@@ -54,6 +77,7 @@ def build():
         wb.close()
         print(f"{yy}: done, running combos={len(combos)}")
 
+    apply_dept_splits(combos)
     months = sorted(months_seen, key=month_sort_key)
     stores = sorted({s for s, _ in combos})
     departments = sorted({d for _, d in combos})
@@ -78,6 +102,10 @@ def demo():
     months = ["Sep'26(Till Date)", "Jan'23", "Dec'23", "Apr'23", "Feb'26"]
     ordered = sorted(months, key=month_sort_key)
     assert ordered == ["Jan'23", "Apr'23", "Dec'23", "Feb'26", "Sep'26(Till Date)"], ordered
+    c = apply_dept_splits({("S", "MSE_PYJAMA"): {"Dec'25": "Y"}, ("S", "MSE_HSR PYJAMA"): {"Jan'26": "N"},
+                           ("S", "L_IN_BRA"): {"Dec'25": "Y"}})
+    assert c == {("S", "MSE_HSR PYJAMA"): {"Jan'26": "N", "Dec'25": "Y"}, ("S", "MSE_TXTL PYJAMA"): {"Dec'25": "Y"},
+                 ("S", "L_IN_BRA"): {"Dec'25": "Y"}, ("S", "L_IN_SPRT BRA"): {"Dec'25": "Y"}}, c
     print("demo OK")
 
 

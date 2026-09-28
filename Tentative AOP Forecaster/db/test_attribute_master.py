@@ -48,7 +48,7 @@ def _use_db(engine):
 
 def test_xlsx_to_rows():
     rows = xlsx_to_rows(DEFAULT_XLSX)
-    assert len(rows) == 974, len(rows)
+    assert len(rows) == 978, len(rows)  # 974 + the 28 Sep 2026 department split (+9 new, -5 old)
     assert set(rows[0]) == {"department", "division", "section", "attribute1", "source_file"}
     by = {r["department"]: r for r in rows}
     assert by["MW_JACKET"]["attribute1"] == "HVY WINTER"

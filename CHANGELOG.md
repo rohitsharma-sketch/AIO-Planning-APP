@@ -7,6 +7,25 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-28
 
+### Split departments adopted across the suite — `7c0a1e2` (core) + additional apps
+The data lake's 5 Sep export re-classified six departments back to 2019; the parts add up exactly to the old department (store × month) and division totals are unchanged.
+
+| Old | New |
+|---|---|
+| MSE_PYJAMA | MSE_HSR PYJAMA, MSE_TXTL PYJAMA |
+| KB_T-SHIRT H/S | KB_R/N T-SHIRT H/S, KB_POLO T-SHIRT H/S |
+| KB_BERMUDA | KB_HSR BERMUDA, KB_TXTL BERMUDA |
+| LW_L_PALAZZO | LW_L_WES PALAZZO, LW_L_ETH PALAZZO |
+| LW_L_JEGGING | LW_L_DNM JOGGER, LW_L_WVN JOGGER |
+| L_IN_BRA | L_IN_BRA (smaller), L_IN_SPRT BRA |
+
+- **BIS:** new sections (season inherited, FY26 LY split exactly), sales file re-pinned to the 5 Sep export so LY, 19 V 26 / 25 V 26 history and sell-through come from the new names. A saved plan or version on the old names hands each old department's growth, AOP seed, lock and hide state to its parts once, then saves so Sales Plan switches too. Division LY unchanged (388.87 Cr). Check: `node test_dept_split.js`.
+- **Sales Plan:** master list on the new names with the right season (the auto-registered REGULAR copies removed); MRP plan split and department active states carried to the parts.
+- **Attribute Master (`att master.xlsx`):** the 9 missing new departments added with their old department's section and season, the 5 old names removed (978 rows, one per department).
+- **Listing / Delisting Analyser** (renamed from "Listing / Delisting" on Landing, in the app and in the Re-Aligner): listing history hands each old department's flags to its parts for the months before the listing sheets switched names (Jan'26); the day-wise cache splits an old department's days by that store's month split from the month-wise export (exact per store × month) until a day-wise export with the new names lands. Sales, seasonality and suggestions rebuilt.
+- **Re-Aligner:** its plan already uses the new names; it reads the rebuilt Listing files and the updated Attribute Master.
+- **NSO Distributor:** no names of its own — it uses the uploaded Sales Plan export (new names) and Attribute Master (upload the updated one).
+
 ### BIS: smoother section / attribute lock
 - One padlock drawing for both states (was a text "○" swapping to a 🔒 emoji of a different size, so the cell jumped). The shackle drops when locked and lifts when unlocked, with a short pop; the growth input tints amber while locked. Animations play even though the table re-draws on each toggle, and are off for reduced-motion users. The button is keyboard-operable and keeps focus after the re-draw.
 

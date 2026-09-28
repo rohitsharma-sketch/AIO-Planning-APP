@@ -27,7 +27,7 @@ ORIG_PKL = os.path.join(CACHE_DIR, "original.pkl")
 TIMINGS_JSON = os.path.join(CACHE_DIR, "timings.json")
 HISTORY_JSON = os.path.join(CACHE_DIR, "history.json")
 MAX_BODY = 400 * 1024 * 1024
-KB_JSON = os.path.join(HERE, "..", "Listing Delisting", "app", "kb.json")  # Listing / Delisting app's listing history
+KB_JSON = os.path.join(HERE, "..", "Listing Delisting", "app", "kb.json")  # Listing / Delisting Analyser app's listing history
 # the three ways to revise an existing plan (engine.py); each has its own step-2 file and template
 METHODS = {"listing": "Store listing changes", "dept": "Existing department changes", "newdept": "New or split departments",
            "shift": "Listing / delisting shifted to a target", "growth": "Growth changes"}
@@ -429,7 +429,7 @@ class Handler(BaseHTTPRequestHandler):
                 kb = None
                 if kind == "kb":
                     if not os.path.exists(KB_JSON):
-                        return self._send(404, {"error": "The Listing / Delisting app's data isn't built yet."})
+                        return self._send(404, {"error": "The Listing / Delisting Analyser's data isn't built yet."})
                     with open(KB_JSON, encoding="utf-8") as fh:
                         kb = json.load(fh)
                 df, skipped = (importer.template_shift if method == "shift" else importer.template_listing)(o, months, kb)
@@ -440,7 +440,7 @@ class Handler(BaseHTTPRequestHandler):
             elif method == "growth":
                 ly = last_year()
                 if not ly:
-                    return self._send(404, {"error": "Last year's sales (the Listing / Delisting app's sales.json) aren't built yet."})
+                    return self._send(404, {"error": "Last year's sales (the Listing / Delisting Analyser's sales.json) aren't built yet."})
                 df, name = importer.template_growth(o, months, ly), "Growth changes template.xlsx"
             elif method == "newdept":
                 df, name = ((importer.template_split(), "Department split template.xlsx") if kind == "split"

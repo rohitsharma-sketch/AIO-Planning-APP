@@ -12,7 +12,7 @@ Proxy routing (first match wins):
   /buyer/*                       → http://127.0.0.1:5050  (BIS, prefix stripped)
   /nso/*                         → http://127.0.0.1:8060  (NSO Plan Distributor, prefix stripped)
   /realigner/*                   → http://127.0.0.1:8070  (AOP Realigner, prefix stripped)
-  /listing/*                     → http://127.0.0.1:8123  (Listing / Delisting, prefix stripped)
+  /listing/*                     → http://127.0.0.1:8123  (Listing / Delisting Analyser, prefix stripped)
   /api/otb/*, /api/status,
     /api/config/aop-div-targets  → http://127.0.0.1:5050  (BIS API, same path)
   /api/config/db-sync*           → http://127.0.0.1:8000  (AOP standalone, no auth)
@@ -73,7 +73,7 @@ APPS = [
     {"name": "NSO Plan Distributor", "port": 8060,
      "cmd": [sys.executable, "nso_distributor.py"],
      "cwd": os.path.join(_REPO_ROOT, "Buyer's Input Sheet")},
-    {"name": "Listing / Delisting", "port": 8123,
+    {"name": "Listing / Delisting Analyser", "port": 8123,
      "cmd": [sys.executable, "serve.py"],   # static app/ with no-cache (data files change daily)
      "cwd": os.path.join(_REPO_ROOT, "Listing Delisting")},
 ]

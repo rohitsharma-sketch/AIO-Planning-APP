@@ -26,7 +26,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _paths import AOP_DIR, DATA_DIR, daywise_dir  # noqa: E402
+from _paths import AOP_DIR, DATA_DIR, daywise_dir, sales_dir  # noqa: E402
+from build_knowledge_base import DEPT_SPLITS  # noqa: E402  - the Listing app's one old -> new department list
 from build_sales import ALLOWED_TOKENS  # noqa: E402  - one apparel scope for every build script
 
 if AOP_DIR not in sys.path:
@@ -53,6 +54,44 @@ def cached_source():
         return None
 
 
+def split_old_departments(df, monthly):
+    """The day-wise export (28 Aug 2026) predates the data lake's department split; the month-wise one has it.
+    Each old department's day rows are shared between its parts by that store's month split (month-wise SL_V);
+    a store-month with no split uses the chain's split that month, then the chain's overall split. So every
+    store x month total is exact and the days inside a month follow the old department's pattern. No-op once a
+    day-wise export carries the new names. df: STORE_NAME, DEPARTMENT, BILLDATE, SL_V; monthly: + MONTH (Period)."""
+    old = [d for d in DEPT_SPLITS if d in set(df["DEPARTMENT"])]
+    if not old:
+        return df, []
+    keep, pieces = df[~df["DEPARTMENT"].isin(old)], []
+    for o in old:
+        parts = DEPT_SPLITS[o]
+        rows = df[df["DEPARTMENT"] == o].assign(MONTH=lambda x: x["BILLDATE"].dt.to_period("M"))
+        m = monthly[monthly["DEPARTMENT"].isin(parts)].assign(SL_V=lambda x: x["SL_V"].clip(lower=0))
+        store = m.pivot_table(index=["STORE_NAME", "MONTH"], columns="DEPARTMENT", values="SL_V", aggfunc="sum").reindex(columns=parts)
+        chain = m.pivot_table(index="MONTH", columns="DEPARTMENT", values="SL_V", aggfunc="sum").reindex(columns=parts)
+        overall = m.groupby("DEPARTMENT")["SL_V"].sum().reindex(parts).fillna(0)
+        norm = lambda t: t.div(t.sum(axis=1), axis=0).where(t.sum(axis=1) > 0)
+        sh = norm(store.fillna(0)).reindex(pd.MultiIndex.from_frame(rows[["STORE_NAME", "MONTH"]]))
+        sh = sh.fillna(norm(chain.fillna(0)).reindex(rows["MONTH"]).set_axis(sh.index))
+        sh = sh.fillna(overall / overall.sum() if overall.sum() > 0 else 1 / len(parts))
+        for p in parts:
+            pieces.append(rows.drop(columns="MONTH").assign(DEPARTMENT=p, SL_V=rows["SL_V"].to_numpy() * sh[p].to_numpy()))
+    return pd.concat([keep, *pieces], ignore_index=True), old
+
+
+def _monthly_parts():
+    """Month-wise SL_V of every split part (newest month-wise export), for split_old_departments."""
+    folder = sales_dir()
+    files = [f for f in call_with_timeout(os.listdir, folder) if re.search(r"_\d{8}T\d{6}\.parquet$", f)]
+    src = os.path.join(folder, max(files, key=lambda f: re.search(r"_(\d{8}T\d{6})\.parquet$", f).group(1)))
+    parts = sorted({p for v in DEPT_SPLITS.values() for p in v})
+    t = call_with_timeout(pq.read_table, src, columns=["BILLMONTH", "STORE_NAME", "DEPARTMENT", "SL_V"],
+                          filters=[("DEPARTMENT", "in", parts)]).to_pandas()
+    t["MONTH"] = pd.to_datetime(t["BILLMONTH"]).dt.to_period("M")
+    return t.groupby(["STORE_NAME", "DEPARTMENT", "MONTH"], as_index=False)["SL_V"].sum(), os.path.basename(src)
+
+
 def build(force=False):
     src = latest(daywise_dir())
     if not force and cached_source() == os.path.basename(src):
@@ -77,7 +116,12 @@ def build(force=False):
             print(f"  row group {i + 1}/{pf.metadata.num_row_groups} · {rows:,} rows read · {time.time() - t0:.0f}s", flush=True)
     df = pd.concat(frames, ignore_index=True)
     df = df.groupby(["STORE_NAME", "DEPARTMENT", "BILLDATE"], as_index=False)["SL_V"].sum()  # a key can span row groups
-    trace = {"source_file": os.path.basename(src), "source_folder": daywise_dir(), "rows_read": rows,
+    split = {}
+    if set(DEPT_SPLITS) & set(df["DEPARTMENT"]):
+        monthly, msrc = _monthly_parts()
+        df, done = split_old_departments(df, monthly)
+        split = {"dept_split": {"departments": done, "month_shares_from": msrc}}
+    trace = {**split, "source_file": os.path.basename(src), "source_folder": daywise_dir(), "rows_read": rows,
              "rows_out": len(df), "date_min": str(df["BILLDATE"].min().date()), "date_max": str(df["BILLDATE"].max().date()),
              "from": str(DAILY_FROM.date()), "metric": "SL_V", "built_at": datetime.datetime.now().isoformat(timespec="seconds")}
     tbl = pa.Table.from_pandas(df, preserve_index=False)
@@ -89,5 +133,20 @@ def build(force=False):
     print(json.dumps(trace, indent=1))
 
 
+def demo():
+    """Store-month split is exact; a store-month with no split of its own falls back to the chain's month."""
+    d = pd.DataFrame({"STORE_NAME": ["A", "A", "B"], "DEPARTMENT": ["MSE_PYJAMA"] * 3, "SL_V": [30.0, 10.0, 8.0],
+                      "BILLDATE": pd.to_datetime(["2026-01-05", "2026-01-20", "2026-01-07"])})
+    m = pd.DataFrame({"STORE_NAME": ["A", "A", "C", "C"], "DEPARTMENT": ["MSE_HSR PYJAMA", "MSE_TXTL PYJAMA"] * 2,
+                      "SL_V": [30.0, 10.0, 10.0, 30.0], "MONTH": pd.Period("2026-01", "M")})
+    out, done = split_old_departments(d, m)
+    assert done == ["MSE_PYJAMA"] and "MSE_PYJAMA" not in set(out["DEPARTMENT"])
+    g = out.groupby(["STORE_NAME", "DEPARTMENT"])["SL_V"].sum()
+    assert abs(g["A", "MSE_HSR PYJAMA"] - 30) < 1e-9 and abs(g["A", "MSE_TXTL PYJAMA"] - 10) < 1e-9, g
+    assert abs(g["B", "MSE_HSR PYJAMA"] - 4) < 1e-9 and abs(g["B", "MSE_TXTL PYJAMA"] - 4) < 1e-9, g  # chain Jan = 40/40
+    assert abs(out["SL_V"].sum() - d["SL_V"].sum()) < 1e-9
+    print("demo OK")
+
+
 if __name__ == "__main__":
-    build(force="--force" in sys.argv)
+    demo() if "--test" in sys.argv else build(force="--force" in sys.argv)
