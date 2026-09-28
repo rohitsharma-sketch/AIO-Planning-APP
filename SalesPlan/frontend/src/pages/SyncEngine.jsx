@@ -177,6 +177,7 @@ export default function SyncEngine() {
     ([key]) => status?.[key]?.actual?.synced || status?.[key]?.trendShifted?.synced
   )
   const last = status?.lastSync
+  const check = status?.lastCheck
   const syncing = false
 
   return (
@@ -196,6 +197,18 @@ export default function SyncEngine() {
           <div style={{ fontSize: 12, color: theme.textMuted, textAlign: 'right', whiteSpace: 'nowrap' }}>
             Last sync <strong style={{ color: last.status === 'success' ? '#10B981' : '#B45309' }}>{last.status}</strong>
             <br />{last.startedAt ? new Date(last.startedAt).toLocaleString() : '—'}
+            {check && (
+              <div
+                style={{ marginTop: 6 }}
+                title={(check.checks || []).map(c => `${c.ok ? '✓' : '✗'} ${c.name}${c.maxDiffL != null ? ` — max diff ${c.maxDiffL} L over ${c.cells} cells` : ''}`).join('\n') + (check.error ? `\n\n${check.error}` : '')}
+              >
+                Accuracy check{' '}
+                <strong style={{ color: check.status === 'success' ? '#10B981' : '#DC2626' }}>
+                  {check.status === 'success' ? `passed ${check.passed}/${check.total}` : check.status === 'failed' ? `FAILED ${check.passed}/${check.total}` : check.status}
+                </strong>
+                <br />{check.completedAt ? new Date(check.completedAt).toLocaleString() : '—'}
+              </div>
+            )}
           </div>
         )}
       </div>

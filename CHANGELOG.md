@@ -7,6 +7,19 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-28
 
+### Nightly accuracy check of the calendarised sales
+- New job `sync/calendar_check_sync.py`, run by the nightly sync right after the Calendar reindex (and by AOP's "Sync into database" button). Read-only; ~45 s; tolerance 0.01 L per cell:
+  1. saved actuals = a fresh read of the raw month-wise export (store × division × month);
+  2. saved reindexed = an independent recompute (each cluster's month map rebuilt from the saved day pairs);
+  3. conservation: reindexed total = actual total per store × division;
+  4. department tables = main tables (actual and reindexed);
+  5. every cluster's day map covers each plan day once and reuses no LY day;
+  6. every trading store with sales has a calendar cluster (closed stores, HO, warehouses and sites are listed, not shifted — 316 L on 28 Sep);
+  plus a self-test: a planted 0.02 L error must be caught.
+- A failure marks the run failed with the reason and keeps the per-check detail (`sync/common.py` now stores detail on failure too). The **Sales Sync** page shows "Accuracy check passed 8/8" (or FAILED) under the last sync, with each check on hover.
+- First run 28 Sep 12:21: 8/8 pass, every difference 0.0 L.
+- Also fixed `sync/test_calendar_reindex_sync.py`, broken by `267d1d6` (snapshot save gained a `suffix` argument).
+
 ### Deep check after the department split (no code change)
 - 17 of 19 checks pass at 0.01 L (planted 0.02 L errors caught). Calendar department snapshots = totals (0.000000 L); AOP live = V2; BIS, Sales Plan, Attribute Master (DB = file, 978) and Listing / Delisting Analyser all on the new department names; 13 test suites pass.
 - After BIS was opened at 12:07 it pushed the new names to Sales Plan (792 rows, AOP 112). Sales Plan now applies exactly AOP's growth (to 0.0003 pp); its SSG plan meets the AOP target within 0.05 L in Mar–May'27 and 0.92–1.16 L in Jun'27.

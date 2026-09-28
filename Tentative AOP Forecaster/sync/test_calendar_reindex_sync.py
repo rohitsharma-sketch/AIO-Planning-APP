@@ -25,14 +25,14 @@ rows_read = {"n": 0}
 scans.reindex_monthwise = lambda **k: {"ok": True, "source": "mw", "keyFields": ["store"], "grain": "store",
                                        "metric": "SL_V", "rows": [], "actualRows": [], "columns": [],
                                        "actualColumns": [], "rowsRead": rows_read["n"], "rowsMapped": 0}
-scans._save_calendarised_sales_snapshot = lambda r: saved.append(r) or None
+scans._save_calendarised_sales_snapshot = lambda r, suffix="": saved.append(r) or None
 payload = {"source": "mw", "months": ["2026-08", "2026-09"], "dayMap": {"C": [["2026-08-01", "2027-08-01"]]}}
 
 r = scans.run_reindex(payload)
 assert r.get("sourceUnreachable") is True and saved == [], (r, saved)
 
 rows_read["n"] = 5
-scans._save_calendarised_sales_snapshot = lambda r: "OperationalError: boom"
+scans._save_calendarised_sales_snapshot = lambda r, suffix="": "OperationalError: boom"
 r = scans.run_reindex(payload)
 assert r.get("snapshotSaveError") == "OperationalError: boom" and "sourceUnreachable" not in r, r
 

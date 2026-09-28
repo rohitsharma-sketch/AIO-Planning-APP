@@ -39,6 +39,9 @@ DB_SYNC_JOBS = [
     # shift by real day sales (db/calendar_shift.py, option b 2026-09-25).
     ("day_weights", "data_lake_day_weights"),
     ("calendar_reindex", "calendar_reindex"),
+    # Read-only accuracy check of what calendar_reindex just saved (user, 2026-09-28): raw vs saved, independent
+    # recompute, conservation, department tables, day maps, trading stores without a cluster. Fails loudly.
+    ("calendar_check", "calendar_check"),
     # Not in app.py's list: Google "Holidays in India" -> festival_reference_dates,
     # then re-dates Festival Master + locked calendars' festival lists.
     ("festival_dates", "festival_dates"),

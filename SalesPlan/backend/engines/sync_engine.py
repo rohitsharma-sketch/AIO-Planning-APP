@@ -87,9 +87,27 @@ def _last_sync():
         session.close()
 
 
+def _last_check():
+    """The latest nightly calendar_check run (sync/calendar_check_sync.py): is the calendarised sales exact?"""
+    from sqlalchemy import text
+    session = SessionLocal()
+    try:
+        r = session.execute(text(
+            "SELECT status, completed_at, error_message, detail FROM sync.sync_runs "
+            "WHERE source_key = 'calendar_check' ORDER BY sync_run_id DESC LIMIT 1")).first()
+        if r is None:
+            return None
+        checks = (r[3] or {}).get("checks", [])
+        return {"status": r[0], "completedAt": r[1].isoformat() if r[1] else None, "error": r[2],
+                "passed": sum(1 for c in checks if c.get("ok")), "total": len(checks),
+                "checks": [{"name": c.get("name"), "ok": c.get("ok"), "maxDiffL": c.get("max_diff_L"), "cells": c.get("cells")} for c in checks]}
+    finally:
+        session.close()
+
+
 @router.get("/status")
 def sync_status():
-    return {**_all_summaries(), "lastSync": _last_sync()}
+    return {**_all_summaries(), "lastSync": _last_sync(), "lastCheck": _last_check()}
 
 
 @router.get("/data")

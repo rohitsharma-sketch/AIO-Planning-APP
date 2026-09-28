@@ -146,6 +146,7 @@ def sync_run(source_key: str):
         else:
             run.status = "failed"
             run.error_message = f"{type(e).__name__}: {e}"
+            run.detail = result["detail"]   # e.g. calendar_check's per-check results, kept for the failure too
         run.completed_at = datetime.datetime.now(datetime.timezone.utc)
         session.add(run)
         session.commit()
