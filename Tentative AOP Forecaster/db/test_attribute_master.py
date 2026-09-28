@@ -72,7 +72,7 @@ def test_db_first_then_xlsx_fallback():
 
     fake = _FakeEngine([dict(r) for r in rows])
     _use_db(fake)
-    assert ace._mtime(ace.ATTR_MASTER_PATH)[:2] == ("db", 974)             # DB fingerprint
+    assert ace._mtime(ace.ATTR_MASTER_PATH)[:2] == ("db", 978)             # DB fingerprint
     assert ace._build_attr_dept_map(active) == from_xlsx                   # same data both paths
 
     # DB edit must be visible: flip one attribute, bump updated_at -> cache invalidates
