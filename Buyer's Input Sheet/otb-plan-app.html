@@ -1728,7 +1728,7 @@ function fCr(v){return v==null?'-':'Rs.'+v.toFixed(1)}
 function fP(v){return v==null?'-':(v>=0?'+':'')+v.toFixed(1)+'%'}
 // 19 V 26 / 25 V 26 hover box (user, 2026-09-28): the two years' LFL sales behind the % and the store count,
 // per month and for the period. kind = 'base' (19 V 26) or 'yoy' (25 V 26); g = a DEPT_/SEC_LFL_GROWTH entry.
-const LFL_FY_START={base:[2019,2025],yoy:[2024,2025]};  // Apr start year of each side, as sync_server's FY19/FY25/FY26 maps (19 base = calendar 2019)
+const LFL_FY_START={base:[2019,2025],yoy:[2024,2025]};  // Apr start year of each side, as sync_server's FY19/FY25/FY26 maps (19 base = calendar 2019; 25/26 = Jul-Jun, so Apr-Jun sit a year later)
 function _lflTip(g,kind,mis){
   const raw=g?.raw?.[kind];if(!raw)return '';
   const [yA,yB]=(kind==='base'?window.FY_LFL_BASE:window.FY_LFL_YOY).split(' V ');
@@ -1736,10 +1736,10 @@ function _lflTip(g,kind,mis){
   let a=0,b=0;const lines=[];
   // Each line names the real months (user, 2026-09-28: "FY19 -> FY26" read like the plan LY, which is Mar-Jun 2026
   // on 148 stores in the LY Actual Sales column). The years are sync_server's FY maps - FY19_DATE_TO_MI starts Apr 2019,
-  // FY25 Apr 2024, FY26 Apr 2025 - so "19 V 26" is Jan-Dec 2019 (user, 28 Sep 2026: Mar'19, not the Mar'20 lockdown
-  // month) against Apr'25-Mar'26 on the same stores.
+  // FY25 Jul 2024-Jun 2025, FY26 Jul 2025-Jun 2026 (user, 28 Sep 2026: same months as the plan LY) - so Mar-Jun reads
+  // 2019 -> 2026 for "19 V 26" (Mar'19, not the Mar'20 lockdown month) and 2025 -> 2026 for "25 V 26", same stores.
   const [sA,sB]=LFL_FY_START[kind];
-  const cal=(y0,mi,calYr)=>`${MO[mi]}'${String((calYr||mi<=8?y0:y0+1)%100).padStart(2,'0')}`;
+  const cal=(y0,mi,calYr)=>`${MO[mi]}'${String((calYr||(mi>=3&&mi<=8)?y0:y0+1)%100).padStart(2,'0')}`;
   mis.forEach(mi=>{const p=raw[mi];if(!p)return;a+=p[0];b+=p[1];
     lines.push(`${cal(sA,mi,kind==='base')} Rs ${p[0].toFixed(2)} Cr -> ${cal(sB,mi)} Rs ${p[1].toFixed(2)} Cr (${fP((p[1]/p[0]-1)*100)})${st?.[mi]!=null?' | same '+st[mi]+' stores':''}`);});
   if(lines.length>1&&a>0)lines.push(`Period total: Rs ${a.toFixed(2)} -> Rs ${b.toFixed(2)} Cr (${fP((b/a-1)*100)})`);

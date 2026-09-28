@@ -111,7 +111,7 @@ DATE_TO_MI = {v: k for k, v in AOP_LY_DATES.items()}
 LY_DEF = "ly" + "".join(f"{y}{m:02d}" for y, m in sorted(AOP_LY_DATES.values())) + "d"   # "d": sales now carry per-department LY (28 Sep 2026)
 # History growth (19V26, 25V26) = cohort tags x per-month trading (lfl_by_month).
 # In data_version so cached history in every browser re-syncs.
-HIST_DEF = "hlflcohort19"   # "19": 19V26 base moved to calendar 2019 (28 Sep 2026)
+HIST_DEF = "hlflcohort19jjw"   # "w": whole-word division match; "19": 19V26 base = calendar 2019; "jj": 25/26 sides Jul-Jun (28 Sep 2026)
 
 # Full-year FY calendars: mi=0=Apr … mi=11=Mar
 _CAL_MONTHS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3]
@@ -127,8 +127,11 @@ def _fy_date_to_mi(fy_start_year: int) -> dict:
 # 19V26 base = calendar 2019 (user, 28 Sep 2026): March is Mar 2019, not the FY19 Mar 2020 lockdown month -
 # buyers judge history on the same months as the plan period.
 FY19_DATE_TO_MI = {(2019, m): mi for (y, m), mi in _fy_date_to_mi(2019).items()}   # Jan–Dec 2019
-FY25_DATE_TO_MI = _fy_date_to_mi(2024)   # Apr 2024 – Mar 2025
-FY26_DATE_TO_MI = _fy_date_to_mi(2025)   # Apr 2025 – Mar 2026
+# 25V26 / 26 side = Jul-Jun years (user, 28 Sep 2026): Apr-Jun move up a year, so Mar-Jun compares
+# 2026 with 2025 (and 2019) - the same months as the plan LY (Mar-Jun 2026).
+_jul_jun = lambda fy_start: {(y + (m in (4, 5, 6)), m): mi for (y, m), mi in _fy_date_to_mi(fy_start).items()}
+FY25_DATE_TO_MI = _jul_jun(2024)   # Jul 2024 – Jun 2025
+FY26_DATE_TO_MI = _jul_jun(2025)   # Jul 2025 – Jun 2026
 
 
 def lfl_by_month(traded: set, opened: dict, base_map: dict, cmp_map: dict, pool=None) -> dict:
@@ -196,9 +199,10 @@ def _get_sales_src() -> str | None:
 
 
 def normalize_div(name: str) -> str | None:
-    nl = str(name).lower().strip()
+    import re
+    words = set(re.findall(r"[a-z]+", str(name).lower()))   # whole words: "CONSIGNMENT" contains "men" (28 Sep 2026)
     for did, aliases in DIV_MAP.items():
-        if any(a in nl for a in aliases):
+        if words & set(aliases):
             return did
     return None
 
