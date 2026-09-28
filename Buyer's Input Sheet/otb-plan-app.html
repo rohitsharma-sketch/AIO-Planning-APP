@@ -300,9 +300,33 @@ thead .c0,thead .c1{background:var(--th-bg)!important;color:var(--th-tx);z-index
 input[data-bk].gi{width:66px}
 td:has(input[data-bk]){text-align:center!important}
 td.aop-col-bg input.gi{background:var(--sf)}
-.blk-lock{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;border:1px solid var(--bm);background:transparent;font-size:10px;cursor:pointer;color:var(--mu);transition:.12s;user-select:none;vertical-align:middle;flex-shrink:0}
+.blk-lock{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:5px;border:1px solid var(--bm);background:transparent;cursor:pointer;color:var(--mu);transition:border-color .2s,background-color .2s,color .2s;user-select:none;vertical-align:middle;flex-shrink:0}
 .blk-lock:hover{border-color:var(--ac);color:var(--ac)}
+.blk-lock:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
 .blk-lock.locked{border-color:var(--wa-br);background:var(--wa-b);color:var(--wa)}
+/* One padlock for both states (2026-09-28): the shackle lifts when open and drops when locked. The table
+   re-renders on every toggle, so the motion is keyframes on the fresh element (.lk-anim), not transitions. */
+.blk-lock svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;overflow:visible}
+.blk-lock .shk{transform:translateY(-2px)}
+.blk-lock rect{fill:transparent}
+.blk-lock.locked .shk{transform:none}
+.blk-lock.locked rect{fill:currentColor}
+.blk-lock.lk-anim{animation:lkPop .3s cubic-bezier(.3,1.6,.5,1)}
+.blk-lock.lk-anim .shk{animation:lkShut .24s ease-out}
+.blk-lock.lk-anim:not(.locked) .shk{animation-name:lkLift}
+.blk-lock.lk-anim rect{animation:lkFill .24s ease-out}
+.blk-lock.lk-anim:not(.locked) rect{animation-name:lkEmpty}
+@keyframes lkPop{0%{transform:scale(.8)}100%{transform:scale(1)}}
+@keyframes lkShut{from{transform:translateY(-2px)}to{transform:none}}
+@keyframes lkLift{from{transform:none}to{transform:translateY(-2px)}}
+@keyframes lkFill{from{fill:transparent}}
+@keyframes lkEmpty{from{fill:currentColor}}
+.gi.lkd{border-color:var(--wa-br);background:var(--wa-b)}
+.gi.lk-anim{animation:giTint .3s ease-out}
+.gi.lk-anim:not(.lkd){animation-name:giUntint}
+@keyframes giTint{from{border-color:var(--bm);background:var(--sf)}}
+@keyframes giUntint{from{border-color:var(--wa-br);background:var(--wa-b)}}
+@media (prefers-reduced-motion:reduce){.blk-lock.lk-anim,.blk-lock.lk-anim .shk,.blk-lock.lk-anim rect,.gi.lk-anim{animation:none}}
 /* active / inactive row toggle */
 .row-act-btn{display:inline-flex;align-items:center;padding:1px 7px;border-radius:10px;border:1px solid;font-size:9px;font-weight:700;cursor:pointer;line-height:1.6;transition:all .12s;user-select:none;white-space:nowrap;margin-right:7px;vertical-align:middle}
 .row-act-btn.on{background:var(--po-b);border-color:var(--po-br);color:var(--po)}
@@ -2572,12 +2596,11 @@ function cellVal(row,def){
         const isLkAttr=secs.length>0&&secs.every(sec=>AOP_MIS.every(mi=>S.locked.has(sec.id+'__'+mi)));
         const allSet=secs.length>0&&AOP_MIS.every(mi=>secs.every(sec=>S.inputs[sec.id+'__'+mi]!=null));
         const bg=allSet?_attrBlockGrowth(dv,attrInfo.attr):null;
-        const cls='gi'+(bg==null?'':bg<0?' neg':' has');
+        const anim=_lkAnim===row._key?' lk-anim':'';
+        const cls='gi'+(bg==null?'':bg<0?' neg':' has')+(isLkAttr?' lkd':'')+anim;
         const attrArg=attrInfo.attr.replace(/'/g,"\\'");
-        const lockBtn=isLkDiv?'':
-          `<span class="blk-lock${isLkAttr?' locked':''}" onclick="event.stopPropagation();toggleAttrLock('${attrInfo.dvId}','${attrArg}')" title="${isLkAttr?'Unlock attribute — allow reapportion':'Lock attribute — freeze vs reapportion'}">
-            ${isLkAttr?'🔒':'○'}
-          </span>`;
+        const lockBtn=isLkDiv?'':_lkBtn(isLkAttr,anim,`toggleAttrLock('${attrInfo.dvId}','${attrArg}','${row._key}')`,
+          isLkAttr?'Unlock attribute — allow reapportion':'Lock attribute — freeze vs reapportion');
         return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="${cls}" data-abk="${row._key}" type="number" step="0.01" placeholder="%" value="${bg!=null?bg:''}" ${isLkDiv?'disabled title="Division locked"':''} oninput="setAttrBlockGrowth('${attrInfo.dvId}','${attrArg}',this.value)" onblur="refresh()"></span>`;
       }
       // Section row — editable block growth% input with per-section lock
@@ -2588,11 +2611,10 @@ function cellVal(row,def){
       const isLkSec=AOP_MIS.every(mi=>S.locked.has(sec.id+'__'+mi));
       const allSet=AOP_MIS.every(mi=>S.inputs[sec.id+'__'+mi]!=null);
       const bg=allSet?_blockGrowth(sec,dv):null;
-      const cls='gi'+(bg==null?'':bg<0?' neg':' has');
-      const lockBtn=isLkDiv?'':
-        `<span class="blk-lock${isLkSec?' locked':''}" data-sbk="${sec.id}" onclick="event.stopPropagation();toggleSecLock('${sec.id}')" title="${isLkSec?'Unlock section — allow reapportion':'Lock section — freeze vs reapportion'}">
-          ${isLkSec?'🔒':'○'}
-        </span>`;
+      const anim=_lkAnim===sec.id?' lk-anim':'';
+      const cls='gi'+(bg==null?'':bg<0?' neg':' has')+(isLkSec?' lkd':'')+anim;
+      const lockBtn=isLkDiv?'':_lkBtn(isLkSec,anim,`toggleSecLock('${sec.id}')`,
+        isLkSec?'Unlock section — allow reapportion':'Lock section — freeze vs reapportion',` data-sbk="${sec.id}"`);
       return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="${cls}" data-bk="${sec.id}" type="number" step="0.01" placeholder="%" value="${bg!=null?bg:''}" ${isLkDiv?'disabled title="Division locked"':''} oninput="setBlockGrowth('${sec.id}',this.value)" onblur="refresh()"></span>`;
     }
     case 'attr_label': return row._attr?`<span style="font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--mu)">${row._attr}</span>`:'—';
@@ -3845,6 +3867,15 @@ function _syncLockAllBtns(){
   btn.textContent=anyLocked?'🔓 Unlock All':'🔒 Lock All';
 }
 
+// Block lock button (section / attribute rows). _lkAnim = the row just toggled, so only it animates.
+var _lkAnim=null;
+function _lkBtn(isLk,anim,call,title,extra=''){
+  return `<span class="blk-lock${isLk?' locked':''}${anim}"${extra} role="button" tabindex="0" aria-pressed="${isLk}" aria-label="${title}" title="${title}" onclick="event.stopPropagation();${call}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="shk" d="M5 7.5V5.3a3 3 0 0 1 6 0v2.2"/><rect x="3" y="7.5" width="10" height="6.5" rx="1.6"/></svg></span>`;
+}
+function _lkRefresh(key){
+  _lkAnim=key;refresh();_lkAnim=null;
+  document.querySelector('.blk-lock.lk-anim')?.focus({preventScroll:true});
+}
 // Toggles the MAMJ lock for a single section's block input.
 // Locked sections are skipped by _divReapp; unlocked sections absorb the redistribution.
 function toggleSecLock(secKey){
@@ -3861,7 +3892,7 @@ function toggleSecLock(secKey){
   }
   AOP_MIS.forEach(mi=>_divReapp(dv,mi));
   _flashLiveBadges();
-  refresh();
+  _lkRefresh(secKey);
 }
 
 /* ── DIVISION TABS ─────────────────────────────── */
@@ -4008,7 +4039,7 @@ function setAttrBlockGrowth(dvId,attr,val){
 }
 
 // Toggles the MAMJ lock for every department in a div+attr group together.
-function toggleAttrLock(dvId,attr){
+function toggleAttrLock(dvId,attr,rowKey){
   const dv=DVDATA.find(d=>d.id===dvId);
   if(!dv||S.divLocked.has(dv.id))return;
   const secs=_attrActiveSecs(dv,attr);
@@ -4023,7 +4054,7 @@ function toggleAttrLock(dvId,attr){
   }
   AOP_MIS.forEach(mi=>_divReappAttr(dv,mi));
   _flashLiveBadges();
-  refresh();
+  _lkRefresh(rowKey);
 }
 
 // Division-level reapportion, one level up from _divReapp: groups active departments
