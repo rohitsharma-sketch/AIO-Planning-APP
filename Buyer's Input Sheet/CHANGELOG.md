@@ -1,5 +1,7 @@
 # OTB Plan App — Changelog
 
+> From 26 Sep 2026 changes are logged suite-wide in [../CHANGELOG.md](../CHANGELOG.md).
+
 ---
 
 ## 2026-08-14 — Buyer's Plan: Division Tabs, Growth Lock & Re-apportioning

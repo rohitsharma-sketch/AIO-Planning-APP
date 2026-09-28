@@ -1,0 +1,55 @@
+# RS Planning Suite — Changelog
+
+Suite-wide changes across Calendar → AOP Forecaster → Buyer's Input Sheet (BIS) → Sales Plan.
+Newest first. Each entry names its commit.
+
+---
+
+## 2026-09-28
+
+### BIS: history hover not showing — `0b6f95e`
+- **Problem:** the 19 V 26 / 25 V 26 hover and header store counts stayed blank in a browser that had opened BIS before `267d1d6`. BIS keeps the history in the browser (`ck_lfl_growth`) and only re-fetched it when the server's data version changed, so the old copy (no store counts, no ₹ values) was kept.
+- **Fix:** a saved copy without store counts is treated as out of date and re-synced on open. Verified by planting an old copy and reloading: headers show "19 V 26 · 31 st" / "25 V 26 · 101–120 st", cells show the per-month ₹ Cr and period total.
+
+### Sales Plan reads LY sales from the Calendar; Buyer's Input drives department status — `267d1d6`
+- **Department Master:** "Sync from AOP Forecaster" is now **"Sync from Buyer's Input"**. KIDS / LADIES / MENS departments are active when live BIS plans them (96 / 57 / 39), inactive otherwise; GM / RETAIL are left as set. The AOP division-target loader stays as a small "Load AOP division targets" link.
+- **Growth Matrix:** inactive departments are greyed, tagged INACTIVE and read-only; column fill skips them.
+- **Sales Sync page:** the manual "Sync Sales" button and the Excel import (MAMJ'26, month locks, admin unlock) are removed. The page is read-only and shows the last nightly sync and the new department-level tables.
+- **Sales Plan actuals:** store × department LY sales now come from the Calendar's department snapshots, refreshed nightly by `sync/calendar_reindex_sync.py` — **reindexed sales = plan base**, actual sales alongside. New snapshot kinds `actual_dept` / `trend_shifted_dept` (migration `d9f3b2a7c1e5`). They sum exactly to the existing month-wise snapshots (0.000000 L over 20,569 cells). First full plan built: 425 stores, Mar–Aug'27.
+- 29 departments with sales but missing from Sales Plan's department list were auto-registered (incl. ₹36.5 Cr MENS pyjamas).
+- **BIS 19 V 26 / 25 V 26:** header shows the like-for-like store count (per-month counts on hover); cell hover shows both years' ₹ Cr per month, store count and period total.
+
+---
+
+## 2026-09-26 — Planning-chain audit fixes — `5f551d7`
+
+Audit tolerance 0.01 L per cell and total; every check also had to catch a planted 0.02 L error. Live AOP = Version 2 (publish 112).
+
+**BIS**
+- AOP growth is kept unrounded (was 2 dp → up to 0.15 L/cell off target); display stays 2 dp. Re-balancing no longer re-rounds.
+- Seeding uses the LY of **active** departments only (hidden departments had left divisions up to 528.82 L short).
+- Reopening keeps the buyer's edits: BIS re-seeds only when the AOP version changes (locked cells kept); "Re-seed plan" is the full reset.
+- Pushes to Sales Plan only months BIS actually records, only once AOP is applied, stamped with the AOP publish id; a failed push is shown to the user. One push per AOP apply (was two).
+
+**Calendar**
+- Cluster names are case-insensitive: the last-saved spelling wins across all cluster tables (`adopt_cluster_spelling`); "Kashmir" → "KASHMIR".
+- Month-cache key now includes the store → cluster map, so a renamed cluster isn't served stale months.
+
+**AOP Forecaster**
+- Review grid: fixed column widths, plain "All months" column, month selector; Results follow the same month pick.
+- Store rows kept at 4 dp; "Base Calendar" label shows both calendar ids.
+- Reindexed-base preview counts DND / CDIT / CONSIGNMENT in the division shares.
+- **Lock to Planning:** locking a deleted / unsaved version now refuses with a message (it used to silently lock the latest saved version).
+
+**Sales Plan**
+- Plan engines read the live BIS growth on P1/P2 (months BIS doesn't record are hidden); GM / RETAIL stay editable.
+- Division Plan: AOP months land exactly on the AOP target; fixed the Apr–Mar plan running Jul–Jun; Export CSV exports the plan on screen.
+
+**Landing**
+- Added the missing `/api/config/buyer-department-growth` route, so BIS growth reaches Sales Plan through the shared address.
+
+### Known open items (reported, awaiting a decision)
+- Sales Plan SSG uses 121 stores; AOP / BIS plan on 148 (KIDS Apr'27 ₹2,575 L vs ₹3,108 L).
+- NON FOOD: Sales Plan files it under RETAIL, AOP under GM.
+- MRP Re-apportionment page returns 404.
+- V2's Mar'27 base is not festival-shifted (141 L, accepted); 38 KLM departments have no BIS growth.
