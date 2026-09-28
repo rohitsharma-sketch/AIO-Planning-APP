@@ -3,8 +3,8 @@
 // Input Sheet. Key names are unchanged - every page reads them inline and
 // App.jsx also exposes each one as a CSS variable (--primary, --surface, ...).
 export const theme = {
-  fontUI:   "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-  fontMono: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",   // numbers use tabular figures (index.css)
+  fontUI:   "var(--st-font-body, 'Plus Jakarta Sans'), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  fontMono: "var(--st-font-body, 'Plus Jakarta Sans'), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",   // numbers use tabular figures (index.css)
 
   // Brand
   navy:         'var(--st-chrome,#34453F)',   // chrome (sidebar + page header), strong headings

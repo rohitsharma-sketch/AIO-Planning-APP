@@ -46,7 +46,7 @@
 
 body {
   margin: 0;
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--st-font-body, 'Plus Jakarta Sans'), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-variant-numeric: tabular-nums;
   font-size: 14px;
   line-height: 1.5;
@@ -1121,3 +1121,6 @@ details.rx-section > summary.rx-label { cursor: pointer; display: list-item; }
 }
 .app-engine select:hover, .app-engine select:focus { border-color: rgba(255,255,255,.45); box-shadow: none; }
 .app-engine option { color: var(--char); background: var(--white); }
+
+/* ── Calm look (user, 2026-09-28: minimal and clean, from the alternate design) ── overrides only. */
+html .app-header-title, html .lib-title { font-family: var(--st-font-display, Georgia, serif); font-weight: 500; letter-spacing: -0.005em; }

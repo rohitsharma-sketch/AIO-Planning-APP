@@ -12,6 +12,21 @@
     return;
   }
   var cfg = window.__SUITE_THEMES__ || { themes: {} };
+
+  // Suite type (user, 2026-09-28: the "alternate look"): IBM Plex Sans for text, IBM Plex Mono for figures,
+  // Fraunces for page titles. Apps read var(--st-font-body|mono|display, <their old font>), so they keep
+  // their old face if this script or Google Fonts can't be reached.
+  if (!document.getElementById('st-fonts')) {
+    var fl = document.createElement('link');
+    fl.id = 'st-fonts'; fl.rel = 'stylesheet';
+    fl.href = 'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600'
+      + '&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap';
+    document.head.appendChild(fl);
+    var fr = document.documentElement.style;
+    fr.setProperty('--st-font-body', "'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif");
+    fr.setProperty('--st-font-mono', "'IBM Plex Mono', ui-monospace, Consolas, monospace");
+    fr.setProperty('--st-font-display', "'Fraunces', Georgia, 'Times New Roman', serif");
+  }
   var base = (document.currentScript && document.currentScript.src) || '';
   var origin = base.replace(/\/api\/suite-theme\.js.*$/, '');
 

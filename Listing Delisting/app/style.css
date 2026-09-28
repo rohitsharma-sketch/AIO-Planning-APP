@@ -21,8 +21,8 @@
   --ink: var(--st-ink,#1E2723);
   --bg: var(--color-background);
   --line: var(--color-border);
-  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: 'Plus Jakarta Sans', system-ui, sans-serif;   /* suite font; numbers use tabular figures */
+  --font-sans: var(--st-font-body, 'Plus Jakarta Sans'), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--st-font-body, 'Plus Jakarta Sans'), system-ui, sans-serif;   /* suite font; numbers use tabular figures */
 
   /* Chrome band (2026-09-25): a dark navy header+tab strip so the app doesn't read as
      "whole white" — same family as the sibling CityKart planning tools' navy chrome.
@@ -66,7 +66,7 @@ body {
 }
 .appbar header h1 { color: #fff; }
 .appbar .subtitle { color: var(--color-chrome-text-muted); }
-header h1 { margin: 0 0 2px; font-size: 22px; font-weight: 700; color: var(--color-foreground); }
+header h1 { margin: 0 0 2px; font-size: 22px; font-weight: 500; color: var(--color-foreground); font-family: var(--st-font-display, inherit); }  /* calm look 2026-09-28 */
 .subtitle { margin: 0 0 16px; color: var(--color-muted-foreground); font-size: 14px; }
 
 .appbar .tabs { margin-bottom: 0; }
@@ -243,3 +243,6 @@ svg .bar-in { fill: var(--w-in); opacity: .8; } svg .bar-off { fill: #94A3B8; } 
 .ver.now { border-color: var(--color-primary); box-shadow: 0 0 0 1px var(--color-primary) inset; }
 .ver.now .ver-tag { background: var(--btn); color: var(--btn-t); }
 .why-line { margin: 8px 0 0; font-size: 12.5px; color: var(--color-muted-foreground); }
+
+/* calm look 2026-09-28: KPI captions wrap instead of running past the card edge */
+.ov-kpi .sub { white-space: normal; }

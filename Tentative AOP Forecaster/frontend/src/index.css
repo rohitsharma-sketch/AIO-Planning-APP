@@ -44,7 +44,7 @@
   --shadow-sm: 0 1px 2px rgba(var(--st-ink-rgb,30,39,35),.06);
   --shadow:   0 1px 2px rgba(var(--st-ink-rgb,30,39,35),.05), 0 4px 14px rgba(var(--st-ink-rgb,30,39,35),.06);
   --shadow-lg: 0 12px 40px rgba(var(--st-ink-rgb,30,39,35),.22);
-  --font-ui:  'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-ui:  var(--st-font-body, 'Plus Jakarta Sans'), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-display: var(--font-ui);
 }
 
@@ -127,3 +127,19 @@ input, select { font-family: inherit; }
 
 .positive { color: var(--green); }
 .negative { color: var(--red); }
+
+/* ── Calm look (user, 2026-09-28: minimal and clean, from the alternate design) ──
+   Overrides only (html-prefixed so they win over the component sheets loaded later); logic untouched. */
+html .card, html .kpi-card, html .pl-tile, html .chart-card { box-shadow: none; }
+html .pl-title, html .dash-title { font-family: var(--st-font-display, Georgia, serif); font-weight: 500; letter-spacing: -0.01em; }
+html .pl-title { font-size: 34px; }
+html .dash-title { font-size: 28px; }
+html .pl-eyebrow { background: none; border: 0; padding: 0; color: var(--st-muted, #5F6B64); }
+/* the stacked filter bars read as one quiet filter area instead of separate boxed cards */
+html .chart-filter-bar { background: transparent; border-color: transparent; box-shadow: none; padding-left: 2px; padding-right: 2px; }
+/* Review growth grid head: light paper with dark text (the dense Output pivot / drill tables keep their dark
+   head, whose controls are built for white-on-dark) */
+html .growth-table th { background: var(--st-surface-3, #F3F2EC); color: var(--st-ink-2, #37423C); border-color: var(--st-line, #E5E3DA); }
+html .growth-table .th-quickset { border-right-color: var(--st-line-2, #D3D0C4); }
+html .growth-table th .th-aop-ov { border-color: var(--st-line-2, #D3D0C4); }
+html .rv-month-chip--on { background: var(--st-btn, #A8CBB7); border-color: var(--st-btn, #A8CBB7); color: var(--st-btn-text, #1F4D3A); }

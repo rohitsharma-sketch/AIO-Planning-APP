@@ -27,7 +27,7 @@
   html, body { margin: 0; }
   body {
     min-height: 100vh;
-    font-family: 'Plus Jakarta Sans', -apple-system, 'Segoe UI', sans-serif;
+    font-family: var(--st-font-body, 'Plus Jakarta Sans'), -apple-system, 'Segoe UI', sans-serif;
     -webkit-font-smoothing: antialiased;
     font-variant-numeric: tabular-nums;
     background: var(--bg);
@@ -342,6 +342,29 @@
   .lm-mo-card, .lm-tbl-wrap, .lm-method-note { box-shadow: var(--shadow-sm); }
   .lm-mo-card, .lm-tbl-wrap { border-radius: 12px; }
   @media (max-width: 620px) { .lm-sub { display: none; } .lm-hdr, .lm-ctrl, .lm-content { padding-left: 16px; padding-right: 16px; } }
+  /* ── Calm look (user, 2026-09-28: "minimal and clean", from the alternate design) ── overrides only;
+     markup, links and how each app opens are unchanged. */
+  .eyebrow { background: none; border: 0; padding: 0; color: var(--muted); letter-spacing: .1em; }
+  h1 { font-family: var(--st-font-display, Georgia, serif); font-weight: 500; font-size: 40px; letter-spacing: -.015em; color: var(--char); margin: 6px 0 6px; }
+  .lede { font-size: 15px; }
+  .card, .sync-strip { box-shadow: none; }
+  .card:hover { transform: none; box-shadow: none; border-color: var(--accent); }
+  .sync-strip:hover { box-shadow: none; border-color: var(--accent); }
+  .card-icon, .grid:not(.tools) .card-icon, .grid.tools .card-icon, .sync-strip .card-icon { background: none; width: auto; height: auto; color: var(--muted); }
+  .card h2, .grid:not(.tools) .card h2 { color: var(--char); font-weight: 600; }
+  .sync-strip-title { color: var(--char); font-weight: 600; }
+  .grid:not(.tools) { gap: 36px; }
+  .grid:not(.tools) .card { min-height: 0; padding: 20px 20px 14px; }
+  .grid:not(.tools) .card:not(:last-child)::after {
+    content: ""; position: absolute; top: 50%; right: -27px; width: 18px; height: 18px; transform: translateY(-50%);
+    background: currentColor; color: var(--st-line-2, #CFC8B8); pointer-events: none;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M13 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M13 6l6 6-6 6'/%3E%3C/svg%3E") center / contain no-repeat;
+  }
+  @media (max-width: 1040px) { .grid:not(.tools) { gap: 16px; } .grid:not(.tools) .card::after { display: none; } }
+  .grid.tools .card p.desc { -webkit-line-clamp: 1; }
+  .btn-ghost { background: none; }
+  .meta { border-top-color: var(--st-surface-3, #F0ECE2); }
 </style>
 </head>
 <body>
@@ -389,7 +412,7 @@
   <main>
     <span class="eyebrow">FY 2027–28 · Planning suite</span>
     <h1>Planning Suite</h1>
-    <p class="lede">Plan, forecast and publish CityKart's store × division sales — one connected workflow from the festival calendar to the sales plan.</p>
+    <p class="lede">One connected chain from the festival calendar to the sales plan.</p>
 
     <div class="sec-hd">
       <span class="sec-title">Core workflow</span>
@@ -399,25 +422,25 @@
       <a class="card" href="/calendar/" target="_blank" data-check="/api/port-status/8010">
         <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-calendar"/></svg></span><span class="step">01</span></div>
         <h2>Calendar</h2>
-        <p class="desc">Festival-aligned day-shift calendar per cluster — reindexes last year's sales onto this year's dates.</p>
+        <p class="desc">Moves last year's sales onto this year's festival and weekday calendar.</p>
         <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
       </a>
       <a class="card" href="/aop/" target="_blank" data-check="/api/port-status/8010">
         <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-forecast"/></svg></span><span class="step">02</span></div>
         <h2>AOP Forecaster</h2>
-        <p class="desc">Annual Operating Plan — planning inputs and the store × division × month forecast, published to the Buyer's Input.</p>
+        <p class="desc">Sets the store × division targets for the plan year.</p>
         <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
       </a>
       <a class="card" href="/buyer/" target="_blank" data-check="/api/port-status/5050">
         <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-buyer"/></svg></span><span class="step">03</span></div>
         <h2>Buyer's Input</h2>
-        <p class="desc">OTB buyer's plan — section-level growth against the locked AOP targets, with cell locks and re-apportioning.</p>
+        <p class="desc">Buyers split each division target across their departments.</p>
         <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
       </a>
       <a class="card" href="/planning/" target="_blank" data-check="/api/port-status/8010">
         <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-plan"/></svg></span><span class="step">04</span></div>
         <h2>Planning Engine</h2>
-        <p class="desc">Sales Plan — division and department plans, MRP re-apportionment, PW/W and SOR deviation.</p>
+        <p class="desc">Division and department plans, with MRP, PW/W and SOR checks.</p>
         <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
       </a>
     </div>
@@ -441,27 +464,27 @@
       <div class="card" id="lagan-card" role="button" tabindex="0" aria-haspopup="dialog">
         <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-lagan"/></svg></span></div>
         <h2>Lagan Calendar</h2>
-        <p class="desc">Auspicious wedding and ceremony dates, 2000–2030, by the Drik astronomical method.</p>
+        <p class="desc">Wedding and ceremony dates, 2000–2030.</p>
         <div class="meta"><span class="port">2000 – 2030</span><span class="open-link">Look up</span></div>
       </div>
       <!-- one address (2026-09-26): every app is a path on this Landing origin -->
       <a class="card" href="/nso/" target="_blank" data-check="/api/port-status/8060" id="nso-card">
         <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-store"/></svg></span></div>
         <h2>NSO Plan Distributor</h2>
-        <p class="desc">NSO details, sales plan and division contribution in — a month-wise store plan workbook out.</p>
+        <p class="desc">Month-wise plans for new stores.</p>
         <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
       </a>
       <a class="card" href="/realigner/" target="_blank" data-check="/api/port-status/8070">
         <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-scale"/></svg></span></div>
         <h2>AOP Re-Aligner</h2>
-        <p class="desc">Revise a finished plan three ways — store listing changes, existing department changes, new or split departments — every store × division stays on the original.</p>
+        <p class="desc">Rebalance a finished plan after listing or department changes.</p>
         <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
       </a>
       <!-- Listing/Delisting (joined the suite 2026-09-26): data rebuilt by the daily data-lake sync -->
       <a class="card" href="/listing/" target="_blank" data-check="/api/port-status/8123">
         <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-listing"/></svg></span></div>
         <h2>Listing / Delisting Analyser</h2>
-        <p class="desc">Listing history with sales, and festival- and season-aware delist / relist suggestions you can trace back to the source.</p>
+        <p class="desc">Listing history and delist / relist suggestions.</p>
         <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
       </a>
     </div>

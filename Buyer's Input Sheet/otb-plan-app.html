@@ -44,7 +44,7 @@
   /* chrome */
   --topbar-bg:var(--st-chrome,#34453F);--topbar-tx:#FFFFFF;--th-bg:var(--st-surface-4,#F4F3EE);--th-tx:var(--st-ink-2,#37423C);--th-mu:var(--st-muted,#5F6B64);
   /* type & sizing */
-  --font:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --font:var(--st-font-body,'Plus Jakarta Sans'),-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
   --mono:var(--font);
   --r:8px;--NW:216px;--TH:54px;--CH:46px;
   --shadow-sm:0 1px 2px rgba(var(--st-ink-rgb,30,39,35),.06);
@@ -483,6 +483,16 @@ tr:hover .mag-trig{display:inline}
 ::-webkit-scrollbar-thumb:hover{background:var(--bh);background-clip:padding-box;border:2px solid transparent}
 ::-webkit-scrollbar-corner{background:transparent}
 *{scrollbar-width:thin;scrollbar-color:var(--bm) transparent}
+/* ── Calm look (user, 2026-09-28: minimal and clean, from the alternate design) ── overrides only; logic untouched ── */
+.tbar{box-shadow:none}
+.tbar-wm-app{font-family:var(--st-font-display,Georgia,serif);font-weight:500;font-size:16px;letter-spacing:-.005em}
+.ktile{box-shadow:none}
+.ktile::before{display:none}
+.dtbl .hr-sg .hblk-st,.dtbl .hr-sg .hblk-hist,.dtbl .hr-sg .hblk-plan{color:var(--st-ink-2,var(--tx2));background:var(--sf);border-top-color:var(--st-line-2,var(--bm))}
+/* the per-row "Active" switch becomes a quiet dot (still a button; the word stays for screen readers) */
+.row-act-btn.on{position:relative;font-size:0;width:18px;height:18px;padding:0;border:0;background:transparent;margin-right:6px;vertical-align:middle}
+.row-act-btn.on::before{content:'';position:absolute;left:5px;top:5px;width:8px;height:8px;border-radius:50%;background:var(--po)}
+.row-act-btn.on:hover::before{box-shadow:0 0 0 3px var(--po-b)}
 </style>
 
 <!-- ─── APP ─────────────────────────────────────── -->

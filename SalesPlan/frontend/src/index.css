@@ -4,7 +4,7 @@
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin: 0; }
 body {
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--st-font-body, 'Plus Jakarta Sans'), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--st-page,#F7F6F2);
   color: var(--st-ink,#1E2723);
   font-size: 14px;
@@ -29,3 +29,8 @@ a { color: var(--st-accent,#4F7A66); }
 .sp-navlink:hover { background: rgba(255,255,255,.06) !important; color: #fff !important; }
 .sp-card:hover { border-color: var(--st-tint-b,#CBE2D5) !important; box-shadow: 0 1px 2px rgba(var(--st-ink-rgb,30,39,35),.05), 0 8px 24px rgba(var(--st-ink-rgb,30,39,35),.08) !important; transform: translateY(-1px); }
 .sp-card:hover .sp-card-go { color: var(--st-accent-dark,#3F6453) !important; }
+
+/* ── Calm look (user, 2026-09-28: minimal and clean, from the alternate design) ── overrides only.
+   Page titles in the suite's display serif (the !important beats the pages' inline weights), flat cards. */
+h1 { font-family: var(--st-font-display, Georgia, serif) !important; font-weight: 500 !important; letter-spacing: -0.01em; }
+.sp-card:hover { box-shadow: none !important; transform: none; border-color: var(--st-accent,#4F7A66) !important; }
