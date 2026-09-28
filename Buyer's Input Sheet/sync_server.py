@@ -108,7 +108,7 @@ AOP_LY_DATES = {mi: (PLAN_MAMJ_YEAR - 1, MI_TO_CAL_MONTH[mi]) for mi in AOP_MONT
 DATE_TO_MI = {v: k for k, v in AOP_LY_DATES.items()}
 # Part of data_version, so a browser holding LY cached under an older month
 # definition resyncs instead of keeping it (the parquet mtime alone wouldn't change).
-LY_DEF = "ly" + "".join(f"{y}{m:02d}" for y, m in sorted(AOP_LY_DATES.values()))
+LY_DEF = "ly" + "".join(f"{y}{m:02d}" for y, m in sorted(AOP_LY_DATES.values())) + "d"   # "d": sales now carry per-department LY (28 Sep 2026)
 # History growth (19V26, 25V26) = cohort tags x per-month trading (lfl_by_month).
 # In data_version so cached history in every browser re-syncs.
 HIST_DEF = "hlflcohort"
@@ -357,6 +357,7 @@ def _run_sales_job(src: str):
         store_col = detect_col(cols_lower, ["store_name", "store", "store_nm", "outlet", "outlet_name"])
         open_col  = detect_col(cols_lower, ["opening_date", "open_date", "store_open_date"])
         stat_col  = detect_col(cols_lower, ["store_current_status"])  # not STORE_STATUS
+        dept_col  = detect_col(cols_lower, ["department"])
 
         if not all([date_col, div_col, amt_col]):
             _sales_job = {"status": "error", "data": None,
@@ -366,7 +367,7 @@ def _run_sales_job(src: str):
 
         read_cols = [date_col, div_col, amt_col] \
                     + ([store_col] if store_col else []) \
-                    + ([c for c in (open_col, stat_col) if c] if store_col else [])
+                    + ([c for c in (open_col, stat_col) if c] if store_col else [])                     + ([dept_col] if dept_col else [])
         df = pd.read_parquet(src, columns=read_cols)
         _sales_job["progress"] = 70
         df[date_col] = parse_date_col(df[date_col])
@@ -398,12 +399,19 @@ def _run_sales_job(src: str):
         result: dict = {}
         for (dv, mi), total in grouped.items():
             result.setdefault(str(dv), {})[str(int(mi))] = round(float(total) / 1e7, 4)
+        # Each department's OWN LY per AOP month for the same plan stores (user, 2026-09-28: BIS showed a
+        # department's LY as its FY26 share x the division base, so e.g. ML_JOGGERS read Rs 6.3 Cr instead of its
+        # actual Rs 6.77 Cr). Keyed by DVDATA section id; Rs Cr to 6 dp (0.0001 L).
+        sec_ly: dict = {}
+        if dept_col:
+            for (dp, mi), total in df_f.groupby([df_f[dept_col].map(normalize_dept_id), "_mi"])[amt_col].sum().items():
+                sec_ly.setdefault(dp, {})[str(int(mi))] = round(float(total) / 1e7, 6)
 
         ts = datetime.now().isoformat()
         _last_sync["sales"] = ts
         _sales_job = {
             "status": "done",
-            "data": {"ok": True, "dept_actual_ly": result, "source_file": os.path.basename(src),
+            "data": {"ok": True, "dept_actual_ly": result, "sec_actual_ly": sec_ly, "source_file": os.path.basename(src),
                      "rows_processed": int(mask.sum()), "synced_at": ts,
                      "data_version": _data_version()},
             "error": None,

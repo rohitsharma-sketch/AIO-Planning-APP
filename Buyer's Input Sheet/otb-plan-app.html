@@ -2119,6 +2119,8 @@ function openMag(secId,dvId){
   if(_magDv){
     const divAnnual=_magDv.secs.reduce((a,s)=>a+s.ly,0);
     AOP_MIS.forEach(mi=>{
+      const act=SEC_ACTUAL_LY[_magSec.id]?.[mi];
+      if(act!=null){_magLyMo[mi]=act;return;}
       const divAct=S.aopBase?.[_magDv.id]?.[mi]??DEPT_ACTUAL_LY[_magDv.id]?.[mi]; // fresh AOP LFL base first - 2026-09-23
       if(divAct&&divAnnual>0)_magLyMo[mi]=divAct*(_magSec.ly/divAnnual);
     });
@@ -2919,7 +2921,7 @@ function buildRows_dept(){
       // this is the OTHER half of that fix, since dept-level LY Actual Sales
       // and the TY-money-basis both redistribute from this SAME anchor).
       const slyMo={...(sec.lyMo||{})};
-      if(divAnnual>0)[11,0,1,2].forEach(mi=>{const da=S.aopBase?.[dv.id]?.[mi]??DEPT_ACTUAL_LY?.[dv.id]?.[mi];if(da!=null)slyMo[mi]=sec.ly/divAnnual*da;});
+      [11,0,1,2].forEach(mi=>{const act=SEC_ACTUAL_LY[sec.id]?.[mi];if(act!=null){slyMo[mi]=act;return;}const da=S.aopBase?.[dv.id]?.[mi]??DEPT_ACTUAL_LY?.[dv.id]?.[mi];if(da!=null&&divAnnual>0)slyMo[mi]=sec.ly/divAnnual*da;});
       const secLY=c.reduce((a,mi)=>a+monLY(sec.ly,mi,slyMo),0);
       const tyByMon={};
       let secTY=0;
@@ -3965,7 +3967,13 @@ function toggleDivLock(dvId){
 // Shared helper: monthly LY for a section within a division.
 // activeDivAnnual: pass the sum of active-section LY when reapportioning
 // among active depts only, so the proportional weights sum correctly.
+// A department's own LY for an AOP month (Rs Cr, the plan LfL stores) from the sales sync; before 28 Sep 2026 BIS
+// only had division totals and showed a department as its FY26 share x the division base (ML_JOGGERS MAMJ read
+// Rs 6.3 Cr, actual 6.77). The share estimate stays as the fallback for a month the sync has not delivered.
+var SEC_ACTUAL_LY={};
 function _secMonLY(sec,dv,mi,activeDivAnnual){
+  const act=SEC_ACTUAL_LY[sec.id]?.[mi];
+  if(act!=null)return act;
   const divAnnual=activeDivAnnual??dv.secs.reduce((a,s)=>a+s.ly,0);
   const da=S.aopBase?.[dv.id]?.[mi]??DEPT_ACTUAL_LY?.[dv.id]?.[mi]; // fresh AOP LFL base first - see buildRows_dept()'s slyMo, 2026-09-23
   return da!=null&&divAnnual>0?sec.ly/divAnnual*da:monLY(sec.ly,mi,sec.lyMo);
@@ -4338,7 +4346,8 @@ function loadSyncCache(){
         if(!DEPT_ACTUAL_LY[divId])DEPT_ACTUAL_LY[divId]={};
         Object.entries(months).forEach(([mi,val])=>{DEPT_ACTUAL_LY[divId][Number(mi)]=val;});
       });
-      cachedSalesVer=sl.ver||'';
+      if(sl.sec)Object.entries(sl.sec).forEach(([id,m])=>{SEC_ACTUAL_LY[id]={};Object.entries(m).forEach(([mi,v])=>{SEC_ACTUAL_LY[id][Number(mi)]=v;});});
+      cachedSalesVer=sl.sec?(sl.ver||''):''; // a copy without per-department LY re-syncs
       _syncUI('sales','ok',sl.t||'cached');
     }
   }catch(_){}
@@ -4595,7 +4604,11 @@ async function syncSalesData(){
       Object.entries(months).forEach(([mi,val])=>{DEPT_ACTUAL_LY[divId][Number(mi)]=val;});
     });
     _syncUI('sales','ok',_syncTime());
-    try{localStorage.setItem('ck_sales_ly',JSON.stringify({data:DEPT_ACTUAL_LY,t:_syncTime(),ver:data.data_version||''}));}catch(_){}
+    Object.keys(SEC_ACTUAL_LY).forEach(k=>delete SEC_ACTUAL_LY[k]);
+    Object.entries(data.sec_actual_ly||{}).forEach(([id,m])=>{SEC_ACTUAL_LY[id]={};Object.entries(m).forEach(([mi,v])=>{SEC_ACTUAL_LY[id][Number(mi)]=v;});});
+    try{localStorage.setItem('ck_sales_ly',JSON.stringify({data:DEPT_ACTUAL_LY,sec:data.sec_actual_ly||{},t:_syncTime(),ver:data.data_version||''}));}catch(_){}
+    // New department LY moves each division's base: re-seed (locked cells kept) so the plan stays on the AOP target.
+    if(S.aopLocked&&Object.keys(S.aopSeeds||{}).length&&_aopSeedFp()!==S.aopSeedFp)seedPlanFromAop(true);
     refresh();
     toast('Sales LY synced');
   }catch(e){_syncUI('sales','err','Failed');toast('Sales sync failed: '+e.message);}
@@ -5175,7 +5188,14 @@ function toggleMenu(id,ev){
 function closeMenus(){document.querySelectorAll('.tmenu.open').forEach(m=>m.classList.remove('open'));}
 document.addEventListener('click',e=>{if(!e.target.closest('.tmenu'))closeMenus();});
 // Fingerprint of the AOP a seed is built on (targets + bases of the AOP months).
-function _aopSeedFp(){return JSON.stringify([S.aop,S.aopBase]);}
+// The seeds depend on the AOP and on the department LY they are set against (per-department LY since 28 Sep 2026),
+// so either changing re-seeds (locked cells kept). The LY part is a short hash, not the figures themselves.
+function _lyHash(){
+  const t=JSON.stringify(Object.keys(SEC_ACTUAL_LY).sort().map(k=>[k,AOP_MIS.map(mi=>SEC_ACTUAL_LY[k][mi]??null)]));
+  let h=5381;for(let i=0;i<t.length;i++)h=((h<<5)+h+t.charCodeAt(i))|0;
+  return h;
+}
+function _aopSeedFp(){return JSON.stringify([S.aop,S.aopBase,_lyHash()]);}
 // keepLocked (page open with a changed AOP, Sync AOP): the buyer's locked cells stay and the other departments
 // are re-balanced so each division x month still equals AOP. Without it (the "Re-seed plan" button) every cell
 // is reset to AOP and its lock cleared (it used to keep the lock flag on a value it had overwritten).
