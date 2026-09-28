@@ -4301,7 +4301,7 @@ function loadSyncCache(){
       Object.entries(lg.data).forEach(([divId,growth])=>{DEPT_LFL_GROWTH[divId]=growth;});
       if(lg.dept)Object.entries(lg.dept).forEach(([deptId,g])=>{SEC_LFL_GROWTH[deptId]=g;});
       if(lg.stores)window._LFL_STORES=lg.stores;
-      cachedLflVer=lg.ver||'';
+      cachedLflVer=lg.stores?(lg.ver||''):''; // pre-hover cache (no store counts / raw Cr) -> force a resync
       _syncUI('hist','ok',lg.t||'cached');
     }
   }catch(_){}
