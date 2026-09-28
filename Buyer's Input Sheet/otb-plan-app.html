@@ -1686,6 +1686,27 @@ function deleteCustomDept(i){
 /* ── HELPERS ───────────────────────────────────── */
 function fCr(v){return v==null?'-':'Rs.'+v.toFixed(1)}
 function fP(v){return v==null?'-':(v>=0?'+':'')+v.toFixed(1)+'%'}
+// 19 V 26 / 25 V 26 hover box (user, 2026-09-28): the two years' LFL sales behind the % and the store count,
+// per month and for the period. kind = 'base' (19 V 26) or 'yoy' (25 V 26); g = a DEPT_/SEC_LFL_GROWTH entry.
+function _lflTip(g,kind,mis){
+  const raw=g?.raw?.[kind];if(!raw)return '';
+  const [yA,yB]=(kind==='base'?window.FY_LFL_BASE:window.FY_LFL_YOY).split(' V ');
+  const st=window._LFL_STORES?.[kind];
+  let a=0,b=0;const lines=[];
+  mis.forEach(mi=>{const p=raw[mi];if(!p)return;a+=p[0];b+=p[1];
+    lines.push(`${MO[mi]}: FY${yA} Rs ${p[0].toFixed(2)} Cr -> FY${yB} Rs ${p[1].toFixed(2)} Cr (${fP((p[1]/p[0]-1)*100)})${st?.[mi]!=null?' | '+st[mi]+' stores':''}`);});
+  if(lines.length>1&&a>0)lines.push(`Period total: Rs ${a.toFixed(2)} -> Rs ${b.toFixed(2)} Cr (${fP((b/a-1)*100)})`);
+  return lines.length?` title="${lines.join('&#10;')}"`:'';
+}
+// Header label "19 V 26 | 148 st" + a hover with the store count per month (same months as the cells).
+function _lflHdr(kind,mis){
+  const lbl=kind==='base'?window.FY_LFL_BASE:window.FY_LFL_YOY;
+  const st=window._LFL_STORES?.[kind];if(!st)return {sub:lbl,title:''};
+  const n=mis.map(mi=>st[mi]).filter(v=>v!=null);if(!n.length)return {sub:lbl,title:''};
+  const lo=Math.min(...n),hi=Math.max(...n);
+  return {sub:`${lbl} · ${lo===hi?lo:lo+'–'+hi} st`,
+          title:`Like-for-like stores (traded the month in both years): `+mis.map(mi=>`${MO[mi]} ${st[mi]??'-'}`).join(', ')};
+}
 function fPct(v){return v==null?'-':v.toFixed(1)+'%'}
 function gCls(v){return v==null?'':v>=0?' gp':' gn'}
 function cols(){return [...S.selM].sort((a,b)=>CAL_ORDER.indexOf(a)-CAL_ORDER.indexOf(b))}
@@ -2302,12 +2323,14 @@ function buildColDefs(){
     // ② Historical Growth% (YOY: 25 V 26 | Base: 19 V 26 when synced)
     if(S.showHistDetail){
       c.forEach(mi=>{
-        defs.push({block:'hist',group:MO[mi],id:'base_'+mi,sub:FY_LFL_BASE,mi,type:'lfl_base'});
-        defs.push({block:'hist',group:MO[mi],id:'yoy_'+mi,sub:FY_LFL_YOY,mi,type:'lfl_yoy'});
+        const hb=_lflHdr('base',[mi]),hy=_lflHdr('yoy',[mi]);
+        defs.push({block:'hist',group:MO[mi],id:'base_'+mi,sub:hb.sub,title:hb.title,mi,type:'lfl_base'});
+        defs.push({block:'hist',group:MO[mi],id:'yoy_'+mi,sub:hy.sub,title:hy.title,mi,type:'lfl_yoy'});
       });
     } else {
-      defs.push({block:'hist',group:'Period',id:'p_base',sub:FY_LFL_BASE,type:'period_lfl_base',sum:true});
-      defs.push({block:'hist',group:'Period',id:'p_yoy',sub:FY_LFL_YOY,type:'period_lfl_yoy',sum:true});
+      const hb=_lflHdr('base',c),hy=_lflHdr('yoy',c);
+      defs.push({block:'hist',group:'Period',id:'p_base',sub:hb.sub,title:hb.title,type:'period_lfl_base',sum:true});
+      defs.push({block:'hist',group:'Period',id:'p_yoy',sub:hy.sub,title:hy.title,type:'period_lfl_yoy',sum:true});
     }
     defs.push({block:'hist',group:'Period',id:'tot_ly',sub:'LY Actual Sales',type:'tot_ly',sum:true});
     defs.push({block:'hist',group:'Period',id:'contrib',sub:'Contrib%',type:'contrib',sum:true});
@@ -2486,7 +2509,7 @@ function buildHeader(defs,noC1=false){
     if(d.block==='hist'&&!seenHist){sep=' hist-sep';seenHist=true;}
     if(d.block==='plan'&&!seenPlan){sep=' plan-sep';seenPlan=true;}
     const sortIcon=S.sortCol===d.id?`<span class="th-sort-icon">${S.sortAsc?'▲':'▼'}</span>`:'';
-    hr2+=`<th class="${d.sum?'sc':''}${sep} ${d.block}-blk th-sort" data-ci="${dimCols2+i}" onclick="setSort('${d.id}')">${d.sub}${sortIcon}</th>`;
+    hr2+=`<th class="${d.sum?'sc':''}${sep} ${d.block}-blk th-sort" data-ci="${dimCols2+i}" onclick="setSort('${d.id}')"${d.title?` title="${d.title}"`:''}>${d.sub}${sortIcon}</th>`;
   });
   hr2+='</tr>';
 
@@ -2615,7 +2638,7 @@ function cellVal(row,def){
       if(row._key==null){
         const g=DEPT_LFL_GROWTH[row._divId]?.yoy?.[def.mi];
         if(g==null)return '<span style="color:var(--mu)">-</span>';
-        return `<span class="${gCls(g)}">${fP(g)}</span>`;
+        return `<span class="${gCls(g)}"${_lflTip(DEPT_LFL_GROWTH[row._divId],'yoy',[def.mi])}>${fP(g)}</span>`;
       }
       {
         const attrInfo=_parseAttrKey(row._key);
@@ -2632,14 +2655,14 @@ function cellVal(row,def){
       if((window._SELLTHRU_LIVE_DEPT||{})[row._key]==null)return '<span style="color:var(--mu)">-</span>';
       const g=SEC_LFL_GROWTH[row._key]?.yoy?.[def.mi];
       if(g==null)return '<span style="color:var(--mu)">-</span>';
-      return `<span class="${gCls(g)}">${fP(g)}</span>`;
+      return `<span class="${gCls(g)}"${_lflTip(SEC_LFL_GROWTH[row._key],'yoy',[def.mi])}>${fP(g)}</span>`;
     }
     case 'lfl_base': {
       if(!row._divId)return '<span style="color:var(--mu)">-</span>';
       if(row._key==null){
         const g=DEPT_LFL_GROWTH[row._divId]?.base?.[def.mi];
         if(g==null)return '<span style="color:var(--mu)">-</span>';
-        return `<span class="${gCls(g)}">${fP(g)}</span>`;
+        return `<span class="${gCls(g)}"${_lflTip(DEPT_LFL_GROWTH[row._divId],'base',[def.mi])}>${fP(g)}</span>`;
       }
       {
         const attrInfo=_parseAttrKey(row._key);
@@ -2656,7 +2679,7 @@ function cellVal(row,def){
       if((window._SELLTHRU_LIVE_DEPT||{})[row._key]==null)return '<span style="color:var(--mu)">-</span>';
       const g=SEC_LFL_GROWTH[row._key]?.base?.[def.mi];
       if(g==null)return '<span style="color:var(--mu)">-</span>';
-      return `<span class="${gCls(g)}">${fP(g)}</span>`;
+      return `<span class="${gCls(g)}"${_lflTip(SEC_LFL_GROWTH[row._key],'base',[def.mi])}>${fP(g)}</span>`;
     }
     case 'avg_st': {
       if(!row._divId)return '<span style="color:var(--mu)">-</span>';
@@ -2700,7 +2723,7 @@ function cellVal(row,def){
         const divVals=mc.map(mi=>DEPT_LFL_GROWTH[row._divId]?.yoy?.[mi]).filter(v=>v!=null);
         if(!divVals.length)return '<span style="color:var(--mu)">-</span>';
         const avg=divVals.reduce((a,v)=>a+v,0)/divVals.length;
-        return `<span class="${gCls(avg)}">${fP(avg)}</span>`;
+        return `<span class="${gCls(avg)}"${_lflTip(DEPT_LFL_GROWTH[row._divId],'yoy',mc)}>${fP(avg)}</span>`;
       }
       {
         const attrInfo=_parseAttrKey(row._key);
@@ -2720,7 +2743,7 @@ function cellVal(row,def){
       const aopValsY=mc.map(mi=>sGy[mi]).filter(v=>v!=null);
       if(!aopValsY.length)return '<span style="color:var(--mu)">-</span>';
       const avgY=aopValsY.reduce((a,v)=>a+v,0)/aopValsY.length;
-      return `<span class="${gCls(avgY)}">${fP(avgY)}</span>`;
+      return `<span class="${gCls(avgY)}"${_lflTip(SEC_LFL_GROWTH[row._key],'yoy',mc)}>${fP(avgY)}</span>`;
     }
     case 'period_lfl_base': {
       if(!row._divId)return '<span style="color:var(--mu)">-</span>';
@@ -2729,7 +2752,7 @@ function cellVal(row,def){
         const divVals=mc.map(mi=>DEPT_LFL_GROWTH[row._divId]?.base?.[mi]).filter(v=>v!=null);
         if(!divVals.length)return '<span style="color:var(--mu)">-</span>';
         const avg=divVals.reduce((a,v)=>a+v,0)/divVals.length;
-        return `<span class="${gCls(avg)}">${fP(avg)}</span>`;
+        return `<span class="${gCls(avg)}"${_lflTip(DEPT_LFL_GROWTH[row._divId],'base',mc)}>${fP(avg)}</span>`;
       }
       {
         const attrInfo=_parseAttrKey(row._key);
@@ -2749,7 +2772,7 @@ function cellVal(row,def){
       const aopValsB=mc.map(mi=>sGb[mi]).filter(v=>v!=null);
       if(!aopValsB.length)return '<span style="color:var(--mu)">-</span>';
       const avgB=aopValsB.reduce((a,v)=>a+v,0)/aopValsB.length;
-      return `<span class="${gCls(avgB)}">${fP(avgB)}</span>`;
+      return `<span class="${gCls(avgB)}"${_lflTip(SEC_LFL_GROWTH[row._key],'base',mc)}>${fP(avgB)}</span>`;
     }
     case 'aop_target': {
       if(!S.aopLocked) return '<span style="color:var(--mu)">—</span>';
@@ -4277,6 +4300,7 @@ function loadSyncCache(){
     if(lg?.data){
       Object.entries(lg.data).forEach(([divId,growth])=>{DEPT_LFL_GROWTH[divId]=growth;});
       if(lg.dept)Object.entries(lg.dept).forEach(([deptId,g])=>{SEC_LFL_GROWTH[deptId]=g;});
+      if(lg.stores)window._LFL_STORES=lg.stores;
       cachedLflVer=lg.ver||'';
       _syncUI('hist','ok',lg.t||'cached');
     }
@@ -4523,10 +4547,11 @@ async function syncHistData(){
       if(!DEPT_LFL_GROWTH[divId])DEPT_LFL_GROWTH[divId]={yoy:{},base:{}};
       DEPT_LFL_GROWTH[divId].base={};
       DEPT_LFL_GROWTH[divId].yoy={};
+      DEPT_LFL_GROWTH[divId].raw={base:{},yoy:{}}; // Rs Cr behind each % (hover box, 2026-09-28)
       for(let mi=0;mi<12;mi++){
         const v19=fy19[String(mi)],v25=fy25[String(mi)],v26=fy26[String(mi)],v26s=fy26s[String(mi)];
-        if(v19&&v26s&&v19>0)DEPT_LFL_GROWTH[divId].base[mi]=Math.round((v26s/v19-1)*1000)/10;
-        if(v25&&v26&&v25>0)DEPT_LFL_GROWTH[divId].yoy[mi]=Math.round((v26/v25-1)*1000)/10;
+        if(v19&&v26s&&v19>0){DEPT_LFL_GROWTH[divId].base[mi]=Math.round((v26s/v19-1)*1000)/10;DEPT_LFL_GROWTH[divId].raw.base[mi]=[v19,v26s];}
+        if(v25&&v26&&v25>0){DEPT_LFL_GROWTH[divId].yoy[mi]=Math.round((v26/v25-1)*1000)/10;DEPT_LFL_GROWTH[divId].raw.yoy[mi]=[v25,v26];}
       }
     });
     // Department-level: 19V26 (base) and 25V26 (yoy) growth
@@ -4535,16 +4560,17 @@ async function syncHistData(){
     const allDeptIds=new Set([...Object.keys(fy19dept),...Object.keys(fy26dept)]);
     allDeptIds.forEach(deptId=>{
       const d19=fy19dept[deptId]||{}, d25=fy25dept[deptId]||{}, d26=fy26dept[deptId]||{}, d26s=fy26sdept[deptId]||{};
-      SEC_LFL_GROWTH[deptId]={base:{},yoy:{}};
+      SEC_LFL_GROWTH[deptId]={base:{},yoy:{},raw:{base:{},yoy:{}}};
       for(let mi=0;mi<12;mi++){
         const v19=d19[String(mi)],v25=d25[String(mi)],v26=d26[String(mi)],v26s=d26s[String(mi)];
-        if(v19&&v26s&&v19>0)SEC_LFL_GROWTH[deptId].base[mi]=Math.round((v26s/v19-1)*1000)/10;
-        if(v25&&v26&&v25>0)SEC_LFL_GROWTH[deptId].yoy[mi]=Math.round((v26/v25-1)*1000)/10;
+        if(v19&&v26s&&v19>0){SEC_LFL_GROWTH[deptId].base[mi]=Math.round((v26s/v19-1)*1000)/10;SEC_LFL_GROWTH[deptId].raw.base[mi]=[v19,v26s];}
+        if(v25&&v26&&v25>0){SEC_LFL_GROWTH[deptId].yoy[mi]=Math.round((v26/v25-1)*1000)/10;SEC_LFL_GROWTH[deptId].raw.yoy[mi]=[v25,v26];}
       }
     });
+    window._LFL_STORES={base:data.lfl_19v26_stores||null,yoy:data.lfl_25v26_stores||null}; // LFL stores per month (Apr..Mar)
     console.log('[HIST] dept_col:',data.detected_dept_col,'| depts:',data.dept_count);
     _syncUI('hist','ok',_syncTime());
-    try{localStorage.setItem('ck_lfl_growth',JSON.stringify({data:DEPT_LFL_GROWTH,dept:SEC_LFL_GROWTH,t:_syncTime(),ver:data.data_version||''}));}catch(_){}
+    try{localStorage.setItem('ck_lfl_growth',JSON.stringify({data:DEPT_LFL_GROWTH,dept:SEC_LFL_GROWTH,stores:window._LFL_STORES,t:_syncTime(),ver:data.data_version||''}));}catch(_){}
     refresh();
     toast('FY19 history synced');
   }catch(e){_syncUI('hist','err','Failed');toast('History sync failed: '+e.message);}

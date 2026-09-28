@@ -1488,5 +1488,150 @@
     "division": "GM",
     "name": "LS_W_MIX",
     "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_BF_BLANKET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HF_BF_QUILT",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_MW_HEADBAND",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "TG_NS_BAT BALL",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "KIDS",
+    "name": "KB_HSR BERMUDA",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "KIDS",
+    "name": "KB_POLO T-SHIRT H/S",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "KIDS",
+    "name": "KB_R/N T-SHIRT H/S",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "KIDS",
+    "name": "KB_TXTL BERMUDA",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "LADIES",
+    "name": "LW_L_DNM JOGGER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "LADIES",
+    "name": "LW_L_ETH PALAZZO",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "LADIES",
+    "name": "LW_L_WES PALAZZO",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "LADIES",
+    "name": "LW_L_WVN JOGGER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "LADIES",
+    "name": "L_IN_SPRT BRA",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "LADIES",
+    "name": "LW_U_CORD SETS",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "MENS",
+    "name": "MSE_HSR PYJAMA",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "MENS",
+    "name": "MSE_TXTL PYJAMA",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_CC_WET WIPES",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "RETAIL",
+    "name": "NF_CC_SHEET MASK",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "FW_MIX",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "LADIES",
+    "name": "L_EW_SAREE_WORK",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_HANKY",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "SF_FT_SKIPPING ROPE",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_G_PUDDING SET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "HH_C_PO_COFFEE SET",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "KIDS",
+    "name": "KIW_THERMAL LOWER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "LADIES",
+    "name": "LWW_K-TOP",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "GM",
+    "name": "LS_IA_BABY GYM",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "KIDS",
+    "name": "KGW_PULLOVER",
+    "attribute": "REGULAR"
+  },
+  {
+    "division": "LADIES",
+    "name": "LWW_MUFFLER",
+    "attribute": "REGULAR"
   }
 ]

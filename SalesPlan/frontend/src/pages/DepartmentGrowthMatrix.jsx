@@ -182,13 +182,13 @@ export default function DepartmentGrowthMatrix() {
     if (isNaN(val)) return
     setData(prev => ({
       ...prev,
-      departments: prev.departments.map(d => ({
+      departments: prev.departments.map(d => d.active === false ? d : ({   // inactive departments are left as they are
         ...d,
         periods: { ...d.periods, [period]: val },
       })),
     }))
     const batch = {}
-    data?.departments.forEach(d => { batch[d.name] = { [period]: val } })
+    data?.departments.forEach(d => { if (d.active !== false) batch[d.name] = { [period]: val } })
     pendingRef.current = deepMerge(pendingRef.current, batch)
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
@@ -691,11 +691,14 @@ export default function DepartmentGrowthMatrix() {
               <tbody>
                 {filtered.map((dept, i) => {
                   const as = ATTR_STYLE[dept.attribute] || { bg: '#F3F4F6', color: '#374151' }
+                  // Inactive in Department Master Setup → greyed out and read-only (user, 2026-09-26); the plan gives it TY 0
+                  const inactive = dept.active === false
                   return (
                     <tr key={dept.name} style={{
                       borderBottom: `1px solid #EEF2F8`,
-                      background: i % 2 === 0 ? 'transparent' : 'rgba(var(--st-ink-rgb,30,39,35),0.025)',
-                    }}>
+                      background: inactive ? 'rgba(var(--st-ink-rgb,30,39,35),0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(var(--st-ink-rgb,30,39,35),0.025)',
+                      opacity: inactive ? 0.45 : 1,
+                    }} title={inactive ? 'Inactive in Department Master Setup - not planned' : undefined}>
                       <td style={{
                         padding: '5px 10px 5px 20px',
                         fontWeight: 500, fontSize: 11.5,
@@ -705,6 +708,8 @@ export default function DepartmentGrowthMatrix() {
                         overflow: 'hidden', textOverflow: 'ellipsis',
                       }} title={dept.name}>
                         {dept.name}
+                        {inactive && <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, letterSpacing: 0.4, padding: '1px 4px',
+                          borderRadius: 3, border: `1px solid ${theme.border}`, color: theme.textSecondary }}>INACTIVE</span>}
                       </td>
                       <td style={{ padding: '5px 8px', borderRight: `2px solid ${theme.border}`, whiteSpace: 'nowrap' }}>
                         <span style={{
@@ -730,8 +735,8 @@ export default function DepartmentGrowthMatrix() {
                                 type="number"
                                 step={0.1}
                                 value={val}
-                                readOnly={fromBuyer}
-                                onChange={e => !fromBuyer && handleChange(dept.name, p, e.target.value)}
+                                readOnly={fromBuyer || inactive}
+                                onChange={e => !fromBuyer && !inactive && handleChange(dept.name, p, e.target.value)}
                                 style={{
                                   width: 40, textAlign: 'right',
                                   border: '1px solid transparent', borderRadius: 3,
@@ -742,9 +747,9 @@ export default function DepartmentGrowthMatrix() {
                                   fontVariantNumeric: 'tabular-nums',
                                   fontWeight: val !== 100 ? 600 : 400,
                                   outline: 'none',
-                                  cursor: fromBuyer ? 'not-allowed' : 'text',
+                                  cursor: fromBuyer || inactive ? 'not-allowed' : 'text',
                                 }}
-                                onFocus={e => !fromBuyer && (e.target.style.borderColor = theme.primary)}
+                                onFocus={e => !fromBuyer && !inactive && (e.target.style.borderColor = theme.primary)}
                                 onBlur={e => e.target.style.borderColor = 'transparent'}
                               />
                               <span style={{ fontSize: 10, color: fromBuyer ? '#1D4ED8' : cellColor(val), opacity: 0.7, userSelect: 'none' }}>%</span>

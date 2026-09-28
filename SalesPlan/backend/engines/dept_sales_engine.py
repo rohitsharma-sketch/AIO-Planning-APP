@@ -28,8 +28,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from actuals_manager import (
     load_actuals, locked_ly_months, available_ty_months,
-    import_actuals_file, admin_unlock_month, load_lock,
-    ACTUALS_DIR,
+    load_store_div_actuals, actuals_source,
 )
 from store_master import load_store_master as _universal_store_master, is_ssg as _universal_is_ssg
 
@@ -37,7 +36,6 @@ router = APIRouter()
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 _BASE     = os.path.dirname(__file__)
-AOP_INPUTS = os.path.abspath(os.path.join(_BASE, "..", "..", "..", "Tentative AOP Forecaster", "inputs.xlsx"))
 DEPT_STATE_PATH    = os.path.join(_BASE, "..", "department_state.json")
 DEPT_CUSTOM_PATH   = os.path.join(_BASE, "..", "department_custom.json")
 DEPT_GROWTH_PATH   = os.path.join(_BASE, "..", "department_growth.json")
@@ -80,44 +78,15 @@ def _load_store_master():
 
 
 def _load_dept_actuals():
-    """
-    Reads from actuals_store.json (populated by actuals_manager.import_actuals_file).
-    Returns (actuals_dict, ly_months_available).
-    Only months that are locked are returned.
-    """
-    actuals = load_actuals()
-    ly_locked = locked_ly_months()
-    return actuals, ly_locked
+    """(store x dept LY actuals, usable LY months) - the Calendar app's reindexed department-level sales
+    (actuals_manager; was actuals_store.json from a manual Excel import until 2026-09-28)."""
+    return load_actuals(), locked_ly_months()
 
 
 def _load_store_div_actuals():
-    """
-    Store × Division × Month LY actuals from 'Store Actuals' sheet.
-    Returns {store: {division: {ly_month: value}}}
-    """
-    try:
-        df = pd.read_excel(AOP_INPUTS, sheet_name="Store Actuals", header=2)
-        df.columns = [str(c).strip() for c in df.columns]
-        col0, col1 = df.columns[0], df.columns[1]
-        df = df[df[col0].notna() & (df[col0].astype(str).str.strip() != "Store")]
-        df = df[~df[col0].astype(str).str.contains("Values pulled", na=True)]
-        df.rename(columns={col0: "Store", col1: "Division"}, inplace=True)
-
-        ly_cols = [c for c in LY_MONTHS if c in df.columns]
-        result = {}
-        for _, row in df.iterrows():
-            store = _norm(row["Store"])
-            div   = _norm(row["Division"])
-            result.setdefault(store, {}).setdefault(div, {})
-            for m in ly_cols:
-                val = row.get(m, 0)
-                try:
-                    result[store][div][m] = float(val) if pd.notna(val) else 0.0
-                except (ValueError, TypeError):
-                    result[store][div][m] = 0.0
-        return result
-    except Exception:
-        return {}
+    """Store x Division x LY month totals of the same reindexed Calendar sales (was the 'Store Actuals' sheet of
+    AOP's inputs.xlsx). Returns {store: {division: {ly_month: Rs lakhs}}}."""
+    return load_store_div_actuals()
 
 
 def _load_new_dept_map() -> dict:
@@ -481,57 +450,15 @@ def run_dept_plan():
 
 @router.get("/actuals/status")
 def actuals_status():
-    """Returns lock registry + which TY months are available in the UI."""
-    lock = load_lock()
+    """Where Sales Plan's LY sales come from (the Calendar app's department-level snapshots, refreshed by the
+    nightly data-lake sync) and which TY months they cover. No import / lock / unlock any more (2026-09-28)."""
+    ly = locked_ly_months()
     return {
-        "locked_ly_months": lock["locked_ly_months"],
+        "source": actuals_source(),
+        "locked_ly_months": {m: {"locked": True, "source": "calendar"} for m in ly},   # kept for older callers
+        "ly_months": ly,
         "available_ty_months": available_ty_months(),
-        "unlock_log_count": len(lock.get("unlock_log", [])),
     }
-
-
-@router.post("/actuals/import-from-dir")
-def import_from_dir():
-    """
-    Scans the Actual Sales folder and imports any Excel files not yet locked.
-    Safe to call repeatedly — already-locked months are skipped.
-    """
-    if not os.path.isdir(ACTUALS_DIR):
-        return {"ok": False, "error": f"Actuals directory not found: {ACTUALS_DIR}"}
-
-    files = [
-        os.path.join(ACTUALS_DIR, f)
-        for f in os.listdir(ACTUALS_DIR)
-        if f.endswith((".xlsx", ".xls", ".csv")) and not f.startswith("~")
-    ]
-
-    if not files:
-        return {"ok": False, "error": "No Excel/CSV files found in Actual Sales folder"}
-
-    results = []
-    for fp in sorted(files):
-        r = import_actuals_file(fp)
-        r["file"] = os.path.basename(fp)
-        results.append(r)
-
-    return {"ok": True, "files_processed": len(files), "results": results}
-
-
-@router.post("/actuals/admin-unlock/{ly_month}")
-async def admin_unlock(ly_month: str, request: Request, reason: str = ""):
-    """
-    ADMIN ONLY — removes lock for a LY month and deletes its actuals data.
-    Requires header: X-Admin-Override: force
-    Not exposed in any UI. Only callable by Claude explicitly.
-    Every call is journaled in actuals_lock.json → unlock_log.
-    """
-    override = request.headers.get("X-Admin-Override", "")
-    if override.strip().lower() != "force":
-        raise HTTPException(
-            status_code=403,
-            detail="This endpoint is admin-only. Requires header: X-Admin-Override: force"
-        )
-    return admin_unlock_month(ly_month, reason=reason)
 
 
 # ── Plan Endpoints ────────────────────────────────────────────────────────────

@@ -42,6 +42,7 @@ from sync.common import sync_run
 SOURCE_KEY = "calendar_reindex"
 REF_YEAR = 2026  # matches store_actuals_sync.py's own REF_YEAR - same forecast cycle
 EXTRA_DIMS = ["ATTRIBUTE1"]
+DEPT_EXTRA_DIMS = ["DEPARTMENT"]   # the department-level snapshot for Sales Plan (2026-09-28)
 REINDEX_TIMEOUT_SECONDS = 1800  # 30 min - a full-year month-wise reindex with one extra dim; generous, not tuned
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -80,50 +81,62 @@ def run():
         # own month-wise reader; no need to pre-check exactly what's available.
         months = [f"{REF_YEAR}-{m:02d}" for m in range(1, 13)]
 
-        payload = {
-            "source": "mw", "months": months, "storeCluster": store_cluster,
-            "dayMap": day_map, "extraDims": EXTRA_DIMS, "metric": None,
-        }
+        # Two month-wise runs: the main snapshot (store x division x ATTRIBUTE1) and the department-level one
+        # (kinds actual_dept / trend_shifted_dept) Sales Plan reads its store x department actual and reindexed
+        # sales from (user, 2026-09-28: no more manual sales import in Sales Plan).
+        details = []
+        for suffix, extra_dims in (("", EXTRA_DIMS), ("_dept", DEPT_EXTRA_DIMS)):
+            rx_result = _run_worker({
+                "source": "mw", "months": months, "storeCluster": store_cluster,
+                "dayMap": day_map, "extraDims": extra_dims, "metric": None, "snapshotSuffix": suffix,
+            })
+            details.append({"snapshot": "mw" + suffix, "extra_dims": extra_dims,
+                            "columns": rx_result.get("columns"), "key_fields": rx_result.get("keyFields"),
+                            "rows_read": rx_result.get("rowsRead"), "rows_mapped": rx_result.get("rowsMapped")})
 
-        with tempfile.TemporaryDirectory() as tmp:
-            payload_path = os.path.join(tmp, "payload.json")
-            progress_path = os.path.join(tmp, "progress.json")
-            result_path = os.path.join(tmp, "result.json")
-            with open(payload_path, "w", encoding="utf-8") as f:
-                json.dump(payload, f)
-
-            proc = subprocess.run(
-                [sys.executable, _WORKER, payload_path, progress_path, result_path],
-                cwd=_CALENDAR_ENGINE_DIR, capture_output=True, text=True,
-                timeout=REINDEX_TIMEOUT_SECONDS,
-            )
-            if not os.path.exists(result_path):
-                raise RuntimeError(
-                    f"reindex_worker produced no result (exit code {proc.returncode}): "
-                    f"{(proc.stderr or proc.stdout)[-2000:]}"
-                )
-            with open(result_path, encoding="utf-8") as f:
-                rx_result = json.load(f)
-
-        if not rx_result.get("ok"):
-            raise RuntimeError(rx_result.get("error") or "reindex_worker returned ok=false with no error message")
-        if rx_result.get("sourceUnreachable"):
-            # Message matches sync/common.py's _is_network_offline -> status 'offline'.
-            raise ConnectionError(
-                f"0 rows read for every freshly computed month {rx_result.get('computedMonths')} - "
-                "data-lake network path was not found; existing MW snapshot left untouched")
-        if rx_result.get("snapshotSaveError"):
-            raise RuntimeError(f"Reindex ran but saving the MW snapshot failed: {rx_result['snapshotSaveError']}")
-
-        result["rows_read"] = rx_result.get("rowsRead")
-        result["rows_updated"] = rx_result.get("rowsMapped")
+        result["rows_read"] = details[0]["rows_read"]
+        result["rows_updated"] = details[0]["rows_mapped"]
         result["rows_added"] = 0
         result["detail"] = {
             "calendar_id": cal.calendar_id, "calendar_name": cal.name,
             "months": months, "extra_dims": EXTRA_DIMS,
-            "columns": rx_result.get("columns"),
-            "key_fields": rx_result.get("keyFields"),
+            "columns": details[0]["columns"], "key_fields": details[0]["key_fields"],
+            "snapshots": details,
         }
+
+
+def _run_worker(payload):
+    """One reindex in Calendar Engine's own worker process; raises on any failure (see run())."""
+    with tempfile.TemporaryDirectory() as tmp:
+        payload_path = os.path.join(tmp, "payload.json")
+        progress_path = os.path.join(tmp, "progress.json")
+        result_path = os.path.join(tmp, "result.json")
+        with open(payload_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+
+        proc = subprocess.run(
+            [sys.executable, _WORKER, payload_path, progress_path, result_path],
+            cwd=_CALENDAR_ENGINE_DIR, capture_output=True, text=True,
+            timeout=REINDEX_TIMEOUT_SECONDS,
+        )
+        if not os.path.exists(result_path):
+            raise RuntimeError(
+                f"reindex_worker produced no result (exit code {proc.returncode}): "
+                f"{(proc.stderr or proc.stdout)[-2000:]}"
+            )
+        with open(result_path, encoding="utf-8") as f:
+            rx_result = json.load(f)
+
+    if not rx_result.get("ok"):
+        raise RuntimeError(rx_result.get("error") or "reindex_worker returned ok=false with no error message")
+    if rx_result.get("sourceUnreachable"):
+        # Message matches sync/common.py's _is_network_offline -> status 'offline'.
+        raise ConnectionError(
+            f"0 rows read for every freshly computed month {rx_result.get('computedMonths')} - "
+            "data-lake network path was not found; existing MW snapshot left untouched")
+    if rx_result.get("snapshotSaveError"):
+        raise RuntimeError(f"Reindex ran but saving the MW snapshot failed: {rx_result['snapshotSaveError']}")
+    return rx_result
 
 
 if __name__ == "__main__":

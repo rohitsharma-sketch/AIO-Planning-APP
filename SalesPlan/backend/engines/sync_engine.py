@@ -1,4 +1,7 @@
-"""Sales Sync
+"""Sales Sync - read-only view of the Calendar app's saved sales (user, 2026-09-28: no manual sync; the backend's
+nightly data-lake sync, sync/run_all.py -> calendar_reindex_sync, pushes them). Also shows the department-level
+month-wise snapshots Sales Plan's actuals come from (actuals_manager).
+
 No longer parses its own parquet files from a manually-configured server
 folder - that duplicated work the Calendar Engine app already does against
 the same network source, and the two could silently drift apart (e.g. one
@@ -30,7 +33,7 @@ from db.models.calendar import SalesSnapshot
 router = APIRouter()
 
 SOURCE_TYPES = ("mw", "dw")
-KINDS = ("actual", "trend_shifted")
+KINDS = ("actual", "trend_shifted", "actual_dept", "trend_shifted_dept")
 
 
 def _load_snapshot(source_type: str, kind: str):
@@ -58,32 +61,35 @@ def _summary(snap):
 
 
 def _all_summaries():
-    return {
+    out = {
         source: {
             "actual": _summary(_load_snapshot(source, "actual")),
             "trendShifted": _summary(_load_snapshot(source, "trend_shifted")),
         }
         for source in SOURCE_TYPES
     }
+    out["mw_dept"] = {"actual": _summary(_load_snapshot("mw", "actual_dept")),
+                      "trendShifted": _summary(_load_snapshot("mw", "trend_shifted_dept"))}
+    return out
+
+
+def _last_sync():
+    """The latest nightly calendar_reindex run (sync.sync_runs) - what refreshed these snapshots."""
+    from sqlalchemy import text
+    session = SessionLocal()
+    try:
+        r = session.execute(text(
+            "SELECT status, started_at, completed_at, error_message FROM sync.sync_runs "
+            "WHERE source_key = 'calendar_reindex' ORDER BY sync_run_id DESC LIMIT 1")).first()
+        return None if r is None else {"status": r[0], "startedAt": r[1].isoformat() if r[1] else None,
+                                       "completedAt": r[2].isoformat() if r[2] else None, "error": r[3]}
+    finally:
+        session.close()
 
 
 @router.get("/status")
 def sync_status():
-    return _all_summaries()
-
-
-@router.post("/sync")
-def sync_sales():
-    """Re-reads every snapshot from the DB - nothing to compute here. The
-    actual computation happens in the Calendarisation app's Run Reindex."""
-    summaries = _all_summaries()
-    if not any(s["actual"]["synced"] or s["trendShifted"]["synced"] for s in summaries.values()):
-        raise HTTPException(
-            409,
-            "No calendarised sales yet - run Reindex in the Calendarisation app's "
-            "Calendarised Sales tab first, then sync here.",
-        )
-    return {"ok": True, **summaries}
+    return {**_all_summaries(), "lastSync": _last_sync()}
 
 
 @router.get("/data")

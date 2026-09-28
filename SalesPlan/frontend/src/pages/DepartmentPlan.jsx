@@ -102,6 +102,20 @@ export default function DepartmentPlan() {
     finally { setAopSyncing(false) }
   }
 
+  // Department active/inactive status from the LIVE Buyer's Input Sheet (user, 2026-09-26: "it should have been
+  // sync from buyer's input"). KIDS / LADIES / MENS only; GM / RETAIL aren't in BIS and stay as they are.
+  const [buyerSyncing, setBuyerSyncing] = useState(false)
+  const syncFromBuyer = async () => {
+    setBuyerSyncing(true); setAopSyncResult(null)
+    try {
+      const r = await fetch('/api/planning/department-plan/sync-from-buyer', { method: 'POST' })
+      const d = await r.json()
+      setAopSyncResult({ ok: r.ok, msg: r.ok ? d.message : (d.detail || 'Error') })
+      if (r.ok) await fetchConfig()
+    } catch (e) { setAopSyncResult({ ok: false, msg: String(e) }) }
+    finally { setBuyerSyncing(false) }
+  }
+
   const calculateFromAop = async () => {
     if (!aopDivisionAops) return
     setCalcRunning(true)
@@ -176,19 +190,29 @@ export default function DepartmentPlan() {
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-            {/* Sync from AOP Forecaster — real pipeline link, not just navigation */}
+            {/* Sync from Buyer's Input — active / inactive departments from the live BIS */}
             <button
-              onClick={syncFromAop}
-              disabled={aopSyncing}
+              onClick={syncFromBuyer}
+              disabled={buyerSyncing}
+              title="Set KIDS / LADIES / MENS departments active or inactive from the live Buyer's Input Sheet (GM / RETAIL unchanged)"
               style={{
                 padding: '8px 18px', borderRadius: 8, border: `1.5px solid #1488cc`,
-                background: aopSyncing ? 'transparent' : '#1488cc12',
-                color: '#1488cc', fontWeight: 700, fontSize: 12, cursor: aopSyncing ? 'default' : 'pointer',
+                background: buyerSyncing ? 'transparent' : '#1488cc12',
+                color: '#1488cc', fontWeight: 700, fontSize: 12, cursor: buyerSyncing ? 'default' : 'pointer',
                 display: 'flex', alignItems: 'center', gap: 7,
               }}
             >
-              <span style={aopSyncing ? { animation: 'spin 0.9s linear infinite', display: 'inline-block' } : {}}>↺</span>
-              {aopSyncing ? 'Syncing…' : 'Sync from AOP Forecaster'}
+              <span style={buyerSyncing ? { animation: 'spin 0.9s linear infinite', display: 'inline-block' } : {}}>↺</span>
+              {buyerSyncing ? 'Syncing…' : "Sync from Buyer's Input"}
+            </button>
+            <button
+              onClick={syncFromAop}
+              disabled={aopSyncing}
+              title="Load the AOP division targets used by Calculate Department Plan"
+              style={{ padding: 0, border: 'none', background: 'none', color: theme.textSecondary, fontSize: 11,
+                       textDecoration: 'underline', cursor: aopSyncing ? 'default' : 'pointer' }}
+            >
+              {aopSyncing ? 'Loading AOP targets…' : 'Load AOP division targets'}
             </button>
             {aopSyncResult && (
               <div style={{

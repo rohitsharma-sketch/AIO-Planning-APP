@@ -140,11 +140,17 @@ function DataTable({ data }) {
 }
 
 const SOURCE_LABELS = { mw: 'Month-wise', dw: 'Day-wise' }
+// status key -> [label, data source, actual kind, reindexed kind]. The department-wise pair is what Sales Plan's
+// actuals are read from (actuals_manager, 2026-09-28): reindexed = the plan base, actual = the same sales on their own dates.
+const SECTIONS = [
+  ['mw', 'Month-wise', 'mw', 'actual', 'trend_shifted'],
+  ['dw', 'Day-wise', 'dw', 'actual', 'trend_shifted'],
+  ['mw_dept', "Department-wise · Sales Plan's actuals", 'mw', 'actual_dept', 'trend_shifted_dept'],
+]
+const KIND_LABEL = { actual: 'Actual Sales', trend_shifted: 'Trend Shifted Sales', actual_dept: 'Actual Sales', trend_shifted_dept: 'Reindexed Sales (plan base)' }
 
 export default function SyncEngine() {
   const [status,    setStatus]    = useState(null)
-  const [syncing,   setSyncing]   = useState(false)
-  const [syncErr,   setSyncErr]   = useState(null)
   const [table,     setTable]     = useState(null) // null | { source, kind }
   const [tableData, setTableData] = useState(null)
   const [tableLoading, setTableLoading] = useState(false)
@@ -158,17 +164,6 @@ export default function SyncEngine() {
 
   useEffect(() => { fetchStatus() }, [fetchStatus])
 
-  const handleSync = async () => {
-    setSyncing(true); setSyncErr(null)
-    try {
-      const r = await fetch(`${API}/sync`, { method: 'POST' })
-      if (!r.ok) { const e = await r.json(); setSyncErr(e.detail || 'Sync failed') }
-      await fetchStatus()
-      if (table) loadData(table.source, table.kind)
-    } catch { setSyncErr('Sync failed') }
-    setSyncing(false)
-  }
-
   const loadData = async (source, kind) => {
     setTable({ source, kind }); setTableLoading(true)
     try {
@@ -178,9 +173,11 @@ export default function SyncEngine() {
     setTableLoading(false)
   }
 
-  const anySynced = Object.keys(SOURCE_LABELS).some(
-    src => status?.[src]?.actual?.synced || status?.[src]?.trendShifted?.synced
+  const anySynced = SECTIONS.some(
+    ([key]) => status?.[key]?.actual?.synced || status?.[key]?.trendShifted?.synced
   )
+  const last = status?.lastSync
+  const syncing = false
 
   return (
     <div style={{ padding: '28px 36px', maxWidth: 1000, margin: '0 auto' }}>
@@ -191,50 +188,36 @@ export default function SyncEngine() {
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: theme.textPrimary }}>Sales Sync</h1>
           <p style={{ margin: '4px 0 0', fontSize: 13, color: theme.textMuted }}>
-            Reads the Calendarisation app's own sales link and Run Reindex output — no separate
-            server-folder setup needed here, and both stay in step with the same database.
+            Pushed automatically: the nightly data-lake sync (05:00) re-runs the Calendarisation app's reindex and
+            saves these tables — nothing to import or sync here. Sales Plan's actuals are the department-wise tables below.
           </p>
         </div>
-
-        <button
-          onClick={handleSync}
-          disabled={syncing}
-          style={{
-            padding: '10px 26px', borderRadius: 8, border: 'none', fontSize: 14,
-            fontWeight: 700, cursor: syncing ? 'default' : 'pointer',
-            background: syncing ? theme.border : 'var(--st-btn,#A8CBB7)',
-            color: 'var(--st-btn-text,#1F4D3A)', display: 'flex', alignItems: 'center', gap: 8,
-          }}
-        >
-          <span style={syncing ? { animation: 'spin 0.8s linear infinite', display: 'inline-block' } : {}}>↺</span>
-          {syncing ? 'Syncing…' : 'Sync Sales'}
-        </button>
+        {last && (
+          <div style={{ fontSize: 12, color: theme.textMuted, textAlign: 'right', whiteSpace: 'nowrap' }}>
+            Last sync <strong style={{ color: last.status === 'success' ? '#10B981' : '#B45309' }}>{last.status}</strong>
+            <br />{last.startedAt ? new Date(last.startedAt).toLocaleString() : '—'}
+          </div>
+        )}
       </div>
 
-      {syncErr && (
-        <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 8, background: '#EF444411', color: '#EF4444', fontSize: 13 }}>
-          {syncErr}
-        </div>
-      )}
-
       {/* ── Status cards, grouped by source ── */}
-      {Object.entries(SOURCE_LABELS).map(([source, label]) => (
-        <div key={source} style={{ marginBottom: 20 }}>
+      {SECTIONS.map(([key, label, source, actualKind, shiftedKind]) => (
+        <div key={key} style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.6, marginBottom: 8 }}>
             {label.toUpperCase()}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <StatusCard
-              title="Actual Sales" subtitle="Real sales on their own date, from the same sales link Calendar Engine reads"
-              summary={status?.[source]?.actual} syncing={syncing}
-              onView={() => loadData(source, 'actual')}
-              viewDisabled={tableLoading && table?.source === source && table?.kind === 'actual'}
+              title={KIND_LABEL[actualKind]} subtitle="Real sales on their own date, from the same sales link Calendar Engine reads"
+              summary={status?.[key]?.actual} syncing={syncing}
+              onView={() => loadData(source, actualKind)}
+              viewDisabled={tableLoading && table?.source === source && table?.kind === actualKind}
             />
             <StatusCard
-              title="Trend Shifted Sales" subtitle="Same sales, moved onto the calendar-aligned future date"
-              summary={status?.[source]?.trendShifted} syncing={syncing}
-              onView={() => loadData(source, 'trend_shifted')}
-              viewDisabled={tableLoading && table?.source === source && table?.kind === 'trend_shifted'}
+              title={KIND_LABEL[shiftedKind]} subtitle="Same sales, moved onto the calendar-aligned future date"
+              summary={status?.[key]?.trendShifted} syncing={syncing}
+              onView={() => loadData(source, shiftedKind)}
+              viewDisabled={tableLoading && table?.source === source && table?.kind === shiftedKind}
             />
           </div>
         </div>
@@ -243,9 +226,8 @@ export default function SyncEngine() {
       {!anySynced && (
         <Card style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 13, color: theme.textMuted }}>
-            No calendarised sales yet — run <strong style={{ color: theme.textPrimary }}>Reindex</strong> in the
-            Calendarisation app's <strong style={{ color: theme.textPrimary }}>Calendarised Sales</strong> tab first,
-            then click Sync Sales here.
+            No calendarised sales yet — they appear after the next nightly data-lake sync (or a Run Reindex in the
+            Calendarisation app's <strong style={{ color: theme.textPrimary }}>Calendarised Sales</strong> tab).
           </div>
         </Card>
       )}
@@ -254,7 +236,7 @@ export default function SyncEngine() {
       {(tableData || tableLoading) && (
         <Card>
           <div style={{ fontWeight: 700, fontSize: 14, color: theme.textPrimary, marginBottom: 16 }}>
-            Data Preview — {SOURCE_LABELS[table?.source]} {table?.kind === 'actual' ? 'Actual Sales' : 'Trend Shifted Sales'}
+            Data Preview — {SOURCE_LABELS[table?.source]} {KIND_LABEL[table?.kind]}{table?.kind?.endsWith('_dept') ? ' (by department)' : ''}
           </div>
           {tableLoading
             ? <div style={{ textAlign: 'center', padding: 40, color: theme.textMuted, fontSize: 13 }}>Loading…</div>

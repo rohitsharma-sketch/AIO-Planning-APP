@@ -248,7 +248,8 @@ class SalesSnapshot(Base):
     __tablename__ = "sales_snapshots"
     __table_args__ = (
         CheckConstraint("source_type IN ('mw', 'dw')", name="ck_sales_snapshots_source_type"),
-        CheckConstraint("kind IN ('actual', 'trend_shifted')", name="ck_sales_snapshots_kind"),
+        # *_dept = the department-level month-wise snapshot Sales Plan reads (migration d9f3b2a7c1e5, 2026-09-28)
+        CheckConstraint("kind IN ('actual', 'trend_shifted', 'actual_dept', 'trend_shifted_dept')", name="ck_sales_snapshots_kind"),
         {"schema": "calendar"},
     )
 

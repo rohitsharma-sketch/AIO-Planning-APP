@@ -982,9 +982,13 @@ def _save_sales_snapshot(session, source_type, kind, grain, metric, key_fields, 
 # raw "DIVISION". Listing only "DIVISION" silently dropped division from every
 # persisted month-wise snapshot.
 _PERSIST_DIMS = {"division", "DIVISION", "ATTRIBUTE1"}
+# A department-level month-wise snapshot is saved on its own (kinds "actual_dept" / "trend_shifted_dept", from a
+# reindex run with payload snapshotSuffix="_dept") for Sales Plan's store x department actuals (user, 2026-09-28:
+# Sales Plan's actual and reindexed sales come from the Calendar output, not a manual import).
+_PERSIST_DIMS_BY_SUFFIX = {"": _PERSIST_DIMS, "_dept": {"division", "DEPARTMENT"}}
 
 
-def _collapse_for_persistence(key_fields, rows):
+def _collapse_for_persistence(key_fields, rows, dims=_PERSIST_DIMS):
     """Re-aggregate `rows` down to only the dims _PERSIST_DIMS actually uses,
     summing `value` across whatever's dropped. Confirmed necessary, not just
     an optimisation: a real day-wise reindex at full history (store x DIVISION
@@ -996,7 +1000,7 @@ def _collapse_for_persistence(key_fields, rows):
     keeps this bounded (store x division x date, optionally x attribute) -
     the same order of magnitude as month-wise's own row count, not two orders
     larger."""
-    keep = [kf for kf in key_fields if kf in _PERSIST_DIMS or kf == "store"]
+    keep = [kf for kf in key_fields if kf in dims or kf == "store"]
     if keep == key_fields:
         return key_fields, rows  # nothing to drop - already at (or under) the kept set
     totals = {}
@@ -1014,7 +1018,7 @@ def _collapse_for_persistence(key_fields, rows):
     return keep, collapsed
 
 
-def _save_calendarised_sales_snapshot(result):
+def _save_calendarised_sales_snapshot(result, suffix=""):
     """Persist a successful reindex result - both the 'actual' (real sales on
     their own reference date) and 'trend_shifted' (calendar-shifted) sides -
     to Postgres, one row each per source_type, full replace on every run. So
@@ -1030,11 +1034,12 @@ def _save_calendarised_sales_snapshot(result):
         session = SessionLocal()
         try:
             now = datetime.datetime.now(datetime.timezone.utc)
-            ts_keep, ts_rows = _collapse_for_persistence(result["keyFields"], result["rows"])
-            actual_keep, actual_rows = _collapse_for_persistence(result["keyFields"], result["actualRows"])
-            _save_sales_snapshot(session, result["source"], "trend_shifted", result["grain"], result["metric"], ts_keep,
+            dims = _PERSIST_DIMS_BY_SUFFIX[suffix]
+            ts_keep, ts_rows = _collapse_for_persistence(result["keyFields"], result["rows"], dims)
+            actual_keep, actual_rows = _collapse_for_persistence(result["keyFields"], result["actualRows"], dims)
+            _save_sales_snapshot(session, result["source"], "trend_shifted" + suffix, result["grain"], result["metric"], ts_keep,
                                   result["columns"], ts_rows, result["rowsRead"], len(ts_rows), now)
-            _save_sales_snapshot(session, result["source"], "actual", result["grain"], result["metric"], actual_keep,
+            _save_sales_snapshot(session, result["source"], "actual" + suffix, result["grain"], result["metric"], actual_keep,
                                   result["actualColumns"], actual_rows, result["rowsRead"], len(actual_rows), now)
             session.commit()
         finally:
@@ -1315,7 +1320,9 @@ def run_reindex(payload, progress=None):
         if computed_months and fresh_rows_read == 0:
             result["sourceUnreachable"] = True
         elif result.get("ok"):
-            save_error = _save_calendarised_sales_snapshot(result)
+            suffix = payload.get("snapshotSuffix") or ""
+            save_error = (_save_calendarised_sales_snapshot(result, suffix) if suffix in _PERSIST_DIMS_BY_SUFFIX
+                          else f"unknown snapshotSuffix {suffix!r}")
             if save_error:
                 result["snapshotSaveError"] = save_error
         return result

@@ -1,45 +1,34 @@
 """
 Actuals Manager
 ================
-Single source of truth for imported LY dept-level actual sales.
+LY store x department sales for Sales Plan, read from the Calendar app's own output (user, 2026-09-28:
+"remove sales sync ... replace the manual import of sales ... with the output from calendar sales - for actual
+and reindexed sales"). The nightly calendar_reindex_sync saves a department-level month-wise snapshot to
+calendar.sales_snapshots: kind 'trend_shifted_dept' = REINDEXED (last year's sales moved onto the plan calendar)
+and 'actual_dept' = the same sales on their own dates. Nothing is imported or locked here any more - a LY month is
+available once it has closed and is in the snapshot (the old actuals_store.json / actuals_lock.json / "Actual
+Sales" Excel import is gone).
 
-Lock precedent
---------------
-Once actuals for a LY month are imported they are LOCKED.
-    - No UI can re-import different values for the same LY month.
-    - No UI exposes an unlock button.
-    - The only override path is: admin-unlock endpoint called explicitly by Claude,
-      with header  X-Admin-Override: force  (not documented in any frontend).
-    - Every unlock is journaled in actuals_lock.json under "unlock_log".
-
-File: backend/actuals_lock.json
-{
-  "locked_ly_months": {
-    "Mar'26": {
-      "locked": true,
-      "imported_at": "...",
-      "source_file": "...",
-      "record_count": 123
-    }
-  },
-  "unlock_log": []
-}
+- load_actuals()            -> REINDEXED, the plan base (user choice): {store: {plan_div: {dept: {LY label: Rs L}}}},
+                               keyed by the LY label of the TY month it lands in (Apr'27 -> "Apr'26"), so every
+                               engine keeps its LY-month lookup.
+- load_actuals("actual")    -> the same stores / departments on their own LY dates.
+- load_store_div_actuals()  -> store x plan division totals of the reindexed sales (non-SSG stores' base).
 """
 
+import calendar as _cal
+import datetime as _dt
 import json, os, re, sys
-from datetime import datetime
-import pandas as pd
 
 sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Tentative AOP Forecaster"))
 
-DEPT_CUSTOM_PATH = os.path.join(os.path.dirname(__file__), "engines", "department_custom.json")
-
-_BASE        = os.path.dirname(__file__)
-LOCK_PATH    = os.path.join(_BASE, "actuals_lock.json")
-ACTUALS_PATH = os.path.join(_BASE, "actuals_store.json")
-
-# Actuals folder beside the backend
-ACTUALS_DIR  = os.path.join(_BASE, "..", "Actual Sales")
+LAKH = 1e5   # snapshots hold SL_V in rupees
+KINDS = {"reindexed": "trend_shifted_dept", "actual": "actual_dept"}
+# LY months of the plan year Mar'27..Mar'28 (same list as dept_sales_engine.LY_MONTHS) - older closed months in the
+# snapshot (e.g. Jan'26 -> Jan'27) fall outside the plan and are not offered.
+PLAN_LY_MONTHS = ["Mar'26", "Apr'26", "May'26", "Jun'26", "Jul'26", "Aug'26", "Sep'26", "Oct'26", "Nov'26",
+                  "Dec'26", "Jan'27", "Feb'27", "Mar'27"]
 
 # Divisions to include in plan (OTHERS excluded)
 PLAN_DIVISIONS = {"GM", "KIDS", "LADIES", "MENS", "RETAIL"}
@@ -63,236 +52,127 @@ DIVISION_COL_TO_PLAN = {
     # DIVISION values to exclude: DND, NON-TRADING, FIXED ASSETS, CONSIGNMENT, CDIT
 }
 
-# Store tags to exclude
+# Store tags to exclude (kept for callers that still import it)
 EXCLUDE_TAGS = {"DC", "CLOSED"}
 
-# Month normalisation map (handles "June" → "Jun", "January" → "Jan" etc.)
-_MONTH_ABBR = {
-    "jan": "Jan", "feb": "Feb", "mar": "Mar", "apr": "Apr",
-    "may": "May", "jun": "Jun", "june": "Jun",
-    "jul": "Jul", "aug": "Aug", "sep": "Sep",
-    "oct": "Oct", "nov": "Nov", "dec": "Dec",
-}
+
+def _plan_div(raw):
+    return DIVISION_COL_TO_PLAN.get(" ".join(str(raw or "").upper().split())) or DIVISION_COL_TO_PLAN.get(str(raw or "").upper())
 
 
-def _norm_month_col(col_name: str) -> str | None:
-    """
-    Converts 'Apr\'26 Actual Sales' → 'Apr\'26'
-    Converts 'June\'26 Actual Sales' → 'Jun\'26'
-    Returns None if not a recognisable month column.
-    """
-    s = str(col_name).strip()
-    # Strip suffix variations
-    s = re.sub(r"\s*Actual\s*Sales?.*$", "", s, flags=re.IGNORECASE).strip()
-    # Match Mon'YY
-    m = re.match(r"([A-Za-z]+)'(\d{2})$", s)
-    if not m:
-        return None
-    mon_raw = m.group(1).lower()
-    yr      = m.group(2)
-    abbr    = _MONTH_ABBR.get(mon_raw)
-    if not abbr:
-        return None
-    return f"{abbr}'{yr}"
+def _ly_label(col, kind):
+    """'2027-04' (reindexed: the TY month) or '2026-04' (actual: the LY month) -> "Apr'26"."""
+    y, m = int(col[:4]), int(col[5:7])
+    if kind == "reindexed":
+        y -= 1
+    return f"{_cal.month_abbr[m]}'{str(y)[2:]}", (y, m)
 
 
-def load_lock() -> dict:
-    if os.path.exists(LOCK_PATH):
-        with open(LOCK_PATH) as f:
-            return json.load(f)
-    return {"locked_ly_months": {}, "unlock_log": []}
+def _closed(y, m, today=None):
+    """A LY month is usable once it has fully elapsed (same rule as the Calendar app's month cache)."""
+    today = today or _dt.date.today()
+    return (y, m) < (today.year, today.month)
 
 
-def save_lock(data: dict):
-    with open(LOCK_PATH, "w") as f:
-        json.dump(data, f, indent=2)
+_cache = {}
 
 
-def load_actuals() -> dict:
-    """Returns {store: {division: {dept: {ly_month: value}}}}"""
-    if os.path.exists(ACTUALS_PATH):
-        with open(ACTUALS_PATH) as f:
-            return json.load(f)
-    return {}
+def _snapshot(kind):
+    """(computed_at, rows) of a department-level snapshot, re-read only when the nightly sync replaced it."""
+    from sqlalchemy import text
+    from db.base import SessionLocal
+    with SessionLocal() as s:
+        at = s.execute(text("SELECT computed_at FROM calendar.sales_snapshots WHERE source_type = 'mw' AND kind = :k"),
+                       {"k": KINDS[kind]}).scalar()
+        if at is None:
+            return None, []
+        if _cache.get(kind, (None,))[0] != at:
+            rows = s.execute(text("SELECT rows FROM calendar.sales_snapshots WHERE source_type = 'mw' AND kind = :k"),
+                             {"k": KINDS[kind]}).scalar() or []
+            _cache[kind] = (at, rows)
+    return _cache[kind]
 
 
-def save_actuals(data: dict):
-    with open(ACTUALS_PATH, "w") as f:
-        json.dump(data, f, indent=2)
-
-
-def locked_ly_months() -> list[str]:
-    return list(load_lock()["locked_ly_months"].keys())
-
-
-def import_actuals_file(filepath: str, source_label: str = "") -> dict:
-    """
-    Parse an actuals Excel/CSV file and store.
-    Only processes months NOT already locked.
-    Returns summary dict.
-    """
-    lock = load_lock()
-    already_locked = set(lock["locked_ly_months"].keys())
-
-    # Read file
-    if filepath.endswith(".csv"):
-        df = pd.read_csv(filepath)
-    else:
-        df = pd.read_excel(filepath)
-
-    df.columns = [str(c).strip() for c in df.columns]
-
-    # Detect month columns
-    month_map = {}  # original_col → normalised label
-    for col in df.columns:
-        label = _norm_month_col(col)
-        if label:
-            month_map[col] = label
-
-    if not month_map:
-        return {"ok": False, "error": "No recognisable month columns found (expected format: Apr'27 Actual Sales)"}
-
-    # Find required columns
-    store_col    = next((c for c in df.columns if c.upper() in ("STORE_NAME", "STORE NAME", "STORE")), df.columns[0])
-    division_col = next((c for c in df.columns if c.upper() == "DIVISION"), None)
-    dept_col     = next((c for c in df.columns if c.upper() == "DEPARTMENT"), None)
-    tag_col      = next((c for c in df.columns if c.upper() in ("ST TAG", "TAG", "STORE TAG")), None)
-
-    if division_col is None:
-        return {"ok": False, "error": "Could not find DIVISION column in file"}
-    if dept_col is None:
-        return {"ok": False, "error": "Could not find DEPARTMENT column in file"}
-
-    # Filter rows
-    df = df[df[store_col].notna()].copy()
-    if tag_col:
-        df = df[~df[tag_col].astype(str).str.strip().isin(EXCLUDE_TAGS)]
-
-    # Map DIVISION column → planning division; drop rows not in mapping
-    df["_plan_div"] = df[division_col].astype(str).str.strip().map(DIVISION_COL_TO_PLAN)
-    df = df[df["_plan_div"].notna()]
-
-    # Identify new months (skip already locked)
-    new_months = {col: lbl for col, lbl in month_map.items() if lbl not in already_locked}
-    skipped    = {lbl for lbl in month_map.values() if lbl in already_locked}
-
-    if not new_months:
-        return {
-            "ok": False,
-            "error": f"All months in file are already locked: {sorted(skipped)}",
-            "locked_months": sorted(already_locked),
-        }
-
-    # Load existing actuals
-    actuals = load_actuals()
-
-    records = 0
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    for _, row in df.iterrows():
-        store    = str(row[store_col]).strip().upper()
-        plan_div = str(row["_plan_div"]).strip().upper()
-        dept     = str(row[dept_col]).strip().upper()
-
-        if not store or not plan_div or not dept:
+def load_actuals(kind: str = "reindexed") -> dict:
+    """Returns {store: {division: {dept: {ly_month: Rs lakhs}}}} for closed LY months (see module docstring)."""
+    _, rows = _snapshot(kind)
+    out = {}
+    for r in rows:
+        div = _plan_div(r.get("division"))
+        dept = str(r.get("DEPARTMENT") or "").strip().upper()
+        if not div or not dept:
             continue
+        label, (y, m) = _ly_label(r["col"], kind)
+        if not _closed(y, m):
+            continue
+        d = out.setdefault(str(r["store"]).strip().upper(), {}).setdefault(div, {}).setdefault(dept, {})
+        d[label] = d.get(label, 0.0) + float(r["value"]) / LAKH
+    at = _cache.get(kind, (None,))[0]
+    if kind == "reindexed" and at is not None and _registered.get("at") != at:
+        _sync_depts_to_master(out)          # once per new snapshot, as the old Excel import did
+        _registered["at"] = at
+    return out
 
-        actuals.setdefault(store, {}).setdefault(plan_div, {}).setdefault(dept, {})
 
-        for orig_col, ly_label in new_months.items():
-            val = row.get(orig_col, 0)
-            try:
-                v = float(val) if pd.notna(val) else 0.0
-            except (ValueError, TypeError):
-                v = 0.0
-            # Aggregate — multiple rows may share same store/plan_div/dept (e.g. sub-depts)
-            actuals[store][plan_div][dept][ly_label] = actuals[store][plan_div][dept].get(ly_label, 0.0) + v
-
-        records += 1
-
-    save_actuals(actuals)
-    _sync_depts_to_master(actuals)
-
-    # Lock the new months
-    for lbl in new_months.values():
-        lock["locked_ly_months"][lbl] = {
-            "locked": True,
-            "imported_at": now_str,
-            "source_file": source_label or os.path.basename(filepath),
-            "record_count": records,
-        }
-    save_lock(lock)
-
-    return {
-        "ok": True,
-        "months_imported": sorted(new_months.values()),
-        "months_skipped_locked": sorted(skipped),
-        "records_processed": records,
-        "imported_at": now_str,
-    }
+_registered = {}
 
 
 def _sync_depts_to_master(actuals: dict):
     """
-    Auto-registers any department seen in actuals that isn't already in
-    the custom dept JSON (department_custom.json).
-    Attribute defaults to REGULAR — user can adjust in Master Setup.
+    Auto-registers any department seen in the Calendar sales that isn't already in the master or the custom dept
+    JSON (department_custom.json), so its sales aren't silently left out of the plan (26-28 Sep 2026: e.g.
+    MSE_HSR PYJAMA / MSE_TXTL PYJAMA, Rs 36.5 Cr). Attribute defaults to REGULAR - adjust in Master Setup;
+    whether it is ACTIVE is set by "Sync from Buyer's Input".
     """
-    # Build set of known depts from master raw + existing custom
     from engines.department_plan import _MASTER_RAW, _load_custom, _save_custom
-    known = set()
-    for div, dept, _ in _MASTER_RAW:
-        known.add((div, dept))
+    known = {(div, dept) for div, dept, _ in _MASTER_RAW}
     custom = _load_custom()
-    for c in custom:
-        known.add((c["division"], c["name"]))
-
+    known |= {(c["division"], c["name"]) for c in custom}
     new_entries = []
     for store_data in actuals.values():
         for div, div_data in store_data.items():
             if div not in PLAN_DIVISIONS:
                 continue
-            for dept in div_data.keys():
+            for dept in div_data:
                 if (div, dept) not in known:
                     known.add((div, dept))
                     new_entries.append({"division": div, "name": dept, "attribute": "REGULAR"})
-
     if new_entries:
         custom.extend(new_entries)
         _save_custom(custom)
 
 
-def admin_unlock_month(ly_month: str, reason: str = "") -> dict:
-    """
-    ADMIN ONLY — removes lock for a LY month.
-    Called only by Claude via X-Admin-Override: force header.
-    Every call is journaled.
-    """
-    lock = load_lock()
-    if ly_month not in lock["locked_ly_months"]:
-        return {"ok": False, "error": f"{ly_month} is not locked"}
+def load_store_div_actuals(kind: str = "reindexed") -> dict:
+    """{store: {division: {ly_month: Rs lakhs}}} - the department snapshot summed per plan division."""
+    out = {}
+    for store, divs in load_actuals(kind).items():
+        for div, depts in divs.items():
+            acc = out.setdefault(store, {}).setdefault(div, {})
+            for months in depts.values():
+                for m, v in months.items():
+                    acc[m] = acc.get(m, 0.0) + v
+    return out
 
-    entry = lock["locked_ly_months"].pop(ly_month)
-    lock["unlock_log"].append({
-        "month": ly_month,
-        "original_import": entry,
-        "unlocked_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "reason": reason,
-    })
-    save_lock(lock)
 
-    # Remove from actuals store
-    actuals = load_actuals()
-    removed = 0
-    for store_data in actuals.values():
-        for div_data in store_data.values():
-            for dept_data in div_data.values():
-                if ly_month in dept_data:
-                    del dept_data[ly_month]
-                    removed += 1
-    save_actuals(actuals)
+def locked_ly_months() -> list[str]:
+    """LY months the plan can use: closed and present in the reindexed snapshot (name kept for callers)."""
+    _, rows = _snapshot("reindexed")
+    labels = {}
+    for r in rows:
+        label, ym = _ly_label(r["col"], "reindexed")
+        if _closed(*ym) and label in PLAN_LY_MONTHS:
+            labels[label] = ym
+    return sorted(labels, key=labels.get)
 
-    return {"ok": True, "month_unlocked": ly_month, "values_removed": removed}
+
+def actuals_source() -> dict:
+    """What the actuals status endpoint shows: where the numbers come from and when they were refreshed."""
+    info = {}
+    for kind in KINDS:
+        at, rows = _snapshot(kind)
+        info[kind] = {"snapshot": "calendar.sales_snapshots mw/" + KINDS[kind],
+                      "computed_at": at.isoformat() if at else None, "rows": len(rows)}
+    return info
 
 
 def ly_to_ty_month(ly_month: str) -> str | None:

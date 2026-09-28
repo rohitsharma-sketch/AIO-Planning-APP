@@ -438,6 +438,7 @@ def _get_growth_matrix(division: str, strict: bool = False) -> tuple[list, list]
     master = _build_master()
     depts  = master.get(division, [])
     saved  = _load_growth().get(division, {})
+    state  = _load_state().get(division, {})
 
     buyer_rows = _fetch_buyer_growth_live(division, strict)
     # {dept_name: {month_label: growth_pct}}
@@ -463,6 +464,8 @@ def _get_growth_matrix(division: str, strict: bool = False) -> tuple[list, list]
         result.append({
             "name": d["name"], "attribute": d["attribute"],
             "periods": periods, "buyer_periods": buyer_periods,
+            # Department Master status (user, 2026-09-26: an inactive department is greyed out in the matrix)
+            "active": state.get(d["name"], {}).get("active", True),
         })
     return result, sorted(buyer_months)
 
@@ -617,27 +620,21 @@ async def import_buyer_growth(
     }
 
 
-_MRP_PLAN_PATH = os.path.join(os.path.dirname(__file__), "mrp_plan.json")
-
 @router.post("/sync-from-buyer")
 def sync_from_buyer():
     """
-    Mark departments active/inactive based on which departments appear in
-    the Integrated Buyer's Input (mrp_plan.json).
-    Departments present in the MRP plan → active; all others → inactive.
-    Contribution % is preserved. Returns counts of activated / deactivated depts.
+    Mark KIDS / LADIES / MENS departments active or inactive from the LIVE Buyer's Input Sheet: a department BIS
+    plans (has growth in the live buyer_department_growth lever) → active; one it doesn't → inactive. GM / RETAIL
+    are untouched (BIS doesn't cover them). Contribution % is preserved. Returns counts of activated / deactivated.
+    2026-09-26: this read mrp_plan.json, a 24-Aug file (86/48/35 active vs 96/57/39 in live BIS).
     """
-    if not os.path.exists(_MRP_PLAN_PATH):
-        from fastapi import HTTPException
-        raise HTTPException(400, "Integrated Buyer's Input (MRP plan) not synced yet. Go to MRP Plan → Buyer's Input first.")
-
-    with open(_MRP_PLAN_PATH) as f:
-        mrp = json.load(f)
-
-    # Build set of (division, dept) pairs present in MRP plan
-    buyer_depts: dict[str, set] = {}
-    for div, depts in mrp.items():
-        buyer_depts[div] = set(depts.keys())
+    from fastapi import HTTPException
+    try:
+        buyer_depts = {div: {r["department"] for r in _fetch_buyer_growth_live(div, strict=True)} for div in BIS_DIVISIONS}
+    except RuntimeError as e:
+        raise HTTPException(502, str(e))
+    if not any(buyer_depts.values()):
+        raise HTTPException(400, "Buyer's Input has no departments yet - open BIS once so it syncs its plan.")
 
     state = _load_state()
     master = _build_master()
@@ -645,7 +642,9 @@ def sync_from_buyer():
     activated = deactivated = 0
 
     for div, dept_rows in master.items():
-        div_buyer = buyer_depts.get(div, set())
+        if div not in buyer_depts:
+            continue
+        div_buyer = buyer_depts[div]
         div_state = state.setdefault(div, {})
         for row in dept_rows:
             dept = row["name"]
@@ -665,7 +664,9 @@ def sync_from_buyer():
         "ok": True,
         "activated": activated,
         "deactivated": deactivated,
-        "message": f"Synced from Integrated Buyer's Input — {activated} activated, {deactivated} deactivated.",
+        "active": {div: len(buyer_depts[div]) for div in BIS_DIVISIONS},
+        "message": f"Synced from Buyer's Input — active KIDS {len(buyer_depts['KIDS'])}, LADIES {len(buyer_depts['LADIES'])}, "
+                   f"MENS {len(buyer_depts['MENS'])} ({activated} activated, {deactivated} deactivated; GM / RETAIL unchanged).",
     }
 
 
