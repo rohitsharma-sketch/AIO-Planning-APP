@@ -111,7 +111,7 @@ DATE_TO_MI = {v: k for k, v in AOP_LY_DATES.items()}
 LY_DEF = "ly" + "".join(f"{y}{m:02d}" for y, m in sorted(AOP_LY_DATES.values())) + "d"   # "d": sales now carry per-department LY (28 Sep 2026)
 # History growth (19V26, 25V26) = cohort tags x per-month trading (lfl_by_month).
 # In data_version so cached history in every browser re-syncs.
-HIST_DEF = "hlflcohort"
+HIST_DEF = "hlflcohort19"   # "19": 19V26 base moved to calendar 2019 (28 Sep 2026)
 
 # Full-year FY calendars: mi=0=Apr … mi=11=Mar
 _CAL_MONTHS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3]
@@ -124,7 +124,9 @@ def _fy_date_to_mi(fy_start_year: int) -> dict:
         result[(yr, cal_mo)] = mi
     return result
 
-FY19_DATE_TO_MI = _fy_date_to_mi(2019)   # Apr 2019 – Mar 2020
+# 19V26 base = calendar 2019 (user, 28 Sep 2026): March is Mar 2019, not the FY19 Mar 2020 lockdown month -
+# buyers judge history on the same months as the plan period.
+FY19_DATE_TO_MI = {(2019, m): mi for (y, m), mi in _fy_date_to_mi(2019).items()}   # Jan–Dec 2019
 FY25_DATE_TO_MI = _fy_date_to_mi(2024)   # Apr 2024 – Mar 2025
 FY26_DATE_TO_MI = _fy_date_to_mi(2025)   # Apr 2025 – Mar 2026
 
