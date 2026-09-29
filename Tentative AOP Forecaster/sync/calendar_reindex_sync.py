@@ -51,35 +51,41 @@ _CALENDAR_ENGINE_DIR = os.path.abspath(os.path.join(
 _WORKER = os.path.join(_CALENDAR_ENGINE_DIR, "reindex_worker.py")
 
 
+def calendar_inputs(session):
+    """(calendar, day_map, store_cluster, months) for a reindex - shared with calendar_reindex_dw_sync."""
+    # Same "latest locked calendar for this refYear" rule store_actuals_sync.py
+    # already uses - the two are meant to stay in sync with each other, both
+    # ultimately feeding AOP's same base_sales.LFL concept from two different
+    # angles (AOP's own replica vs Calendar Engine's authoritative reindex).
+    cal = session.execute(
+        select(Calendar).where(Calendar.ref_year == REF_YEAR).order_by(Calendar.saved_at.desc())
+    ).scalars().first()
+    if cal is None:
+        raise LookupError(f"No locked calendar with refYear {REF_YEAR} found — save one via the Calendarisation Suite (/calendar/)")
+
+    pairs = session.execute(
+        select(CalendarDayPair).where(CalendarDayPair.calendar_id == cal.calendar_id)
+    ).scalars().all()
+    day_map = {}
+    for p in pairs:
+        day_map.setdefault(p.cluster_name, []).append([p.ref_date.isoformat(), p.fut_date.isoformat()])
+    if not day_map:
+        raise RuntimeError(f'Calendar "{cal.name}" has no day-pairs saved — cannot reindex against it')
+
+    store_cluster = dict(session.execute(
+        select(StoreCalendarCluster.store_id, StoreCalendarCluster.cluster_name)
+    ).all())
+
+    # Whole reference year - reindex_monthwise silently contributes zero for
+    # any month the source data doesn't have yet, same as store_actuals_sync's
+    # own month-wise reader; no need to pre-check exactly what's available.
+    months = [f"{REF_YEAR}-{m:02d}" for m in range(1, 13)]
+    return cal, day_map, store_cluster, months
+
+
 def run():
     with sync_run(SOURCE_KEY) as (session, result):
-        # Same "latest locked calendar for this refYear" rule store_actuals_sync.py
-        # already uses - the two are meant to stay in sync with each other, both
-        # ultimately feeding AOP's same base_sales.LFL concept from two different
-        # angles (AOP's own replica vs Calendar Engine's authoritative reindex).
-        cal = session.execute(
-            select(Calendar).where(Calendar.ref_year == REF_YEAR).order_by(Calendar.saved_at.desc())
-        ).scalars().first()
-        if cal is None:
-            raise LookupError(f"No locked calendar with refYear {REF_YEAR} found — save one via the Calendarisation Suite (/calendar/)")
-
-        pairs = session.execute(
-            select(CalendarDayPair).where(CalendarDayPair.calendar_id == cal.calendar_id)
-        ).scalars().all()
-        day_map = {}
-        for p in pairs:
-            day_map.setdefault(p.cluster_name, []).append([p.ref_date.isoformat(), p.fut_date.isoformat()])
-        if not day_map:
-            raise RuntimeError(f'Calendar "{cal.name}" has no day-pairs saved — cannot reindex against it')
-
-        store_cluster = dict(session.execute(
-            select(StoreCalendarCluster.store_id, StoreCalendarCluster.cluster_name)
-        ).all())
-
-        # Whole reference year - reindex_monthwise silently contributes zero for
-        # any month the source data doesn't have yet, same as store_actuals_sync's
-        # own month-wise reader; no need to pre-check exactly what's available.
-        months = [f"{REF_YEAR}-{m:02d}" for m in range(1, 13)]
+        cal, day_map, store_cluster, months = calendar_inputs(session)
 
         # Two month-wise runs: the main snapshot (store x division x ATTRIBUTE1) and the department-level one
         # (kinds actual_dept / trend_shifted_dept) Sales Plan reads its store x department actual and reindexed
@@ -133,9 +139,9 @@ def _run_worker(payload):
         # Message matches sync/common.py's _is_network_offline -> status 'offline'.
         raise ConnectionError(
             f"0 rows read for every freshly computed month {rx_result.get('computedMonths')} - "
-            "data-lake network path was not found; existing MW snapshot left untouched")
+            f"data-lake network path was not found; existing {payload['source'].upper()} snapshot left untouched")
     if rx_result.get("snapshotSaveError"):
-        raise RuntimeError(f"Reindex ran but saving the MW snapshot failed: {rx_result['snapshotSaveError']}")
+        raise RuntimeError(f"Reindex ran but saving the {payload['source'].upper()} snapshot failed: {rx_result['snapshotSaveError']}")
     return rx_result
 
 

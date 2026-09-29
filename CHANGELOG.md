@@ -7,6 +7,16 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### Nightly sync now rebuilds the Calendar's day-wise sales too
+- **Asked (user):** "yes, add day-wise to the nightly sync".
+- **Before:** only the month-wise calendarised sales were rebuilt nightly. The day-wise ones changed only when someone ran Run Reindex → Day-wise by hand, and still sat on 26 Sep's data, which stopped at **27 Aug 2026**.
+- **New job `calendar_reindex_dw`** (`sync/calendar_reindex_dw_sync.py`) runs in `sync/run_all.py`, after `calendar_reindex` and `calendar_check`. So it's part of the 05:00 task and of Sync now / Sync into database.
+  - It uses the same calendar, stores and months as the month-wise job, and the Calendar's own day-wise output (store level, default metric).
+  - It has its own sync-status row, so a day-wise failure never marks the month-wise rebuild failed. The shared calendar loading moved into `calendar_reindex_sync.calendar_inputs()`.
+- **Bug fixed on the way (month cache):** a closed month is cached for good. August had been cached on 26 Sep from a day-wise file that ended on 27 Aug, because "closed" comes from the month-wise data. Every later day-wise run, nightly included, would have kept serving that 27-day August.
+  - Day-wise months are now cached, or reused, only when their data reaches the month's last day (`scans._covers_month_end`). The month-wise rule is unchanged.
+  - Tests: `RS Planning Platform/backend/tests/test_reindex_dw_cache.py` (3).
+
 ### Calendar: "Last synced" shows when the data was actually pulled
 - **Bug (user, screenshot):** the Link Sales Data Source table showed Month-wise last synced "25 Sept, 10:40 am", although the data had been re-synced since (29 Sep, 13:09).
 - **Cause:** the column showed when the list of linked months was last saved. Month-wise already had every month linked, so the daily syncs that rebuild its data never moved it.

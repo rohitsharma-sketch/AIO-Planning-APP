@@ -1074,6 +1074,16 @@ def _is_month_closed(ym, today=None):
     return today >= first_of_next
 
 
+def _covers_month_end(result, ym):
+    """Day-wise only: does this one month's reindex result reach the month's last day? 'Closed' comes from the
+    month-wise closed-through, but the day-wise export can end earlier - on 26 Sep 2026 Aug was cached from a
+    day-wise file that stopped at 27 Aug, and every later run kept serving that 27-day August. Such a result is
+    not cached, and a cached one like it is recomputed."""
+    y, m = (int(p) for p in ym.split("-"))
+    last = datetime.date(y + (m == 12), (m % 12) + 1, 1) - datetime.timedelta(days=1)
+    return last.isoformat() in ((result or {}).get("actualColumns") or [])
+
+
 def _calendar_fingerprint(day_map, store_cluster=None):
     """Hashes the day-map AND the store -> cluster map actually used for a
     reindex - not a calendar id - so editing either self-invalidates every
@@ -1265,8 +1275,10 @@ def run_reindex(payload, progress=None):
         computed_months = []
         for m in months:
             if m in cached_status:
-                results.append(_load_month_cache(source, m, calendar_fp, fields_key))
-                continue
+                cached = _load_month_cache(source, m, calendar_fp, fields_key)
+                if source != "dw" or _covers_month_end(cached, m):
+                    results.append(cached)
+                    continue
             computed_months.append(m)
 
         # Pre-warm the raw-data cache with EVERY uncached month in one pass,
@@ -1307,7 +1319,7 @@ def run_reindex(payload, progress=None):
             # permanent: every later run replayed the same empty result
             # forever, even once the source came back. Only a month that
             # actually read real rows is safe to treat as "done for good".
-            if _is_month_closed(m) and r.get("rowsRead", 0) > 0:
+            if _is_month_closed(m) and r.get("rowsRead", 0) > 0 and (source != "dw" or _covers_month_end(r, m)):
                 _save_month_cache(source, m, calendar_fp, fields_key, r)
 
         result = _merge_reindex_results(results)

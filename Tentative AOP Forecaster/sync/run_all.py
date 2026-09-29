@@ -42,6 +42,8 @@ DB_SYNC_JOBS = [
     # Read-only accuracy check of what calendar_reindex just saved (user, 2026-09-28): raw vs saved, independent
     # recompute, conservation, department tables, day maps, trading stores without a cluster. Fails loudly.
     ("calendar_check", "calendar_check"),
+    # Day-wise calendarised sales (user, 2026-09-30) - after the month-wise rebuild and its check, own source row.
+    ("calendar_reindex_dw", "calendar_reindex_dw"),
     # Not in app.py's list: Google "Holidays in India" -> festival_reference_dates,
     # then re-dates Festival Master + locked calendars' festival lists.
     ("festival_dates", "festival_dates"),
