@@ -290,7 +290,8 @@ export default function MrpReapportionment() {
   }, [groups, filter])
 
   const overrideCount = Object.keys(overrides).length
-  const canRun = salesInfo?.file_found && status?.mapping_file_found && !running
+  const salesOk = !!(salesInfo?.file_found && salesInfo.check?.pass)
+  const canRun = salesOk && status?.mapping_file_found && !running
   const lastRun = status?.last_run
 
   return (
@@ -350,19 +351,26 @@ export default function MrpReapportionment() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
               <div style={{
                 padding: '12px 14px', borderRadius: 8,
-                background: salesInfo?.file_found ? `${alpha(theme.accent,'0d')}` : `${alpha(theme.danger,'0d')}`,
-                border: `1px solid ${alpha(salesInfo?.file_found ? theme.accent : theme.danger,'33')}`,
+                background: salesOk ? `${alpha(theme.accent,'0d')}` : `${alpha(salesInfo ? theme.danger : theme.border,'0d')}`,
+                border: `1px solid ${alpha(salesOk ? theme.accent : salesInfo ? theme.danger : theme.border,'33')}`,
               }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: salesInfo?.file_found ? theme.accent : theme.danger, marginBottom: 3 }}>
-                  {salesInfo?.file_found ? '✓' : '✗'} Actual Sales
+                {/* LY actual sales come from the suite's sales engine, never an upload (user, 2026-09-29) */}
+                <div style={{ fontSize: 11, fontWeight: 700, color: salesOk ? theme.accent : salesInfo ? theme.danger : theme.textMuted, marginBottom: 3 }}>
+                  {!salesInfo ? '⟳' : salesOk ? '✓' : '✗'} LY Actual Sales · sales engine
                 </div>
-                {salesInfo?.file_found
-                  ? <>
-                      <div style={{ fontSize: 11, color: theme.textPrimary, ...mono }}>{salesInfo.filename}</div>
-                      <div style={{ fontSize: 10, color: theme.textMuted, marginTop: 2 }}>{salesInfo.size_kb} KB · {salesInfo.modified}</div>
-                    </>
-                  : <div style={{ fontSize: 11, color: theme.textMuted }}>Drop .xlsb/.xlsx in Historical Sales\</div>
-                }
+                {!salesInfo && <div style={{ fontSize: 11, color: theme.textMuted }}>Reading Mar–Jun 2026 from the data lake…</div>}
+                {salesInfo?.file_found && <>
+                  <div style={{ fontSize: 11, color: theme.textPrimary }}>
+                    {salesInfo.months?.join(' · ')} · ₹{(salesInfo.check?.total_lakh ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })} L
+                  </div>
+                  <div style={{ fontSize: 10, color: theme.textMuted, marginTop: 2 }}>
+                    {salesOk
+                      ? `Ties to the Calendar department sales: ${salesInfo.check.cells.toLocaleString('en-IN')} store × dept × month cells, max diff ${salesInfo.check.max_diff_lakh} L`
+                      : `Does NOT tie to the Calendar department sales (max diff ${salesInfo.check?.max_diff_lakh} L) — run blocked`}
+                  </div>
+                  <div style={{ fontSize: 10, color: theme.textMuted, marginTop: 2, wordBreak: 'break-all', ...mono }}>{salesInfo.filename} · {salesInfo.modified}</div>
+                </>}
+                {salesInfo && !salesInfo.file_found && <div style={{ fontSize: 11, color: theme.danger }}>{salesInfo.error}</div>}
               </div>
               <div style={{
                 padding: '12px 14px', borderRadius: 8,
@@ -563,10 +571,9 @@ export default function MrpReapportionment() {
 
           <div style={{ background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`, padding: '18px 20px' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.5, marginBottom: 12 }}>
-              DROP FILES HERE
+              DROP THE MRP STRUCTURE HERE
             </div>
             {[
-              { label: 'Actual Sales (.xlsb / .xlsx)', path: 'Sales Reapportionment\\Historical Sales\\' },
               { label: 'MRP Mapping Master (.xlsx)',   path: 'Sales Reapportionment\\MRP Mapping\\' },
             ].map(({ label, path }) => (
               <div key={label} style={{ marginBottom: 10 }}>
@@ -614,12 +621,6 @@ export default function MrpReapportionment() {
               </div>
             ))}
           </div>
-
-          <a href="/api/planning/mrp-reapportionment/template" style={{
-            display: 'block', padding: '9px 14px', borderRadius: 8,
-            background: 'transparent', border: `1px solid ${theme.border}`,
-            color: theme.textMuted, textDecoration: 'none', fontSize: 12, textAlign: 'center',
-          }}>↓ Download Sales Template</a>
         </div>
       </div>
     </div>

@@ -68,6 +68,7 @@ from engines.pww_deviation_engine import router as pww_deviation_router  # noqa:
 from engines.sor_deviation_engine import router as sor_deviation_router  # noqa: E402
 from engines.display_type_engine import router as display_type_router  # noqa: E402
 from engines.sync_engine import router as sync_router  # noqa: E402
+from engines.mrp_reapportionment_engine import router as mrp_reapp_router  # noqa: E402
 import store_master as _sm  # noqa: E402
 
 _dep = [Depends(require_login)]
@@ -82,6 +83,8 @@ app.include_router(pww_deviation_router,   prefix="/api/planning/deviation/pww",
 app.include_router(sor_deviation_router,   prefix="/api/planning/deviation/sor",   dependencies=_dep)
 app.include_router(display_type_router,    prefix="/api/planning/display-type",    dependencies=_dep)
 app.include_router(sync_router,            prefix="/api/planning/sync",            dependencies=_dep)
+# MRP Re-apportionment page (/mrp-plan/reapportionment) - its router was never mounted, so the page 404ed (2026-09-29)
+app.include_router(mrp_reapp_router,       prefix="/api/planning/mrp-reapportionment", dependencies=_dep)
 
 
 @app.get("/api/planning/store-master", dependencies=_dep)

@@ -11,17 +11,19 @@ Logic:
   - Sales at a valid MRP slab pass through unchanged.
   - Totals are preserved exactly per Store × Dept × Display × Attribute × Month.
 
-Source files (server-side):
-  Sales:       MRP Merging Engine/Sales Reapportionment/Historical Sales/  (.xlsb/.xlsx/.csv)
-  MRP Mapping: MRP Merging Engine/Sales Reapportionment/MRP Mapping/MRP Mapping Master.xlsx
+Sources:
+  Sales:       the suite's sales engine (user, 2026-09-29: "LY actual sales will be taken from the sales engine
+               which is embedded in all the other apps, only the new MRP structure will be given") - the Calendar
+               engine's month-wise data-lake file, read with its own reader, LY Mar-Jun 2026, and checked cell by
+               cell against the Calendar department snapshot (store x department x month) Sales Plan reads.
+  MRP Mapping: MRP Merging Engine/Sales Reapportionment/MRP Mapping/MRP Mapping Master.xlsx (the only upload)
 
 Endpoints:
   GET  /status           → file presence, last-run metadata
-  GET  /sales-status     → sales file info (name, size, modified)
+  GET  /sales-status     → sales engine file, LY months, tie to Calendar dept sales
   GET  /mrp-groups       → groups (Dept, Display, Attr) with valid + discontinued MRPs
   POST /run              → redistribution with user-provided cont_pcts
   GET  /download         → latest output Excel
-  GET  /template         → blank sales template
 """
 
 import os
@@ -46,7 +48,6 @@ router = APIRouter()
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 BASE         = r"C:\Users\A9820\Documents\CLaude - New Projects"
-SALES_DIR    = os.path.join(BASE, r"MRP Merging Engine\Sales Reapportionment\Historical Sales")
 MAPPING_DIR  = os.path.join(BASE, r"MRP Merging Engine\Sales Reapportionment\MRP Mapping")
 OUTPUT_DIR   = os.path.join(BASE, r"MRP Merging Engine\Sales Reapportionment\Output")
 LAST_RUN_JSON = os.path.join(OUTPUT_DIR, "_last_run.json")
@@ -74,12 +75,82 @@ def _norm_cols(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# LY months = the plan's LY (Mar-Jun 2026, as BIS / AOP); labels as the old sales template ("Mar 2026").
+LY_MONTHS = ["2026-03", "2026-04", "2026-05", "2026-06"]
+_SALES_CACHE: dict = {}   # {"key": (path, mtime), "df", "month_cols", "check"}
+
+
+def _calendar_scans():
+    """The Calendar engine's own data-lake reader (RS Planning Platform/backend/calendar_engine/scans.py)."""
+    import sys
+    plat = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "RS Planning Platform", "backend")
+    if plat not in sys.path:
+        sys.path.insert(0, plat)
+    from calendar_engine import scans
+    return scans
+
+
 def _find_sales_file() -> Optional[str]:
-    files = []
-    for pat in ("*.xlsb", "*.xlsx", "*.xls", "*.csv"):
-        files.extend(glob.glob(os.path.join(SALES_DIR, pat)))
-    files = [f for f in files if "template" not in os.path.basename(f).lower()]
-    return max(files, key=os.path.getmtime) if files else None
+    files = _calendar_scans()._latest_monthwise_files()
+    return files[0] if files else None
+
+
+def _engine_check(raw: pd.DataFrame) -> dict:
+    """Store x department x month of the MRP-level sales vs the Calendar 'actual_dept' snapshot (Rs in, lakh diff)."""
+    import collections
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "Tentative AOP Forecaster"))
+    from db.base import SessionLocal
+    from sqlalchemy import text
+    with SessionLocal() as db:
+        snap = db.execute(text("SELECT rows FROM calendar.sales_snapshots "
+                               "WHERE source_type='mw' AND kind='actual_dept'")).scalar() or []
+    want = set(LY_MONTHS)
+    cal = collections.defaultdict(float)
+    for r in snap:
+        if r["col"] in want:
+            cal[(str(r["store"]).strip().upper(), str(r["DEPARTMENT"]).strip().upper(), r["col"])] += float(r["value"])
+    ours = raw.groupby(["STORE", "DEPARTMENT", "ym"])["SL_V"].sum().to_dict()
+    keys = set(cal) | set(ours)
+    worst = max((abs(ours.get(k, 0.0) - cal.get(k, 0.0)) / 1e5 for k in keys), default=0.0)
+    return {"cells": len(keys), "max_diff_lakh": round(worst, 6), "pass": bool(keys) and worst <= 0.01,
+            "total_lakh": round(sum(ours.values()) / 1e5, 2), "calendar_total_lakh": round(sum(cal.values()) / 1e5, 2)}
+
+
+def _engine_sales() -> tuple:
+    """LY sales at Store x Division x Dept x MRP x Display x Attribute, one column per LY month, from the sales
+    engine's file. ponytail: one cached copy, re-read only when the data-lake file changes."""
+    scans = _calendar_scans()
+    path = _find_sales_file()
+    if not path:
+        raise ValueError(f"Sales engine file not reachable: {scans.PARQUET_DIR}")
+    key = (path, os.path.getmtime(path))
+    if _SALES_CACHE.get("key") != key:
+        lo, hi = scans._month_bounds(LY_MONTHS)
+        raw = scans._read_file_filtered(path, ["BILLMONTH", "DIVISION", "STORE_NAME", "SL_V", "DEPARTMENT", "MRP",
+                                               "DISPLAY_TYPE", "ATTRIBUTE1"], "BILLMONTH", lo, hi)
+        raw["ym"] = raw["BILLMONTH"].dt.strftime("%Y-%m")
+        raw = raw[raw["ym"].isin(LY_MONTHS)].rename(
+            columns={"STORE_NAME": "STORE", "DISPLAY_TYPE": "DISPLAY", "ATTRIBUTE1": "ATTRIBUTE"})
+        for c in ("STORE", "DIVISION", "DEPARTMENT", "DISPLAY", "ATTRIBUTE"):
+            raw[c] = raw[c].astype(str).str.strip().str.upper()
+        raw["MRP"] = pd.to_numeric(raw["MRP"], errors="coerce").fillna(0).round().astype(int)
+        raw["SL_V"] = pd.to_numeric(raw["SL_V"], errors="coerce").fillna(0.0)
+        check = _engine_check(raw)
+        label = {m: datetime.date(int(m[:4]), int(m[5:]), 1).strftime("%b %Y") for m in LY_MONTHS}
+        wide = raw.pivot_table(index=["STORE", "DIVISION", "DEPARTMENT", "MRP", "DISPLAY", "ATTRIBUTE"],
+                               columns="ym", values="SL_V", aggfunc="sum", fill_value=0.0).reset_index()
+        wide.columns.name = None
+        wide = wide.rename(columns=label)
+        month_cols = [label[m] for m in LY_MONTHS if label[m] in wide.columns]
+        _SALES_CACHE.update(key=key, df=wide, month_cols=month_cols, check=check)
+    return _SALES_CACHE["df"].copy(), list(_SALES_CACHE["month_cols"]), _SALES_CACHE["check"]
+
+
+def _mapped_sales(mapping_df: pd.DataFrame) -> tuple:
+    """Engine sales of the departments the MRP structure covers (the rest of the business is not re-apportioned)."""
+    df, month_cols, check = _engine_sales()
+    return df[df["DEPARTMENT"].isin(set(mapping_df["DEPARTMENT"]))].reset_index(drop=True), month_cols, check
 
 
 def _find_mapping_file() -> Optional[str]:
@@ -87,18 +158,6 @@ def _find_mapping_file() -> Optional[str]:
     for pat in ("*.xlsx", "*.xls"):
         files.extend(glob.glob(os.path.join(MAPPING_DIR, pat)))
     return max(files, key=os.path.getmtime) if files else None
-
-
-def _excel_serial_to_month(serial) -> Optional[str]:
-    """Convert Excel date serial to month name like 'Mar 2026'."""
-    try:
-        s = int(float(serial))
-        # Excel serial: days since 1900-01-00 (with 1900 leap year bug)
-        import datetime as _dt
-        d = _dt.date(1899, 12, 30) + _dt.timedelta(days=s)
-        return d.strftime("%b %Y")
-    except Exception:
-        return None
 
 
 def _load_mapping() -> pd.DataFrame:
@@ -141,109 +200,6 @@ def _load_mapping() -> pd.DataFrame:
     df["MRP_CURRENT"] = pd.to_numeric(df["MRP_CURRENT"], errors="coerce").fillna(0).astype(int)
     df["MRP_LISTED"]  = pd.to_numeric(df["MRP_LISTED"],  errors="coerce").fillna(0).astype(int)
     return df.dropna(subset=["DEPARTMENT"])
-
-
-def _load_sales(path: str) -> tuple[pd.DataFrame, list[str]]:
-    """Load sales file (.xlsb / .xlsx / .csv).
-    Returns (df, month_cols) where month_cols is the list of month column names.
-    df always has: STORE, DIVISION, DEPARTMENT, MRP, DISPLAY, ATTRIBUTE
-    then month_cols columns each containing numeric sales.
-    """
-    if path.endswith(".xlsb"):
-        try:
-            import pyxlsb
-        except ImportError:
-            raise ValueError("pyxlsb not installed. Run: pip install pyxlsb")
-        rows = []
-        with pyxlsb.open_workbook(path) as wb:
-            with wb.get_sheet(1) as ws:
-                all_rows = list(ws.rows())
-        headers = [str(c.v).strip() if c.v is not None else "" for c in all_rows[0]]
-        for row in all_rows[1:]:
-            rows.append([c.v for c in row])
-        df = pd.DataFrame(rows, columns=headers)
-    elif path.endswith(".csv"):
-        df = pd.read_csv(path)
-    else:
-        df = pd.read_excel(path)
-
-    df = _norm_cols(df)
-
-    # Map column names
-    rename = {}
-    for c in df.columns:
-        cu = c.upper()
-        if cu in ("STORE_NAME", "STORE", "STORE_CODE", "STORE_ID"): rename[c] = "STORE"
-        elif cu in ("DIVISION", "DIV"):                              rename[c] = "DIVISION"
-        elif cu in ("DEPARTMENT", "DEPT"):                           rename[c] = "DEPARTMENT"
-        elif cu in ("MRP", "EXISTING_MRP", "CURRENT_MRP",
-                    "OLD_MRP", "RAW_MRP"):                           rename[c] = "MRP"
-        elif cu in ("DISPLAY_TYPE", "DISPLAY", "SECTION",
-                    "DISPLAY_TYPE"):                                  rename[c] = "DISPLAY"
-        elif cu in ("ATTRIBUTE", "ATTRIBUTE1", "ATTRIBUTE_1",
-                    "ATTR"):                                          rename[c] = "ATTRIBUTE"
-        elif cu in ("SALES", "SALES_VALUE", "AMOUNT",
-                    "NET_SALES", "REVENUE"):                          rename[c] = "SALES"
-    df.rename(columns=rename, inplace=True)
-
-    # Detect month / sales columns — numeric columns that aren't key columns
-    key_cols = {"STORE", "DIVISION", "DEPARTMENT", "MRP", "DISPLAY", "ATTRIBUTE"}
-    # Excel date serials or string month names in non-key columns
-    month_cols = []
-    for c in df.columns:
-        if c in key_cols:
-            continue
-        if c == "SALES":
-            continue
-        # Try parsing as numeric (date serial or sales)
-        vals = pd.to_numeric(df[c], errors="coerce")
-        if vals.notna().sum() > len(df) * 0.5:
-            # Rename if it's an Excel serial
-            try:
-                serial = float(c)
-                month_label = _excel_serial_to_month(serial)
-                if month_label:
-                    df.rename(columns={c: month_label}, inplace=True)
-                    month_cols.append(month_label)
-                else:
-                    month_cols.append(c)
-            except (ValueError, TypeError):
-                month_cols.append(c)
-
-    # If no month cols found, check for single SALES column
-    if not month_cols and "SALES" in df.columns:
-        month_cols = ["SALES"]
-
-    if not month_cols:
-        raise ValueError("Could not detect sales columns. Expected month columns or a SALES column.")
-
-    # Ensure required key columns exist
-    for req in ["STORE", "DEPARTMENT", "MRP"]:
-        if req not in df.columns:
-            raise ValueError(f"Missing required column: {req}")
-
-    for c in ["STORE", "DEPARTMENT", "DIVISION"]:
-        if c in df.columns:
-            df[c] = df[c].astype(str).str.strip().str.upper()
-    if "DISPLAY" in df.columns:
-        df["DISPLAY"] = df["DISPLAY"].astype(str).str.strip().str.upper()
-    if "ATTRIBUTE" in df.columns:
-        df["ATTRIBUTE"] = df["ATTRIBUTE"].astype(str).str.strip().str.upper()
-
-    df["MRP"] = pd.to_numeric(df["MRP"], errors="coerce").fillna(0).astype(int)
-
-    for mc in month_cols:
-        df[mc] = pd.to_numeric(df[mc], errors="coerce").fillna(0)
-
-    # Ensure DISPLAY and ATTRIBUTE exist
-    if "DISPLAY" not in df.columns:
-        df["DISPLAY"] = "ALL"
-    if "ATTRIBUTE" not in df.columns:
-        df["ATTRIBUTE"] = "ALL"
-    if "DIVISION" not in df.columns:
-        df["DIVISION"] = ""
-
-    return df, month_cols
 
 
 def _build_groups(mapping_df: pd.DataFrame) -> dict:
@@ -533,45 +489,6 @@ def _build_excel(output_df, unmapped_df, val_rows, val_pass, log_lines, sales_df
     return buf.getvalue()
 
 
-def _build_template() -> bytes:
-    wb = openpyxl.Workbook()
-    ws = wb.active; ws.title = "Historical Sales"
-
-    def fill(h): return PatternFill("solid", fgColor=h)
-    def fnt(bold=False, color="E2EAED", size=9): return Font(name="Arial", bold=bold, color=color, size=size)
-    def bdr():
-        t = Side(style="thin", color="2D3B40")
-        return Border(left=t, right=t, top=t, bottom=t)
-
-    headers = ["STORE_NAME", "DIVISION", "DEPARTMENT", "MRP", "DISPLAY_TYPE", "ATTRIBUTE",
-               "Mar 2026", "Apr 2026", "May 2026", "Jun 2026"]
-    widths  = [16, 12, 24, 10, 14, 14, 12, 12, 12, 12]
-    for ci, h in enumerate(headers, 1):
-        c = ws.cell(1, ci, h)
-        c.fill = fill("1F3864"); c.font = fnt(True, "FFFFFF", 10)
-        c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        c.border = bdr()
-
-    examples = [
-        ["STORE_A", "KIDS", "KB_BERMUDA", 299, "NON_TABLE", "SUMMER", 43320, 32275, 16409, 26714],
-        ["STORE_A", "KIDS", "KB_BERMUDA", 399, "NON_TABLE", "SUMMER", 37483, 31398, 17436, 19811],
-    ]
-    for ri, row in enumerate(examples, 2):
-        for ci, v in enumerate(row, 1):
-            c = ws.cell(ri, ci, v)
-            c.fill = fill("FFEB9C"); c.font = fnt(False, "7D4E00"); c.border = bdr()
-            c.alignment = Alignment(horizontal="right" if ci >= 4 else "left", vertical="center")
-
-    ws.cell(5, 1, "Yellow rows = example data. Delete before use. Month columns can be named anything — engine auto-detects numeric columns.").font = fnt(False, "7FA0AD")
-
-    for ci, w in enumerate(widths, 1):
-        ws.column_dimensions[get_column_letter(ci)].width = w
-    ws.row_dimensions[1].height = 26
-    ws.freeze_panes = "A2"
-
-    buf = io.BytesIO(); wb.save(buf); return buf.getvalue()
-
-
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
 @router.get("/status")
@@ -598,23 +515,25 @@ def get_status():
         "output_found":       len(output_files) > 0,
         "last_output":        os.path.basename(output_files[0]) if output_files else None,
         "last_run":           last_run,
-        "sales_folder":       SALES_DIR,
         "mapping_folder":     MAPPING_DIR,
     }
 
 
 @router.get("/sales-status")
 def get_sales_status():
-    f = _find_sales_file()
-    if not f:
-        return {"file_found": False, "folder": SALES_DIR}
-    mtime = os.path.getmtime(f)
+    """The sales engine's file, the LY months read and the tie to the Calendar department snapshot."""
+    try:
+        f = _find_sales_file()
+        _, month_cols, check = _engine_sales()
+    except Exception as e:
+        return {"file_found": False, "source": "Sales engine (data lake)", "error": str(e)}
     return {
         "file_found": True,
+        "source":     "Sales engine (data lake)",
         "filename":   os.path.basename(f),
-        "folder":     SALES_DIR,
-        "modified":   datetime.datetime.fromtimestamp(mtime).strftime("%d %b %Y %H:%M"),
-        "size_kb":    round(os.path.getsize(f) / 1024, 1),
+        "modified":   datetime.datetime.fromtimestamp(os.path.getmtime(f)).strftime("%d %b %Y %H:%M"),
+        "months":     month_cols,
+        "check":      check,
     }
 
 
@@ -633,10 +552,9 @@ def get_mrp_groups():
 
     # Try to overlay sales counts
     sales_counts: dict = {}
-    sales_path = _find_sales_file()
-    if sales_path:
+    if _find_sales_file():
         try:
-            sales_df, month_cols = _load_sales(sales_path)
+            sales_df, month_cols, _ = _mapped_sales(mapping_df)
             disc_lookup = set()
             for _, row in mapping_df[mapping_df["MRP_LISTED"] == 0].iterrows():
                 disc_lookup.add((row["DEPARTMENT"], row["DISPLAY"], row["ATTRIBUTE"], int(row["MRP_CURRENT"])))
@@ -678,17 +596,19 @@ def run_engine(body: RunRequest):
     """
     sales_path = _find_sales_file()
     if not sales_path:
-        raise HTTPException(400, detail=f"No sales file found in: {SALES_DIR}")
+        raise HTTPException(400, detail="Sales engine file not reachable")
 
     mapping_file = _find_mapping_file()
     if not mapping_file:
         raise HTTPException(400, detail=f"No mapping master found in: {MAPPING_DIR}")
 
     try:
-        mapping_df          = _load_mapping()
-        sales_df, month_cols = _load_sales(sales_path)
+        mapping_df = _load_mapping()
+        sales_df, month_cols, check = _mapped_sales(mapping_df)
     except Exception as e:
         raise HTTPException(400, detail=str(e))
+    if not check["pass"]:   # never re-apportion sales that don't tie to the sales engine's structure
+        raise HTTPException(409, detail=f"Sales do not tie to the Calendar department sales (max diff {check['max_diff_lakh']} L)")
 
     try:
         output_df, unmapped_df, eng_log = _redistribute(
@@ -703,7 +623,7 @@ def run_engine(body: RunRequest):
     total_after  = round(float(output_df[month_cols].sum().sum()), 2) if not output_df.empty else 0.0
 
     full_log = [
-        f"Sales file  : {os.path.basename(sales_path)}",
+        f"Sales       : sales engine {os.path.basename(sales_path)} (tie to Calendar dept sales: max {check['max_diff_lakh']} L)",
         f"Mapping file: {os.path.basename(mapping_file)}",
         f"Month cols  : {', '.join(month_cols)}",
         f"Input rows  : {len(sales_df):,}",
@@ -734,6 +654,7 @@ def run_engine(body: RunRequest):
     run_meta = {
         "run_at":      datetime.datetime.now().isoformat(),
         "sales_file":  os.path.basename(sales_path),
+        "sales_check": check,
         "input_rows":  len(sales_df),
         "output_rows": len(output_df),
         "unmapped":    len(unmapped_df),
@@ -780,14 +701,4 @@ def download_latest():
         io.BytesIO(data),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={os.path.basename(path)}"},
-    )
-
-
-@router.get("/template")
-def download_template():
-    data = _build_template()
-    return StreamingResponse(
-        io.BytesIO(data),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=Historical_Sales_Template.xlsx"},
     )

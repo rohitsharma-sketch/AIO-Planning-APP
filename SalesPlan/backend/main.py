@@ -14,6 +14,7 @@ from engines.pww_deviation_engine import router as pww_deviation_router
 from engines.sor_deviation_engine import router as sor_deviation_router
 from engines.display_type_engine import router as display_type_router
 from engines.sync_engine import router as sync_router
+from engines.mrp_reapportionment_engine import router as mrp_reapp_router
 
 import store_master as _sm
 
@@ -50,6 +51,7 @@ app.include_router(pww_deviation_router,   prefix="/api/deviation/pww")
 app.include_router(sor_deviation_router,   prefix="/api/deviation/sor")
 app.include_router(display_type_router,    prefix="/api/display-type")
 app.include_router(sync_router,            prefix="/api/sync")
+app.include_router(mrp_reapp_router,       prefix="/api/planning/mrp-reapportionment")
 
 # Serve the built React frontend — mount after all API routes
 _DIST = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
