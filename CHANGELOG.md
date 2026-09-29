@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-29
 
+### BIS sends inactive departments to Sales Plan as plan 0
+- **Problem (from the post-sync check):** Sales Plan's LADIES TY ran +0.05 … +0.12 L a month over AOP. L_EW_BLOUSE is inactive in BIS, so BIS left it out of the push, and its share went to the other LADIES departments. But Sales Plan still planned it: a department with no BIS row falls back to the saved matrix value (or index 100), and Sales Plan's Department Master only follows BIS when someone presses its "Sync from Buyer's Input" button. So the share was counted twice.
+- **Fix (user's choice: "BIS sends it as plan 0"):** BIS now pushes every inactive department with **−100% for each recorded month**. Sales Plan turns that into growth index 0, so TY = 0, with no change to the Sales Plan engine. Sales Plan's `sync-from-buyer` treats a department BIS sends only at −100% as **inactive**, so it stays greyed there instead of flipping to "active".
+- **Check (BIS sandbox, push intercepted):** L_EW_BLOUSE is sent as −100% for Mar–Jun. 39 inactive departments = 156 rows at −100%, 944 rows in all. Sales Plan's live figures update at the next **Save** in BIS.
+
 ### Sales sync run on the new files, and the data checked through every app
 - **Bug fixed on the way (BIS):** the sales job reused whatever local copy already existed, so it would have kept reading the old 5 Sep copy after the source moved to `master.parquet`. It also read a half-written copy while the history job was re-copying it ("File too short"). Both jobs now share one `_local_copy()`: refreshed only when the network file changes, written to a temp file and swapped in under a lock.
 - **Sync:** the full data-lake sync ran (`run_all`: site master, store master, day shift, store actuals, day weights — cluster-days now to **28 Sep 2026**, calendar reindex, nightly accuracy check, festival dates, Listing / Delisting), all ok. BIS sales, history and sell-through re-synced from `master.parquet` / the complete 2 Sep sell-through.

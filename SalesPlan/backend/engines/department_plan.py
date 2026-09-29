@@ -631,7 +631,9 @@ def sync_from_buyer():
     """
     from fastapi import HTTPException
     try:
-        buyer_depts = {div: {r["department"] for r in _fetch_buyer_growth_live(div, strict=True)} for div in BIS_DIVISIONS}
+        # a department BIS sends only at -100% (inactive there, plan 0 - 29 Sep 2026) is inactive here too
+        buyer_depts = {div: {r["department"] for r in _fetch_buyer_growth_live(div, strict=True) if r["growth_pct"] > -100}
+                       for div in BIS_DIVISIONS}
     except RuntimeError as e:
         raise HTTPException(502, str(e))
     if not any(buyer_depts.values()):

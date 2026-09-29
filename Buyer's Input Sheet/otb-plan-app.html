@@ -4345,7 +4345,9 @@ async function pushBuyerGrowthLive(explicit=false){
     const rows=[];
     DVDATA.forEach(dv=>{
       dv.secs.forEach(sec=>{
-        if(S.hiddenSecs.has(sec.id))return; // inactive dept — nothing to float
+        // Inactive dept: sent as plan 0 (-100% -> Sales Plan growth index 0), not left out - Sales Plan otherwise
+        // planned it on its saved / 100 fallback growth, so LADIES ran over AOP with L_EW_BLOUSE (user choice 29 Sep)
+        if(S.hiddenSecs.has(sec.id)){recorded.forEach(mi=>rows.push({division:dv.nm,department:sec.nm,mi,growth_pct:-100}));return;}
         for(let mi=0;mi<12;mi++){
           const v=S.inputs[sec.id+'__'+mi];
           if(v==null||v===''||!recorded.has(mi))continue;
