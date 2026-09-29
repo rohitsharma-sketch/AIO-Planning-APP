@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-29
 
+### BIS: the department filter search picks what you click
+- **Bug (user):** "filter search not working properly, I cannot single out my selection." With no filter set, typing a search showed the matches ticked, and clicking one **hid** it (search "dupatta" → click → 235 other departments shown, dupatta gone).
+- **Fix (Excel-style):** while searching with nothing picked yet, the matches start unticked. Clicking one **shows only that department**, and more clicks add or remove others. "(Select All Search Results)" shows only the matches. Without a search, unticking still hides just that one.
+- **Check (sandbox):** "dupatta" → click → only L_EW_DUPATTA · then "kurti set" → click → DUPATTA + KURTI SET · Select All → all 198 · "kurti" + Select All Search Results → the 5 kurti departments · no search, untick DUPATTA → only it hidden.
+
 ### BIS sends inactive departments to Sales Plan as plan 0
 - **Problem (from the post-sync check):** Sales Plan's LADIES TY ran +0.05 … +0.12 L a month over AOP. L_EW_BLOUSE is inactive in BIS, so BIS left it out of the push, and its share went to the other LADIES departments. But Sales Plan still planned it: a department with no BIS row falls back to the saved matrix value (or index 100), and Sales Plan's Department Master only follows BIS when someone presses its "Sync from Buyer's Input" button. So the share was counted twice.
 - **Fix (user's choice: "BIS sends it as plan 0"):** BIS now pushes every inactive department with **−100% for each recorded month**. Sales Plan turns that into growth index 0, so TY = 0, with no change to the Sales Plan engine. Sales Plan's `sync-from-buyer` treats a department BIS sends only at −100% as **inactive**, so it stays greyed there instead of flipping to "active".

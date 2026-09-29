@@ -2091,11 +2091,13 @@ function buildCfdList(type,search){
   const filtered=q?items.filter(i=>i.label.toLowerCase().includes(q)||i.val.toLowerCase().includes(q)):items;
   if(!filtered.length)return`<div class="cfd-empty">No matches</div>`;
   // For dept: empty filter = all selected (whitelist semantics; checked when in set OR set is empty)
-  const allMode=type==='dept'&&S.filters.dept===null;
+  // Searching with nothing picked yet (all-mode): the matches start unticked - a click picks (Excel-style, 29 Sep:
+  // clicking the one match used to HIDE it, so a department couldn't be singled out from a search)
+  const allMode=type==='dept'&&S.filters.dept===null&&!q;
   let html='',lastGrp=null;
   // "Select All Search Results" header row when a search is active
   if(q&&type==='dept'){
-    const allSearchChk=allMode||filtered.every(i=>S.filters.dept&&S.filters.dept.has(i.val));
+    const allSearchChk=!!S.filters.dept&&filtered.every(i=>S.filters.dept.has(i.val));
     html+=`<div class="cfd-item cfd-sar${allSearchChk?' active':''}" onclick="cfdAllSearch('${type}')">
       <input type="checkbox"${allSearchChk?' checked':''}><span style="font-style:italic">(Select All Search Results)</span></div>
     <div class="cfd-grp-sep"></div>`;
@@ -2276,7 +2278,10 @@ function _updateMagFoot(){
 function cfdToggle(type,val){
   if(type!=='dept'&&!S.filters[type])S.filters[type]=new Set();
   if(type==='dept'){
-    if(S.filters.dept===null){
+    const searching=!!(document.getElementById('cfd-search')?.value||'').trim();
+    if(S.filters.dept===null&&searching){
+      S.filters.dept=new Set([val]);   // picked from a search -> show just this one
+    } else if(S.filters.dept===null){
       // All-mode: unchecking one → whitelist everyone except this one
       S.filters.dept=new Set();
       getCfdItems('dept').forEach(i=>{if(i.val!==val)S.filters.dept.add(i.val);});
@@ -2325,8 +2330,10 @@ function cfdAllSearch(type){
   const filtered=qn?items.filter(i=>i.label.toLowerCase().includes(qn)||i.val.toLowerCase().includes(qn)):items;
   if(type==='dept'){
     const allMode=S.filters.dept===null;
-    const allSearchChk=allMode||filtered.every(i=>S.filters.dept.has(i.val));
-    if(allSearchChk){
+    const allSearchChk=!allMode&&filtered.every(i=>S.filters.dept.has(i.val));
+    if(allMode&&qn){
+      S.filters.dept=new Set(filtered.map(i=>i.val));   // show only the search results
+    } else if(allSearchChk){
       // Uncheck: remove search results from visible set
       if(allMode){
         // Build whitelist of everything EXCEPT search results
