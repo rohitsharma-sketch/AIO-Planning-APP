@@ -4,7 +4,7 @@
 const RULES_NOW = [
   ['What is kept', [
     'Every <b>Store × Division × Month</b> total of the original plan - the plan being revised - is the target the output lands on.',
-    'The values you give (revised, newly listed or split departments) are kept <b>exactly</b>; every other department in the same store × division absorbs the difference, pro-rata to its original value.',
+    'The values you give (revised, newly listed or split departments) are kept <b>exactly</b>; every other department in the same store × division absorbs the difference, pro-rata to its original value - unless Method 2 runs with the other departments <b>kept as they are</b>.',
     '<b>Locked months are never changed</b> (value and qty) - the planner locks / unlocks each month of the original plan (Jan / Feb locked by default). Locked-month figures in an upload are ignored and flagged.',
   ]],
   ['When a month overflows', [
@@ -22,9 +22,16 @@ const RULES_NOW = [
   ]],
   ['Method 2 - existing department changes', [
     'Store × Department rows with "&lt;Month&gt; New" values; months not in the file stay as original.',
-    '<b>Re-phase &amp; run</b> (or <b>Re-phase file</b> to check it first) builds this file and runs it with the other departments kept as they are: each store keeps its total for the unlocked months, re-split by last year\'s month shape of the department (or a chosen one) at the first SSG store of: the store itself, its REF, REF OLD - else the cluster\'s SSG stores together, else its planned phasing. Months the store doesn\'t trade in get 0 and the rest is scaled back to 100%.',
-    '<b>Store overrides</b> (upload once, kept until cleared): a store\'s REF OLD - used before the cluster\'s SSG stores - and / or a fixed month mix that replaces its last-year shape (a store set by hand).',
-    'Other departments in the store × division: <b>absorb the change</b> (default - each store × division stays on the original) or <b>stay as they are</b> (only the revised departments move, e.g. a month re-phase; the checks then confirm the others are untouched and the revised departments kept their season total).',
+    'Other departments in the store × division: <b>absorb the change</b> (default - each store × division stays on the original) or <b>stay as they are</b> (only the revised departments move, e.g. a month re-phase).',
+  ]],
+  ['Method 2 - Re-phase from last year', [
+    '<b>Re-phase &amp; run</b>: pick the department (and, if needed, whose last-year shape to use - any department with last-year sales, e.g. LW_U_T-TOP F/S) and it is re-phased, loaded as the revised file and run with the other departments <b>kept as they are</b>, in one step. <b>Re-phase file</b> downloads the same file to check or edit first.',
+    "Months re-phased = the <b>unlocked full months</b> of the plan (a P1 / P2 half-month has no last-year month). Each store keeps its <b>total for those months</b>; only the split between them changes.",
+    "The split = last year's sales of the shape department in the same months a year earlier (the month-wise data-lake sales), taken from the first <b>SSG / SSG-ANG store</b> of: the store itself, its REF store, its REF OLD store - an OTHERS store never lends its shape. None of them: the SSG stores of its cluster together; still none: the store keeps its planned phasing (never 0). A negative last-year month counts as 0.",
+    "A month the store doesn't trade in (no plan in the department's division that month) gets 0 and the rest is scaled back to 100%.",
+    'REF, SSG TAG and CLUSTER are read from the original plan\'s own columns (a REF OLD column there is used too).',
+    '<b>Store overrides</b> (upload once, kept until cleared): STORE NAME + REF OLD (used before the cluster) and / or "&lt;Month&gt; %" - a fixed month mix, any scale, rescaled to 100%, that replaces the store\'s last-year shape (a store set by hand). The <b>Overrides template</b> lists the stores needing a look first.',
+    'Every re-phase comes with a "How it was built" sheet per store: its tag, REF / REF OLD, where the shape came from, last year by month, the mix %, months not trading, old and new values.',
   ]],
   ['Method 3 - new or split departments', [
     "Split: PARENT DEPARTMENT, NEW DEPARTMENT, SHARE % (optional STORE NAME; a store's own row overrides the all-store row). The parent keeps what is not shared out, the new departments take their share with the parent's MRP × display mix and ASPs; nothing else moves. Shares over 100% are refused.",
@@ -46,6 +53,7 @@ const RULES_NOW = [
   ]],
   ['Checks on every run', [
     'Recomputed from the output: kept values exact, store × division season and month totals, grand total, locked months untouched, display-type cont % as the original. Any input error blocks the run; warnings and notes are listed with row examples.',
+    'Method 2 with the other departments <b>kept as they are</b>: instead of the store × division totals it checks that every other department is untouched and that the revised departments kept their season total; the store × division month totals are shown for information (they move by exactly the revised departments\' change) and the grand total is still checked.',
   ]],
 ];
 

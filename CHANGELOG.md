@@ -7,6 +7,25 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### Re-Aligner Rules page: Method 2 written out in full
+- **Asked (user):** "have you made sure that the rules are set for method 2". The Rules page was checked line by line against `importer.template_rephase` and `engine.verify`.
+- **What was wrong:**
+  - "What is kept" said the other departments always absorb, but Method 2 can keep them as they are.
+  - "Checks" didn't describe the stay-as-they-are checks.
+  - The re-phase details the code applies were missing:
+    - The window is only the unlocked full months; P1/P2 halves have no last-year month.
+    - Last year comes from the data-lake sales, a year earlier.
+    - Only SSG stores lend a shape, and negative last-year values count as 0.
+    - A month is "not trading" when the store has no plan in that division.
+    - REF / SSG TAG / CLUSTER are read from the plan's own columns.
+    - A fixed mix is rescaled to 100%.
+    - Each re-phase comes with a "How it was built" sheet.
+- **Now:**
+  - "Method 2 – existing department changes" covers the file format and the absorb / stay-as-they-are option.
+  - A new "Method 2 – Re-phase from last year" section covers Re-phase & run, the window, the shape cascade, non-trading months, store overrides and the audit sheet.
+  - "Checks on every run" now includes the stay-as-they-are checks.
+- File: `AOP Realigner/rules.js`.
+
 ### Re-Aligner Re-phase: store overrides make it match the hand-built plan exactly
 - **Asked (user):** "Check why is there a slight difference between mine and your iteration and fine tune it". The app gave 304.10 / 316.09 / 96.28 / 56.30; the user's pivot is 304.07 / 316.26 / 96.73 / 55.71.
 - **Why:** 286 of 303 stores already matched exactly. The gap came from two causes only:
