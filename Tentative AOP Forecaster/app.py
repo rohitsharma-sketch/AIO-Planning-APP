@@ -20,7 +20,11 @@ app = FastAPI(title="AOP Forecaster API")
 # session — see _get_actor below) — when mounted under the unified platform,
 # the SAME session cookie/secret is used, so a real logged-in user's id/role
 # comes through here too.
-app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SESSION_SECRET", "dev-only-change-me"))
+# Same rule as RS Planning Platform auth/security.session_secret (2026-09-29): no public fallback in production.
+_secret = os.environ.get("SESSION_SECRET", "").strip()
+if os.environ.get("APP_ENV", "").strip().lower() == "production" and (len(_secret) < 32 or _secret == "dev-only-change-me"):
+    raise RuntimeError("SESSION_SECRET (32+ chars, not the dev default) is required when APP_ENV=production")
+app.add_middleware(SessionMiddleware, secret_key=_secret or "dev-only-change-me")
 
 app.add_middleware(
     CORSMiddleware,

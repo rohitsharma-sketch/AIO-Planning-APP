@@ -22,7 +22,7 @@ from auth.routes import router as auth_router
 from workflow.routes import router as workflow_router
 from audit.routes import router as audit_router
 
-SESSION_SECRET = os.environ.get("SESSION_SECRET", "dev-only-change-me")
+from auth.security import SESSION_SECRET  # noqa: E402 - one rule: required in production (auth.security.session_secret)
 
 app = FastAPI(title="RS Planning Platform")
 # max_age=None -> a browser-session-only cookie (no Max-Age/Expires), so a

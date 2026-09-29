@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-29
 
+### Security: the platform no longer runs on a public session key (P0, no calculation changes)
+- **Problem:** `SESSION_SECRET` was not set on the live server, so 8010 (and 8000) fell back to `"dev-only-change-me"`, which is written in the code. Every login session, 30-day remember-me cookie and password-reset link was signed with it: anyone with the code could forge an admin session. **Proven before the fix:** a cookie signed with the default key for a made-up user was accepted (`/api/auth/me` → 200).
+- **Fix:** `auth.security.session_secret()` is the one rule (8010's SessionMiddleware, remember-me and reset links all use it; AOP 8000 applies the same check). With `APP_ENV=production`, a missing, default or short (<32 chars) secret **stops the app from starting**. Development keeps the documented dev key with a warning. A 64-character random `SESSION_SECRET` and `APP_ENV=production` are now Windows user environment variables on the server. They are never printed and not in any file. `.env.example` lists the names.
+- **After the restart:** the same forged cookie is rejected (401). Landing, 8010, 8000 and 5050 answer normally. **Everyone had to sign in again once**, and old remember-me cookies and reset links stopped working.
+- **Tests:** new `tests/test_session_secret.py` (3 pass: production refuses empty/default/short, accepts strong; development falls back with a warning). `test_router_mount` / `test_calendar_mount` log in to the live server as the fixture user `planner1`, which fails on this server's database (401) with or without this change.
+
 ### BIS: Save says whether Sales Plan received the plan
 - **Found on the re-check:** after "reloaded and saved", Sales Plan still had the 09:01 push. The Save left no trace, and BIS gave no sign: a push that sent nothing (AOP not synced on the page, or no rows) was silent, and a successful one looked the same as a failed one.
 - **Now** the Save button always reports the outcome: "Saved ✓ — N growth rows sent to Sales Plan", "Saved in this browser only — NOT sent to Sales Plan: <reason>", or "Growth NOT sent to Sales Plan (status – sign in again)". A save that was redirected to the sign-in page counts as a failure. Failures are also shown on automatic saves.
