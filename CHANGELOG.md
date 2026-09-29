@@ -7,6 +7,15 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### Re-Aligner: no "Replace this file" box after Re-phase & run
+- **Asked (user):** "shouldn't this replace the file option be removed … now that the plan is remade accordingly".
+- **Change:** when the step-2 file was built by Re-phase & run, the big drop box is replaced by one line: "Built by Re-phase & run – nothing to upload. To use your own edits, download Re-phase file, change it and upload it here", where "upload it here" is a small link.
+- **Unchanged:**
+  - An uploaded file still shows the drop box.
+  - The edit-and-upload route stays: download the Re-phase file, change it (e.g. a hand-set store) and upload.
+  - The upload route for other departments' hand-made revised plans stays.
+- **How:** `server.job_rephase` marks the revised info `generated`, and `index.html renderRev` reads it.
+
 ### Re-Aligner Rules page: Method 2 written out in full
 - **Asked (user):** "have you made sure that the rules are set for method 2". The Rules page was checked line by line against `importer.template_rephase` and `engine.verify`.
 - **What was wrong:**

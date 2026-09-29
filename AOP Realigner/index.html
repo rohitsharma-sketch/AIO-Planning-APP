@@ -169,6 +169,7 @@ td.frozen,th.frozen{color:var(--muted-foreground)}
 .check .t{font-weight:500}
 .check .d{font-size:12.5px;color:var(--muted-foreground)}
 .ok-i{color:var(--success)}.warn-i{color:var(--warning)}.fail-i{color:var(--destructive)}.info-i{color:var(--info)}
+.rephase-note{font-size:13px;margin:0}.link-upload{cursor:pointer;text-decoration:underline;color:var(--foreground)}
 .absorb{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:10px;font-size:13px}.absorb label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
 
 /* downloads */
@@ -508,7 +509,10 @@ function renderRev() {
         ${pv.rows.length > 1 ? `<tr class="total"><td>All revised</td><td></td>${tot.map(([a, b], j) => cellHtml(a, b, pv.frozen[j])).join('')}${
           cellHtml(sumLive(tot.map(t => t[0])), sumLive(tot.map(t => t[1])), false)}</tr>` : ''}</tbody></table></div>`;
     }
-    h += `<div class="sep"></div>${dropzone('revised', 'Replace this file', true)}`;
+    // A file built by Re-phase & run needs no upload (user, 2026-09-30); an edited one can still come in by the small link
+    h += `<div class="sep"></div>${r.generated
+      ? `<p class="muted rephase-note">Built by <b>Re-phase &amp; run</b> - nothing to upload. To use your own edits, download <b>Re-phase file</b>, change it and <label class="link-upload">upload it here<input type="file" hidden accept=".xlsx,.xlsm,.xlsb,.xls,.csv" onchange="picked(this,'revised')"></label>.</p>`
+      : dropzone('revised', 'Replace this file', true)}`;
   } else if (o) h += dropzone('revised', M.drop);
   $('#c-rev').innerHTML = h + '</div>';
 }

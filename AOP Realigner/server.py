@@ -389,6 +389,9 @@ def job_rephase(job, dept, mix=None):
     with lock:
         state.update(method="dept", absorb=False)
     _check_revised(job, data, f"Re-phase from LY - {dept}.xlsx", None, "dept")
+    with lock:
+        if state["rev_info"] is not None:
+            state["rev_info"]["generated"] = True   # built here, not uploaded - the page shows no Replace drop zone for it
     job_run(job)
 
 
