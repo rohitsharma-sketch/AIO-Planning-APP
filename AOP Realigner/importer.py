@@ -710,14 +710,80 @@ def _store_col(orig, names):
     return dict(zip(v[STORE], _clean(v[c])))
 
 
-def template_rephase(orig, months, ly, dept, mix=None):
+def _mix_cols(df, lm):
+    """{month: column} for the fixed-mix columns of a store-overrides file ("Sep'26 %", "Sep'26 MIX %", ...)."""
+    names = lambda m: {norm(m + t) for t in (" %", " MIX %", " MIX", " SHARE %", " SHARE")}
+    return {m: c for m in lm for c in df.columns if norm(c) in names(m)}
+
+
+def read_rephase_overrides(data, name, orig, months):
+    """Store overrides for Re-phase from LY (user, 2026-09-30 - REF OLD is kept nowhere else, and some stores are set by
+    hand): STORE NAME + optional REF OLD (used before the cluster fallback) + optional '<Month> %' columns (a fixed
+    month mix that replaces the last-year shape for that store; any scale, rescaled to 100%) ->
+    ({store: {"ref_old": "PTS", "mix": {"Sep'26": 0.6, ...}}}, report)."""
+    df, info, rep = read_table(data, name, {STORE}, "store overrides")
+    if df is None:
+        return None, rep
+    lm = [m for m in months if not locked(m) and ly_label(m)]
+    ro = next((c for c in df.columns if norm(c) in REF_OLD_NAMES), None)
+    mc = _mix_cols(df, lm)
+    if ro is None and not mc:
+        rep.error(f"No REF OLD column and no month mix columns ({', '.join(m + ' %' for m in lm)}) - nothing to override.")
+        return None, rep
+    out, bad, unknown = {}, [], []
+    known = set(orig[STORE])
+    for i, r in df.iterrows():
+        s = norm(r[STORE])
+        if not s:
+            continue
+        ov = {}
+        if ro is not None and norm(r[ro]):
+            ov["ref_old"] = norm(r[ro])
+        vals = {m: pd.to_numeric(r[c], errors="coerce") for m, c in mc.items()}
+        if any(pd.notna(v) for v in vals.values()):
+            vals = {m: float(v) if pd.notna(v) else 0.0 for m, v in vals.items()}
+            if any(v < 0 for v in vals.values()) or sum(vals.values()) <= 0:
+                bad.append(i)
+                continue
+            ov["mix"] = {m: v / sum(vals.values()) for m, v in vals.items()}
+        if ov:
+            out[s] = ov
+            if s not in known:
+                unknown.append(s)
+    if bad:
+        rep.error(f"{len(bad)} row(s) have a month mix that is negative or adds up to 0.", _rows(bad))
+    if unknown:
+        rep.warn(f"{len(unknown)} store(s) aren't in the original plan - ignored there.", unknown)
+    if not out and rep.ok:
+        rep.error("No store has a REF OLD or a month mix filled in.")
+    rep.info(f"{len(out)} store override(s): {sum('ref_old' in v for v in out.values())} REF OLD, "
+             f"{sum('mix' in v for v in out.values())} fixed month mix.")
+    return (out if rep.ok else None), rep
+
+
+def template_rephase_overrides(orig, months, ly, dept, mix=None, overrides=None):
+    """Store-overrides template for Re-phase: every store of the re-phase with where its shape comes from today,
+    REF OLD (filled from the plan / current overrides) and empty '<Month> %' columns - stores whose shape isn't their
+    own or REF's first, since those are the ones REF OLD or a fixed mix would change."""
+    _, how = template_rephase(orig, months, ly, dept, mix, overrides)
+    lm = [m for m in months if not locked(m) and ly_label(m)]
+    ov = overrides or {}
+    t = how[["STORE NAME", "SSG TAG", "REF", "REF OLD", "SHAPE FROM", "SHAPE STORE"]].copy()
+    for m in lm:
+        t[f"{m} %"] = [round(ov[s]["mix"][m] * 100, 4) if "mix" in ov.get(s, {}) else None for s in t["STORE NAME"]]
+    t["NEEDS A LOOK"] = ~t["SHAPE FROM"].isin(["own", "REF", "fixed mix (override)"])
+    return t.sort_values(["NEEDS A LOOK", "STORE NAME"], ascending=[False, True]).reset_index(drop=True)
+
+
+def template_rephase(orig, months, ly, dept, mix=None, overrides=None):
     """Method 2 file that re-phases `dept` across the live months by last year's month shape (rule set R2-R7) ->
     (revised rows: STORE, DIV, DEPT, '<Month> New' for the live months; how-it-was-built rows, one per store).
     Each store keeps its live-month total. The shape = last year's sales of `mix` (default: dept itself) in the same
     months at the first SSG / SSG-ANG store of: the store itself, its REF store, REF OLD (any store when the plan has
     no SSG TAG column); failing all three, the SSG stores of its CLUSTER together. A month the store doesn't trade in (no plan in the division) gets 0 and the rest is scaled back to 100%.
-    No usable last year -> the store keeps its planned phasing (flagged). Meant for 'other departments: stay as they are'."""
-    mix = mix or dept
+    No usable last year -> the store keeps its planned phasing (flagged). Meant for 'other departments: stay as they are'.
+    overrides (read_rephase_overrides): a store's REF OLD replaces the plan's; its fixed month mix replaces the shape."""
+    mix, ov = mix or dept, overrides or {}
     lm = [m for m in months if not locked(m) and ly_label(m)]
     if len(lm) < 2:
         raise ValueError("Re-phasing needs at least two unlocked full months - unlock the months to re-phase.")
@@ -742,10 +808,12 @@ def template_rephase(orig, months, ly, dept, mix=None):
     lyv = lambda x: (sum((one(p) for p in peers.get(x[8:], [])), np.zeros(len(lm))) if x.startswith("CLUSTER:") else one(x))
     rows, how = [], []
     for j, (s, o_) in enumerate(zip(old.index, old.to_numpy())):
-        c = (clus or {}).get(s)
-        chain = [("own", s), ("REF", (ref or {}).get(s)), ("REF OLD", (refold or {}).get(s)),
-                 ("cluster SSG stores", "CLUSTER:" + c if c else None)]
+        c, ro = (clus or {}).get(s), ov.get(s, {}).get("ref_old") or (refold or {}).get(s)
+        chain = [("own", s), ("REF", (ref or {}).get(s)), ("REF OLD", ro), ("cluster SSG stores", "CLUSTER:" + c if c else None)]
         src, x, p = "planned phasing (no last-year shape)", "", None
+        if "mix" in ov.get(s, {}):                           # set by hand for this store (e.g. JHM) - used as given
+            src, p = "fixed mix (override)", np.array([ov[s]["mix"].get(m, 0.0) for m in lm])
+            chain = []
         for name, st in chain:
             v = lyv(st) if st and (st.startswith("CLUSTER:") or ssg_ok(st)) else np.zeros(len(lm))
             if v.sum() > 1e-9:
@@ -755,7 +823,7 @@ def template_rephase(orig, months, ly, dept, mix=None):
                     break
         new = o_.sum() * p if p is not None else o_
         rows.append({STORE: s, DIV: div, DEPT: dept, **{m + " New": float(n) for m, n in zip(lm, new)}})
-        how.append({STORE: s, "SSG TAG": (ssg or {}).get(s, ""), "REF": (ref or {}).get(s, ""), "REF OLD": (refold or {}).get(s, ""),
+        how.append({STORE: s, "SSG TAG": (ssg or {}).get(s, ""), "REF": (ref or {}).get(s, ""), "REF OLD": ro or "",
                     "SHAPE FROM": src, "SHAPE STORE": x,
                     **{f"LY {ly_label(m)}": float(v) for m, v in zip(lm, lyv(x) if x else np.zeros(len(lm)))},
                     **{f"{m} %": round(float(v) * 100, 4) for m, v in zip(lm, p if p is not None else o_ / o_.sum())},

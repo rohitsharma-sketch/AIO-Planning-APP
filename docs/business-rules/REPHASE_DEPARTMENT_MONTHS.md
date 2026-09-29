@@ -157,5 +157,17 @@ Tested on this workbook (`scratchpad/rephase_validate.py`):
 | live `sales.json`, plan without REF OLD (the app today) | 271 / 286 exact — the 15 off are the stores whose shape came from REF OLD; with the cluster fallback they are within 0.71 L (planned phasing would be 2.4 L off) | 7,657 / 7,878 exact, max 0.23 L |
 
 Live plan (`New Plan - 8.9.26 With MC Split.xlsb`), LW_U_T-TOP with the F/S shape: 229 stores, window total
-772.77 L kept exactly; Sep–Dec 304.10 / 316.09 / 96.28 / 56.30 L (workbook 304.08 / 316.25 / 96.73 / 55.71).
-**To be exact for every store, add a `REF OLD` column to the plan** — the generator uses it before the cluster.
+772.77 L kept exactly; Sep–Dec 304.10 / 316.09 / 96.28 / 56.30 L (workbook 304.07 / 316.26 / 96.73 / 55.71).
+
+**Why the small gap, and the fix (30 Sep).** The gap is exactly two causes — every other store (286) matched to
+the paisa: (1) **16 stores** whose REF isn't SSG take REF OLD's shape in the workbook, but REF OLD exists nowhere
+the app can read (not in the plan, the DB store master or `Store Master.xlsx` — 1/16 each), so the cluster fallback
+was used (Sep +0.68 / Oct −1.09 / Nov −0.23 / Dec +0.64 L); (2) **JHM** is hand-typed (Oct 0 although JHM trades in
+Oct in the plan) (−0.65 / +0.92 / −0.22 / −0.05 L).
+**Store overrides** close it: upload once (Method 2 step 2 → Store overrides; kept until cleared) a sheet with
+`STORE NAME`, `REF OLD` and optional `<Month> %` (a fixed month mix, any scale, rescaled to 100%). REF OLD from it
+replaces the plan's; a fixed mix replaces the store's last-year shape as given. **Overrides template** lists the stores
+of the re-phase with the ones needing a look (cluster / planned phasing) first. With the workbook's REF OLD + JHM's
+typed mix: **303 / 303 stores exact (max 2e-8 L), Sep–Dec 304.07 / 316.26 / 96.73 / 55.71 = the workbook**, all
+checks ok. Code: `importer.read_rephase_overrides`, `template_rephase(..., overrides)`,
+`template_rephase_overrides`; server `POST /api/rephase-overrides` (+ `/clear`), `.cache/rephase_overrides.json`.

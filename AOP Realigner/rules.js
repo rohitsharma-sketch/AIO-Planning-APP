@@ -23,6 +23,7 @@ const RULES_NOW = [
   ['Method 2 - existing department changes', [
     'Store × Department rows with "&lt;Month&gt; New" values; months not in the file stay as original.',
     '<b>Re-phase &amp; run</b> (or <b>Re-phase file</b> to check it first) builds this file and runs it with the other departments kept as they are: each store keeps its total for the unlocked months, re-split by last year\'s month shape of the department (or a chosen one) at the first SSG store of: the store itself, its REF, REF OLD - else the cluster\'s SSG stores together, else its planned phasing. Months the store doesn\'t trade in get 0 and the rest is scaled back to 100%.',
+    '<b>Store overrides</b> (upload once, kept until cleared): a store\'s REF OLD - used before the cluster\'s SSG stores - and / or a fixed month mix that replaces its last-year shape (a store set by hand).',
     'Other departments in the store × division: <b>absorb the change</b> (default - each store × division stays on the original) or <b>stay as they are</b> (only the revised departments move, e.g. a month re-phase; the checks then confirm the others are untouched and the revised departments kept their season total).',
   ]],
   ['Method 3 - new or split departments', [
@@ -52,6 +53,6 @@ const RULES_LATEST = {
   date: '2026-09-30',
   changes: [
     'Method 2: "Re-phase & run" - pick a department and it is re-phased by last year\'s month shape and run to the final plan in one step (each store keeps its total for the unlocked months).',
-    'Method 2: choose whether the other departments absorb the change or stay as they are.',
+    'Re-phase store overrides: REF OLD and / or a fixed month mix per store, uploaded once - with them the re-phase matches a hand-built plan store for store.',
   ],
 };

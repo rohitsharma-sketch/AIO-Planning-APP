@@ -7,6 +7,18 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### Re-Aligner Re-phase: store overrides make it match the hand-built plan exactly
+- **Asked (user):** "Check why is there a slight difference between mine and your iteration and fine tune it". The app gave 304.10 / 316.09 / 96.28 / 56.30; the user's pivot is 304.07 / 316.26 / 96.73 / 55.71.
+- **Why:** 286 of 303 stores already matched exactly. The gap came from two causes only:
+  - **16 stores** take REF OLD's shape in the workbook. REF OLD isn't in the plan, the DB store master or Store Master.xlsx (1/16 in each), so the app used the cluster's SSG stores.
+  - **JHM** is hand-typed, with Oct = 0 although it trades in Oct.
+- **Fix, "Store overrides":** in Method 2 step 2, upload once (kept until cleared) a sheet with STORE NAME, REF OLD and optionally `<Month> %`.
+  - REF OLD from the sheet is used before the cluster fallback.
+  - A month % mix replaces that store's last-year shape, as given.
+  - **Overrides template** lists the re-phase's stores, with the ones that need REF OLD first.
+- **Result, in the app on the live plan:** with the workbook's REF OLD and JHM's typed mix, **Re-phase & run gives 304.07 / 316.26 / 96.73 / 55.71**, all 303 stores exact (max 2e-8 L), and all checks ok.
+- Files: `AOP Realigner/importer.py` (`read_rephase_overrides`, `template_rephase_overrides`, `template_rephase(..., overrides)`), `server.py`, `index.html`, `rules.js`, `test_realign.py`, `docs/business-rules/REPHASE_DEPARTMENT_MONTHS.md`.
+
 ### AOP Re-Aligner: "Re-phase & run" takes a department to the final plan in one click
 - **Asked (user):** "i just select the department to be executed and you do it on the second step by yourself and take it to the final plan".
 - **How it works:** in Method 2's step 2, pick the department (and optionally the LY shape), then click **Re-phase & run**. The server does, as one job, what used to be three steps:

@@ -26,7 +26,8 @@ CACHE_DIR = os.path.join(HERE, ".cache")  # gitignored: real plan data
 ORIG_PKL = os.path.join(CACHE_DIR, "original.pkl")
 TIMINGS_JSON = os.path.join(CACHE_DIR, "timings.json")
 HISTORY_JSON = os.path.join(CACHE_DIR, "history.json")
-LOCKS_JSON = os.path.join(CACHE_DIR, "locks.json")   # the user's locked months for the loaded original plan
+LOCKS_JSON = os.path.join(CACHE_DIR, "locks.json")
+REPHASE_OV_JSON = os.path.join(CACHE_DIR, "rephase_overrides.json")   # Re-phase store overrides (REF OLD, fixed mix)   # the user's locked months for the loaded original plan
 MAX_BODY = 400 * 1024 * 1024
 KB_JSON = os.path.join(HERE, "..", "Listing Delisting", "app", "kb.json")  # Listing / Delisting Analyser app's listing history
 # the three ways to revise an existing plan (engine.py); each has its own step-2 file and template
@@ -253,6 +254,12 @@ if os.path.exists(ORIG_PKL):
     except Exception:
         traceback.print_exc()
 _set_locks(state["months"], _load_json(LOCKS_JSON, {}).get("chosen"))
+state["rephase_ov"] = _load_json(REPHASE_OV_JSON, None)   # kept across restarts and plans until cleared
+
+
+def _overrides():
+    """The uploaded Re-phase store overrides ({store: {ref_old, mix}}), or None."""
+    return (state.get("rephase_ov") or {}).get("stores")
 
 
 def _fail(report, what):
@@ -375,7 +382,7 @@ def job_rephase(job, dept, mix=None):
         raise UserError("Last year's sales (the Listing / Delisting Analyser's sales.json) aren't built yet.")
     with job.step("Build the re-phase from last year", "rephase", len(o)):
         try:
-            df, how = importer.template_rephase(o, months, ly, dept, mix)
+            df, how = importer.template_rephase(o, months, ly, dept, mix, _overrides())
         except ValueError as e:
             raise UserError(str(e))
         data = engine.write_xlsx([("Revised plan", df), ("How it was built", how)])
@@ -432,6 +439,9 @@ def public_state():
         "departments": sorted(o[DEPT].unique().tolist()) if o is not None else [],
         "method": s["method"], "listing_app": os.path.exists(KB_JSON), "locks": s["locks"], "absorb": s["absorb"],
         "ly_departments": ly_departments() if o is not None and s["method"] == "dept" else [],
+        "rephase_overrides": (lambda v: v and {"name": v["name"], "loaded_at": v["loaded_at"], "stores": len(v["stores"]),
+                                               "ref_old": sum("ref_old" in x for x in v["stores"].values()),
+                                               "mix": sum("mix" in x for x in v["stores"].values())})(s.get("rephase_ov")),
     }
 
 
@@ -499,17 +509,22 @@ class Handler(BaseHTTPRequestHandler):
             elif method == "newdept":
                 df, name = ((importer.template_split(), "Department split template.xlsx") if kind == "split"
                             else (importer.template_newdept(months), "New department template.xlsx"))
-            elif kind == "rephase":   # Method 2 file from last year's month shape (docs/business-rules/REPHASE_DEPARTMENT_MONTHS.md)
+            elif kind in ("rephase", "rephase-overrides"):   # Method 2 file from last year's month shape (docs/business-rules/REPHASE_DEPARTMENT_MONTHS.md)
                 ly = last_year()
                 if not ly:
                     return self._send(404, {"error": "Last year's sales (the Listing / Delisting Analyser's sales.json) aren't built yet."})
                 if not dept:
                     return self._send(400, {"error": "Pick the department to re-phase first."})
                 try:
-                    df, how = importer.template_rephase(o, months, ly, dept, q.get("mix") or None)
+                    if kind == "rephase-overrides":   # the stores of this re-phase, the ones needing REF OLD / a mix first
+                        sheets = [("Store overrides", importer.template_rephase_overrides(o, months, ly, dept, q.get("mix") or None,
+                                                                                           _overrides()))]
+                        name = f"Re-phase store overrides - {dept}.xlsx"
+                    else:
+                        df, how = importer.template_rephase(o, months, ly, dept, q.get("mix") or None, _overrides())
+                        sheets, name = [("Revised plan", df), ("How it was built", how)], f"Re-phase from LY - {dept}.xlsx"
                 except ValueError as e:
                     return self._send(400, {"error": str(e)})
-                sheets, name = [("Revised plan", df), ("How it was built", how)], f"Re-phase from LY - {dept}.xlsx"
             else:
                 df = importer.template(o, months, dept)
                 name = f"Revised plan template - {dept}.xlsx" if dept else "Revised plan template.xlsx"
@@ -578,6 +593,25 @@ class Handler(BaseHTTPRequestHandler):
                     job = start_job("data", "revised", "Re-checking with the new locked months", _check_revised, *rev)
                     return self._send(202, {"job": job.id, "locks": locks})
                 return self._send(200, {"ok": True, "locks": locks})
+            elif path == "/api/rephase-overrides":   # upload: STORE NAME + REF OLD and/or '<Month> %'
+                with lock:
+                    o, months = state["orig"], state["months"]
+                if o is None:
+                    raise UserError("Load the original plan first (step 1).")
+                ov, rep = importer.read_rephase_overrides(data, name, o, months)
+                if ov is None:
+                    raise UserError(f"{name}: {rep.first_error()}")
+                saved = {"name": name, "loaded_at": stamp(), "stores": ov}
+                _save_json(REPHASE_OV_JSON, saved)
+                with lock:
+                    state["rephase_ov"] = saved
+                return self._send(200, {"ok": True, "report": rep.items})
+            elif path == "/api/rephase-overrides/clear":
+                with lock:
+                    state["rephase_ov"] = None
+                if os.path.exists(REPHASE_OV_JSON):
+                    os.remove(REPHASE_OV_JSON)
+                return self._send(200, {"ok": True})
             elif path == "/api/rephase":   # ?dept=&mix= - re-phase from LY, load it as step 2 and run (Method 2)
                 if not q.get("dept"):
                     raise UserError("Pick the department to re-phase first.")

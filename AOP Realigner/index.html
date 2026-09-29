@@ -473,7 +473,8 @@ function templateActions() {
     <select class="select" id="tpl-mix" aria-label="Whose last-year month shape to use" onchange="tplMix=this.value"><option value="">LY shape: same department</option>${
       (S.ly_departments || []).map(d => `<option value="${esc(d)}" ${d === tplMix ? 'selected' : ''}>LY shape: ${esc(d)}</option>`).join('')}</select>
     <button class="btn btn-outline btn-sm" onclick="rephase()" title="Download the re-phase file to check or edit before uploading it">${icon('dl')}Re-phase file</button>
-    <button class="btn btn-primary btn-sm" onclick="rephaseRun()" ${dataBusy() ? 'disabled' : ''} title="Build the re-phase from last year, load it here and run it to the final plan - other departments kept as they are">${icon('play')}Re-phase &amp; run</button>`;
+    <button class="btn btn-primary btn-sm" onclick="rephaseRun()" ${dataBusy() ? 'disabled' : ''} title="Build the re-phase from last year, load it here and run it to the final plan - other departments kept as they are">${icon('play')}Re-phase &amp; run</button>
+    ${storeOverrides()}`;
 }
 
 function renderRev() {
@@ -670,20 +671,35 @@ async function run() { try { await api('api/run'); } catch (e) { toast(e.message
 // Method 2 option (2026-09-29): keep every store x division on the original (absorb) or leave the other departments alone
 async function setAbsorb(v) { try { await api('api/option?absorb=' + (v ? 1 : 0)); } catch (e) { toast(e.message); } refresh(); }
 // Re-phase from LY (2026-09-30): a Method 2 file built from last year's month shape; errors come back as a toast
-async function rephase() {
+async function rephase(kind = 'rephase') {
   if (!tplDept) return toast('Pick the department to re-phase in the list first.');
-  const q = new URLSearchParams({method: 'dept', kind: 'rephase', dept: tplDept});
+  const q = new URLSearchParams({method: 'dept', kind, dept: tplDept});
   if (tplMix) q.set('mix', tplMix);
   try {
     const r = await fetch(`api/template?${q}`);
     if (!r.ok) return toast((await r.json().catch(() => ({}))).error || 'Could not build the re-phase file.');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(await r.blob());
-    a.download = `Re-phase from LY - ${tplDept}.xlsx`.replace(/\//g, '-');
+    a.download = `${kind === 'rephase' ? 'Re-phase from LY' : 'Re-phase store overrides'} - ${tplDept}.xlsx`.replace(/\//g, '-');
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    toast('Re-phase file built - check the "How it was built" sheet, upload it here, then run with "other departments: stay as they are".', 'info');
+    toast(kind === 'rephase' ? 'Re-phase file built - check the "How it was built" sheet, upload it here, then run with "other departments: stay as they are".'
+      : 'Fill REF OLD (and a month % for a store set by hand), then upload it with Store overrides.', 'info');
   } catch (e) { toast(e.message); }
+}
+// Re-phase store overrides (2026-09-30): REF OLD and/or a fixed month mix per store, kept until cleared
+function storeOverrides() {
+  const v = S.rephase_overrides;
+  const tip = v ? `${v.name} (${v.loaded_at}) - ${v.ref_old} REF OLD, ${v.mix} fixed month mix. Used by every re-phase; upload again to replace.`
+    : 'Upload REF OLD and/or a fixed month mix per store (STORE NAME, REF OLD, <Month> %) - used by every re-phase until cleared';
+  return `<label class="btn btn-outline btn-sm" title="${esc(tip)}">${icon('upload')}${v ? `Overrides: ${v.stores} stores` : 'Store overrides'}<input type="file" hidden accept=".xlsx,.xlsm,.xlsb,.xls,.csv" onchange="picked(this,'rephase-overrides')"></label>
+    ${v ? `<button class="btn btn-ghost btn-sm" onclick="clearOverrides()" title="Stop using the store overrides" aria-label="Clear store overrides">${icon('trash')}</button>` : ''}
+    <button class="btn btn-ghost btn-sm" onclick="rephase('rephase-overrides')" title="The stores of this re-phase - the ones with no own / REF shape first - with REF OLD and month % columns to fill">${icon('dl')}Overrides template</button>`;
+}
+async function clearOverrides() {
+  if (!confirm('Stop using the store overrides for Re-phase?')) return;
+  try { await api('api/rephase-overrides/clear'); } catch (e) { toast(e.message); }
+  refresh();
 }
 // Re-phase & run (2026-09-30): the server builds the re-phase, loads it as step 2 and realigns - one click to the final plan
 async function rephaseRun() {

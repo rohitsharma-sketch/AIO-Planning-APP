@@ -373,4 +373,20 @@ rout = realign(ro, rr, RM, rsrc, absorb=False)[0]
 assert np.allclose(rout[ro.DEPARTMENT != "A"][[m + " Plan" for m in RM]], ro[ro.DEPARTMENT != "A"][[m + " Plan" for m in RM]])
 assert np.allclose(rout[rout["Store Name"] == "S1"].query("DEPARTMENT == 'A'")[["Sep'26 Plan", "Oct'26 Plan", "Nov'26 Plan"]], [[2, 6, 0]])
 
+# store overrides: REF OLD (before the cluster) and a fixed month mix (any scale, rescaled to 100%)
+ovx = engine.write_xlsx([("o", pd.DataFrame([{"STORE NAME": "S3", "REF OLD": "S1"},
+                                             {"STORE NAME": "S5", "Sep'26 %": 25, "Oct'26 %": 25, "Nov'26 %": 50},
+                                             {"STORE NAME": "ZZ", "REF OLD": "S1"}]))])
+ovs, ovrep = importer.read_rephase_overrides(ovx, "o.xlsx", ro, RM)
+assert ovrep.ok and ovs["S3"] == {"ref_old": "S1"} and np.isclose(ovs["S5"]["mix"]["Nov'26"], 0.5), ovrep.items
+assert any(i["level"] == "warning" and "ZZ" in i["examples"] for i in ovrep.items)      # not in the plan: flagged
+rv2, rh2 = importer.template_rephase(ro, RM, rly, "A", "A F/S", ovs)
+src2 = rh2.set_index("STORE NAME")["SHAPE FROM"]
+assert src2["S3"] == "REF OLD" and src2["S5"] == "fixed mix (override)"
+assert np.allclose(rv2.set_index("Store Name").loc["S5", ["Sep'26 New", "Oct'26 New", "Nov'26 New"]], [1, 1, 2])
+assert importer.read_rephase_overrides(engine.write_xlsx([("o", pd.DataFrame([{"STORE NAME": "S5", "Sep'26 %": -1}]))]),
+                                       "o.xlsx", ro, RM)[0] is None                    # negative mix: refused
+tov = importer.template_rephase_overrides(ro, RM, rly, "A", "A F/S")
+assert list(tov["STORE NAME"][:3]) == ["S3", "S4", "S5"] and tov["NEEDS A LOOK"].sum() == 3   # cluster / planned first
+
 print("all realign checks passed")
