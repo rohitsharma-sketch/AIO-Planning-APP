@@ -18,7 +18,7 @@ import re
 import numpy as np
 import pandas as pd
 
-from engine import (DEPT, DISP, DIV, FROZEN, MRP, STORE, growth_targets, listing_targets, ly_label, parent_for,
+from engine import (DEPT, DISP, DIV, MRP, STORE, locked, growth_targets, listing_targets, ly_label, parent_for,
                     shift_targets, split_targets)
 
 LIST, FROMM, PARENT, NEWD, SHARE = "LISTING", "FROM MONTH", "PARENT DEPARTMENT", "NEW DEPARTMENT", "SHARE %"
@@ -339,12 +339,12 @@ def prepare_revised(df, info, rep, orig, months):
     V = [m + " Plan" for m in use]
     orig_sd = orig.groupby([STORE, DEPT])[V].sum()
     base = orig_sd.reindex(pd.MultiIndex.from_frame(df[[STORE, DEPT]])).fillna(0.0).to_numpy()
-    fz = [j for j, m in enumerate(use) if m[:3] in FROZEN]
+    fz = [j for j, m in enumerate(use) if locked(m)]
     if fz:
         diff = (np.abs(df[use].to_numpy()[:, fz] - base[:, fz]) > 1e-6).any(axis=1)
         if diff.any():
-            rep.warn(f"{int(diff.sum())} row(s) have Jan/Feb values that differ from the original - they'll be ignored "
-                     f"(Jan & Feb always stay as the original).", [f"row {r}" for r in _rows(df.index[diff])])
+            rep.warn(f"{int(diff.sum())} row(s) have values in locked months that differ from the original - they'll be ignored "
+                     f"(locked months always stay as the original).", [f"row {r}" for r in _rows(df.index[diff])])
     missing = [m for m in months if m not in use]
     if missing:
         rep.info(f"Months not in the file stay as original for these departments: {', '.join(missing)}.")
@@ -378,7 +378,7 @@ def _preview(r, orig, use, tags=None):
     rows = [{"dept": d, "stores": len(ix), "tag": (tags or {}).get(d),
              "original": base[ix].sum(0).tolist(), "revised": vals[ix].sum(0).tolist()}
             for d, ix in r.groupby(DEPT, sort=False).indices.items()]
-    return {"months": use, "frozen": [m[:3] in FROZEN for m in use], "rows": rows}
+    return {"months": use, "frozen": [locked(m) for m in use], "rows": rows}
 
 
 def _known(df, rep, checks):
@@ -438,7 +438,7 @@ def prepare_listing(df, info, rep, orig, months, shift=False, section_of=None):
         if nf.any():
             rep.error(f"{int(nf.sum())} FROM MONTH value(s) aren't months of the plan ({months[0]} to {months[-1]}).",
                       [f'row {i + 1}: "{raw_from[i]}"' for i in df.index[nf][:6]])
-    vcols = [m for m in months if m + " New" in df.columns and m[:3] not in FROZEN]
+    vcols = [m for m in months if m + " New" in df.columns and not locked(m)]
     given = pd.concat([~_blank(df[m + " New"]) for m in vcols], axis=1).any(axis=1) if vcols else pd.Series(False, index=df.index)
     df = _numbers(df, [m + " New" for m in vcols], rep)
     if not rep.ok:
@@ -538,7 +538,7 @@ def prepare_growth(df, info, rep, orig, months, ly):
     """Method 5 - growth changes: DEPARTMENT, NEW GROWTH % (vs last year), optional STORE NAME (blank = every
     store; a store's own row overrides) -> (revised Store x Dept rows, months, {}, info, report).
     ly: {(store, dept): {"Sep'25": value}} from the month-wise data-lake export, in the plan's units."""
-    gcols = [m for m in month_cols(df, "Growth") if m in months and m[:3] not in FROZEN and ly_label(m)]
+    gcols = [m for m in month_cols(df, "Growth") if m in months and not locked(m) and ly_label(m)]
     cols = [GROWTH] + [m + " Growth" for m in gcols]         # NEW GROWTH % (season) + optional '<Month> GROWTH %'
     raw = df[cols].copy()
     df = _keys(df, [DEPT], rep, "growth")
@@ -571,7 +571,7 @@ def prepare_growth(df, info, rep, orig, months, ly):
     except ValueError as e:
         rep.error(str(e))
         return None, [], {}, info, rep
-    lm = [m for m in months if m[:3] not in FROZEN and ly_label(m)]
+    lm = [m for m in months if not locked(m) and ly_label(m)]
     for x in detail:
         mm = "".join(f"; {y['month']} {y['current']:+.1%} → {y['new']:+.1%}" for y in x["months"])
         season = (f"{x['current']:+.1%} now → {x['new']:+.1%} (plan × {x['factor']:.4f})" if x["new"] is not None
@@ -624,7 +624,7 @@ def prepare_split(df, info, rep, orig, months):
     tags = {p: f"split into {k}" for p, k in kids.items()}
     tags.update({c: f"from {p}" for p, c in zip(df[PARENT], df[NEWD])})
     rep.info("Each parent keeps what isn't shared out; each new department takes its share of the parent in every live "
-             "month, with the parent's MRP / display mix and ASPs. Jan / Feb stay on the parent (never changed).")
+             "month, with the parent's MRP / display mix and ASPs. Locked months stay on the parent (never changed).")
     info.update(rows=len(df), stores=int(r[STORE].nunique()), months=months, preview=_preview(r, orig, months, tags))
     info["departments"] = len(info["preview"]["rows"])
     rep.info(f"{len(df)} split row(s) · {len(kids)} parent department(s) · {info['stores']} stores.")
@@ -644,7 +644,7 @@ def template(orig, months, dept=None):
 
 
 def live_months(months):
-    return [m for m in months if m[:3] not in FROZEN]
+    return [m for m in months if not locked(m)]
 
 
 def template_listing(orig, months, kb=None):
@@ -696,7 +696,7 @@ def template_shift(orig, months, kb=None):
 def template_growth(orig, months, ly):
     """Method 5 template: every department with its plan and last year's sales over the live months (stores that have
     both) and the growth that gives today; fill NEW GROWTH % for the ones to change (blank = unchanged)."""
-    lm = [m for m in months if m[:3] not in FROZEN and ly_label(m)]
+    lm = [m for m in months if not locked(m) and ly_label(m)]
     g = orig.groupby([STORE, DIV, DEPT])[[m + " Plan" for m in lm]].sum().sum(axis=1).rename("plan").reset_index()
     g["ly"] = [sum(float(ly.get((s, d), {}).get(ly_label(m), 0.0)) for m in lm) for s, d in zip(g[STORE], g[DEPT])]
     c = g[(g["plan"] > 1e-9) & (g["ly"] > 1e-9)].groupby([DIV, DEPT])[["plan", "ly"]].sum()

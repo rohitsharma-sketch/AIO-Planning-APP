@@ -26,7 +26,16 @@ import xlsxwriter
 
 TOL = 1e-9
 STORE, DIV, DEPT, MRP, DISP = "Store Name", "DIVISION", "DEPARTMENT", "MRP", "DISPLAY TYPE"
-FROZEN = ("Jan", "Feb")  # user rule: Jan & Feb plans stay exactly as the original
+FROZEN = ("Jan", "Feb")  # default lock for a newly loaded plan: Jan & Feb stay exactly as the original
+LOCKED = None  # month labels the user locked (server.py sets it per original plan); None = the FROZEN default
+
+
+def locked(m):
+    """Is plan month m locked - kept exactly as the original (value and qty)? The user picks this per month from
+    the months found in the original plan (2026-09-29); until they do, Jan / Feb are the locked months."""
+    return m in LOCKED if LOCKED is not None else m[:3] in FROZEN
+
+
 XLSX_CTYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
@@ -100,7 +109,7 @@ def listing_targets(o, changes, months):
     store's division total - or the given values. Its MRP/display rows come from the peer store that plans the
     most of it. Frozen months (Jan/Feb) and months before `start` keep the original."""
     n = len(months)
-    fz = np.array([m[:3] in FROZEN for m in months])
+    fz = np.array([locked(m) for m in months])
     sd, dv = _sd_totals(o, months), _sd_totals(o, months, DIV)
     div_of = o.groupby(DEPT)[DIV].agg(lambda s: s.mode().iat[0]).to_dict()
     cluster = o.groupby(STORE)["CLUSTER"].first().to_dict() if "CLUSTER" in o else {}
@@ -147,7 +156,7 @@ def split_targets(o, splits, months):
     one). A new child copies the parent's MRP/display rows, so its mix and ASPs are the parent's; nothing else
     moves. Jan/Feb stay on the parent (frozen rule)."""
     n = len(months)
-    live = ~np.array([m[:3] in FROZEN for m in months])
+    live = ~np.array([locked(m) for m in months])
     sd = _sd_totals(o, months)
     target, source, over = {}, {}, []
     get = lambda k: target.setdefault(k, sd.get(k, np.zeros(n)).copy())
@@ -182,7 +191,7 @@ def shift_targets(o, changes, months, section_of=None):
     the target has. Nothing else moves, so every store x division x month total is unchanged."""
     section_of = section_of or {}
     n = len(months)
-    live = ~np.array([m[:3] in FROZEN for m in months])
+    live = ~np.array([locked(m) for m in months])
     sd = _sd_totals(o, months)
     div_sd = o.groupby([STORE, DEPT])[DIV].first().to_dict()
     div_of = o.groupby(DEPT)[DIV].agg(lambda s: s.mode().iat[0]).to_dict()
@@ -247,7 +256,7 @@ def growth_targets(o, rows, months, ly):
     Current growth = plan / last year over the live months, on the stores that have both (store-level for a store
     row); the department's plan in scope is scaled by (1 + new) / (1 + current) in every live month, so its month
     phasing is kept. The rest of the store x division absorbs it in realign (capped at store x division x month)."""
-    live = [j for j, m in enumerate(months) if m[:3] not in FROZEN and ly_label(m)]
+    live = [j for j, m in enumerate(months) if not locked(m) and ly_label(m)]
     sd = _sd_totals(o, months)
     plan_live = {k: float(v[live].sum()) for k, v in sd.items()}
     ly_live = lambda s, d: sum(float(ly.get((s, d), {}).get(ly_label(months[j]), 0.0)) for j in live)
@@ -299,11 +308,11 @@ def realign(o, r, months, source=None):
 
     keys = pd.MultiIndex.from_arrays([o[STORE], o[DEPT]])
     rev = r.set_index([STORE, DEPT]).reindex(columns=months)
-    locked = keys.isin(rev.index)
+    kept = keys.isin(rev.index)   # rows the revised file keeps (was `locked`, now the month-lock helper)
     R = np.nan_to_num(rev.reindex(keys).to_numpy(float))
-    frozen = np.array([m[:3] in FROZEN for m in months])
-    # a month absent from the revised file, or a frozen month (Jan/Feb), is never touched
-    lk = locked[:, None] & rev.notna().any().to_numpy()[None, :] & ~frozen[None, :]
+    frozen = np.array([locked(m) for m in months])
+    # a month absent from the revised file, or a locked month (Jan/Feb by default), is never touched
+    lk = kept[:, None] & rev.notna().any().to_numpy()[None, :] & ~frozen[None, :]
 
     # 1. split revised Store x Dept value to MRP x Display rows by that month's original cont %;
     #    a month where the dept had no plan uses the row's average cont % across the months it did have
@@ -317,7 +326,7 @@ def realign(o, r, months, source=None):
     mix = np.where(has, share, avg[:, None])
     new = np.where(lk, R * mix, orig)
     fb_cells = int((lk & ~has & (np.abs(R) > TOL)).sum())
-    ignored = int((locked[:, None] & frozen[None, :] & (np.abs(R - pd.DataFrame(orig).groupby(sd).transform("sum").to_numpy()) > 1e-6)).any(1).sum())
+    ignored = int((kept[:, None] & frozen[None, :] & (np.abs(R - pd.DataFrame(orig).groupby(sd).transform("sum").to_numpy()) > 1e-6)).any(1).sum())
 
     # 2. every other department in the Store x Division x Month absorbs the difference pro-rata. Revised
     #    values are never changed: if they alone exceed a month's total, the other departments go to 0 that
@@ -385,7 +394,7 @@ def realign(o, r, months, source=None):
         i = g.index.to_numpy()
         for j, m in enumerate(months):
             summ.append({"division": d, "month": m, "original": float(orig[i, j].sum()), "final": float(new[i, j].sum()),
-                         "revised_before": float(orig[i, j][locked[i]].sum()), "revised_after": float(new[i, j][locked[i]].sum())})
+                         "revised_before": float(orig[i, j][kept[i]].sum()), "revised_after": float(new[i, j][kept[i]].sum())})
     spilled_sd = sorted({f"{s}/{d}" for s, d in zip(o[STORE][spilled], o[DIV][spilled])})
     spilled_amt = float(pd.Series(excess[:, 0]).groupby(grp).first().sum())
     short_sd = sorted({f"{s}/{d}" for s, d in zip(o[STORE][short], o[DIV][short])})
@@ -395,7 +404,7 @@ def realign(o, r, months, source=None):
     if fb_cells:
         warn.append(f"{fb_cells} revised row-months had no original plan that month; split by the row's average cont % across the other months.")
     if ignored:
-        warn.append(f"{ignored} revised rows had Jan/Feb values different from the original - ignored, Jan/Feb stay as original.")
+        warn.append(f"{ignored} revised rows had values in locked months different from the original - ignored, locked months stay as original.")
     if spilled_sd:
         warn.append(f"{len(spilled_sd)} store-division(s) had revised departments exceeding a month's original total - "
                     f"revised kept exactly, other departments set to 0 that month, and the excess ({spilled_amt:.4f}) taken "
@@ -414,8 +423,8 @@ def verify(o, r, out, months):
     original vs revised (file) vs realigned (output) - the numbers a planner would eyeball."""
     V = [m + " Plan" for m in months]
     rm = [m for m in months if m in r.columns]
-    live = [m for m in rm if m[:3] not in FROZEN]
-    fz = [m for m in months if m[:3] in FROZEN]
+    live = [m for m in rm if not locked(m)]
+    fz = [m for m in months if locked(m)]
     checks = []
     add = lambda name, status, detail: checks.append({"name": name, "status": status, "detail": detail})
 
@@ -440,7 +449,7 @@ def verify(o, r, out, months):
         k = [STORE, DEPT, MRP, DISP]  # by key: a rebuilt empty store-dept can move rows around
         a = o.set_index(k)[cols]
         fd = float(np.abs(out.set_index(k)[cols].reindex(a.index).fillna(0.0).to_numpy() - a.to_numpy()).max())
-        add("Jan / Feb untouched (value and qty)", "ok" if fd < 1e-9 else "fail", f"largest change {fd:.2g}")
+        add("Locked months untouched (value and qty)", "ok" if fd < 1e-9 else "fail", f"largest change {fd:.2g}")
     # user rule for every method: the output follows the ORIGINAL plan's display-type cont % in each
     # store x department x month that has a plan both before and after
     k = [STORE, DEPT, DISP]

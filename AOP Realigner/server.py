@@ -26,6 +26,7 @@ CACHE_DIR = os.path.join(HERE, ".cache")  # gitignored: real plan data
 ORIG_PKL = os.path.join(CACHE_DIR, "original.pkl")
 TIMINGS_JSON = os.path.join(CACHE_DIR, "timings.json")
 HISTORY_JSON = os.path.join(CACHE_DIR, "history.json")
+LOCKS_JSON = os.path.join(CACHE_DIR, "locks.json")   # the user's locked months for the loaded original plan
 MAX_BODY = 400 * 1024 * 1024
 KB_JSON = os.path.join(HERE, "..", "Listing Delisting", "app", "kb.json")  # Listing / Delisting Analyser app's listing history
 # the three ways to revise an existing plan (engine.py); each has its own step-2 file and template
@@ -207,9 +208,23 @@ def _run(job, fn, args):
 NO_RESULT = {"result": None, "out": None, "compare": None, "summary": None, "exports": {}}
 state = {"orig": None, "months": [], "orig_info": None, "orig_report": [], "orig_failed": None,
          "rev": None, "rev_months": [], "rev_info": None, "rev_report": [], "rev_upload": None, "orig_upload": None,
-         "rev_source": {}, "method": "dept",
+         "rev_source": {}, "method": "dept", "locks": [],
          **NO_RESULT}
 lock = threading.RLock()
+
+
+def _set_locks(months, chosen=None):
+    """Locked months = kept exactly as the original (user, 2026-09-29: "make these locks dynamic for months ...
+    auto detect the months as per the original plan upload"). Only months found in the original plan can be
+    locked; a month without a choice yet gets the default (Jan / Feb). Saved so it survives a restart.
+    ponytail: engine.LOCKED is one global - fine for this one-plan local server."""
+    chosen = chosen or {}
+    locks = [m for m in months if chosen.get(m, m[:3] in engine.FROZEN)]
+    engine.LOCKED = set(locks)
+    state["locks"] = locks
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    _save_json(LOCKS_JSON, {"months": months, "chosen": {m: m in locks for m in months}})
+    return locks
 
 if os.path.exists(ORIG_PKL):
     try:
@@ -227,6 +242,7 @@ if os.path.exists(ORIG_PKL):
         state.update(orig=saved["df"], months=saved["months"], orig_info=saved["info"], orig_report=saved["report"])
     except Exception:
         traceback.print_exc()
+_set_locks(state["months"], _load_json(LOCKS_JSON, {}).get("chosen"))
 
 
 def _fail(report, what):
@@ -252,6 +268,8 @@ def job_original(job, data, name, sheet=None):
             pickle.dump({"df": df, "months": months, "info": info, "report": rep.items}, fh)
         os.replace(ORIG_PKL + ".tmp", ORIG_PKL)
     with lock:
+        # a month the previous plan also had keeps the user's lock choice; a new month starts on the default
+        _set_locks(months, _load_json(LOCKS_JSON, {}).get("chosen"))
         state.update(orig=df, months=months, orig_info=info, orig_report=rep.items, orig_failed=None,
                      orig_upload=(data, name) if len(info["sheets"]) > 1 else None, **NO_RESULT)
         rev = state["rev_upload"]
@@ -377,7 +395,7 @@ def public_state():
                                       "report": s["rev_report"], "ok": s["rev"] is not None},
         "result": res, "exports": exports, "jobs": live, "history": hist, "estimates": est,
         "departments": sorted(o[DEPT].unique().tolist()) if o is not None else [],
-        "method": s["method"], "listing_app": os.path.exists(KB_JSON),
+        "method": s["method"], "listing_app": os.path.exists(KB_JSON), "locks": s["locks"],
     }
 
 
@@ -489,6 +507,23 @@ class Handler(BaseHTTPRequestHandler):
                         state["method"] = method
                     state.update(rev=None, rev_months=[], rev_info=None, rev_report=[], rev_upload=None, rev_source={}, **NO_RESULT)
                 return self._send(200, {"ok": True})
+            elif path == "/api/locks":   # ?months=Jan'27 P1|Feb'27 P1 - the full set of locked months
+                with jobs_lock:
+                    if any(j.group == "data" and j.status == "running" for j in jobs.values()):
+                        raise UserError("Please wait for the current step to finish.")
+                with lock:
+                    months = state["months"]
+                    want = [m for m in (q.get("months") or "").split("|") if m]
+                    bad = [m for m in want if m not in months]
+                    if bad:
+                        raise UserError(f"Not a month of the original plan: {', '.join(bad)}")
+                    locks = _set_locks(months, {m: m in want for m in months})
+                    state.update(**NO_RESULT)   # an earlier result was realigned with the old locks
+                    rev = state["rev_upload"]
+                if rev:   # its checks depend on which months are locked
+                    job = start_job("data", "revised", "Re-checking with the new locked months", _check_revised, *rev)
+                    return self._send(202, {"job": job.id, "locks": locks})
+                return self._send(200, {"ok": True, "locks": locks})
             elif path == "/api/run":
                 job = start_job("data", "run", f"Realigning · {METHODS[method].lower()}", job_run)
             elif path == "/api/export":

@@ -50,7 +50,7 @@ assert np.isclose(bucket("S1", "Sep'26"), 70) and np.isclose(bucket("S1", "Nov'2
 # Jan untouched even though the revised file says 99
 assert np.isclose(g("S1", "A", 299, "Jan'27 P1"), 6) and np.isclose(g("S1", "B", 299, "Jan'27 P1"), 10)
 assert np.isclose(g("S1", "A F/S", 299, "Jan'27 P1"), 0)
-assert any("Jan/Feb" in w for w in warn)
+assert any("locked months" in w for w in warn)
 # overflow: S2 Sep revised A=20 > month total 10 -> A stays EXACTLY 20, B Sep -> 0, and the excess 10 comes out
 # of S2's other live month (Nov: room 20-5=15 -> target 10 -> B Nov 5); season total still = original 30
 assert np.isclose(g("S2", "A", 299, "Sep'26"), 20) and np.isclose(g("S2", "B", 299, "Sep'26"), 0)
@@ -73,8 +73,20 @@ checks, table = verify(orig, rev, out, M)
 status = {ch["name"]: ch["status"] for ch in checks}
 assert status["Revised values kept exactly"] == "ok" and status["Grand total unchanged"] == "fail"  # S3 shortfall -> total drops
 assert status["Store × Division totals match — each month"] == "warn"   # S2's excess moved months
-assert status["Jan / Feb untouched (value and qty)"] == "ok"
+assert status["Locked months untouched (value and qty)"] == "ok"
 assert [t["dept"] for t in table] == ["A", "A F/S"] and np.isclose(table[0]["months"][0]["revised"], 37)
+
+# user-chosen locks (2026-09-29): lock Nov instead of Jan -> Nov stays exactly as the original, Jan follows the file
+import engine  # noqa: E402
+engine.LOCKED = {"Nov'26"}
+out2, _, _, _ = realign(orig, rev, M)
+g2 = lambda s, d, mrp, m: out2[(out2["Store Name"] == s) & (out2.DEPARTMENT == d) & (out2.MRP == mrp)][m + " Plan"].sum()
+for s_, d_, mrp_ in [("S1", "A", 299), ("S1", "B", 299), ("S1", "D", 299), ("S2", "B", 299), ("S3", "A", 299)]:
+    o_ = orig[(orig["Store Name"] == s_) & (orig.DEPARTMENT == d_) & (orig.MRP == mrp_)]["Nov'26 Plan"].sum()
+    assert np.isclose(g2(s_, d_, mrp_, "Nov'26"), o_), (s_, d_)            # locked month = original, value for value
+assert np.isclose(g2("S1", "A", 299, "Jan'27 P1"), 99 * 0.6)                  # unlocked Jan now takes the revised 99
+assert {ch["name"]: ch["status"] for ch in verify(orig, rev, out2, M)[0]}["Locked months untouched (value and qty)"] == "ok"
+engine.LOCKED = None   # back to the default (Jan / Feb) for the rest of the checks
 
 # ------------------------------------------------------------------ method 1: store listing changes
 o1 = orig.assign(CLUSTER=orig["Store Name"].map({"S1": "X", "S2": "X", "S3": "Y"}), **{"REF Name": "R-" + orig["Store Name"]})
@@ -227,7 +239,7 @@ _, _, _, _, rep = load_rev(xlsx([["STORE NAME", "DEPARTMENT", "Sep'26 New", "Jan
                               ["S9", "A", 1, 1], ["S1", "ZZ", 1, 1], ["S1", "A", 1, 99]]))
 errs = [i["msg"] for i in rep.items if i["level"] == "error"]
 assert any("aren't in the original" in e for e in errs) and any("no department to copy" in e for e in errs)
-assert any("Jan/Feb values" in i["msg"] for i in rep.items if i["level"] == "warning")
+assert any("values in locked months" in i["msg"] for i in rep.items if i["level"] == "warning")
 
 # method 3, new department with an explicit COPY FROM
 r, use, src, info, rep = load_rev(b"Store Name,Department,Copy From,Sep'26 New\nS1,ZZ NEW,B,5\n", "new.csv")

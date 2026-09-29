@@ -130,6 +130,8 @@ details.report .body{margin-top:10px}
 .stat-label{font-size:12px;color:var(--muted-foreground)}
 .stat-value{font-size:19px;font-weight:600;letter-spacing:-.02em;margin-top:1px}
 .stat-sub{font-size:11.5px;color:var(--muted-foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lockchip{cursor:pointer;border:1px solid transparent;font:inherit}.lockchip.on{border-color:var(--primary)}
+.lockchip:hover{border-color:var(--muted-foreground,#999)}
 .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:12px;align-items:center}
 .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .muted{color:var(--muted-foreground)}
@@ -286,7 +288,7 @@ const L = v => (v ?? 0).toLocaleString('en-IN', {minimumFractionDigits: 2, maxim
 const N = v => (v ?? 0).toLocaleString('en-IN');
 const secs = s => s == null ? '—' : s < 1 ? '<1 s' : s < 60 ? `${s.toFixed(s < 10 ? 1 : 0)} s` : `${Math.floor(s / 60)} m ${Math.round(s % 60)} s`;
 const bytes = b => b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`;
-const frozen = m => /^(Jan|Feb)/.test(m);
+const frozen = m => (S.locks || []).includes(m);   // the user's locked months (server)
 // the three ways to revise an existing plan (server METHODS / engine.py) - step 2 takes one file of the chosen kind
 const METHODS = {
   listing: {no: 1, title: 'Store listing changes', short: 'A department delisted from a store, or newly listed in one.',
@@ -317,7 +319,7 @@ const METHODS = {
       The rest of the <b>same store × division</b> re-aligns around it (capped at store × division × month); other divisions are not touched. The template lists every department with its current growth.`,
     run: 'The target department takes its new growth over last year in every live month; the rest of its own store × division absorbs the change pro-rata — other divisions are untouched.'},
 };
-const RUN_TAIL = ' Every method splits to MRP × display rows by the original plan\'s display-type cont %; Jan / Feb are never touched; qty is priced at the original month-wise ASP per Department × MRP × Display Type.';
+const RUN_TAIL = ' Every method splits to MRP × display rows by the original plan\'s display-type cont %; locked months (Jan / Feb unless you change them) are never touched; qty is priced at the original month-wise ASP per Department × MRP × Display Type.';
 const method = () => METHODS[S.method] || METHODS.dept;
 const P = {
   upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',
@@ -348,6 +350,14 @@ function toast(msg, kind = 'error') {
   el.innerHTML = icon(kind === 'error' ? 'error' : kind === 'success' ? 'ok' : 'info') + `<div>${esc(msg)}</div>`;
   $('#toasts').append(el);
   setTimeout(() => el.remove(), kind === 'error' ? 9000 : 4500);
+}
+
+// Lock / unlock one month of the original plan; the server re-checks the revised file against the new locks.
+async function toggleLock(m) {
+  const L = new Set(S.locks || []);
+  L.has(m) ? L.delete(m) : L.add(m);
+  try { await api('api/locks?months=' + encodeURIComponent([...L].join('|'))); } catch (e) { alert(e.message); }
+  refresh();
 }
 
 async function api(path) {
@@ -381,7 +391,7 @@ const dataBusy = () => S.jobs.some(j => j.status === 'running' && j.kind !== 'ex
 // ------------------------------------------------------------------ render
 
 function render() {
-  const s = JSON.stringify([S.original, S.original_failed, S.revised, S.result && S.result.id, S.departments.length, S.method, S.listing_app]);
+  const s = JSON.stringify([S.original, S.original_failed, S.revised, S.result && S.result.id, S.departments.length, S.method, S.listing_app, S.locks]);   // S.locks: a lock toggle redraws the chips
   if (s !== sig) { sig = s; renderOrig(); renderRev(); renderResults(); }
   renderRun(); renderDownloads(); renderActivity(); autoDownload();
   document.querySelectorAll('.drop').forEach(d => d.classList.toggle('disabled', !!dataBusy()));
@@ -440,8 +450,8 @@ function renderOrig() {
         <div class="stat"><div class="stat-label">Departments</div><div class="stat-value">${N(o.departments)}</div></div>
         <div class="stat"><div class="stat-label">Divisions</div><div class="stat-value">${(o.divisions || []).length}</div><div class="stat-sub">${esc((o.divisions || []).join(' · '))}</div></div>
       </div>
-      <div class="chips">${(o.months || []).map(m => `<span class="chip">${frozen(m) ? icon('lock', 'xs') : ''}${esc(m)}</span>`).join('')}
-        <span class="muted small">${icon('lock', 'xs')} never changed (Jan / Feb)</span></div>
+      <div class="chips">${(o.months || []).map(m => `<button class="chip lockchip${frozen(m) ? ' on' : ''}" onclick="toggleLock(this.dataset.m)" data-m="${esc(m)}" aria-pressed="${frozen(m)}" title="${frozen(m) ? 'Locked - kept exactly as the original. Click to let it change' : 'Changes with the realignment. Click to lock it'}">${frozen(m) ? icon('lock', 'xs') : ''}${esc(m)}</button>`).join('')}
+        <span class="muted small">${icon('lock', 'xs')} locked = kept exactly as the original · click a month to lock / unlock</span></div>
       ${report(o.report, 'rep-o')}<div class="sep"></div>${dropzone('original', 'Replace the original plan', true)}`;
   } else h += dropzone('original', f ? 'Try another file' : 'Upload the original plan', !!f);
   $('#c-orig').innerHTML = h + '</div>';
@@ -485,7 +495,7 @@ function renderRev() {
       const tot = pv.months.map((_, j) => [pv.rows.reduce((a, x) => a + x.original[j], 0), pv.rows.reduce((a, x) => a + x.revised[j], 0)]);
       h += `<div class="sep"></div><div class="row" style="justify-content:space-between;margin-bottom:8px"><strong class="small">Preview — revised totals against the original, same stores</strong>
         <span class="muted small">₹ lakhs</span></div><div class="table-wrap"><table><thead><tr><th>Department</th><th>Stores</th>${
-        pv.months.map((m, j) => `<th class="${pv.frozen[j] ? 'frozen' : ''}">${pv.frozen[j] ? icon('lock', 'xs') + ' ' : ''}${esc(m)}</th>`).join('')}<th>Total excl. Jan / Feb</th></tr></thead><tbody>${
+        pv.months.map((m, j) => `<th class="${pv.frozen[j] ? 'frozen' : ''}">${pv.frozen[j] ? icon('lock', 'xs') + ' ' : ''}${esc(m)}</th>`).join('')}<th>Total excl. locked months</th></tr></thead><tbody>${
         pv.rows.map(x => `<tr><td><strong>${esc(x.dept)}</strong>${x.tag ? ` <span class="badge b-info">${esc(x.tag)}</span>` : ''}</td><td>${N(x.stores)}</td>${
           pv.months.map((m, j) => cellHtml(x.original[j], x.revised[j], pv.frozen[j])).join('')}${cellHtml(sumLive(x.original), sumLive(x.revised), false)}</tr>`).join('')}
         ${pv.rows.length > 1 ? `<tr class="total"><td>All revised</td><td></td>${tot.map(([a, b], j) => cellHtml(a, b, pv.frozen[j])).join('')}${
@@ -553,7 +563,7 @@ function deptTable(res) {
       <td class="muted">${lbl[k]}</td>${d.months.map(m => {
         const same = Math.abs(m.realigned - m.revised) < 1e-6, fz = frozen(m.month), mark = k === 'realigned' && !fz;
         return `<td class="${fz ? 'frozen' : mark ? (same ? 'up' : 'dn') : ''}">${L(m[k])}${mark ? ' ' + icon(same ? 'check' : 'warn', 'xs') : ''}</td>`; }).join('')}</tr>`).join('')).join('')}
-    </tbody></table></div><p class="muted small" style="margin:6px 0 0">₹ lakhs. A tick means the output equals the revised file exactly. Jan / Feb stay as the original regardless of the file.</p>`;
+    </tbody></table></div><p class="muted small" style="margin:6px 0 0">₹ lakhs. A tick means the output equals the revised file exactly. Locked months stay as the original regardless of the file.</p>`;
 }
 
 function divTable(res) {

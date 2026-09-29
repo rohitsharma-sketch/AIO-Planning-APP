@@ -5,7 +5,7 @@ const RULES_NOW = [
   ['What is kept', [
     'Every <b>Store × Division × Month</b> total of the original plan - the plan being revised - is the target the output lands on.',
     'The values you give (revised, newly listed or split departments) are kept <b>exactly</b>; every other department in the same store × division absorbs the difference, pro-rata to its original value.',
-    '<b>Jan and Feb are never changed</b> (value and qty). Jan / Feb figures in an upload are ignored and flagged.',
+    '<b>Locked months are never changed</b> (value and qty) - the planner locks / unlocks each month of the original plan (Jan / Feb locked by default). Locked-month figures in an upload are ignored and flagged.',
   ]],
   ['When a month overflows', [
     "If the kept departments alone exceed a month's store × division total, the other departments go to 0 that month and the excess comes out of the same store × division's other live months, in proportion to their room.",
@@ -42,7 +42,7 @@ const RULES_NOW = [
     "The final plan is split to MRP × display rows by the <b>original plan's display-type cont %</b> in every store × department × month; the other departments are scaled as a whole, so theirs is kept too. Every run checks it.",
   ]],
   ['Checks on every run', [
-    'Recomputed from the output: kept values exact, store × division season and month totals, grand total, Jan / Feb untouched, display-type cont % as the original. Any input error blocks the run; warnings and notes are listed with row examples.',
+    'Recomputed from the output: kept values exact, store × division season and month totals, grand total, locked months untouched, display-type cont % as the original. Any input error blocks the run; warnings and notes are listed with row examples.',
   ]],
 ];
 
