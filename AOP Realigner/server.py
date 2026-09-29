@@ -208,7 +208,7 @@ def _run(job, fn, args):
 NO_RESULT = {"result": None, "out": None, "compare": None, "summary": None, "exports": {}}
 state = {"orig": None, "months": [], "orig_info": None, "orig_report": [], "orig_failed": None,
          "rev": None, "rev_months": [], "rev_info": None, "rev_report": [], "rev_upload": None, "orig_upload": None,
-         "rev_source": {}, "method": "dept", "locks": [],
+         "rev_source": {}, "method": "dept", "locks": [], "absorb": True,
          **NO_RESULT}
 lock = threading.RLock()
 
@@ -330,16 +330,18 @@ def job_run(job):
         o, r, months, source = state["orig"], state["rev"], state["months"], state["rev_source"]
         method = (state["rev_info"] or {}).get("method", "dept")
         names = (state["orig_info"] or {}).get("name"), (state["rev_info"] or {}).get("name")
+        # Method 2 option (2026-09-29): other departments absorb the change (default) or stay as they are
+        absorb = state["absorb"] if method == "dept" else True
     if o is None or r is None:
         raise UserError("Load a valid original plan (step 1) and revised plan (step 2) first.")
     with job.step("Realign", "realign", len(o)):
         try:
-            out, summ, warn, compare = engine.realign(o, r, months, source)
+            out, summ, warn, compare = engine.realign(o, r, months, source, absorb=absorb)
         except ValueError as e:
             raise UserError(str(e))
     with job.step("Verify totals", "verify", len(o)):
-        checks, dept_table = engine.verify(o, r, out, months)
-    res = {"id": job.id, "method": method, "finished_at": stamp(), "secs": round(job.elapsed(), 1), "original": names[0], "revised": names[1],
+        checks, dept_table = engine.verify(o, r, out, months, absorb=absorb)
+    res = {"id": job.id, "method": method, "absorb": absorb, "finished_at": stamp(), "secs": round(job.elapsed(), 1), "original": names[0], "revised": names[1],
            "rows": len(out), "changed_rows": len(compare), "summary": summ, "warnings": warn,
            "checks": checks, "dept_table": dept_table,
            "status_counts": compare["Status"].value_counts().to_dict() if len(compare) else {}}
@@ -395,7 +397,7 @@ def public_state():
                                       "report": s["rev_report"], "ok": s["rev"] is not None},
         "result": res, "exports": exports, "jobs": live, "history": hist, "estimates": est,
         "departments": sorted(o[DEPT].unique().tolist()) if o is not None else [],
-        "method": s["method"], "listing_app": os.path.exists(KB_JSON), "locks": s["locks"],
+        "method": s["method"], "listing_app": os.path.exists(KB_JSON), "locks": s["locks"], "absorb": s["absorb"],
     }
 
 
@@ -507,6 +509,13 @@ class Handler(BaseHTTPRequestHandler):
                         state["method"] = method
                     state.update(rev=None, rev_months=[], rev_info=None, rev_report=[], rev_upload=None, rev_source={}, **NO_RESULT)
                 return self._send(200, {"ok": True})
+            elif path == "/api/option":   # ?absorb=1|0 - Method 2: other departments absorb / stay as they are
+                with jobs_lock:
+                    if any(j.group == "data" and j.status == "running" for j in jobs.values()):
+                        raise UserError("Please wait for the current step to finish.")
+                with lock:
+                    state.update(absorb=q.get("absorb", "1") != "0", **NO_RESULT)   # a result from the other mode is stale
+                return self._send(200, {"ok": True, "absorb": state["absorb"]})
             elif path == "/api/locks":   # ?months=Jan'27 P1|Feb'27 P1 - the full set of locked months
                 with jobs_lock:
                     if any(j.group == "data" and j.status == "running" for j in jobs.values()):

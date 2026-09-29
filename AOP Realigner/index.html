@@ -168,7 +168,8 @@ td.frozen,th.frozen{color:var(--muted-foreground)}
 .check{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius)}
 .check .t{font-weight:500}
 .check .d{font-size:12.5px;color:var(--muted-foreground)}
-.ok-i{color:var(--success)}.warn-i{color:var(--warning)}.fail-i{color:var(--destructive)}
+.ok-i{color:var(--success)}.warn-i{color:var(--warning)}.fail-i{color:var(--destructive)}.info-i{color:var(--info)}
+.absorb{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:10px;font-size:13px}.absorb label{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
 
 /* downloads */
 .dls{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
@@ -319,6 +320,7 @@ const METHODS = {
       The rest of the <b>same store × division</b> re-aligns around it (capped at store × division × month); other divisions are not touched. The template lists every department with its current growth.`,
     run: 'The target department takes its new growth over last year in every live month; the rest of its own store × division absorbs the change pro-rata — other divisions are untouched.'},
 };
+const KEEP_RUN = 'Revised departments keep their values exactly and every other department stays exactly as it is — each store × division\'s months follow the revised departments (a re-phase keeps the season total, so check "Revised departments keep their season total").';
 const RUN_TAIL = ' Every method splits to MRP × display rows by the original plan\'s display-type cont %; locked months (Jan / Feb unless you change them) are never touched; qty is priced at the original month-wise ASP per Department × MRP × Display Type.';
 const method = () => METHODS[S.method] || METHODS.dept;
 const P = {
@@ -513,7 +515,10 @@ function renderRun() {
   const other = !job && dataBusy();
   if (other && !reason) reason = 'Waiting for the current step to finish…';
   const h = `<div class="card-header">${stepNo(3, res ? 'done' : ready ? 'current' : '')}<div class="grow"><h2 class="card-title" id="t-run">Realign</h2>
-    <p class="card-desc"><strong>Method ${method().no} · ${esc(method().title)}.</strong> ${esc(method().run)}${RUN_TAIL}</p></div></div>
+    <p class="card-desc"><strong>Method ${method().no} · ${esc(method().title)}.</strong> ${esc(S.method === 'dept' && S.absorb === false ? KEEP_RUN : method().run)}${RUN_TAIL}</p>
+    ${S.method === 'dept' ? `<div class="absorb" role="radiogroup" aria-label="Other departments in the store × division"><span class="muted">Other departments in the store × division:</span>
+      <label><input type="radio" name="absorb" ${S.absorb !== false ? 'checked' : ''} ${job || other ? 'disabled' : ''} onchange="setAbsorb(true)">absorb the change — each store × division stays on the original</label>
+      <label><input type="radio" name="absorb" ${S.absorb === false ? 'checked' : ''} ${job || other ? 'disabled' : ''} onchange="setAbsorb(false)">stay as they are — only these departments move (e.g. a month re-phase)</label></div>` : ''}</div></div>
     <div class="card-content"><div class="row">
       <button class="btn btn-primary btn-lg" onclick="run()" ${!ready || job || other ? 'disabled' : ''}>${job ? icon('load', 'spin') + 'Realigning…' : icon('play') + (res ? 'Run again' : 'Run realignment')}</button>
       <span class="muted small">${job ? `Running for ${secs(job.secs)} — each step is timed in Activity.` : reason ||
@@ -528,10 +533,10 @@ function renderResults() {
   el.hidden = !res;
   if (!res) return;
   const sc = res.status_counts || {}, fails = res.checks.filter(c => c.status === 'fail').length;
-  const chk = res.checks.map(c => `<div class="check">${icon(c.status === 'ok' ? 'ok' : c.status === 'warn' ? 'warn' : 'error', c.status + '-i')}<div><div class="t">${esc(c.name)}</div><div class="d">${esc(c.detail)}</div></div></div>`).join('');
+  const chk = res.checks.map(c => `<div class="check">${icon(c.status === 'ok' ? 'ok' : c.status === 'warn' ? 'warn' : c.status === 'info' ? 'info' : 'error', c.status + '-i')}<div><div class="t">${esc(c.name)}</div><div class="d">${esc(c.detail)}</div></div></div>`).join('');
   el.innerHTML = `<div class="card-header">${stepNo(4, 'done')}<div class="grow"><h2 class="card-title" id="t-res">Results
       <span class="badge ${fails ? 'b-error' : 'b-success'}"><span class="dot"></span>${fails ? `${fails} check${fails > 1 ? 's' : ''} failed` : 'All checks passed'}</span></h2>
-    <p class="card-desc">${METHODS[res.method] ? `Method ${METHODS[res.method].no} · ${esc(METHODS[res.method].title)} · ` : ''}Run ${esc(res.finished_at)} in ${secs(res.secs)} · ${esc(res.revised)} against ${esc(res.original)}</p></div></div>
+    <p class="card-desc">${METHODS[res.method] ? `Method ${METHODS[res.method].no} · ${esc(METHODS[res.method].title)}${res.absorb === false ? ' (other departments kept as they are)' : ''} · ` : ''}Run ${esc(res.finished_at)} in ${secs(res.secs)} · ${esc(res.revised)} against ${esc(res.original)}</p></div></div>
     <div class="card-content">
       <div class="stats" style="margin-top:0">
         <div class="stat"><div class="stat-label">Cells changed</div><div class="stat-value">${N(res.changed_rows)}</div><div class="stat-sub">${N(sc.kept || 0)} kept · ${N(sc.absorbed || 0)} absorbed</div></div>
@@ -658,6 +663,8 @@ async function useSheet(slot) {
 async function dismissOrig() { try { await api('api/original/dismiss'); } catch (e) { toast(e.message); } refresh(); }
 async function clearRev() { try { await api('api/revised/clear'); } catch (e) { toast(e.message); } refresh(); }
 async function run() { try { await api('api/run'); } catch (e) { toast(e.message); } refresh(); }
+// Method 2 option (2026-09-29): keep every store x division on the original (absorb) or leave the other departments alone
+async function setAbsorb(v) { try { await api('api/option?absorb=' + (v ? 1 : 0)); } catch (e) { toast(e.message); } refresh(); }
 function template(m = 'dept', kind = '') {
   const q = new URLSearchParams({method: m});
   if (kind) q.set('kind', kind);

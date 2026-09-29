@@ -61,9 +61,13 @@ store's plan across **all** departments — not from D's plan alone (D can be 0 
 
 **R8 — Down to MRP × display type.** Within each store-month, split `New_s,D,m` by the old plan's MRP × display
 share **of that month**. For a window month with no old plan at all (Nov / Dec here — D was not planned in winter),
-use each row's **average share of the months that did have a plan** (`AVERAGEIF(<>0)` of Sep / Oct), then
-**renormalise to 100%** per store (the workbook happens to sum to 1; the average does not guarantee it).
+use each row's **average share over the window months that did have a plan** (Sep / Oct), a row's 0 in such a month
+**counted** as 0. Each month's shares sum to 100%, so their average does too — no renormalising needed.
+Only the window's months count: averaging in months outside it (the locked Jan / Feb) moves the mix off.
 *Workbook:* 7,878 rows, every store-month equals `Base - Dep` exactly; no new value was left without a mix.
+*Tested (29 Sep):* this reproduces every Nov / Dec row exactly. Skipping a row's 0s (`AVERAGEIF(<>0)`, with or
+without renormalising) or averaging over all planned months including Jan / Feb does not (up to 0.075 L off on
+2,896 row-months).
 
 **R9 — Quantity.** `Qty = Value / ASP`, with ASP = the old plan's value ÷ qty for the same
 Store × Dept × MRP × Display × Month; if that month had no old qty, the row's all-month ASP (the AOP Re-Aligner's
@@ -104,3 +108,26 @@ This is a **month re-phase** of an existing plan with store totals fixed — clo
 as a Re-Aligner method: inputs = the loaded original plan, D, M, W, locked months (the Re-Aligner's month locks),
 the store master (SSG tag, REF, REF OLD, opening dates) and LY sales from the sales engine; output = the realigned
 plan with checks C1–C6.
+
+## 7. Tested against the AOP Re-Aligner, Method 2 (29 Sep 2026)
+
+The workbook's new LW_U_T-TOP store months (`Base - Dep` "New" columns) were fed to Method 2 ("Existing department
+changes") as the revised file, with the original = the file's 8th Aug LADIES plan (220,584 rows, 52 departments).
+
+| Mode | LW_U_T-TOP rows vs the file | Other LADIES departments |
+|---|---|---|
+| **Stay as they are** (new option) | 7,878 / 7,878 exact, every month | untouched (0 of 51 moved); all checks ok |
+| Absorb (default) | exact | move +246 / −94 / −97 / −56 L (Sep–Dec) to keep each store × division month on the original |
+
+Improvements made to Method 2 from this test:
+
+- **R8 fallback mix:** a month the department had no plan in now takes the average over the *revised* months that had one
+  (it used to average in locked months too; 2,896 row-months were up to 0.075 L off, now 0).
+- **"Other departments stay as they are"** option on the Run card: only the revised departments change. This is what a
+  month re-phase needs. Checks then confirm the other departments are untouched and the revised departments kept their
+  season total; the store × division month totals are reported as info, not as failures.
+- The "locked month was ignored" warning now counts only locked months that the revised file actually contains (it
+  used to fire 6,864 times when the file had no Jan / Feb columns).
+
+Still manual: building the revised store months themselves (R3–R7, the LY mix cascade). That can become a
+"re-phase from LY" generator in front of Method 2.

@@ -7,6 +7,16 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-29
 
+### AOP Re-Aligner Method 2: tested against the re-phase rule set, and improved
+- **Asked (user):** "compare it with the method 2 and improve the logic base through intense training and checking." The user chose "Test, then improve Method 2".
+- **Test:** the new LW_U_T-TOP store months from `LW_U_T-TOP Working.xlsx` were fed to Method 2 against the file's 8th Aug LADIES plan (220,584 rows).
+- **Fixes and additions:**
+  - **Fallback mix:** a month the department had no plan in (Nov/Dec) now uses the average over the *revised* months that had one. Locked Jan/Feb no longer count. It was 2,896 row-months off by up to 0.075 L; now 0.
+  - **New Run-card option "Other departments: stay as they are":** only the revised departments move, which suits a month re-phase. The default ("absorb") is unchanged. In this mode the checks confirm the other departments are untouched and the revised departments kept their season total; the store × division months show as info.
+  - **Warning fix:** the "locked month ignored" warning now fires only for locked months the revised file contains. It had fired 6,864 times falsely.
+- **Result:** with "stay as they are", all 7,878 LW_U_T-TOP rows match the workbook exactly in every month, the other 51 LADIES departments are untouched, and all checks are ok. Rule-set doc R8 was corrected (zeros counted, window months only), and §7 was added.
+- Files: `AOP Realigner/engine.py`, `server.py` (`/api/option?absorb=`), `index.html`, `test_realign.py`, `docs/business-rules/REPHASE_DEPARTMENT_MONTHS.md`.
+
 ### Rule set: re-phase a department's plan across months (from LW_U_T-TOP Working.xlsx)
 - **Asked (user):** "analyse this file thoroughly and build a generic rule set." The 554 MB workbook was read by streaming its XML, without opening it in Excel or loading whole sheets. Every step was checked against its saved values.
 - **Written up:** `docs/business-rules/REPHASE_DEPARTMENT_MONTHS.md`. The method:

@@ -88,6 +88,27 @@ assert np.isclose(g2("S1", "A", 299, "Jan'27 P1"), 99 * 0.6)                  # 
 assert {ch["name"]: ch["status"] for ch in verify(orig, rev, out2, M)[0]}["Locked months untouched (value and qty)"] == "ok"
 engine.LOCKED = None   # back to the default (Jan / Feb) for the rest of the checks
 
+# Method 2 option "other departments stay as they are" (absorb=False, 2026-09-29): only revised rows move
+out3, _, warn3, cmp3 = realign(orig, rev, M, absorb=False)
+g3 = lambda s, d, mrp, m: out3[(out3["Store Name"] == s) & (out3.DEPARTMENT == d) & (out3.MRP == mrp)][m + " Plan"].sum()
+for s_, d_, mrp_ in [("S1", "B", 299), ("S1", "C", 299), ("S1", "D", 299), ("S2", "B", 299)]:
+    for m_ in M:
+        o_ = orig[(orig["Store Name"] == s_) & (orig.DEPARTMENT == d_) & (orig.MRP == mrp_)][m_ + " Plan"].sum()
+        assert np.isclose(g3(s_, d_, mrp_, m_), o_), (s_, d_, m_)          # untouched, value for value
+assert np.isclose(g3("S1", "A", 299, "Sep'26"), 7.2) and np.isclose(g3("S2", "A", 299, "Sep'26"), 20)  # revised kept
+assert np.isclose(bucket_ := out3[out3["Store Name"] == "S1"]["Sep'26 Plan"].sum(), 70 + (12 + 3) - 10), bucket_  # moves by the change
+assert not any("excess" in w or "couldn't fully land" in w for w in warn3)
+assert set(cmp3["Status"]) == {"kept"}
+st3 = {ch["name"]: ch["status"] for ch in verify(orig, rev, out3, M, absorb=False)[0]}
+assert st3["Other departments untouched"] == "ok" and st3["Revised values kept exactly"] == "ok", st3
+assert st3["Revised departments keep their season total"] == "warn"   # this revised file changes totals, not only months
+assert st3["Store × Division month totals"] == "info" and "Store × Division totals match — whole season" not in st3
+# a pure re-phase (season total kept, months moved) passes the season-total check
+rephase = pd.DataFrame([{"Store Name": "S1", "DEPARTMENT": "D", "Sep'26": 20, "Nov'26": 60, "Jan'27 P1": 40}])
+out4, _, _, _ = realign(orig, rephase, M, absorb=False)
+st4 = {ch["name"]: ch["status"] for ch in verify(orig, rephase, out4, M, absorb=False)[0]}
+assert st4["Revised departments keep their season total"] == "ok" and st4["Other departments untouched"] == "ok", st4
+
 # ------------------------------------------------------------------ method 1: store listing changes
 o1 = orig.assign(CLUSTER=orig["Store Name"].map({"S1": "X", "S2": "X", "S3": "Y"}), **{"REF Name": "R-" + orig["Store Name"]})
 changes = [{"store": "S1", "dept": "D", "listing": "N", "start": 1, "values": None},   # delisted from Nov
