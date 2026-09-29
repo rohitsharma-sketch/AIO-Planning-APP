@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-29
 
+### BIS: Save says whether Sales Plan received the plan
+- **Found on the re-check:** after "reloaded and saved", Sales Plan still had the 09:01 push. The Save left no trace, and BIS gave no sign: a push that sent nothing (AOP not synced on the page, or no rows) was silent, and a successful one looked the same as a failed one.
+- **Now** the Save button always reports the outcome: "Saved ✓ — N growth rows sent to Sales Plan", "Saved in this browser only — NOT sent to Sales Plan: <reason>", or "Growth NOT sent to Sales Plan (status – sign in again)". A save that was redirected to the sign-in page counts as a failure. Failures are also shown on automatic saves.
+- Checked in the sandbox (its push cannot reach Sales Plan): Save → "Growth NOT sent to Sales Plan (501)"; with no AOP → "NOT sent … no AOP synced".
+
 ### Landing (7800) now restarts itself — the whole suite stays reachable
 - **Problem (user: "the whole server went down" → "permafix this issue"):** Landing stopped when the Claude session that had started it was restarted. Every app is opened through Landing, so every link died, although the servers behind it (8010, 8000, 5050, 8060, 8070, 8123) were all still running. Nothing watched Landing: its own watchdog restarts the other apps, not itself. The four "RS Planning - … Server" scheduled tasks had **never run** (last run 1999): they fire "at system start-up" but only "when the user is logged on", which Windows never meets. The BIS task also points at an old copy of BIS (`…\Buyers Input Sheet`).
 - **Fix:** `Landing/keep_alive.py` starts Landing in the background (no console window, no new browser tab — `--no-browser`) whenever port 7800 is down. The new scheduled task **"RS Planning - Keep Alive"** (`Landing/install_keep_alive.ps1`, current user, no admin) runs it at sign-in and every 2 minutes. Landing's own watchdog then brings back any app that is down within 30 s.

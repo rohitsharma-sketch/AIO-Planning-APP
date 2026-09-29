@@ -4323,8 +4323,8 @@ function saveState(logVersion=false){
   try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopVersionId:S.aopVersionId,aopUnit:S.aopUnit,locked:[...S.locked],aopSeeds:S.aopSeeds,aopSeededFrom:S.aopSeededFrom,aopSeedFp:S.aopSeedFp,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],customDepts:S.customDepts,deptSplit:1,at:now.toISOString()}))}catch(e){}
   _updateSaveLabel(now);
   if(logVersion)_maybeSaveVersion(now);
-  pushBuyerGrowthLive();
   toast('State saved ✓');
+  pushBuyerGrowthLive(logVersion);   // the Save button (logVersion) reports whether Sales Plan got it
 }
 // Live push to SalesPlan's Department Growth Matrix — every department/month
 // growth % currently entered (not just locked MAMJ cells; "automatic, live"
@@ -4335,9 +4335,11 @@ function saveState(logVersion=false){
 // recorded when AOP seeded it or the buyer set any cell in it; the rest only hold seedPlanDefaults' LY YoY fill.
 // The server replaces the whole set, so a month that stops being recorded drops out; hence no push until the AOP
 // has been applied (a partial picture would wipe the MAMJ rows). Each row carries the AOP publish it was seeded from.
-async function pushBuyerGrowthLive(){
+// explicit = the Save button: always say what happened (2026-09-29: a Save that sent nothing looked like a success)
+async function pushBuyerGrowthLive(explicit=false){
+  const note=m=>{if(explicit)toast(m);};
   try{
-    if(!S.aopLocked)return;
+    if(!S.aopLocked){note('Saved in this browser only — NOT sent to Sales Plan: no AOP synced');return;}
     const recorded=new Set();
     Object.keys(S.aopSeeds).concat([...S.locked]).forEach(k=>recorded.add(+k.split('__').pop()));
     const rows=[];
@@ -4351,11 +4353,12 @@ async function pushBuyerGrowthLive(){
         }
       });
     });
-    if(!rows.length)return;
+    if(!rows.length){note('Saved in this browser only — NOT sent to Sales Plan: no growth entered');return;}
     await fetch('/api/config/buyer-department-growth',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({rows,aop_publish_id:S.aopSeededFrom??null}),
-    }).then(r=>{if(!r.ok)toast('Growth NOT sent to Sales Plan ('+r.status+(r.status===401?' - sign in again':'')+')');});
+    }).then(r=>{if(!r.ok||r.redirected)toast('Growth NOT sent to Sales Plan ('+r.status+(r.status===401||r.redirected?' - sign in again':'')+')');
+      else note('Saved ✓ — '+rows.length+' growth rows sent to Sales Plan');});
   }catch(e){toast('Growth NOT sent to Sales Plan (AOP unreachable)');} // never block the buyer's own save on this
 }
 function _updateSaveLabel(d){
