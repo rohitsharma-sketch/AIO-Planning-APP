@@ -90,7 +90,7 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
     setSyncing(true)
     try {
       await putSalesdataLinkSelection(sourceType, payload)
-      setSelection(payload)
+      setSelection(s => ({ ...s, ...payload }))   // keep dataSyncedAt from the server
       onSelectionChange?.(sourceType, payload)
     } finally {
       setSyncing(false)
@@ -109,7 +109,10 @@ export default function LinkStatusPanel({ sourceType, isPlanner, onSelectionChan
       syncAll().catch(e => setFetchError(`Auto-sync failed: ${e.message}`))
   }, [link, selLoaded, selection]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const synced = selection?.syncedAt ? new Date(selection.syncedAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-'
+  // Last synced = the later of: the linked-months save, and the server's last pull of this source's data (the
+  // daily sync rebuilds the data without touching the month list - 2026-09-30, mw sat on 25 Sep for days).
+  const last = [selection?.syncedAt, selection?.dataSyncedAt].filter(Boolean).map(t => new Date(t)).sort((a, b) => b - a)[0]
+  const synced = last ? last.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-'
   let status
   if (progress) {
     status = <td colSpan={4}>

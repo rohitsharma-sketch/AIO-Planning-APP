@@ -775,13 +775,24 @@ def put_festival_changelog(body: dict = Body(...), actor: dict = Depends(require
 def get_salesdata_link_selection(source_type: str, user: dict = Depends(require_login)):
     if source_type not in ("mw", "dw"):
         raise HTTPException(404, "source_type must be 'mw' or 'dw'")
+    from db.models.calendar import SalesSnapshot
     session = SessionLocal()
     try:
+        # When this source's data was last pulled in (2026-09-30): syncedAt alone only moves when the list of
+        # linked months changes, so the daily syncs that rebuild the data left "Last synced" stuck (mw showed
+        # 25 Sep while its snapshots were rebuilt on 29 Sep). mw = the snapshot rebuild; dw also = the day-weights sync.
+        pulled = [session.execute(select(func.max(SalesSnapshot.computed_at)).where(SalesSnapshot.source_type == source_type)).scalar()]
+        if source_type == "dw":
+            pulled.append(session.execute(text("SELECT max(completed_at) FROM sync.sync_runs "
+                                               "WHERE source_key = 'data_lake_day_weights' AND status = 'success'")).scalar())
+        pulled = max((p for p in pulled if p is not None), default=None)
         row = session.get(SalesdataLinkSelection, source_type)
         if row is None:
-            return {"months": [], "path": None, "syncedAt": None, "extraDims": [], "metric": None}
+            return {"months": [], "path": None, "syncedAt": None, "extraDims": [], "metric": None,
+                    "dataSyncedAt": pulled.isoformat() if pulled else None}
         return {"months": row.months, "path": row.path, "syncedAt": row.synced_at.isoformat(),
-                "extraDims": row.extra_dims, "metric": row.metric}
+                "extraDims": row.extra_dims, "metric": row.metric,
+                "dataSyncedAt": pulled.isoformat() if pulled else None}
     finally:
         session.close()
 
