@@ -1913,16 +1913,37 @@ function toggleSecVis(id){
     const sec=DVDATA.flatMap(d=>d.secs).find(s=>s.id===id);
     if(sec&&sec.ly>0) S.manualInactive.add(id);
   }
-  _syncDivTabs(document.getElementById('divtabs'));
-  _syncInactiveBadge();
-  renderTable();
+  _afterVisChange(DVDATA.filter(d=>d.secs.some(s=>s.id===id)));
 }
 function showAllSecs(){
   S.hiddenSecs=new Set();
   S.manualInactive=new Set();
+  _afterVisChange(DVDATA);
+}
+// A dept going inactive / active changes which depts carry the division's AOP target: rescale the other unlocked
+// active depts' plans by one factor so each division stays exactly on target, keeping their relative growth
+// (bug 2026-09-29: inactivating L_EW_BLOUSE dropped its plan - LADIES pushed 0.01-0.08 L under AOP - and the toggle
+// never saved, so Sales Plan only got it on the next reload). Then save + push like any other edit.
+function _afterVisChange(dvs){
+  if(S.aopLocked)dvs.forEach(dv=>AOP_MIS.forEach(mi=>_divRescale(dv,mi)));
   _syncDivTabs(document.getElementById('divtabs'));
   _syncInactiveBadge();
+  saveState();
   renderTable();
+}
+function _divRescale(dv,mi){
+  if(S.divLocked.has(dv.id))return;
+  const aopMon=S.aop[dv.id]?.[mi];
+  if(!aopMon)return;
+  let lockedTY=0,freeTY=0;const free=[];
+  dv.secs.forEach(sec=>{
+    if(S.hiddenSecs.has(sec.id))return;
+    const ly=_secMonLY(sec,dv,mi),k=sec.id+'__'+mi,ty=ly*(1+(S.inputs[k]??0)/100);
+    if(S.locked.has(k))lockedTY+=ty;else if(ly>0){freeTY+=ty;free.push({k,ly,ty});}
+  });
+  if(!freeTY)return;
+  const f=(aopMon-lockedTY)/freeTY;
+  free.forEach(({k,ly,ty})=>{S.inputs[k]=(ty*f/ly-1)*100;});
 }
 function _deptAvgST(deptId){
   const obj=(window._SELLTHRU_LIVE_DEPT||{})[deptId];
@@ -5157,6 +5178,19 @@ function _autoApplyAop(){
   // A plan saved on the pre-split department names was just carried onto the new ones: save it once so
   // Sales Plan's growth matrix switches to the new names too (the server replaces the whole set).
   else if(_deptMigrated){_deptMigrated=false;saveState();}
+  // A plan saved before _afterVisChange existed can sit off AOP after a dept was made inactive: put each division
+  // back on target here (local only - opening still pushes nothing) and ask for one Save.
+  else{
+    const off=AOP_DIVS.filter(d=>AOP_MIS.some(mi=>{
+      const dv=DVDATA.find(x=>x.id===d.id);if(!dv||!S.aop[d.id]?.[mi]||S.divLocked.has(d.id))return false;
+      const ty=dv.secs.reduce((a,s)=>S.hiddenSecs.has(s.id)?a:a+_secMonLY(s,dv,mi)*(1+(S.inputs[s.id+'__'+mi]??0)/100),0);
+      return Math.abs(ty-S.aop[d.id][mi])>1e-6;   // Rs Cr: 0.0001 L
+    }));
+    if(off.length){
+      off.forEach(d=>{const dv=DVDATA.find(x=>x.id===d.id);AOP_MIS.forEach(mi=>_divRescale(dv,mi));});
+      toast(`${off.map(d=>d.id.toUpperCase()).join(', ')} re-balanced onto the AOP target (inactive departments) — press Save to send it to Sales Plan`);
+    }
+  }
   syncAopLockUI();
   syncAopLockStatus();
   buildPills();

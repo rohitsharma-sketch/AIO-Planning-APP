@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-29
 
+### BIS: making a department inactive keeps the division on its AOP target
+- **Bug (found on the re-check after the reload):** LADIES reached Sales Plan 0.01–0.08 L a month under AOP (Mar −0.0725, Apr −0.0636, May −0.0800, Jun −0.0137 L). L_EW_BLOUSE had been made inactive by hand; its planned sales were simply dropped instead of passing to the other departments. The toggle also never saved, so Sales Plan only got the change on the next reload.
+- **Fix:** making a department inactive or active again rescales the other unlocked, active departments of that division by one factor, so the division lands exactly on its AOP target. Each department keeps its growth relative to the others, and locked cells are untouched. The change then saves and pushes like any edit. A plan already saved off target (like the current one) is put back on target when BIS opens — locally only, since opening pushes nothing — and a message asks for one **Save**.
+- **Check (sandbox that cannot push):** inactivate → LADIES gap 0 in all four months, MENS untouched, kurti/dupatta growth ratio unchanged, 1 push. Re-activate → 0, pushed. A stale saved plan 1.5 L off → 0 after opening, no push, message shown.
+
 ### Sales Plan PW/W and SOR Deviation: block read from the imported files; SOR laid out like PW/W
 - **Change (user):** "similar format for SOR deviation just like PW/W Deviation, and instead of the manual search bar in PW/W I want an auto detect from the file imported so that there is sanctity between modules, make this happen in both". The user chose month columns in the file.
 - **PW/W:** the BLOCK search box (91 month combinations) is gone. The PPO Cont % file now carries one column per TY month (DEPARTMENT | ARTICLE NAME | FINAL MRP | Mar'27 | Apr'27 | …). Sync reads those headers (Excel dates, "Mar'27", "Mar-27", "Mar 2027", "2027-03" all work), detects the block (4 months Mar'27–Jun'27 → MAMJ; months must be consecutive plan months) and shows it read-only. Phase 1 and Phase 2 always run on that block. Phase 2 uses each month's own MRP mix; Phase 1 uses the block average. **The current single-column PPO Cont %.xlsx is refused** with a message showing the new columns, until it is re-saved with month columns.
