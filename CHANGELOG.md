@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-29
 
+### Sales sync run on the new files, and the data checked through every app
+- **Bug fixed on the way (BIS):** the sales job reused whatever local copy already existed, so it would have kept reading the old 5 Sep copy after the source moved to `master.parquet`. It also read a half-written copy while the history job was re-copying it ("File too short"). Both jobs now share one `_local_copy()`: refreshed only when the network file changes, written to a temp file and swapped in under a lock.
+- **Sync:** the full data-lake sync ran (`run_all`: site master, store master, day shift, store actuals, day weights — cluster-days now to **28 Sep 2026**, calendar reindex, nightly accuracy check, festival dates, Listing / Delisting), all ok. BIS sales, history and sell-through re-synced from `master.parquet` / the complete 2 Sep sell-through.
+- **What changed in the data:** Mar–Jun 2026 (the plan LY) and every month Sep 2025–Jul 2026 are **identical** to the 5 Sep file for KIDS / LADIES / MENS. Aug 2026 has tiny restatements (−0.01 … −0.07 L). Sep 2026 grows from ~5 to 28 days. So the AOP base, BIS LY and the plans are unchanged.
+- **Every app ties to the raw file** (0.01 L tolerance, planted 0.02 L caught each time): Calendar department snapshot 398,433 store × dept × month cells (Mar–Sep 2026, ₹90,034.01 L) exact · Listing `sales.json` 170,394 cells exact · BIS department LY 743 cells (148 plan stores, ₹38,885.41 L) max 0.0001 L · Sales Plan actual LY 330,733 cells exact · MRP Re-apportionment 212,813 cells, 0.0 L.
+- **Chain deep check 17 / 19**, the same two known misses (AOP V2 base vs the current calendar). BIS → Sales Plan = AOP target, 0.0 L. **Open item:** Sales Plan's LADIES TY is now +0.05…+0.12 L over target because L_EW_BLOUSE — inactive in BIS, so not pushed — is still planned in Sales Plan from its own LY with a fallback growth. It is counted in BIS's re-spread and again in Sales Plan. A fix is proposed; nothing changed, since it touches the Sales Plan engine.
+
 ### Every app reads the same, newest complete data-lake file (sales sync)
 - **Change (user):** "sync the sales data and always pick the latest file from the folders to sync. Post sync, make sure that the data is flowing through all the apps consistently."
 - **Found:** new exports landed today (29 Sep): month-wise `master.parquet` (22,769,780 rows, +392k), day-wise `…_20260929T043251` (bills to 28 Sep), and a sell-through file of **exactly 50,000 rows** (the previous one has 7,069,667 — a capped or partial export). The apps chose files in five different ways, so they would have split across files:

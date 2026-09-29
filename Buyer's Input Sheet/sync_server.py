@@ -187,6 +187,39 @@ def _data_version() -> str:
     return "-".join(parts + [LY_DEF, HIST_DEF]) if parts else "unknown"
 
 
+import threading as _threading
+_copy_lock = _threading.Lock()
+
+
+def _local_copy(src: str) -> str:
+    """The one local snapshot of the network sales file that the sales AND history jobs read (29 Sep 2026: the
+    sales job kept reusing whatever copy existed - the old 5 Sep one after the source moved on - and read it
+    half-written while the history job was re-copying it). Refreshed only when the network file changes; written
+    to a temp file and swapped in, under a lock, so neither job ever sees a partial copy. Falls back to src."""
+    local = os.path.join(LOCAL_CACHE, "rs_sales_latest.parquet")
+    if os.path.abspath(src) == os.path.abspath(local):
+        return local
+    try:
+        want = f"{src}|{os.path.getmtime(src)}|{os.path.getsize(src)}"
+    except OSError:
+        return src
+    with _copy_lock:
+        try:
+            with open(local + ".src", encoding="utf-8") as fh:
+                if os.path.exists(local) and fh.read() == want:
+                    return local
+        except OSError:
+            pass
+        try:
+            shutil.copy2(src, local + ".tmp")
+            os.replace(local + ".tmp", local)
+            with open(local + ".src", "w", encoding="utf-8") as fh:
+                fh.write(want)
+            return local
+        except Exception:
+            return src
+
+
 def get_latest_file(directory: str, patterns=("*.parquet",)) -> str | None:
     """Newest complete export (rs_rs_common.lake_files: an unreadable / truncated / column-short newer file is skipped)."""
     for pat in patterns:
@@ -338,17 +371,7 @@ def _run_sales_job(src: str):
             }
             return
 
-        # Use the local cached copy if it exists — same snapshot as history job.
-        # If it doesn't exist yet, copy from network now so future jobs share it.
-        local_src = os.path.join(LOCAL_CACHE, "rs_sales_latest.parquet")
-        if os.path.exists(local_src):
-            src = local_src
-        else:
-            try:
-                shutil.copy2(src, local_src)
-                src = local_src
-            except Exception:
-                pass  # fall back to network path
+        src = _local_copy(src)   # the same current snapshot the history job reads
         _sales_job["progress"] = 10
 
         import pyarrow.parquet as pq
@@ -673,14 +696,7 @@ def _run_history_job(src: str):
 
         row_filter = [(date_col, "in", target_ym_ints)] if pa.types.is_integer(date_field.type) else None
 
-        # Copy network parquet to local once; sales job will read the same snapshot for consistency
-        local_src = os.path.join(LOCAL_CACHE, "rs_sales_latest.parquet")
-        if src != local_src:
-            try:
-                shutil.copy2(src, local_src)
-                src = local_src
-            except Exception:
-                pass  # fall back to network path if copy fails
+        src = _local_copy(src)   # one current local snapshot, shared with the sales job
 
         # STORE_NAME + TAG_TYPE (cohorts) + OPENING_DATE feed lfl_by_month
         store_col = detect_col(cols_lower_schema, ["store_name", "store", "store_nm", "outlet", "outlet_name"])
