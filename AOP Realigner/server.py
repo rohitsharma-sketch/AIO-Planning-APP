@@ -67,6 +67,16 @@ def last_year():
             data = json.load(fh)["data"]
         return {(st, d): {m[:6]: v / 1e5 for m, v in mm.items()} for st, dd in data.items() for d, mm in dd.items()}
     return _cached(SALES_JSON, build)
+
+
+def ly_departments():
+    """Departments with last year's sales - the choices for Re-phase from LY's shape (a proxy such as LW_U_T-TOP F/S
+    need not be in the plan). Rebuilt only when sales.json changes."""
+    ly = last_year()
+    hit = _ref_cache.get("ly_departments")
+    if not hit or hit[0] is not ly:
+        hit = _ref_cache["ly_departments"] = (ly, sorted({d for _, d in ly}))
+    return hit[1]
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 
@@ -398,6 +408,7 @@ def public_state():
         "result": res, "exports": exports, "jobs": live, "history": hist, "estimates": est,
         "departments": sorted(o[DEPT].unique().tolist()) if o is not None else [],
         "method": s["method"], "listing_app": os.path.exists(KB_JSON), "locks": s["locks"], "absorb": s["absorb"],
+        "ly_departments": ly_departments() if o is not None and s["method"] == "dept" else [],
     }
 
 
@@ -465,6 +476,17 @@ class Handler(BaseHTTPRequestHandler):
             elif method == "newdept":
                 df, name = ((importer.template_split(), "Department split template.xlsx") if kind == "split"
                             else (importer.template_newdept(months), "New department template.xlsx"))
+            elif kind == "rephase":   # Method 2 file from last year's month shape (docs/business-rules/REPHASE_DEPARTMENT_MONTHS.md)
+                ly = last_year()
+                if not ly:
+                    return self._send(404, {"error": "Last year's sales (the Listing / Delisting Analyser's sales.json) aren't built yet."})
+                if not dept:
+                    return self._send(400, {"error": "Pick the department to re-phase first."})
+                try:
+                    df, how = importer.template_rephase(o, months, ly, dept, q.get("mix") or None)
+                except ValueError as e:
+                    return self._send(400, {"error": str(e)})
+                sheets, name = [("Revised plan", df), ("How it was built", how)], f"Re-phase from LY - {dept}.xlsx"
             else:
                 df = importer.template(o, months, dept)
                 name = f"Revised plan template - {dept}.xlsx" if dept else "Revised plan template.xlsx"

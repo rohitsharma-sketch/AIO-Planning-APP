@@ -693,6 +693,79 @@ def template_shift(orig, months, kb=None):
     return t, skipped
 
 
+# Re-phase from last year (user, 2026-09-30) - docs/business-rules/REPHASE_DEPARTMENT_MONTHS.md R2-R7
+REF_NAMES = {"REF NAME", "REF", "REF STORE", "REF_NAME", "BUDDY", "BUDDY STORE"}
+REF_OLD_NAMES = {"REF OLD", "OLD REF", "REF_OLD", "REF NAME OLD", "OLD REF NAME"}
+SSG_NAMES = {"SSG TAG", "SSG", "SSG_TAG"}
+CLUSTER_NAMES = {"CLUSTER", "CLUSTER NAME", "CALENDAR CLUSTER"}
+OWN_SHAPE_TAGS = {"SSG", "SSG-ANG"}
+
+
+def _store_col(orig, names):
+    """{store: value} of an optional store-attribute column of the plan (first non-blank per store), or None."""
+    c = next((c for c in orig.columns if norm(c) in names), None)
+    if c is None:
+        return None
+    v = orig.loc[~_blank(orig[c]), [STORE, c]].drop_duplicates(STORE)
+    return dict(zip(v[STORE], _clean(v[c])))
+
+
+def template_rephase(orig, months, ly, dept, mix=None):
+    """Method 2 file that re-phases `dept` across the live months by last year's month shape (rule set R2-R7) ->
+    (revised rows: STORE, DIV, DEPT, '<Month> New' for the live months; how-it-was-built rows, one per store).
+    Each store keeps its live-month total. The shape = last year's sales of `mix` (default: dept itself) in the same
+    months at the first SSG / SSG-ANG store of: the store itself, its REF store, REF OLD (any store when the plan has
+    no SSG TAG column); failing all three, the SSG stores of its CLUSTER together. A month the store doesn't trade in (no plan in the division) gets 0 and the rest is scaled back to 100%.
+    No usable last year -> the store keeps its planned phasing (flagged). Meant for 'other departments: stay as they are'."""
+    mix = mix or dept
+    lm = [m for m in months if not locked(m) and ly_label(m)]
+    if len(lm) < 2:
+        raise ValueError("Re-phasing needs at least two unlocked full months - unlock the months to re-phase.")
+    d = orig[orig[DEPT] == dept]
+    if not len(d):
+        raise ValueError(f"{dept} isn't in the original plan.")
+    if not any(k[1] == mix for k in ly):
+        raise ValueError(f"No last-year sales for {mix} - pick another department for the last-year shape.")
+    P = [m + " Plan" for m in lm]
+    div = d[DIV].mode().iat[0]
+    old = d.groupby(STORE)[P].sum()
+    old = old[old.sum(axis=1).abs() > 1e-9]                  # nothing planned in these months = nothing to re-phase
+    trading = orig[orig[DIV] == div].groupby(STORE)[P].sum().abs().reindex(old.index).fillna(0.0).to_numpy() > 1e-9
+    ssg, ref, refold, clus = (_store_col(orig, n) for n in (SSG_NAMES, REF_NAMES, REF_OLD_NAMES, CLUSTER_NAMES))
+    one = lambda x: np.clip([float(ly.get((x, mix), {}).get(ly_label(m), 0.0)) for m in lm], 0, None)
+    # only an SSG / SSG-ANG store (a full, comparable last year) lends its shape - the workbook's LY pivot is filtered so
+    ssg_ok = lambda st: bool(st) and (ssg is None or ssg.get(st, "").replace(" ", "") in OWN_SHAPE_TAGS)
+    peers = {}                                               # cluster -> its SSG stores (the last fallback)
+    for st, c in (clus or {}).items():
+        if ssg_ok(st):
+            peers.setdefault(c, []).append(st)
+    lyv = lambda x: (sum((one(p) for p in peers.get(x[8:], [])), np.zeros(len(lm))) if x.startswith("CLUSTER:") else one(x))
+    rows, how = [], []
+    for j, (s, o_) in enumerate(zip(old.index, old.to_numpy())):
+        c = (clus or {}).get(s)
+        chain = [("own", s), ("REF", (ref or {}).get(s)), ("REF OLD", (refold or {}).get(s)),
+                 ("cluster SSG stores", "CLUSTER:" + c if c else None)]
+        src, x, p = "planned phasing (no last-year shape)", "", None
+        for name, st in chain:
+            v = lyv(st) if st and (st.startswith("CLUSTER:") or ssg_ok(st)) else np.zeros(len(lm))
+            if v.sum() > 1e-9:
+                q = v / v.sum() * trading[j]
+                if q.sum() > 1e-9:
+                    src, x, p = name, st, q / q.sum()
+                    break
+        new = o_.sum() * p if p is not None else o_
+        rows.append({STORE: s, DIV: div, DEPT: dept, **{m + " New": float(n) for m, n in zip(lm, new)}})
+        how.append({STORE: s, "SSG TAG": (ssg or {}).get(s, ""), "REF": (ref or {}).get(s, ""), "REF OLD": (refold or {}).get(s, ""),
+                    "SHAPE FROM": src, "SHAPE STORE": x,
+                    **{f"LY {ly_label(m)}": float(v) for m, v in zip(lm, lyv(x) if x else np.zeros(len(lm)))},
+                    **{f"{m} %": round(float(v) * 100, 4) for m, v in zip(lm, p if p is not None else o_ / o_.sum())},
+                    "NOT TRADING": ", ".join(m for m, t in zip(lm, trading[j]) if not t),
+                    **{f"{m} OLD": float(v) for m, v in zip(lm, o_)}, **{f"{m} NEW": float(v) for m, v in zip(lm, new)},
+                    "TOTAL": float(o_.sum())})
+    return (pd.DataFrame(rows, columns=[STORE, DIV, DEPT] + [m + " New" for m in lm]),
+            pd.DataFrame(how).rename(columns={STORE: "STORE NAME"}))
+
+
 def template_growth(orig, months, ly):
     """Method 5 template: every department with its plan and last year's sales over the live months (stores that have
     both) and the growth that gives today; fill NEW GROWTH % for the ones to change (blank = unchanged)."""

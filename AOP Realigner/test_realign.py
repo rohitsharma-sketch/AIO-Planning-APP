@@ -328,4 +328,49 @@ with j1.step("long export"):
     assert j1.view()["steps"][0]["done"] == 5 and j1.view()["steps"][0]["total"] == 10
 assert j2.view()["steps"][0]["status"] == "done" and j1.view()["steps"][0]["status"] == "done"
 
+# ------------------------------------------------------------------ re-phase from last year (rule set R2-R7)
+RM = ["Sep'26", "Oct'26", "Nov'26", "Jan'27 P1"]     # Jan locked -> the window is Sep-Nov
+def rrow(store, ref, tag, clus, dept, *v):
+    d = {"Store Name": store, "REF Name": ref, "SSG TAG": tag, "CLUSTER": clus, "DIVISION": "LADIES", "DEPARTMENT": dept,
+         "MRP": 299, "DISPLAY TYPE": "TABLE"}
+    for m, x in zip(RM, v):
+        d[m + " Plan"], d[m + " Plan Qty"] = x, x
+    return d
+ro = pd.DataFrame([
+    rrow("S1", "S1", "SSG",    "C1", "A", 8, 0, 0, 5),    # own shape (A F/S LY 1 / 3 / 0) -> 2 / 6 / 0
+    rrow("S2", "S1", "OTHERS", "C1", "A", 0, 4, 0, 5),    # REF S1's shape, but S2 doesn't trade in Sep -> 0 / 4 / 0
+    rrow("S2", "S1", "OTHERS", "C1", "B", 0, 3, 3, 5),
+    rrow("S3", "S4", "OTHERS", "C1", "A", 1, 2, 1, 5),    # REF S4 isn't SSG -> the cluster's SSG stores (S1) -> 1 / 3 / 0
+    rrow("S4", "S4", "OTHERS", "C1", "A", 1, 1, 1, 5),    # its own REF, not SSG -> cluster C1 (S1)
+    rrow("S5", "",   "OTHERS", "C9", "A", 3, 1, 0, 5),    # nothing usable -> keeps its planned phasing
+    rrow("S1", "S1", "SSG",    "C1", "C", 9, 9, 9, 5),    # another department: never in the file
+])
+rly = {("S1", "A F/S"): {"Sep'25": 1, "Oct'25": 3, "Nov'25": 0}, ("S4", "A F/S"): {"Sep'25": 9, "Oct'25": 0, "Nov'25": 1}}
+rv, rh = importer.template_rephase(ro, RM, rly, "A", "A F/S")
+got = rv.set_index("Store Name")[["Sep'26 New", "Oct'26 New", "Nov'26 New"]]
+assert list(rv.columns) == ["Store Name", "DIVISION", "DEPARTMENT", "Sep'26 New", "Oct'26 New", "Nov'26 New"]  # Jan locked: not in the file
+assert np.allclose(got.loc["S1"], [2, 6, 0]) and np.allclose(got.loc["S2"], [0, 4, 0])
+assert np.allclose(got.loc["S3"], [1, 3, 0]) and np.allclose(got.loc["S4"], [0.75, 2.25, 0]) and np.allclose(got.loc["S5"], [3, 1, 0])
+src = rh.set_index("STORE NAME")["SHAPE FROM"].to_dict()
+assert src == {"S1": "own", "S2": "REF", "S3": "cluster SSG stores", "S4": "cluster SSG stores",
+               "S5": "planned phasing (no last-year shape)"}, src
+assert rh.set_index("STORE NAME").at["S2", "NOT TRADING"] == "Sep'26"
+assert np.allclose(got.sum(axis=1), ro[ro.DEPARTMENT == "A"].groupby("Store Name")[["Sep'26 Plan", "Oct'26 Plan", "Nov'26 Plan"]].sum().sum(axis=1))
+ro2 = ro.assign(**{"REF OLD": ro["Store Name"].map({"S3": "S1"})})   # a REF OLD column is used before the cluster
+assert importer.template_rephase(ro2, RM, rly, "A", "A F/S")[1].set_index("STORE NAME").at["S3", "SHAPE FROM"] == "REF OLD"
+for bad in (lambda: importer.template_rephase(ro, RM, rly, "Z"), lambda: importer.template_rephase(ro, RM, rly, "A", "NOPE")):
+    try:
+        bad()
+        raise AssertionError("expected a ValueError")
+    except ValueError:
+        pass
+# the file reads back as a Method 2 upload and, with other departments kept, changes only A
+rdf, rinfo, rrep = importer.read_table(engine.write_xlsx([("Revised plan", rv), ("How it was built", rh)]), "r.xlsx",
+                                       importer.NEED_REVISED, "revised plan")
+rr, ruse, rsrc, rinfo, rrep = importer.prepare_revised(rdf, rinfo, rrep, ro, RM)
+assert rrep.ok, rrep.items
+rout = realign(ro, rr, RM, rsrc, absorb=False)[0]
+assert np.allclose(rout[ro.DEPARTMENT != "A"][[m + " Plan" for m in RM]], ro[ro.DEPARTMENT != "A"][[m + " Plan" for m in RM]])
+assert np.allclose(rout[rout["Store Name"] == "S1"].query("DEPARTMENT == 'A'")[["Sep'26 Plan", "Oct'26 Plan", "Nov'26 Plan"]], [[2, 6, 0]])
+
 print("all realign checks passed")

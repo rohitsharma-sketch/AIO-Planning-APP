@@ -44,6 +44,11 @@ month outside W is copied exactly. *Workbook:* the PSP plan's grand totals move 
 3. if REF has no LY → **REF OLD**'s mix;
 4. if none → 0 (the Excel `MAX(IFERROR(...),0%)`).
 *Workbook:* 120 stores own mix, 183 via REF / REF OLD; all 303 mixes sum to 100%.
+**Only an SSG store lends its mix** (found 30 Sep): the `Approaches` LY pivot is filtered to SSG TAG = SSG, so a REF
+that is not SSG counts as "no LY" and the cascade moves on to REF OLD. The generic cascade is therefore: the first
+SSG / SSG-ANG store of (the store itself, REF, REF OLD). **Generator fallback** (not in the workbook): if none of the
+three is SSG, use the SSG stores of the store's CLUSTER together, and failing that keep the store's planned phasing
+(never 0, so the window total can't be lost).
 
 **R5 — The mix department may be a proxy.** Use M ≠ D when D's own LY is too thin or shaped by a different season
 to give a usable month curve. *Workbook:* LW_U_T-TOP's own SOND LY = 44.0 L, 67% in Sep (a summer-shaped tail);
@@ -129,5 +134,28 @@ Improvements made to Method 2 from this test:
 - The "locked month was ignored" warning now counts only locked months that the revised file actually contains (it
   used to fire 6,864 times when the file had no Jan / Feb columns).
 
-Still manual: building the revised store months themselves (R3–R7, the LY mix cascade). That can become a
-"re-phase from LY" generator in front of Method 2.
+## 8. Re-phase from LY generator (AOP Re-Aligner, Method 2 — built 30 Sep 2026)
+
+Step 2 of Method 2 → pick the department, optionally the **LY shape** department (any department with last-year sales,
+e.g. the proxy LW_U_T-TOP F/S — it need not be in the plan), → **Re-phase from LY**. It downloads a Method 2 file
+(`Revised plan` sheet) built by R2–R7 plus a **How it was built** sheet per store (SSG TAG, REF, REF OLD, shape source
+and store, LY per month, mix %, months not trading, old / new values, total). Review or hand-edit it (e.g. JHM), upload
+it in step 2 and run with **other departments: stay as they are**; R8–R9 then happen in Method 2.
+
+- Window = the plan's **unlocked full months** (the month locks choose it); LY = the same months a year earlier from
+  the Listing / Delisting Analyser's `sales.json` (the data lake, same as Method 5).
+- Store attributes are read from the plan's own columns: `REF Name`, `SSG TAG`, optional `REF OLD`, `CLUSTER`
+  (the DB store master's ref_store differs from the plan's REF for 127 of 303 stores, so it is not used).
+- Code: `importer.template_rephase`, route `GET /api/template?method=dept&kind=rephase&dept=&mix=`; test in
+  `test_realign.py`.
+
+Tested on this workbook (`scratchpad/rephase_validate.py`):
+
+| LY source | Store months vs `Base - Dep` | Through Method 2 vs `Pivot For New Plan` |
+|---|---|---|
+| the workbook's own LY pivot + its REF OLD | 286 / 286 formula stores exact, 16 / 17 Exception (JHM = manual) | 7,865 / 7,878 rows exact (the 13 = JHM); other departments untouched |
+| live `sales.json`, plan without REF OLD (the app today) | 271 / 286 exact — the 15 off are the stores whose shape came from REF OLD; with the cluster fallback they are within 0.71 L (planned phasing would be 2.4 L off) | 7,657 / 7,878 exact, max 0.23 L |
+
+Live plan (`New Plan - 8.9.26 With MC Split.xlsb`), LW_U_T-TOP with the F/S shape: 229 stores, window total
+772.77 L kept exactly; Sep–Dec 304.10 / 316.09 / 96.28 / 56.30 L (workbook 304.08 / 316.25 / 96.73 / 55.71).
+**To be exact for every store, add a `REF OLD` column to the plan** — the generator uses it before the cluster.

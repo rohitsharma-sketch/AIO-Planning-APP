@@ -5,6 +5,32 @@ Newest first. Each entry names its commit.
 
 ---
 
+## 2026-09-30
+
+### Calendar: "Last synced" shows when the data was actually pulled
+- **Bug (user, screenshot):** the Link Sales Data Source table showed Month-wise last synced "25 Sept, 10:40 am", although the data had been re-synced since (29 Sep, 13:09).
+- **Cause:** the column showed when the list of linked months was last saved. Month-wise already had every month linked, so the daily syncs that rebuild its data never moved it.
+- **Fix:** `GET /api/calendar/salesdata-link-selection/{mw|dw}` now also returns `dataSyncedAt`. That's the source's last snapshot rebuild, plus the last day-weights sync for day-wise. The column shows the later of the two.
+- Month-wise now reads 29 Sep, 01:09 pm; day-wise is unchanged (29 Sep, 01:58 pm).
+- Files: `RS Planning Platform/backend/calendar_engine/router.py`, `Calendar Engine/frontend/src/components/CalendarisedSalesTab/LinkStatusPanel.jsx` (+ rebuilt `dist/`).
+
+### AOP Re-Aligner: "Re-phase from LY" builds the Method 2 file
+- **Asked (user):** "yes, build the re-phase from LY generator".
+- **Where:** Method 2, step 2. Pick the department and optionally the LY-shape department (any department with last-year sales, e.g. LW_U_T-TOP F/S), then click **Re-phase from LY**.
+- **What it builds:** a Method 2 file where each store keeps its total for the unlocked months, re-split by last year's same months.
+  - **Shape source:** the first SSG store of (the store itself, REF, REF OLD), else the cluster's SSG stores, else the store's planned phasing.
+  - **Non-trading months** get 0 and the rest is rescaled.
+  - **Audit sheet:** "How it was built" shows each store's source, LY, mix % and old/new values.
+  - **Then:** upload it and run with "other departments: stay as they are".
+- **New rule found in the workbook:** only SSG stores lend a shape. The workbook's LY pivot is filtered to SSG, so a non-SSG REF falls through to REF OLD.
+- **Tested on `LW_U_T-TOP Working.xlsx`:**
+  - With the workbook's LY and REF OLD: 286/286 formula stores exact, 16/17 exceptions (JHM is manual); 7,865/7,878 final rows exact, all 13 misses are JHM.
+  - With live `sales.json` and no REF OLD column: 271/286 exact. The 15 REF-OLD stores use the cluster fallback, within 0.71 L.
+  - Live plan: 772.77 L kept exactly.
+  - Adding a REF OLD column to the plan makes every store exact.
+- **Also:** Method 2's fallback mix no longer prints numpy's "mean of empty slice" warning (same maths). The Rules page has been updated.
+- Files: `AOP Realigner/importer.py` (`template_rephase`), `server.py` (template route, `ly_departments` in state), `index.html`, `rules.js`, `engine.py`, `test_realign.py`, `docs/business-rules/REPHASE_DEPARTMENT_MONTHS.md` (R4, §8).
+
 ## 2026-09-29
 
 ### AOP Re-Aligner Method 2: tested against the re-phase rule set, and improved

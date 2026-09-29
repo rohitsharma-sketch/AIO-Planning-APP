@@ -328,8 +328,8 @@ def realign(o, r, months, source=None, absorb=True):
     in_rev = rev.notna().any().to_numpy() & ~frozen
     win = has & in_rev[None, :]
     use = np.where(win.any(1, keepdims=True), win, has)
-    with np.errstate(invalid="ignore"):
-        avg = np.nan_to_num(np.nanmean(np.where(use, share, np.nan), axis=1)) if share.size else np.zeros(len(o))
+    n = use.sum(axis=1)   # mean over `use` without numpy's "mean of empty slice" warning (a row with none -> 0)
+    avg = np.divide(np.nansum(np.where(use, share, 0.0), axis=1), n, out=np.zeros(len(o)), where=n > 0) if share.size else np.zeros(len(o))
     cnt = pd.Series(avg).groupby(sd).transform("size").to_numpy()
     avg = np.where(has.any(1), avg, 1.0 / cnt)  # dept never planned in this store -> equal split
     mix = np.where(has, share, avg[:, None])
