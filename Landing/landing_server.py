@@ -464,6 +464,7 @@ if __name__ == "__main__":
         if not _is_online(app["port"]):
             _launch(app)
     threading.Thread(target=_watchdog, daemon=True).start()
-    webbrowser.open(f"http://localhost:{PORT}")
+    if "--no-browser" not in sys.argv:   # keep_alive.py restarts Landing in the background - no new tab each time
+        webbrowser.open(f"http://localhost:{PORT}")
     print(f"RS Planning landing page at http://localhost:{PORT}")
     ThreadingHTTPServer(("", PORT), Handler).serve_forever()
