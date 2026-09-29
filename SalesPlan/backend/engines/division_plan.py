@@ -1,7 +1,5 @@
 from fastapi import APIRouter
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-import io
 import os
 import sys
 import pandas as pd
@@ -27,12 +25,6 @@ FY27_BASE = {
     "KIDS":   54237.27,
     "LADIES": 51264.55,
     "MENS":   68427.08,
-}
-
-DIVISION_SEASONALITY = {
-    "KIDS":   1.10,
-    "LADIES": 1.08,
-    "MENS":   1.06,
 }
 
 FY28_MONTHS = [
@@ -116,177 +108,61 @@ def _aop_mamj_total(aop_by_div: dict) -> dict:
     }
 
 
-def _build_default_divisions(aop_growth: dict | None = None):
-    growth_rates = _load_growth_rates()
-    # If AOP-derived growth is available, prefer it over inputs.xlsx
-    if aop_growth:
-        growth_rates.update(aop_growth)
-    return [
-        {
-            "division_name": div,
-            "base_sales": FY27_BASE[div],
-            "growth_pct": growth_rates[div],
-            "seasonality_index": DIVISION_SEASONALITY[div],
-            "fy_start_month": 4,
-        }
-        for div in DIVISIONS
-    ]
+PLAN_MONTHS = {202703: "Mar'27", 202704: "Apr'27", 202705: "May'27", 202706: "Jun'27"}
 
 
-class DivisionConfig(BaseModel):
-    division_name: str
-    base_sales: float
-    growth_pct: float
-    seasonality_index: float
-    fy_start_month: int
+def _bis_aop():
+    """The AOP publish BIS plans on (user, 29 Sep 2026: "show the plan shown in BIS and not any day further"):
+    the one stamped on BIS's last growth push (buyer_department_growth source "buyer_input|aop:<id>"), else the
+    live saved version. Returns (publish id, version label, division_totals, division_base_totals) or Nones."""
+    from db.base import SessionLocal
+    from db.publish_aop_targets import list_aop_history
+    from sqlalchemy import text
+    with SessionLocal() as db:
+        src = db.execute(text(
+            "SELECT source FROM planning_inputs.input_values WHERE lever_key = 'buyer_department_growth' "
+            "AND source LIKE '%aop:%' ORDER BY updated_at DESC LIMIT 1")).scalar()
+        hist = list_aop_history(db, limit=50)
+        pid = int(src.split("aop:", 1)[1]) if src else (hist[0]["id"] if hist else None)
+        h = next((x for x in hist if x["id"] == pid), None)
+        if h is None:
+            return None, None, {}, {}
+        bases = db.execute(text("SELECT division_base_totals FROM planning_inputs.aop_publish_history WHERE id = :id"),
+                           {"id": pid}).scalar()
+    return pid, h["version_label"], h["division_totals"] or {}, bases or {}
 
 
-class DivisionPlanInput(BaseModel):
-    divisions: list[DivisionConfig]
-    plan_year: int
-    plan_name: str
-
-
-class MonthlyBreakdown(BaseModel):
-    month: str
-    planned_sales: float
-    index: float
-
-
-class DivisionResult(BaseModel):
-    division_name: str
-    annual_target: float
-    monthly_breakdown: list[MonthlyBreakdown]
-
-
-class DivisionPlanOutput(BaseModel):
-    plan_name: str
-    plan_year: int
-    total_planned_sales: float
-    divisions: list[DivisionResult]
-
-
-@router.get("/aop-targets")
-def get_aop_targets():
-    """Return MAMJ AOP targets per division from the shared DB, with AOP growth from inputs.xlsx."""
-    aop_by_div, _lever = _load_aop_targets()
-    mamj = _aop_mamj_total(aop_by_div)
-    # Growth rates from the AOP Forecaster's Growth % sheet — the actual forecast rates
-    growth_rates = _load_growth_rates()
+def _plan_rows(totals: dict, bases: dict) -> list:
+    """Per division, the months BIS plans: LY base = the publish's base (Mar-Jun 2026 LY, fixed once published),
+    plan = its division target - BIS spreads every division exactly onto it (verified 0.0000 L)."""
+    val = lambda d, p: float((d or {}).get(str(p), (d or {}).get(p)) or 0)
     out = []
     for div in DIVISIONS:
-        mamj_val = mamj.get(div, 0.0)
-        out.append({
-            "division": div,
-            "mamj_lakhs": round(mamj_val, 2),
-            "fy27_base_lakhs": FY27_BASE.get(div, 0.0),
-            "aop_growth_pct": round(growth_rates.get(div, 6.0), 2),
-        })
-    return {
-        "source": "planning_inputs.input_values (aop_division_target)",
-        "growth_source": "AOP Forecaster — inputs.xlsx",
-        "divisions": out,
-        "total_mamj_lakhs": round(sum(r["mamj_lakhs"] for r in out), 2),
-    }
+        months = [{"period_id": p, "month": m, "ly": round(val(bases.get(div), p), 2), "plan": round(val(totals.get(div), p), 2)}
+                  for p, m in PLAN_MONTHS.items()]
+        for m in months:
+            m["growth_pct"] = round((m["plan"] / m["ly"] - 1) * 100, 2) if m["ly"] else None
+        ly, plan = sum(m["ly"] for m in months), sum(m["plan"] for m in months)
+        out.append({"division_name": div, "ly_mamj": round(ly, 2), "plan_mamj": round(plan, 2),
+                    "growth_pct": round((plan / ly - 1) * 100, 2) if ly else None, "months": months})
+    return out
 
 
 @router.get("/config")
 def get_config():
     store_master = _load_store_master()
-    aop_by_div, aop_lever = _load_aop_targets()
-    mamj = _aop_mamj_total(aop_by_div)
-    divisions_data = _build_default_divisions()
-    for d in divisions_data:
-        d["mamj_lakhs"] = round(mamj.get(d["division_name"], 0.0), 2)
-    has_mamj = any(d["mamj_lakhs"] for d in divisions_data)
-    lever_label = "locked" if aop_lever == "aop_locked_target" else ("staging" if aop_lever else None)
+    pid, label, totals, bases = _bis_aop()
+    divisions = _plan_rows(totals, bases)
     return {
-        "divisions": divisions_data,
-        "store_master": store_master,
+        "divisions": divisions,
         "total_stores": len(store_master),
         "n_divisions": len(DIVISIONS),
-        "source": "AOP Forecaster — inputs.xlsx (KLM)",
-        "aop_source": "planning_inputs.input_values (MAMJ ref)" if has_mamj else "inputs.xlsx",
-        "aop_lever": lever_label,
-        "total_mamj_lakhs": round(sum(d["mamj_lakhs"] for d in divisions_data), 2),
+        "aop_publish_id": pid,
+        "version_label": label,
+        "source": f"BIS plan on AOP {label or '-'} (publish {pid})" if pid else "No AOP published yet",
+        "total_ly": round(sum(d["ly_mamj"] for d in divisions), 2),
+        "total_plan": round(sum(d["plan_mamj"] for d in divisions), 2),
     }
-
-
-def _monthly_split(div_name, annual, seasonality_index, fy_start_month, plan_year, aop):
-    """[(month_name, planned, index)] over the plan year. A month the live AOP targets (aop = {div: {period_id:
-    lakhs}}) is planned at exactly that target; the rest of the annual target is spread over the other months by
-    the seasonality curve (audit 2026-09-26: every month came off the curve, KIDS Jun'27 4,311.88 vs AOP 2,875.35).
-    When the AOP months alone exceed the annual target, the others get 0 and the annual becomes their sum.
-    MONTH_NAMES / SEASONALITY_CURVE start at April, so the FY starts at index fy_start_month - 4 (it was
-    fy_start_month - 1, which made the Apr-Mar plan run Jul-Jun)."""
-    start = (fy_start_month - 4) % 12
-    months = []
-    for i in range(12):
-        month_idx = (start + i) % 12
-        m = (month_idx + 3) % 12 + 1
-        pid = (plan_year + (1 if m < fy_start_month else 0)) * 100 + m
-        months.append((MONTH_NAMES[month_idx], SEASONALITY_CURVE[month_idx] * seasonality_index,
-                       (aop or {}).get(div_name, {}).get(pid)))
-    pinned = sum(round(t, 2) for _, _, t in months if t is not None)
-    rest = max(annual - pinned, 0.0)
-    free = [i for i, (_, _, t) in enumerate(months) if t is None]
-    raw_sum = sum(months[i][1] for i in free)
-    out, running = [], 0.0
-    for i, (name, idx, t) in enumerate(months):
-        if t is not None:
-            planned = round(t, 2)
-        elif i == free[-1]:
-            planned = max(round(rest - running, 2), 0.0)   # cent rounding can't make the last month negative
-        else:
-            planned = round(idx / raw_sum * rest, 2)
-            running += planned
-        out.append((name, planned, round(idx, 4)))
-    return out
-
-
-@router.post("/calculate", response_model=DivisionPlanOutput)
-def calculate_plan(payload: DivisionPlanInput):
-    results = []
-    total = 0.0
-    aop, _ = _load_aop_targets()
-
-    for div in payload.divisions:
-        split = _monthly_split(div.division_name, div.base_sales * (1 + div.growth_pct / 100),
-                               div.seasonality_index, div.fy_start_month, payload.plan_year, aop)
-        annual_target = sum(p for _, p, _ in split)
-        monthly = [MonthlyBreakdown(month=n, planned_sales=p, index=ix) for n, p, ix in split]
-
-        results.append(DivisionResult(
-            division_name=div.division_name,
-            annual_target=round(annual_target, 2),
-            monthly_breakdown=monthly,
-        ))
-        total += annual_target
-
-    return DivisionPlanOutput(
-        plan_name=payload.plan_name,
-        plan_year=payload.plan_year,
-        total_planned_sales=round(total, 2),
-        divisions=results,
-    )
-
-
-@router.get("/export")
-def export_csv(plan_name: str = "FY27 Division Plan", plan_year: int = 2027):
-    divisions = _build_default_divisions()
-    aop, _ = _load_aop_targets()
-    lines = ["Plan Name,Plan Year,Division,Month,Planned Sales (Lakhs)"]
-    for div in divisions:
-        for mn, val, _ in _monthly_split(div["division_name"], div["base_sales"] * (1 + div["growth_pct"] / 100),
-                                         div["seasonality_index"], div["fy_start_month"], plan_year, aop):
-            lines.append(f"{plan_name},{plan_year},{div['division_name']},{mn},{val}")
-
-    content = "\n".join(lines)
-    return StreamingResponse(
-        io.BytesIO(content.encode()),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=division_plan.csv"},
-    )
 
 
 @router.get("/stores")

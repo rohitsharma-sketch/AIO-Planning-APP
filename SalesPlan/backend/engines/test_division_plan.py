@@ -1,22 +1,16 @@
-"""No-DB check: AOP months are planned at exactly the AOP target, the rest keeps the annual total.
+"""No-DB check: Division Plan = BIS's months only (Mar-Jun 2027), LY base and plan straight from the AOP publish.
 Run: python engines/test_division_plan.py   (from SalesPlan/backend)"""
 import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from engines.division_plan import _monthly_split  # noqa: E402
+from engines.division_plan import _plan_rows  # noqa: E402
 
-aop = {"KIDS": {202703: 4533.84, 202704: 3108.03, 202705: 3123.83, 202706: 2875.35}}
-out = _monthly_split("KIDS", 57000.0, 1.10, 4, 2027, aop)
-got = {n: p for n, p, _ in out}
-assert (got["Apr"], got["May"], got["Jun"]) == (3108.03, 3123.83, 2875.35), got   # Mar'27 is outside Apr'27-Mar'28
-assert abs(sum(got.values()) - 57000.0) < 1e-6, sum(got.values())
-assert got["Nov"] > got["Jul"] > 0                                                   # the rest still follows the curve
-
-# AOP months above the annual target: the others get 0, nothing negative.
-out = _monthly_split("KIDS", 5000.0, 1.10, 4, 2027, aop)
-assert all(p >= 0 for _, p, _ in out) and round(sum(p for _, p, _ in out), 2) == 9107.21, out
-
-# No AOP: plain curve, sum = annual.
-assert abs(sum(p for _, p, _ in _monthly_split("KIDS", 1200.0, 1.0, 4, 2027, {})) - 1200.0) < 1e-6
+totals = {"KIDS": {"202703": 4533.84, "202704": 3108.03, "202705": 3123.83, "202706": 2875.35}}
+bases = {"KIDS": {"202703": 3807.91, "202704": 2825.49, "202705": 2839.87, "202706": 2614.0}}
+k = {d["division_name"]: d for d in _plan_rows(totals, bases)}["KIDS"]
+assert [m["month"] for m in k["months"]] == ["Mar'27", "Apr'27", "May'27", "Jun'27"], k   # nothing past Jun'27
+assert k["plan_mamj"] == 13641.05 and k["ly_mamj"] == 12087.27, k
+assert k["growth_pct"] == round((13641.05 / 12087.27 - 1) * 100, 2)                         # period total, not a monthly average
+assert {d["division_name"]: d for d in _plan_rows(totals, bases)}["MENS"]["growth_pct"] is None   # no base -> no growth
 print("division plan checks passed")

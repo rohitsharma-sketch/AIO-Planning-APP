@@ -1746,6 +1746,14 @@ function _lflTip(g,kind,mis){
   if(lines.length)lines.push(`Same-store history, not the plan LY - that is the LY Actual Sales column (Mar-Jun 2026, 148 stores)`);
   return lines.length?` title="${lines.join('&#10;')}"`:'';
 }
+// Period 19 V 26 / 25 V 26 = growth of the period TOTALS (user, 2026-09-29: L_EW_DUPATTA showed +96.1%, the average
+// of its monthly %s, while the hover's period total said +62%). gs = growth entries summed together (one row, or
+// every department of an attribute); only months with both years' sales count, as in the hover.
+function _lflTot(gs,kind,mis){
+  let a=0,b=0;
+  gs.forEach(g=>mis.forEach(mi=>{const p=g?.raw?.[kind]?.[mi];if(p){a+=p[0];b+=p[1];}}));
+  return a>0?(b/a-1)*100:null;
+}
 // Header label "19 V 26 | 148 st" + a hover with the store count per month (same months as the cells).
 function _lflHdr(kind,mis){
   const lbl=kind==='base'?window.FY_LFL_BASE:window.FY_LFL_YOY;
@@ -2768,19 +2776,16 @@ function cellVal(row,def){
       if(!row._divId)return '<span style="color:var(--mu)">-</span>';
       const mc=cols();
       if(row._key==null){
-        const divVals=mc.map(mi=>DEPT_LFL_GROWTH[row._divId]?.yoy?.[mi]).filter(v=>v!=null);
-        if(!divVals.length)return '<span style="color:var(--mu)">-</span>';
-        const avg=divVals.reduce((a,v)=>a+v,0)/divVals.length;
+        const avg=_lflTot([DEPT_LFL_GROWTH[row._divId]],'yoy',mc);
+        if(avg==null)return '<span style="color:var(--mu)">-</span>';
         return `<span class="${gCls(avg)}"${_lflTip(DEPT_LFL_GROWTH[row._divId],'yoy',mc)}>${fP(avg)}</span>`;
       }
       {
         const attrInfo=_parseAttrKey(row._key);
         if(attrInfo){
           const dv=DVDATA.find(d=>d.id===attrInfo.dvId);
-          const avg=dv?_attrPeriodAvg(dv,attrInfo.attr,mc,(sec,mi)=>{
-            if((window._SELLTHRU_LIVE_DEPT||{})[sec.id]==null)return null;
-            return SEC_LFL_GROWTH[sec.id]?.yoy?.[mi];
-          }):null;
+          const avg=dv?_lflTot(_attrActiveSecs(dv,attrInfo.attr).filter(sec=>(window._SELLTHRU_LIVE_DEPT||{})[sec.id]!=null)
+            .map(sec=>SEC_LFL_GROWTH[sec.id]),'yoy',mc):null;
           if(avg==null)return '<span style="color:var(--mu)">-</span>';
           return `<span class="${gCls(avg)}">${fP(avg)}</span>`;
         }
@@ -2788,28 +2793,24 @@ function cellVal(row,def){
       if((window._SELLTHRU_LIVE_DEPT||{})[row._key]==null)return '<span style="color:var(--mu)">-</span>';
       const sGy=SEC_LFL_GROWTH[row._key]?.yoy;
       if(!sGy)return '<span style="color:var(--mu)">-</span>';
-      const aopValsY=mc.map(mi=>sGy[mi]).filter(v=>v!=null);
-      if(!aopValsY.length)return '<span style="color:var(--mu)">-</span>';
-      const avgY=aopValsY.reduce((a,v)=>a+v,0)/aopValsY.length;
+      const avgY=_lflTot([SEC_LFL_GROWTH[row._key]],'yoy',mc);
+      if(avgY==null)return '<span style="color:var(--mu)">-</span>';
       return `<span class="${gCls(avgY)}"${_lflTip(SEC_LFL_GROWTH[row._key],'yoy',mc)}>${fP(avgY)}</span>`;
     }
     case 'period_lfl_base': {
       if(!row._divId)return '<span style="color:var(--mu)">-</span>';
       const mc=cols();
       if(row._key==null){
-        const divVals=mc.map(mi=>DEPT_LFL_GROWTH[row._divId]?.base?.[mi]).filter(v=>v!=null);
-        if(!divVals.length)return '<span style="color:var(--mu)">-</span>';
-        const avg=divVals.reduce((a,v)=>a+v,0)/divVals.length;
+        const avg=_lflTot([DEPT_LFL_GROWTH[row._divId]],'base',mc);
+        if(avg==null)return '<span style="color:var(--mu)">-</span>';
         return `<span class="${gCls(avg)}"${_lflTip(DEPT_LFL_GROWTH[row._divId],'base',mc)}>${fP(avg)}</span>`;
       }
       {
         const attrInfo=_parseAttrKey(row._key);
         if(attrInfo){
           const dv=DVDATA.find(d=>d.id===attrInfo.dvId);
-          const avg=dv?_attrPeriodAvg(dv,attrInfo.attr,mc,(sec,mi)=>{
-            if((window._SELLTHRU_LIVE_DEPT||{})[sec.id]==null)return null;
-            return SEC_LFL_GROWTH[sec.id]?.base?.[mi];
-          }):null;
+          const avg=dv?_lflTot(_attrActiveSecs(dv,attrInfo.attr).filter(sec=>(window._SELLTHRU_LIVE_DEPT||{})[sec.id]!=null)
+            .map(sec=>SEC_LFL_GROWTH[sec.id]),'base',mc):null;
           if(avg==null)return '<span style="color:var(--mu)">-</span>';
           return `<span class="${gCls(avg)}">${fP(avg)}</span>`;
         }
@@ -2817,9 +2818,8 @@ function cellVal(row,def){
       if((window._SELLTHRU_LIVE_DEPT||{})[row._key]==null)return '<span style="color:var(--mu)">-</span>';
       const sGb=SEC_LFL_GROWTH[row._key]?.base;
       if(!sGb)return '<span style="color:var(--mu)">-</span>';
-      const aopValsB=mc.map(mi=>sGb[mi]).filter(v=>v!=null);
-      if(!aopValsB.length)return '<span style="color:var(--mu)">-</span>';
-      const avgB=aopValsB.reduce((a,v)=>a+v,0)/aopValsB.length;
+      const avgB=_lflTot([SEC_LFL_GROWTH[row._key]],'base',mc);
+      if(avgB==null)return '<span style="color:var(--mu)">-</span>';
       return `<span class="${gCls(avgB)}"${_lflTip(SEC_LFL_GROWTH[row._key],'base',mc)}>${fP(avgB)}</span>`;
     }
     case 'aop_target': {
@@ -2919,8 +2919,9 @@ function buildRows_dept(){
       if(S.filters.sec.size&&!(DEPT_TO_SEC[sec.id]&&S.filters.sec.has(DEPT_TO_SEC[sec.id])))return;
       if(S.filters.dept!==null&&!S.filters.dept.has(sec.id))return;
       const inactive=S.hiddenSecs.has(sec.id);
-      // Ghost rows in buyers plan only for depts with actual LY — zero-LY depts have no planning value
-      if(inactive&&(S.report!=='buyers'||!sec.ly||sec.ly<=0))return;
+      // Inactive depts live on the Inactive Depts sheet only (user, 2026-09-29: a manually inactivated dept showed
+      // on both sheets) - no greyed ghost row here; re-activate it from that sheet.
+      if(inactive)return;
       // Distribute actual division monthly LY proportionally (divAnnual includes all, so each dept gets its real share).
       // Anchor on AOP's own fresh, live LFL base (S.aopBase) when synced -
       // DEPT_ACTUAL_LY is a hardcoded historical snapshot that drifts out of
@@ -3036,9 +3037,8 @@ function buildRows_attr(){
       const allSecs=attrSecs[attr];
       const activeSecs=allSecs.filter(sec=>!S.hiddenSecs.has(sec.id));
       const inactive=activeSecs.length===0;
-      // Ghost rows (ALL depts in this attr hidden) only when the group ever had LY —
-      // mirrors buildRows_dept's rule for buyer-plan ghost rows.
-      if(inactive&&!allSecs.some(sec=>sec.ly>0))return;
+      // All its depts inactive -> the group is only on the Inactive Depts sheet, like buildRows_dept (2026-09-29).
+      if(inactive)return;
       let secLY=0;
       const tyByMon={};
       let secTY=0;

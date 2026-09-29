@@ -1,667 +1,147 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { theme } from '../theme'
 
-const inputStyle = {
-  border: `1px solid ${theme.border}`,
-  borderRadius: 6,
-  padding: '6px 10px',
-  fontSize: 13,
-  color: theme.textPrimary,
-  background: theme.surface,
-  width: '100%',
-  outline: 'none',
-  boxSizing: 'border-box',
-}
+// Division Plan = the plan BIS shows (user, 2026-09-29): only BIS's months (Mar'27-Jun'27), LY base and plan
+// read from the AOP publish BIS plans on - nothing typed here, nothing past Jun'27. Change the plan in BIS.
 
 const btnStyle = (color, textColor = '#fff') => ({
-  padding: '8px 18px',
-  borderRadius: 7,
-  border: 'none',
-  background: color,
-  color: textColor,
-  fontSize: 13,
-  fontWeight: 600,
-  cursor: 'pointer',
-  letterSpacing: 0.3,
+  padding: '8px 18px', borderRadius: 7, border: 'none', background: color, color: textColor,
+  fontSize: 13, fontWeight: 600, cursor: 'pointer', letterSpacing: 0.3,
 })
+const card = {
+  background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 10,
+  boxShadow: '0 1px 4px rgba(27,79,138,0.05)',
+}
+const th = {
+  padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: theme.textSecondary, fontSize: 12,
+  letterSpacing: 0.4, borderBottom: `1px solid ${theme.border}`, whiteSpace: 'nowrap',
+}
+const td = { padding: '9px 14px', fontVariantNumeric: 'tabular-nums' }
+const L = v => (v ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })
+const pct = v => v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
 
 export default function DivisionPlan() {
-  const [planName, setPlanName] = useState('FY28 Division Plan')
-  const [planYear, setPlanYear] = useState(2027)
-  const [rows, setRows] = useState([])
-  const [results, setResults] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [cfg, setCfg] = useState(null)
   const [error, setError] = useState(null)
-  const [configMeta, setConfigMeta] = useState(null)
-  const [versions, setVersions] = useState(null)       // null = not loaded yet
-  const [versionsLoading, setVersionsLoading] = useState(false)
-  const [promoteState, setPromoteState] = useState({}) // {[id]: 'loading'|'done'|'error'}
-  const [activeVersionId, setActiveVersionId] = useState(() => {
-    try { return localStorage.getItem('aop_active_version_id') || null } catch { return null }
-  })
-  useEffect(() => { loadConfig() }, [])
 
-  const persistActiveVersion = (id) => {
-    setActiveVersionId(id)
-    try {
-      if (id != null) localStorage.setItem('aop_active_version_id', String(id))
-      else localStorage.removeItem('aop_active_version_id')
-    } catch {}
-  }
-
-  // When versions load, authoritative DB match overrides localStorage; also show correct growth %
-  useEffect(() => {
-    if (!versions || !configMeta || !configMeta.totalMamj) return
-    if (configMeta.aopLever === 'locked') {
-      const match = versions.find(v => Math.abs(v.total_mamj_lakhs - configMeta.totalMamj) < 1)
-      if (match) {
-        persistActiveVersion(match.id)
-        if (match.growth_pct != null) {
-          setRows(prev => prev.map(r => ({ ...r, growth_pct: match.growth_pct })))
-        }
-      }
-    }
-  }, [versions, configMeta])
-
-  const loadConfig = async () => {
+  const load = async () => {
     setError(null)
-    try {
-      const cfgRes = await axios.get('/api/planning/division-plan/config')
-      const divs = cfgRes.data.divisions.map(d => ({ ...d }))
-      setRows(divs)
-      setConfigMeta({
-        totalStores: cfgRes.data.total_stores,
-        nDivisions: cfgRes.data.n_divisions || cfgRes.data.divisions.length,
-        source: cfgRes.data.source,
-        aopSource: cfgRes.data.aop_source,
-        totalMamj: cfgRes.data.total_mamj_lakhs,
-        aopLever: cfgRes.data.aop_lever,  // 'locked' | 'staging' | null
-      })
-    } catch {
-      setError('Failed to load config from backend.')
-    }
+    try { setCfg((await axios.get('/api/planning/division-plan/config')).data) }
+    catch { setError('Failed to load the plan from the backend.') }
+  }
+  useEffect(() => { load() }, [])
+
+  const exportCSV = () => {
+    const lines = ['AOP Version,Division,Month,LY (Lakhs),Plan (Lakhs),Growth %', ...cfg.divisions.flatMap(d =>
+      d.months.map(m => `${cfg.version_label || ''},${d.division_name},${m.month},${m.ly},${m.plan},${m.growth_pct ?? ''}`))]
+    const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'division_plan.csv'
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
-  const loadVersions = async () => {
-    setVersionsLoading(true)
-    try {
-      const res = await axios.get('/api/aop/api/aop-publish-history?limit=15')
-      setVersions(res.data.versions || [])
-    } catch {
-      setVersions([])
-    } finally {
-      setVersionsLoading(false)
-    }
-  }
-
-  const promoteVersion = async (version) => {
-    const versionId = version.id
-
-    // Optimistic update: apply this version's numbers immediately, before any API call
-    const dt = version.division_totals || {}
-    const divMamj = {
-      KIDS:   Object.values(dt.KIDS   || {}).reduce((s, x) => s + x, 0),
-      LADIES: Object.values(dt.LADIES || {}).reduce((s, x) => s + x, 0),
-      MENS:   Object.values(dt.MENS   || {}).reduce((s, x) => s + x, 0),
-    }
-    setRows(prev => prev.map(r => {
-      const newMamj = divMamj[r.division_name]
-      if (newMamj == null) return r
-      const newGrowth = version.growth_pct != null ? version.growth_pct : r.growth_pct
-      return { ...r, mamj_lakhs: parseFloat(newMamj.toFixed(1)), growth_pct: newGrowth }
-    }))
-    persistActiveVersion(versionId)
-    setPromoteState(s => ({ ...s, [versionId]: 'loading' }))
-
-    try {
-      await axios.post(`/api/aop/api/promote-aop-version/${versionId}`)
-      setPromoteState(s => ({ ...s, [versionId]: 'done' }))
-      // Refresh banner only — do NOT call loadConfig() which would overwrite rows
-      const cfgRes = await axios.get('/api/planning/division-plan/config')
-      setConfigMeta({
-        totalStores: cfgRes.data.total_stores,
-        nDivisions: cfgRes.data.n_divisions || cfgRes.data.divisions.length,
-        source: cfgRes.data.source,
-        aopSource: cfgRes.data.aop_source,
-        totalMamj: cfgRes.data.total_mamj_lakhs,
-        aopLever: cfgRes.data.aop_lever,
-      })
-    } catch {
-      setPromoteState(s => ({ ...s, [versionId]: 'error' }))
-      // Revert optimistic update on error
-      persistActiveVersion(null)
-      await loadConfig()
-    }
-  }
-
-  const updateRow = (idx, field, value) => {
-    setRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r))
-  }
-
-  const addRow = () => {
-    setRows(prev => [...prev, {
-      division_name: '',
-      base_sales: 0,
-      growth_pct: 10,
-      seasonality_index: 1.0,
-      fy_start_month: 4,
-    }])
-  }
-
-  const removeRow = (idx) => {
-    setRows(prev => prev.filter((_, i) => i !== idx))
-  }
-
-  const buildPayload = () => ({
-    divisions: rows.map(r => ({
-      ...r,
-      base_sales: parseFloat(r.base_sales) || 0,
-      growth_pct: parseFloat(r.growth_pct) || 0,
-      seasonality_index: parseFloat(r.seasonality_index) || 1,
-      fy_start_month: parseInt(r.fy_start_month) || 4,
-    })),
-    plan_year: planYear,
-    plan_name: planName,
-  })
-
-  const calculate = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await axios.post('/api/planning/division-plan/calculate', buildPayload())
-      setResults(res.data)
-    } catch {
-      setError('Calculation failed. Check that the backend is running.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Exports the plan on screen (the growth shown here, e.g. the locked AOP's), not a server-side default:
-  // GET /export re-read inputs.xlsx's 6% while the screen showed 11.1% (audit 2026-09-26).
-  const exportCSV = async () => {
-    try {
-      const plan = results || (await axios.post('/api/planning/division-plan/calculate', buildPayload())).data
-      const lines = ['Plan Name,Plan Year,Division,Month,Planned Sales (Lakhs)', ...plan.divisions.flatMap(d =>
-        d.monthly_breakdown.map(m => `${plan.plan_name},${plan.plan_year},${d.division_name},${m.month},${m.planned_sales}`))]
-      const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }))
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'division_plan.csv'
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch {
-      setError('Export failed.')
-    }
-  }
-
-  const peakMonth = (breakdown) => {
-    return breakdown.reduce((a, b) => a.planned_sales > b.planned_sales ? a : b).month
-  }
-
-  const avgGrowth = results
-    ? (rows.reduce((s, r) => s + parseFloat(r.growth_pct || 0), 0) / rows.length).toFixed(1)
-    : null
+  const totalGrowth = cfg && cfg.total_ly ? (cfg.total_plan / cfg.total_ly - 1) * 100 : null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px', background: theme.surfaceAlt }}>
 
-        {configMeta && (
-          <div style={{
-            background: theme.accentLight,
-            border: `1px solid ${theme.accent}`,
-            borderRadius: 8,
-            padding: '10px 16px',
-            marginBottom: 18,
-            fontSize: 13,
-            color: theme.textPrimary,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-          }}>
-            <span style={{ fontSize: 16 }}>📂</span>
-            <span>
-              Loaded from <strong>{configMeta.source}</strong> — <strong>{configMeta.totalStores} stores</strong> × <strong>{configMeta.nDivisions || 3} divisions (KLM)</strong>
-              {configMeta.totalMamj > 0 && (
-                <span style={{ color: theme.primary, fontWeight: 600, marginLeft: 8 }}>
-                  · AOP MAMJ: ₹{(configMeta.totalMamj / 100).toFixed(1)} Cr
-                </span>
-              )}
-              {configMeta.aopLever && (
-                <span style={{
-                  background: configMeta.aopLever === 'locked' ? '#D1FAE5' : '#FEF3C7',
-                  color:      configMeta.aopLever === 'locked' ? '#065F46' : '#92400E',
-                  borderRadius: 4, padding: '2px 8px', fontSize: 11,
-                  fontWeight: 700, marginLeft: 8, letterSpacing: 0.3,
-                }}>
-                  {configMeta.aopLever === 'locked' ? '🔒 Locked' : '⚡ Staging'}
-                </span>
-              )}
-              {configMeta.aopSource && <span style={{ color: theme.textMuted, marginLeft: 8 }}>· {configMeta.aopSource}</span>}
-            </span>
-          </div>
-        )}
-
-        {/* AOP Version Selector */}
-        <div style={{
-          background: theme.surface,
-          border: `1px solid ${theme.border}`,
-          borderRadius: 8,
-          marginBottom: 18,
-          overflow: 'hidden',
-        }}>
-          <div style={{
-            padding: '10px 16px',
-            borderBottom: versions !== null ? `1px solid ${theme.border}` : 'none',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-          }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: theme.textPrimary, flex: 1 }}>
-              🗂 AOP Version History
-            </span>
-            {versions === null ? (
-              <button
-                style={{ ...btnStyle(theme.primaryLight, theme.primary), fontSize: 12, padding: '5px 14px' }}
-                onClick={loadVersions}
-                disabled={versionsLoading}
-              >
-                {versionsLoading ? 'Loading…' : 'Load Available Versions'}
-              </button>
-            ) : (
-              <button
-                style={{ ...btnStyle(theme.surfaceAlt, theme.textSecondary), fontSize: 12, padding: '5px 14px' }}
-                onClick={loadVersions}
-                disabled={versionsLoading}
-              >
-                ↺ Refresh
-              </button>
-            )}
-          </div>
-
-          {versions !== null && (
-            <div style={{ overflowX: 'auto' }}>
-              {versions.length === 0 ? (
-                <div style={{ padding: '14px 16px', fontSize: 13, color: theme.textMuted }}>
-                  No published versions found. Run the AOP Forecaster to create one.
-                </div>
-              ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ background: theme.surfaceAlt }}>
-                      {['Version', 'Published', 'KIDS (₹ L)', 'LADIES (₹ L)', 'MENS (₹ L)', 'Total MAMJ (₹ Cr)', 'MAMJ Growth', ''].map(h => (
-                        <th key={h} style={{
-                          padding: '8px 14px', textAlign: 'left', fontWeight: 600,
-                          color: theme.textSecondary, fontSize: 11, letterSpacing: 0.4,
-                          borderBottom: `1px solid ${theme.border}`, whiteSpace: 'nowrap',
-                        }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {versions.map((v, idx) => {
-                      const dt = v.division_totals || {}
-                      const kidsTotal = Object.values(dt.KIDS || {}).reduce((s, x) => s + x, 0)
-                      const ladiesTotal = Object.values(dt.LADIES || {}).reduce((s, x) => s + x, 0)
-                      const mensTotal = Object.values(dt.MENS || {}).reduce((s, x) => s + x, 0)
-                      const pubDate = v.published_at
-                        ? new Date(v.published_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' })
-                        : '—'
-                      const ps = promoteState[v.id]
-                      return (
-                        <tr key={v.id} style={{ background: idx % 2 === 0 ? theme.surface : theme.surfaceAlt }}>
-                          <td style={{ padding: '8px 14px', color: theme.text, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                            {v.version_label || `Version ${versions.length - idx}`}
-                          </td>
-                          <td style={{ padding: '8px 14px', color: theme.textSecondary, whiteSpace: 'nowrap' }}>{pubDate}</td>
-                          <td style={{ padding: '8px 14px', fontVariantNumeric: 'tabular-nums' }}>
-                            {kidsTotal > 0 ? kidsTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '—'}
-                          </td>
-                          <td style={{ padding: '8px 14px', fontVariantNumeric: 'tabular-nums' }}>
-                            {ladiesTotal > 0 ? ladiesTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '—'}
-                          </td>
-                          <td style={{ padding: '8px 14px', fontVariantNumeric: 'tabular-nums' }}>
-                            {mensTotal > 0 ? mensTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '—'}
-                          </td>
-                          <td style={{ padding: '8px 14px', color: theme.primary, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-                            ₹{(v.total_mamj_lakhs / 100).toFixed(1)} Cr
-                          </td>
-                          <td style={{ padding: '8px 14px' }}>
-                            {v.growth_pct != null ? (
-                              <span style={{
-                                background: v.growth_pct >= 0 ? theme.accentLight : '#FEF2F2',
-                                color: v.growth_pct >= 0 ? theme.accent : theme.danger,
-                                borderRadius: 5, padding: '3px 8px',
-                                fontWeight: 700, fontSize: 12,
-                                fontVariantNumeric: 'tabular-nums',
-                              }}>
-                                {v.growth_pct >= 0 ? '+' : ''}{v.growth_pct.toFixed(1)}%
-                              </span>
-                            ) : <span style={{ color: theme.textMuted, fontSize: 11 }}>—</span>}
-                          </td>
-                          <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>
-                            {activeVersionId === v.id ? (
-                              <span style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 5,
-                                background: '#D1FAE5', color: '#065F46',
-                                borderRadius: 6, padding: '4px 12px',
-                                fontSize: 11, fontWeight: 700, letterSpacing: 0.2,
-                              }}>🔒 Active</span>
-                            ) : (
-                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 11, color: theme.textMuted }}>🔓</span>
-                                <button
-                                  style={{
-                                    ...btnStyle(
-                                      ps === 'loading' ? theme.surfaceAlt : ps === 'error' ? '#FEF2F2' : theme.accent,
-                                      ps === 'loading' ? theme.textSecondary : ps === 'error' ? theme.danger : '#fff'
-                                    ),
-                                    fontSize: 11, padding: '4px 12px',
-                                  }}
-                                  disabled={ps === 'loading'}
-                                  onClick={() => promoteVersion(v)}
-                                >
-                                  {ps === 'loading' ? 'Switching…' : ps === 'error' ? '⚠ Retry' : 'Use This Version'}
-                                </button>
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
-        </div>
-
         {error && (
-          <div style={{
-            background: '#FEF2F2', border: `1px solid ${theme.danger}`, borderRadius: 8,
-            padding: '10px 16px', marginBottom: 18, color: theme.danger, fontSize: 13,
-          }}>
-            {error}
-          </div>
+          <div style={{ background: '#FEF2F2', border: `1px solid ${theme.danger}`, borderRadius: 8,
+            padding: '10px 16px', marginBottom: 18, color: theme.danger, fontSize: 13 }}>{error}</div>
         )}
 
-        <div style={{
-          background: theme.surface,
-          border: `1px solid ${theme.border}`,
-          borderRadius: 10,
-          padding: '18px 20px',
-          marginBottom: 22,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 14,
-          flexWrap: 'wrap',
-          boxShadow: '0 1px 4px rgba(27,79,138,0.05)',
-        }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 11, fontWeight: 600, color: theme.textMuted, letterSpacing: 0.5 }}>PLAN NAME</label>
-            <input
-              style={{ ...inputStyle, width: 220 }}
-              value={planName}
-              onChange={e => setPlanName(e.target.value)}
-            />
+        {cfg && (<>
+          <div style={{ ...card, padding: '12px 18px', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 13 }}>
+            <span style={{ flex: 1, color: theme.textPrimary }}>
+              <strong>{cfg.source}</strong> · Mar'27 – Jun'27 · like-for-like stores, as in BIS · {cfg.n_divisions} divisions (KLM)
+              <span style={{ color: theme.textMuted, marginLeft: 8 }}>· LY base and plan are fixed by the AOP publish; change the plan in BIS</span>
+            </span>
+            <button style={btnStyle(theme.surfaceAlt, theme.primary)} onClick={load}>↺ Refresh</button>
+            <button style={btnStyle(theme.accent)} onClick={exportCSV}>⬇ Export CSV</button>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <label style={{ fontSize: 11, fontWeight: 600, color: theme.textMuted, letterSpacing: 0.5 }}>PLAN YEAR</label>
-            <select
-              style={{ ...inputStyle, width: 100 }}
-              value={planYear}
-              onChange={e => setPlanYear(parseInt(e.target.value))}
-            >
-              <option value={2025}>2025</option>
-              <option value={2026}>2026</option>
-              <option value={2027}>2027</option>
-            </select>
-          </div>
-          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-            <button style={btnStyle(theme.surfaceAlt, theme.primary)} onClick={loadConfig}>
-              ↺ Load Config
-            </button>
-            <button
-              style={btnStyle(theme.primary)}
-              onClick={calculate}
-              disabled={loading}
-            >
-              {loading ? 'Calculating…' : '⚡ Calculate Plan'}
-            </button>
-            <button style={btnStyle(theme.accent)} onClick={exportCSV}>
-              ⬇ Export CSV
-            </button>
-          </div>
-        </div>
 
-        <div style={{
-          background: theme.surface,
-          border: `1px solid ${theme.border}`,
-          borderRadius: 10,
-          marginBottom: 24,
-          overflow: 'hidden',
-          boxShadow: '0 1px 4px rgba(27,79,138,0.05)',
-        }}>
-          <div style={{
-            padding: '14px 20px',
-            borderBottom: `1px solid ${theme.border}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: theme.textPrimary }}>Division Inputs</span>
-            <button style={btnStyle(theme.primaryLight, theme.primary)} onClick={addRow}>+ Add Row</button>
+          <div style={{ display: 'flex', gap: 16, marginBottom: 22 }}>
+            {[
+              { label: 'LY Base MAMJ', value: `₹ ${L(cfg.total_ly)} L`, color: theme.textPrimary },
+              { label: 'Plan MAMJ', value: `₹ ${L(cfg.total_plan)} L`, color: theme.primary },
+              { label: 'Plan Growth', value: pct(totalGrowth), color: theme.accent },
+            ].map(c => (
+              <div key={c.label} style={{ ...card, flex: 1, padding: '18px 22px' }}>
+                <div style={{ fontSize: 12, color: theme.textMuted, fontWeight: 600, letterSpacing: 0.5, marginBottom: 6 }}>{c.label.toUpperCase()}</div>
+                <div style={{ fontSize: 26, fontWeight: 700, color: c.color }}>{c.value}</div>
+              </div>
+            ))}
           </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: theme.surfaceAlt }}>
-                  {['Division', 'LY Base (₹ L)', 'AOP MAMJ (₹ L)', 'AOP Growth %', 'Plan Growth %', 'FY Start Month', ''].map(h => (
-                    <th key={h} style={{
-                      padding: '10px 14px',
-                      textAlign: 'left',
-                      fontWeight: 600,
-                      color: theme.textSecondary,
-                      fontSize: 12,
-                      letterSpacing: 0.4,
-                      borderBottom: `1px solid ${theme.border}`,
-                      whiteSpace: 'nowrap',
-                    }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, idx) => (
-                  <tr
-                    key={idx}
-                    style={{ background: idx % 2 === 0 ? theme.surface : theme.surfaceAlt }}
-                  >
-                    <td style={{ padding: '8px 14px', fontWeight: 600, color: theme.textPrimary }}>
-                      {row.division_name || (
-                        <input
-                          style={inputStyle}
-                          value={row.division_name}
-                          onChange={e => updateRow(idx, 'division_name', e.target.value)}
-                          placeholder="Division name"
-                        />
-                      )}
-                    </td>
-                    <td style={{ padding: '8px 14px' }}>
-                      <input
-                        style={{ ...inputStyle, width: 120 }}
-                        type="number"
-                        value={row.base_sales}
-                        onChange={e => updateRow(idx, 'base_sales', e.target.value)}
-                      />
-                    </td>
-                    {/* AOP MAMJ — reference from DB, read-only */}
-                    <td style={{ padding: '8px 14px', color: theme.primary, fontWeight: 600, fontSize: 13 }}>
-                      {row.mamj_lakhs != null ? row.mamj_lakhs.toLocaleString('en-IN', { maximumFractionDigits: 1 }) : '—'}
-                    </td>
-                    {/* AOP Growth % — from inputs.xlsx, read-only reference */}
-                    <td style={{ padding: '8px 14px' }}>
-                      <span style={{
-                        background: theme.accentLight, color: theme.accent,
-                        borderRadius: 5, padding: '2px 7px', fontWeight: 600, fontSize: 12,
-                      }}>+{parseFloat(row.growth_pct || 0).toFixed(1)}%</span>
-                    </td>
-                    {/* Plan Growth % — editable, defaults to AOP growth */}
-                    <td style={{ padding: '8px 14px' }}>
-                      <input
-                        style={{ ...inputStyle, width: 90 }}
-                        type="number"
-                        step="0.1"
-                        value={row.growth_pct}
-                        onChange={e => updateRow(idx, 'growth_pct', e.target.value)}
-                      />
-                    </td>
-                    <td style={{ padding: '8px 14px' }}>
-                      <select
-                        style={{ ...inputStyle, width: 90 }}
-                        value={row.fy_start_month}
-                        onChange={e => updateRow(idx, 'fy_start_month', e.target.value)}
-                      >
-                        {Array.from({ length: 12 }, (_, i) => (
-                          <option key={i + 1} value={i + 1}>{i + 1}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td style={{ padding: '8px 14px' }}>
-                      <button
-                        onClick={() => removeRow(idx)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          fontSize: 16,
-                          color: theme.danger,
-                          padding: '2px 6px',
-                        }}
-                        title="Remove row"
-                      >🗑</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
 
-        {results && (
-          <div>
-            <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
-              {[
-                { label: 'Total Plan Value', value: `₹ ${results.total_planned_sales.toLocaleString('en-IN', { maximumFractionDigits: 1 })} L`, color: theme.primary },
-                { label: 'No. of Divisions', value: results.divisions.length, color: theme.primary },
-                { label: 'Avg Growth %', value: `${avgGrowth}%`, color: theme.accent },
-              ].map(card => (
-                <div key={card.label} style={{
-                  flex: 1,
-                  background: theme.surface,
-                  border: `1px solid ${theme.border}`,
-                  borderRadius: 10,
-                  padding: '18px 22px',
-                  boxShadow: '0 1px 4px rgba(27,79,138,0.05)',
-                }}>
-                  <div style={{ fontSize: 12, color: theme.textMuted, fontWeight: 600, letterSpacing: 0.5, marginBottom: 6 }}>{card.label.toUpperCase()}</div>
-                  <div style={{ fontSize: 26, fontWeight: 700, color: card.color }}>{card.value}</div>
-                </div>
-              ))}
+          <div style={{ ...card, marginBottom: 24, overflow: 'hidden' }}>
+            <div style={{ padding: '14px 20px', borderBottom: `1px solid ${theme.border}`, fontSize: 14, fontWeight: 600, color: theme.textPrimary }}>
+              Division Plan (as in BIS)
             </div>
-
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: theme.textMuted, letterSpacing: 0.7, textTransform: 'uppercase', marginBottom: 14 }}>
-                Monthly Distribution by Division
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 18 }}>
-                {results.divisions.map(div => (
-                  <div key={div.division_name} style={{
-                    background: theme.surface,
-                    border: `1px solid ${theme.border}`,
-                    borderRadius: 10,
-                    padding: '16px 18px',
-                    boxShadow: '0 1px 4px rgba(27,79,138,0.05)',
-                  }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: theme.textPrimary, marginBottom: 4 }}>{div.division_name}</div>
-                    <div style={{ fontSize: 12, color: theme.textSecondary, marginBottom: 14 }}>
-                      Annual Target: <strong>₹ {div.annual_target.toLocaleString('en-IN', { maximumFractionDigits: 1 })} L</strong>
-                    </div>
-                    <ResponsiveContainer width="100%" height={180}>
-                      <BarChart data={div.monthly_breakdown} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={theme.border} />
-                        <XAxis dataKey="month" tick={{ fontSize: 11, fill: theme.textSecondary }} />
-                        <YAxis tick={{ fontSize: 11, fill: theme.textSecondary }} />
-                        <Tooltip
-                          formatter={(v) => [`₹ ${v.toLocaleString('en-IN', { maximumFractionDigits: 1 })} L`, 'Planned']}
-                          contentStyle={{ fontSize: 12, borderRadius: 6, border: `1px solid ${theme.border}` }}
-                        />
-                        <Bar dataKey="planned_sales" fill={theme.primary} radius={[3, 3, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div style={{
-              background: theme.surface,
-              border: `1px solid ${theme.border}`,
-              borderRadius: 10,
-              overflow: 'hidden',
-              boxShadow: '0 1px 4px rgba(27,79,138,0.05)',
-            }}>
-              <div style={{ padding: '14px 20px', borderBottom: `1px solid ${theme.border}` }}>
-                <span style={{ fontSize: 14, fontWeight: 600, color: theme.textPrimary }}>Summary Table</span>
-              </div>
+            <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: theme.surfaceAlt }}>
-                    {['Division', 'Annual Target (₹ L)', 'Peak Month', 'Growth %'].map(h => (
-                      <th key={h} style={{
-                        padding: '10px 18px',
-                        textAlign: 'left',
-                        fontWeight: 600,
-                        color: theme.textSecondary,
-                        fontSize: 12,
-                        letterSpacing: 0.4,
-                        borderBottom: `1px solid ${theme.border}`,
-                      }}>{h}</th>
-                    ))}
+                    <th style={th}>Division</th>
+                    {cfg.divisions[0]?.months.map(m => <th key={m.month} style={th}>{m.month} LY / Plan (₹ L)</th>)}
+                    <th style={th}>LY Base MAMJ (₹ L)</th>
+                    <th style={th}>Plan MAMJ (₹ L)</th>
+                    <th style={th}>Growth %</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {results.divisions.map((div, idx) => {
-                    const inputRow = rows.find(r => r.division_name === div.division_name)
-                    return (
-                      <tr key={div.division_name} style={{ background: idx % 2 === 0 ? theme.surface : theme.surfaceAlt }}>
-                        <td style={{ padding: '10px 18px', fontWeight: 600, color: theme.textPrimary }}>{div.division_name}</td>
-                        <td style={{ padding: '10px 18px', color: theme.primary, fontWeight: 700 }}>
-                          {div.annual_target.toLocaleString('en-IN', { maximumFractionDigits: 1 })}
+                  {cfg.divisions.map((d, idx) => (
+                    <tr key={d.division_name} style={{ background: idx % 2 === 0 ? theme.surface : theme.surfaceAlt }}>
+                      <td style={{ ...td, fontWeight: 600, color: theme.textPrimary }}>{d.division_name}</td>
+                      {d.months.map(m => (
+                        <td key={m.month} style={td} title={`${m.month}: LY ₹ ${L(m.ly)} L → plan ₹ ${L(m.plan)} L (${pct(m.growth_pct)})`}>
+                          <span style={{ color: theme.textMuted }}>{L(m.ly)}</span> / <strong style={{ color: theme.primary }}>{L(m.plan)}</strong>
                         </td>
-                        <td style={{ padding: '10px 18px', color: theme.textSecondary }}>{peakMonth(div.monthly_breakdown)}</td>
-                        <td style={{ padding: '10px 18px' }}>
-                          <span style={{
-                            background: theme.accentLight,
-                            color: theme.accent,
-                            borderRadius: 5,
-                            padding: '3px 8px',
-                            fontWeight: 600,
-                            fontSize: 12,
-                          }}>
-                            {inputRow ? `${parseFloat(inputRow.growth_pct).toFixed(1)}%` : '—'}
-                          </span>
-                        </td>
-                      </tr>
-                    )
-                  })}
+                      ))}
+                      <td style={td}>{L(d.ly_mamj)}</td>
+                      <td style={{ ...td, color: theme.primary, fontWeight: 700 }}>{L(d.plan_mamj)}</td>
+                      <td style={td}>
+                        <span style={{ background: theme.accentLight, color: theme.accent, borderRadius: 5, padding: '2px 7px', fontWeight: 600, fontSize: 12 }}>
+                          {pct(d.growth_pct)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           </div>
-        )}
+
+          <div style={{ fontSize: 13, fontWeight: 600, color: theme.textMuted, letterSpacing: 0.7, textTransform: 'uppercase', marginBottom: 14 }}>
+            Monthly Plan by Division
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 18 }}>
+            {cfg.divisions.map(d => (
+              <div key={d.division_name} style={{ ...card, padding: '16px 18px' }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: theme.textPrimary, marginBottom: 4 }}>{d.division_name}</div>
+                <div style={{ fontSize: 12, color: theme.textSecondary, marginBottom: 14 }}>
+                  Plan MAMJ: <strong>₹ {L(d.plan_mamj)} L</strong> · {pct(d.growth_pct)} on LY ₹ {L(d.ly_mamj)} L
+                </div>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={d.months} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={theme.border} />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: theme.textSecondary }} />
+                    <YAxis tick={{ fontSize: 11, fill: theme.textSecondary }} />
+                    <Tooltip formatter={(v, n) => [`₹ ${L(v)} L`, n]}
+                      contentStyle={{ fontSize: 12, borderRadius: 6, border: `1px solid ${theme.border}` }} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="ly" name="LY" fill={theme.textMuted} fillOpacity={0.45} radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="plan" name="Plan" fill={theme.primary} radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ))}
+          </div>
+        </>)}
       </div>
     </div>
   )
