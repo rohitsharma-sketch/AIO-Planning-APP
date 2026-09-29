@@ -12,7 +12,7 @@ const RULES_NOW = [
     "So the store × division <b>season</b> total and the grand total still match; only that month's split moves. A case with nothing left to absorb is flagged, never hidden.",
   ]],
   ['MRP × display rows and qty', [
-    "A department value is split to its MRP × display type rows by that month's original share; a month with no original plan uses the row's average share across the months it had.",
+    "A department value is split to its MRP × display type rows by that month's original share; a month with no original plan uses the row's average share across the revised months it had (locked months do not count).",
     "Qty = value ÷ the original ASP of that Department × MRP × Display type × Month (pooled across stores). No qty that month: the combination's all-month ASP, then MRP. Unchanged cells keep their exact original qty.",
   ]],
   ['Method 1 - store listing changes', [
@@ -22,6 +22,7 @@ const RULES_NOW = [
   ]],
   ['Method 2 - existing department changes', [
     'Store × Department rows with "&lt;Month&gt; New" values; months not in the file stay as original.',
+    'Other departments in the store × division: <b>absorb the change</b> (default - each store × division stays on the original) or <b>stay as they are</b> (only the revised departments move, e.g. a month re-phase; the checks then confirm the others are untouched and the revised departments kept their season total).',
   ]],
   ['Method 3 - new or split departments', [
     "Split: PARENT DEPARTMENT, NEW DEPARTMENT, SHARE % (optional STORE NAME; a store's own row overrides the all-store row). The parent keeps what is not shared out, the new departments take their share with the parent's MRP × display mix and ASPs; nothing else moves. Shares over 100% are refused.",
@@ -47,10 +48,10 @@ const RULES_NOW = [
 ];
 
 const RULES_LATEST = {
-  date: '2026-09-26',
+  date: '2026-09-29',
   changes: [
-    "Method 4: a delisted department's plan moves only into a chosen department or section, and a new listing is taken only out of it - nothing else moves.",
-    'Method 5: a department is set to a new growth over last year - for the season, or month by month with the "<Month> GROWTH %" columns - and only its own store × division absorbs it.',
-    "Every method keeps the original plan's display-type cont %, and each run checks it.",
+    'Locked months are the planner\'s choice: lock or unlock any month of the original plan (Jan / Feb locked by default).',
+    'Method 2: choose whether the other departments absorb the change or stay as they are.',
+    'A month a department had no plan in takes its MRP × display mix from the revised months only.',
   ],
 };
