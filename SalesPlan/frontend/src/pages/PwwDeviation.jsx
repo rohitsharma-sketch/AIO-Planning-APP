@@ -1,102 +1,19 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { theme, alpha } from '../theme'
 
-// ── Block search combobox ──────────────────────────────────────────────────────
-function BlockSearch({ blocks, value, onChange }) {
-  const [query,  setQuery]  = useState('')
-  const [open,   setOpen]   = useState(false)
-  const ref = useRef(null)
-
-  const selected = blocks.find(b => b.key === value)
-
-  const filtered = query.trim()
-    ? blocks.filter(b =>
-        b.key.includes(query.toUpperCase()) ||
-        b.label.toUpperCase().includes(query.toUpperCase()) ||
-        b.ly_months.some(m => m.toUpperCase().includes(query.toUpperCase()))
-      )
-    : blocks
-
-  useEffect(() => {
-    const handle = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', handle)
-    return () => document.removeEventListener('mousedown', handle)
-  }, [])
-
+// The block comes from the imported PPO file's month columns - no manual picker (user, 2026-09-29).
+export function BlockChip({ block, months, note }) {
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <div
-        onClick={() => setOpen(o => !o)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          background: theme.surfaceUp, border: `1px solid ${open ? theme.primary : theme.border}`,
-          borderRadius: 7, padding: '5px 12px', cursor: 'pointer', minWidth: 200,
-          transition: 'border-color 0.15s',
-        }}
-      >
-        <span style={{ fontFamily: theme.fontMono, fontSize: 13, fontWeight: 700, color: theme.primary }}>
-          {selected?.key || value}
-        </span>
-        <span style={{ fontSize: 11, color: theme.textSecondary, flex: 1 }}>
-          {selected ? selected.ly_months.join(' · ') : ''}
-        </span>
-        <span style={{ fontSize: 10, color: theme.textMuted }}>{open ? '▲' : '▼'}</span>
-      </div>
-
-      {open && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 500,
-          background: theme.surface, border: `1px solid ${theme.border}`,
-          borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-          width: 340, maxHeight: 320, display: 'flex', flexDirection: 'column',
-        }}>
-          <div style={{ padding: '8px 10px', borderBottom: `1px solid ${theme.border}` }}>
-            <input
-              autoFocus
-              placeholder="Search block… e.g. SOND, Mar, OND"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              style={{
-                width: '100%', background: theme.surfaceUp, color: theme.textPrimary,
-                border: `1px solid ${theme.border}`, borderRadius: 5,
-                padding: '5px 10px', fontSize: 12, fontFamily: theme.fontMono, outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
-          <div style={{ overflowY: 'auto', flex: 1 }}>
-            {filtered.length === 0 && (
-              <div style={{ padding: '12px 14px', fontSize: 12, color: theme.textMuted }}>No match</div>
-            )}
-            {filtered.map(b => {
-              const active = b.key === value
-              return (
-                <div
-                  key={b.key}
-                  onClick={() => { onChange(b.key); setOpen(false); setQuery('') }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '7px 14px', cursor: 'pointer',
-                    background: active ? `${alpha(theme.primary,'22')}` : 'transparent',
-                    borderLeft: `3px solid ${active ? theme.primary : 'transparent'}`,
-                  }}
-                >
-                  <span style={{ fontFamily: theme.fontMono, fontSize: 12, fontWeight: 700, color: active ? theme.primary : theme.textPrimary, minWidth: 70 }}>
-                    {b.key}
-                  </span>
-                  <span style={{ fontSize: 11, color: theme.textSecondary }}>
-                    {b.ly_months.join(' · ')}
-                  </span>
-                  <span style={{
-                    marginLeft: 'auto', fontSize: 10, color: theme.textMuted,
-                    background: theme.surfaceUp, borderRadius: 4, padding: '1px 5px',
-                  }}>{b.months_count}m</span>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
+    <div title={note} style={{
+      display: 'flex', alignItems: 'center', gap: 8, background: theme.surfaceUp,
+      border: `1px solid ${block ? theme.border : theme.danger}`, borderRadius: 7, padding: '5px 12px', minWidth: 200,
+    }}>
+      <span style={{ fontFamily: theme.fontMono, fontSize: 13, fontWeight: 700, color: block ? theme.primary : theme.danger }}>
+        {block || '—'}
+      </span>
+      <span style={{ fontSize: 11, color: theme.textSecondary, flex: 1 }}>
+        {block ? `${(months || []).join(' · ')} · from file` : 'sync a file with month columns'}
+      </span>
     </div>
   )
 }
@@ -136,8 +53,6 @@ export default function PwwDeviation() {
   const [result,        setResult]        = useState(null)
   const [p2Result,      setP2Result]      = useState(null)
   const [reappResult,   setReappResult]   = useState(null)
-  const [blocks,        setBlocks]        = useState([])
-  const [activeBlock,   setActiveBlock]   = useState('MAMJ')
   const [syncing,       setSyncing]       = useState(false)
   const [running,       setRunning]       = useState(false)
   const [runningP2,     setRunningP2]     = useState(false)
@@ -167,23 +82,19 @@ export default function PwwDeviation() {
     try { setStatus(await (await fetch('/api/planning/deviation/pww/status')).json()) } catch {}
   }, [])
 
-  const fetchBlocks = useCallback(async () => {
-    try { setBlocks(await (await fetch('/api/planning/deviation/pww/blocks')).json()) } catch {}
-  }, [])
-
   useEffect(() => {
     fetchSyncStatus()
     fetchStatus()
-    fetchBlocks()
-  }, [fetchSyncStatus, fetchStatus, fetchBlocks])
+  }, [fetchSyncStatus, fetchStatus])
 
   const handleSync = async () => {
     setSyncing(true)
     try {
       const d = await (await fetch('/api/planning/deviation/pww/sync', { method: 'POST' })).json()
       if (d.ok) {
-        flash(`Synced — ${d.depts} departments, ${d.rows} MRP rows`)
+        flash(`Synced — ${d.depts} departments, ${d.rows} MRP rows · block ${d.block} (${d.ty_months?.join(' · ')}) read from the file`)
         fetchStatus()
+        fetchSyncStatus()
       } else flash(d.detail || 'Sync failed')
     } catch (e) { flash('Error: ' + e.message) }
     finally { setSyncing(false) }
@@ -192,7 +103,7 @@ export default function PwwDeviation() {
   const handleRun = async () => {
     setRunning(true)
     try {
-      const d = await (await fetch(`/api/planning/deviation/pww/run-phase1?block=${activeBlock}`)).json()
+      const d = await (await fetch('/api/planning/deviation/pww/run-phase1')).json()
       if (d.divisions) {
         setResult(d)
         setP2Result(null)
@@ -208,7 +119,7 @@ export default function PwwDeviation() {
   const handleRunP2 = async () => {
     setRunningP2(true)
     try {
-      const d = await (await fetch(`/api/planning/deviation/pww/run-phase2?block=${result?.block || activeBlock}`)).json()
+      const d = await (await fetch('/api/planning/deviation/pww/run-phase2')).json()
       if (d.ok) {
         flash(`Phase 2 done — ${d.clusters?.length} clusters · ${d.months?.length} months · ${d.total_depts} depts`)
         const full = await (await fetch('/api/planning/deviation/pww/phase2-result')).json()
@@ -288,6 +199,7 @@ export default function PwwDeviation() {
             {syncStatus?.file_found
               ? `File found · ${syncStatus.file_date} · ${syncStatus.size_kb} KB`
               : 'File not found — drop PPO Cont %.xlsx in the PW-W Deviation folder'}
+            {' · columns: DEPARTMENT | ARTICLE NAME | FINAL MRP | one column per TY month (e.g. Mar\'27 … Jun\'27)'}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -297,7 +209,7 @@ export default function PwwDeviation() {
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 11, color: theme.textMuted, fontWeight: 600, whiteSpace: 'nowrap' }}>BLOCK</span>
-            <BlockSearch blocks={blocks} value={activeBlock} onChange={setActiveBlock} />
+            <BlockChip block={status?.block} months={status?.ty_months} note="Detected from the PPO file's month columns" />
           </div>
           <button onClick={handleRun} disabled={running || !status?.ppo_loaded} style={btnStyle('primary', running || !status?.ppo_loaded)}>
             {running ? 'Running…' : 'Run Phase 1'}

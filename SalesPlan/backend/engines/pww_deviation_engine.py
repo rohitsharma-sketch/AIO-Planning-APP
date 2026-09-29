@@ -1,8 +1,11 @@
 """
 PW/W Deviation Engine
 ======================
-Phase 1: Compare PPO cont % (dept × MRP) vs LY SSG actuals for a user-specified
-cumulative month block (MAMJ, SOND, OND, AMJ, JFM, …).
+Phase 1: Compare PPO cont % (dept × MRP) vs LY SSG actuals for a cumulative month block (MAMJ, SOND, …).
+The block is AUTO-DETECTED from the month columns of the imported PPO Cont % file (user, 2026-09-29: "instead of
+the manual search bar ... auto detect from the file imported so that there is sanctity between modules") -
+template DEPARTMENT | ARTICLE NAME | FINAL MRP | <TY month cols, e.g. Mar'27 Apr'27 May'27 Jun'27>. SOR
+Deviation detects its months the same way (month_label / detect_block below).
 
 Deviation formula:
   block_cont_pct = dept_block_ly_ssg / div_block_ly_ssg × 100
@@ -39,6 +42,7 @@ PWW_PPO_PATH     = os.path.join(_BASE, "..", "pww_ppo_data.json")
 PWW_RESULT_PATH  = os.path.join(_BASE, "..", "pww_phase1_result.json")
 PWW_P2_PATH      = os.path.join(_BASE, "..", "pww_phase2_result.json")
 PWW_REAPP_PATH   = os.path.join(_BASE, "..", "pww_reapportion_result.json")
+PWW_META_PATH    = os.path.join(_BASE, "..", "pww_ppo_meta.json")   # block / months detected at sync
 FINAL_PLAN_PATH  = os.path.join(_BASE, "..", "final_dept_plan.json")
 
 # ── Block definitions — all consecutive permutations ──────────────────────────
@@ -82,6 +86,48 @@ def _build_blocks() -> dict:
     return blocks
 
 BLOCKS = _build_blocks()
+
+_MON = {m: i + 1 for i, m in enumerate(["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"])}
+
+
+def month_label(header):
+    """A file header naming a month -> "Mar'27" (Excel date, "Mar'27", "Mar-27", "Mar 2027", "2027-03", ...),
+    else None. Shared with SOR Deviation so both modules read months the same way."""
+    import re
+    if isinstance(header, (datetime.date, datetime.datetime, pd.Timestamp)):
+        y, m = header.year, header.month
+    else:
+        h = str(header).strip().upper().replace("’", "'")
+        mt = re.fullmatch(r"(\d{4})[-/](\d{1,2})(?:[-/]\d{1,2})?(?: 00:00:00)?", h)
+        if mt:
+            y, m = int(mt[1]), int(mt[2])
+        else:
+            mt = re.fullmatch(r"([A-Z]{3})[A-Z]*[\s'\-_/]*(\d{2}|\d{4})", h)
+            if not mt or mt[1] not in _MON:
+                return None
+            m, y = _MON[mt[1]], int(mt[2]) % 100 + 2000
+    if not 1 <= m <= 12:
+        return None
+    return f"{datetime.date(2000, m, 1).strftime('%b')}'{y % 100:02d}"
+
+
+def detect_block(ty_months: list) -> tuple:
+    """TY month labels found in a file -> (block key, block def). They must be consecutive plan months."""
+    idx = sorted(_TY_MONTHS.index(m) for m in set(ty_months) if m in _TY_MONTHS)
+    if not idx or len(idx) != len(set(ty_months)):
+        raise ValueError(f"Months {ty_months} are not all plan months ({_TY_MONTHS[0]}-{_TY_MONTHS[-1]})")
+    if idx != list(range(idx[0], idx[-1] + 1)):
+        raise ValueError(f"Months {ty_months} are not consecutive")
+    want = _TY_MONTHS[idx[0]:idx[-1] + 1]
+    key = next(k for k, v in BLOCKS.items() if v["ty_months"] == want)
+    return key, BLOCKS[key]
+
+
+def _load_meta() -> dict:
+    if os.path.exists(PWW_META_PATH):
+        with open(PWW_META_PATH) as f:
+            return json.load(f)
+    return {}
 
 def _ly_to_ty(ly_month: str) -> str:
     idx = _LY_MONTHS.index(ly_month) if ly_month in _LY_MONTHS else -1
@@ -127,14 +173,18 @@ def _save_ppo(data: dict):
 
 @router.get("/sync-status")
 def get_sync_status():
+    meta = _load_meta()
     if not os.path.exists(PWW_SOURCE_PATH):
-        return {"file_found": False, "file_date": None, "size_kb": None, "path": PWW_SOURCE_PATH}
+        return {"file_found": False, "file_date": None, "size_kb": None, "path": PWW_SOURCE_PATH, "block": meta.get("block")}
     st = os.stat(PWW_SOURCE_PATH)
     return {
         "file_found": True,
         "file_date":  datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
         "size_kb":    round(st.st_size / 1024, 1),
         "path":       PWW_SOURCE_PATH,
+        "block":      meta.get("block"),
+        "ty_months":  meta.get("ty_months"),
+        "ly_months":  meta.get("ly_months"),
     }
 
 
@@ -149,18 +199,23 @@ def sync_ppo():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not read file: {e}")
 
-    df.columns = [str(c).strip().upper() for c in df.columns]
+    month_cols = {c: month_label(c) for c in df.columns if month_label(c)}   # original header -> "Mar'27"
+    df.columns = [c if c in month_cols else str(c).strip().upper() for c in df.columns]
 
-    dept_col    = next((c for c in df.columns if "DEPARTMENT" in c), None)
-    article_col = next((c for c in df.columns if "ARTICLE" in c), None)
-    mrp_col     = next((c for c in df.columns if "MRP" in c), None)
-    cont_col    = next((c for c in df.columns if "CONT" in c), None)
+    dept_col    = next((c for c in df.columns if c not in month_cols and "DEPARTMENT" in c), None)
+    article_col = next((c for c in df.columns if c not in month_cols and "ARTICLE" in c), None)
+    mrp_col     = next((c for c in df.columns if c not in month_cols and "MRP" in c), None)
 
-    if not all([dept_col, mrp_col, cont_col]):
-        raise HTTPException(
-            status_code=422,
-            detail=f"Missing columns. Found: {list(df.columns)}"
-        )
+    if not all([dept_col, mrp_col]):
+        raise HTTPException(status_code=422, detail=f"Missing DEPARTMENT / FINAL MRP columns. Found: {list(df.columns)}")
+    if not month_cols:
+        raise HTTPException(status_code=422, detail=(
+            "No month columns - the block is read from the file. Use DEPARTMENT | ARTICLE NAME | FINAL MRP | "
+            "one column per TY month (e.g. Mar'27, Apr'27, May'27, Jun'27) holding the PPO cont %."))
+    try:
+        block_key, block_def = detect_block(list(month_cols.values()))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
     ppo: dict[str, list] = {}
     for _, row in df.iterrows():
@@ -168,23 +223,31 @@ def sync_ppo():
         if not dept or dept.lower() == "nan":
             continue
         mrp  = row[mrp_col]
-        cont = float(row[cont_col]) if pd.notna(row[cont_col]) else 0.0
         art  = str(row[article_col]).strip() if article_col and pd.notna(row[article_col]) else ""
+        by_month = {lbl: round(float(row[c]) * 100 if pd.notna(row[c]) else 0.0, 4)   # stored as %
+                    for c, lbl in month_cols.items()}
         if dept not in ppo:
             ppo[dept] = []
         ppo[dept].append({
             "mrp":          float(mrp) if pd.notna(mrp) else 0.0,
             "article_name": art,
-            "ppo_cont_pct": round(cont * 100, 4),  # store as %
+            "ppo_cont_pct": round(sum(by_month.values()) / len(by_month), 4),   # block average
+            "months":       by_month,                                           # TY month -> % (Phase 2)
         })
 
     _save_ppo(ppo)
     st = os.stat(PWW_SOURCE_PATH)
+    meta = {"block": block_key, "ty_months": block_def["ty_months"], "ly_months": block_def["ly_months"],
+            "file_date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S")}
+    with open(PWW_META_PATH, "w") as f:
+        json.dump(meta, f, indent=2)
     return {
         "ok":        True,
-        "file_date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+        "file_date": meta["file_date"],
         "depts":     len(ppo),
         "rows":      sum(len(v) for v in ppo.values()),
+        "block":     block_key,
+        "ty_months": block_def["ty_months"],
     }
 
 
@@ -228,7 +291,7 @@ def _ppo_dept_cont_pct(ty_plan: dict, dept: str, div: str, ty_months: list[str])
 # ── Phase 1 + Deviation ────────────────────────────────────────────────────────
 
 @router.get("/run-phase1")
-def run_phase1(block: str = Query(default="MAMJ", description="Month block: MAMJ, SOND, OND, AMJ, JFM, FULL …")):
+def run_phase1(block: str | None = Query(default=None, description="Omit: the block detected from the PPO file")):
     """
     Phase 1: LY SSG actuals vs PPO cont% for the specified block.
 
@@ -242,13 +305,13 @@ def run_phase1(block: str = Query(default="MAMJ", description="Month block: MAMJ
     if not ppo:
         raise HTTPException(status_code=404, detail="No PPO data — run sync first")
 
-    block_key = block.strip().upper()
-    block_def = BLOCKS.get(block_key)
-    if not block_def:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Unknown block '{block_key}'. Valid blocks: {list(BLOCKS.keys())[:20]} …"
-        )
+    file_block = _load_meta().get("block")
+    if not file_block:
+        raise HTTPException(status_code=404, detail="No block detected yet - sync the PPO Cont % file first")
+    block_key = (block or file_block).strip().upper()
+    if block_key != file_block:   # the run always follows the imported file
+        raise HTTPException(status_code=422, detail=f"The PPO file is for block {file_block}, not {block_key}")
+    block_def = BLOCKS[block_key]
     ly_block_months = block_def["ly_months"]
     ty_block_months = block_def["ty_months"]
 
@@ -356,15 +419,6 @@ def get_phase1_result():
     return run_phase1()
 
 
-@router.get("/blocks")
-def get_blocks():
-    """Returns all block permutations as a list for the frontend search picker."""
-    return [
-        {"key": k, **v}
-        for k, v in BLOCKS.items()
-    ]
-
-
 @router.get("/status")
 def get_status():
     ppo = _load_ppo()
@@ -383,9 +437,13 @@ def get_status():
     if has_reapp:
         with open(PWW_REAPP_PATH) as f:
             reapp_run_date = json.load(f).get("run_date")
+    meta = _load_meta()
     return {
-        "ppo_loaded":      bool(ppo),
+        "ppo_loaded":      bool(ppo) and bool(meta.get("block")),
         "ppo_depts":       len(ppo),
+        "block":           meta.get("block"),
+        "ty_months":       meta.get("ty_months"),
+        "ly_months":       meta.get("ly_months"),
         "phase1_run":      has_p1,
         "run_date":        p1_run_date,
         "phase2_run":      has_p2,
@@ -398,7 +456,7 @@ def get_status():
 # ── Phase 2 ────────────────────────────────────────────────────────────────────
 
 @router.get("/run-phase2")
-def run_phase2(block: str = Query(default="MAMJ")):
+def run_phase2(block: str | None = Query(default=None)):
     """
     Phase 2: Cluster × Department × Merged MRP × Month final contribution %.
 
@@ -413,12 +471,11 @@ def run_phase2(block: str = Query(default="MAMJ")):
       > PPO × 150%→ Final = PPO_mrp_div_cont% × 150%  rule = "cap_150"
       else        → Final = Adjusted                   rule = "adjusted"
     """
-    block_key = block.strip().upper()
-
     if not os.path.exists(PWW_RESULT_PATH):
         raise HTTPException(status_code=404, detail="Phase 1 not run yet — run Phase 1 first")
     with open(PWW_RESULT_PATH) as f:
         p1 = json.load(f)
+    block_key = (block or p1["block"]).strip().upper()
 
     if p1["block"] != block_key:
         raise HTTPException(
@@ -494,7 +551,8 @@ def run_phase2(block: str = Query(default="MAMJ")):
                 for row in mrp_rows:
                     mrp        = row["mrp"]
                     mrp_key    = str(int(mrp)) if mrp == int(mrp) else str(mrp)
-                    ppo_mrp_pct = row["ppo_cont_pct"]  # within-dept MRP mix, already as %
+                    # within-dept MRP mix, already as % - the month's own column when the file has one
+                    ppo_mrp_pct = (row.get("months") or {}).get(_ly_to_ty(m), row["ppo_cont_pct"])
                     art         = row.get("article_name", "")
 
                     # LY MRP cont% at div level for this cluster/month

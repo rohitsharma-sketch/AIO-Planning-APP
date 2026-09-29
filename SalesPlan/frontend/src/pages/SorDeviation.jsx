@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { theme, alpha } from '../theme'
+import { BlockChip } from './PwwDeviation'
 
 const API = '/api/planning/deviation/sor'
 
@@ -29,58 +30,11 @@ function RuleBadge({ rule }) {
   )
 }
 
-function UploadBox({ label, subtitle, onFile, imported, importedDate, importedRows }) {
-  const ref = useRef()
-  const [dragging, setDragging] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [err, setErr] = useState(null)
-
-  async function upload(file) {
-    setUploading(true); setErr(null)
-    const fd = new FormData()
-    fd.append('file', file)
-    try {
-      const r = await fetch(`${API}/${label === 'Sales Plan Cont%' ? 'import/sales-plan' : 'import/stock-ppo'}`, { method: 'POST', body: fd })
-      if (!r.ok) { const e = await r.json(); throw new Error(e.detail || 'Upload failed') }
-      onFile()
-    } catch (e) { setErr(e.message) }
-    setUploading(false)
-  }
-
-  return (
-    <div style={{
-      border: `2px dashed ${dragging ? theme.accent : imported ? theme.success : theme.border}`,
-      borderRadius: 12, padding: 24, background: imported ? `${alpha(theme.success,'0a')}` : theme.surface,
-      cursor: 'pointer', transition: 'border 0.2s', flex: 1,
-    }}
-      onClick={() => ref.current?.click()}
-      onDragOver={e => { e.preventDefault(); setDragging(true) }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={e => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) upload(f) }}
-    >
-      <input ref={ref} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }}
-        onChange={e => { const f = e.target.files[0]; if (f) upload(f) }} />
-
-      <div style={{ fontSize: 22, marginBottom: 8 }}>{imported ? '✅' : '📂'}</div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: theme.textPrimary, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 12, color: theme.textMuted, marginBottom: 12 }}>{subtitle}</div>
-
-      {uploading && <div style={{ fontSize: 12, color: theme.accent }}>Uploading…</div>}
-      {err && <div style={{ fontSize: 12, color: theme.danger, marginTop: 6 }}>{err}</div>}
-      {imported && !uploading && (
-        <div style={{ fontSize: 11, color: theme.success, marginTop: 4 }}>
-          ✓ {importedRows} rows imported · {importedDate}
-        </div>
-      )}
-      {!imported && !uploading && (
-        <div style={{ fontSize: 11, color: theme.textMuted }}>Drop file here or click to browse</div>
-      )}
-    </div>
-  )
-}
-
 export default function SorDeviation() {
   const [status, setStatus]         = useState(null)
+  const [files, setFiles]           = useState(null)
+  const [syncing, setSyncing]       = useState(false)
+  const [msg, setMsg]               = useState('')
   const [running, setRunning]       = useState(false)
   const [reapping, setReapping]     = useState(false)
   const [viewMode, setViewMode]     = useState('avg')   // 'avg' | 'reapp'
@@ -92,6 +46,22 @@ export default function SorDeviation() {
   const [selAttr, setSelAttr]       = useState('ALL')
   const [selDept, setSelDept]       = useState('ALL')
   const [expandedRows, setExpandedRows] = useState(new Set())
+
+  async function loadFiles() {
+    try { setFiles(await (await fetch(`${API}/sync-status`)).json()) } catch {}
+  }
+
+  async function syncFiles() {
+    setSyncing(true)
+    try {
+      const r = await fetch(`${API}/sync`, { method: 'POST' })
+      const d = await r.json()
+      setMsg(r.ok ? `Synced — ${d.plan_rows} plan rows, ${d.ppo_rows} PPO rows · block ${d.block} (${d.months.join(' · ')}) read from the files` : (d.detail || 'Sync failed'))
+      if (r.ok) { setAvgResult(null); setReappResult(null) }
+    } catch (e) { setMsg('Error: ' + e.message) }
+    setSyncing(false)
+    loadStatus()
+  }
 
   async function loadStatus() {
     const r = await fetch(`${API}/status`)
@@ -110,7 +80,7 @@ export default function SorDeviation() {
     }
   }
 
-  useEffect(() => { loadStatus() }, [])
+  useEffect(() => { loadStatus(); loadFiles() }, [])
 
   async function runAvg() {
     setRunning(true)
@@ -190,24 +160,48 @@ export default function SorDeviation() {
         </p>
       </div>
 
-      {/* Upload row */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
-        <UploadBox
-          label="Sales Plan Cont%"
-          subtitle="Wide format: ATTRIBUTE-1 | DEPT | ARTICLE NAME | FINAL MRP | Month cols"
-          onFile={loadStatus}
-          imported={status?.plan_imported}
-          importedDate={status?.plan_date}
-          importedRows={status?.plan_rows}
-        />
-        <UploadBox
-          label="Stock PPO Cont%"
-          subtitle="Same template as Sales Plan — month columns are cont%"
-          onFile={loadStatus}
-          imported={status?.ppo_imported}
-          importedDate={status?.ppo_date}
-          importedRows={status?.ppo_rows}
-        />
+      {/* Sync panel - same layout as PW/W: both files synced from the folder, block read from their month columns */}
+      <div style={{
+        background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 10,
+        padding: '16px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
+      }}>
+        <div style={{ flex: 1, minWidth: 260, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {[['plan', 'Sales Plan Cont %'], ['ppo', 'Stock PPO Cont %']].map(([k, lbl]) => {
+            const f = files?.[k]
+            return (
+              <div key={k}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: theme.textPrimary }}>{lbl} — Sync from Folder</div>
+                <div style={{ fontSize: 11, color: theme.textMuted, fontFamily: theme.fontMono }}>{f?.path || '…'}</div>
+                <div style={{ fontSize: 11, color: f?.file_found ? theme.textSecondary : theme.danger }}>
+                  {f?.file_found ? `File found · ${f.file_date} · ${f.size_kb} KB` : 'File not found — drop it in the SOR Deviation folder'}
+                </div>
+              </div>
+            )
+          })}
+          <div style={{ fontSize: 11, color: theme.textMuted }}>
+            Columns: ATTRIBUTE-1 | DEPARTMENT | ARTICLE NAME | FINAL MRP | one column per TY month (cont %) — both files, same months
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button onClick={loadFiles} style={{
+            padding: '7px 16px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            background: 'transparent', border: `1px solid ${theme.border}`, color: theme.textSecondary,
+          }}>Refresh</button>
+          <button onClick={syncFiles} disabled={syncing || !(files?.plan?.file_found && files?.ppo?.file_found)} style={{
+            padding: '7px 16px', borderRadius: 7, fontSize: 12, fontWeight: 700, border: 'none',
+            cursor: syncing || !(files?.plan?.file_found && files?.ppo?.file_found) ? 'not-allowed' : 'pointer',
+            background: files?.plan?.file_found && files?.ppo?.file_found ? 'var(--st-btn,#A8CBB7)' : theme.surfaceAlt,
+            color: files?.plan?.file_found && files?.ppo?.file_found ? 'var(--st-btn-text,#1F4D3A)' : theme.textMuted,
+          }}>{syncing ? 'Syncing…' : 'Sync Files'}</button>
+          <span style={{ fontSize: 11, color: theme.textMuted, fontWeight: 600 }}>BLOCK</span>
+          <BlockChip block={status?.block} months={status?.plan_months} note="Detected from the files' month columns" />
+        </div>
+        {status?.block && status?.pww_block && status.block !== status.pww_block && (
+          <div style={{ width: '100%', fontSize: 12, color: theme.danger, fontWeight: 600 }}>
+            ⚠ PW/W Deviation is on block {status.pww_block}, SOR files are {status.block} — sync matching files so both modules plan the same months.
+          </div>
+        )}
+        {msg && <div style={{ width: '100%', fontSize: 12, color: theme.accent, fontWeight: 600 }}>{msg}</div>}
       </div>
 
       {/* Run buttons */}
@@ -410,8 +404,8 @@ export default function SorDeviation() {
       {!activeData && !running && (
         <div style={{ textAlign: 'center', padding: 60, color: theme.textMuted, fontSize: 13 }}>
           {status?.plan_imported && status?.ppo_imported
-            ? 'Both files imported — click "Run Average" to compute.'
-            : 'Import both files above to get started.'}
+            ? 'Both files synced — click "Run Average" to compute.'
+            : 'Drop both files in the SOR Deviation folder and click Sync Files.'}
         </div>
       )}
     </div>

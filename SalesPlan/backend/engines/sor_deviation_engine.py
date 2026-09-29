@@ -1,17 +1,20 @@
 # SOR Deviation Engine
 # Summer / Occasional / Regular deviation logic
 #
-# Phase 1: User uploads Sales Plan Cont% + Stock PPO Cont% (same wide template)
-#   Template columns: ATTRIBUTE-1 | DEPARTMENT | ARTICLE NAME | FINAL MRP | <Month1> | <Month2> | ...
+# Phase 1: Sales Plan Cont% + Stock PPO Cont% (same wide template) synced from the SOR Deviation folder, as PW/W
+#   does (user, 2026-09-29: "similar format for SOR deviation just like PW/W" + months auto-detected from the files).
+#   Template columns: ATTRIBUTE-1 | DEPARTMENT | ARTICLE NAME | FINAL MRP | <TY month cols, e.g. Mar'27 ...>
+#   Both files must carry the same months; the block is detected with PW/W's own detect_block.
 #   Average = (plan_cont + ppo_cont) / 2 when both present
 #            = max(plan_cont, ppo_cont) when one is absent/zero
 # Phase 2 (reapportionment): within each DEPT x MONTH, normalise all article avg%
 #   values to sum to 100%.
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 import os, json, datetime, io
 import pandas as pd
+from engines.pww_deviation_engine import month_label, detect_block, _load_meta as _pww_meta
 
 router = APIRouter()
 
@@ -21,6 +24,11 @@ SOR_PLAN_PATH  = os.path.join(SOR_DIR, "sor_sales_plan.json")
 SOR_PPO_PATH   = os.path.join(SOR_DIR, "sor_stock_ppo.json")
 SOR_AVG_PATH   = os.path.join(SOR_DIR, "sor_avg_result.json")
 SOR_REAPP_PATH = os.path.join(SOR_DIR, "sor_reapp_result.json")
+
+# Source files, synced from the folder like PW/W's PPO Cont %
+SOR_SOURCE_DIR = r"C:\Users\A9820\Documents\CLaude - New Projects\SalesPlan\SOR Deviation"
+SOR_SOURCES = {"plan": os.path.join(SOR_SOURCE_DIR, "Sales Plan Cont %.xlsx"),
+               "ppo":  os.path.join(SOR_SOURCE_DIR, "Stock PPO Cont %.xlsx")}
 
 _FIXED_COLS = {"ATTRIBUTE-1", "DEPARTMENT", "ARTICLE NAME", "FINAL MRP"}
 
@@ -37,10 +45,14 @@ def _parse_file(contents: bytes, filename: str) -> dict:
     else:
         df = pd.read_excel(io.BytesIO(contents))
 
-    df.columns = [str(c).strip() for c in df.columns]
-
-    # Identify month columns (everything after the 4 fixed cols)
-    month_cols = [c for c in df.columns if c not in _FIXED_COLS]
+    # Month columns = headers that name a month, as "Mar'27" (the rest must be the 4 fixed cols)
+    df.columns = [month_label(c) or str(c).strip() for c in df.columns]
+    month_cols = [c for c in df.columns if c.upper() not in _FIXED_COLS]
+    bad = [c for c in month_cols if month_label(c) is None]
+    if bad:
+        raise ValueError(f"Columns that are not months: {bad}")
+    if not month_cols:
+        raise ValueError("No month columns")
 
     # Normalise fixed cols (case-insensitive fallback)
     col_map = {}
@@ -100,6 +112,44 @@ def _ts():
 
 # ── status ─────────────────────────────────────────────────────────────────────
 
+def _file_info(path):
+    if not os.path.exists(path):
+        return {"file_found": False, "path": path}
+    st = os.stat(path)
+    return {"file_found": True, "path": path, "size_kb": round(st.st_size / 1024, 1),
+            "file_date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S")}
+
+
+@router.get("/sync-status")
+def sor_sync_status():
+    return {k: _file_info(p) for k, p in SOR_SOURCES.items()}
+
+
+@router.post("/sync")
+def sor_sync():
+    """Read both files from the folder; their months must match - the block is detected from them."""
+    parsed = {}
+    for k, path in SOR_SOURCES.items():
+        if not os.path.exists(path):
+            raise HTTPException(404, f"File not found: {path}")
+        try:
+            with open(path, "rb") as f:
+                parsed[k] = _parse_file(f.read(), path)
+        except Exception as e:
+            raise HTTPException(422, f"{os.path.basename(path)}: {e}")
+    if parsed["plan"]["months"] != parsed["ppo"]["months"]:
+        raise HTTPException(422, f"Months differ - Sales Plan {parsed['plan']['months']} vs Stock PPO {parsed['ppo']['months']}")
+    try:
+        block, _ = detect_block(parsed["plan"]["months"])
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    for k, dest in (("plan", SOR_PLAN_PATH), ("ppo", SOR_PPO_PATH)):
+        parsed[k].update(imported_at=_ts(), source_file=os.path.basename(SOR_SOURCES[k]), block=block)
+        _save_json(dest, parsed[k])
+    return {"ok": True, "block": block, "months": parsed["plan"]["months"],
+            "plan_rows": len(parsed["plan"]["rows"]), "ppo_rows": len(parsed["ppo"]["rows"])}
+
+
 @router.get("/status")
 def sor_status():
     plan  = _load_json(SOR_PLAN_PATH)
@@ -107,6 +157,8 @@ def sor_status():
     avg   = _load_json(SOR_AVG_PATH)
     reapp = _load_json(SOR_REAPP_PATH)
     return {
+        "block":          plan.get("block") if plan else None,
+        "pww_block":      _pww_meta().get("block"),   # sanctity check shown on the page
         "plan_imported":  plan  is not None,
         "plan_rows":      len(plan["rows"])   if plan  else 0,
         "plan_months":    plan["months"]       if plan  else [],
@@ -119,34 +171,6 @@ def sor_status():
         "reapp_run":      reapp is not None,
         "reapp_date":     reapp.get("run_at","")      if reapp else "",
     }
-
-
-# ── imports ────────────────────────────────────────────────────────────────────
-
-@router.post("/import/sales-plan")
-async def import_sales_plan(file: UploadFile = File(...)):
-    contents = await file.read()
-    try:
-        parsed = _parse_file(contents, file.filename)
-    except Exception as e:
-        raise HTTPException(400, f"Parse error: {e}")
-    parsed["imported_at"] = _ts()
-    parsed["source_file"] = file.filename
-    _save_json(SOR_PLAN_PATH, parsed)
-    return {"ok": True, "rows": len(parsed["rows"]), "months": parsed["months"]}
-
-
-@router.post("/import/stock-ppo")
-async def import_stock_ppo(file: UploadFile = File(...)):
-    contents = await file.read()
-    try:
-        parsed = _parse_file(contents, file.filename)
-    except Exception as e:
-        raise HTTPException(400, f"Parse error: {e}")
-    parsed["imported_at"] = _ts()
-    parsed["source_file"] = file.filename
-    _save_json(SOR_PPO_PATH, parsed)
-    return {"ok": True, "rows": len(parsed["rows"]), "months": parsed["months"]}
 
 
 # ── average engine ─────────────────────────────────────────────────────────────

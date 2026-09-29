@@ -49,6 +49,8 @@ def reload_store_master():
     return {"ok": True, "stores": len(stores), "clusters": _sm.get_clusters()}
 app.include_router(pww_deviation_router,   prefix="/api/deviation/pww")
 app.include_router(sor_deviation_router,   prefix="/api/deviation/sor")
+app.include_router(pww_deviation_router,   prefix="/api/planning/deviation/pww")   # the pages call /api/planning/...
+app.include_router(sor_deviation_router,   prefix="/api/planning/deviation/sor")
 app.include_router(display_type_router,    prefix="/api/display-type")
 app.include_router(sync_router,            prefix="/api/sync")
 app.include_router(mrp_reapp_router,       prefix="/api/planning/mrp-reapportionment")
