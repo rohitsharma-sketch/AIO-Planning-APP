@@ -7,6 +7,25 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-29
 
+### Rule set: re-phase a department's plan across months (from LW_U_T-TOP Working.xlsx)
+- **Asked (user):** "analyse this file thoroughly and build a generic rule set." The 554 MB workbook was read by streaming its XML, without opening it in Excel or loading whole sheets. Every step was checked against its saved values.
+- **Written up:** `docs/business-rules/REPHASE_DEPARTMENT_MONTHS.md`. The method:
+  - Keep each store's window total (Sep–Dec) for one department.
+  - Re-split it by a store-level LY month mix: own mix for SSG / SSG-ANG stores, else REF → REF OLD → 0. The mix may come from a proxy department (here LW_U_T-TOP F/S).
+  - Drop non-trading months and rescale the rest.
+  - Split down to MRP × display by the old plan's month mix (the average of the planned months for months that had none, renormalised).
+  - Re-price qty from the old ASP. Jan/Feb and every other department stay untouched.
+  - The doc also lists the checks each run must pass.
+- **Verified in the file:**
+  - 303 stores; the window total is kept exactly (772.77 L); every mix is 100%.
+  - MRP × display rows equal the store months exactly; Jan/Feb and the other departments are unchanged.
+  - 16 of the 17 hand-typed "Exception" rows follow the non-trading-month rule exactly.
+- **Open points:**
+  - JHM's typed mix doesn't follow the rule.
+  - F/S is used as the curve but has no plan of its own.
+  - The workbook's final value + qty (Post) step is unfinished.
+- No app code changed.
+
 ### BIS: the department filter search picks what you click
 - **Bug (user):** "filter search not working properly, I cannot single out my selection." With no filter set, typing a search showed the matches ticked, and clicking one **hid** it (search "dupatta" → click → 235 other departments shown, dupatta gone).
 - **Fix (Excel-style):** while searching with nothing picked yet, the matches start unticked. Clicking one **shows only that department**, and more clicks add or remove others. "(Select All Search Results)" shows only the matches. Without a search, unticking still hides just that one.
