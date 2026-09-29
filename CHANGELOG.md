@@ -7,6 +7,18 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### AOP Re-Aligner: "Re-phase & run" takes a department to the final plan in one click
+- **Asked (user):** "i just select the department to be executed and you do it on the second step by yourself and take it to the final plan".
+- **How it works:** in Method 2's step 2, pick the department (and optionally the LY shape), then click **Re-phase & run**. The server does, as one job, what used to be three steps:
+  1. Builds the re-phase from last year.
+  2. Loads it as the step-2 revised plan, with the usual checks.
+  3. Sets "other departments: stay as they are" and runs the realignment. The result, checks and downloads appear as after a normal run.
+- **Re-phase file** still downloads the same file, for checking or editing it first.
+- **Tested on the live plan** (LW_U_T-TOP with the LW_U_T-TOP F/S shape): 25 s, all checks passed.
+  - LADIES moves only by LW_U_T-TOP's own change: Sep 550.21 → 304.10, Oct 222.56 → 316.09, Nov 0 → 96.28, Dec 0 → 56.30 L; 229 stores.
+  - KIDS, MENS and Jan/Feb are unchanged.
+- Files: `AOP Realigner/server.py` (`job_rephase`, `POST /api/rephase?dept=&mix=`), `index.html`, `rules.js`.
+
 ### Nightly sync now rebuilds the Calendar's day-wise sales too
 - **Asked (user):** "yes, add day-wise to the nightly sync".
 - **Before:** only the month-wise calendarised sales were rebuilt nightly. The day-wise ones changed only when someone ran Run Reindex → Day-wise by hand, and still sat on 26 Sep's data, which stopped at **27 Aug 2026**.

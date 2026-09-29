@@ -300,7 +300,7 @@ const METHODS = {
     run: 'Delisted departments go to 0 from their month and new listings take their sized value; every other department in the same store × division absorbs the difference pro-rata.'},
   dept: {no: 2, title: 'Existing department changes', short: 'New values for departments already in the plan.',
     drop: 'Upload the revised plan',
-    howto: `Only the departments you changed — Store × Department rows with “&lt;Month&gt; New” columns. Pick a department and download the template: it comes pre-filled with that department's original values in every store, ready to edit. <b>Re-phase from LY</b> fills it for you instead: each store keeps its total for the unlocked months, re-split by last year's month shape (own if SSG, else REF / REF OLD / the cluster's SSG stores) - then run with the other departments kept as they are.`,
+    howto: `Only the departments you changed — Store × Department rows with “&lt;Month&gt; New” columns. Pick a department and download the template: it comes pre-filled with that department's original values in every store, ready to edit. <b>Re-phase &amp; run</b> does it all for you: pick the department (and, if needed, whose last-year shape to use) - each store keeps its total for the unlocked months, re-split by last year's month shape (own if SSG, else REF / REF OLD / the cluster's SSG stores), loaded here and run to the final plan with the other departments kept as they are. <b>Re-phase file</b> downloads the same file to check or edit first.`,
     run: 'Revised departments keep their values exactly; every other department in the same store × division absorbs the difference pro-rata, so each store × division lands back on the original.'},
   newdept: {no: 3, title: 'New or split departments', short: 'A department added late, or one split into several.',
     drop: 'Upload the split or new-department file',
@@ -472,7 +472,8 @@ function templateActions() {
     <button class="btn btn-outline btn-sm" onclick="template('dept')" title="Excel file with the right headers, pre-filled with the original values of the chosen department">${icon('dl')}Template</button>
     <select class="select" id="tpl-mix" aria-label="Whose last-year month shape to use" onchange="tplMix=this.value"><option value="">LY shape: same department</option>${
       (S.ly_departments || []).map(d => `<option value="${esc(d)}" ${d === tplMix ? 'selected' : ''}>LY shape: ${esc(d)}</option>`).join('')}</select>
-    <button class="btn btn-outline btn-sm" onclick="rephase()" title="Re-split the chosen department's unlocked months by last year's month shape - every store keeps its total for those months">${icon('dl')}Re-phase from LY</button>`;
+    <button class="btn btn-outline btn-sm" onclick="rephase()" title="Download the re-phase file to check or edit before uploading it">${icon('dl')}Re-phase file</button>
+    <button class="btn btn-primary btn-sm" onclick="rephaseRun()" ${dataBusy() ? 'disabled' : ''} title="Build the re-phase from last year, load it here and run it to the final plan - other departments kept as they are">${icon('play')}Re-phase &amp; run</button>`;
 }
 
 function renderRev() {
@@ -683,6 +684,14 @@ async function rephase() {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     toast('Re-phase file built - check the "How it was built" sheet, upload it here, then run with "other departments: stay as they are".', 'info');
   } catch (e) { toast(e.message); }
+}
+// Re-phase & run (2026-09-30): the server builds the re-phase, loads it as step 2 and realigns - one click to the final plan
+async function rephaseRun() {
+  if (!tplDept) return toast('Pick the department to re-phase in the list first.');
+  const q = new URLSearchParams({dept: tplDept});
+  if (tplMix) q.set('mix', tplMix);
+  try { await api(`api/rephase?${q}`); } catch (e) { toast(e.message); }
+  refresh();
 }
 function template(m = 'dept', kind = '') {
   const q = new URLSearchParams({method: m});

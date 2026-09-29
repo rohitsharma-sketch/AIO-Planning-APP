@@ -362,6 +362,29 @@ def job_run(job):
 EXPORTS = {"compare": "Comparison vs original", "full": "Full realigned plan"}
 
 
+def job_rephase(job, dept, mix=None):
+    """Method 2 in one go (user, 2026-09-30: "i just select the department ... take it to the final plan"): build the
+    re-phase from last year, load it as the revised plan and realign with the other departments kept as they are -
+    exactly the Re-phase file download -> step-2 upload -> Run, with the same checks at every step."""
+    with lock:
+        o, months = state["orig"], state["months"]
+    if o is None:
+        raise UserError("Load the original plan first (step 1).")
+    ly = last_year()
+    if not ly:
+        raise UserError("Last year's sales (the Listing / Delisting Analyser's sales.json) aren't built yet.")
+    with job.step("Build the re-phase from last year", "rephase", len(o)):
+        try:
+            df, how = importer.template_rephase(o, months, ly, dept, mix)
+        except ValueError as e:
+            raise UserError(str(e))
+        data = engine.write_xlsx([("Revised plan", df), ("How it was built", how)])
+    with lock:
+        state.update(method="dept", absorb=False)
+    _check_revised(job, data, f"Re-phase from LY - {dept}.xlsx", None, "dept")
+    job_run(job)
+
+
 def job_export(job, kind, fmt):
     with lock:
         res, out, compare, summ = state["result"], state["out"], state["compare"], state["summary"]
@@ -555,6 +578,11 @@ class Handler(BaseHTTPRequestHandler):
                     job = start_job("data", "revised", "Re-checking with the new locked months", _check_revised, *rev)
                     return self._send(202, {"job": job.id, "locks": locks})
                 return self._send(200, {"ok": True, "locks": locks})
+            elif path == "/api/rephase":   # ?dept=&mix= - re-phase from LY, load it as step 2 and run (Method 2)
+                if not q.get("dept"):
+                    raise UserError("Pick the department to re-phase first.")
+                job = start_job("data", "rephase", f"Re-phasing {q['dept']} from last year", job_rephase,
+                                q["dept"], q.get("mix") or None)
             elif path == "/api/run":
                 job = start_job("data", "run", f"Realigning · {METHODS[method].lower()}", job_run)
             elif path == "/api/export":
