@@ -7,6 +7,23 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### Re-Aligner Re-phase rebuilt as a generic planning rule, and tested across plan set-ups
+- **Asked (user):** "i want it to be a generic planning tool and not a biased working ... made for one time purpose ... reverify and rebuild ... the logic base should be clear, try to test on different models".
+- **Rebuilt:** these rules are in the rule-set doc §0 (G1–G10), the Rules page and the Summary shown with every run.
+  - **Comparable stores:** with an SSG TAG column, a store counts as comparable if its tag starts with "SSG" (it used to be an exact match on "SSG"/"SSG-ANG"). Without that column, it's decided from the data: the store must have sold in the division in every window month last year. Before this, every store could lend its shape, even one that opened mid-year.
+  - **Last-year months:** a month missing from the data, or only till date, is refused rather than used silently.
+  - **Unlocked half-months:** reported instead of skipped silently.
+  - **Summary:** every run comes with a Summary sheet, and its lines also show in step 2.
+  - **Wording:** SSG-specific labels are now "comparable stores", and the workbook examples are gone from the help text.
+- **A bias the tests caught:** a fixed mix typed for LW_U_T-TOP in JHM was also applied to ML_JEANS. A fixed mix is now keyed by store × department: an overrides row needs a DEPARTMENT, and one without it is refused. REF OLD stays a store-wide attribute. The workbook's overrides file was rebuilt with JHM's mix set for LW_U_T-TOP and re-uploaded.
+- **Tested:**
+  - **Every department in the live plan:** 176 departments; 175 run and 1 is correctly refused because it has no last year. All invariants hold: shares 100% (worst 4e-16), store totals kept, non-trading months 0, only comparable stores lend a shape.
+  - **Independent cross-check:** a different model wrote its own implementation from the rules only, without the code. On 6 set-ups (a proxy shape, KIDS, MENS, a 3-month window, a plan without SSG TAG, a plan without SSG TAG/REF/CLUSTER) it matched **5,362/5,362 store-months** (max 5e-15 L).
+  - **Full Method 2 path:** all six end to end with every check ok, and the other departments moved 0.
+  - **Workbook regression:** still exact (303/303 stores).
+  - **Unit tests added:** no-tag comparable rule, partial and missing month refusal, half-month note, and mix per department.
+- Files: `AOP Realigner/importer.py`, `server.py` (`ly_partial`, notes into step 2 + Summary sheet), `index.html`, `rules.js`, `test_realign.py`, `docs/business-rules/REPHASE_DEPARTMENT_MONTHS.md` (§0).
+
 ### Re-Aligner: no "Replace this file" box after Re-phase & run
 - **Asked (user):** "shouldn't this replace the file option be removed … now that the plan is remade accordingly".
 - **Change:** when the step-2 file was built by Re-phase & run, the big drop box is replaced by one line: "Built by Re-phase & run – nothing to upload. To use your own edits, download Re-phase file, change it and upload it here", where "upload it here" is a small link.

@@ -16,6 +16,8 @@ import urllib.parse
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import pandas as pd
+
 import engine
 import importer
 from engine import DEPT, STORE
@@ -68,6 +70,19 @@ def last_year():
             data = json.load(fh)["data"]
         return {(st, d): {m[:6]: v / 1e5 for m, v in mm.items()} for st, dd in data.items() for d, mm in dd.items()}
     return _cached(SALES_JSON, build)
+
+
+def ly_partial():
+    """Last-year months the sales export doesn't hold in full yet ("Sep'26(Till Date)" -> {"Sep'26"})."""
+    try:
+        mt = os.path.getmtime(SALES_JSON)
+    except OSError:
+        return set()
+    hit = _ref_cache.get("ly_partial")
+    if not hit or hit[0] != mt:
+        with open(SALES_JSON, encoding="utf-8") as fh:
+            hit = _ref_cache["ly_partial"] = (mt, {m[:6] for m in json.load(fh)["months"] if "(" in m})
+    return hit[1]
 
 
 def ly_departments():
@@ -382,16 +397,17 @@ def job_rephase(job, dept, mix=None):
         raise UserError("Last year's sales (the Listing / Delisting Analyser's sales.json) aren't built yet.")
     with job.step("Build the re-phase from last year", "rephase", len(o)):
         try:
-            df, how = importer.template_rephase(o, months, ly, dept, mix, _overrides())
+            df, how, notes = importer.template_rephase(o, months, ly, dept, mix, _overrides(), ly_partial())
         except ValueError as e:
             raise UserError(str(e))
-        data = engine.write_xlsx([("Revised plan", df), ("How it was built", how)])
+        data = engine.write_xlsx([("Revised plan", df), ("How it was built", how), ("Summary", pd.DataFrame({"NOTE": notes}))])
     with lock:
         state.update(method="dept", absorb=False)
     _check_revised(job, data, f"Re-phase from LY - {dept}.xlsx", None, "dept")
     with lock:
         if state["rev_info"] is not None:
             state["rev_info"]["generated"] = True   # built here, not uploaded - the page shows no Replace drop zone for it
+            state["rev_report"] = [{"level": "info", "msg": n, "examples": []} for n in notes] + state["rev_report"]
     job_run(job)
 
 
@@ -444,7 +460,8 @@ def public_state():
         "ly_departments": ly_departments() if o is not None and s["method"] == "dept" else [],
         "rephase_overrides": (lambda v: v and {"name": v["name"], "loaded_at": v["loaded_at"], "stores": len(v["stores"]),
                                                "ref_old": sum("ref_old" in x for x in v["stores"].values()),
-                                               "mix": sum("mix" in x for x in v["stores"].values())})(s.get("rephase_ov")),
+                                               "mix": sum(len(x.get("mix") or {}) if all(isinstance(y, dict) for y in (x.get("mix") or {}).values()) else 0
+                                                          for x in v["stores"].values())})(s.get("rephase_ov")),
     }
 
 
@@ -524,8 +541,9 @@ class Handler(BaseHTTPRequestHandler):
                                                                                            _overrides()))]
                         name = f"Re-phase store overrides - {dept}.xlsx"
                     else:
-                        df, how = importer.template_rephase(o, months, ly, dept, q.get("mix") or None, _overrides())
-                        sheets, name = [("Revised plan", df), ("How it was built", how)], f"Re-phase from LY - {dept}.xlsx"
+                        df, how, notes = importer.template_rephase(o, months, ly, dept, q.get("mix") or None, _overrides(), ly_partial())
+                        sheets = [("Revised plan", df), ("How it was built", how), ("Summary", pd.DataFrame({"NOTE": notes}))]
+                        name = f"Re-phase from LY - {dept}.xlsx"
                 except ValueError as e:
                     return self._send(400, {"error": str(e)})
             else:

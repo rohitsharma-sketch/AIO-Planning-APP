@@ -4,6 +4,38 @@ Derived from `LW_U_T-TOP Working.xlsx` (user's working file, 23–25 Sep 2026; 5
 cell by cell against its saved values (29 Sep 2026). The workbook re-phases **LW_U_T-TOP**'s Sep–Dec'26 plan;
 the rules below are written generically so any department / window can be re-phased the same way.
 
+> **The rules in force are §0 below** (made generic 30 Sep 2026, on the user's ask: "a generic planning tool and not a
+> biased working ... made for one time purpose"). §1–§8 are how they were found in, and proved against, that workbook.
+
+## 0. The generic rules in force (AOP Re-Aligner, Method 2 → Re-phase from LY)
+
+| # | Rule |
+|---|---|
+| G1 | **Window** = the plan's unlocked months that have a last-year month (same month, one year earlier). An unlocked P1 / P2 half has none: it keeps its plan and the summary says so. |
+| G2 | **Last year must be real and complete**: a window month whose last-year month is not in the data, or only till date, is refused (lock it or re-phase after it closes) — never a silent 0 or a part-month shape. |
+| G3 | **Kept**: each store's total of the department over the window; only the split between months changes. Other departments are untouched (run with "stay as they are"). |
+| G4 | **Shape** = last year's sales of the shape department (default: the department itself; any department with last-year sales can be chosen) in the window's last-year months; negative months count as 0. |
+| G5 | **Whose shape**: the first **comparable** store of: the store itself → its REF → its REF OLD; else the comparable stores of its CLUSTER together; else the store keeps its planned phasing (never 0). A missing column (REF, REF OLD, CLUSTER) just drops out of the order. |
+| G6 | **Comparable** (may lend a shape): if the plan has an SSG TAG column, a tag starting "SSG"; without it, from the data — the store sold in the department's division in **every** window month last year (no part-year histories). |
+| G7 | **Not trading**: a month with no plan in the department's division for that store gets 0; the rest is rescaled to 100%. |
+| G8 | **Store overrides**: REF OLD is a store attribute (all departments); a fixed month mix is per **store × department** and replaces the shape only there. A mix without a DEPARTMENT is refused, so it can never move another department. |
+| G9 | **Transparency**: every run has a Summary (also in step 2 — stores, months, comparable rule used, shape sources, stores left on planned phasing, non-trading months, half-months skipped) and a per-store "How it was built" sheet. |
+| G10 | Down to MRP × display and qty: Method 2's own rules (month share, revised-window average for unplanned months, ASP) — R8 / R9 below. |
+
+**Tested on different models (30 Sep 2026, live plan `New Plan - 8.9.26 With MC Split.xlsb`, 674,478 rows):**
+- **All 176 departments**, own shape, default locks: store window totals kept, shares 100% (worst 4e-16), non-trading months 0,
+  only comparable stores lent a shape, department totals kept. 175 ran; 1 correctly refused (KI_AP_BABA SUIT NEW BORN F/S has
+  no last year of its own — pick a shape department).
+- **Independent implementation by a different model**, written from these rules only (it never saw the code): 6 set-ups —
+  LADIES with a proxy shape, KIDS, MENS, a 3-month window (Dec locked), a plan without SSG TAG, a plan without SSG TAG /
+  REF / CLUSTER — **5,362 of 5,362 store-months identical** (max 5e-15 L).
+- **Full Method 2 path** (file → upload checks → realign → verify) for all 6: every check ok, other departments moved 0.
+  With "absorb" instead, 21 of 7,272 store × division months are flagged (a re-phased department exceeding a month's
+  original total — the overflow rule), which is why Re-phase & run uses "stay as they are".
+- **A bias the tests caught and fixed**: a fixed mix typed for LW_U_T-TOP in JHM was also applied to ML_JEANS (overrides were per
+  store) → now per store × department (G8).
+- The workbook itself is still reproduced exactly with its REF OLD + JHM's mix (303 / 303 stores).
+
 ## 1. What the method does (one line)
 
 Keep every store's **window total** for the department exactly as planned, but **re-split it across the months of

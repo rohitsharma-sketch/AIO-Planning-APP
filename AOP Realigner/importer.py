@@ -286,7 +286,7 @@ def prepare_revised(df, info, rep, orig, months):
     """Methods 2 and 3 (new departments): validate a revised plan against the loaded original ->
     (revised Store x Dept rows, months used, source rows for new depts, info, report).
     An optional COPY FROM (PARENT DEPARTMENT) column names the department whose MRP / display rows and ASPs a new
-    department takes; without it a new department must start with an existing one's name (LW_U_T-TOP F/S).
+    department takes; without it a new department must start with an existing one's name (e.g. an F/S split named after its parent department).
     info["preview"] compares original vs revised totals per department for the same stores."""
     new = month_cols(df, "New")
     if not new:
@@ -332,7 +332,7 @@ def prepare_revised(df, info, rep, orig, months):
     if orphans:
         rep.error(f"{len(orphans)} store-department(s) don't exist in the original and have no department to copy "
                   f"MRP / display rows from - name one in a COPY FROM column, or start the new name with an "
-                  f"existing department's (LW_U_T-TOP F/S).", orphans)
+                  f"existing department's (e.g. an F/S split named after its parent department).", orphans)
     for d, (p, n) in parents.items():
         rep.info(f"New department {d} will be created in {n} store(s), using {p}'s MRP / display rows and ASPs.")
 
@@ -698,7 +698,7 @@ REF_NAMES = {"REF NAME", "REF", "REF STORE", "REF_NAME", "BUDDY", "BUDDY STORE"}
 REF_OLD_NAMES = {"REF OLD", "OLD REF", "REF_OLD", "REF NAME OLD", "OLD REF NAME"}
 SSG_NAMES = {"SSG TAG", "SSG", "SSG_TAG"}
 CLUSTER_NAMES = {"CLUSTER", "CLUSTER NAME", "CALENDAR CLUSTER"}
-OWN_SHAPE_TAGS = {"SSG", "SSG-ANG"}
+SHAPE_TAG_PREFIX = "SSG"   # SSG TAG values that mark a like-for-like store: "SSG", "SSG - ANG", ... (spaces ignored)
 
 
 def _store_col(orig, names):
@@ -718,9 +718,11 @@ def _mix_cols(df, lm):
 
 def read_rephase_overrides(data, name, orig, months):
     """Store overrides for Re-phase from LY (user, 2026-09-30 - REF OLD is kept nowhere else, and some stores are set by
-    hand): STORE NAME + optional REF OLD (used before the cluster fallback) + optional '<Month> %' columns (a fixed
-    month mix that replaces the last-year shape for that store; any scale, rescaled to 100%) ->
-    ({store: {"ref_old": "PTS", "mix": {"Sep'26": 0.6, ...}}}, report)."""
+    hand): STORE NAME + optional REF OLD (a store attribute: used before the cluster fallback, for every department) +
+    optional DEPARTMENT and '<Month> %' columns (a fixed month mix for that store AND department - it replaces the
+    last-year shape only there; any scale, rescaled to 100%). A month mix without a DEPARTMENT is refused: a mix set
+    for one department must never leak into another (found when a hand-set LW_U_T-TOP mix moved ML_JEANS) ->
+    ({store: {"ref_old": "PTS", "mix": {department: {"Sep'26": 0.6, ...}}}}, report)."""
     df, info, rep = read_table(data, name, {STORE}, "store overrides")
     if df is None:
         return None, rep
@@ -730,34 +732,44 @@ def read_rephase_overrides(data, name, orig, months):
     if ro is None and not mc:
         rep.error(f"No REF OLD column and no month mix columns ({', '.join(m + ' %' for m in lm)}) - nothing to override.")
         return None, rep
-    out, bad, unknown = {}, [], []
-    known = set(orig[STORE])
+    out, bad, nodept, unknown, udept = {}, [], [], [], []
+    known, depts = set(orig[STORE]), set(orig[DEPT])
     for i, r in df.iterrows():
         s = norm(r[STORE])
         if not s:
             continue
-        ov = {}
+        ov = out.setdefault(s, {})
         if ro is not None and norm(r[ro]):
             ov["ref_old"] = norm(r[ro])
         vals = {m: pd.to_numeric(r[c], errors="coerce") for m, c in mc.items()}
         if any(pd.notna(v) for v in vals.values()):
+            dp = norm(r[DEPT]) if DEPT in df.columns else ""
             vals = {m: float(v) if pd.notna(v) else 0.0 for m, v in vals.items()}
-            if any(v < 0 for v in vals.values()) or sum(vals.values()) <= 0:
+            if not dp:
+                nodept.append(i)
+            elif any(v < 0 for v in vals.values()) or sum(vals.values()) <= 0:
                 bad.append(i)
-                continue
-            ov["mix"] = {m: v / sum(vals.values()) for m, v in vals.items()}
-        if ov:
-            out[s] = ov
-            if s not in known:
-                unknown.append(s)
+            else:
+                ov.setdefault("mix", {})[dp] = {m: v / sum(vals.values()) for m, v in vals.items()}
+                if dp not in depts:
+                    udept.append(dp)
+        if not ov:
+            del out[s]
+        elif s not in known:
+            unknown.append(s)
+    if nodept:
+        rep.error(f"{len(nodept)} row(s) have a month mix but no DEPARTMENT - say which department the mix is for "
+                  f"(a mix for one department must not move the others).", _rows(nodept))
     if bad:
         rep.error(f"{len(bad)} row(s) have a month mix that is negative or adds up to 0.", _rows(bad))
+    if udept:
+        rep.warn(f"{len(set(udept))} department(s) aren't in the original plan - their month mix is never used.", sorted(set(udept)))
     if unknown:
         rep.warn(f"{len(unknown)} store(s) aren't in the original plan - ignored there.", unknown)
     if not out and rep.ok:
         rep.error("No store has a REF OLD or a month mix filled in.")
     rep.info(f"{len(out)} store override(s): {sum('ref_old' in v for v in out.values())} REF OLD, "
-             f"{sum('mix' in v for v in out.values())} fixed month mix.")
+             f"{sum(len(v.get('mix', {})) for v in out.values())} fixed store x department month mix.")
     return (out if rep.ok else None), rep
 
 
@@ -765,26 +777,40 @@ def template_rephase_overrides(orig, months, ly, dept, mix=None, overrides=None)
     """Store-overrides template for Re-phase: every store of the re-phase with where its shape comes from today,
     REF OLD (filled from the plan / current overrides) and empty '<Month> %' columns - stores whose shape isn't their
     own or REF's first, since those are the ones REF OLD or a fixed mix would change."""
-    _, how = template_rephase(orig, months, ly, dept, mix, overrides)
+    _, how, _ = template_rephase(orig, months, ly, dept, mix, overrides)
     lm = [m for m in months if not locked(m) and ly_label(m)]
     ov = overrides or {}
     t = how[["STORE NAME", "SSG TAG", "REF", "REF OLD", "SHAPE FROM", "SHAPE STORE"]].copy()
+    t.insert(1, "DEPARTMENT", dept)                          # a month mix below applies to this department only
     for m in lm:
-        t[f"{m} %"] = [round(ov[s]["mix"][m] * 100, 4) if "mix" in ov.get(s, {}) else None for s in t["STORE NAME"]]
-    t["NEEDS A LOOK"] = ~t["SHAPE FROM"].isin(["own", "REF", "fixed mix (override)"])
+        t[f"{m} %"] = [round(ov[s]["mix"][dept][m] * 100, 4) if dept in ov.get(s, {}).get("mix", {}) else None
+                       for s in t["STORE NAME"]]
+    t["NEEDS A LOOK"] = ~t["SHAPE FROM"].isin(["own", "REF", "REF OLD", "fixed mix (override)"])
     return t.sort_values(["NEEDS A LOOK", "STORE NAME"], ascending=[False, True]).reset_index(drop=True)
 
 
-def template_rephase(orig, months, ly, dept, mix=None, overrides=None):
-    """Method 2 file that re-phases `dept` across the live months by last year's month shape (rule set R2-R7) ->
-    (revised rows: STORE, DIV, DEPT, '<Month> New' for the live months; how-it-was-built rows, one per store).
-    Each store keeps its live-month total. The shape = last year's sales of `mix` (default: dept itself) in the same
-    months at the first SSG / SSG-ANG store of: the store itself, its REF store, REF OLD (any store when the plan has
-    no SSG TAG column); failing all three, the SSG stores of its CLUSTER together. A month the store doesn't trade in (no plan in the division) gets 0 and the rest is scaled back to 100%.
-    No usable last year -> the store keeps its planned phasing (flagged). Meant for 'other departments: stay as they are'.
-    overrides (read_rephase_overrides): a store's REF OLD replaces the plan's; its fixed month mix replaces the shape."""
+def template_rephase(orig, months, ly, dept, mix=None, overrides=None, partial=()):
+    """Re-phase one department's plan across the unlocked months by last year's month shape - a generic Method 2
+    input (docs/business-rules/REPHASE_DEPARTMENT_MONTHS.md) -> (revised rows: STORE, DIV, DEPT, '<Month> New' for the
+    re-phased months; how-it-was-built rows, one per store; summary notes).
+
+    - Months re-phased = the unlocked months that have a last-year month (a P1 / P2 half has none - it keeps its plan,
+      and the notes say so). Last year's month must be in the data and complete: a missing month, or one in `partial`
+      (the export's 'till date' month), is refused - its shape would be wrong.
+    - Each store keeps its total for those months; only the split changes. The split = last year's sales of `mix`
+      (default: the department itself) in the same months, taken from the first COMPARABLE store of: the store itself,
+      its REF store, its REF OLD store; else the comparable stores of its CLUSTER together; else the store keeps its
+      planned phasing (never 0). A negative last-year month counts as 0.
+    - Comparable (may lend its shape) = the plan's SSG TAG starts with "SSG" when the plan has that column; without it,
+      a store that sold in the department's division in every one of the months last year - never a store with a
+      part-year history.
+    - A month the store doesn't trade in (no plan in the division that month) gets 0 and the rest is rescaled.
+    - overrides (read_rephase_overrides): a store's REF OLD replaces the plan's; a fixed month mix set for this store
+      and this department is used as given (a mix set for another department is never used here).
+    Meant to run with 'other departments: stay as they are'."""
     mix, ov = mix or dept, overrides or {}
     lm = [m for m in months if not locked(m) and ly_label(m)]
+    halves = [m for m in months if not locked(m) and not ly_label(m)]
     if len(lm) < 2:
         raise ValueError("Re-phasing needs at least two unlocked full months - unlock the months to re-phase.")
     d = orig[orig[DEPT] == dept]
@@ -792,6 +818,15 @@ def template_rephase(orig, months, ly, dept, mix=None, overrides=None):
         raise ValueError(f"{dept} isn't in the original plan.")
     if not any(k[1] == mix for k in ly):
         raise ValueError(f"No last-year sales for {mix} - pick another department for the last-year shape.")
+    seen = set().union(*(mm.keys() for mm in ly.values()))
+    gone = [m for m in lm if ly_label(m) not in seen]
+    if gone:
+        raise ValueError(f"No last-year sales in the data for {', '.join(ly_label(m) for m in gone)} (a year before "
+                         f"{', '.join(gone)}) - lock those months or re-phase them another way.")
+    part = [m for m in lm if ly_label(m) in set(partial)]
+    if part:
+        raise ValueError(f"Last year's {', '.join(ly_label(m) for m in part)} isn't complete in the data yet (till date) - "
+                         f"its shape would come out too low. Lock {', '.join(part)} or re-phase after the month closes.")
     P = [m + " Plan" for m in lm]
     div = d[DIV].mode().iat[0]
     old = d.groupby(STORE)[P].sum()
@@ -799,23 +834,32 @@ def template_rephase(orig, months, ly, dept, mix=None, overrides=None):
     trading = orig[orig[DIV] == div].groupby(STORE)[P].sum().abs().reindex(old.index).fillna(0.0).to_numpy() > 1e-9
     ssg, ref, refold, clus = (_store_col(orig, n) for n in (SSG_NAMES, REF_NAMES, REF_OLD_NAMES, CLUSTER_NAMES))
     one = lambda x: np.clip([float(ly.get((x, mix), {}).get(ly_label(m), 0.0)) for m in lm], 0, None)
-    # only an SSG / SSG-ANG store (a full, comparable last year) lends its shape - the workbook's LY pivot is filtered so
-    ssg_ok = lambda st: bool(st) and (ssg is None or ssg.get(st, "").replace(" ", "") in OWN_SHAPE_TAGS)
-    peers = {}                                               # cluster -> its SSG stores (the last fallback)
+    if ssg is not None:
+        comparable = {st for st, t in ssg.items() if t.replace(" ", "").startswith(SHAPE_TAG_PREFIX)}
+        rule = f"the plan's SSG TAG ({len(comparable)} stores tagged SSG...)"
+    else:                                                    # no tag: prove it from the data - a full year in every month
+        div_depts, tot = set(orig.loc[orig[DIV] == div, DEPT]), {}
+        for (st, dp), mm in ly.items():
+            if dp in div_depts:
+                tot[st] = tot.get(st, 0) + np.array([float(mm.get(ly_label(m), 0.0)) for m in lm])
+        comparable = {st for st, a in tot.items() if (a > 0).all()}
+        rule = f"sold in {div} in every one of these months last year ({len(comparable)} stores; the plan has no SSG TAG)"
+    peers = {}                                               # cluster -> its comparable stores (the last fallback)
     for st, c in (clus or {}).items():
-        if ssg_ok(st):
+        if st in comparable:
             peers.setdefault(c, []).append(st)
     lyv = lambda x: (sum((one(p) for p in peers.get(x[8:], [])), np.zeros(len(lm))) if x.startswith("CLUSTER:") else one(x))
     rows, how = [], []
     for j, (s, o_) in enumerate(zip(old.index, old.to_numpy())):
         c, ro = (clus or {}).get(s), ov.get(s, {}).get("ref_old") or (refold or {}).get(s)
-        chain = [("own", s), ("REF", (ref or {}).get(s)), ("REF OLD", ro), ("cluster SSG stores", "CLUSTER:" + c if c else None)]
+        chain = [("own", s), ("REF", (ref or {}).get(s)), ("REF OLD", ro), ("cluster comparable stores", "CLUSTER:" + c if c else None)]
         src, x, p = "planned phasing (no last-year shape)", "", None
-        if "mix" in ov.get(s, {}):                           # set by hand for this store (e.g. JHM) - used as given
-            src, p = "fixed mix (override)", np.array([ov[s]["mix"].get(m, 0.0) for m in lm])
+        fixed = ov.get(s, {}).get("mix", {}).get(dept)       # set by hand for this store AND department - used as given
+        if isinstance(fixed, dict):
+            src, p = "fixed mix (override)", np.array([fixed.get(m, 0.0) for m in lm])
             chain = []
         for name, st in chain:
-            v = lyv(st) if st and (st.startswith("CLUSTER:") or ssg_ok(st)) else np.zeros(len(lm))
+            v = lyv(st) if st and (st.startswith("CLUSTER:") or st in comparable) else np.zeros(len(lm))
             if v.sum() > 1e-9:
                 q = v / v.sum() * trading[j]
                 if q.sum() > 1e-9:
@@ -823,15 +867,32 @@ def template_rephase(orig, months, ly, dept, mix=None, overrides=None):
                     break
         new = o_.sum() * p if p is not None else o_
         rows.append({STORE: s, DIV: div, DEPT: dept, **{m + " New": float(n) for m, n in zip(lm, new)}})
-        how.append({STORE: s, "SSG TAG": (ssg or {}).get(s, ""), "REF": (ref or {}).get(s, ""), "REF OLD": ro or "",
-                    "SHAPE FROM": src, "SHAPE STORE": x,
+        how.append({STORE: s, "SSG TAG": (ssg or {}).get(s, ""), "COMPARABLE": s in comparable, "REF": (ref or {}).get(s, ""),
+                    "REF OLD": ro or "", "SHAPE FROM": src, "SHAPE STORE": x,
                     **{f"LY {ly_label(m)}": float(v) for m, v in zip(lm, lyv(x) if x else np.zeros(len(lm)))},
                     **{f"{m} %": round(float(v) * 100, 4) for m, v in zip(lm, p if p is not None else o_ / o_.sum())},
                     "NOT TRADING": ", ".join(m for m, t in zip(lm, trading[j]) if not t),
                     **{f"{m} OLD": float(v) for m, v in zip(lm, o_)}, **{f"{m} NEW": float(v) for m, v in zip(lm, new)},
                     "TOTAL": float(o_.sum())})
-    return (pd.DataFrame(rows, columns=[STORE, DIV, DEPT] + [m + " New" for m in lm]),
-            pd.DataFrame(how).rename(columns={STORE: "STORE NAME"}))
+    how = pd.DataFrame(how).rename(columns={STORE: "STORE NAME"})
+    src = how["SHAPE FROM"].value_counts() if len(how) else pd.Series(dtype=int)
+    flat = how.loc[how["SHAPE FROM"].str.startswith("planned"), "STORE NAME"].tolist() if len(how) else []
+    notes = [f"{dept} ({div}): {len(how)} stores re-phased across {', '.join(lm)}, shape from last year's "
+             f"{mix if mix != dept else 'own'} sales in {', '.join(ly_label(m) for m in lm)}; "
+             f"each store keeps its total for these months ({float(old.to_numpy().sum()):,.2f} L in all).",
+             f"Comparable stores (may lend their shape): {rule}.",
+             "Shape from: " + ", ".join(f"{k} {v}" for k, v in src.items()) + "."]
+    if flat:
+        notes.append(f"{len(flat)} store(s) found no comparable last year (own / REF / REF OLD / cluster) and keep their planned "
+                     f"phasing: {', '.join(flat[:12])}{' ...' if len(flat) > 12 else ''} - give them a REF OLD or a fixed mix "
+                     f"in Store overrides if they should move.")
+    nt = int((~trading).any(axis=1).sum()) if len(old) else 0
+    if nt:
+        notes.append(f"{nt} store(s) don't trade in some of these months (no {div} plan) - those months get 0.")
+    if halves:
+        notes.append(f"{', '.join(halves)} {'is' if len(halves) == 1 else 'are'} unlocked but half-month(s) with no last-year "
+                     f"month - not re-phased, they keep their plan.")
+    return pd.DataFrame(rows, columns=[STORE, DIV, DEPT] + [m + " New" for m in lm]), how, notes
 
 
 def template_growth(orig, months, ly):

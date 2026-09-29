@@ -301,7 +301,7 @@ const METHODS = {
     run: 'Delisted departments go to 0 from their month and new listings take their sized value; every other department in the same store × division absorbs the difference pro-rata.'},
   dept: {no: 2, title: 'Existing department changes', short: 'New values for departments already in the plan.',
     drop: 'Upload the revised plan',
-    howto: `Only the departments you changed — Store × Department rows with “&lt;Month&gt; New” columns. Pick a department and download the template: it comes pre-filled with that department's original values in every store, ready to edit. <b>Re-phase &amp; run</b> does it all for you: pick the department (and, if needed, whose last-year shape to use) - each store keeps its total for the unlocked months, re-split by last year's month shape (own if SSG, else REF / REF OLD / the cluster's SSG stores), loaded here and run to the final plan with the other departments kept as they are. <b>Re-phase file</b> downloads the same file to check or edit first.`,
+    howto: `Only the departments you changed — Store × Department rows with “&lt;Month&gt; New” columns. Pick a department and download the template: it comes pre-filled with that department's original values in every store, ready to edit. <b>Re-phase &amp; run</b> does it all for you: pick the department (and, if needed, whose last-year shape to use) - each store keeps its total for the unlocked months, re-split by last year's month shape (its own if it is a comparable store, else its REF / REF OLD store's, else its cluster's comparable stores), loaded here and run to the final plan with the other departments kept as they are. <b>Re-phase file</b> downloads the same file to check or edit first.`,
     run: 'Revised departments keep their values exactly; every other department in the same store × division absorbs the difference pro-rata, so each store × division lands back on the original.'},
   newdept: {no: 3, title: 'New or split departments', short: 'A department added late, or one split into several.',
     drop: 'Upload the split or new-department file',
@@ -694,8 +694,8 @@ async function rephase(kind = 'rephase') {
 // Re-phase store overrides (2026-09-30): REF OLD and/or a fixed month mix per store, kept until cleared
 function storeOverrides() {
   const v = S.rephase_overrides;
-  const tip = v ? `${v.name} (${v.loaded_at}) - ${v.ref_old} REF OLD, ${v.mix} fixed month mix. Used by every re-phase; upload again to replace.`
-    : 'Upload REF OLD and/or a fixed month mix per store (STORE NAME, REF OLD, <Month> %) - used by every re-phase until cleared';
+  const tip = v ? `${v.name} (${v.loaded_at}) - ${v.ref_old} REF OLD, ${v.mix} fixed store × department month mix. Used by every re-phase; upload again to replace.`
+    : 'Upload REF OLD per store and/or a fixed month mix per store and department (STORE NAME, REF OLD, DEPARTMENT, <Month> %) - used by every re-phase until cleared';
   return `<label class="btn btn-outline btn-sm" title="${esc(tip)}">${icon('upload')}${v ? `Overrides: ${v.stores} stores` : 'Store overrides'}<input type="file" hidden accept=".xlsx,.xlsm,.xlsb,.xls,.csv" onchange="picked(this,'rephase-overrides')"></label>
     ${v ? `<button class="btn btn-ghost btn-sm" onclick="clearOverrides()" title="Stop using the store overrides" aria-label="Clear store overrides">${icon('trash')}</button>` : ''}
     <button class="btn btn-ghost btn-sm" onclick="rephase('rephase-overrides')" title="The stores of this re-phase - the ones with no own / REF shape first - with REF OLD and month % columns to fill">${icon('dl')}Overrides template</button>`;
