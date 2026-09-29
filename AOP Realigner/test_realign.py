@@ -345,7 +345,8 @@ ro = pd.DataFrame([
     rrow("S5", "",   "OTHERS", "C9", "A", 3, 1, 0, 5),    # nothing usable -> keeps its planned phasing
     rrow("S1", "S1", "SSG",    "C1", "C", 9, 9, 9, 5),    # another department: never in the file
 ])
-rly = {("S1", "A F/S"): {"Sep'25": 1, "Oct'25": 3, "Nov'25": 0}, ("S4", "A F/S"): {"Sep'25": 9, "Oct'25": 0, "Nov'25": 1}}
+rly = {("S1", "A F/S"): {"Sep'25": 1, "Oct'25": 3, "Nov'25": 0}, ("S4", "A F/S"): {"Sep'25": 9, "Oct'25": 0, "Nov'25": 1},
+       ("S1", "C"): {"Sep'25": 1, "Oct'25": 1, "Nov'25": 1}}      # S1 sold in LADIES in every month last year: comparable
 rv, rh, rnotes = importer.template_rephase(ro, RM, rly, "A", "A F/S")
 got = rv.set_index("Store Name")[["Sep'26 New", "Oct'26 New", "Nov'26 New"]]
 assert list(rv.columns) == ["Store Name", "DIVISION", "DEPARTMENT", "Sep'26 New", "Oct'26 New", "Nov'26 New"]  # Jan locked: not in the file
@@ -396,7 +397,11 @@ assert list(tov["STORE NAME"][:3]) == ["S3", "S4", "S5"] and tov["NEEDS A LOOK"]
 
 # generic rules (2026-09-30): no SSG TAG column -> comparable = sold in the division in every month last year
 rly3 = {**rly, ("S4", "A"): {"Sep'25": 1, "Oct'25": 1, "Nov'25": 1},     # S4: a full year in LADIES -> comparable
-        ("S1", "A"): {"Sep'25": 1, "Oct'25": 1, "Nov'25": 0}}               # S1: no Nov last year -> not comparable
+        ("S1", "C"): {"Sep'25": 1, "Oct'25": 1, "Nov'25": 0}}               # S1: no Nov last year -> not comparable
+# with the tag column kept, S1 is tagged SSG but has a part-year history -> left out; S4 isn't tagged -> nobody lends
+_, h5, n5 = importer.template_rephase(ro, RM, rly3, "A", "A F/S")
+assert h5.set_index("STORE NAME").at["S1", "SHAPE FROM"].startswith("planned"), h5
+assert any("part-year history: S1" in n for n in n5), n5
 rv3, rh3, n3 = importer.template_rephase(ro.drop(columns=["SSG TAG"]), RM, rly3, "A", "A F/S")
 h3 = rh3.set_index("STORE NAME")
 assert h3.at["S4", "SHAPE FROM"] == "own" and h3.at["S1", "SHAPE FROM"] == "cluster comparable stores" and h3.at["S1", "SHAPE STORE"] == "CLUSTER:C1"

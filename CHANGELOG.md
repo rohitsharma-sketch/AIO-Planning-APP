@@ -7,6 +7,14 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### Re-phase: a comparable store needs both the SSG tag and a full last year
+- **Asked (user):** "yes, require both the tag and a full last year".
+- **Rule:** a store may lend its month shape only if it sold in the department's division in **every** re-phased month last year **and**, when the plan has an SSG TAG column, it is tagged SSG. Tagged stores left out are named in the summary.
+- **Live plan:** 124 SSG-tagged stores become 121 comparable. The 3 left out are **BRN, SAH and SBW**: they're tagged SSG but have no last-year sales in the data at all, so they never had a shape to lend.
+- **Results unchanged:** every department and all six test set-ups give the same numbers. LW_U_T-TOP still reproduces the workbook (304.07 / 316.26 / 96.73 / 55.71).
+- Tests: a tagged store with a part-year history is left out.
+- Files: `AOP Realigner/importer.py`, `rules.js`, `test_realign.py`, `docs/business-rules/REPHASE_DEPARTMENT_MONTHS.md` (G6).
+
 ### Re-Aligner Re-phase rebuilt as a generic planning rule, and tested across plan set-ups
 - **Asked (user):** "i want it to be a generic planning tool and not a biased working ... made for one time purpose ... reverify and rebuild ... the logic base should be clear, try to test on different models".
 - **Rebuilt:** these rules are in the rule-set doc §0 (G1–G10), the Rules page and the Summary shown with every run.

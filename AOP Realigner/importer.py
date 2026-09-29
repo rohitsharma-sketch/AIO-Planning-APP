@@ -834,15 +834,21 @@ def template_rephase(orig, months, ly, dept, mix=None, overrides=None, partial=(
     trading = orig[orig[DIV] == div].groupby(STORE)[P].sum().abs().reindex(old.index).fillna(0.0).to_numpy() > 1e-9
     ssg, ref, refold, clus = (_store_col(orig, n) for n in (SSG_NAMES, REF_NAMES, REF_OLD_NAMES, CLUSTER_NAMES))
     one = lambda x: np.clip([float(ly.get((x, mix), {}).get(ly_label(m), 0.0)) for m in lm], 0, None)
+    # Comparable = a full last year in the data (sold in the division in every window month) AND, when the plan has an
+    # SSG TAG column, tagged SSG... (user, 2026-09-30: "require both the tag and a full last year")
+    div_depts, tot = set(orig.loc[orig[DIV] == div, DEPT]), {}
+    for (st, dp), mm in ly.items():
+        if dp in div_depts:
+            tot[st] = tot.get(st, 0) + np.array([float(mm.get(ly_label(m), 0.0)) for m in lm])
+    full = {st for st, a in tot.items() if (a > 0).all()}
     if ssg is not None:
-        comparable = {st for st, t in ssg.items() if t.replace(" ", "").startswith(SHAPE_TAG_PREFIX)}
-        rule = f"the plan's SSG TAG ({len(comparable)} stores tagged SSG...)"
-    else:                                                    # no tag: prove it from the data - a full year in every month
-        div_depts, tot = set(orig.loc[orig[DIV] == div, DEPT]), {}
-        for (st, dp), mm in ly.items():
-            if dp in div_depts:
-                tot[st] = tot.get(st, 0) + np.array([float(mm.get(ly_label(m), 0.0)) for m in lm])
-        comparable = {st for st, a in tot.items() if (a > 0).all()}
+        tagged = {st for st, t in ssg.items() if t.replace(" ", "").startswith(SHAPE_TAG_PREFIX)}
+        comparable = tagged & full
+        rule = (f"tagged SSG... in the plan AND sold in {div} in every one of these months last year ({len(comparable)} stores"
+                + (f"; {len(tagged - full)} tagged store(s) left out for a part-year history: {', '.join(sorted(tagged - full)[:10])}"
+                   f"{' ...' if len(tagged - full) > 10 else ''}" if tagged - full else "") + ")")
+    else:
+        comparable = full
         rule = f"sold in {div} in every one of these months last year ({len(comparable)} stores; the plan has no SSG TAG)"
     peers = {}                                               # cluster -> its comparable stores (the last fallback)
     for st, c in (clus or {}).items():

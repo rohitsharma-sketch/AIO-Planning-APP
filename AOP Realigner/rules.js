@@ -29,7 +29,7 @@ const RULES_NOW = [
     "Months re-phased = the <b>unlocked months that have a last-year month</b> (a P1 / P2 half-month has none - it keeps its plan, and the summary says so). Each store keeps its <b>total for those months</b>; only the split between them changes.",
     "Last year's month must be in the data and complete - a month the sales data doesn't have yet, or only has till date, is refused (its shape would be wrong): lock it, or re-phase after it closes.",
     "The split = last year's sales of the shape department in the same months a year earlier (the month-wise data-lake sales), from the first <b>comparable store</b> of: the store itself, its REF store, its REF OLD store; none of them - the comparable stores of its cluster together; still none - the store keeps its planned phasing (never 0). A negative last-year month counts as 0.",
-    "<b>Comparable store</b> (may lend its shape): if the plan has an SSG TAG column, a store whose tag starts with SSG; if it has none, a store that sold in the department's division in <b>every one</b> of those months last year - never a store with a part-year history.",
+    "<b>Comparable store</b> (may lend its shape): a store that sold in the department's division in <b>every one</b> of those months last year - never a part-year history - <b>and</b>, if the plan has an SSG TAG column, is tagged SSG. Both are required; a tagged store without a full last year is left out and named in the summary.",
     "A month the store doesn't trade in (no plan in the department's division that month) gets 0 and the rest is scaled back to 100%.",
     'REF, REF OLD, SSG TAG and CLUSTER are read from the original plan\'s own columns when it has them; each missing one simply drops out of the order above.',
     '<b>Store overrides</b> (upload once, kept until cleared): STORE NAME + REF OLD - a store attribute, used before the cluster for every department - and / or DEPARTMENT + "&lt;Month&gt; %" - a fixed month mix for that store and department only (any scale, rescaled to 100%), replacing its last-year shape there. A mix without a DEPARTMENT is refused, so a mix set for one department never moves another. The <b>Overrides template</b> lists the stores needing a look first.',
@@ -62,7 +62,7 @@ const RULES_NOW = [
 const RULES_LATEST = {
   date: '2026-09-30',
   changes: [
-    'Re-phase from last year is generic: a comparable store is one tagged SSG... or, in a plan without that tag, one that sold in every re-phased month last year; any missing store column simply drops out of the order.',
+    'Re-phase from last year is generic: a comparable store must have sold in every re-phased month last year and, when the plan has an SSG TAG, be tagged SSG (both required); any missing store column simply drops out of the order.',
     'A last-year month that is missing from the data or only till date is refused; unlocked half-months are reported, not silently skipped; every re-phase comes with a summary.',
   ],
 };
