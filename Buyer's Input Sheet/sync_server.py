@@ -14,6 +14,9 @@ import glob
 import shutil
 import tempfile
 from datetime import datetime
+import sys  # noqa: E402
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))  # repo root
+from rs_common.lake_files import latest_path  # noqa: E402 - the one "which file" rule (29 Sep 2026)
 
 app = Flask(__name__)
 CORS(app)
@@ -40,7 +43,9 @@ LOCAL_CACHE = os.path.join(tempfile.gettempdir(), "citykart_otb_cache")
 # Set to None to resume auto-pick (latest file in SALES_DIR).
 # 28 Sep 2026: re-pinned to the 5 Sep export - the data lake re-classified departments (MSE_PYJAMA ->
 # MSE_HSR/TXTL PYJAMA etc., back to 2019; totals unchanged), and the Calendar / Sales Plan already read it.
-PINNED_SALES_FILE = os.path.join(LOCAL_CACHE, "rs_sales_20260905.parquet")  # pinned: Sep-05 2026 (was rs_sales_latest = Aug-17)
+# Unpinned 29 Sep 2026 (user: "always pick the latest file from the folders"): the newest complete export in
+# SALES_DIR, by the shared rule every app uses (rs_common.lake_files). Was pinned to the 5 Sep copy.
+PINNED_SALES_FILE = None
 
 # ── LFL STORES (user rules, 2026-09-25) ──────────────────────────────────────
 # Plan base (26V27, the BIS LY): auto-detected - a trading store (SAME/NEW STORE)
@@ -174,10 +179,8 @@ def _data_version() -> str:
         pass
     # ST: always latest on network
     try:
-        import glob as _glob
-        files = _glob.glob(os.path.join(SELLTHRU_DIR, "*.parquet"))
-        if files:
-            latest = max(files, key=os.path.getmtime)
+        latest = latest_path(SELLTHRU_DIR)   # same file the ST sync reads (a truncated newer export is skipped)
+        if latest:
             parts.append(str(int(os.path.getmtime(latest) * 1000)))
     except Exception:
         pass
@@ -185,10 +188,12 @@ def _data_version() -> str:
 
 
 def get_latest_file(directory: str, patterns=("*.parquet",)) -> str | None:
-    files = []
+    """Newest complete export (rs_rs_common.lake_files: an unreadable / truncated / column-short newer file is skipped)."""
     for pat in patterns:
-        files.extend(glob.glob(os.path.join(directory, pat)))
-    return max(files, key=os.path.getmtime) if files else None
+        p = latest_path(directory, pat)
+        if p:
+            return p
+    return None
 
 
 def _get_sales_src() -> str | None:

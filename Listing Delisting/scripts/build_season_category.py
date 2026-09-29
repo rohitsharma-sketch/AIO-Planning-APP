@@ -26,6 +26,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _paths import sales_dir  # noqa: E402  - same data-lake setting as the core syncs
 SALES_DIR = sales_dir()
+import sys  # noqa: E402
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))  # repo root
+from rs_common.lake_files import latest_path  # noqa: E402 - the one "which file" rule (29 Sep 2026)
 
 # Same apparel-only scope as extract_one.py / build_sales.py / build_knowledge_base.py.
 ALLOWED_TOKENS = {
@@ -44,10 +47,12 @@ def normalize(attr):
 
 
 def latest_sales_file():
-    files = [os.path.join(SALES_DIR, f) for f in os.listdir(SALES_DIR) if f.endswith('.parquet')]
-    if not files:
+    """The newest complete month-wise export - the same file the Calendar engine and BIS read (rs_common.lake_files;
+    it used to go by the _YYYYMMDDTHHMMSS in the name, which a 'master.parquet' export doesn't have)."""
+    p = latest_path(SALES_DIR)
+    if not p:
         raise ValueError(f"No parquet files found in {SALES_DIR}")
-    return max(files, key=lambda f: re.search(r'_(\d{8}T\d{6})\.parquet$', f).group(1))
+    return p
 
 
 def extract_season_category():

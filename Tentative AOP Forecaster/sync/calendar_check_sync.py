@@ -95,8 +95,8 @@ def raw_monthwise(session, months):
     """store x division x month SL_V from the newest month-wise export (same file the reindex reads)."""
     import pyarrow.parquet as pq
     folder = session.execute(text("SELECT config->>'path' FROM sync.sources WHERE source_key = 'data_lake_sales'")).scalar()
-    files = [f for f in call_with_timeout(os.listdir, folder) if re.search(r"_\d{8}T\d{6}\.parquet$", f)]
-    src = os.path.join(folder, max(files, key=lambda f: re.search(r"_(\d{8}T\d{6})\.parquet$", f).group(1)))
+    from sync.common import latest_file
+    src = latest_file(folder)   # the same file the reindex read (rs_common.lake_files) - not the newest name stamp
     lo = datetime.datetime.strptime(min(months), "%Y-%m")
     t = call_with_timeout(pq.read_table, src, columns=["BILLMONTH", "STORE_NAME", "DIVISION", "SL_V"],
                           filters=[("BILLMONTH", ">=", lo)]).to_pandas()

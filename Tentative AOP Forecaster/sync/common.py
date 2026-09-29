@@ -49,12 +49,16 @@ def call_with_timeout(fn, *args, timeout=NETWORK_TIMEOUT_SECONDS, retries=NETWOR
 
 
 def latest_file(folder: str) -> str:
-    """Data-lake folders hold one or more `<uuid>_<YYYYMMDDTHHMMSS>.parquet`
-    snapshots; the lexicographically-last timestamp is the newest."""
-    files = sorted(f for f in call_with_timeout(os.listdir, folder) if f.endswith(".parquet"))
-    if not files:
+    """The newest complete data-lake export in folder - the one rule every app uses (rs_common.lake_files, 29 Sep 2026).
+    It used to take the alphabetically-last FILE NAME, which picked the old day-wise export once a newer one's uuid
+    sorted lower ("31d59..." < "b9e58...") and only got 'master.parquet' right by luck."""
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))   # repo root
+    from rs_common.lake_files import latest_path
+    path = call_with_timeout(latest_path, folder)
+    if not path:
         raise FileNotFoundError(f"No parquet snapshot found in {folder}")
-    return os.path.join(folder, files[-1])
+    return path
 
 
 def snapshot_last_day(filename: str):

@@ -163,12 +163,13 @@ def _latest_daywise_files():
     ignore, not more data to add. Every day-wise read (link scan, schema
     introspection, and the actual reindex fetch) goes through this so all
     three always agree on which single file is "the" source."""
-    candidates = []
-    for d in DAYWISE_DIRS:
-        candidates.extend(glob.glob(os.path.join(d, "*.parquet")))
-    if not candidates:
-        return []
-    return [max(candidates, key=os.path.getmtime)]
+    picks = [p for p in (latest_path(d) for d in DAYWISE_DIRS) if p]   # each folder's newest complete export
+    return [max(picks, key=os.path.getmtime)] if picks else []
+
+
+import sys  # noqa: E402
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))  # repo root
+from rs_common.lake_files import latest_path  # noqa: E402 - the one "which file" rule (29 Sep 2026)
 
 
 def _latest_monthwise_files():
@@ -177,10 +178,8 @@ def _latest_monthwise_files():
     re-exports, not incremental partitions, so reading more than one file
     double-counts every sale in the overlap. All three month-wise reads (link
     scan, schema introspection, reindex fetch) go through this."""
-    candidates = glob.glob(os.path.join(PARQUET_DIR, "*.parquet"))
-    if not candidates:
-        return []
-    return [max(candidates, key=os.path.getmtime)]
+    p = latest_path(PARQUET_DIR)   # newest complete export (a truncated / unreadable newer file is skipped)
+    return [p] if p else []
 
 
 def _months_between(lo, hi):

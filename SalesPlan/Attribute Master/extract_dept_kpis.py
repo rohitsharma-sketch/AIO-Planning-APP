@@ -60,11 +60,14 @@ def compute_monthly_st():
 
     COLS = ["DIVISION","WEEK","WK_START_DT","SL_Q","OPN_Q","IN_TRAN_Q"]
     frames = []
-    for fname in sorted(os.listdir(ST_PATH)):
-        if not fname.endswith(".parquet"):
-            continue
-        df = pd.read_parquet(os.path.join(ST_PATH, fname), columns=COLS)
-        frames.append(df)
+    # ONE file - each export is a full history, so reading them all counted every week several times (29 Sep 2026)
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))   # repo root
+    from rs_common.lake_files import latest_path
+    st_file = latest_path(ST_PATH)
+    if st_file:
+        with open(st_file, "rb") as fh:
+            frames.append(pd.read_parquet(fh, columns=COLS))
 
     if not frames:
         print("  ✗ No parquet files found in ST_PATH — skipping")

@@ -7,6 +7,19 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-29
 
+### Every app reads the same, newest complete data-lake file (sales sync)
+- **Change (user):** "sync the sales data and always pick the latest file from the folders to sync. Post sync, make sure that the data is flowing through all the apps consistently."
+- **Found:** new exports landed today (29 Sep): month-wise `master.parquet` (22,769,780 rows, +392k), day-wise `…_20260929T043251` (bills to 28 Sep), and a sell-through file of **exactly 50,000 rows** (the previous one has 7,069,667 — a capped or partial export). The apps chose files in five different ways, so they would have split across files:
+  - **BIS sales:** pinned to the 5 Sep copy.
+  - **BIS sell-through:** newest by time with no check, so it would have taken the 50,000-row file.
+  - **Listing:** newest by the date stamp in the file name, so it would have kept 5 Sep (`master.parquet` has no stamp), and `build_sales` would have crashed.
+  - **Sync jobs (`store_actuals`, `day_weights`):** alphabetically-last name, which picked the **old** 28 Aug day-wise file.
+  - **Nightly accuracy check:** would have compared the new snapshots with the old 5 Sep file.
+  - **Sales Plan's `extract_dept_kpis`:** added up every sell-through export (each week counted 2–4 times).
+- **Fix — one rule, `rs_common/lake_files.py`:** each folder holds full re-exports, so exactly one file is read — the newest by modified time, unless it is clearly incomplete (unreadable/still being written, missing columns, or fewer than 90% of the previous export's rows); then the last good one, with a note saying why. BIS (unpinned), the Calendar engine (and through it Sales Plan's snapshots, the AOP syncs and MRP Re-apportionment), the sync jobs, the nightly check and Listing all use it.
+- **Picks today:** month-wise `master.parquet` · day-wise 29 Sep · sell-through the complete **2 Sep** export (the 50,000-row file is skipped: "only 50,000 rows vs 7,069,667").
+- **Tests:** `rs_common/test_lake_files.py` (newest wins; truncated, column-short and half-written files are skipped). The existing reindex/sync tests pass.
+
 ### AOP Re-Aligner: you choose which months are locked
 - **Change (user):** "make these locks dynamic for months so that it depends on the user if they want to get it locked or they want to get them changed accordingly. Also auto detect the months as per the original plan upload." Before, Jan and Feb were always locked (`FROZEN = ("Jan", "Feb")`, checked in 14 places), and nothing else could be.
 - **Now:** the month chips under "Original plan" are the months found in the uploaded plan (its `<Month> Plan` columns — today Sep'26 … Feb'27 P2). Each chip is a lock button: click to lock (kept exactly as the original, value and qty) or unlock (changes with the realignment). A new plan starts with Jan / Feb locked, as before. A month the previous plan also had keeps your choice. The choice is saved (`.cache/locks.json`, gitignored) and survives restarts. Changing a lock re-checks the revised file and clears an earlier result, since it was realigned with the old locks.

@@ -39,11 +39,17 @@ COLS = ["BILLDATE", "STORE_NAME", "DEPARTMENT", "SL_V"]
 DAILY_FROM = datetime.datetime(2022, 1, 1)  # benchmark years start here (festival dates exist from 2021; 2021 H1 = lockdowns)
 
 
+import sys  # noqa: E402
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))  # repo root
+from rs_common.lake_files import latest_path  # noqa: E402 - the one "which file" rule (29 Sep 2026)
+
+
 def latest(folder):
-    files = [f for f in call_with_timeout(os.listdir, folder) if re.search(r"_\d{8}T\d{6}\.parquet$", f)]
-    if not files:
-        raise ValueError(f"No day-wise parquet files in {folder}")
-    return os.path.join(folder, max(files, key=lambda f: re.search(r"_(\d{8}T\d{6})\.parquet$", f).group(1)))
+    """The newest complete export in folder - the rule every app uses (rs_common.lake_files)."""
+    p = call_with_timeout(latest_path, folder)
+    if not p:
+        raise ValueError(f"No parquet files in {folder}")
+    return p
 
 
 def cached_source():
@@ -82,9 +88,7 @@ def split_old_departments(df, monthly):
 
 def _monthly_parts():
     """Month-wise SL_V of every split part (newest month-wise export), for split_old_departments."""
-    folder = sales_dir()
-    files = [f for f in call_with_timeout(os.listdir, folder) if re.search(r"_\d{8}T\d{6}\.parquet$", f)]
-    src = os.path.join(folder, max(files, key=lambda f: re.search(r"_(\d{8}T\d{6})\.parquet$", f).group(1)))
+    src = latest(sales_dir())   # the same month-wise file every app reads
     parts = sorted({p for v in DEPT_SPLITS.values() for p in v})
     t = call_with_timeout(pq.read_table, src, columns=["BILLMONTH", "STORE_NAME", "DEPARTMENT", "SL_V"],
                           filters=[("DEPARTMENT", "in", parts)]).to_pandas()
