@@ -16,17 +16,34 @@ from db.models.auth import ROLES, User
 router = APIRouter()
 
 
+def password_ok(plain, hashed) -> bool:
+    """The password as typed, or without spaces at either end (a temporary password copied from the admin page often
+    picks up a trailing space - 2026-09-30, "it is not accepting temp password set by admin")."""
+    plain = plain or ""
+    return verify_password(plain, hashed) or (plain != plain.strip() and verify_password(plain.strip(), hashed))
+
+
+def find_login_user(session, name):
+    """The active account a sign-in name means: its username (exact, else ignoring capitals - accounts were renamed
+    Planning01 etc. while people still type planning01), else its email; only when exactly one account matches."""
+    active = User.is_active.is_(True)
+    u = session.execute(select(User).where(User.username == name, active)).scalar_one_or_none()
+    if u is not None:
+        return u
+    for col in (User.username, User.email) if "@" in name else (User.username,):
+        hits = session.execute(select(User).where(func.lower(col) == name.lower(), active)).scalars().all()
+        if len(hits) == 1:
+            return hits[0]
+    return None
+
+
 @router.post("/login")
 def login(request: Request, response: Response, body: dict = Body(...)):
     username, password = (body.get("username") or "").strip(), body.get("password", "")
     session = SessionLocal()
     try:
-        user = session.execute(select(User).where(User.username == username, User.is_active.is_(True))).scalar_one_or_none()
-        if user is None and "@" in username:   # sign in with the email on file too (2026-09-30) - only if it's one account's
-            hits = session.execute(select(User).where(func.lower(User.email) == username.lower(),
-                                                      User.is_active.is_(True))).scalars().all()
-            user = hits[0] if len(hits) == 1 else None
-        if user is None or not verify_password(password, user.password_hash):
+        user = find_login_user(session, username)   # username or email (2026-09-30)
+        if user is None or not password_ok(password, user.password_hash):
             raise HTTPException(401, "Invalid credentials")
         request.session["user"] = {
             "id": str(user.id), "username": user.username, "role": user.role, "is_admin": user.is_admin,
@@ -112,7 +129,7 @@ def change_password(request: Request, body: dict = Body(...), user: dict = Depen
     session = SessionLocal()
     try:
         u = session.get(User, uuid.UUID(user["id"]))
-        if u is None or not verify_password(current_password, u.password_hash):
+        if u is None or not password_ok(current_password, u.password_hash):
             raise HTTPException(401, "Current password is incorrect")
         u.password_hash = hash_password(new_password)
         u.must_change_password = False
@@ -242,6 +259,7 @@ def set_rights(user_id: str, body: dict = Body(...), _admin: dict = Depends(requ
 @router.post("/admin/users")
 def create_user(body: dict = Body(...), _admin: dict = Depends(require_admin)):
     username, password, role = body.get("username"), body.get("password"), body.get("role")
+    username, password = (username or "").strip(), (password or "").strip()
     if not username or not password or role not in ROLES:
         raise HTTPException(422, f"username, password required; role must be one of {ROLES}")
     session = SessionLocal()
@@ -255,7 +273,7 @@ def create_user(body: dict = Body(...), _admin: dict = Depends(require_admin)):
         # signup) - default True so the new owner is forced to pick their
         # own on first login, unless the caller explicitly opts out.
         must_change = bool(body.get("must_change_password", True))
-        u = User(username=username, email=body.get("email") or None, password_hash=hash_password(password),
+        u = User(username=username, email=body.get("email") or None, password_hash=hash_password(password.strip()),
                   role=role, is_admin=bool(body.get("is_admin", False)), must_change_password=must_change)
         session.add(u)
         session.commit()
@@ -341,7 +359,9 @@ def update_user(user_id: str, request: Request, body: dict = Body(...), _admin: 
         if "is_active" in body:
             user.is_active = bool(body["is_active"])
         if body.get("password"):
-            user.password_hash = hash_password(body["password"])
+            if len(body["password"].strip()) < 8:
+                raise HTTPException(422, "The password needs at least 8 characters (spaces at the ends don't count).")
+            user.password_hash = hash_password(body["password"].strip())   # admin-set: no stray spaces
             # Same reasoning as creation: an admin-reset password is a new
             # known/shared value, so force a change again unless told not to.
             user.must_change_password = bool(body.get("must_change_password", True))

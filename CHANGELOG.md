@@ -7,6 +7,17 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### Sign-in fix: capitals in usernames and spaces around passwords
+- **Bug (user):** "except for admin others cannot login through their email id and it is not accepting temp password set by admin".
+- **Found:**
+  - The email lookup worked for all 4 accounts. But usernames matched capitals exactly, and the accounts had been renamed Planning01 / Planning02 / SK-Planning, so anyone typing "planning01" got "Invalid credentials" even with the right temporary password.
+  - A temporary password copied from the Users page's green message can pick up a trailing space, and the password check counted that space.
+- **Fix (`auth/routes.py`):**
+  - `find_login_user`: the username exactly, else ignoring capitals, else the email, ignoring capitals. Each only counts when exactly one active account matches.
+  - `password_ok`: accepts the password as typed, or with the spaces at either end removed. Used at sign-in and at change-password.
+  - Admin-set passwords (Add a person, Set password) are trimmed before saving, and must still be at least 8 characters.
+- **Checked live through Landing** (a deliberately wrong password, timed): every account is found by its email, by its email in capitals, by its lowercase username, and by its username with a trailing space; an unknown name is not. Test: `tests/test_admin_guard.py::test_password_ok_ignores_spaces_at_the_ends`.
+
 ### Sales Plan Division Plan: shown in ₹ Cr
 - **Asked (user):** "Can we have this in Cr ?" (the LY Base / Plan MAMJ cards).
 - The cards now read ₹ 388.83 Cr and ₹ 431.85 Cr (1 Cr = 100 L, 2 decimals); hovering shows the exact lakhs.

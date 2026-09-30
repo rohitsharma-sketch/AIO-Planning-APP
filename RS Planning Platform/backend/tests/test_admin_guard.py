@@ -29,3 +29,11 @@ def test_sign_in_as_checks():
     assert "another admin" in sign_in_as_refusal("a", "b", True, True)   # no admin-to-admin hops
     assert "switched off" in sign_in_as_refusal("a", "b", False, False)
     assert sign_in_as_refusal("a", "b", False, True) is None
+
+
+def test_password_ok_ignores_spaces_at_the_ends():
+    from auth.routes import password_ok
+    from auth.security import hash_password
+    h = hash_password("Temp-Pass-123")
+    assert password_ok("Temp-Pass-123", h) and password_ok("Temp-Pass-123 ", h) and password_ok(" Temp-Pass-123\n", h)
+    assert not password_ok("temp-pass-123", h) and not password_ok("Temp-Pass-12", h) and not password_ok("", h)
