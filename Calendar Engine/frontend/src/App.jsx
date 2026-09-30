@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getMe } from './lib/api'
+import { getMe, getRights } from './lib/api'
 import VersionSettingTab from './components/VersionSettingTab'
 import CalendarisationTab from './components/CalendarisationTab'
 import StoreClusterMappingTab from './components/StoreClusterMappingTab'
@@ -15,6 +15,7 @@ const TABS = [
 export default function App() {
   const [activeModule, setActiveModule] = useState('calendarisation')
   const [me, setMe] = useState(null)
+  const [rights, setRights] = useState(null)
   const [engineVersion, setEngineVersion] = useState(() => {
     try { return parseInt(localStorage.getItem('ce_engine_version') || '1', 10) || 1 }
     catch { return 1 }
@@ -22,6 +23,7 @@ export default function App() {
 
   useEffect(() => {
     getMe().then(setMe).catch(() => setMe(null))
+    getRights().then(setRights)
   }, [])
 
   function handleVersionChange(v) {
@@ -70,7 +72,7 @@ export default function App() {
         ))}
       </nav>
       {/* onNavigate lets a tab hand control to another tab by id */}
-      {ActiveComponent && <ActiveComponent isPlanner={isPlanner} onNavigate={setActiveModule} engineVersion={engineVersion} />}
+      {ActiveComponent && <ActiveComponent isPlanner={isPlanner} rights={rights} onNavigate={setActiveModule} engineVersion={engineVersion} />}
     </div>
   )
 }

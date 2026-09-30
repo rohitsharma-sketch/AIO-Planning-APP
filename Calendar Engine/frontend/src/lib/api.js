@@ -17,6 +17,10 @@ export async function fetchJson(path, opts) {
 const jsonPost = (path, body, method = 'POST') =>
   fetchJson(path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 
+// Actions an admin can switch off per person (Users & access); null = couldn't tell (the server still checks).
+export const getRights = () => fetch('/api/auth/rights', { credentials: 'same-origin' })
+  .then(r => (r.ok ? r.json() : null)).then(d => d?.rights ?? null).catch(() => null)
+
 export async function getMe() {
   const res = await fetch('/api/auth/me', { credentials: 'same-origin' })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)

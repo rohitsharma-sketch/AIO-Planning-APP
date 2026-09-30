@@ -6,6 +6,7 @@ import {
 import OutputTab from './OutputTab'
 import { toLeaf, MONTHS, TYPES } from '../lib/tags'
 import { apiUrl } from '../lib/apiBase'
+import { useCan } from '../lib/rights'
 import { useShownMonths, monthSpan } from '../lib/horizon'
 import './ResultsDashboard.css'
 
@@ -74,6 +75,7 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
   const [reindexed, setReindexed] = useState(null)
   const [reindexedLoading, setReindexedLoading] = useState(false)
   const [reindexedError, setReindexedError] = useState(null)
+  const canPublish = useCan('aop_publish')   // an admin can switch Promote / Unlock off per person
   const [promoteState, setPromoteState] = useState(null)  // null | 'loading' | 'done' | 'error'
   // The real, persisted lock — promoteState above only covers the in-flight
   // click; this is what the Planning Engine actually sees (survives reload).
@@ -260,16 +262,16 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
               >
                 Locked to Planning
               </span>
-              <button
+              {canPublish && <button
                 className="btn-secondary"
                 onClick={handleUnlock}
                 disabled={promoteState === 'loading'}
                 title="Undo the lock — Planning Engine falls back to live staging targets"
               >
                 {promoteState === 'loading' ? 'Unlocking…' : 'Unlock'}
-              </button>
+              </button>}
             </>
-          ) : (
+          ) : canPublish && (
             <button
               className="btn-secondary"
               onClick={handlePromote}

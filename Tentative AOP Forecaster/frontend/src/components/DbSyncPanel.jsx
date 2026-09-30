@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import './DbSyncPanel.css'
 import { apiUrl } from '../lib/apiBase'
+import { useCan } from '../lib/rights'
 
 export const fmtStamp = s => s ? new Date(s).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
 
@@ -27,6 +28,7 @@ const DB_SYNC_LABELS = {
 }
 
 export default function DbSyncPanel({ onSynced }) {
+  const canSync = useCan('data_sync')   // an admin can switch Sync into database off per person
   const [runs, setRuns]   = useState(null)
   const [busy, setBusy]   = useState(false)
   const [err, setErr]     = useState(null)
@@ -95,7 +97,7 @@ export default function DbSyncPanel({ onSynced }) {
         </div>
         <div className="cfg-sync-actions">
           <button className="btn-outline cfg-btn" onClick={() => setOpen(o => !o)} aria-expanded={open}>{open ? 'Hide details' : 'Details'}</button>
-          <button className="cfg-btn cfg-btn--primary" onClick={syncAll} disabled={busy}>{busy ? 'Syncing…' : 'Sync into database'}</button>
+          {canSync && <button className="cfg-btn cfg-btn--primary" onClick={syncAll} disabled={busy}>{busy ? 'Syncing…' : 'Sync into database'}</button>}
         </div>
       </div>
       {err && <p className="upload-err">{err}</p>}

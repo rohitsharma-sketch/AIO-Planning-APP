@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### Switched-off actions are hidden in Calendar and AOP; Landing gets Sign out / switch user
+- **Asked (user):** "yes, hide the buttons in calendar and aop too" and "also add a log off or change user button in the landing page to switch profiles".
+- **Calendar:** Run Reindex is hidden for a person whose `calendar_reindex` is switched off. `lib/api.js getRights`, and `App.jsx` passes `rights` to the tabs (`CalendarisedSalesTab`).
+- **AOP Forecaster:** Sync into database (`DbSyncPanel`) and Promote to Planning / Unlock (`ResultsDashboard`) are hidden when `data_sync` / `aop_publish` is switched off. They use a new `lib/rights.js useCan(right)`, which asks `/api/auth/rights` once per page load. Standalone :8000, or no answer, means show the button; Landing still refuses the action.
+- **Landing:** a "<name> · Sign out" button next to Users. It calls `POST /api/auth/logout`, which clears the session and the remember-me cookie, then goes to `/login?next=/` so someone else can sign in. On phones the top bar drops the brand name, username and "Theme" text, so it fits (it had already been 47 px too wide at 412 px).
+- **Build:** both frontends rebuilt. `dist/` is not committed; 8010 serves the local build.
+
 ### Users & access: switch off important actions per person
 - **Asked (user):** "give me a revoke access panel for admin for different rights like server action button and other important features".
 - **Panel:** a new "Access to important actions" card on `/auth/users`, with one tick box per action for each person. Unticking switches the action off at once. Everyone has every action until an admin unticks it, admins always keep all of them, and switched-off accounts have none.

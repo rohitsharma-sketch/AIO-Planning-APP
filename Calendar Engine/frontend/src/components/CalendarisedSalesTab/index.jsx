@@ -125,7 +125,8 @@ async function fetchCalendarMaps(calendarId, source) {
   return { detail, festivalByDate, refByCluster, refMonthsByCluster, fwdSplitByCluster, moveInfo }
 }
 
-export default function CalendarisedSalesTab({ isPlanner }) {
+export default function CalendarisedSalesTab({ isPlanner, rights }) {
+  const canReindex = !rights || rights.includes('calendar_reindex')   // an admin can switch Run Reindex off per person
   const [selections, setSelections] = useState({})
   const [calendars, setCalendars] = useState([])
   const [source, setSource] = useState('dw')
@@ -531,7 +532,7 @@ export default function CalendarisedSalesTab({ isPlanner }) {
               {schema.metrics.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           )}
-          {isPlanner && (
+          {isPlanner && canReindex && (
             <button className="btn" onClick={runRx} disabled={!!progress || activeRunMonths.size === 0}>
               {progress ? 'Reindexing...' : `Run Reindex${activeRunMonths.size ? ` (${activeRunMonths.size} mo)` : ''}`}
             </button>

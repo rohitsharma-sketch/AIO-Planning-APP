@@ -119,7 +119,8 @@
   .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
   .grid.tools { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   @media (max-width: 1040px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .grid.tools { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  @media (max-width: 620px)  { .grid, .grid.tools { grid-template-columns: minmax(0, 1fr); } .brand-sub, .sys-pill { display: none; } }
+  #signout-btn { padding-left: 13px; }
+  @media (max-width: 620px)  { .grid, .grid.tools { grid-template-columns: minmax(0, 1fr); } .brand-sub, .sys-pill, .brand-name, .so-name, #theme-btn .breaker-label { display: none; } .topbar { padding: 0 16px; gap: 8px; } }
 
   .card {
     position: relative; display: flex; flex-direction: column;
@@ -390,6 +391,7 @@
     <span class="topbar-gap"></span>
     <span class="sys-pill" id="sys-pill"><span class="dot" id="sys-dot"></span><span id="sys-label">Checking services…</span></span>
     <a class="breaker" id="admin-link" href="/auth/users" style="display:none;text-decoration:none" title="Users & access - who can sign in and what they can do (admins)"><span class="breaker-label">Users</span></a>
+    <button class="breaker" id="signout-btn" type="button" style="display:none" title="Sign out - then sign in as someone else"><span class="breaker-label"><span class="so-name" id="signout-label"></span>Sign out</span></button>
     <!-- Suite theme picker: one colour theme for every app -->
     <div class="theme-wrap">
       <button id="theme-btn" class="breaker" type="button" aria-haspopup="true" aria-expanded="false" title="Colour theme for every RS Planning app">
@@ -1068,7 +1070,16 @@
 </script>
 <script>/* Users & access link - shown to admins only (2026-09-30) */
 fetch('/api/auth/me', {credentials: 'include', cache: 'no-store'}).then(r => r.ok ? r.json() : null)
-  .then(u => { if (u && u.is_admin) document.getElementById('admin-link').style.display = 'inline-flex'; }).catch(() => {});
+  .then(u => {
+    if (!u) return;
+    if (u.is_admin) document.getElementById('admin-link').style.display = 'inline-flex';
+    const b = document.getElementById('signout-btn');   /* sign out / switch user (2026-09-30) */
+    document.getElementById('signout-label').textContent = u.username + ' · ';
+    b.title = 'Signed in as ' + u.username + ' - sign out, then sign in as someone else';
+    b.style.display = 'inline-flex';
+    b.onclick = () => { b.disabled = true;
+      fetch('/api/auth/logout', {method: 'POST', credentials: 'include'}).finally(() => { location.href = '/login?next=/'; }); };
+  }).catch(() => {});
 /* Actions an admin switched off for this person (Users & access > Access to important actions): grey the button out.
    Landing's server refuses them anyway - this just says so up front. */
 fetch('/api/auth/rights', {credentials: 'include', cache: 'no-store'}).then(r => r.ok ? r.json() : null).then(d => {
