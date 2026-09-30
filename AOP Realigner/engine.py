@@ -26,6 +26,7 @@ import pandas as pd
 import xlsxwriter
 
 TOL = 1e-9
+SHOWN = 5e-9   # the comparison shows 8 decimals: any difference that would show there counts (user, 2026-09-30)
 STORE, DIV, DEPT, MRP, DISP = "Store Name", "DIVISION", "DEPARTMENT", "MRP", "DISPLAY TYPE"
 FROZEN = ("Jan", "Feb")  # default lock for a newly loaded plan: Jan & Feb stay exactly as the original
 LOCKED = None  # month labels the user locked (server.py sets it per original plan); None = the FROZEN default
@@ -399,7 +400,7 @@ def realign(o, r, months, source=None):
     status = np.where(lk, np.where(np.abs(scale - 1) > TOL, "kept, moved to fit the cap", "kept"),
                       np.where(np.abs(f - 1) > TOL, "absorbed", "unchanged"))
     delta = new - orig
-    changed = np.abs(delta) > 1e-6
+    changed = np.abs(delta) > SHOWN
     if changed.any():
         ri, ci = np.nonzero(changed)
         ov, nv = orig[ri, ci], new[ri, ci]
@@ -472,7 +473,7 @@ def verify(o, r, out, months):
             add("Revised values kept exactly", "fail", f"largest difference {diff:.2g}")
     a = o.groupby([STORE, DIV])[V].sum()
     d = (out.groupby([STORE, DIV])[V].sum().reindex(a.index).fillna(0.0) - a).to_numpy()
-    season, cells = int((np.abs(d.sum(1)) > 1e-6).sum()), int((np.abs(d) > 1e-6).sum())
+    season, cells = int((np.abs(d.sum(1)) > SHOWN).sum()), int((np.abs(d) > SHOWN).sum())
     g0, g1 = float(o[V].to_numpy().sum()), float(out[V].to_numpy().sum())
     add("Store × Division totals match — whole season", "ok" if season == 0 else "fail",
         f"{season} of {len(a):,} store-divisions differ")
@@ -516,17 +517,23 @@ def _cell(v):
     return None if isinstance(v, float) and not np.isfinite(v) else v
 
 
-def write_xlsx(sheets, on_progress=None):
+def write_xlsx(sheets, on_progress=None, num_format=None):
     """sheets: [(name, df), ...]. Written row by row with xlsxwriter's own API (not pandas' .to_excel)
-    so on_progress(done, total) can report real rows - the full plan is ~680k rows and takes minutes."""
+    so on_progress(done, total) can report real rows - the full plan is ~680k rows and takes minutes.
+    num_format (e.g. "0.00000000") is applied to every float column, so Excel shows the figures in full."""
     total = sum(len(df) for _, df in sheets)
     tick = on_progress or (lambda done, total: None)
     tick(0, total)
     buf = io.BytesIO()
     wb = xlsxwriter.Workbook(buf, {"in_memory": True, "constant_memory": True})
     done = 0
+    fmt = wb.add_format({"num_format": num_format}) if num_format else None
     for name, df in sheets:
         ws = wb.add_worksheet(name[:31])  # Excel's own sheet-name length limit
+        if fmt:
+            for j, c in enumerate(df.columns):
+                if pd.api.types.is_float_dtype(df[c]):
+                    ws.set_column(j, j, 14, fmt)
         for j, c in enumerate(df.columns):
             ws.write(0, j, str(c))
         for i, row in enumerate(df.itertuples(index=False, name=None)):
@@ -567,9 +574,9 @@ def compare_levels(o, out, months):
         t = t.sort_values(by + ["Month"]).reset_index(drop=True)
         t["Month"] = t["Month"].astype(str)
         t["Locked month"] = np.where([locked(m) for m in t["Month"]], "Yes", "")
-        return t[t["Difference"].abs() > 1e-6].reset_index(drop=True) if only_moved else t
+        return t[t["Difference"].abs() > SHOWN].reset_index(drop=True) if only_moved else t
     sdm = table([STORE, DIV], False)
-    sdm["Within cap"] = np.where(sdm["Difference"].abs() <= 1e-6, "Yes",
+    sdm["Within cap"] = np.where(sdm["Difference"].abs() <= SHOWN, "Yes",
                                  np.where(sdm["Difference"] > 0, "No - over the original", "No - under the original"))
     return sdm, table([STORE, DIV, DEPT], True)
 
@@ -578,8 +585,17 @@ def export_compare(summ, compare, fmt, on_progress=None, levels=None):
     """The "did this come out okay" file: a Division x Month summary, the Store x Division x Month cap check and the
     Store x Dept x Month moves (levels = compare_levels(...)), plus every cell that actually changed."""
     if fmt == "csv":
-        return compare.round(4).to_csv(index=False).encode("utf-8-sig"), "text/csv", "csv"
-    sheets = [("Summary", pd.DataFrame(summ).round(4))]
+        return _r8(compare).to_csv(index=False, float_format="%.8f").encode("utf-8-sig"), "text/csv", "csv"
+    sheets = [("Summary", _r8(pd.DataFrame(summ)))]
     if levels is not None:
-        sheets += [("Store x Division x Month", levels[0].round(4)), ("Store x Dept x Month", levels[1].round(4))]
-    return write_xlsx(sheets + [("Changed Rows", compare.round(4))], on_progress), XLSX_CTYPE, "xlsx"
+        sheets += [("Store x Division x Month", _r8(levels[0])), ("Store x Dept x Month", _r8(levels[1]))]
+    return write_xlsx(sheets + [("Changed Rows", _r8(compare))], on_progress, "0.00000000"), XLSX_CTYPE, "xlsx"
+
+
+def _r8(df):
+    """8 decimals (user, 2026-09-30: "zero in difference to 0.00000000 instead of the full blown 0.0001"): a real
+    difference shows in full and float noise (1e-13) becomes a clean 0, never -0."""
+    df = df.copy()
+    num = df.select_dtypes("float").columns
+    df[num] = df[num].round(8) + 0.0
+    return df

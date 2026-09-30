@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### Sales Plan Re-Aligner comparison: 8 decimals (0.00000000)
+- **Asked (user):** "can you zero in difference to 0.00000000 ? instead of the full blown 0.0001 ?" (on the comparison download).
+- **Before:** every figure was rounded to 4 decimals, so a real difference below 0.00005 showed as 0.0000 and the smallest as 0.0001 (in the user's file, 38,596 Changed Rows read exactly 0.0001).
+- **Now:** every number in the comparison (xlsx and CSV) is rounded to 8 decimals, float noise is written as a clean 0 (never -0), and the xlsx number format is `0.00000000` (`engine._r8`, `write_xlsx(num_format=)`). The "changed", "moved", "Within cap" and cap check use the same 8-decimal line (`engine.SHOWN = 5e-9`), so any difference the file shows is counted.
+- **Checked:** LW_U_T-TOP Store x Division x Month has 7,272 rows, all exactly 0; the smallest real difference is 0.00000004 (Store x Dept x Month) and 0.00000001 (Changed Rows); the cap still passes at 0 of 7,272. The file grew from 11.9 to 15.1 MB (about 40 s to build).
+
 ### Sales Plan Re-Aligner: "stay as they are" option removed
 - **Asked (user):** "remove the stay as they are option".
 - **Removed everywhere:** the Run card radio buttons and `setAbsorb`; `POST /api/option` (now 404) and `state.absorb`; the `absorb` parameter and its branch in `engine.realign` / `engine.verify`, with their "other departments untouched" / "season total" checks; and the Rules panel and page text that described it. Every run now keeps each Store × Division × Month on the original file (the cap).
