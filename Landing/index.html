@@ -389,6 +389,7 @@
     </a>
     <span class="topbar-gap"></span>
     <span class="sys-pill" id="sys-pill"><span class="dot" id="sys-dot"></span><span id="sys-label">Checking services…</span></span>
+    <a class="breaker" id="admin-link" href="/auth/users" style="display:none;text-decoration:none" title="Users & access - who can sign in and what they can do (admins)"><span class="breaker-label">Users</span></a>
     <!-- Suite theme picker: one colour theme for every app -->
     <div class="theme-wrap">
       <button id="theme-btn" class="breaker" type="button" aria-haspopup="true" aria-expanded="false" title="Colour theme for every RS Planning app">
@@ -1064,6 +1065,10 @@
     window.addEventListener('suitethemechange',function(){ document.getElementById('theme-btn-sw').innerHTML=sw(ST.themes[ST.current]); });
     render();
   })();
+</script>
+<script>/* Users & access link - shown to admins only (2026-09-30) */
+fetch('/api/auth/me', {credentials: 'include', cache: 'no-store'}).then(r => r.ok ? r.json() : null)
+  .then(u => { if (u && u.is_admin) document.getElementById('admin-link').style.display = 'inline-flex'; }).catch(() => {});
 </script>
 </body>
 </html>

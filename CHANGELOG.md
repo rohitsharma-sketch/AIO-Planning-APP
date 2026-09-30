@@ -7,6 +7,29 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### Users & access admin page; password reset accepts an email
+- **Asked (user):** "email not sent - email should be there" and "give me an admin layout for setting user control up".
+- **Why no reset email came:**
+  - The value typed (an email) isn't a username, and the form only looked up usernames.
+  - None of the 3 accounts (admin, planning01, planning02) has an email on file.
+  - The server has no SMTP (email-sending) settings, so it can't send any email yet.
+- **Fixes:**
+  - **Forgot password** now also accepts the email on file. It still answers the same way whether or not the account exists.
+  - **New Users & access page** at `/auth/users`, reached through a Users button on Landing that only admins see. On it an admin can:
+    - see every account;
+    - change email, role (planner / buyer / reviewer / approver), admin rights, and sign-in on/off, each saved immediately;
+    - **set a temporary password**, generated or typed, which forces the person to pick their own at next sign-in;
+    - add a person.
+  - It also shows how many admins there are and whether reset email is set up, and explains the roles.
+  - **Lock-out guards** (server side): an admin can't remove their own admin rights or switch themselves off, and the last active admin can't be removed.
+  - **Email status:** an admin-only `GET /api/auth/admin/email-status` reports whether email is set up, never the settings themselves.
+- **Checked:**
+  - The admin endpoints return 401 without a sign-in, and the page sends anonymous visitors to sign-in.
+  - Guard tests pass (`tests/test_admin_guard.py`).
+  - A cookie forged with the public development key is still rejected after the 8010 restart.
+- **Still needed for email resets:** SMTP settings on the server (SMTP_HOST / SMTP_USER / SMTP_PASSWORD / SMTP_FROM), and each person's email on the page. Until then, use **Set password**.
+- Files: `RS Planning Platform/backend/auth/routes.py`, `app.py`, `static/admin-users.html`, `tests/test_admin_guard.py`; `Landing/index.html`.
+
 ### Re-phase: a comparable store needs both the SSG tag and a full last year
 - **Asked (user):** "yes, require both the tag and a full last year".
 - **Rule:** a store may lend its month shape only if it sold in the department's division in **every** re-phased month last year **and**, when the plan has an SSG TAG column, it is tagged SSG. Tagged stores left out are named in the summary.

@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from auth.deps import REMEMBER_COOKIE, require_admin, require_login
 from auth.email import send_reset_email, smtp_configured
@@ -51,6 +51,9 @@ def forgot_password(body: dict = Body(...)):
     session = SessionLocal()
     try:
         user = session.execute(select(User).where(User.username == username, User.is_active.is_(True))).scalar_one_or_none()
+        if user is None and "@" in username:   # people type their email here (2026-09-30) - same silent answer either way
+            user = session.execute(select(User).where(func.lower(User.email) == username.lower(),
+                                                      User.is_active.is_(True))).scalars().first()
         # Same {"ok": True} whether or not the account/email exists — this
         # endpoint must not let a caller enumerate valid usernames.
         if user is None or not user.email:
@@ -151,6 +154,24 @@ def create_user(body: dict = Body(...), _admin: dict = Depends(require_admin)):
         session.close()
 
 
+def admin_change_refusal(me_id, target_id, target_is_admin, target_is_active, body, active_admins):
+    """Why an admin edit must be refused, or None (lock-out guards, 2026-09-30): an admin can't remove their own admin
+    rights or switch off their own account, and the platform is never left without an active admin."""
+    drops_admin = "is_admin" in body and not body["is_admin"]
+    switches_off = "is_active" in body and not body["is_active"]
+    if str(target_id) == str(me_id) and (drops_admin or switches_off):
+        return "You can't remove your own admin rights or switch off your own account - ask another admin."
+    if target_is_admin and target_is_active and (drops_admin or switches_off) and active_admins <= 1:
+        return "This is the last active admin - make someone else an admin first."
+    return None
+
+
+@router.get("/admin/email-status")
+def email_status(_admin: dict = Depends(require_admin)):
+    """Whether forgot-password emails can be sent (SMTP settings present) - never the settings themselves."""
+    return {"configured": smtp_configured()}
+
+
 @router.patch("/admin/users/{user_id}")
 def update_user(user_id: str, body: dict = Body(...), _admin: dict = Depends(require_admin)):
     try:
@@ -162,6 +183,11 @@ def update_user(user_id: str, body: dict = Body(...), _admin: dict = Depends(req
         user = session.get(User, uid)
         if user is None:
             raise HTTPException(404, "User not found")
+        admins = session.execute(select(func.count()).select_from(User).where(User.is_admin.is_(True),
+                                                                               User.is_active.is_(True))).scalar()
+        refusal = admin_change_refusal(_admin["id"], user.id, user.is_admin, user.is_active, body, admins)
+        if refusal:
+            raise HTTPException(409, refusal)
         if "email" in body:
             user.email = body["email"] or None
         if "role" in body:

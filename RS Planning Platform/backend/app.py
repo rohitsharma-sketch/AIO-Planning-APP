@@ -212,6 +212,15 @@ def plan_cycles_page(request: Request):
     return _html_no_cache(os.path.join(_HERE, "static", "plan-cycles.html"))
 
 
+@app.get("/auth/users")
+def admin_users_page(request: Request):
+    # Users & access (2026-09-30). The page itself says "admins only" to anyone else; every call behind it is
+    # admin-gated server-side (auth/routes.py require_admin).
+    if get_session_user(request) is None:
+        return RedirectResponse("/login?next=/auth/users")
+    return _html_no_cache(os.path.join(_HERE, "static", "admin-users.html"))
+
+
 # Serve both existing frontends' built bundles under their own paths
 _aop_dist = os.path.join(_AOP_DIR, "frontend", "dist")
 if os.path.isdir(_aop_dist):

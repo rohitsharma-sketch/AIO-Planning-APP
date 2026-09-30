@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script>/* suite colour theme - one choice for every app, picked on Landing */(function(){var p=location.port,o=(p==='7800'||p==='8010')?'':'//'+location.hostname+':8010';document.write('<script src="'+o+'/api/suite-theme.js"><\/script>')})()</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Users &amp; access · RS Planning</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* Admin - users and access (2026-09-30). Same suite palette / font as the sign-in pages and Landing. */
+  :root {
+    color-scheme: light;
+    --navy: var(--st-chrome,#34453F); --accent: var(--st-accent,#4F7A66); --accent-h: var(--st-accent-dark,#3F6453); --accent-bg: var(--st-tint,#EAF3EE); --accent-bd: var(--st-tint-b,#CBE2D5);
+    --bg: var(--st-page,#F7F6F2); --white: #fff; --char: var(--st-ink,#1E2723); --text2: var(--st-ink-2,#37423C); --muted: var(--st-muted,#5F6B64); --faint: var(--st-faint,#6E7872);
+    --border: var(--st-line,#E5E3DA); --border2: var(--st-line-2,#D3D0C4);
+    --red: #B42318; --red-bg: #FEF3F2; --red-bd: #F7C1BC; --green: #15803D; --green-bg: #ECFDF3; --green-bd: #A6E3BD;
+    --amber: #92400E; --amber-bg: #FFFBEB; --amber-bd: #FCD34D;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--char); font-size: 14px; line-height: 1.5;
+    font-family: var(--st-font-body, 'Plus Jakarta Sans'), -apple-system, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
+  .topbar { background: var(--navy); color: #fff; display: flex; align-items: center; gap: 12px; padding: 12px 24px; }
+  .brand { display: flex; align-items: center; gap: 11px; color: #fff; text-decoration: none; }
+  .brand-mark { width: 30px; height: 30px; border-radius: 8px; background: var(--st-btn,#A8CBB7); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: var(--st-btn-text,#1F4D3A); }
+  .brand-name { font-size: 15px; font-weight: 800; }
+  .brand-sub { font-size: 12px; color: rgba(255,255,255,.55); padding-left: 11px; border-left: 1px solid rgba(255,255,255,.18); }
+  .gap { flex: 1; }
+  .topbar a.back { color: rgba(255,255,255,.85); font-size: 13px; font-weight: 600; text-decoration: none; }
+  .topbar a.back:hover { color: #fff; text-decoration: underline; }
+  .who { font-size: 12.5px; color: rgba(255,255,255,.65); }
+  main { max-width: 1120px; margin: 0 auto; padding: 28px 24px 60px; }
+  h1 { font-size: 24px; font-weight: 800; color: var(--navy); letter-spacing: -.02em; margin: 0 0 4px; }
+  h2 { font-size: 15px; font-weight: 800; color: var(--navy); margin: 0 0 4px; }
+  p.sub { margin: 0 0 20px; color: var(--muted); font-size: 13.5px; }
+  .card { background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; margin-bottom: 16px; }
+  .card p.desc { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+  .strip { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+  .pill { display: inline-flex; align-items: center; gap: 7px; border-radius: 999px; padding: 5px 12px; font-size: 12.5px; font-weight: 600; border: 1px solid var(--border2); background: var(--white); color: var(--text2); }
+  .pill.ok { background: var(--green-bg); border-color: var(--green-bd); color: var(--green); }
+  .pill.warn { background: var(--amber-bg); border-color: var(--amber-bd); color: var(--amber); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; min-width: 860px; }
+  th { text-align: left; font-size: 11.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; background: var(--bg); padding: 9px 12px; border-bottom: 1px solid var(--border); }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr.off td { color: var(--faint); }
+  .uname { font-weight: 700; }
+  .you { font-size: 11px; font-weight: 700; color: var(--accent); margin-left: 6px; }
+  .badge { display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: 11.5px; font-weight: 700; }
+  .badge.amber { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-bd); }
+  .badge.grey { background: var(--bg); color: var(--muted); border: 1px solid var(--border2); }
+  input:not([type=checkbox]), select { height: 36px; padding: 0 10px; font: inherit; font-size: 13.5px; color: var(--char); background: var(--white); border: 1px solid var(--border2); border-radius: 8px; }
+  input:not([type=checkbox]):focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(var(--st-accent-rgb,79,122,102),.15); }
+  input[type=email] { width: 100%; min-width: 200px; }
+  input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); vertical-align: middle; }
+  label.chk { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text2); cursor: pointer; }
+  .btn { height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border2); background: var(--white); color: var(--text2); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-h); }
+  .btn.primary { background: var(--st-btn,#A8CBB7); border-color: transparent; color: var(--st-btn-text,#1F4D3A); }
+  .btn.primary:hover:not(:disabled) { background: var(--st-btn-hover,#95BFA7); color: var(--st-btn-text,#1F4D3A); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.small { height: 30px; padding: 0 10px; font-size: 12.5px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 16px; align-items: end; }
+  .field label { display: block; font-size: 12.5px; font-weight: 700; color: var(--text2); margin-bottom: 5px; }
+  .field input:not([type=checkbox]), .field select { width: 100%; }
+  .pw-row { display: flex; gap: 8px; }
+  .pw-row input { flex: 1; font-family: ui-monospace, Consolas, monospace; }
+  .roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 16px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--text2); }
+  .roles b { color: var(--navy); }
+  .msg { display: none; margin: 12px 0 0; padding: 10px 12px; border-radius: 9px; font-size: 13px; }
+  .msg.err { display: block; background: var(--red-bg); color: var(--red); border: 1px solid var(--red-bd); }
+  .msg.ok { display: block; background: var(--green-bg); color: var(--green); border: 1px solid var(--green-bd); }
+  .secret { font-family: ui-monospace, Consolas, monospace; font-weight: 700; background: var(--accent-bg); border: 1px solid var(--accent-bd); border-radius: 6px; padding: 1px 6px; color: var(--navy); }
+  dialog { border: 1px solid var(--border); border-radius: 12px; padding: 20px 22px; max-width: 440px; width: calc(100% - 32px); color: var(--char); }
+  dialog::backdrop { background: rgba(30,39,35,.35); }
+  dialog h2 { margin-bottom: 6px; }
+  dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .denied { text-align: center; padding: 48px 20px; }
+  @media (max-width: 640px) { .topbar { padding: 10px 16px; } .brand-sub, .who { display: none; } main { padding: 20px 16px 48px; } }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/" aria-label="RS Planning home"><span class="brand-mark">RS</span><span class="brand-name">RS Planning</span><span class="brand-sub">CityKart</span></a>
+  <span class="gap"></span>
+  <span class="who" id="who"></span>
+  <a class="back" href="/">← Back to Landing</a>
+</header>
+
+<main>
+  <h1>Users &amp; access</h1>
+  <p class="sub">Who can sign in to RS Planning, what they can do, and how they get back in if they forget their password.</p>
+
+  <div id="denied" class="card denied" hidden>
+    <h2>Admins only</h2>
+    <p class="desc">This page is for RS Planning admins. Ask an admin to change your access.</p>
+  </div>
+
+  <div id="admin" hidden>
+    <div class="strip">
+      <span class="pill" id="pill-users"></span>
+      <span class="pill" id="pill-admins"></span>
+      <span class="pill" id="pill-email" title=""></span>
+    </div>
+
+    <section class="card" aria-labelledby="h-users">
+      <h2 id="h-users">People</h2>
+      <p class="desc">Change a role, email or admin rights here - it saves as soon as you change it. Switch an account off to stop it signing in without deleting it. <b>Set password</b> gives someone a temporary password; they choose their own the next time they sign in.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>User</th><th>Email (for password resets)</th><th>Role</th><th>Admin</th><th>Can sign in</th><th>Status</th><th></th></tr></thead>
+          <tbody id="rows"><tr><td colspan="7">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="msg" id="table-msg" role="status"></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-add">
+      <h2 id="h-add">Add a person</h2>
+      <p class="desc">They sign in with the username and the temporary password you give them, then must choose their own.</p>
+      <form id="add-form" autocomplete="off">
+        <div class="form-grid">
+          <div class="field"><label for="n-user">Username</label><input id="n-user" required pattern="[A-Za-z0-9._@-]{3,64}" title="3-64 letters, digits, . _ - or @" placeholder="e.g. rohit.sharma"></div>
+          <div class="field"><label for="n-email">Email</label><input id="n-email" type="email" placeholder="name@citykart.org"></div>
+          <div class="field"><label for="n-role">Role</label><select id="n-role"></select></div>
+          <div class="field"><label for="n-pw">Temporary password</label><div class="pw-row"><input id="n-pw" required minlength="8" autocomplete="new-password"><button type="button" class="btn" id="n-gen">Generate</button></div></div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:18px;align-items:center;margin-top:14px">
+          <label class="chk"><input type="checkbox" id="n-admin"> Admin (can manage users)</label>
+          <label class="chk"><input type="checkbox" id="n-must" checked> Must choose their own password at first sign-in</label>
+          <span class="gap"></span>
+          <button type="submit" class="btn primary">Add person</button>
+        </div>
+      </form>
+      <div class="msg" id="add-msg" role="status"></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-roles">
+      <h2 id="h-roles">What the roles mean</h2>
+      <ul class="roles">
+        <li><b>Planner</b> - builds and edits plans: Calendar, AOP Forecaster, Buyer's Input Sheet, Sales Plan, Re-Aligner.</li>
+        <li><b>Buyer</b> - works on the buyer's input for the plan cycles sent to them.</li>
+        <li><b>Reviewer</b> - reviews submitted plan cycles and approves or sends them back.</li>
+        <li><b>Approver</b> - gives the final approval on reviewed plan cycles.</li>
+        <li><b>Admin</b> (with any role) - can open this page and manage people.</li>
+      </ul>
+    </section>
+  </div>
+</main>
+
+<dialog id="pw-dialog" aria-labelledby="pw-title">
+  <form method="dialog" id="pw-form">
+    <h2 id="pw-title">Set a temporary password</h2>
+    <p class="desc" id="pw-desc" style="color:var(--muted);font-size:13px;margin:0 0 12px"></p>
+    <div class="field"><label for="pw-new">Temporary password</label><div class="pw-row"><input id="pw-new" required minlength="8" autocomplete="new-password"><button type="button" class="btn" id="pw-gen">Generate</button></div></div>
+    <label class="chk" style="margin-top:12px"><input type="checkbox" id="pw-must" checked> Must choose their own password at next sign-in</label>
+    <div class="actions"><button type="button" class="btn" id="pw-cancel">Cancel</button><button type="submit" class="btn primary" id="pw-save">Set password</button></div>
+  </form>
+</dialog>
+
+<script>
+const ROLES = ['planner', 'buyer', 'reviewer', 'approver'];
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+let me = null, users = [], pwTarget = null;
+
+async function api(path, opts = {}) {
+  const r = await fetch('/api/auth' + path, {credentials: 'same-origin', ...opts,
+    headers: opts.body ? {'Content-Type': 'application/json'} : undefined});
+  if (r.status === 401) { location.href = '/login?next=/auth/users'; throw new Error('Please sign in again.'); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(typeof j.detail === 'string' ? j.detail : `Something went wrong (${r.status}).`);
+  return j;
+}
+function say(el, text, ok) { el.textContent = text; el.className = 'msg ' + (ok ? 'ok' : 'err'); }
+function genPassword() {   // 14 characters, no look-alikes (0/O, 1/l/I)
+  const a = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789', b = new Uint32Array(14);
+  crypto.getRandomValues(b);
+  return Array.from(b, x => a[x % a.length]).join('');
+}
+
+function render() {
+  const active = users.filter(u => u.is_active), admins = active.filter(u => u.is_admin);
+  $('#pill-users').innerHTML = `<span class="dot"></span>${active.length} can sign in · ${users.length} accounts`;
+  $('#pill-admins').innerHTML = `<span class="dot"></span>${admins.length} admin${admins.length === 1 ? '' : 's'}`;
+  $('#pill-admins').className = 'pill ' + (admins.length > 1 ? 'ok' : 'warn');
+  $('#pill-admins').title = admins.length > 1 ? '' : 'Only one admin - if they lose access nobody can manage users. Consider a second admin.';
+  const sorted = [...users].sort((a, b) => (b.is_active - a.is_active) || a.username.localeCompare(b.username));
+  $('#rows').innerHTML = sorted.map(u => {
+    const self = me && u.id === me.id;
+    return `<tr class="${u.is_active ? '' : 'off'}" data-id="${esc(u.id)}">
+      <td><span class="uname">${esc(u.username)}</span>${self ? '<span class="you">you</span>' : ''}</td>
+      <td><input type="email" value="${esc(u.email || '')}" placeholder="no email - can't reset by email" aria-label="Email for ${esc(u.username)}" data-f="email"></td>
+      <td><select data-f="role" aria-label="Role for ${esc(u.username)}">${ROLES.map(r => `<option value="${r}" ${r === u.role ? 'selected' : ''}>${r[0].toUpperCase() + r.slice(1)}</option>`).join('')}</select></td>
+      <td><input type="checkbox" data-f="is_admin" ${u.is_admin ? 'checked' : ''} ${self ? 'disabled title="You can\'t remove your own admin rights"' : ''} aria-label="Admin: ${esc(u.username)}"></td>
+      <td><input type="checkbox" data-f="is_active" ${u.is_active ? 'checked' : ''} ${self ? 'disabled title="You can\'t switch off your own account"' : ''} aria-label="Can sign in: ${esc(u.username)}"></td>
+      <td>${u.must_change_password ? '<span class="badge amber">Must set own password</span>' : !u.is_active ? '<span class="badge grey">Switched off</span>' : !u.email ? '<span class="badge grey">No email</span>' : ''}</td>
+      <td><button class="btn small" data-act="pw">Set password</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7">No accounts yet.</td></tr>';
+}
+
+async function load() {
+  users = await api('/admin/users');
+  render();
+}
+
+async function save(id, patch, label) {
+  const msg = $('#table-msg');
+  try {
+    const u = await api(`/admin/users/${id}`, {method: 'PATCH', body: JSON.stringify(patch)});
+    users = users.map(x => x.id === id ? {...x, ...u} : x);
+    render();
+    say(msg, `Saved ${label} for ${u.username}.`, true);
+  } catch (e) { say(msg, e.message); render(); }
+}
+
+$('#rows').addEventListener('change', e => {
+  const f = e.target.dataset.f, tr = e.target.closest('tr');
+  if (!f || !tr) return;
+  const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value.trim();
+  const u = users.find(x => x.id === tr.dataset.id);
+  if (f === 'is_active' && !v && !confirm(`Switch off ${u.username}? They won't be able to sign in until you switch them back on.`)) { render(); return; }
+  if (f === 'is_admin' && v && !confirm(`Make ${u.username} an admin? They'll be able to manage every account.`)) { render(); return; }
+  save(tr.dataset.id, {[f]: v}, {email: 'the email', role: 'the role', is_admin: 'admin rights', is_active: 'sign-in access'}[f]);
+});
+$('#rows').addEventListener('click', e => {
+  if (e.target.dataset.act !== 'pw') return;
+  pwTarget = users.find(x => x.id === e.target.closest('tr').dataset.id);
+  $('#pw-desc').textContent = `For ${pwTarget.username}. Tell them this password yourself - it isn't emailed.`;
+  $('#pw-new').value = genPassword();
+  $('#pw-must').checked = true;
+  $('#pw-dialog').showModal();
+});
+$('#pw-gen').onclick = () => { $('#pw-new').value = genPassword(); };
+$('#pw-cancel').onclick = () => $('#pw-dialog').close();
+$('#pw-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const pw = $('#pw-new').value;
+  if (pw.length < 8) return;
+  $('#pw-dialog').close();
+  const msg = $('#table-msg');
+  try {
+    const u = await api(`/admin/users/${pwTarget.id}`, {method: 'PATCH', body: JSON.stringify({password: pw, must_change_password: $('#pw-must').checked})});
+    users = users.map(x => x.id === u.id ? {...x, ...u} : x);
+    render();
+    msg.className = 'msg ok';
+    msg.innerHTML = `New temporary password for <b>${esc(u.username)}</b>: <span class="secret">${esc(pw)}</span> - share it with them directly; it won't be shown again.`;
+  } catch (err) { say(msg, err.message); }
+});
+
+$('#n-role').innerHTML = ROLES.map(r => `<option value="${r}">${r[0].toUpperCase() + r.slice(1)}</option>`).join('');
+$('#n-gen').onclick = () => { $('#n-pw').value = genPassword(); };
+$('#add-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const body = {username: $('#n-user').value.trim(), email: $('#n-email').value.trim() || null, role: $('#n-role').value,
+                is_admin: $('#n-admin').checked, password: $('#n-pw').value, must_change_password: $('#n-must').checked};
+  const msg = $('#add-msg');
+  try {
+    const u = await api('/admin/users', {method: 'POST', body: JSON.stringify(body)});
+    users.push({...u, is_active: true});
+    render();
+    msg.className = 'msg ok';
+    msg.innerHTML = `Added <b>${esc(u.username)}</b>. Temporary password: <span class="secret">${esc(body.password)}</span> - share it with them directly; it won't be shown again.`;
+    e.target.reset(); $('#n-must').checked = true;
+  } catch (err) { say(msg, err.message); }
+});
+
+(async () => {
+  try {
+    me = await api('/me');
+    $('#who').textContent = `Signed in as ${me.username}`;
+    if (!me.is_admin) { $('#denied').hidden = false; return; }
+    $('#admin').hidden = false;
+    const [, mail] = await Promise.all([load(), api('/admin/email-status').catch(() => ({configured: false}))]);
+    const p = $('#pill-email');
+    p.className = 'pill ' + (mail.configured ? 'ok' : 'warn');
+    p.innerHTML = `<span class="dot"></span>${mail.configured ? 'Password-reset email is set up' : 'Password-reset email is not set up'}`;
+    p.title = mail.configured ? '' : 'Forgot-password emails can\'t be sent until the server has its email (SMTP) settings. Until then, use Set password.';
+  } catch (e) { say($('#table-msg'), e.message); $('#admin').hidden = false; }
+})();
+</script>
+</body>
+</html>
