@@ -165,7 +165,7 @@ Improvements made to Method 2 from this test:
 
 - **R8 fallback mix:** a month the department had no plan in now takes the average over the *revised* months that had one
   (it used to average in locked months too; 2,896 row-months were up to 0.075 L off, now 0).
-- **"Other departments stay as they are"** option on the Run card: only the revised departments change. This is what a
+- **(Removed 30 Sep 2026 — user: "remove the stay as they are option"; every run now keeps the cap, G3a.)** **"Other departments stay as they are"** option on the Run card: only the revised departments change. This is what a
   month re-phase needs. Checks then confirm the other departments are untouched and the revised departments kept their
   season total; the store × division month totals are reported as info, not as failures.
 - The "locked month was ignored" warning now counts only locked months that the revised file actually contains (it

@@ -4,7 +4,7 @@
 const RULES_NOW = [
   ['What is kept', [
     'Every <b>Store × Division × Month</b> total of the original plan - the file imported in step 1 - is the <b>cap</b>: the output lands exactly on it, and every run checks it (pass / fail).',
-    'The values you give (revised, newly listed or split departments) are kept <b>exactly</b> within the cap; every other department in the same store × division absorbs the difference, pro-rata to its original value - unless Method 2 is run by hand with the other departments <b>kept as they are</b> (the only mode where month totals move).',
+    'The values you give (revised, newly listed or split departments) are kept <b>exactly</b> within the cap; every other department in the same store × division absorbs the difference, pro-rata to its original value.',
     '<b>Locked months are never changed</b> (value and qty) - the planner locks / unlocks each month of the original plan (Jan / Feb locked by default). Locked-month figures in an upload are ignored and flagged.',
   ]],
   ['When a month overflows', [
@@ -22,7 +22,7 @@ const RULES_NOW = [
   ]],
   ['Method 2 - existing department changes', [
     'Store × Department rows with "&lt;Month&gt; New" values; months not in the file stay as original.',
-    'Other departments in the store × division: <b>absorb the change</b> (default - each store × division stays on the original) or <b>stay as they are</b> (only the revised departments move, e.g. a month re-phase).',
+    'Every other department in the store × division absorbs the change, so each store × division × month stays on the original (there is no "stay as they are" option).',
   ]],
   ['Method 2 - Re-phase from last year', [
     '<b>Re-phase &amp; run</b>: pick the department (and, if needed, whose last-year shape to use - any department with last-year sales, e.g. a related department with a fuller history) and it is re-phased, loaded as the revised file and run with the other departments <b>absorbing the change</b>, in one step - so every store × division × month stays on the original file (the cap). <b>Re-phase file</b> downloads the same file to check or edit first.',
@@ -56,7 +56,6 @@ const RULES_NOW = [
   ['Checks on every run', [
     'Recomputed from the output: kept values exact, store × division season totals, <b>Store × Division × Month = original (the cap)</b>, grand total, locked months untouched, display-type cont % as the original. Any input error blocks the run; warnings and notes are listed with row examples.',
     '<b>Comparison vs original</b> (download after a run): Summary (division × month), <b>Store x Division x Month</b> - every one, original vs new, difference and "Within cap" - <b>Store x Dept x Month</b> - every department month that moved - and <b>Changed Rows</b> (every MRP × display cell, with why).',
-    'Method 2 with the other departments <b>kept as they are</b>: instead of the store × division totals it checks that every other department is untouched and that the revised departments kept their season total; the store × division month totals are shown for information (they move by exactly the revised departments\' change) and the grand total is still checked.',
   ]],
 ];
 
@@ -65,6 +64,7 @@ const RULES_LATEST = {
   changes: [
     'Store × Division × Month of the original file is now a hard cap: Re-phase & run lets the other departments absorb the change, and a revised department that exceeds a month is cut to the cap with the excess moved into its own other months (season kept). The check is pass / fail.',
     'The comparison download adds Store x Division x Month (every one, flagged against the cap) and Store x Dept x Month sheets.',
+    'The Method 2 option "other departments stay as they are" is removed - every run keeps the cap.',
     'Re-phase from last year is generic: a comparable store must have sold in every re-phased month last year and, when the plan has an SSG TAG, be tagged SSG (both required); any missing store column simply drops out of the order.',
     'A last-year month that is missing from the data or only till date is refused; unlocked half-months are reported, not silently skipped; every re-phase comes with a summary.',
   ],

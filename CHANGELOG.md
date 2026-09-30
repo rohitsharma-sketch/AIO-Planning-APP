@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### Sales Plan Re-Aligner: "stay as they are" option removed
+- **Asked (user):** "remove the stay as they are option".
+- **Removed everywhere:** the Run card radio buttons and `setAbsorb`; `POST /api/option` (now 404) and `state.absorb`; the `absorb` parameter and its branch in `engine.realign` / `engine.verify`, with their "other departments untouched" / "season total" checks; and the Rules panel and page text that described it. Every run now keeps each Store × Division × Month on the original file (the cap).
+- **Tests:** the absorb=False cases are replaced by a capped pure re-phase (D 40/40 → 20/60, kept exactly, S1 months stay 70 / 80) and a capped read-back of the Re-phase file (stores with another department sit exactly on the cap; single-department stores are flagged). `test_realign.py` and `test_workspaces.py` pass.
+- **Checked live** (Admin workspace, LW_U_T-TOP Re-phase & run after the 8070 restart): the cap passes at 0 of 7,272, same counts as before (104 moved to fit), no option on the page.
+
 ### Sales Plan Re-Aligner: Store × Division × Month is a hard cap; original-vs-new comparison download
 - **Asked (user):** "cap the target for the month x store x division should be matching as per the original file imported. validate the same. Also, make sure that there is a comparitive drawn between 2 iterations - original plan v new revised plan and is downloadable to see where the difference is there." (after checking a Method 2 output).
 - **Found:** Re-phase & run ran with "other departments stay as they are", so month totals followed the re-phased department. Replaying Planning01's LW_U_T-TOP run: **750 of 7,272** store × division × months were off the original (up to 2.39 L), with season totals kept. Even with "absorb", 8 were off: BRN and DLT LADIES, where T-TOP's re-phase alone was bigger than the whole division's month, and the old overflow rule lowered other months' targets.

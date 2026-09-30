@@ -300,11 +300,10 @@ def growth_targets(o, rows, months, ly):
     return r, detail
 
 
-def realign(o, r, months, source=None, absorb=True):
+def realign(o, r, months, source=None):
     """o: original rows (numeric cols clean), r: revised Store x Dept values over `months`, source: where a new
-    store-dept's rows come from (see add_new_departments). absorb=False (Method 2 option, 2026-09-29): the other
-    departments stay exactly as they are and the store-division's month totals follow the revised departments -
-    a month re-phase of one department (docs/business-rules/REPHASE_DEPARTMENT_MONTHS.md).
+    store-dept's rows come from (see add_new_departments). Every store x division x month lands on the original - the
+    cap (the "other departments stay as they are" option was removed, user 2026-09-30).
     Returns (realigned rows in original layout, division x month summary, warnings,
     a long-format table of every cell that actually changed - for the comparison download)."""
     V = [m + " Plan" for m in months]
@@ -354,35 +353,28 @@ def realign(o, r, months, source=None, absorb=True):
     #    the same amount) - so every month total AND the revised departments' season total still match. Only excess
     #    with no room anywhere stays over its month (flagged).
     grp = (o[STORE] + "||" + o[DIV]).to_numpy()
-    scale = np.ones_like(orig)   # how much a revised cell was moved to fit the cap (1 = kept exactly)
-    if absorb:
-        T = pd.DataFrame(orig).groupby(grp).transform("sum").to_numpy()
-        L = pd.DataFrame(np.where(lk, new, 0.0)).groupby(grp).transform("sum").to_numpy()
-        U = pd.DataFrame(np.where(lk, 0.0, orig)).groupby(grp).transform("sum").to_numpy()
-        live = (rev.notna().any().to_numpy() & ~frozen)[None, :]
-        has_u = np.abs(U) > TOL
-        over = live & (L > T + TOL)
-        excess = np.where(over, L - T, 0.0).sum(1, keepdims=True)
-        # room = months where the revised departments have a value to grow and other departments can give way
-        room = np.where(live & ~over & has_u & (L > TOL), np.clip(T - L, 0, None), 0.0)
-        room_tot = room.sum(1, keepdims=True)
-        take = np.where(room_tot > TOL, room * np.minimum(excess / np.where(room_tot > TOL, room_tot, 1), 1.0), 0.0)
-        placed = np.divide(take.sum(1, keepdims=True), excess, out=np.zeros_like(excess), where=excess > TOL)
-        Lnew = np.where(over, L - (L - T) * placed, L + take)   # the revised departments' month total after the move
-        scale = np.where(lk & (L > TOL), Lnew / np.where(L > TOL, L, 1), 1.0)
-        new = np.where(lk, new * scale, new)
-        f = np.where(has_u & ~over, (T - Lnew) / np.where(has_u, U, 1), 0.0)
-        new = np.where(lk, new, orig * f)
-        spilled = over.any(1)
-        unplaced = excess[:, 0] - take.sum(1)  # excess with no room left in any other month
-        # nothing left to absorb into (bucket stays under target), or excess that couldn't be placed (stays over)
-        short = ((~has_u) & live & (T - Lnew > 1e-6)).any(1) | (unplaced > 1e-6)
-    else:
-        # only the revised departments move; every other row is the original (f = 1, nothing spills or is short)
-        f = np.ones_like(orig)
-        new = np.where(lk, new, orig)
-        excess = np.zeros((len(o), 1))
-        spilled = short = np.zeros(len(o), bool)
+    T = pd.DataFrame(orig).groupby(grp).transform("sum").to_numpy()
+    L = pd.DataFrame(np.where(lk, new, 0.0)).groupby(grp).transform("sum").to_numpy()
+    U = pd.DataFrame(np.where(lk, 0.0, orig)).groupby(grp).transform("sum").to_numpy()
+    live = (rev.notna().any().to_numpy() & ~frozen)[None, :]
+    has_u = np.abs(U) > TOL
+    over = live & (L > T + TOL)
+    excess = np.where(over, L - T, 0.0).sum(1, keepdims=True)
+    # room = months where the revised departments have a value to grow and other departments can give way
+    room = np.where(live & ~over & has_u & (L > TOL), np.clip(T - L, 0, None), 0.0)
+    room_tot = room.sum(1, keepdims=True)
+    take = np.where(room_tot > TOL, room * np.minimum(excess / np.where(room_tot > TOL, room_tot, 1), 1.0), 0.0)
+    placed = np.divide(take.sum(1, keepdims=True), excess, out=np.zeros_like(excess), where=excess > TOL)
+    Lnew = np.where(over, L - (L - T) * placed, L + take)   # the revised departments' month total after the move
+    scale = np.where(lk & (L > TOL), Lnew / np.where(L > TOL, L, 1), 1.0)   # 1 = a revised cell kept exactly
+    new = np.where(lk, new * scale, new)
+    f = np.where(has_u & ~over, (T - Lnew) / np.where(has_u, U, 1), 0.0)
+    new = np.where(lk, new, orig * f)
+    spilled = over.any(1)
+    unplaced = excess[:, 0] - take.sum(1)  # excess with no room left in any other month
+    # nothing left to absorb into (bucket stays under target), or excess that couldn't be placed (stays over)
+    short = ((~has_u) & live & (T - Lnew > 1e-6)).any(1) | (unplaced > 1e-6)
+
 
     # 3. qty = new value / the original plan's ASP for that Department x MRP x Display Type x Month, pooled
     #    across stores (in the original it's identical across stores anyway). A new dept uses its parent's.
@@ -453,12 +445,9 @@ def realign(o, r, months, source=None, absorb=True):
     return o, summ, warn, compare
 
 
-def verify(o, r, out, months, absorb=True):
+def verify(o, r, out, months):
     """Independent after-the-fact checks of a realign result, plus a per-department table of
-    original vs revised (file) vs realigned (output) - the numbers a planner would eyeball.
-    absorb=False (other departments kept as they are): the store-division checks become information - the month
-    totals are meant to follow the revised departments - and two checks take their place: every other department
-    is untouched, and each revised store-department keeps its season total (a re-phase moves value between months)."""
+    original vs revised (file) vs realigned (output) - the numbers a planner would eyeball."""
     V = [m + " Plan" for m in months]
     rm = [m for m in months if m in r.columns]
     live = [m for m in rm if not locked(m)]
@@ -476,7 +465,7 @@ def verify(o, r, out, months, absorb=True):
         season_kept = float(np.abs(out_sd[lvp].to_numpy().sum(1) - r[live].to_numpy().sum(1)).max())
         if diff < 1e-6:
             add("Revised values kept exactly", "ok", f"largest difference {diff:.2g}")
-        elif absorb and season_kept < 1e-6:   # moved between months only to fit the store x division x month cap
+        elif season_kept < 1e-6:   # moved between months only to fit the store x division x month cap
             add("Revised values kept exactly", "warn", f"{moved} revised store-department-months moved to fit the "
                 f"store × division × month cap (largest {diff:.4f}); every revised store-department keeps its season total")
         else:
@@ -485,29 +474,12 @@ def verify(o, r, out, months, absorb=True):
     d = (out.groupby([STORE, DIV])[V].sum().reindex(a.index).fillna(0.0) - a).to_numpy()
     season, cells = int((np.abs(d.sum(1)) > 1e-6).sum()), int((np.abs(d) > 1e-6).sum())
     g0, g1 = float(o[V].to_numpy().sum()), float(out[V].to_numpy().sum())
-    if absorb:
-        add("Store × Division totals match — whole season", "ok" if season == 0 else "fail",
-            f"{season} of {len(a):,} store-divisions differ")
-        add("Store × Division × Month = original (the cap)", "ok" if cells == 0 else "fail",
-            f"{cells} of {d.size:,} store-division-months differ from the original file" +
-            ("" if cells == 0 else f" (largest {float(np.abs(d).max()):.4f}) - see the Store x Division x Month sheet of the comparison"))
-        add("Grand total unchanged", "ok" if abs(g1 - g0) < 1e-6 else "fail", f"{g0:,.2f} → {g1:,.2f}")
-    else:
-        k = [STORE, DEPT, MRP, DISP]
-        rev_sd = set(zip(r[STORE], r[DEPT]))
-        mine = pd.Series([(s, dp) in rev_sd for s, dp in zip(o[STORE], o[DEPT])], index=o.index)
-        a_rest = o[~mine].set_index(k)[V]
-        b_rest = out.set_index(k)[V].reindex(a_rest.index).fillna(0.0)
-        rd = float(np.abs(b_rest.to_numpy() - a_rest.to_numpy()).max()) if len(a_rest) else 0.0
-        add("Other departments untouched", "ok" if rd < 1e-9 else "fail", f"{len(a_rest):,} rows · largest change {rd:.2g}")
-        lv = [m + " Plan" for m in live]
-        sd_moved = int((np.abs(out_sd[lv].sum(axis=1) - orig_sd[lv].sum(axis=1)) > 1e-6).sum()) if lv else 0
-        add("Revised departments keep their season total", "ok" if sd_moved == 0 else "warn",
-            f"{sd_moved} of {len(keys):,} revised store-departments changed their season total"
-            + ("" if sd_moved == 0 else " - the revised file changes the total, not just the months"))
-        add("Store × Division month totals", "info",
-            f"{cells} of {d.size:,} store-division-months moved with the revised departments (other departments kept)")
-        add("Grand total", "ok" if abs(g1 - g0) < 1e-6 else "info", f"{g0:,.2f} → {g1:,.2f}")
+    add("Store × Division totals match — whole season", "ok" if season == 0 else "fail",
+        f"{season} of {len(a):,} store-divisions differ")
+    add("Store × Division × Month = original (the cap)", "ok" if cells == 0 else "fail",
+        f"{cells} of {d.size:,} store-division-months differ from the original file" +
+        ("" if cells == 0 else f" (largest {float(np.abs(d).max()):.4f}) - see the Store x Division x Month sheet of the comparison"))
+    add("Grand total unchanged", "ok" if abs(g1 - g0) < 1e-6 else "fail", f"{g0:,.2f} → {g1:,.2f}")
     if fz:
         cols = [m + " Plan" for m in fz] + [m + " Plan Qty" for m in fz]
         k = [STORE, DEPT, MRP, DISP]  # by key: a rebuilt empty store-dept can move rows around

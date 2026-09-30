@@ -99,26 +99,15 @@ assert np.isclose(out2[out2["Store Name"] == "S1"]["Jan'27 P1 Plan"].sum(), 70)
 assert {ch["name"]: ch["status"] for ch in verify(orig, rev, out2, M)[0]}["Locked months untouched (value and qty)"] == "ok"
 engine.LOCKED = None   # back to the default (Jan / Feb) for the rest of the checks
 
-# Method 2 option "other departments stay as they are" (absorb=False, 2026-09-29): only revised rows move
-out3, _, warn3, cmp3 = realign(orig, rev, M, absorb=False)
-g3 = lambda s, d, mrp, m: out3[(out3["Store Name"] == s) & (out3.DEPARTMENT == d) & (out3.MRP == mrp)][m + " Plan"].sum()
-for s_, d_, mrp_ in [("S1", "B", 299), ("S1", "C", 299), ("S1", "D", 299), ("S2", "B", 299)]:
-    for m_ in M:
-        o_ = orig[(orig["Store Name"] == s_) & (orig.DEPARTMENT == d_) & (orig.MRP == mrp_)][m_ + " Plan"].sum()
-        assert np.isclose(g3(s_, d_, mrp_, m_), o_), (s_, d_, m_)          # untouched, value for value
-assert np.isclose(g3("S1", "A", 299, "Sep'26"), 7.2) and np.isclose(g3("S2", "A", 299, "Sep'26"), 20)  # revised kept
-assert np.isclose(bucket_ := out3[out3["Store Name"] == "S1"]["Sep'26 Plan"].sum(), 70 + (12 + 3) - 10), bucket_  # moves by the change
-assert not any("excess" in w or "couldn't fully land" in w for w in warn3)
-assert set(cmp3["Status"]) == {"kept"}
-st3 = {ch["name"]: ch["status"] for ch in verify(orig, rev, out3, M, absorb=False)[0]}
-assert st3["Other departments untouched"] == "ok" and st3["Revised values kept exactly"] == "ok", st3
-assert st3["Revised departments keep their season total"] == "warn"   # this revised file changes totals, not only months
-assert st3["Store × Division month totals"] == "info" and "Store × Division totals match — whole season" not in st3
-# a pure re-phase (season total kept, months moved) passes the season-total check
+# a pure re-phase (D's season kept, months moved): D keeps its new months exactly and the other departments absorb it,
+# so every store x division x month stays on the original - the cap ("stay as they are" was removed, 2026-09-30)
 rephase = pd.DataFrame([{"Store Name": "S1", "DEPARTMENT": "D", "Sep'26": 20, "Nov'26": 60, "Jan'27 P1": 40}])
-out4, _, _, _ = realign(orig, rephase, M, absorb=False)
-st4 = {ch["name"]: ch["status"] for ch in verify(orig, rephase, out4, M, absorb=False)[0]}
-assert st4["Revised departments keep their season total"] == "ok" and st4["Other departments untouched"] == "ok", st4
+out4, _, _, _ = realign(orig, rephase, M)
+g4 = lambda s, d, m: out4[(out4["Store Name"] == s) & (out4.DEPARTMENT == d)][m + " Plan"].sum()
+assert np.isclose(g4("S1", "D", "Sep'26"), 20) and np.isclose(g4("S1", "D", "Nov'26"), 60)
+assert np.isclose(out4[out4["Store Name"] == "S1"]["Sep'26 Plan"].sum(), 70) and np.isclose(out4[out4["Store Name"] == "S1"]["Nov'26 Plan"].sum(), 80)
+st4 = {ch["name"]: ch["status"] for ch in verify(orig, rephase, out4, M)[0]}
+assert st4["Store × Division × Month = original (the cap)"] == "ok" and st4["Revised values kept exactly"] == "ok", st4
 
 # ------------------------------------------------------------------ method 1: store listing changes
 o1 = orig.assign(CLUSTER=orig["Store Name"].map({"S1": "X", "S2": "X", "S3": "Y"}), **{"REF Name": "R-" + orig["Store Name"]})
@@ -377,13 +366,16 @@ for bad in (lambda: importer.template_rephase(ro, RM, rly, "Z"), lambda: importe
         raise AssertionError("expected a ValueError")
     except ValueError:
         pass
-# the file reads back as a Method 2 upload and, with other departments kept, changes only A
+# the file reads back as a Method 2 upload and runs with every store x division x month on the original (the cap)
 rdf, rinfo, rrep = importer.read_table(engine.write_xlsx([("Revised plan", rv), ("How it was built", rh)]), "r.xlsx",
                                        importer.NEED_REVISED, "revised plan")
 rr, ruse, rsrc, rinfo, rrep = importer.prepare_revised(rdf, rinfo, rrep, ro, RM)
 assert rrep.ok, rrep.items
-rout = realign(ro, rr, RM, rsrc, absorb=False)[0]
-assert np.allclose(rout[ro.DEPARTMENT != "A"][[m + " Plan" for m in RM]], ro[ro.DEPARTMENT != "A"][[m + " Plan" for m in RM]])
+rout, _, rwarn, _ = realign(ro, rr, RM, rsrc)
+rsdm = engine.compare_levels(ro, rout, RM)[0].set_index("Store Name")
+assert (rsdm.loc[["S1", "S2"], "Within cap"] == "Yes").all()   # stores with another department to absorb: exactly on the cap
+# S3 / S4 / S5 plan only A in LADIES: nothing can absorb a re-phase there, so they are flagged, never hidden
+assert any("couldn't fully land" in w and "S3/LADIES" in w for w in rwarn), rwarn
 assert np.allclose(rout[rout["Store Name"] == "S1"].query("DEPARTMENT == 'A'")[["Sep'26 Plan", "Oct'26 Plan", "Nov'26 Plan"]], [[2, 6, 0]])
 
 # store overrides: REF OLD (before the cluster) and a fixed month mix (any scale, rescaled to 100%)
