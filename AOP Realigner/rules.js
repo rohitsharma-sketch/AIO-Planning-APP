@@ -1,4 +1,4 @@
-// AOP Re-Aligner - the rules in force and the latest rule change, shown by the "Rules" button in the top bar.
+// Sales Plan Re-Aligner - the rules in force and the latest rule change, shown by the "Rules" button in the top bar.
 // The rules themselves are coded in engine.py and importer.py. Only the current rules are kept (user, 2026-09-26:
 // no version numbers, no history): when one changes, update RULES_NOW to match and replace RULES_LATEST.
 const RULES_NOW = [

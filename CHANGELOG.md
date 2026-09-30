@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### AOP Re-Aligner is now "Sales Plan Re-Aligner"
+- **Asked (user):** "Rename AOP Re-Aligner to Sales Plan Re-Aligner everywhere".
+- **Renamed:** the Landing card and launcher name, the app's page title and heading, the Rules panel, code headers and the re-phase rule document.
+- **Kept, so nothing breaks:** the folder `AOP Realigner/` (the launcher, sync jobs and docs point at it) and the web address `/realigner/`, so bookmarks still work. Older entries below keep the name they had at the time.
+
 ### Users & access: admins can "Sign in as" someone
 - **Asked (user):** "yes, build the sign in as option". Showing people's permanent passwords isn't possible: only a bcrypt hash is stored, and it can't be reversed. Storing passwords readably was declined for security.
 - **What:** a **Sign in as** link next to Rename, for active non-admin accounts other than yourself. It opens the suite as that person without their password. `POST /api/auth/admin/sign-in-as/{id}` (admin only) swaps the session to that person with `signed_in_by` {admin id, current name} and `must_change_password` off, so the admin isn't forced to choose the person's password.

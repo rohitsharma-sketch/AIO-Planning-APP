@@ -1,4 +1,4 @@
-"""AOP Realigner engine - pure functions, no I/O.
+"""Sales Plan Re-Aligner engine - pure functions, no I/O.
 
 Original plan: Store x Department x MRP x Display Type rows, "<Month> Plan" value + "<Month> Plan Qty".
 Revised plan:  Store x Department values per month (only the departments the buyer changed).

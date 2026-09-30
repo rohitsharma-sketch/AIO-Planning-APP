@@ -1,4 +1,4 @@
-"""AOP Realigner - web app.  python server.py  ->  http://localhost:8070
+"""Sales Plan Re-Aligner - web app.  python server.py  ->  http://localhost:8070
 
 Every slow thing (reading a workbook, realigning, building an export) runs as a background job made of
 timed steps; GET /api/state shows them live with an ETA learned from previous runs, and finished jobs go
@@ -795,5 +795,5 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print(f"AOP Re-Aligner on http://localhost:{PORT}")
+    print(f"Sales Plan Re-Aligner on http://localhost:{PORT}")
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()   # loopback only - via Landing /realigner/

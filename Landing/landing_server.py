@@ -11,7 +11,7 @@ rule; every sub-app port (5050, 8000, 8010, 8060, 8070, 8123) is loopback-only.
 Proxy routing (first match wins):
   /buyer/*                       → http://127.0.0.1:5050  (BIS, prefix stripped)
   /nso/*                         → http://127.0.0.1:8060  (NSO Plan Distributor, prefix stripped)
-  /realigner/*                   → http://127.0.0.1:8070  (AOP Realigner, prefix stripped)
+  /realigner/*                   → http://127.0.0.1:8070  (Sales Plan Re-Aligner, prefix stripped)
   /listing/*                     → http://127.0.0.1:8123  (Listing / Delisting Analyser, prefix stripped)
   /api/otb/*, /api/status,
     /api/config/aop-div-targets  → http://127.0.0.1:5050  (BIS API, same path)
@@ -64,7 +64,7 @@ APPS = [
      "cmd": [sys.executable, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", "8010"],
      "cwd": os.path.join(_REPO_ROOT, "RS Planning Platform", "backend")},
     # Linked directly (not proxied): its xlsx export outruns the 60s proxy timeout.
-    {"name": "AOP Re-Aligner", "port": 8070,
+    {"name": "Sales Plan Re-Aligner", "port": 8070,
      "cmd": [sys.executable, "server.py"],
      "cwd": os.path.join(_REPO_ROOT, "AOP Realigner")},
     # Additional app (joined 2026-09-26): static site over its app/*.json, rebuilt by the

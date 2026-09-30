@@ -7,7 +7,7 @@ the rules below are written generically so any department / window can be re-pha
 > **The rules in force are §0 below** (made generic 30 Sep 2026, on the user's ask: "a generic planning tool and not a
 > biased working ... made for one time purpose"). §1–§8 are how they were found in, and proved against, that workbook.
 
-## 0. The generic rules in force (AOP Re-Aligner, Method 2 → Re-phase from LY)
+## 0. The generic rules in force (Sales Plan Re-Aligner, Method 2 → Re-phase from LY)
 
 | # | Rule |
 |---|---|
@@ -107,7 +107,7 @@ without renormalising) or averaging over all planned months including Jan / Feb 
 2,896 row-months).
 
 **R9 — Quantity.** `Qty = Value / ASP`, with ASP = the old plan's value ÷ qty for the same
-Store × Dept × MRP × Display × Month; if that month had no old qty, the row's all-month ASP (the AOP Re-Aligner's
+Store × Dept × MRP × Display × Month; if that month had no old qty, the row's all-month ASP (the Sales Plan Re-Aligner's
 existing rule). The workbook's "Post … Qty" columns are still empty (see finding 3).
 
 **R10 — Write-back key.** Join on `Store & Dept & MRP & Display` (the workbook's CONC-UDF key). Only D's rows are
@@ -140,13 +140,13 @@ replaced (`IF(DEPARTMENT = D, new, old)`).
 
 ## 6. Where it fits in the suite
 
-This is a **month re-phase** of an existing plan with store totals fixed — close to the AOP Re-Aligner's
+This is a **month re-phase** of an existing plan with store totals fixed — close to the Sales Plan Re-Aligner's
 "Existing department changes" method, but driven by a seasonality source instead of a revised file. It can be added
 as a Re-Aligner method: inputs = the loaded original plan, D, M, W, locked months (the Re-Aligner's month locks),
 the store master (SSG tag, REF, REF OLD, opening dates) and LY sales from the sales engine; output = the realigned
 plan with checks C1–C6.
 
-## 7. Tested against the AOP Re-Aligner, Method 2 (29 Sep 2026)
+## 7. Tested against the Sales Plan Re-Aligner, Method 2 (29 Sep 2026)
 
 The workbook's new LW_U_T-TOP store months (`Base - Dep` "New" columns) were fed to Method 2 ("Existing department
 changes") as the revised file, with the original = the file's 8th Aug LADIES plan (220,584 rows, 52 departments).
@@ -166,7 +166,7 @@ Improvements made to Method 2 from this test:
 - The "locked month was ignored" warning now counts only locked months that the revised file actually contains (it
   used to fire 6,864 times when the file had no Jan / Feb columns).
 
-## 8. Re-phase from LY generator (AOP Re-Aligner, Method 2 — built 30 Sep 2026)
+## 8. Re-phase from LY generator (Sales Plan Re-Aligner, Method 2 — built 30 Sep 2026)
 
 Step 2 of Method 2 → pick the department, optionally the **LY shape** department (any department with last-year sales,
 e.g. the proxy LW_U_T-TOP F/S — it need not be in the plan), → **Re-phase from LY**. It downloads a Method 2 file
