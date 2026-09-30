@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### Sign in with your username or your email
+- **Asked (user):** "can we enable an option for either using an email sign in or the username sign in, like you can sign in either with your email or username ?".
+- **Login** (`auth/routes.py login`): tries the username first. If there's no match and the entry contains "@", it tries the email on file, ignoring capitals, but only when exactly one active account has that email. The login page label now says "Username or email".
+- **One email per person:** adding a person, changing an email on the Users page, and setting your own email at change-password now refuse an email another account already has (`email_taken`, 409). Checked on 30 Sep: 4 accounts, 4 emails, none shared.
+- **Checked live:** the admin's email in capitals with a wrong password reached the password check (0.39 s, bcrypt ran); an unknown email was refused at once (0.005 s). No real password was used.
+
 ### AOP Re-Aligner is now "Sales Plan Re-Aligner"
 - **Asked (user):** "Rename AOP Re-Aligner to Sales Plan Re-Aligner everywhere".
 - **Renamed:** the Landing card and launcher name, the app's page title and heading, the Rules panel, code headers and the re-phase rule document.

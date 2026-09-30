@@ -18,10 +18,14 @@ router = APIRouter()
 
 @router.post("/login")
 def login(request: Request, response: Response, body: dict = Body(...)):
-    username, password = body.get("username", ""), body.get("password", "")
+    username, password = (body.get("username") or "").strip(), body.get("password", "")
     session = SessionLocal()
     try:
         user = session.execute(select(User).where(User.username == username, User.is_active.is_(True))).scalar_one_or_none()
+        if user is None and "@" in username:   # sign in with the email on file too (2026-09-30) - only if it's one account's
+            hits = session.execute(select(User).where(func.lower(User.email) == username.lower(),
+                                                      User.is_active.is_(True))).scalars().all()
+            user = hits[0] if len(hits) == 1 else None
         if user is None or not verify_password(password, user.password_hash):
             raise HTTPException(401, "Invalid credentials")
         request.session["user"] = {
@@ -118,6 +122,8 @@ def change_password(request: Request, body: dict = Body(...), user: dict = Depen
         # already-set email from a prior visit isn't cleared by leaving this
         # field blank on a later, voluntary password change).
         if email:
+            if email_taken(session, email, u.id):
+                raise HTTPException(409, "Another account already has this email - use your own.")
             u.email = email
         session.commit()
         request.session["user"] = {
@@ -242,6 +248,8 @@ def create_user(body: dict = Body(...), _admin: dict = Depends(require_admin)):
     try:
         if session.execute(select(User).where(User.username == username)).scalar_one_or_none():
             raise HTTPException(409, "Username already exists")
+        if email_taken(session, body.get("email")):
+            raise HTTPException(409, "Another account already has this email - each person needs their own.")
         # Admin-issued accounts start with a password the admin themselves
         # chose (so it's necessarily "known"/shared, unlike a self-service
         # signup) - default True so the new owner is forced to pick their
@@ -273,6 +281,16 @@ def admin_change_refusal(me_id, target_id, target_is_admin, target_is_active, bo
 def email_status(_admin: dict = Depends(require_admin)):
     """Whether forgot-password emails can be sent (SMTP settings present) - never the settings themselves."""
     return {"configured": smtp_configured()}
+
+
+def email_taken(session, email, except_id=None):
+    """Another account already has this email (ignoring case)? Emails are a sign-in name too, so one per person."""
+    if not email:
+        return False
+    q = select(User.id).where(func.lower(User.email) == email.strip().lower())
+    if except_id is not None:
+        q = q.where(User.id != except_id)
+    return session.execute(q).first() is not None
 
 
 def username_refusal(new, taken):
@@ -311,7 +329,9 @@ def update_user(user_id: str, request: Request, body: dict = Body(...), _admin: 
                 raise HTTPException(422, refusal)
             user.username = new
         if "email" in body:
-            user.email = body["email"] or None
+            if email_taken(session, body["email"], user.id):
+                raise HTTPException(409, "Another account already has this email - each person needs their own.")
+            user.email = (body["email"] or "").strip() or None
         if "role" in body:
             if body["role"] not in ROLES:
                 raise HTTPException(422, f"role must be one of {ROLES}")
