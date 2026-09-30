@@ -7,9 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
-### Sales Plan Division Plan: summary cards in ₹ Cr
+### Sales Plan Division Plan: shown in ₹ Cr
 - **Asked (user):** "Can we have this in Cr ?" (the LY Base / Plan MAMJ cards).
-- The cards now read ₹ 388.83 Cr and ₹ 431.85 Cr (1 Cr = 100 L, 2 decimals); hovering shows the exact lakhs. The tables, the comparison card and the CSV stay in ₹ L.
+- The cards now read ₹ 388.83 Cr and ₹ 431.85 Cr (1 Cr = 100 L, 2 decimals); hovering shows the exact lakhs.
+- **Then (user):** "yes, show the tables in Cr too". The Division Plan table, the comparison card, the chart cards, the chart axes and the tooltips are now in ₹ Cr, and hovering a cell still shows the exact lakhs. The CSV export stays in lakhs, so its figures stay exact.
 
 ### Sales Plan Division Plan: "Compare with" another AOP version
 - **Asked (user):** "where is the version selector here ?" then "yes, add the comparison dropdown". The old selector was removed on 29 Sep (`de37c48`) when the page was set to follow the BIS plan.

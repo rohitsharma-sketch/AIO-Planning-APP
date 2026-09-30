@@ -108,9 +108,9 @@ export default function DivisionPlan() {
                 <thead>
                   <tr style={{ background: theme.surfaceAlt }}>
                     <th style={th}>Division</th>
-                    {cfg.divisions[0]?.months.map(m => <th key={m.month} style={th}>{m.month} LY / Plan (₹ L)</th>)}
-                    <th style={th}>LY Base MAMJ (₹ L)</th>
-                    <th style={th}>Plan MAMJ (₹ L)</th>
+                    {cfg.divisions[0]?.months.map(m => <th key={m.month} style={th}>{m.month} LY / Plan (₹ Cr)</th>)}
+                    <th style={th}>LY Base MAMJ (₹ Cr)</th>
+                    <th style={th}>Plan MAMJ (₹ Cr)</th>
                     <th style={th}>Growth %</th>
                   </tr>
                 </thead>
@@ -120,11 +120,11 @@ export default function DivisionPlan() {
                       <td style={{ ...td, fontWeight: 600, color: theme.textPrimary }}>{d.division_name}</td>
                       {d.months.map(m => (
                         <td key={m.month} style={td} title={`${m.month}: LY ₹ ${L(m.ly)} L → plan ₹ ${L(m.plan)} L (${pct(m.growth_pct)})`}>
-                          <span style={{ color: theme.textMuted }}>{L(m.ly)}</span> / <strong style={{ color: theme.primary }}>{L(m.plan)}</strong>
+                          <span style={{ color: theme.textMuted }}>{Cr(m.ly)}</span> / <strong style={{ color: theme.primary }}>{Cr(m.plan)}</strong>
                         </td>
                       ))}
-                      <td style={td}>{L(d.ly_mamj)}</td>
-                      <td style={{ ...td, color: theme.primary, fontWeight: 700 }}>{L(d.plan_mamj)}</td>
+                      <td style={td}>{Cr(d.ly_mamj)}</td>
+                      <td style={{ ...td, color: theme.primary, fontWeight: 700 }}>{Cr(d.plan_mamj)}</td>
                       <td style={td}>
                         <span style={{ background: theme.accentLight, color: theme.accent, borderRadius: 5, padding: '2px 7px', fontWeight: 600, fontSize: 12 }}>
                           {pct(d.growth_pct)}
@@ -142,14 +142,14 @@ export default function DivisionPlan() {
             const diff = (a, b) => a - b
             const dpct = (a, b) => b ? (a / b - 1) * 100 : null
             const col = v => v > 0.005 ? theme.accent : v < -0.005 ? theme.danger : theme.textMuted
-            const sign = v => `${v > 0 ? '+' : ''}${L(v)}`
+            const sign = v => `${v > 0 ? '+' : ''}${Cr(v)}`
             const rows = cmp.divisions.map(d => ({ d, b: bis[d.division_name] }))
             const tot = rows.reduce((t, { d, b }) => ({ v: t.v + d.plan_mamj, b: t.b + (b?.plan_mamj || 0), ly: t.ly + (b?.ly_mamj || 0) }), { v: 0, b: 0, ly: 0 })
             return (
               <div style={{ ...card, marginBottom: 24, overflow: 'hidden', borderColor: theme.primary }}>
                 <div style={{ padding: '14px 20px', borderBottom: `1px solid ${theme.border}`, fontSize: 14, fontWeight: 600, color: theme.textPrimary, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'baseline' }}>
                   <span>Comparison: {cmp.version_label} vs the BIS plan ({cfg.version_label})</span>
-                  <span style={{ fontSize: 12, fontWeight: 400, color: theme.textMuted }}>view only · plan ₹ L, difference = {cmp.version_label.split(' — ')[0]} − BIS plan · growth on this page's LY base</span>
+                  <span style={{ fontSize: 12, fontWeight: 400, color: theme.textMuted }}>view only · ₹ Cr, difference = {cmp.version_label.split(' — ')[0]} − BIS plan · growth on this page's LY base</span>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -171,12 +171,12 @@ export default function DivisionPlan() {
                             const bp = b?.months[i]?.plan || 0, dv = diff(m.plan, bp)
                             return (
                               <td key={m.month} style={td} title={`${m.month}: ${cmp.version_label} ₹ ${L(m.plan)} L vs BIS plan ₹ ${L(bp)} L (${pct(dpct(m.plan, bp))})`}>
-                                <strong style={{ color: theme.textPrimary }}>{L(m.plan)}</strong> <span style={{ color: col(dv), fontSize: 12 }}>{sign(dv)}</span>
+                                <strong style={{ color: theme.textPrimary }}>{Cr(m.plan)}</strong> <span style={{ color: col(dv), fontSize: 12 }}>{sign(dv)}</span>
                               </td>
                             )
                           })}
-                          <td style={{ ...td, fontWeight: 700 }}>{L(d.plan_mamj)}</td>
-                          <td style={{ ...td, color: theme.primary }}>{L(b?.plan_mamj)}</td>
+                          <td style={{ ...td, fontWeight: 700 }}>{Cr(d.plan_mamj)}</td>
+                          <td style={{ ...td, color: theme.primary }}>{Cr(b?.plan_mamj)}</td>
                           <td style={{ ...td, color: col(diff(d.plan_mamj, b?.plan_mamj || 0)), fontWeight: 600 }}>{sign(diff(d.plan_mamj, b?.plan_mamj || 0))} <span style={{ fontSize: 12 }}>({pct(dpct(d.plan_mamj, b?.plan_mamj))})</span></td>
                           <td style={td}>{pct(dpct(d.plan_mamj, b?.ly_mamj))}</td>
                         </tr>
@@ -184,8 +184,8 @@ export default function DivisionPlan() {
                       <tr style={{ borderTop: `1px solid ${theme.border}`, fontWeight: 700 }}>
                         <td style={td}>Total</td>
                         {cmp.divisions[0]?.months.map(m => <td key={m.month} style={td}></td>)}
-                        <td style={td}>{L(tot.v)}</td>
-                        <td style={{ ...td, color: theme.primary }}>{L(tot.b)}</td>
+                        <td style={td}>{Cr(tot.v)}</td>
+                        <td style={{ ...td, color: theme.primary }}>{Cr(tot.b)}</td>
                         <td style={{ ...td, color: col(tot.v - tot.b) }}>{sign(tot.v - tot.b)} <span style={{ fontSize: 12 }}>({pct(dpct(tot.v, tot.b))})</span></td>
                         <td style={td}>{pct(dpct(tot.v, tot.ly))}</td>
                       </tr>
@@ -203,14 +203,14 @@ export default function DivisionPlan() {
               <div key={d.division_name} style={{ ...card, padding: '16px 18px' }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: theme.textPrimary, marginBottom: 4 }}>{d.division_name}</div>
                 <div style={{ fontSize: 12, color: theme.textSecondary, marginBottom: 14 }}>
-                  Plan MAMJ: <strong>₹ {L(d.plan_mamj)} L</strong> · {pct(d.growth_pct)} on LY ₹ {L(d.ly_mamj)} L
+                  Plan MAMJ: <strong>₹ {Cr(d.plan_mamj)} Cr</strong> · {pct(d.growth_pct)} on LY ₹ {Cr(d.ly_mamj)} Cr
                 </div>
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={d.months} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={theme.border} />
                     <XAxis dataKey="month" tick={{ fontSize: 11, fill: theme.textSecondary }} />
-                    <YAxis tick={{ fontSize: 11, fill: theme.textSecondary }} />
-                    <Tooltip formatter={(v, n) => [`₹ ${L(v)} L`, n]}
+                    <YAxis tick={{ fontSize: 11, fill: theme.textSecondary }} tickFormatter={v => (v / 100).toLocaleString('en-IN', { maximumFractionDigits: 0 })} />
+                    <Tooltip formatter={(v, n) => [`₹ ${Cr(v)} Cr`, n]}
                       contentStyle={{ fontSize: 12, borderRadius: 6, border: `1px solid ${theme.border}` }} />
                     <Legend wrapperStyle={{ fontSize: 12 }} />
                     <Bar dataKey="ly" name="LY" fill={theme.textMuted} fillOpacity={0.45} radius={[3, 3, 0, 0]} />
