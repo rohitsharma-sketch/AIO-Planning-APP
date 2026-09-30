@@ -20,6 +20,7 @@ const th = {
 }
 const td = { padding: '9px 14px', fontVariantNumeric: 'tabular-nums' }
 const L = v => (v ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })
+const Cr = v => ((v ?? 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })   // ₹ lakhs -> crores
 const pct = v => v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
 
 export default function DivisionPlan() {
@@ -87,11 +88,11 @@ export default function DivisionPlan() {
 
           <div style={{ display: 'flex', gap: 16, marginBottom: 22 }}>
             {[
-              { label: 'LY Base MAMJ', value: `₹ ${L(cfg.total_ly)} L`, color: theme.textPrimary },
-              { label: 'Plan MAMJ', value: `₹ ${L(cfg.total_plan)} L`, color: theme.primary },
+              { label: 'LY Base MAMJ', value: `₹ ${Cr(cfg.total_ly)} Cr`, title: `₹ ${L(cfg.total_ly)} L`, color: theme.textPrimary },
+              { label: 'Plan MAMJ', value: `₹ ${Cr(cfg.total_plan)} Cr`, title: `₹ ${L(cfg.total_plan)} L`, color: theme.primary },
               { label: 'Plan Growth', value: pct(totalGrowth), color: theme.accent },
             ].map(c => (
-              <div key={c.label} style={{ ...card, flex: 1, padding: '18px 22px' }}>
+              <div key={c.label} title={c.title} style={{ ...card, flex: 1, padding: '18px 22px' }}>
                 <div style={{ fontSize: 12, color: theme.textMuted, fontWeight: 600, letterSpacing: 0.5, marginBottom: 6 }}>{c.label.toUpperCase()}</div>
                 <div style={{ fontSize: 26, fontWeight: 700, color: c.color }}>{c.value}</div>
               </div>

@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### Sales Plan Division Plan: summary cards in ₹ Cr
+- **Asked (user):** "Can we have this in Cr ?" (the LY Base / Plan MAMJ cards).
+- The cards now read ₹ 388.83 Cr and ₹ 431.85 Cr (1 Cr = 100 L, 2 decimals); hovering shows the exact lakhs. The tables, the comparison card and the CSV stay in ₹ L.
+
 ### Sales Plan Division Plan: "Compare with" another AOP version
 - **Asked (user):** "where is the version selector here ?" then "yes, add the comparison dropdown". The old selector was removed on 29 Sep (`de37c48`) when the page was set to follow the BIS plan.
 - **What:** a **Compare with** dropdown lists every other saved AOP version (its latest publish). Picking one adds a card showing that version's Mar'27–Jun'27 plan per division and month, the difference from the BIS plan (₹ L and %), and its growth on this page's LY base. It is view only and changes nothing; the plan still comes from BIS.
