@@ -1069,6 +1069,15 @@
 <script>/* Users & access link - shown to admins only (2026-09-30) */
 fetch('/api/auth/me', {credentials: 'include', cache: 'no-store'}).then(r => r.ok ? r.json() : null)
   .then(u => { if (u && u.is_admin) document.getElementById('admin-link').style.display = 'inline-flex'; }).catch(() => {});
+/* Actions an admin switched off for this person (Users & access > Access to important actions): grey the button out.
+   Landing's server refuses them anyway - this just says so up front. */
+fetch('/api/auth/rights', {credentials: 'include', cache: 'no-store'}).then(r => r.ok ? r.json() : null).then(d => {
+  if (!d) return;
+  [['launch-all-btn', 'servers'], ['sync-now-btn', 'data_sync']].forEach(([id, k]) => {
+    const b = document.getElementById(id);
+    if (b && !d.rights.includes(k)) { b.disabled = true; b.style.opacity = '.45'; b.title = 'An admin has switched this off for you: ' + d.labels[k]; }
+  });
+}).catch(() => {});
 </script>
 </body>
 </html>

@@ -7,6 +7,15 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### Users & access: switch off important actions per person
+- **Asked (user):** "give me a revoke access panel for admin for different rights like server action button and other important features".
+- **Panel:** a new "Access to important actions" card on `/auth/users`, with one tick box per action for each person. Unticking switches the action off at once. Everyone has every action until an admin unticks it, admins always keep all of them, and switched-off accounts have none.
+- **The six actions:** start / stop all servers (Master Switch); sync the data lake (Landing Sync now, AOP Sync into database); promote AOP to Planning or unlock it; Calendar Run Reindex; Re-Aligner Run and Re-phase & run; change the suite colour theme.
+- **Enforced in Landing** (`landing_server.py` `GUARDED`), the one door to every app. Before a guarded request, Landing asks 8010 `GET /api/auth/rights`, which reads admin and active status fresh from the database, not the session, and returns 403 "An admin has switched off your access to: …" when the right is gone. If the check can't be made, the action is refused. Landing also greys out the Master Switch and Sync now for people without them.
+- **Storage:** `RS Planning Platform/backend/data/user_rights.json`, shaped {user id: [revoked rights]}. It is local and git-ignored, and no database change was needed. API: `GET /api/auth/admin/rights`, `PUT /api/auth/admin/rights/{id}` {revoked}.
+- **Left out on purpose:** the BIS sales / sell-through / history syncs. BIS calls them itself when it loads, so blocking them would break BIS for that person.
+- **Tests:** `tests/test_rights.py`, `Landing/test_rights_guard.py`. Checked live: switching one action off for Planning01 applied at once (5 of 6); the admin's guarded request passed Landing; it was given back.
+
 ### Users & access: rename a username
 - **Asked (user):** "i need a username rename option here".
 - **What:** a **Rename** link under each name in the USER column of `/auth/users` (kept there so it stays visible when the table scrolls sideways on a narrow screen) changes the name the person signs in with. The server refuses a blank name, one over 64 characters, or one another account already has (ignoring case, so "Admin" and "admin" can't both exist). Renaming yourself updates your own session at once; anyone else sees the new name the next time they sign in.

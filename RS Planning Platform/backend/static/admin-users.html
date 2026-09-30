@@ -82,7 +82,12 @@
   dialog h2 { margin-bottom: 6px; }
   dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
   .denied { text-align: center; padding: 48px 20px; }
-  @media (max-width: 640px) { .topbar { padding: 10px 16px; } .brand-sub, .who { display: none; } main { padding: 20px 16px 48px; } }
+  .rrow { display: grid; grid-template-columns: 170px 1fr; gap: 6px 16px; padding: 11px 0; border-bottom: 1px solid var(--border); align-items: start; }
+  .rrow:last-child { border-bottom: none; }
+  .rrow .chips { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+  .rrow .note { font-size: 13px; color: var(--muted); }
+  label.chk.revoked { color: var(--red); text-decoration: line-through; }
+  @media (max-width: 640px) { .rrow { grid-template-columns: 1fr; } .topbar { padding: 10px 16px; } .brand-sub, .who { display: none; } main { padding: 20px 16px 48px; } }
 </style>
 </head>
 <body>
@@ -119,6 +124,13 @@
         </table>
       </div>
       <div class="msg" id="table-msg" role="status"></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-rights">
+      <h2 id="h-rights">Access to important actions</h2>
+      <p class="desc">Untick an action to switch it off for that person - it applies straight away, and they see a message saying an admin switched it off if they try. Everyone has every action until you untick it. Admins always keep all of them.</p>
+      <div id="rights"><p class="desc">Loading…</p></div>
+      <div class="msg" id="rights-msg" role="status"></div>
     </section>
 
     <section class="card" aria-labelledby="h-add">
@@ -168,7 +180,7 @@
 const ROLES = ['planner', 'buyer', 'reviewer', 'approver'];
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
-let me = null, users = [], pwTarget = null;
+let me = null, users = [], pwTarget = null, rights = {labels: {}, revoked: {}};
 
 async function api(path, opts = {}) {
   const r = await fetch('/api/auth' + path, {credentials: 'same-origin', ...opts,
@@ -204,12 +216,38 @@ function render() {
       <td><button class="btn small" data-act="pw">Set password</button></td>
     </tr>`;
   }).join('') || '<tr><td colspan="7">No accounts yet.</td></tr>';
+  renderRights();
 }
 
 async function load() {
-  users = await api('/admin/users');
+  [users, rights] = await Promise.all([api('/admin/users'), api('/admin/rights')]);
   render();
 }
+
+function renderRights() {
+  const keys = Object.keys(rights.labels);
+  const sorted = [...users].sort((a, b) => (b.is_active - a.is_active) || a.username.localeCompare(b.username));
+  $('#rights').innerHTML = sorted.map(u => {
+    const off = rights.revoked[u.id] || [];
+    const body = u.is_admin ? '<span class="note">Admin - always has every action.</span>'
+      : !u.is_active ? '<span class="note">Switched off - cannot sign in, so has none of these.</span>'
+      : `<div class="chips">${keys.map(k => `<label class="chk ${off.includes(k) ? 'revoked' : ''}"><input type="checkbox" data-right="${k}" ${off.includes(k) ? '' : 'checked'}> ${esc(rights.labels[k])}</label>`).join('')}</div>`;
+    return `<div class="rrow" data-id="${esc(u.id)}"><div><span class="uname">${esc(u.username)}</span>${off.length && !u.is_admin ? `<br><span class="badge amber">${off.length} switched off</span>` : ''}</div>${body}</div>`;
+  }).join('') || '<p class="desc">No accounts yet.</p>';
+}
+
+$('#rights').addEventListener('change', async e => {
+  const k = e.target.dataset.right, row = e.target.closest('.rrow');
+  if (!k || !row) return;
+  const u = users.find(x => x.id === row.dataset.id), msg = $('#rights-msg');
+  const revoked = [...row.querySelectorAll('input[data-right]')].filter(i => !i.checked).map(i => i.dataset.right);
+  try {
+    const r = await api(`/admin/rights/${u.id}`, {method: 'PUT', body: JSON.stringify({revoked})});
+    rights.revoked[u.id] = r.revoked;
+    say(msg, `${e.target.checked ? 'Gave back' : 'Switched off'} "${rights.labels[k]}" for ${u.username}.`, true);
+  } catch (err) { say(msg, err.message); }
+  renderRights();
+});
 
 async function save(id, patch, label) {
   const msg = $('#table-msg');

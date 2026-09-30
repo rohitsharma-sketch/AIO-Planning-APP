@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 
 from auth.deps import REMEMBER_COOKIE, require_admin, require_login
 from auth.email import send_reset_email, smtp_configured
+from auth.rights import RIGHTS, load_revoked, rights_for, save_revoked
 from auth.security import REMEMBER_MAX_AGE, hash_password, make_remember_token, make_reset_token, read_reset_token, verify_password
 from db.base import SessionLocal
 from db.models.auth import ROLES, User
@@ -128,6 +129,27 @@ def change_password(request: Request, body: dict = Body(...), user: dict = Depen
 @router.get("/me")
 def me(user: dict = Depends(require_login)):
     return user
+
+
+@router.get("/rights")
+def my_rights(user: dict = Depends(require_login)):
+    """The signed-in person's rights right now (Landing checks this before a guarded action) + what each means."""
+    return {"rights": rights_for(user["id"]), "labels": RIGHTS}
+
+
+@router.get("/admin/rights")
+def all_rights(_admin: dict = Depends(require_admin)):
+    return {"labels": RIGHTS, "revoked": load_revoked()}
+
+
+@router.put("/admin/rights/{user_id}")
+def set_rights(user_id: str, body: dict = Body(...), _admin: dict = Depends(require_admin)):
+    """body {"revoked": [right, ...]} - the rights this person no longer has (empty list = everything back)."""
+    try:
+        uid = str(uuid.UUID(user_id))
+        return {"revoked": save_revoked(uid, body.get("revoked") or [])}
+    except ValueError as e:
+        raise HTTPException(422, str(e))
 
 
 @router.post("/admin/users")

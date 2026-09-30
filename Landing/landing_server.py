@@ -24,6 +24,7 @@ Proxy routing (first match wins):
 """
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -394,11 +395,49 @@ class Handler(SimpleHTTPRequestHandler):
         else:
             super().do_GET()
 
+    # Actions an admin can switch off per person (Users & access > Rights; RS Planning Platform auth/rights.py).
+    # (method, path regex, right). Landing is the one door to every app, so this is where they're enforced.
+    GUARDED = [
+        ("POST", re.compile(r"^/api/(launch|shutdown)-all$"), "servers"),
+        ("POST", re.compile(r"/config/db-sync$"), "data_sync"),
+        ("POST", re.compile(r"/api/(promote-aop-targets|unlock-aop-targets|promote-aop-version/)"), "aop_publish"),
+        ("POST", re.compile(r"^/api/calendar/salesdata/reindex(/start)?$"), "calendar_reindex"),
+        ("POST", re.compile(r"^/realigner/api/(run|rephase)$"), "realigner_run"),
+        ("POST", re.compile(r"^/api/suite-theme$"), "suite_theme"),
+    ]
+
+    def _right_refusal(self):
+        """403 text when this request is a guarded action the signed-in person has had switched off, else None.
+        Asks 8010 fresh each time (these are rare, deliberate clicks), so a revoke applies at once."""
+        path = self.path.split('?')[0]
+        need = next((r for m, rx, r in self.GUARDED if m == self.command and rx.search(path)), None)
+        if need is None:
+            return None
+        try:
+            req = urllib.request.Request('http://127.0.0.1:8010/api/auth/rights')
+            req.add_header('Cookie', self.headers.get('Cookie', ''))
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                got = json.load(resp)
+        except Exception:  # noqa: BLE001 - platform down / not signed in: refuse rather than let it through
+            return "Couldn't check your access right now - try again in a minute."
+        if need in got.get("rights", []):
+            return None
+        return f"An admin has switched off your access to: {got.get('labels', {}).get(need, need)}."
+
     def _auth_guard_api(self):
         """For mutating API routes: return 401 JSON if not authenticated."""
         if self._requires_auth() and not self._is_authenticated():
             body = json.dumps({"detail": "Not authenticated"}).encode()
             self.send_response(401)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            SimpleHTTPRequestHandler.end_headers(self)
+            self.wfile.write(body)
+            return True
+        refusal = self._right_refusal()
+        if refusal:
+            body = json.dumps({"detail": refusal, "error": refusal}).encode()
+            self.send_response(403)
             self.send_header('Content-Type', 'application/json')
             self.send_header('Content-Length', str(len(body)))
             SimpleHTTPRequestHandler.end_headers(self)
