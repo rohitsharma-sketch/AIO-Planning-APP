@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### Users & access: rename a username
+- **Asked (user):** "i need a username rename option here".
+- **What:** a **Rename** button on each row of `/auth/users` changes the name the person signs in with. The server refuses a blank name, one over 64 characters, or one another account already has (ignoring case, so "Admin" and "admin" can't both exist). Renaming yourself updates your own session at once; anyone else sees the new name the next time they sign in.
+- **Re-Aligner:** workspaces are now kept by account id, not username, so a renamed person keeps their plan, locks, overrides and history. Folders named by username before this change move to the id folder on that person's next visit.
+- **Files:** `RS Planning Platform/backend/auth/routes.py` (`username_refusal`, PATCH accepts `username`), `static/admin-users.html`, `tests/test_admin_guard.py`; `AOP Realigner/server.py` (`who` returns (id, username), `Workspace(key, name)`), `test_workspaces.py`.
+
 ### AOP Re-Aligner: every signed-in user has their own copy
 - **Asked (user):** "make it so each user gets their own copy".
 - **How it works:** each request is tied to the RS Planning user signed in through Landing. The Re-Aligner asks the platform (`/api/auth/me`) who the forwarded session cookie belongs to, and caches the answer for a minute.

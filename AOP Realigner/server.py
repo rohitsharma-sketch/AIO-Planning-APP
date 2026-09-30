@@ -304,8 +304,11 @@ def _safe(name):
 class Workspace:
     """One user's own Re-Aligner: plan, locks, overrides, revised file, result, exports, jobs and history."""
 
-    def __init__(self, name):
-        self.name, self.dir = name, os.path.join(USERS_DIR, _safe(name))
+    def __init__(self, key, name=None):
+        self.name, self.dir = name or key, os.path.join(USERS_DIR, _safe(key))
+        old = os.path.join(USERS_DIR, _safe(self.name))   # folders were named by username before 30 Sep: keep that work
+        if not os.path.isdir(self.dir) and old != self.dir and os.path.isdir(old):
+            os.rename(old, self.dir)
         if not os.path.isdir(self.dir):          # first visit: start from a copy of the setup at the time
             os.makedirs(self.dir)
             for f in (ORIG_PKL, LOCKS_JSON, REPHASE_OV_JSON):
@@ -356,19 +359,22 @@ _spaces, _spaces_lock, _who = {}, threading.Lock(), {}
 
 
 def who(cookie):
-    """The signed-in RS Planning user a request comes from (Landing forwards its session cookie), cached a minute.
+    """(account id, username) of the signed-in RS Planning user a request comes from (Landing forwards its session
+    cookie), cached a minute. Keyed by id so a renamed user keeps their workspace.
     No cookie / not signed in (direct loopback use of :8070) -> the "local" workspace."""
     if not cookie:
-        return "local"
+        return "local", "local"
     now = time.time()
     hit = _who.get(cookie)
     if hit and now - hit[1] < 60:
         return hit[0]
-    name = "local"
+    name = "local", "local"
     try:
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         with opener.open(urllib.request.Request(AUTH_ME, headers={"Cookie": cookie}), timeout=5) as r:
-            name = json.load(r).get("username") or "local"
+            me = json.load(r)
+        if me.get("id"):
+            name = me["id"], me.get("username") or me["id"]
     except Exception:  # noqa: BLE001 - 401 / platform down: no user
         pass
     if len(_who) > 500:
@@ -377,13 +383,14 @@ def who(cookie):
     return name
 
 
-def workspace(name):
+def workspace(key, name=None):
     """This user's workspace (created on first visit); frees other idle workspaces' memory.
     ponytail: one lock around creation - a first visit (loading a ~200 MB plan) briefly holds up other users' polls."""
     with _spaces_lock:
-        w = _spaces.get(name)
+        w = _spaces.get(key)
         if w is None:
-            w = _spaces[name] = Workspace(name)
+            w = _spaces[key] = Workspace(key, name)
+        w.name = name or w.name                  # a rename shows up on the next visit
         now = time.time()
         for o in _spaces.values():
             if o is not w and o.loaded and now - o.touched > IDLE_UNLOAD and not any(j.status == "running" for j in o.jobs.values()):
@@ -612,7 +619,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _enter(self):
         """Every request works in its own user's workspace."""
-        _tl.ws = workspace(who(self.headers.get("Cookie")))
+        _tl.ws = workspace(*who(self.headers.get("Cookie")))
         engine._TL.locks = _tl.ws.locks
 
     def do_GET(self):

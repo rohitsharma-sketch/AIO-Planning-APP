@@ -40,7 +40,7 @@ for t in ts:
 for t in ts:
     t.join()
 assert seen == {"a": ["Sep'26"], "b": ["Nov'26"]}, seen
-assert server.who(None) == "local" and server.who("") == "local"
+assert server.who(None) == ("local", "local") and server.who("") == ("local", "local")
 assert server._safe("../../x") == ".._.._x" and server._safe("rohit.sharma@citykart.org") == "rohit.sharma@citykart.org"
 a.touched -= server.IDLE_UNLOAD + 1
 a.state["method"] = "shift"
@@ -48,4 +48,9 @@ server.workspace("bob")                                     # another user's vis
 assert not a.loaded and a.state["method"] == "dept"
 server.workspace("alice")                                   # ... and it reloads on its next visit
 assert a.loaded
+os.makedirs(os.path.join(server.USERS_DIR, "carol"))          # a folder from before workspaces were keyed by account id
+open(os.path.join(server.USERS_DIR, "carol", "history.json"), "w").write('[{"x": 1}]')
+c = server.workspace("id-9", "carol")
+assert c.dir.endswith("id-9") and c.history == [{"x": 1}] and not os.path.exists(os.path.join(server.USERS_DIR, "carol"))
+assert server.workspace("id-9", "carol2") is c and c.name == "carol2"   # renamed: same work, new name on the badge
 print("all workspace checks passed")

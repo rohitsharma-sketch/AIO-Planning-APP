@@ -109,7 +109,7 @@
 
     <section class="card" aria-labelledby="h-users">
       <h2 id="h-users">People</h2>
-      <p class="desc">Change a role, email or admin rights here - it saves as soon as you change it. Switch an account off to stop it signing in without deleting it. <b>Set password</b> gives someone a temporary password; they choose their own the next time they sign in.</p>
+      <p class="desc">Change a role, email or admin rights here - it saves as soon as you change it. Switch an account off to stop it signing in without deleting it. <b>Rename</b> changes the username they sign in with. <b>Set password</b> gives someone a temporary password; they choose their own the next time they sign in.</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>User</th><th>Email (for password resets)</th><th>Role</th><th>Admin</th><th>Can sign in</th><th>Status</th><th></th></tr></thead>
@@ -199,7 +199,7 @@ function render() {
       <td><input type="checkbox" data-f="is_admin" ${u.is_admin ? 'checked' : ''} ${self ? 'disabled title="You can\'t remove your own admin rights"' : ''} aria-label="Admin: ${esc(u.username)}"></td>
       <td><input type="checkbox" data-f="is_active" ${u.is_active ? 'checked' : ''} ${self ? 'disabled title="You can\'t switch off your own account"' : ''} aria-label="Can sign in: ${esc(u.username)}"></td>
       <td>${u.must_change_password ? '<span class="badge amber">Must set own password</span>' : !u.is_active ? '<span class="badge grey">Switched off</span>' : !u.email ? '<span class="badge grey">No email</span>' : ''}</td>
-      <td><button class="btn small" data-act="pw">Set password</button></td>
+      <td style="white-space:nowrap"><button class="btn small" data-act="rename">Rename</button> <button class="btn small" data-act="pw">Set password</button></td>
     </tr>`;
   }).join('') || '<tr><td colspan="7">No accounts yet.</td></tr>';
 }
@@ -229,6 +229,14 @@ $('#rows').addEventListener('change', e => {
   save(tr.dataset.id, {[f]: v}, {email: 'the email', role: 'the role', is_admin: 'admin rights', is_active: 'sign-in access'}[f]);
 });
 $('#rows').addEventListener('click', e => {
+  if (e.target.dataset.act === 'rename') {
+    const u = users.find(x => x.id === e.target.closest('tr').dataset.id);
+    const name = (prompt(`New username for ${u.username} (they sign in with this from now on):`, u.username) || '').trim();
+    if (name && name !== u.username) save(u.id, {username: name}, 'the new username').then(() => {
+      if (me && u.id === me.id) { me.username = users.find(x => x.id === u.id).username; $('#who').textContent = `Signed in as ${me.username}`; }
+    });
+    return;
+  }
   if (e.target.dataset.act !== 'pw') return;
   pwTarget = users.find(x => x.id === e.target.closest('tr').dataset.id);
   $('#pw-desc').textContent = `For ${pwTarget.username}. Tell them this password yourself - it isn't emailed.`;

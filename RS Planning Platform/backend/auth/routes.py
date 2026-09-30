@@ -172,8 +172,20 @@ def email_status(_admin: dict = Depends(require_admin)):
     return {"configured": smtp_configured()}
 
 
+def username_refusal(new, taken):
+    """Why a rename must be refused, or None (2026-09-30). `taken` = the other accounts' usernames; compared ignoring
+    case so "Admin" and "admin" can't both exist and be mixed up at sign-in."""
+    if not new:
+        return "The username can't be blank."
+    if len(new) > 64:
+        return "Keep the username to 64 characters or fewer."
+    if new.lower() in {t.lower() for t in taken}:
+        return f'"{new}" is already someone\'s username.'
+    return None
+
+
 @router.patch("/admin/users/{user_id}")
-def update_user(user_id: str, body: dict = Body(...), _admin: dict = Depends(require_admin)):
+def update_user(user_id: str, request: Request, body: dict = Body(...), _admin: dict = Depends(require_admin)):
     try:
         uid = uuid.UUID(user_id)
     except ValueError:
@@ -188,6 +200,13 @@ def update_user(user_id: str, body: dict = Body(...), _admin: dict = Depends(req
         refusal = admin_change_refusal(_admin["id"], user.id, user.is_admin, user.is_active, body, admins)
         if refusal:
             raise HTTPException(409, refusal)
+        if "username" in body:
+            new = str(body["username"] or "").strip()
+            others = session.execute(select(User.username).where(User.id != user.id)).scalars().all()
+            refusal = username_refusal(new, others)
+            if refusal:
+                raise HTTPException(422, refusal)
+            user.username = new
         if "email" in body:
             user.email = body["email"] or None
         if "role" in body:
@@ -206,6 +225,8 @@ def update_user(user_id: str, body: dict = Body(...), _admin: dict = Depends(req
         elif "must_change_password" in body:
             user.must_change_password = bool(body["must_change_password"])
         session.commit()
+        if str(user.id) == _admin["id"]:   # renaming yourself: this session shows the new name at once
+            request.session["user"] = {**_admin, "username": user.username}
         return {"id": str(user.id), "username": user.username, "email": user.email,
                 "role": user.role, "is_admin": user.is_admin, "is_active": user.is_active,
                 "must_change_password": user.must_change_password}

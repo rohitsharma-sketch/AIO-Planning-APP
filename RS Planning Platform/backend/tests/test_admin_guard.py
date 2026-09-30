@@ -14,3 +14,10 @@ def test_last_active_admin_is_kept():
     assert admin_change_refusal("a", "b", True, True, {"is_admin": False}, 2) is None     # another admin remains
     assert admin_change_refusal("a", "b", False, True, {"is_active": False}, 1) is None   # not an admin
     assert admin_change_refusal("a", "b", True, False, {"is_admin": False}, 1) is None    # already switched off
+
+
+def test_rename_checks():
+    from auth.routes import username_refusal
+    assert username_refusal("", ["admin"]) and username_refusal("x" * 65, [])
+    assert "already" in username_refusal("Admin", ["admin", "planning01"])     # case doesn't make it different
+    assert username_refusal("Suraj Kumar", ["admin"]) is None
