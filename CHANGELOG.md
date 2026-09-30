@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### Sales Plan Division Plan: "Compare with" another AOP version
+- **Asked (user):** "where is the version selector here ?" then "yes, add the comparison dropdown". The old selector was removed on 29 Sep (`de37c48`) when the page was set to follow the BIS plan.
+- **What:** a **Compare with** dropdown lists every other saved AOP version (its latest publish). Picking one adds a card showing that version's Mar'27–Jun'27 plan per division and month, the difference from the BIS plan (₹ L and %), and its growth on this page's LY base. It is view only and changes nothing; the plan still comes from BIS.
+- **Server:** `division_plan.py` `_versions()` (added to `/config` as `versions`), `GET /api/planning/division-plan/compare/{publish_id}`, which reuses `_plan_rows`. The LY base is the page's own: Version 1's publish (32) came before publishes stored their base.
+- **Checked live:** Version 1 (publish 32) vs the BIS plan (Version 2, publish 112) is ₹42,089.98 L vs ₹43,184.66 L = −1,094.68 L (−2.5%); KIDS −330.23, LADIES −334.53, MENS −429.92; Mar'27 is identical. Growth on the LY base: +8.2% vs +11.1%.
+
 ### Sign in with your username or your email
 - **Asked (user):** "can we enable an option for either using an email sign in or the username sign in, like you can sign in either with your email or username ?".
 - **Login** (`auth/routes.py login`): tries the username first. If there's no match and the entry contains "@", it tries the email on file, ignoring capitals, but only when exactly one active account has that email. The login page label now says "Username or email".

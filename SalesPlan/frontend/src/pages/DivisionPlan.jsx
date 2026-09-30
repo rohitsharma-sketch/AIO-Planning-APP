@@ -25,6 +25,8 @@ const pct = v => v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
 export default function DivisionPlan() {
   const [cfg, setCfg] = useState(null)
   const [error, setError] = useState(null)
+  const [cmpId, setCmpId] = useState('')      // "Compare with" another saved AOP version (user, 2026-09-30) - view only
+  const [cmp, setCmp] = useState(null)
 
   const load = async () => {
     setError(null)
@@ -32,6 +34,12 @@ export default function DivisionPlan() {
     catch { setError('Failed to load the plan from the backend.') }
   }
   useEffect(() => { load() }, [])
+  useEffect(() => {
+    setCmp(null)
+    if (!cmpId) return
+    axios.get(`/api/planning/division-plan/compare/${cmpId}`).then(r => setCmp(r.data))
+      .catch(() => { setError('Could not load that version to compare.'); setCmpId('') })
+  }, [cmpId])
 
   const exportCSV = () => {
     const lines = ['AOP Version,Division,Month,LY (Lakhs),Plan (Lakhs),Growth %', ...cfg.divisions.flatMap(d =>
@@ -61,6 +69,18 @@ export default function DivisionPlan() {
               <strong>{cfg.source}</strong> · Mar'27 – Jun'27 · like-for-like stores, as in BIS · {cfg.n_divisions} divisions (KLM)
               <span style={{ color: theme.textMuted, marginLeft: 8 }}>· LY base and plan are fixed by the AOP publish; change the plan in BIS</span>
             </span>
+            {cfg.versions?.some(v => v.id !== cfg.aop_publish_id) && (
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: theme.textSecondary, fontWeight: 600 }}>
+                Compare with
+                <select value={cmpId} onChange={e => setCmpId(e.target.value)} aria-label="Compare with another saved AOP version"
+                  style={{ height: 34, padding: '0 10px', borderRadius: 7, border: `1px solid ${theme.border}`, background: theme.surface, color: theme.textPrimary, font: 'inherit', fontWeight: 500 }}>
+                  <option value="">— none —</option>
+                  {cfg.versions.filter(v => v.id !== cfg.aop_publish_id).map(v => (
+                    <option key={v.id} value={v.id}>{v.label} (publish {v.id})</option>
+                  ))}
+                </select>
+              </label>
+            )}
             <button style={btnStyle(theme.surfaceAlt, theme.primary)} onClick={load}>↺ Refresh</button>
             <button style={btnStyle(theme.accent)} onClick={exportCSV}>⬇ Export CSV</button>
           </div>
@@ -116,6 +136,64 @@ export default function DivisionPlan() {
             </div>
           </div>
 
+          {cmp && (() => {
+            const bis = Object.fromEntries(cfg.divisions.map(d => [d.division_name, d]))
+            const diff = (a, b) => a - b
+            const dpct = (a, b) => b ? (a / b - 1) * 100 : null
+            const col = v => v > 0.005 ? theme.accent : v < -0.005 ? theme.danger : theme.textMuted
+            const sign = v => `${v > 0 ? '+' : ''}${L(v)}`
+            const rows = cmp.divisions.map(d => ({ d, b: bis[d.division_name] }))
+            const tot = rows.reduce((t, { d, b }) => ({ v: t.v + d.plan_mamj, b: t.b + (b?.plan_mamj || 0), ly: t.ly + (b?.ly_mamj || 0) }), { v: 0, b: 0, ly: 0 })
+            return (
+              <div style={{ ...card, marginBottom: 24, overflow: 'hidden', borderColor: theme.primary }}>
+                <div style={{ padding: '14px 20px', borderBottom: `1px solid ${theme.border}`, fontSize: 14, fontWeight: 600, color: theme.textPrimary, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'baseline' }}>
+                  <span>Comparison: {cmp.version_label} vs the BIS plan ({cfg.version_label})</span>
+                  <span style={{ fontSize: 12, fontWeight: 400, color: theme.textMuted }}>view only · plan ₹ L, difference = {cmp.version_label.split(' — ')[0]} − BIS plan · growth on this page's LY base</span>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: theme.surfaceAlt }}>
+                        <th style={th}>Division</th>
+                        {cmp.divisions[0]?.months.map(m => <th key={m.month} style={th}>{m.month} plan / diff</th>)}
+                        <th style={th}>Plan MAMJ</th>
+                        <th style={th}>BIS plan MAMJ</th>
+                        <th style={th}>Difference</th>
+                        <th style={th}>Growth %</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map(({ d, b }, idx) => (
+                        <tr key={d.division_name} style={{ background: idx % 2 === 0 ? theme.surface : theme.surfaceAlt }}>
+                          <td style={{ ...td, fontWeight: 600, color: theme.textPrimary }}>{d.division_name}</td>
+                          {d.months.map((m, i) => {
+                            const bp = b?.months[i]?.plan || 0, dv = diff(m.plan, bp)
+                            return (
+                              <td key={m.month} style={td} title={`${m.month}: ${cmp.version_label} ₹ ${L(m.plan)} L vs BIS plan ₹ ${L(bp)} L (${pct(dpct(m.plan, bp))})`}>
+                                <strong style={{ color: theme.textPrimary }}>{L(m.plan)}</strong> <span style={{ color: col(dv), fontSize: 12 }}>{sign(dv)}</span>
+                              </td>
+                            )
+                          })}
+                          <td style={{ ...td, fontWeight: 700 }}>{L(d.plan_mamj)}</td>
+                          <td style={{ ...td, color: theme.primary }}>{L(b?.plan_mamj)}</td>
+                          <td style={{ ...td, color: col(diff(d.plan_mamj, b?.plan_mamj || 0)), fontWeight: 600 }}>{sign(diff(d.plan_mamj, b?.plan_mamj || 0))} <span style={{ fontSize: 12 }}>({pct(dpct(d.plan_mamj, b?.plan_mamj))})</span></td>
+                          <td style={td}>{pct(dpct(d.plan_mamj, b?.ly_mamj))}</td>
+                        </tr>
+                      ))}
+                      <tr style={{ borderTop: `1px solid ${theme.border}`, fontWeight: 700 }}>
+                        <td style={td}>Total</td>
+                        {cmp.divisions[0]?.months.map(m => <td key={m.month} style={td}></td>)}
+                        <td style={td}>{L(tot.v)}</td>
+                        <td style={{ ...td, color: theme.primary }}>{L(tot.b)}</td>
+                        <td style={{ ...td, color: col(tot.v - tot.b) }}>{sign(tot.v - tot.b)} <span style={{ fontSize: 12 }}>({pct(dpct(tot.v, tot.b))})</span></td>
+                        <td style={td}>{pct(dpct(tot.v, tot.ly))}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          })()}
           <div style={{ fontSize: 13, fontWeight: 600, color: theme.textMuted, letterSpacing: 0.7, textTransform: 'uppercase', marginBottom: 14 }}>
             Monthly Plan by Division
           </div>

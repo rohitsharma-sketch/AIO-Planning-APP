@@ -148,6 +148,35 @@ def _plan_rows(totals: dict, bases: dict) -> list:
     return out
 
 
+def _versions():
+    """Every saved AOP version (its latest publish) - the choices for "Compare with" (user, 30 Sep 2026)."""
+    from db.base import SessionLocal
+    from db.publish_aop_targets import list_aop_history
+    with SessionLocal() as db:
+        hist = list_aop_history(db, limit=50)
+    return [{"id": h["id"], "label": h["version_label"], "published_at": h["published_at"],
+             "total_mamj": round(h["total_mamj_lakhs"] or 0, 2)} for h in hist]
+
+
+@router.get("/compare/{publish_id}")
+def get_compare(publish_id: int):
+    """Another saved version's Mar-Jun division numbers, to set beside the BIS plan - view only, changes nothing."""
+    from fastapi import HTTPException
+    from db.base import SessionLocal
+    from sqlalchemy import text
+    with SessionLocal() as db:
+        row = db.execute(text("SELECT division_totals, division_base_totals FROM planning_inputs.aop_publish_history "
+                              "WHERE id = :id"), {"id": publish_id}).first()
+    v = next((x for x in _versions() if x["id"] == publish_id), None)
+    if row is None or v is None:
+        raise HTTPException(404, "That AOP version isn't among the saved versions.")
+    divisions = _plan_rows(row[0] or {}, row[1] or {})
+    return {"publish_id": publish_id, "version_label": v["label"], "published_at": v["published_at"],
+            "divisions": divisions,
+            "total_ly": round(sum(d["ly_mamj"] for d in divisions), 2),
+            "total_plan": round(sum(d["plan_mamj"] for d in divisions), 2)}
+
+
 @router.get("/config")
 def get_config():
     store_master = _load_store_master()
@@ -162,6 +191,7 @@ def get_config():
         "source": f"BIS plan on AOP {label or '-'} (publish {pid})" if pid else "No AOP published yet",
         "total_ly": round(sum(d["ly_mamj"] for d in divisions), 2),
         "total_plan": round(sum(d["plan_mamj"] for d in divisions), 2),
+        "versions": _versions(),
     }
 
 
