@@ -3,6 +3,7 @@ import io
 import numpy as np
 import pandas as pd
 import importer
+import engine
 from engine import listing_targets, realign, split_targets, verify
 
 # ------------------------------------------------------------------ engine
@@ -51,11 +52,12 @@ assert np.isclose(bucket("S1", "Sep'26"), 70) and np.isclose(bucket("S1", "Nov'2
 assert np.isclose(g("S1", "A", 299, "Jan'27 P1"), 6) and np.isclose(g("S1", "B", 299, "Jan'27 P1"), 10)
 assert np.isclose(g("S1", "A F/S", 299, "Jan'27 P1"), 0)
 assert any("locked months" in w for w in warn)
-# overflow: S2 Sep revised A=20 > month total 10 -> A stays EXACTLY 20, B Sep -> 0, and the excess 10 comes out
-# of S2's other live month (Nov: room 20-5=15 -> target 10 -> B Nov 5); season total still = original 30
-assert np.isclose(g("S2", "A", 299, "Sep'26"), 20) and np.isclose(g("S2", "B", 299, "Sep'26"), 0)
-assert np.isclose(g("S2", "A", 299, "Nov'26"), 5) and np.isclose(g("S2", "B", 299, "Nov'26"), 5)
-assert np.isclose(bucket("S2", "Sep'26") + bucket("S2", "Nov'26"), 30)
+# overflow (the cap, 2026-09-30): S2 Sep revised A=20 > the month's cap 10 -> A is cut to 10, B Sep -> 0, and the
+# excess 10 moves into A's other live month (Nov: room 20-5=15 -> A Nov 15, B Nov 5). Every month stays on its cap
+# (Sep 10, Nov 20) and A keeps its season total (20+5 = 10+15)
+assert np.isclose(g("S2", "A", 299, "Sep'26"), 10) and np.isclose(g("S2", "B", 299, "Sep'26"), 0)
+assert np.isclose(g("S2", "A", 299, "Nov'26"), 15) and np.isclose(g("S2", "B", 299, "Nov'26"), 5)
+assert np.isclose(bucket("S2", "Sep'26"), 10) and np.isclose(bucket("S2", "Nov'26"), 20)
 assert any("excess" in w and "S2/LADIES" in w for w in warn)
 # S3: sole department revised down, nothing else to absorb -> bucket stays under original, flagged
 assert np.isclose(g("S3", "A", 299, "Sep'26"), 5) and any("couldn't fully land" in w and "S3/LADIES" in w for w in warn)
@@ -66,13 +68,19 @@ assert np.isclose(cell("S1", "A", 399, "Nov'26", " Plan Qty"), 2)               
 assert np.isclose(cell("S1", "A F/S", 299, "Sep'26", " Plan Qty"), 1.8)           # new dept uses parent's ASP
 assert np.isclose(cell("S1", "D", 299, "Jan'27 P1", " Plan Qty"), 40)             # unchanged -> original qty
 # comparison table
-assert c.loc[("S2", "A", 299, "Sep'26"), "Status"] == "kept" and c.loc[("S1", "B", 299, "Sep'26"), "Status"] == "absorbed"
+assert c.loc[("S2", "A", 299, "Sep'26"), "Status"] == "kept, moved to fit the cap" and c.loc[("S1", "B", 299, "Sep'26"), "Status"] == "absorbed"
+assert c.loc[("S1", "A", 299, "Sep'26"), "Status"] == "kept"
 assert ("S1", "A", 299, "Jan'27 P1") not in c.index
 # verify(): independent checks agree with the rules
 checks, table = verify(orig, rev, out, M)
 status = {ch["name"]: ch["status"] for ch in checks}
-assert status["Revised values kept exactly"] == "ok" and status["Grand total unchanged"] == "fail"  # S3 shortfall -> total drops
-assert status["Store × Division totals match — each month"] == "warn"   # S2's excess moved months
+assert status["Revised values kept exactly"] == "warn" and status["Grand total unchanged"] == "fail"  # S2 moved to fit; S3 short
+assert status["Store × Division × Month = original (the cap)"] == "fail"   # S3: sole dept revised down, nothing to absorb
+# the comparison levels: every store x division x month, flagged against the cap; S3 Sep is the only one off
+sdm, sdd = engine.compare_levels(orig, out, M)
+assert len(sdm) == 3 * len(M) and set(sdm.loc[sdm["Within cap"] != "Yes", "Store Name"]) == {"S3"}
+assert sdm.loc[(sdm["Store Name"] == "S3") & (sdm["Month"] == "Sep'26"), "Within cap"].item() == "No - under the original"
+assert ((sdd["Store Name"] == "S2") & (sdd["DEPARTMENT"] == "A") & (sdd["Month"] == "Nov'26")).any() and not (sdd["Locked month"] == "Yes").any()
 assert status["Locked months untouched (value and qty)"] == "ok"
 assert [t["dept"] for t in table] == ["A", "A F/S"] and np.isclose(table[0]["months"][0]["revised"], 37)
 
@@ -84,7 +92,10 @@ g2 = lambda s, d, mrp, m: out2[(out2["Store Name"] == s) & (out2.DEPARTMENT == d
 for s_, d_, mrp_ in [("S1", "A", 299), ("S1", "B", 299), ("S1", "D", 299), ("S2", "B", 299), ("S3", "A", 299)]:
     o_ = orig[(orig["Store Name"] == s_) & (orig.DEPARTMENT == d_) & (orig.MRP == mrp_)]["Nov'26 Plan"].sum()
     assert np.isclose(g2(s_, d_, mrp_, "Nov'26"), o_), (s_, d_)            # locked month = original, value for value
-assert np.isclose(g2("S1", "A", 299, "Jan'27 P1"), 99 * 0.6)                  # unlocked Jan now takes the revised 99
+# unlocked Jan now takes the revised 99 - up to the cap: S1 LADIES Jan is 70 in the original, so A is cut to 70
+# (A 299 = 70 x 60%) and the other 29 moves into A's other live month (Sep, which has room)
+assert np.isclose(g2("S1", "A", 299, "Jan'27 P1"), 70 * 0.6)
+assert np.isclose(out2[out2["Store Name"] == "S1"]["Jan'27 P1 Plan"].sum(), 70)
 assert {ch["name"]: ch["status"] for ch in verify(orig, rev, out2, M)[0]}["Locked months untouched (value and qty)"] == "ok"
 engine.LOCKED = None   # back to the default (Jan / Feb) for the rest of the checks
 

@@ -7,6 +7,22 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### Sales Plan Re-Aligner: Store × Division × Month is a hard cap; original-vs-new comparison download
+- **Asked (user):** "cap the target for the month x store x division should be matching as per the original file imported. validate the same. Also, make sure that there is a comparitive drawn between 2 iterations - original plan v new revised plan and is downloadable to see where the difference is there." (after checking a Method 2 output).
+- **Found:** Re-phase & run ran with "other departments stay as they are", so month totals followed the re-phased department. Replaying Planning01's LW_U_T-TOP run: **750 of 7,272** store × division × months were off the original (up to 2.39 L), with season totals kept. Even with "absorb", 8 were off: BRN and DLT LADIES, where T-TOP's re-phase alone was bigger than the whole division's month, and the old overflow rule lowered other months' targets.
+- **Now (`engine.realign`):**
+  - Re-phase & run uses **absorb**.
+  - A revised department that exceeds a month's cap is **cut to the cap**, and the excess moves into the same department's other live months that have room, where the other departments shrink by the same amount. So every Store × Division × Month, the season, the grand total and the revised department's own season total all match.
+  - Only excess with no room anywhere stays over its month, and it is flagged.
+  - Such cells are labelled "kept, moved to fit the cap".
+- **Checks (`engine.verify`):** "Store × Division × Month = original (the cap)" is now pass / fail (it was a warning). "Revised values kept exactly" reads **warn** when values only moved between months to fit the cap and every revised store-department kept its season total.
+- **Comparison download** ("Comparison vs original", xlsx; `engine.compare_levels`): **Summary**, **Store x Division x Month** (every one: Original, New plan, Difference, %, Locked month, **Within cap**), **Store x Dept x Month** (every department-month that moved), **Changed Rows** (every MRP × display cell, with why). The CSV is still the changed cells.
+- **Validated:**
+  - LW_U_T-TOP replayed on Planning01's plan and then run live in the Admin workspace: 0 of 7,272 off the cap, grand total 83,848.99 → 83,848.99, locked months and display-type cont % unchanged, 104 cells moved to fit the cap. Comparison 11.9 MB, all 7,272 "Within cap = Yes".
+  - ML_JEANS, MW_JACKET, MW_WINTER T-SHIRT, MW_PULLOVER and LWW_CARDIGAN: all 0 of 7,272, no failed check.
+  - `test_realign.py` updated: the overflow case S2 is now cut to its cap with A's season kept; the lock-swap case is capped at 70.
+- **Also:** the Rules panel, `docs/business-rules/REPHASE_DEPARTMENT_MONTHS.md` (G3a), and the Run card wording. The manual "stay as they are" option remains, now labelled "store × division × month totals will NOT match the original". Restarting 8070 cleared in-memory results.
+
 ### Sign-in fix: capitals in usernames and spaces around passwords
 - **Bug (user):** "except for admin others cannot login through their email id and it is not accepting temp password set by admin".
 - **Found:**

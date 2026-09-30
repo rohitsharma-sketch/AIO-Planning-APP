@@ -475,7 +475,7 @@ function templateActions() {
     <select class="select" id="tpl-mix" aria-label="Whose last-year month shape to use" onchange="tplMix=this.value"><option value="">LY shape: same department</option>${
       (S.ly_departments || []).map(d => `<option value="${esc(d)}" ${d === tplMix ? 'selected' : ''}>LY shape: ${esc(d)}</option>`).join('')}</select>
     <button class="btn btn-outline btn-sm" onclick="rephase()" title="Download the re-phase file to check or edit before uploading it">${icon('dl')}Re-phase file</button>
-    <button class="btn btn-primary btn-sm" onclick="rephaseRun()" ${dataBusy() ? 'disabled' : ''} title="Build the re-phase from last year, load it here and run it to the final plan - other departments kept as they are">${icon('play')}Re-phase &amp; run</button>
+    <button class="btn btn-primary btn-sm" onclick="rephaseRun()" ${dataBusy() ? 'disabled' : ''} title="Build the re-phase from last year, load it here and run it to the final plan - the other departments absorb it, so every store × division × month stays on the original">${icon('play')}Re-phase &amp; run</button>
     ${storeOverrides()}`;
 }
 
@@ -528,7 +528,7 @@ function renderRun() {
     <p class="card-desc"><strong>Method ${method().no} · ${esc(method().title)}.</strong> ${esc(S.method === 'dept' && S.absorb === false ? KEEP_RUN : method().run)}${RUN_TAIL}</p>
     ${S.method === 'dept' ? `<div class="absorb" role="radiogroup" aria-label="Other departments in the store × division"><span class="muted">Other departments in the store × division:</span>
       <label><input type="radio" name="absorb" ${S.absorb !== false ? 'checked' : ''} ${job || other ? 'disabled' : ''} onchange="setAbsorb(true)">absorb the change — each store × division stays on the original</label>
-      <label><input type="radio" name="absorb" ${S.absorb === false ? 'checked' : ''} ${job || other ? 'disabled' : ''} onchange="setAbsorb(false)">stay as they are — only these departments move (e.g. a month re-phase)</label></div>` : ''}</div></div>
+      <label><input type="radio" name="absorb" ${S.absorb === false ? 'checked' : ''} ${job || other ? 'disabled' : ''} onchange="setAbsorb(false)">stay as they are — only these departments move; store × division × month totals will NOT match the original</label></div>` : ''}</div></div>
     <div class="card-content"><div class="row">
       <button class="btn btn-primary btn-lg" onclick="run()" ${!ready || job || other ? 'disabled' : ''}>${job ? icon('load', 'spin') + 'Realigning…' : icon('play') + (res ? 'Run again' : 'Run realignment')}</button>
       <span class="muted small">${job ? `Running for ${secs(job.secs)} — each step is timed in Activity.` : reason ||
@@ -549,7 +549,7 @@ function renderResults() {
     <p class="card-desc">${METHODS[res.method] ? `Method ${METHODS[res.method].no} · ${esc(METHODS[res.method].title)}${res.absorb === false ? ' (other departments kept as they are)' : ''} · ` : ''}Run ${esc(res.finished_at)} in ${secs(res.secs)} · ${esc(res.revised)} against ${esc(res.original)}</p></div></div>
     <div class="card-content">
       <div class="stats" style="margin-top:0">
-        <div class="stat"><div class="stat-label">Cells changed</div><div class="stat-value">${N(res.changed_rows)}</div><div class="stat-sub">${N(sc.kept || 0)} kept · ${N(sc.absorbed || 0)} absorbed</div></div>
+        <div class="stat"><div class="stat-label">Cells changed</div><div class="stat-value">${N(res.changed_rows)}</div><div class="stat-sub">${N((sc.kept || 0) + (sc['kept, moved to fit the cap'] || 0))} kept${sc['kept, moved to fit the cap'] ? ` (${N(sc['kept, moved to fit the cap'])} moved to fit the cap)` : ''} · ${N(sc.absorbed || 0)} absorbed</div></div>
         <div class="stat"><div class="stat-label">Output rows</div><div class="stat-value">${N(res.rows)}</div><div class="stat-sub">Store × Dept × MRP × Display</div></div>
         <div class="stat"><div class="stat-label">Revised departments</div><div class="stat-value">${res.dept_table.length}</div><div class="stat-sub" title="${esc(res.dept_table.map(d => d.dept).join(', '))}">${esc(res.dept_table.map(d => d.dept).join(', '))}</div></div>
         <div class="stat"><div class="stat-label">Run time</div><div class="stat-value">${secs(res.secs)}</div><div class="stat-sub">realign + verify</div></div>
@@ -590,7 +590,7 @@ function divTable(res) {
 }
 
 const DL = [
-  ['compare', 'xlsx', 'Comparison vs original', 'A Summary sheet plus every cell that moved — Original, Realigned, Delta, Delta % and why (kept / absorbed). The quick way to check the output is okay.'],
+  ['compare', 'xlsx', 'Comparison vs original', 'Original plan vs the new plan: Summary, Store × Division × Month (every one, with “Within cap”), Store × Dept × Month (what moved) and every changed cell with why (kept / absorbed). The quick way to see where the difference is.'],
   ['compare', 'csv', 'Comparison — CSV', 'Just the changed cells, as CSV. Builds in seconds and opens fastest.'],
   ['full', 'xlsx', 'Full realigned plan', 'Every row in the original layout (Store × Department × MRP × Display Type), value and qty — the file to load back.'],
   ['full', 'csv', 'Full realigned plan — CSV', 'The same as CSV — builds in seconds instead of minutes.'],
@@ -688,7 +688,7 @@ async function rephase(kind = 'rephase') {
     a.download = `${kind === 'rephase' ? 'Re-phase from LY' : 'Re-phase store overrides'} - ${tplDept}.xlsx`.replace(/\//g, '-');
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    toast(kind === 'rephase' ? 'Re-phase file built - check the "How it was built" sheet, upload it here, then run with "other departments: stay as they are".'
+    toast(kind === 'rephase' ? 'Re-phase file built - check the "How it was built" sheet, upload it here, then run with "other departments: absorb the change" so every store × division × month stays on the original.'
       : 'Fill REF OLD (and a month % for a store set by hand), then upload it with Store overrides.', 'info');
   } catch (e) { toast(e.message); }
 }

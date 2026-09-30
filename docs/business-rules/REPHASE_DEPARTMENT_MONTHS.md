@@ -13,7 +13,8 @@ the rules below are written generically so any department / window can be re-pha
 |---|---|
 | G1 | **Window** = the plan's unlocked months that have a last-year month (same month, one year earlier). An unlocked P1 / P2 half has none: it keeps its plan and the summary says so. |
 | G2 | **Last year must be real and complete**: a window month whose last-year month is not in the data, or only till date, is refused (lock it or re-phase after it closes) — never a silent 0 or a part-month shape. |
-| G3 | **Kept**: each store's total of the department over the window; only the split between months changes. Other departments are untouched (run with "stay as they are"). |
+| G3 | **Kept**: each store's total of the department over the window; only the split between months changes. |
+| G3a | **The cap** (user, 30 Sep: "cap the target for the month x store x division should be matching as per the original file imported"): Re-phase & run lets the other departments of the store × division **absorb** the move, so every Store × Division × Month lands exactly on the original file. Where the re-phased department alone exceeds a month's cap, it is cut to the cap and the excess moves into its own other window months that have room — its store window total (G3) is still kept. Checked on every run ("Store × Division × Month = original (the cap)", pass / fail). |
 | G4 | **Shape** = last year's sales of the shape department (default: the department itself; any department with last-year sales can be chosen) in the window's last-year months; negative months count as 0. |
 | G5 | **Whose shape**: the first **comparable** store of: the store itself → its REF → its REF OLD; else the comparable stores of its CLUSTER together; else the store keeps its planned phasing (never 0). A missing column (REF, REF OLD, CLUSTER) just drops out of the order. |
 | G6 | **Comparable** (may lend a shape): the store sold in the department's division in **every** window month last year (no part-year histories) **and**, when the plan has an SSG TAG column, its tag starts "SSG" — both required (user, 30 Sep: "require both the tag and a full last year"). Tagged stores left out for a part-year history are named in the summary (live plan: BRN, SAH, SBW — tagged SSG but with no last-year sales in the data at all; results unchanged). |
@@ -30,8 +31,12 @@ the rules below are written generically so any department / window can be re-pha
   LADIES with a proxy shape, KIDS, MENS, a 3-month window (Dec locked), a plan without SSG TAG, a plan without SSG TAG /
   REF / CLUSTER — **5,362 of 5,362 store-months identical** (max 5e-15 L).
 - **Full Method 2 path** (file → upload checks → realign → verify) for all 6: every check ok, other departments moved 0.
-  With "absorb" instead, 21 of 7,272 store × division months are flagged (a re-phased department exceeding a month's
-  original total — the overflow rule), which is why Re-phase & run uses "stay as they are".
+  With "absorb" instead, 21 of 7,272 store × division months were flagged (a re-phased department exceeding a month's
+  original total — the old overflow rule), which is why Re-phase & run first used "stay as they are".
+- **Superseded 30 Sep (G3a, the cap)**: the overflow now moves inside the re-phased department, so absorb holds every month.
+  Re-run on Planning01's plan: LW_U_T-TOP 750 → **0** of 7,272 store × division months off the original (8 department-months
+  moved to fit, BRN / DLT LADIES, window totals kept); ML_JEANS, MW_JACKET, MW_WINTER T-SHIRT, MW_PULLOVER, LWW_CARDIGAN all
+  0 of 7,272, grand total unchanged, no failed check.
 - **A bias the tests caught and fixed**: a fixed mix typed for LW_U_T-TOP in JHM was also applied to ML_JEANS (overrides were per
   store) → now per store × department (G8).
 - The workbook itself is still reproduced exactly with its REF OLD + JHM's mix (303 / 303 stores).

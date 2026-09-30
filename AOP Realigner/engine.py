@@ -346,11 +346,15 @@ def realign(o, r, months, source=None, absorb=True):
     ignored = int((kept[:, None] & (frozen & rev.notna().any().to_numpy())[None, :]
                    & (np.abs(R - pd.DataFrame(orig).groupby(sd).transform("sum").to_numpy()) > 1e-6)).any(1).sum())
 
-    # 2. every other department in the Store x Division x Month absorbs the difference pro-rata. Revised
-    #    values are never changed: if they alone exceed a month's total, the other departments go to 0 that
-    #    month and the excess is taken from the same store-division's other live months (in proportion to
-    #    their room), so the store x division season total - and the grand total - still match the original.
+    # 2. every other department in the Store x Division x Month absorbs the difference pro-rata, so each
+    #    store x division x month lands exactly on the original - the cap (user, 2026-09-30: "cap the target for the
+    #    month x store x division should be matching as per the original file imported"). If the revised departments
+    #    alone exceed a month's cap, they are cut to it (the other departments go to 0 that month) and the cut moves
+    #    to the same revised departments' other live months that still have room (other departments shrink there by
+    #    the same amount) - so every month total AND the revised departments' season total still match. Only excess
+    #    with no room anywhere stays over its month (flagged).
     grp = (o[STORE] + "||" + o[DIV]).to_numpy()
+    scale = np.ones_like(orig)   # how much a revised cell was moved to fit the cap (1 = kept exactly)
     if absorb:
         T = pd.DataFrame(orig).groupby(grp).transform("sum").to_numpy()
         L = pd.DataFrame(np.where(lk, new, 0.0)).groupby(grp).transform("sum").to_numpy()
@@ -359,16 +363,20 @@ def realign(o, r, months, source=None, absorb=True):
         has_u = np.abs(U) > TOL
         over = live & (L > T + TOL)
         excess = np.where(over, L - T, 0.0).sum(1, keepdims=True)
-        room = np.where(live & ~over & has_u, np.clip(T - L, 0, None), 0.0)
+        # room = months where the revised departments have a value to grow and other departments can give way
+        room = np.where(live & ~over & has_u & (L > TOL), np.clip(T - L, 0, None), 0.0)
         room_tot = room.sum(1, keepdims=True)
         take = np.where(room_tot > TOL, room * np.minimum(excess / np.where(room_tot > TOL, room_tot, 1), 1.0), 0.0)
-        Tadj = T - take
-        f = np.where(has_u & ~over, (Tadj - L) / np.where(has_u, U, 1), 0.0)
+        placed = np.divide(take.sum(1, keepdims=True), excess, out=np.zeros_like(excess), where=excess > TOL)
+        Lnew = np.where(over, L - (L - T) * placed, L + take)   # the revised departments' month total after the move
+        scale = np.where(lk & (L > TOL), Lnew / np.where(L > TOL, L, 1), 1.0)
+        new = np.where(lk, new * scale, new)
+        f = np.where(has_u & ~over, (T - Lnew) / np.where(has_u, U, 1), 0.0)
         new = np.where(lk, new, orig * f)
         spilled = over.any(1)
         unplaced = excess[:, 0] - take.sum(1)  # excess with no room left in any other month
         # nothing left to absorb into (bucket stays under target), or excess that couldn't be placed (stays over)
-        short = ((~has_u) & live & (Tadj - L > 1e-6)).any(1) | (unplaced > 1e-6)
+        short = ((~has_u) & live & (T - Lnew > 1e-6)).any(1) | (unplaced > 1e-6)
     else:
         # only the revised departments move; every other row is the original (f = 1, nothing spills or is short)
         f = np.ones_like(orig)
@@ -396,7 +404,8 @@ def realign(o, r, months, source=None, absorb=True):
     # 4. comparison table: every cell that actually moved, tagged with why - the "did this come out
     #    okay" check against the original. "kept" = a revised row; "absorbed" = everything else that
     #    moved to make room (frozen months never change - f==1 there - so they're filtered out).
-    status = np.where(lk, "kept", np.where(np.abs(f - 1) > TOL, "absorbed", "unchanged"))
+    status = np.where(lk, np.where(np.abs(scale - 1) > TOL, "kept, moved to fit the cap", "kept"),
+                      np.where(np.abs(f - 1) > TOL, "absorbed", "unchanged"))
     delta = new - orig
     changed = np.abs(delta) > 1e-6
     if changed.any():
@@ -431,9 +440,10 @@ def realign(o, r, months, source=None, absorb=True):
     if ignored:
         warn.append(f"{ignored} revised rows had values in locked months different from the original - ignored, locked months stay as original.")
     if spilled_sd:
-        warn.append(f"{len(spilled_sd)} store-division(s) had revised departments exceeding a month's original total - "
-                    f"revised kept exactly, other departments set to 0 that month, and the excess ({spilled_amt:.4f}) taken "
-                    f"from the same store-division's other live months, so its season total still matches: {', '.join(spilled_sd[:15])}")
+        warn.append(f"{len(spilled_sd)} store-division(s) had revised departments exceeding a month's cap (the original "
+                    f"store x division x month total) - cut to the cap, other departments 0 that month, and the excess "
+                    f"({spilled_amt:.4f}) moved into the same revised departments' other months, so every month total and "
+                    f"their season total still match: {', '.join(spilled_sd[:15])}")
     if asp_fb:
         warn.append(f"{asp_fb} changed row-months had no original qty for their Department x MRP x Display Type that month - "
                     f"qty uses that combination's all-month ASP instead.")
@@ -460,8 +470,17 @@ def verify(o, r, out, months, absorb=True):
     out_sd = out.groupby([STORE, DEPT])[V].sum().reindex(keys).fillna(0.0)
     orig_sd = o.groupby([STORE, DEPT])[V].sum().reindex(keys).fillna(0.0)
     if live and len(r):
-        diff = float(np.abs(out_sd[[m + " Plan" for m in live]].to_numpy() - r[live].to_numpy()).max())
-        add("Revised values kept exactly", "ok" if diff < 1e-6 else "fail", f"largest difference {diff:.2g}")
+        lvp = [m + " Plan" for m in live]
+        dm = np.abs(out_sd[lvp].to_numpy() - r[live].to_numpy())
+        diff, moved = float(dm.max()), int((dm > 1e-6).sum())
+        season_kept = float(np.abs(out_sd[lvp].to_numpy().sum(1) - r[live].to_numpy().sum(1)).max())
+        if diff < 1e-6:
+            add("Revised values kept exactly", "ok", f"largest difference {diff:.2g}")
+        elif absorb and season_kept < 1e-6:   # moved between months only to fit the store x division x month cap
+            add("Revised values kept exactly", "warn", f"{moved} revised store-department-months moved to fit the "
+                f"store × division × month cap (largest {diff:.4f}); every revised store-department keeps its season total")
+        else:
+            add("Revised values kept exactly", "fail", f"largest difference {diff:.2g}")
     a = o.groupby([STORE, DIV])[V].sum()
     d = (out.groupby([STORE, DIV])[V].sum().reindex(a.index).fillna(0.0) - a).to_numpy()
     season, cells = int((np.abs(d.sum(1)) > 1e-6).sum()), int((np.abs(d) > 1e-6).sum())
@@ -469,9 +488,9 @@ def verify(o, r, out, months, absorb=True):
     if absorb:
         add("Store × Division totals match — whole season", "ok" if season == 0 else "fail",
             f"{season} of {len(a):,} store-divisions differ")
-        add("Store × Division totals match — each month", "ok" if cells == 0 else "warn",
-            f"{cells} of {d.size:,} store-division-months differ" +
-            ("" if cells == 0 else " (where a revised department exceeded its month, the excess moved to other months)"))
+        add("Store × Division × Month = original (the cap)", "ok" if cells == 0 else "fail",
+            f"{cells} of {d.size:,} store-division-months differ from the original file" +
+            ("" if cells == 0 else f" (largest {float(np.abs(d).max()):.4f}) - see the Store x Division x Month sheet of the comparison"))
         add("Grand total unchanged", "ok" if abs(g1 - g0) < 1e-6 else "fail", f"{g0:,.2f} → {g1:,.2f}")
     else:
         k = [STORE, DEPT, MRP, DISP]
@@ -555,8 +574,40 @@ def export(df, fmt, on_progress=None):
     return write_xlsx([("Realigned Plan", df.round(6))], on_progress), XLSX_CTYPE, "xlsx"
 
 
-def export_compare(summ, compare, fmt, on_progress=None):
-    """The "did this come out okay" file: a Division x Month summary plus every cell that actually changed."""
+def compare_levels(o, out, months):
+    """Original plan vs the new plan at the two levels a planner checks (user, 2026-09-30: "a comparitive ... original
+    plan v new revised plan ... to see where the difference is"):
+      Store x Division x Month - EVERY cell, with "Within cap" (the original file's total is the cap);
+      Store x Dept x Month     - the cells that moved."""
+    V = [m + " Plan" for m in months]
+    def long(df, by):
+        g = df.groupby(by)[V].sum()
+        g.columns = pd.Index(months, name="Month")
+        return g.stack()
+    def table(by, only_moved):
+        a, b = long(o, by), long(out, by)
+        idx = a.index.union(b.index)
+        t = pd.DataFrame({"Original": a.reindex(idx).fillna(0.0), "New plan": b.reindex(idx).fillna(0.0)})
+        t["Difference"] = t["New plan"] - t["Original"]
+        t["Difference %"] = np.where(t["Original"].abs() > TOL, t["Difference"] / t["Original"].abs() * 100, np.nan)
+        t = t.reset_index()
+        t["Month"] = pd.Categorical(t["Month"], categories=months, ordered=True)
+        t = t.sort_values(by + ["Month"]).reset_index(drop=True)
+        t["Month"] = t["Month"].astype(str)
+        t["Locked month"] = np.where([locked(m) for m in t["Month"]], "Yes", "")
+        return t[t["Difference"].abs() > 1e-6].reset_index(drop=True) if only_moved else t
+    sdm = table([STORE, DIV], False)
+    sdm["Within cap"] = np.where(sdm["Difference"].abs() <= 1e-6, "Yes",
+                                 np.where(sdm["Difference"] > 0, "No - over the original", "No - under the original"))
+    return sdm, table([STORE, DIV, DEPT], True)
+
+
+def export_compare(summ, compare, fmt, on_progress=None, levels=None):
+    """The "did this come out okay" file: a Division x Month summary, the Store x Division x Month cap check and the
+    Store x Dept x Month moves (levels = compare_levels(...)), plus every cell that actually changed."""
     if fmt == "csv":
         return compare.round(4).to_csv(index=False).encode("utf-8-sig"), "text/csv", "csv"
-    return write_xlsx([("Summary", pd.DataFrame(summ).round(4)), ("Changed Rows", compare.round(4))], on_progress), XLSX_CTYPE, "xlsx"
+    sheets = [("Summary", pd.DataFrame(summ).round(4))]
+    if levels is not None:
+        sheets += [("Store x Division x Month", levels[0].round(4)), ("Store x Dept x Month", levels[1].round(4))]
+    return write_xlsx(sheets + [("Changed Rows", compare.round(4))], on_progress), XLSX_CTYPE, "xlsx"

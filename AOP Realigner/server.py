@@ -531,8 +531,8 @@ def job_rephase(job, dept, mix=None):
         except ValueError as e:
             raise UserError(str(e))
         data = engine.write_xlsx([("Revised plan", df), ("How it was built", how), ("Summary", pd.DataFrame({"NOTE": notes}))])
-    with lock:
-        state.update(method="dept", absorb=False)
+    with lock:   # other departments absorb, so every store x division x month stays on the original (the cap, 2026-09-30)
+        state.update(method="dept", absorb=True)
     _check_revised(job, data, f"Re-phase from LY - {dept}.xlsx", None, "dept")
     with lock:
         if state["rev_info"] is not None:
@@ -544,6 +544,7 @@ def job_rephase(job, dept, mix=None):
 def job_export(job, kind, fmt):
     with lock:
         res, out, compare, summ = state["result"], state["out"], state["compare"], state["summary"]
+        orig, months = state["orig"], state["months"]
         colmap = (state["orig_info"] or {}).get("colmap") or {}
     if not res:
         raise UserError("Run the realignment first.")
@@ -553,7 +554,8 @@ def job_export(job, kind, fmt):
             data, ctype, ext = engine.export(out.rename(columns={k: v for k, v in colmap.items() if k in out.columns}),
                                              fmt, job.progress)
         else:
-            data, ctype, ext = engine.export_compare(summ, compare, fmt, job.progress)
+            levels = engine.compare_levels(orig, out, months) if fmt == "xlsx" else None
+            data, ctype, ext = engine.export_compare(summ, compare, fmt, job.progress, levels)
     name = "Realigned Plan" + (" - Comparison" if kind == "compare" else "") + f".{ext}"
     with lock:
         if state["result"] and state["result"]["id"] == res["id"]:  # a newer run makes this build stale
