@@ -7,6 +7,24 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### AOP Re-Aligner: every signed-in user has their own copy
+- **Asked (user):** "make it so each user gets their own copy".
+- **How it works:** each request is tied to the RS Planning user signed in through Landing. The Re-Aligner asks the platform (`/api/auth/me`) who the forwarded session cookie belongs to, and caches the answer for a minute.
+- **What each user gets:** their own **workspace** in `.cache/users/<name>/`, holding:
+  - the plan, month locks and store overrides;
+  - the revised file, result and exports;
+  - running jobs and activity history.
+- **Isolation:** one user's loads, locks, Re-phase & run and exports never touch another's. Jobs run with their own user's locks, and each user can run their own job at the same time as others.
+- **Starting point:** a user's first visit starts from a **copy of the setup at that time**: the loaded plan, locks and overrides. After that it's theirs.
+- **Local use:** direct use of `:8070` on this PC, with no sign-in, gets a separate "local" workspace.
+- **Memory:** a workspace untouched for 2 hours frees its plan from memory, and it reloads on the next visit. An unexported result is dropped then. The Re-Aligner's top bar shows "Your workspace: <name>".
+- **No Landing change or restart:** Landing already forwards the session cookie.
+- **Checked:**
+  - Your own browser tab was put in the `admin` workspace automatically, seeded with the 674,478-row plan, 4 locked months and 303 overrides.
+  - `test_workspaces.py`: two users' locks and settings stay apart, job threads see their own locks, and idle unload and reload work.
+  - `test_realign.py` still passes.
+- Files: `AOP Realigner/server.py` (Workspace, `who()`, per-user `state` / `jobs` / `history`), `engine.py` (`locked()` per thread, `engine.LOCKED` still the fallback), `index.html`, `test_workspaces.py`.
+
 ### Users & access admin page; password reset accepts an email
 - **Asked (user):** "email not sent - email should be there" and "give me an admin layout for setting user control up".
 - **Why no reset email came:**

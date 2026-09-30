@@ -250,7 +250,7 @@ dialog.rules::backdrop{background:rgba(15,23,42,.45)}
       <h1>AOP Re-Aligner</h1>
       <p>Revise an existing plan — listing changes, department changes, new or split departments, shifts to a target, growth — while every store × division stays on the original.</p>
     </div>
-    <div class="right"><span id="conn" class="badge b-muted"><span class="dot"></span>Connecting…</span><button class="rules-btn" type="button" onclick="openRules()">Rules</button><a class="home" id="home-link" href="/">&larr; Landing</a></div>
+    <div class="right"><span id="ws-user" class="badge b-muted" style="display:none" title="Your own copy - your plan, locks, overrides and results; nobody else's changes reach it"></span><span id="conn" class="badge b-muted"><span class="dot"></span>Connecting…</span><button class="rules-btn" type="button" onclick="openRules()">Rules</button><a class="home" id="home-link" href="/">&larr; Landing</a></div>
   </div>
 </header>
 
@@ -375,6 +375,7 @@ async function refresh() {
   try {
     S = await (await fetch('api/state', {cache: 'no-store'})).json();
     setConn(true);
+    if (S.user) { const u = $('#ws-user'); u.textContent = S.user === 'local' ? 'Local workspace' : `Your workspace: ${S.user}`; u.style.display = ''; }
     render();
   } catch { setConn(false); }
   const busy = !S || S.jobs.some(j => j.status === 'running') || Object.keys(uploads).length || Object.keys(pending).length;

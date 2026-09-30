@@ -9,10 +9,13 @@ import contextlib
 import json
 import os
 import pickle
+import re
+import shutil
 import threading
 import time
 import traceback
 import urllib.parse
+import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -29,7 +32,13 @@ ORIG_PKL = os.path.join(CACHE_DIR, "original.pkl")
 TIMINGS_JSON = os.path.join(CACHE_DIR, "timings.json")
 HISTORY_JSON = os.path.join(CACHE_DIR, "history.json")
 LOCKS_JSON = os.path.join(CACHE_DIR, "locks.json")
-REPHASE_OV_JSON = os.path.join(CACHE_DIR, "rephase_overrides.json")   # Re-phase store overrides (REF OLD, fixed mix)   # the user's locked months for the loaded original plan
+REPHASE_OV_JSON = os.path.join(CACHE_DIR, "rephase_overrides.json")   # Re-phase store overrides (REF OLD, fixed mix)
+# Each signed-in user has their own workspace (user, 2026-09-30: "make it so each user gets their own copy"):
+# .cache/users/<name>/ holds their original.pkl, locks.json, rephase_overrides.json and history.json. A new user's
+# workspace starts as a copy of the files above (the setup at the time), then is theirs alone.
+USERS_DIR = os.path.join(CACHE_DIR, "users")
+AUTH_ME = "http://127.0.0.1:8010/api/auth/me"   # who a Landing session cookie belongs to
+IDLE_UNLOAD = 2 * 3600   # an untouched workspace frees its plan from memory after this long (reloads on next visit)
 MAX_BODY = 400 * 1024 * 1024
 KB_JSON = os.path.join(HERE, "..", "Listing Delisting", "app", "kb.json")  # Listing / Delisting Analyser app's listing history
 # the three ways to revise an existing plan (engine.py); each has its own step-2 file and template
@@ -93,7 +102,7 @@ def ly_departments():
     if not hit or hit[0] is not ly:
         hit = _ref_cache["ly_departments"] = (ly, sorted({d for _, d in ly}))
     return hit[1]
-os.makedirs(CACHE_DIR, exist_ok=True)
+os.makedirs(USERS_DIR, exist_ok=True)
 
 
 class UserError(Exception):
@@ -192,8 +201,42 @@ class Job:
                 "ended_at": self.ended and stamp(self.ended), "steps": steps}
 
 
-jobs, jobs_lock = {}, threading.Lock()
-history = _load_json(HISTORY_JSON, [])
+jobs_lock = threading.Lock()
+_tl = threading.local()   # the workspace of the request / job running on this thread
+
+
+class _Mine:
+    """Stands for the calling user's own dict / list in their workspace, so `state["orig"]`, `jobs.values()` and
+    `history[:20]` below always mean *this* user's."""
+    def __init__(self, attr):
+        self._attr = attr
+
+    def _o(self):
+        return getattr(_tl.ws, self._attr)
+
+    def __getattr__(self, n):
+        return getattr(self._o(), n)
+
+    def __getitem__(self, k):
+        return self._o()[k]
+
+    def __setitem__(self, k, v):
+        self._o()[k] = v
+
+    def __delitem__(self, k):
+        del self._o()[k]
+
+    def __contains__(self, k):
+        return k in self._o()
+
+    def __iter__(self):
+        return iter(self._o())
+
+    def __len__(self):
+        return len(self._o())
+
+
+jobs, history, state = _Mine("jobs"), _Mine("history"), _Mine("state")
 
 
 def start_job(group, kind, label, fn, *args):
@@ -208,11 +251,12 @@ def start_job(group, kind, label, fn, *args):
         for old in sorted(jobs.values(), key=lambda j: j.started)[:-40]:
             if old.status != "running":
                 jobs.pop(old.id)
-    threading.Thread(target=_run, args=(job, fn, args), daemon=True).start()
+    threading.Thread(target=_run, args=(job, fn, args, _tl.ws), daemon=True).start()
     return job
 
 
-def _run(job, fn, args):
+def _run(job, fn, args, w):
+    _tl.ws, engine._TL.locks = w, w.locks   # the job works in its user's workspace
     try:
         fn(job, *args)
         job.status = "done"
@@ -224,52 +268,130 @@ def _run(job, fn, args):
     finally:
         job.ended = time.time()
         with jobs_lock:
-            history.insert(0, job.view())
-            del history[40:]
-            _save_json(HISTORY_JSON, history)
+            w.history.insert(0, job.view())
+            del w.history[40:]
+            _save_json(w.path("history.json"), w.history)
 
 
 # ---------------------------------------------------------------- state
 
 NO_RESULT = {"result": None, "out": None, "compare": None, "summary": None, "exports": {}}
-state = {"orig": None, "months": [], "orig_info": None, "orig_report": [], "orig_failed": None,
-         "rev": None, "rev_months": [], "rev_info": None, "rev_report": [], "rev_upload": None, "orig_upload": None,
-         "rev_source": {}, "method": "dept", "locks": [], "absorb": True,
-         **NO_RESULT}
+def _new_state():
+    return {"orig": None, "months": [], "orig_info": None, "orig_report": [], "orig_failed": None,
+            "rev": None, "rev_months": [], "rev_info": None, "rev_report": [], "rev_upload": None, "orig_upload": None,
+            "rev_source": {}, "method": "dept", "locks": [], "absorb": True, "rephase_ov": None, **NO_RESULT}
+
+
 lock = threading.RLock()
 
 
 def _set_locks(months, chosen=None):
     """Locked months = kept exactly as the original (user, 2026-09-29: "make these locks dynamic for months ...
     auto detect the months as per the original plan upload"). Only months found in the original plan can be
-    locked; a month without a choice yet gets the default (Jan / Feb). Saved so it survives a restart.
-    ponytail: engine.LOCKED is one global - fine for this one-plan local server."""
+    locked; a month without a choice yet gets the default (Jan / Feb). Saved so it survives a restart. Per user:
+    the calling user's workspace and this thread's engine locks."""
     chosen = chosen or {}
     locks = [m for m in months if chosen.get(m, m[:3] in engine.FROZEN)]
-    engine.LOCKED = set(locks)
+    _tl.ws.locks = engine._TL.locks = set(locks)
     state["locks"] = locks
-    os.makedirs(CACHE_DIR, exist_ok=True)
-    _save_json(LOCKS_JSON, {"months": months, "chosen": {m: m in locks for m in months}})
+    _save_json(_tl.ws.path("locks.json"), {"months": months, "chosen": {m: m in locks for m in months}})
     return locks
 
-if os.path.exists(ORIG_PKL):
+def _safe(name):
+    return re.sub(r"[^A-Za-z0-9._@-]", "_", name)[:80] or "local"
+
+
+class Workspace:
+    """One user's own Re-Aligner: plan, locks, overrides, revised file, result, exports, jobs and history."""
+
+    def __init__(self, name):
+        self.name, self.dir = name, os.path.join(USERS_DIR, _safe(name))
+        if not os.path.isdir(self.dir):          # first visit: start from a copy of the setup at the time
+            os.makedirs(self.dir)
+            for f in (ORIG_PKL, LOCKS_JSON, REPHASE_OV_JSON):
+                if os.path.exists(f):
+                    shutil.copy2(f, os.path.join(self.dir, os.path.basename(f)))
+        self.jobs, self.history = {}, _load_json(self.path("history.json"), [])
+        self.locks, self.touched = None, time.time()
+        self.state = _new_state()
+        self.load()
+
+    def path(self, f):
+        return os.path.join(self.dir, f)
+
+    def load(self):
+        """The saved plan, locks and overrides into memory (on first use, and again after an idle unload)."""
+        prev, _tl.ws = getattr(_tl, "ws", None), self
+        try:
+            if os.path.exists(self.path("original.pkl")):
+                try:
+                    with open(self.path("original.pkl"), "rb") as fh:
+                        saved = pickle.load(fh)
+                    if isinstance(saved, tuple):  # cache written by the previous version: (df, months, meta)
+                        df, months, meta = saved
+                        for c in (STORE, DEPT, engine.DIV, engine.DISP):  # the old reader kept double spaces; today's importer collapses them
+                            df[c] = df[c].astype(str).str.replace(r"\s+", " ", regex=True).str.strip()
+                        saved = {"df": df, "months": months, "report": [], "info": {
+                            "name": urllib.parse.unquote(meta.get("name", "original plan")), "loaded_at": meta.get("loaded_at"),
+                            "rows": len(df), "stores": int(df[STORE].nunique()), "departments": int(df[DEPT].nunique()),
+                            "divisions": sorted(df[engine.DIV].unique().tolist()), "months": months,
+                            "colmap": {c: c for c in df.columns}, "sheets": [], "parse_secs": None}}
+                    self.state.update(orig=saved["df"], months=saved["months"], orig_info=saved["info"], orig_report=saved["report"])
+                except Exception:
+                    traceback.print_exc()
+            _set_locks(self.state["months"], _load_json(self.path("locks.json"), {}).get("chosen"))
+            self.state["rephase_ov"] = _load_json(self.path("rephase_overrides.json"), None)   # kept until cleared
+            self.loaded = True
+        finally:
+            _tl.ws = prev
+
+    def unload(self):
+        """Free the plan and any result from memory - the plan is on disk and reloads on the next visit."""
+        with lock:
+            self.state.update(_new_state())
+            self.loaded = False
+
+
+_spaces, _spaces_lock, _who = {}, threading.Lock(), {}
+
+
+def who(cookie):
+    """The signed-in RS Planning user a request comes from (Landing forwards its session cookie), cached a minute.
+    No cookie / not signed in (direct loopback use of :8070) -> the "local" workspace."""
+    if not cookie:
+        return "local"
+    now = time.time()
+    hit = _who.get(cookie)
+    if hit and now - hit[1] < 60:
+        return hit[0]
+    name = "local"
     try:
-        with open(ORIG_PKL, "rb") as fh:
-            saved = pickle.load(fh)
-        if isinstance(saved, tuple):  # cache written by the previous version: (df, months, meta)
-            df, months, meta = saved
-            for c in (STORE, DEPT, engine.DIV, engine.DISP):  # the old reader kept double spaces; today's importer collapses them
-                df[c] = df[c].astype(str).str.replace(r"\s+", " ", regex=True).str.strip()
-            saved = {"df": df, "months": months, "report": [], "info": {
-                "name": urllib.parse.unquote(meta.get("name", "original plan")), "loaded_at": meta.get("loaded_at"),
-                "rows": len(df), "stores": int(df[STORE].nunique()), "departments": int(df[DEPT].nunique()),
-                "divisions": sorted(df[engine.DIV].unique().tolist()), "months": months,
-                "colmap": {c: c for c in df.columns}, "sheets": [], "parse_secs": None}}
-        state.update(orig=saved["df"], months=saved["months"], orig_info=saved["info"], orig_report=saved["report"])
-    except Exception:
-        traceback.print_exc()
-_set_locks(state["months"], _load_json(LOCKS_JSON, {}).get("chosen"))
-state["rephase_ov"] = _load_json(REPHASE_OV_JSON, None)   # kept across restarts and plans until cleared
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(urllib.request.Request(AUTH_ME, headers={"Cookie": cookie}), timeout=5) as r:
+            name = json.load(r).get("username") or "local"
+    except Exception:  # noqa: BLE001 - 401 / platform down: no user
+        pass
+    if len(_who) > 500:
+        _who.clear()
+    _who[cookie] = (name, now)
+    return name
+
+
+def workspace(name):
+    """This user's workspace (created on first visit); frees other idle workspaces' memory.
+    ponytail: one lock around creation - a first visit (loading a ~200 MB plan) briefly holds up other users' polls."""
+    with _spaces_lock:
+        w = _spaces.get(name)
+        if w is None:
+            w = _spaces[name] = Workspace(name)
+        now = time.time()
+        for o in _spaces.values():
+            if o is not w and o.loaded and now - o.touched > IDLE_UNLOAD and not any(j.status == "running" for j in o.jobs.values()):
+                o.unload()
+    if not w.loaded:
+        w.load()
+    w.touched = time.time()
+    return w
 
 
 def _overrides():
@@ -296,12 +418,13 @@ def job_original(job, data, name, sheet=None):
             state["orig_upload"] = (data, name) if len(info.get("sheets", [])) > 1 else None
         _fail(rep, name)
     with job.step("Save for next session", "save:original", len(df)):
-        with open(ORIG_PKL + ".tmp", "wb") as fh:
+        pkl = _tl.ws.path("original.pkl")
+        with open(pkl + ".tmp", "wb") as fh:
             pickle.dump({"df": df, "months": months, "info": info, "report": rep.items}, fh)
-        os.replace(ORIG_PKL + ".tmp", ORIG_PKL)
+        os.replace(pkl + ".tmp", pkl)
     with lock:
         # a month the previous plan also had keeps the user's lock choice; a new month starts on the default
-        _set_locks(months, _load_json(LOCKS_JSON, {}).get("chosen"))
+        _set_locks(months, _load_json(_tl.ws.path("locks.json"), {}).get("chosen"))
         state.update(orig=df, months=months, orig_info=info, orig_report=rep.items, orig_failed=None,
                      orig_upload=(data, name) if len(info["sheets"]) > 1 else None, **NO_RESULT)
         rev = state["rev_upload"]
@@ -458,6 +581,7 @@ def public_state():
         "departments": sorted(o[DEPT].unique().tolist()) if o is not None else [],
         "method": s["method"], "listing_app": os.path.exists(KB_JSON), "locks": s["locks"], "absorb": s["absorb"],
         "ly_departments": ly_departments() if o is not None and s["method"] == "dept" else [],
+        "user": _tl.ws.name,   # whose workspace this is
         "rephase_overrides": (lambda v: v and {"name": v["name"], "loaded_at": v["loaded_at"], "stores": len(v["stores"]),
                                                "ref_old": sum("ref_old" in x for x in v["stores"].values()),
                                                "mix": sum(len(x.get("mix") or {}) if all(isinstance(y, dict) for y in (x.get("mix") or {}).values()) else 0
@@ -486,7 +610,13 @@ class Handler(BaseHTTPRequestHandler):
         u = urllib.parse.urlsplit(self.path)
         return u.path, {k: v[0] for k, v in urllib.parse.parse_qs(u.query).items()}
 
+    def _enter(self):
+        """Every request works in its own user's workspace."""
+        _tl.ws = workspace(who(self.headers.get("Cookie")))
+        engine._TL.locks = _tl.ws.locks
+
     def do_GET(self):
+        self._enter()
         path, q = self._route()
         if path in ("/", "/index.html"):
             with open(os.path.join(HERE, "index.html"), "rb") as fh:
@@ -554,6 +684,7 @@ class Handler(BaseHTTPRequestHandler):
         self._send(404, {"error": "not found"})
 
     def do_POST(self):
+        self._enter()
         path, q = self._route()
         n = int(self.headers.get("Content-Length") or 0)
         if n > MAX_BODY:
@@ -623,15 +754,15 @@ class Handler(BaseHTTPRequestHandler):
                 if ov is None:
                     raise UserError(f"{name}: {rep.first_error()}")
                 saved = {"name": name, "loaded_at": stamp(), "stores": ov}
-                _save_json(REPHASE_OV_JSON, saved)
+                _save_json(_tl.ws.path("rephase_overrides.json"), saved)
                 with lock:
                     state["rephase_ov"] = saved
                 return self._send(200, {"ok": True, "report": rep.items})
             elif path == "/api/rephase-overrides/clear":
                 with lock:
                     state["rephase_ov"] = None
-                if os.path.exists(REPHASE_OV_JSON):
-                    os.remove(REPHASE_OV_JSON)
+                if os.path.exists(_tl.ws.path("rephase_overrides.json")):
+                    os.remove(_tl.ws.path("rephase_overrides.json"))
                 return self._send(200, {"ok": True})
             elif path == "/api/rephase":   # ?dept=&mix= - re-phase from LY, load it as step 2 and run (Method 2)
                 if not q.get("dept"):

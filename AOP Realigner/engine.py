@@ -19,6 +19,7 @@ of the same store-division's other live months instead. Jan/Feb are never touche
 the original ASP for that Department x MRP x Display Type x Month.
 """
 import io
+import threading
 
 import numpy as np
 import pandas as pd
@@ -30,10 +31,15 @@ FROZEN = ("Jan", "Feb")  # default lock for a newly loaded plan: Jan & Feb stay 
 LOCKED = None  # month labels the user locked (server.py sets it per original plan); None = the FROZEN default
 
 
+_TL = threading.local()   # the calling user's locked months (server.py sets it per request / job; 2026-09-30)
+
+
 def locked(m):
     """Is plan month m locked - kept exactly as the original (value and qty)? The user picks this per month from
     the months found in the original plan (2026-09-29); until they do, Jan / Feb are the locked months."""
-    return m in LOCKED if LOCKED is not None else m[:3] in FROZEN
+    L = getattr(_TL, "locks", None)
+    L = L if L is not None else LOCKED
+    return m in L if L is not None else m[:3] in FROZEN
 
 
 XLSX_CTYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
