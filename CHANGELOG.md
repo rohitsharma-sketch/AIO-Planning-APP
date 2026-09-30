@@ -7,6 +7,14 @@ Newest first. Each entry names its commit.
 
 ## 2026-09-30
 
+### Users & access: admins can "Sign in as" someone
+- **Asked (user):** "yes, build the sign in as option". Showing people's permanent passwords isn't possible: only a bcrypt hash is stored, and it can't be reversed. Storing passwords readably was declined for security.
+- **What:** a **Sign in as** link next to Rename, for active non-admin accounts other than yourself. It opens the suite as that person without their password. `POST /api/auth/admin/sign-in-as/{id}` (admin only) swaps the session to that person with `signed_in_by` {admin id, current name} and `must_change_password` off, so the admin isn't forced to choose the person's password.
+- **Banner:** while signed in as someone else, every page shows "Signed in as <name>" with a **Back to admin** button. It is in `static/suite-theme.js`, which every app loads. `POST /api/auth/stop-sign-in-as` re-checks that the admin is still an active admin (otherwise it signs out) and restores their session.
+- **While signed in as them:** you have their role and their action rights, you work in their Re-Aligner workspace, and the admin pages are closed. Anything done is recorded as that person.
+- **Log:** `backend/data/sign_in_as.log` (JSON lines {at, event start|stop, admin, as}, gitignored). The newest 50 are shown in a "Sign in as - history" card (`GET /api/auth/admin/sign-in-as-log`).
+- **Checks:** no signing in as yourself, as another admin, or as a switched-off account (`sign_in_as_refusal`, tests in `tests/test_admin_guard.py`). Checked live: admin → Planning02 (banner shown, Users hidden, admin API 403, Planning02's rights) → Back to admin, with both events logged.
+
 ### Switched-off actions are hidden in Calendar and AOP; Landing gets Sign out / switch user
 - **Asked (user):** "yes, hide the buttons in calendar and aop too" and "also add a log off or change user button in the landing page to switch profiles".
 - **Calendar:** Run Reindex is hidden for a person whose `calendar_reindex` is switched off. `lib/api.js getRights`, and `App.jsx` passes `rights` to the tabs (`CalendarisedSalesTab`).

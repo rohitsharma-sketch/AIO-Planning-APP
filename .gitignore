@@ -54,3 +54,4 @@ data/listing/
 Listing Delisting/app/*.json
 Landing/keep_alive.log
 RS Planning Platform/backend/data/user_rights.json
+RS Planning Platform/backend/data/sign_in_as.log

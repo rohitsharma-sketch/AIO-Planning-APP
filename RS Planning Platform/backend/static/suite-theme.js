@@ -82,6 +82,35 @@
       }).then(function (r) { if (!r.ok) throw new Error('Theme not saved (' + r.status + ')'); return id; });
     },
   };
+  // "Sign in as" banner (2026-09-30): while an admin has the suite open as someone else, every page says so
+  // and offers the way back. Nothing shows for a normal sign-in.
+  fetch(origin + '/api/auth/me', { credentials: 'include', cache: 'no-store' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (u) {
+      if (!u || !u.signed_in_by) return;
+      function show() {
+        var d = document.createElement('div');
+        d.setAttribute('role', 'status');
+        d.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:2147483647;'
+          + 'display:flex;align-items:center;gap:12px;max-width:calc(100% - 32px);white-space:nowrap;padding:8px 8px 8px 16px;'
+          + 'border-radius:999px;background:#7A4B00;color:#fff;font:600 13px/1.3 system-ui,sans-serif;'
+          + 'box-shadow:0 4px 16px rgba(0,0,0,.25)';
+        var t = document.createElement('span');
+        t.textContent = 'Signed in as ' + u.username;
+        t.style.cssText = 'min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+        d.title = u.signed_in_by.username + ' opened RS Planning as ' + u.username + ' (Users & access > Sign in as)';
+        var b = document.createElement('button');
+        b.type = 'button'; b.textContent = 'Back to admin';
+        b.style.cssText = 'border:0;border-radius:999px;padding:6px 12px;background:#fff;color:#7A4B00;font:inherit;cursor:pointer;white-space:nowrap';
+        b.onclick = function () {
+          b.disabled = true;
+          fetch(origin + '/api/auth/stop-sign-in-as', { method: 'POST', credentials: 'include' })
+            .finally(function () { location.href = origin + '/auth/users'; });
+        };
+        d.appendChild(t); d.appendChild(b); document.body.appendChild(d);
+      }
+      if (document.body) show(); else document.addEventListener('DOMContentLoaded', show);
+    }).catch(function () {});
   apply(window.__SUITE_THEME__);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
 })();

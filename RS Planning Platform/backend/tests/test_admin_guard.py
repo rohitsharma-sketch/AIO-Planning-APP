@@ -21,3 +21,11 @@ def test_rename_checks():
     assert username_refusal("", ["admin"]) and username_refusal("x" * 65, [])
     assert "already" in username_refusal("Admin", ["admin", "planning01"])     # case doesn't make it different
     assert username_refusal("Suraj Kumar", ["admin"]) is None
+
+
+def test_sign_in_as_checks():
+    from auth.routes import sign_in_as_refusal
+    assert sign_in_as_refusal("a", "a", True, True)                     # yourself
+    assert "another admin" in sign_in_as_refusal("a", "b", True, True)   # no admin-to-admin hops
+    assert "switched off" in sign_in_as_refusal("a", "b", False, False)
+    assert sign_in_as_refusal("a", "b", False, True) is None

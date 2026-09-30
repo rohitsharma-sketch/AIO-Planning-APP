@@ -50,6 +50,11 @@
   .uname { font-weight: 700; }
   .linkbtn { border: 0; background: none; padding: 2px 0 0; font: inherit; font-size: 12px; font-weight: 700; color: var(--accent); cursor: pointer; text-decoration: underline; }
   .linkbtn:hover { color: var(--accent-h); }
+  .sep { color: var(--faint); font-size: 12px; }
+  .log { margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--text2); }
+  .log li { padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .log li:last-child { border-bottom: none; }
+  .log .when { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 10px; }
   .you { font-size: 11px; font-weight: 700; color: var(--accent); margin-left: 6px; }
   .badge { display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: 11.5px; font-weight: 700; }
   .badge.amber { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-bd); }
@@ -116,7 +121,7 @@
 
     <section class="card" aria-labelledby="h-users">
       <h2 id="h-users">People</h2>
-      <p class="desc">Change a role, email or admin rights here - it saves as soon as you change it. Switch an account off to stop it signing in without deleting it. <b>Rename</b> changes the username they sign in with. <b>Set password</b> gives someone a temporary password; they choose their own the next time they sign in.</p>
+      <p class="desc">Change a role, email or admin rights here - it saves as soon as you change it. Switch an account off to stop it signing in without deleting it. <b>Rename</b> changes the username they sign in with. <b>Sign in as</b> opens the suite as that person - without their password - to see or fix their work; a banner on every page takes you back, and each use is logged below. <b>Set password</b> gives someone a temporary password; they choose their own the next time they sign in.</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>User</th><th>Email (for password resets)</th><th>Role</th><th>Admin</th><th>Can sign in</th><th>Status</th><th></th></tr></thead>
@@ -131,6 +136,12 @@
       <p class="desc">Untick an action to switch it off for that person - it applies straight away, and they see a message saying an admin switched it off if they try. Everyone has every action until you untick it. Admins always keep all of them.</p>
       <div id="rights"><p class="desc">Loading…</p></div>
       <div class="msg" id="rights-msg" role="status"></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-log">
+      <h2 id="h-log">Sign in as - history</h2>
+      <p class="desc">Every time an admin opened the suite as someone else, and when they came back. Anything done in between is recorded as that person.</p>
+      <ul class="log" id="as-log"><li>Loading…</li></ul>
     </section>
 
     <section class="card" aria-labelledby="h-add">
@@ -207,7 +218,7 @@ function render() {
   $('#rows').innerHTML = sorted.map(u => {
     const self = me && u.id === me.id;
     return `<tr class="${u.is_active ? '' : 'off'}" data-id="${esc(u.id)}">
-      <td><span class="uname">${esc(u.username)}</span>${self ? '<span class="you">you</span>' : ''}<br><button type="button" class="linkbtn" data-act="rename" aria-label="Rename ${esc(u.username)}">Rename</button></td>
+      <td><span class="uname">${esc(u.username)}</span>${self ? '<span class="you">you</span>' : ''}<br><button type="button" class="linkbtn" data-act="rename" aria-label="Rename ${esc(u.username)}">Rename</button>${!self && !u.is_admin && u.is_active ? ` <span class="sep">·</span> <button type="button" class="linkbtn" data-act="as" aria-label="Sign in as ${esc(u.username)}">Sign in as</button>` : ''}</td>
       <td><input type="email" value="${esc(u.email || '')}" placeholder="no email - can't reset by email" aria-label="Email for ${esc(u.username)}" data-f="email"></td>
       <td><select data-f="role" aria-label="Role for ${esc(u.username)}">${ROLES.map(r => `<option value="${r}" ${r === u.role ? 'selected' : ''}>${r[0].toUpperCase() + r.slice(1)}</option>`).join('')}</select></td>
       <td><input type="checkbox" data-f="is_admin" ${u.is_admin ? 'checked' : ''} ${self ? 'disabled title="You can\'t remove your own admin rights"' : ''} aria-label="Admin: ${esc(u.username)}"></td>
@@ -222,6 +233,10 @@ function render() {
 async function load() {
   [users, rights] = await Promise.all([api('/admin/users'), api('/admin/rights')]);
   render();
+  const log = await api('/admin/sign-in-as-log').catch(() => []);
+  $('#as-log').innerHTML = log.map(e => `<li><span class="when">${esc(e.at)}</span>${e.event === 'start'
+    ? `<b>${esc(e.admin)}</b> signed in as <b>${esc(e.as)}</b>` : `<b>${esc(e.admin)}</b> came back from <b>${esc(e.as)}</b>`}</li>`).join('')
+    || '<li>Nobody has used Sign in as yet.</li>';
 }
 
 function renderRights() {
@@ -269,6 +284,12 @@ $('#rows').addEventListener('change', e => {
   save(tr.dataset.id, {[f]: v}, {email: 'the email', role: 'the role', is_admin: 'admin rights', is_active: 'sign-in access'}[f]);
 });
 $('#rows').addEventListener('click', e => {
+  if (e.target.dataset.act === 'as') {
+    const u = users.find(x => x.id === e.target.closest('tr').dataset.id);
+    if (!confirm(`Open RS Planning as ${u.username}? You'll see and do everything as them until you click "Back to admin". This is logged.`)) return;
+    api(`/admin/sign-in-as/${u.id}`, {method: 'POST'}).then(() => { location.href = '/'; }).catch(err => say($('#table-msg'), err.message));
+    return;
+  }
   if (e.target.dataset.act === 'rename') {
     const u = users.find(x => x.id === e.target.closest('tr').dataset.id);
     const name = (prompt(`New username for ${u.username} (they sign in with this from now on):`, u.username) || '').trim();

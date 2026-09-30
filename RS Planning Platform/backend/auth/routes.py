@@ -1,3 +1,6 @@
+import json
+import os
+import time
 import uuid
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
@@ -135,6 +138,84 @@ def me(user: dict = Depends(require_login)):
 def my_rights(user: dict = Depends(require_login)):
     """The signed-in person's rights right now (Landing checks this before a guarded action) + what each means."""
     return {"rights": rights_for(user["id"]), "labels": RIGHTS}
+
+
+SIGN_IN_AS_LOG = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "sign_in_as.log")
+
+
+def sign_in_as_refusal(me_id, target_id, target_is_admin, target_is_active):
+    """Why an admin may not sign in as this person, or None (2026-09-30)."""
+    if str(target_id) == str(me_id):
+        return "That's you already."
+    if target_is_admin:
+        return "You can't sign in as another admin."
+    if not target_is_active:
+        return "This account is switched off - switch it back on first."
+    return None
+
+
+def _log_sign_in_as(event, admin, target):
+    os.makedirs(os.path.dirname(SIGN_IN_AS_LOG), exist_ok=True)
+    with open(SIGN_IN_AS_LOG, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"at": time.strftime("%Y-%m-%d %H:%M:%S"), "event": event, "admin": admin, "as": target}) + "\n")
+
+
+@router.post("/admin/sign-in-as/{user_id}")
+def sign_in_as(user_id: str, request: Request, _admin: dict = Depends(require_admin)):
+    """An admin opens the suite as this person, without their password, to see or fix their work. Every use is
+    logged; the session remembers the admin so "Back to admin" returns without signing in again."""
+    try:
+        uid = uuid.UUID(user_id)
+    except ValueError:
+        raise HTTPException(422, "Invalid user id")
+    session = SessionLocal()
+    try:
+        u = session.get(User, uid)
+        by_name = session.get(User, uuid.UUID(_admin["id"])).username   # current name, not the session's copy
+    finally:
+        session.close()
+    if u is None:
+        raise HTTPException(404, "User not found")
+    refusal = sign_in_as_refusal(_admin["id"], u.id, u.is_admin, u.is_active)
+    if refusal:
+        raise HTTPException(409, refusal)
+    # must_change_password off: the admin isn't forced to pick this person's password for them
+    request.session["user"] = {"id": str(u.id), "username": u.username, "role": u.role, "is_admin": False,
+                               "must_change_password": False,
+                               "signed_in_by": {"id": _admin["id"], "username": by_name}}
+    _log_sign_in_as("start", by_name, u.username)
+    return request.session["user"]
+
+
+@router.post("/stop-sign-in-as")
+def stop_sign_in_as(request: Request, user: dict = Depends(require_login)):
+    """Back to the admin's own session (checked fresh: still an active admin, else signed out)."""
+    by = user.get("signed_in_by")
+    if not by:
+        raise HTTPException(409, "You're not signed in as someone else.")
+    session = SessionLocal()
+    try:
+        a = session.get(User, uuid.UUID(by["id"]))
+    finally:
+        session.close()
+    if a is None or not a.is_admin or not a.is_active:
+        request.session.pop("user", None)
+        raise HTTPException(403, "Your admin access has ended - sign in again.")
+    request.session["user"] = {"id": str(a.id), "username": a.username, "role": a.role, "is_admin": True,
+                               "must_change_password": a.must_change_password}
+    _log_sign_in_as("stop", a.username, user["username"])
+    return request.session["user"]
+
+
+@router.get("/admin/sign-in-as-log")
+def sign_in_as_log(_admin: dict = Depends(require_admin)):
+    """The latest 50 Sign in as / Back to admin events, newest first."""
+    try:
+        with open(SIGN_IN_AS_LOG, encoding="utf-8") as fh:
+            lines = fh.readlines()[-50:]
+    except OSError:
+        return []
+    return [json.loads(x) for x in reversed(lines) if x.strip()]
 
 
 @router.get("/admin/rights")
