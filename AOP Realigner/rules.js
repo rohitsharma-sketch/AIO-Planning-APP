@@ -17,8 +17,8 @@ const RULES_NOW = [
     "Qty = value ÷ the original ASP of that Department × MRP × Display type × Month (pooled across stores). No qty that month: the combination's all-month ASP, then MRP. Unchanged cells keep their exact original qty.",
   ]],
   ['Method 1 - store listing changes', [
-    'The blank template is <b>Department | Store | Value</b>; Value is the listing flag, Y or N (a LISTING column is read the same way). An optional FROM MONTH column and "&lt;Month&gt; New" values are still read if added.',
-    'Value / LISTING = N: the department goes to 0 from FROM MONTH (blank = the first month).',
+    'The blank template is <b>Department | Store | Listing (Y/N)</b>. An optional FROM MONTH column and "&lt;Month&gt; New" values are still read if added.',
+    'Listing = N: the department goes to 0 from FROM MONTH (blank = the first month).',
     "LISTING = Y (not planned there): sized, month by month, as its share of the division in same-cluster stores that plan it × this store's division plan - or your own values - with rows borrowed from the peer store that plans it most.",
     'The "From Listing / Delisting Analyser" template leaves out a store × division whose every department is delisted (a closing or not-yet-open store): nothing would be left to absorb it.',
   ]],

@@ -286,10 +286,11 @@ assert not rep_.ok and "S3" in str(rep_.items)                       # S3 isn't 
 df_, info_, rep_ = importer.read_table(b"Store,Dept,Listing,Sep'26 New\nS1,A,N,\n", "x.csv", importer.NEED_LISTING, "file")
 r_, _, _, _, rep_ = importer.prepare_listing(df_, info_, rep_, o_df, o_months)
 assert rep_.ok and r_.loc[0, "Sep'26"] == 0, rep_.items
-# the blank template's own headers (user, 2026-10-01): Department | Store | Value (Y / N)
-assert list(importer.template_listing(o_df, o_months)[0].columns) == ["Department", "Store", "Value"]
-r_, _, _, _, rep_ = read_as(b"Department,Store,Value\nA,S1,N\n", importer.NEED_LISTING, importer.prepare_listing)
-assert rep_.ok and r_.loc[0, "Sep'26"] == 0, rep_.items
+# the blank template's own headers (user, 2026-10-01): Department | Store | Listing (Y/N); "Value" still reads
+assert list(importer.template_listing(o_df, o_months)[0].columns) == ["Department", "Store", "Listing (Y/N)"]
+for hdr in (b"Department,Store,Listing (Y/N)", b"Department,Store,Value"):
+    r_, _, _, _, rep_ = read_as(hdr + b"\nA,S1,N\n", importer.NEED_LISTING, importer.prepare_listing)
+    assert rep_.ok and r_.loc[0, "Sep'26"] == 0, (hdr, rep_.items)
 _, _, _, _, rep = read_as(b"Store,Dept,Listing,From\nS1,A,X,Mar'27\n", importer.NEED_LISTING, importer.prepare_listing)
 errs = " | ".join(i["msg"] for i in rep.items if i["level"] == "error")
 assert "isn't Y or N" in errs and "FROM MONTH" in errs

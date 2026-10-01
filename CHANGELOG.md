@@ -7,8 +7,9 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-01
 
-### Sales Plan Re-Aligner: Method 1 blank template is Department | Store | Value — `2730379`
-- **Asked (user):** "i want this as blank template headers instead of the current one" (screenshot: Department | Store | Value); Value = the Y / N listing flag (user's choice).
+### Sales Plan Re-Aligner: Method 1 blank template is Department | Store | Listing (Y/N) — `2730379`, renamed in the next commit
+- **Asked (user):** "i want this as blank template headers instead of the current one" (screenshot: Department | Store | Value); Value = the Y / N listing flag (user's choice). Then "rename Value to Listing (y/n)".
+- **Rename:** the third column is now **Listing (Y/N)**, which was already a LISTING alias. A file with a "Value" header still reads; the test covers both.
 - **Template:** `importer.template_listing` (blank, without the Listing app) returns just **Department, Store, Value**. It used to be STORE NAME, DIVISION, DEPARTMENT, LISTING, FROM MONTH, NOTE and "<Month> New".
 - **Reading:** "VALUE" is a new name for the LISTING column (Y = newly listed, N = delisted). An optional FROM MONTH and "<Month> New" values are still read if added.
 - **Unchanged:** the "From Listing / Delisting Analyser" pre-filled template keeps its columns.

@@ -32,7 +32,7 @@ ALIASES = {
     DIV: {"DIVISION", "DIV"},
     MRP: {"MRP"},
     DISP: {"DISPLAY TYPE", "DISPLAY", "DISPLAYTYPE", "DISPLAY_TYPE"},
-    # VALUE: the Method 1 blank template's Y / N column (user, 2026-10-01: headers "Department | Store | Value")
+    # VALUE: what the Method 1 blank template's Y / N column was briefly called (now "Listing (Y/N)", user 2026-10-01)
     LIST: {"LISTING", "LISTING (Y/N)", "LISTED", "MC_LISTING", "MC LISTING", "MC_LISTING(REV)", "LISTING STATUS", "VALUE"},
     FROMM: {"FROM MONTH", "FROM", "EFFECTIVE FROM", "EFFECTIVE MONTH", "FROM (MONTH)"},
     PARENT: {"PARENT DEPARTMENT", "PARENT DEPT", "PARENT", "COPY FROM", "SPLIT FROM", "OLD DEPARTMENT", "FROM DEPARTMENT"},
@@ -656,8 +656,8 @@ def template_listing(orig, months, kb=None):
     closing or not open yet, e.g. an upcoming store flipped to N) is left out: nothing would be left there to
     absorb its plan. Those rows come back separately for the "Not included" sheet."""
     cols = [STORE, DIV, DEPT, LIST, FROMM, "NOTE"] + [m + " New" for m in live_months(months)]
-    if not kb:   # blank: just Department | Store | Value (Y / N) - FROM MONTH / "<Month> New" still read if added
-        return pd.DataFrame(columns=["Department", "Store", "Value"]), pd.DataFrame()
+    if not kb:   # blank: just Department | Store | Listing (Y/N) - FROM MONTH / "<Month> New" still read if added
+        return pd.DataFrame(columns=["Department", "Store", "Listing (Y/N)"]), pd.DataFrame()
     tot = orig.groupby([STORE, DEPT])[[m + " Plan" for m in months]].sum().abs().sum(axis=1)
     planned = set(tot[tot > 1e-9].index)
     season = orig.groupby([STORE, DEPT])[[m + " Plan" for m in live_months(months)]].sum().sum(axis=1)
