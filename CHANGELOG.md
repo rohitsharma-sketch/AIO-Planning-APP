@@ -7,6 +7,16 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-02
 
+### Growth vs LY — new app on Landing (`/growth/`, port 8075) — `156a0ac`
+- **Asked (user):** "check this format and design a convertor for me so that whenever i want to input old data and the final sales plan it can plot the data against ly according to the hierarchy given in the sale splan" (format: GR % PLAN - 3.9.26.xlsb). Chose: LY "Auto from data lake"; "New app on Landing".
+- **Input:** the final sales plan (xlsx / xlsb / csv, any header row — the Re-Aligner's importer).
+- **LY, by itself:** the data lake's day-wise sales (latest complete export via `rs_common.lake_files`), the same months a year earlier, value ₹ ÷ 1e5 = lakhs and qty. A P1 / P2 month is split last year at the middle day: **P1 = 1st–15th, Feb 1st–14th**. Checked against the 3.9.26 workbook: full months match the month-wise lake exactly; Jan P1/P2 match 98% of rows at the 15th, Feb 98–99% at the 14th. The rest are departments renamed or split in the lake since then (MSE_PYJAMA, KB_BERMUDA, LW_L_JEGGING …), which the final plan's names now follow. Stores with no LY (new stores) show LY 0, as in that workbook. The first read takes ~2 min, then it's cached per lake export.
+- **Screen:** Division › Attribute › Department (the plan's hierarchy) with each block (e.g. OND / JF — months grouped by calendar year) and the season: TY, LY, growth % (TY ÷ LY − 1, same stores). There's an SSG TAG filter (SSG by default, or All stores) and a month-by-month TY vs LY chart for any row.
+- **Download — GR % PLAN workbook:** MAIN (one row per Store × Department in the 3.9.26 layout: Div Conc, Dep Conc, Division, STORE NAME, DEPARTMENT, ST TAG, ATTRIBUTE, SSG TAG, TY value / qty, LY value / qty by month with block and season totals, plus growth % per block and season) + PIVOT for the chosen tags + PIVOT ALL. "TTL Qty LY" is the season total (the 3.9.26 file repeated SOND there).
+- **On your plan (NEW FINAL):** SSG stores: KIDS +23.4%, LADIES +20.6%, MENS +18.9%, total +20.8% (42,314.79 vs 35,033.40 L). All stores: +72.7% (new stores have no LY).
+- **Landing:** watchdog entry, `/growth` proxy route + slash redirect, card. Landing restarted once (4 stale duplicate processes cleared).
+- `test_gr.py`: P1/P2 cut (Jan 15th, Feb 14th), rupees → lakhs, blocks, MAIN totals, LY-only rows kept, pivot growth.
+
 ### Sales Plan Re-Aligner: engine delays cut — Method 1 run 100 s → 10 s — `cda7b06`
 - **Asked (user):** "cut the delays in all the method engines"
 - **Timed on your plan** (676k rows; check → realign → verify), old → new:
