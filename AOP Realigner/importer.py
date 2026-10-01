@@ -18,7 +18,7 @@ import re
 import numpy as np
 import pandas as pd
 
-from engine import (DEPT, DISP, DIV, MRP, STORE, locked, growth_targets, listing_targets, ly_label, parent_for,
+from engine import (DEPT, DISP, DIV, MRP, STORE, locked, growth_targets, listing_targets, ly_groups, ly_label, parent_for,
                     shift_targets, split_targets)
 
 LIST, FROMM, PARENT, NEWD, SHARE = "LISTING", "FROM MONTH", "PARENT DEPARTMENT", "NEW DEPARTMENT", "SHARE %"
@@ -568,7 +568,8 @@ def prepare_growth(df, info, rep, orig, months, ly):
     """Method 5 - growth changes: DEPARTMENT, NEW GROWTH % (vs last year), optional STORE NAME (blank = every
     store; a store's own row overrides) -> (revised Store x Dept rows, months, {}, info, report).
     ly: {(store, dept): {"Sep'25": value}} from the month-wise data-lake export, in the plan's units."""
-    gcols = [m for m in month_cols(df, "Growth") if m in months and not locked(m) and ly_label(m)]
+    grp = ly_groups(months)   # "Jan'27" covers Jan'27 P1 + P2 (compared with last year's whole Jan)
+    gcols = [m for m in month_cols(df, "Growth") if m.split(" ")[0] in grp]
     cols = [GROWTH] + [m + " Growth" for m in gcols]         # NEW GROWTH % (season) + optional '<Month> GROWTH %'
     raw = df[cols].copy()
     df = _keys(df, [DEPT], rep, "growth")
@@ -592,7 +593,7 @@ def prepare_growth(df, info, rep, orig, months, ly):
         rep.error("Last year's sales aren't available (the Listing / Delisting Analyser's sales.json) - can't measure growth.")
     if not rep.ok:
         return None, [], {}, info, rep
-    jm = {m: j for j, m in enumerate(months)}
+    jm = {m: grp[m.split(" ")[0]][0] for m in gcols}
     rows = [{"dept": d, "store": s or None, "growth": vals.get((i, GROWTH)),
              "months": {jm[m]: vals[(i, m + " Growth")] for m in gcols if (i, m + " Growth") in vals}}
             for i, d, s in zip(df.index, df[DEPT], df[STORE])]
@@ -601,7 +602,7 @@ def prepare_growth(df, info, rep, orig, months, ly):
     except ValueError as e:
         rep.error(str(e))
         return None, [], {}, info, rep
-    lm = [m for m in months if not locked(m) and ly_label(m)]
+    lm = list(grp)
     for x in detail:
         mm = "".join(f"; {y['month']} {y['current']:+.1%} → {y['new']:+.1%}" for y in x["months"])
         season = (f"{x['current']:+.1%} now → {x['new']:+.1%} (plan × {x['factor']:.4f})" if x["new"] is not None
@@ -744,7 +745,10 @@ def template_newdept(months):
 def template_shift(orig, months, kb=None):
     """Method 4 template: the Method 1 columns plus TARGET; with kb, pre-filled like Method 1 (TARGET left for the user)."""
     t, skipped = template_listing(orig, months, kb)
-    t.insert(t.columns.get_loc(FROMM) + 1, TARGET, "")
+    if FROMM in t.columns:
+        t.insert(t.columns.get_loc(FROMM) + 1, TARGET, "")
+    else:   # the blank Method 1 template has no FROM MONTH (2026-10-01) - it crashed the Method 4 template
+        t["Target"] = ""
     return t, skipped
 
 
@@ -959,8 +963,9 @@ def template_rephase(orig, months, ly, dept, mix=None, overrides=None, partial=(
 def template_growth(orig, months, ly):
     """Method 5 template: every department with its plan and last year's sales over the live months (stores that have
     both) and the growth that gives today; fill NEW GROWTH % for the ones to change (blank = unchanged)."""
-    lm = [m for m in months if not locked(m) and ly_label(m)]
-    g = orig.groupby([STORE, DIV, DEPT])[[m + " Plan" for m in lm]].sum().sum(axis=1).rename("plan").reset_index()
+    grp = ly_groups(months)   # a P1 / P2 half pairs with its other half: "Jan'27" vs last year's Jan
+    lm = list(grp)
+    g = orig.groupby([STORE, DIV, DEPT])[[months[j] + " Plan" for js in grp.values() for j in js]].sum().sum(axis=1).rename("plan").reset_index()
     g["ly"] = [sum(float(ly.get((s, d), {}).get(ly_label(m), 0.0)) for m in lm) for s, d in zip(g[STORE], g[DEPT])]
     c = g[(g["plan"] > 1e-9) & (g["ly"] > 1e-9)].groupby([DIV, DEPT])[["plan", "ly"]].sum()
     a = g.groupby([DIV, DEPT]).agg(stores=(STORE, "size")).join(c).reset_index()
@@ -972,7 +977,7 @@ def template_growth(orig, months, ly):
     # per month: that month's current growth (same comparable stores) and an empty column to set it
     comp = g[(g["plan"] > 1e-9) & (g["ly"] > 1e-9)][[STORE, DEPT]]
     for m in lm:
-        pm = orig.groupby([STORE, DEPT])[m + " Plan"].sum().reindex(pd.MultiIndex.from_frame(comp)).fillna(0.0)
+        pm = orig.groupby([STORE, DEPT])[[months[j] + " Plan" for j in grp[m]]].sum().sum(axis=1).reindex(pd.MultiIndex.from_frame(comp)).fillna(0.0)
         lym = pd.Series([float(ly.get((s, d), {}).get(ly_label(m), 0.0)) for s, d in zip(comp[STORE], comp[DEPT])], index=pm.index)
         cur = (pm.groupby(level=1).sum() / lym.groupby(level=1).sum().replace(0, np.nan) - 1) * 100
         out[f"{m} CURRENT %"] = out[DEPT].map(cur).round(2)

@@ -6,6 +6,12 @@ import importer
 import engine
 from engine import listing_targets, realign, split_targets, verify
 
+# no default lock (user, 2026-10-02): nothing is locked until the user locks it ...
+assert not engine.locked("Jan'27 P1") and not engine.locked("Feb'27 P2")
+# ... these fixtures lock Jan / Feb, as a planner would
+JF = {"Jan'27", "Jan'27 P1", "Jan'27 P2", "Feb'27", "Feb'27 P1", "Feb'27 P2"}
+engine.LOCKED = JF
+
 # ------------------------------------------------------------------ engine
 
 M = ["Sep'26", "Nov'26", "Jan'27 P1"]
@@ -98,7 +104,7 @@ for s_, d_, mrp_ in [("S1", "A", 299), ("S1", "B", 299), ("S1", "D", 299), ("S2"
 assert np.isclose(g2("S1", "A", 299, "Jan'27 P1"), 70 * 0.6)
 assert np.isclose(out2[out2["Store Name"] == "S1"]["Jan'27 P1 Plan"].sum(), 70)
 assert {ch["name"]: ch["status"] for ch in verify(orig, rev, out2, M)[0]}["Locked months untouched (value and qty)"] == "ok"
-engine.LOCKED = None   # back to the default (Jan / Feb) for the rest of the checks
+engine.LOCKED = JF   # back to Jan / Feb locked for the rest of the checks
 
 # a pure re-phase (D's season kept, months moved): D keeps its new months exactly and the other departments absorb it,
 # so every store x division x month stays on the original - the cap ("stay as they are" was removed, 2026-09-30)
@@ -242,6 +248,18 @@ out5, _, _, _ = realign(orig, r5, M)
 assert np.isclose(out5[out5["Store Name"] == "S1"]["Sep'26 Plan"].sum(), 70)                 # capped at store x division
 checks5, _ = verify(orig, r5, out5, M)
 assert {c["name"]: c["status"] for c in checks5}["Display-type cont % kept as in the original"] == "ok"
+# a P1 / P2 half is not locked by Method 5 (user, 2026-10-02): unlocked, Jan'27 P1 is grown vs last year's whole Jan
+engine.LOCKED = set()
+lyJ = {k: {**v, "Jan'26": 5} for k, v in ly.items()}
+r5j, det5j = growth_targets(orig, [{"dept": "B", "store": None, "growth": 0.2}], M, lyJ)
+fJ = 1.2 / (65 / 35)                                         # plan Sep + Nov + Jan P1 = 40 + 25 vs last year 20 + 15
+assert np.isclose(det5j[0]["factor"], fJ) and np.allclose(r5j.set_index(["Store Name", "DEPARTMENT"]).loc[("S1", "B")], [10 * fJ, 20 * fJ, 10 * fJ])
+assert list(engine.ly_groups(["Dec'26", "Jan'27 P1", "Jan'27 P2"])) == ["Dec'26", "Jan'27"]
+engine.LOCKED = {"Jan'27 P2"}                                # one half locked: the month can't be compared, so it is left out
+assert list(engine.ly_groups(["Dec'26", "Jan'27 P1", "Jan'27 P2"])) == ["Dec'26"]
+engine.LOCKED = JF
+# Method 4 blank template (crashed on the Method 1 blank, 2026-10-02): Method 1 columns + Target
+assert list(importer.template_shift(orig, M)[0].columns) == ["Department", "Store", "Listing (Y/N)", "Target"]
 checks4, _ = verify(orig, r4, out4, M)
 assert {c["name"]: c["status"] for c in checks4}["Display-type cont % kept as in the original"] == "ok"
 
@@ -477,7 +495,7 @@ for kw, msg in (({"partial": {"Oct'25"}}, "isn't complete"), ({}, "No last-year 
 engine.LOCKED = set()
 _, _, n4 = importer.template_rephase(ro, RM, rly, "A", "A F/S")
 assert any("Jan'27 P1" in n and "half-month" in n for n in n4), n4
-engine.LOCKED = None
+engine.LOCKED = JF
 
 # ------------------------------------------------------------------ the cap per attribute (user, 2026-10-01)
 # S1 LADIES: A, B are REGULAR; C, D are SUMMER. A Sep 10 -> 15: only B (same attribute) gives way, C / D untouched

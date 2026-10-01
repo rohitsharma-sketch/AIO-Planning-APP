@@ -334,7 +334,7 @@ const METHODS = {
       The rest of the <b>same store × division</b> re-aligns around it (capped at store × division × month); other divisions are not touched. The template lists every department with its current growth.`,
     run: 'The target department takes its new growth over last year in every live month; the rest of its own store × division absorbs the change pro-rata — other divisions are untouched.'},
 };
-const RUN_TAIL = ' Every method splits to MRP × display rows by the original plan\'s display-type cont %; locked months (Jan / Feb unless you change them) are never touched; qty is priced at the original month-wise ASP per Department × MRP × Display Type.';
+const RUN_TAIL = ' Every method splits to MRP × display rows by the original plan\'s display-type cont %; locked months (only those you lock) are never touched; qty is priced at the original month-wise ASP per Department × MRP × Display Type.';
 const method = () => METHODS[S.method] || METHODS.dept;
 const P = {
   upload:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/>',

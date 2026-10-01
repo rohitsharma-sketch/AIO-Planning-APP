@@ -9,7 +9,7 @@ const RULES_NOW = [
     'If nothing of the same attribute can absorb a change (e.g. a delisted department that is the only one of its attribute in the store), the <b>rest of that store × division</b> absorbs it pro-rata - that store × division is then checked at division level. Listed in the notes.',
     'Last resort, so the plan is never up or down: a store × division × month still off after all this has every department scaled onto the original (revised ones included, flagged); one with nothing left to carry its plan (every department 0) keeps its original plan that month (flagged).',
     '<b>No negative plan</b>: after apportioning, every negative cell in an unlocked month (e.g. -0.01) is set to <b>0</b>, and the balance comes back out of the same store × division × attribute × month by the same rules - a revised department’s negative row out of that department’s own other rows (its value stays as given), any other out of the other departments pro-rata - so the cap still holds. Negatives in locked months stay as they are. Checked on every run.',
-    '<b>Locked months are never changed</b> (value and qty) - the planner locks / unlocks each month of the original plan (Jan / Feb locked by default). Locked-month figures in an upload are ignored and flagged.',
+    '<b>Locked months are never changed</b> (value and qty) - the planner locks / unlocks each month of the original plan (nothing is locked unless you lock it). Locked-month figures in an upload are ignored and flagged.',
   ]],
   ['When a month overflows', [
     "If the departments you gave alone exceed a month's cap, they are <b>cut to the cap</b> that month (the other departments go to 0) and the excess moves into the <b>same departments' other live months</b> that still have room - the other departments there shrink by the same amount.",
@@ -56,6 +56,7 @@ const RULES_NOW = [
     "DEPARTMENT and NEW GROWTH % (season) and / or per-month growth columns over last year, optional STORE NAME (blank = every store; a store's own row overrides). Last year = the month-wise data-lake sales (Listing / Delisting Analyser app).",
     'Current growth = plan ÷ last year over the live months, on the stores with both; the plan is scaled by (1 + new) ÷ (1 + current) in every live month, keeping its month phasing.',
     'Per month: a "&lt;Month&gt; GROWTH %" column sets that month on its own - its plan vs its own last-year month (so a festival that moved month, e.g. Diwali, shows up there). Months without one take NEW GROWTH %, or stay as planned if that is blank too.',
+    'A <b>P1 / P2 half-month</b> is measured with its other half against last year’s <b>whole month</b> (Jan’27 P1 + P2 vs Jan’26) - one "&lt;Month&gt; GROWTH %" column (e.g. Jan’27) sets both halves. Only a month you locked (or one with a locked half) is left out.',
     'The rest of the same store × division × attribute absorbs it (the cap); other attributes and divisions are not touched. A current growth beyond ±200% is flagged as "last year not comparable".',
   ]],
   ['Display-type cont % (every method)', [
@@ -70,17 +71,10 @@ const RULES_NOW = [
 ];
 
 const RULES_LATEST = {
-  date: '2026-10-01',
+  date: '2026-10-02',
   changes: [
-    'The cap is now <b>Store × Division × Attribute × Month</b> (was Store × Division × Month): a department change is absorbed only by the other departments of its own attribute in that store × division - nothing is apportioned across attributes. Store × division × month still matches, as it follows.',
-    'A department that is alone in its attribute in a store has nothing to absorb its change: flagged ("couldn\'t fully land"), never spread to another attribute.',
-    'Method 4: a shift target must be in the same division <b>and attribute</b>; a section target takes only its departments of that attribute.',
-    'Method 1 new listings: sized from the REF store\'s cont % first, then the cluster\'s, × the store\'s division AOP; the rest of that store × division gives way pro-rata (division-level cap there). New <b>Listing check file</b> to see it before running.',
-    'Method 4 new listings are sized the same way (REF store first, then cluster) and still come only out of their target.',
-    'New listings, month by month: where the REF store is at 0% (e.g. it plans the department only Oct-Jan and the store opens in Feb), the cluster\'s average of its non-zero cont % is used, then every planning store\'s.',
-    'Store × Division × Month now always equals the original file: no same-attribute department to absorb → the rest of the store × division does; anything still off is scaled onto it, or kept as the original where nothing is left.',
-    'Negative plan cells in the unlocked months are set to 0 after apportioning; the balance is re-apportioned inside their store × division × attribute × month (new check: "No negative plan in the unlocked months").',
-    'New download <b>Plan to plan</b>: the full original vs final plan, row for row (Store × Department × MRP × Display Type), every month, Changed flag to filter on.',
-    'Checks: "Store × Division × Attribute × Month = original (the cap)" plus "Store × Division × Month = original". The comparison download\'s cap sheet is now Store x Div x Attribute x Month.',
+    '<b>No default month lock</b>: Jan / Feb are no longer locked when a plan is loaded - a month is locked only when you lock it (click it in step 1).',
+    'Method 5: Jan / Feb <b>P1 / P2</b> months are no longer skipped - each pair is grown against last year’s whole month, with one "&lt;Month&gt; GROWTH %" column for both halves.',
+    'Method 4: the blank template downloads again (Department | Store | Listing (Y/N) | Target); a section target with no department of the same attribute in the store now says so.',
   ],
 };

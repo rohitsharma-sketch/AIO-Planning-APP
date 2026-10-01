@@ -288,7 +288,8 @@ lock = threading.RLock()
 def _set_locks(months, chosen=None):
     """Locked months = kept exactly as the original (user, 2026-09-29: "make these locks dynamic for months ...
     auto detect the months as per the original plan upload"). Only months found in the original plan can be
-    locked; a month without a choice yet gets the default (Jan / Feb). Saved so it survives a restart. Per user:
+    locked; a month without a choice yet is unlocked (user, 2026-10-02: "the month lock only can be configured
+    if the user has set it" - was Jan / Feb). Saved so it survives a restart. Per user:
     the calling user's workspace and this thread's engine locks."""
     chosen = chosen or {}
     locks = [m for m in months if chosen.get(m, m[:3] in engine.FROZEN)]

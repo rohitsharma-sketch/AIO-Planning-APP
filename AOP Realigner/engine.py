@@ -16,7 +16,7 @@ Per Store x Division x Attribute x Month the original total is the target - the 
 change stays inside its own attribute, no cross-attribute apportioning). Revised departments keep their new value
 exactly (split to MRP x Display Type by the original cont %); every other department in that bucket absorbs the
 difference pro-rata. If revised alone exceed a month's total, the excess comes out of the same bucket's other live
-months instead. A plan without an ATTRIBUTE column falls back to Store x Division x Month. Jan/Feb are never touched. Qty = value /
+months instead. A plan without an ATTRIBUTE column falls back to Store x Division x Month. Locked months (the user's choice) are never touched. Qty = value /
 the original ASP for that Department x MRP x Display Type x Month.
 """
 import io
@@ -29,7 +29,7 @@ import xlsxwriter
 TOL = 1e-9
 SHOWN = 5e-9   # the comparison shows 8 decimals: any difference that would show there counts (user, 2026-09-30)
 STORE, DIV, DEPT, MRP, DISP = "Store Name", "DIVISION", "DEPARTMENT", "MRP", "DISPLAY TYPE"
-FROZEN = ("Jan", "Feb")  # default lock for a newly loaded plan: Jan & Feb stay exactly as the original
+FROZEN = ()  # no default lock: a month is locked only when the user locks it (user, 2026-10-02 - was Jan / Feb)
 LOCKED = None  # month labels the user locked (server.py sets it per original plan); None = the FROZEN default
 
 
@@ -38,7 +38,7 @@ _TL = threading.local()   # the calling user's locked months (server.py sets it 
 
 def locked(m):
     """Is plan month m locked - kept exactly as the original (value and qty)? The user picks this per month from
-    the months found in the original plan (2026-09-29); until they do, Jan / Feb are the locked months."""
+    the months found in the original plan (2026-09-29); until they do, nothing is locked (2026-10-02)."""
     L = getattr(_TL, "locks", None)
     L = L if L is not None else LOCKED
     return m in L if L is not None else m[:3] in FROZEN
@@ -228,7 +228,7 @@ def split_targets(o, splits, months):
     replaces the all-store rows of that parent in that store. In live months the parent keeps (1 - sum of shares)
     of its original value and each child gets share x the parent (on top of its own original, if it already has
     one). A new child copies the parent's MRP/display rows, so its mix and ASPs are the parent's; nothing else
-    moves. Jan/Feb stay on the parent (frozen rule)."""
+    moves. Locked months stay on the parent."""
     n = len(months)
     live = ~np.array([locked(m) for m in months])
     sd = _sd_totals(o, months)
@@ -290,7 +290,9 @@ def shift_targets(o, changes, months, section_of=None, ref_of=None):
         tg = [t] if t in have else sorted(x for x in have if section_of.get(x) == t and x != d and div_sd[(s, x)] == div
                                           and attr_of.get(x) == attr_of.get(d))
         if not tg:
-            errors.append(f"{s} / {d}: target {t} isn't planned in this store")
+            errors.append(f"{s} / {d}: target {t} isn't planned in this store" if t in div_of or not attr_of else
+                          f"{s} / {d}: no {attr_of.get(d)} department of section {t} is planned in this store's {div} "
+                          f"(a shift stays inside its attribute)")
             continue
         if any(div_sd[(s, x)] != div for x in tg):
             errors.append(f"{s} / {d}: target {t} is in another division ({div_sd[(s, tg[0])]}) - a shift must stay inside {div}")
@@ -329,6 +331,16 @@ def ly_label(m):
     return None if " " in m else f"{m[:4]}{int(m[4:6]) - 1:02d}"
 
 
+def ly_groups(months):
+    """Method 5 growth months: {month ("Jan'27") -> its plan month indices}, over the unlocked months with a last-year
+    month. A P1 / P2 half pairs with its other half and is compared with last year's whole month (user, 2026-10-02:
+    Jan / Feb P1 / P2 looked locked in Method 5) - only when every half of it is unlocked."""
+    g = {}
+    for j, m in enumerate(months):
+        g.setdefault(m.split(" ")[0], []).append(j)
+    return {k: v for k, v in g.items() if ly_label(k) and not any(locked(months[j]) for j in v)}
+
+
 def growth_targets(o, rows, months, ly):
     """Method 5 - growth changes -> (revised Store x Dept values, per-row detail).
     rows: [{dept, growth (0.12 = 12%, or None), months ({month index: growth} - optional per-month growth, each
@@ -338,10 +350,11 @@ def growth_targets(o, rows, months, ly):
     Current growth = plan / last year over the live months, on the stores that have both (store-level for a store
     row); the department's plan in scope is scaled by (1 + new) / (1 + current) in every live month, so its month
     phasing is kept. The rest of its store x division x attribute absorbs it in realign (the cap)."""
-    live = [j for j, m in enumerate(months) if not locked(m) and ly_label(m)]
+    grp = ly_groups(months)
+    live = [j for js in grp.values() for j in js]
     sd = _sd_totals(o, months)
     plan_live = {k: float(v[live].sum()) for k, v in sd.items()}
-    ly_live = lambda s, d: sum(float(ly.get((s, d), {}).get(ly_label(months[j]), 0.0)) for j in live)
+    ly_live = lambda s, d: sum(float(ly.get((s, d), {}).get(ly_label(k), 0.0)) for k in grp)
     own = {(x["store"], x["dept"]) for x in rows if x["store"]}
     out, detail, errors = {}, [], []
     for x in rows:
@@ -356,13 +369,16 @@ def growth_targets(o, rows, months, ly):
         f = (1 + x["growth"]) / (1 + cur) if x.get("growth") is not None else 1.0
         fm, per_month = {}, []                       # per-month growth: that month's own plan vs its own last year
         for j, g in sorted((x.get("months") or {}).items()):
-            pj = sum(float(sd[(s, d)][j]) for s in comp)
-            lj = sum(float(ly.get((s, d), {}).get(ly_label(months[j]), 0.0)) for s in comp)
+            k = months[j].split(" ")[0]          # a P1 / P2 half: the whole month, both halves together
+            js = grp.get(k, [])
+            pj = sum(float(sd[(s, d)][js].sum()) for s in comp)
+            lj = sum(float(ly.get((s, d), {}).get(ly_label(k), 0.0)) for s in comp) if js else 0.0
             if lj <= TOL or pj <= TOL:
-                errors.append(f"{x['store'] or 'all stores'} / {d} / {months[j]}: {'no last-year sales' if lj <= TOL else 'no plan'} that month")
+                errors.append(f"{x['store'] or 'all stores'} / {d} / {k}: {'no last-year sales' if lj <= TOL else 'no plan'} that month")
                 continue
-            fm[j] = (1 + g) * lj / pj
-            per_month.append({"month": months[j], "current": pj / lj - 1, "new": g, "factor": fm[j]})
+            for jj in js:
+                fm[jj] = (1 + g) * lj / pj
+            per_month.append({"month": k, "current": pj / lj - 1, "new": g, "factor": fm[js[0]]})
         for s in scope:
             v = sd[(s, d)].copy()
             for j in live:
@@ -405,7 +421,7 @@ def realign(o, r, months, source=None, div_cap=None):
     kept = keys.isin(rev.index)   # rows the revised file keeps (was `locked`, now the month-lock helper)
     R = np.nan_to_num(rev.reindex(keys).to_numpy(float))
     frozen = np.array([locked(m) for m in months])
-    # a month absent from the revised file, or a locked month (Jan/Feb by default), is never touched
+    # a month absent from the revised file, or a locked month, is never touched
     lk = kept[:, None] & rev.notna().any().to_numpy()[None, :] & ~frozen[None, :]
 
     # 1. split revised Store x Dept value to MRP x Display rows by that month's original cont %;
