@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 import os, json, datetime, io
 import pandas as pd
 from engines.pww_deviation_engine import month_label, detect_block, _load_meta as _pww_meta
+from apportion import shares_pct  # noqa: E402  (engines.pww_deviation_engine puts backend/ on the path)
 
 router = APIRouter()
 
@@ -272,25 +273,19 @@ def reapportion():
 
     months = avg["months"]
 
-    # For each DEPT x MONTH: sum avg_cont across all articles
-    # reapp_cont = avg_cont / dept_month_total * 100
-    dept_month_totals: dict[str, dict[str, float]] = {}
-    for row in avg["rows"]:
-        dept = row["dept"]
+    # each dept x month's articles re-apportioned to exactly 100 (was avg / total x 100, each rounded to 6 dp)
+    by_dm: dict = {}
+    for i, row in enumerate(avg["rows"]):
         for m, md in row["months"].items():
-            dept_month_totals.setdefault(dept, {})
-            dept_month_totals[dept][m] = dept_month_totals[dept].get(m, 0.0) + md["avg_cont"]
+            by_dm.setdefault((row["dept"], m), {})[i] = md["avg_cont"]
+    shares = {k: shares_pct(v) for k, v in by_dm.items()}
 
     reapp_rows = []
-    for row in avg["rows"]:
+    for i, row in enumerate(avg["rows"]):
         dept = row["dept"]
         month_detail = {}
         for m, md in row["months"].items():
-            total = dept_month_totals.get(dept, {}).get(m, 0.0)
-            if total > 0:
-                reapp = round(md["avg_cont"] / total * 100, 6)
-            else:
-                reapp = 0.0
+            reapp = shares[(dept, m)][i]
             month_detail[m] = {
                 "plan_cont":  md["plan_cont"],
                 "ppo_cont":   md["ppo_cont"],

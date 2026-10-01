@@ -9,8 +9,10 @@
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
-import os, json, datetime, io
+import os, json, datetime, io, sys
 import pandas as pd
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from apportion import SHOWN, split  # noqa: E402
 
 router = APIRouter()
 
@@ -186,9 +188,18 @@ async def import_asp(file: UploadFile = File(...)):
 
 # ── run plan ───────────────────────────────────────────────────────────────────
 
+def _dept_plan():
+    """The latest department plan - corrected first, like every other engine (was the uncorrected plan only)."""
+    for f in ("base_corrected_plan.json", "attr_corrected_plan.json", "final_dept_plan.json"):
+        d = _load(os.path.join(_PARENT, f))
+        if d:
+            return d
+    return None
+
+
 @router.get("/run-plan")
 def run_plan():
-    fp      = _load(FINAL_PLAN_PATH)
+    fp      = _dept_plan()
     mrp_raw = _load(MRP_PLAN_PATH)
     contrib = _load(DT_CONTRIB_PATH)
 
@@ -203,42 +214,41 @@ def run_plan():
     for store, sr in fp["stores"].items():
         if not sr.get("is_ssg"): continue
         divs = sr.get("divisions", {})
-        for div, div_months in divs.items():
+        for div, div_data in divs.items():
             if div not in mrp_raw: continue
-            for month, month_data in div_months.items():
+            # 2026-09-30: this looped over the division's keys ("months") instead of its months - no rows were made
+            for month, month_data in div_data.get("months", {}).items():
+                if month not in months: continue   # a month with no MRP shares has nothing to split by
                 depts_data = month_data.get("departments", {})
                 for dept, dept_rec in depts_data.items():
                     if dept not in mrp_raw.get(div, {}): continue
                     mrp_dept = mrp_raw[div][dept]
                     ty_p1 = dept_rec.get("ty_p1", 0.0)
                     ty_p2 = dept_rec.get("ty_p2", 0.0)
+                    # each half split over the MRPs by its share - the MRPs add back to the department exactly
+                    s1 = split(ty_p1, {m: pm.get(f"{month} P1", 0.0) for m, pm in mrp_dept.items()})
+                    s2 = split(ty_p2, {m: pm.get(f"{month} P2", 0.0) for m, pm in mrp_dept.items()})
 
-                    for mrp_str, period_map in mrp_dept.items():
-                        p1_key = f"{month} P1"
-                        p2_key = f"{month} P2"
-                        p1_pct = period_map.get(p1_key, 0.0) / 100
-                        p2_pct = period_map.get(p2_key, 0.0) / 100
-
-                        mrp_plan_rs = round(ty_p1 * p1_pct + ty_p2 * p2_pct, 6)
+                    for mrp_str in mrp_dept:
+                        mrp_plan_rs = s1[mrp_str] + s2[mrp_str]
 
                         ck = f"{store}|{div}|{dept}|{mrp_str}"
                         c  = contrib_data.get(ck, {})
                         tbl_pct  = c.get("table_pct",    0.0)
                         ntbl_pct = c.get("nontable_pct", 0.0)
-                        has_contrib = bool(c)
-
-                        table_plan    = round(mrp_plan_rs * tbl_pct  / 100, 6)
-                        nontable_plan = round(mrp_plan_rs * ntbl_pct / 100, 6)
+                        has_contrib = bool(c) and (tbl_pct + ntbl_pct) > 0
+                        # Table / Non-Table add back to the MRP plan exactly
+                        dt = split(mrp_plan_rs, {"t": tbl_pct, "n": ntbl_pct})
 
                         rows.append({
                             "store": store, "division": div, "dept": dept, "mrp": mrp_str,
                             "month": month,
-                            "ty_p1": round(ty_p1, 6), "ty_p2": round(ty_p2, 6),
-                            "mrp_plan": round(mrp_plan_rs, 6),
-                            "table_contrib":    round(tbl_pct, 4),
-                            "nontable_contrib": round(ntbl_pct, 4),
-                            "table_plan":    round(table_plan, 6),
-                            "nontable_plan": round(nontable_plan, 6),
+                            "ty_p1": ty_p1, "ty_p2": ty_p2,
+                            "mrp_plan": mrp_plan_rs,
+                            "table_contrib":    tbl_pct,
+                            "nontable_contrib": ntbl_pct,
+                            "table_plan":    dt["t"],
+                            "nontable_plan": dt["n"],
                             "has_contrib": has_contrib,
                         })
 
@@ -263,7 +273,7 @@ def validate():
 
     rows = result["rows"]
     anomalies = []
-    TOLS = 0.001  # ₹L tolerance for float comparison
+    TOLS = SHOWN  # any gap that shows at 8 decimals (was 0.001 L)
 
     # Index by (store, div, dept, mrp, month)
     by_key: dict = {}
@@ -349,24 +359,25 @@ def validate():
                 "level": "MRP → Department",
                 "severity": "error",
                 "store": store, "division": div, "dept": dept, "mrp": "ALL", "month": month,
-                "expected": round(ty, 4), "actual": round(mrp_sum, 4),
-                "gap": round(mrp_sum - ty, 4),
+                "expected": ty, "actual": mrp_sum,
+                "gap": mrp_sum - ty,
                 "message": (
-                    f"{dept} in {store} / {month}: MRP plans total ₹{mrp_sum:.4f}L "
-                    f"vs department plan ₹{ty:.4f}L (gap ₹{mrp_sum - ty:+.4f}L). "
-                    f"Check if MRP plan contribution %s sum to 100% for this dept."
+                    f"{dept} in {store} / {month}: no MRP shares for this month in the MRP plan - "
+                    f"₹{ty:.8f}L is not split to MRPs. Add its MRP shares." if mrp_sum == 0 else
+                    f"{dept} in {store} / {month}: MRP plans total ₹{mrp_sum:.8f}L "
+                    f"vs department plan ₹{ty:.8f}L (gap ₹{mrp_sum - ty:+.8f}L)."
                 ),
             })
 
     # 4. Dept → Division check per store × month
     dept_sum_by_div: dict = defaultdict(float)
     div_ty: dict          = defaultdict(float)
-    fp = _load(FINAL_PLAN_PATH)
+    fp = _dept_plan()
     if fp:
         for store, sr in fp["stores"].items():
             if not sr.get("is_ssg"): continue
-            for div, div_months in sr.get("divisions", {}).items():
-                for month, mdata in div_months.items():
+            for div, div_data in sr.get("divisions", {}).items():
+                for month, mdata in div_data.get("months", {}).items():
                     div_ty[(store, div, month)] = mdata.get("div_total_ty", 0.0)
     for r in rows:
         dept_sum_by_div[(r["store"], r["division"], r["month"])] += r["mrp_plan"]
@@ -379,12 +390,12 @@ def validate():
                 "level": "Department → Division",
                 "severity": "warning",
                 "store": store, "division": div, "dept": "ALL", "mrp": "ALL", "month": month,
-                "expected": round(div_total, 4), "actual": round(dept_sum, 4),
-                "gap": round(dept_sum - div_total, 4),
+                "expected": div_total, "actual": dept_sum,
+                "gap": dept_sum - div_total,
                 "message": (
-                    f"{div} in {store} / {month}: department totals sum to ₹{dept_sum:.4f}L "
-                    f"vs division plan ₹{div_total:.4f}L ({(dept_sum/div_total - 1)*100:+.1f}%). "
-                    f"Some departments may have MRP contributions that don't sum to 100%."
+                    f"{div} in {store} / {month}: departments split to MRPs total ₹{dept_sum:.8f}L "
+                    f"vs division plan ₹{div_total:.8f}L ({(dept_sum/div_total - 1)*100:+.2f}%) - "
+                    f"departments with no MRP shares in the MRP plan are not split."
                 ),
             })
 

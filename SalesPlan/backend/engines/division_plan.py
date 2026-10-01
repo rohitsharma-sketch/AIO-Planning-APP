@@ -6,6 +6,7 @@ import pandas as pd
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "Tentative AOP Forecaster"))
 from store_master import load_store_master as _universal_store_master, is_ssg as _universal_is_ssg
+from apportion import split  # noqa: E402
 
 router = APIRouter()
 
@@ -281,19 +282,17 @@ def _build_growth_structure(growth_matrix: dict) -> dict:
         div_growth = list(raw_growth) + [None] * (12 - len(raw_growth))
         div_growth = div_growth[:12]
 
-        monthly_base = []
+        # the year's base spread over the months by the seasonality curve - the months add back to it exactly
+        # (2026-09-30: each month was rounded to 2 dp and the "annual base" was their rounded sum, not the base)
+        mbs = split(base, dict(enumerate(SEASONALITY_CURVE)))
+        monthly_base = [mbs[i] for i in range(12)]
         monthly_forecast = []
-
         for i in range(12):
-            mb = base / SEASON_SUM * SEASONALITY_CURVE[i]
-            monthly_base.append(round(mb, 2))
-
             eff = div_growth[i] if (div_growth[i] is not None) else overall[i]
-            mf = mb * (1 + eff / 100)
-            monthly_forecast.append(round(mf, 2))
+            monthly_forecast.append(monthly_base[i] * (1 + eff / 100))
 
-        annual_base = round(sum(monthly_base), 2)
-        annual_forecast = round(sum(monthly_forecast), 2)
+        annual_base = sum(monthly_base)
+        annual_forecast = sum(monthly_forecast)
         eff_annual = (annual_forecast / annual_base - 1) * 100 if annual_base else 0.0
 
         divisions_out.append({
@@ -314,8 +313,8 @@ def _build_growth_structure(growth_matrix: dict) -> dict:
         "months": FY28_MONTHS,
         "growth_matrix": growth_matrix,
         "divisions": divisions_out,
-        "total_base": round(total_base, 2),
-        "total_forecast": round(total_forecast, 2),
+        "total_base": total_base,
+        "total_forecast": total_forecast,
         "overall_growth_pct": overall_growth_pct,
         "source": "AOP Forecaster — inputs.xlsx",
     }

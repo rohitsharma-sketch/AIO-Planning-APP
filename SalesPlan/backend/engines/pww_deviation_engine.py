@@ -28,6 +28,7 @@ import os, json, datetime
 import pandas as pd
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from apportion import shares_pct  # noqa: E402
 from actuals_manager import load_actuals, locked_ly_months
 from store_master import load_store_master as _universal_store_master, is_ssg as _universal_is_ssg
 
@@ -585,7 +586,7 @@ def run_phase2(block: str | None = Query(default=None)):
                         "ly_mrp_cont_pct":  round(ly_mrp_cont, 4),
                         "adjusted_cont_pct":round(adjusted, 4),
                         "ppo_div_cont_pct": round(ppo_mrp_div, 4),
-                        "final_cont_pct":   round(final, 4),
+                        "final_cont_pct":   final,   # unrounded: the re-apportion normalises it (was 4 dp)
                         "rule":             rule,
                     }
 
@@ -686,9 +687,10 @@ def reapportion():
             dept_block_total = sum(mrp_sums.values())
 
             mrp_rows: dict[str, dict] = {}
+            reapp = shares_pct(dict(mrp_sums))   # adds to exactly 100 per cluster x dept (was 4 dp each, no plug)
             for mrp_key, mrp_sum in mrp_sums.items():
                 meta = da["_mrp_meta"][mrp_key]
-                reapp_pct = round(mrp_sum / dept_block_total * 100, 4) if dept_block_total > 0 else 0.0
+                reapp_pct = reapp[mrp_key]
                 mrp_rows[mrp_key] = {
                     "article_name":      meta["article_name"],
                     "mrp":               meta["mrp"],

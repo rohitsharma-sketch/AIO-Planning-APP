@@ -29,6 +29,7 @@ const navItems = [
   ]},
   { label: 'Display Type Plan', icon: 'display', to: '/display-type' },
   { label: 'Sales Sync',        icon: 'sync', to: '/sync' },
+  { label: 'Reconciliation',    icon: 'check', to: '/reconciliation' },
 ]
 
 const DIV_DOT = {

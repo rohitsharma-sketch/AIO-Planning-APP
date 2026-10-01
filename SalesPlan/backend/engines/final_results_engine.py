@@ -107,7 +107,7 @@ def _aggregate_plan(plan: dict) -> dict:
                 ty   = m_data.get("div_total_ty", 0.0) or 0.0
                 p1   = m_data.get("div_total_p1", ty / 2.0) or 0.0
                 p2   = m_data.get("div_total_p2", ty / 2.0) or 0.0
-                monthly[m] = {"total": round(ty, 2), "p1": round(p1, 2), "p2": round(p2, 2)}
+                monthly[m] = {"total": ty, "p1": p1, "p2": p2}
                 div_total += ty
 
             # Aggregate dept-level TY + LY across all months
@@ -126,10 +126,10 @@ def _aggregate_plan(plan: dict) -> dict:
                     dept_agg[dept]["ty_p1"] += d_data.get("ty_p1", ty_val / 2.0) or 0.0
                     dept_agg[dept]["ty_p2"] += d_data.get("ty_p2", ty_val / 2.0) or 0.0
                     dept_agg[dept]["monthly"][m] = {
-                        "ty":   round(ty_val, 2),
-                        "ty_p1": round(d_data.get("ty_p1", ty_val / 2.0) or 0.0, 2),
-                        "ty_p2": round(d_data.get("ty_p2", ty_val / 2.0) or 0.0, 2),
-                        "ly":   round(d_data.get("ly", 0.0) or 0.0, 2),
+                        "ty":   ty_val,
+                        "ty_p1": d_data.get("ty_p1", ty_val / 2.0) or 0.0,
+                        "ty_p2": d_data.get("ty_p2", ty_val / 2.0) or 0.0,
+                        "ly":   d_data.get("ly", 0.0) or 0.0,
                     }
 
             depts_out = {}
@@ -142,17 +142,17 @@ def _aggregate_plan(plan: dict) -> dict:
                 else:
                     growth = None
                 depts_out[dept] = {
-                    "ty":     round(ty_d, 2),
-                    "ty_p1":  round(vals["ty_p1"], 2),
-                    "ty_p2":  round(vals["ty_p2"], 2),
-                    "ly":     round(ly_d, 2),
+                    "ty":     ty_d,
+                    "ty_p1":  vals["ty_p1"],
+                    "ty_p2":  vals["ty_p2"],
+                    "ly":     ly_d,
                     "growth": growth,
                     "monthly": vals["monthly"],
                 }
 
             divs_out[div] = {
                 "monthly":    monthly,
-                "div_total":  round(div_total, 2),
+                "div_total":  div_total,
                 "departments": depts_out,
             }
             store_total += div_total
@@ -164,7 +164,7 @@ def _aggregate_plan(plan: dict) -> dict:
             "cluster":   cluster,
             "ref_store": ref,
             "divisions": divs_out,
-            "store_total": round(store_total, 2),
+            "store_total": store_total,
         })
         total_ty += store_total
 
@@ -174,7 +174,7 @@ def _aggregate_plan(plan: dict) -> dict:
         "total_stores": len(stores_out),
         "ssg_stores":   ssg_count,
         "nso_stores":   nso_count,
-        "total_ty":     round(total_ty, 2),
+        "total_ty":     total_ty,
         "stores":       stores_out,
     }
 
@@ -293,16 +293,16 @@ def get_dashboard():
         for attr, av in d["attributes"].items():
             aly, aty = av["ly"], av["ty"]
             attrs_out[attr] = {
-                "ty":     round(aty, 2),
-                "ly":     round(aly, 2),
+                "ty":     aty,
+                "ly":     aly,
                 "growth": round((aty / aly - 1) * 100, 1) if aly > 0 else None,
             }
 
         result[div] = {
-            "ty":             round(ty, 2),
-            "ly":             round(ly, 2),
-            "ssg_ty":         round(d["ssg_ty"], 2),
-            "nso_ty":         round(d["nso_ty"], 2),
+            "ty":             ty,
+            "ly":             ly,
+            "ssg_ty":         d["ssg_ty"],
+            "nso_ty":         d["nso_ty"],
             "growth":         growth,
             "degrowth_stores": len(d["degrowth_stores"]),
             "has_attr":       d["has_attr"],

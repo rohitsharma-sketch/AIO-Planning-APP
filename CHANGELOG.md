@@ -5,6 +5,29 @@ Newest first. Each entry names its commit.
 
 ---
 
+## 2026-10-01
+
+### Least apportioned difference, Phase 1: Sales Plan (every split adds back exactly) + Reconciliation page
+- **Asked (user):** "embed the matrix to give me the least apportioned difference all time in all models across apps wherever apportioning is present". Chosen: phase by app, Sales Plan first; AOP targets to be kept at full precision in their phase.
+- **Rule (`SalesPlan/backend/apportion.py`):** parts are kept at full precision, never rounded before being summed or saved. A split's float remainder goes to its largest part (`split`, `shares_pct`, `plug`), so totals equal the sum of their parts at 8 decimals (`SHOWN = 5e-9`). Rounding is display only.
+- **Fixed, engine by engine:**
+  - `dept_sales_engine`:
+    - SSG P1 / P2 / TY were rounded to 4 dp before summing. Non-SSG departments are now split exactly from the division total; P2 = TY − P1.
+    - **Bug:** the new-department adjustment changed TY but not P1 / P2, so TY ≠ P1 + P2 by up to **3.06 L** (BHR KIDS KB_BABA SUIT DNM H/S). It also left the division total stale. P1 / P2 now move with TY, and the division total and contribution % are re-derived.
+    - Summary and exports are at full precision / 8 dp.
+  - `department_plan`: equal default shares add to exactly 100 (was round(100/n, 4) = 99.9999). `/calculate` splits the target exactly by the shares and reports `allocated` / `difference` (was 2 dp per department).
+  - `attribute_correction_engine`: the corrected attributes share out exactly what they had, by their new % (which are shares of the attributed departments), so the store × division × month total never moves. Before, the % were applied to the whole division, values were rounded to 4 dp, and the drifted sum overwrote the total. Aggregates are no longer rounded on every addition.
+  - `base_correction_engine`: the gap fill uses exact halves. **Bug:** the NSO re-apportionment rounded to 4 dp, never updated P1 / P2, and a ref store with no plan wiped the NSO's division total to 0. It now splits exactly, moves P1 / P2 with TY, and keeps the plan when there is nothing to split by.
+  - `mrp_plan_engine`: bands are split exactly (were 2 dp) and add back even when the shares total 99.6 / 100.4; reports `allocated_ty` / `difference`; the CSV is at 8 dp. **Bug:** it looked for the plan in `engines/`, so it never found it and every band was 0. It now reads backend/, like every other engine.
+  - `display_type_engine`: **bug:** it looped over the division's keys instead of its months, so it made **0 rows**. It now makes rows; on the live plan with 60/40 test shares, 967,032 rows. MRP and Table / Non-Table splits are exact. It reads the corrected plan first like the other engines, its validate uses the 8-dp line, and its messages name the missing MRP shares.
+  - `mrp_reapportionment_engine`: the exact split (was 6 dp + plug), the Excel at 8 dp (was re-rounded to 2 after the plug), validation at 8 dp (was 0.01), and equal default shares exact. Test tightened: 190 store × dept totals exact on real data.
+  - `pww_deviation_engine` / `sor_deviation_engine`: re-apportioned shares add to exactly 100 (were 4 / 6 dp, no plug).
+  - `division_plan` growth structure: months add back exactly to each division base (were 2 dp each).
+  - `final_results_engine`: values at full precision (the page formats them).
+- **Reconciliation page** (Sales Plan → Reconciliation; `engines/reconciliation.py`, `GET /api/planning/reconciliation`, `/export` xlsx with 0.00000000 format). On the plan the pages use, every store × division × month: division total = Σ departments, P1 / P2 likewise, TY = P1 + P2, Σ contribution % = 100; and department = Σ MRP bands. What the MRP file has no shares for is listed apart as "not covered" (not a rounding difference). It shows which plan file it checked and when that file was generated.
+- **Before → after on the live plan** (426 stores, Mar–Aug'27, 1,410,912 department-months): division total vs departments 847 → **0** off (largest 0.0015 L); TY = P1 + P2 43,532 → **0** (3.06 L); contribution % 4,284 → **0**. The plan total moves 84,183.8482 → **84,183.7397 L** (now = Σ departments; before, total and departments disagreed). Not covered by MRP shares: **34,043 L** (Jul–Aug'27, plus 348 of 518 departments not in the MRP file).
+- **To act on:** the saved `final_dept_plan.json` is from 23 Sep and has no months. Generate it again (Department Plan → Growth Matrix → ▶ Generate Base Plan) so the saved plan uses the exact maths. Next phases: NSO, AOP publish (full precision), Calendar download, Re-Aligner export.
+
 ## 2026-09-30
 
 ### Sales Plan Re-Aligner comparison: 8 decimals (0.00000000)

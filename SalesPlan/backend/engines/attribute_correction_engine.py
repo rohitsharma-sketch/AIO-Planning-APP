@@ -12,6 +12,7 @@ import io, json, os, copy
 import pandas as pd
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from apportion import shares_pct, split  # noqa: E402
 
 router = APIRouter()
 
@@ -208,19 +209,18 @@ def compute_attr_aggregates(plan: dict, attr_map: dict) -> dict:
                         continue
                     ty = dinfo.get("ty", 0.0)
                     raw.setdefault(div, {}).setdefault(attr, {})
-                    raw[div][attr][month] = round(raw[div][attr].get(month, 0.0) + ty, 4)
-                    div_month_totals.setdefault(div, {})
-                    div_month_totals[div][month] = round(div_month_totals[div].get(month, 0.0) + ty, 4)
+                    raw[div][attr][month] = raw[div][attr].get(month, 0.0) + ty   # full precision (was rounded on
+                    div_month_totals.setdefault(div, {})                          # every addition, 2026-09-30)
+                    div_month_totals[div][month] = div_month_totals[div].get(month, 0.0) + ty
 
     result = {}
     for div, attrs in raw.items():
-        result[div] = {}
-        for attr, months in attrs.items():
-            result[div][attr] = {}
-            for month, ty in months.items():
-                total = div_month_totals.get(div, {}).get(month, 0.0)
-                cont_pct = round(ty / total * 100, 4) if total > 0 else 0.0
-                result[div][attr][month] = {"ty": round(ty, 2), "cont_pct": cont_pct}
+        result[div] = {attr: {} for attr in attrs}
+        for month in div_month_totals.get(div, {}):
+            pcts = shares_pct({a: m.get(month, 0.0) for a, m in attrs.items() if month in m})   # add to exactly 100
+            for attr, months in attrs.items():
+                if month in months:
+                    result[div][attr][month] = {"ty": months[month], "cont_pct": pcts[attr]}
 
     return result
 
@@ -251,10 +251,6 @@ def apply_attr_corrections(plan: dict, corrections: dict, attr_map: dict) -> dic
                     continue
                 depts = month_data.get("departments", {})
 
-                total_ty = sum(d.get("ty", 0.0) for d in depts.values() if d.get("active"))
-                if total_ty <= 0:
-                    continue
-
                 # Group active dept TYs by attribute
                 attr_dept_ty: dict[str, dict[str, float]] = {}
                 for dept, dinfo in depts.items():
@@ -264,32 +260,33 @@ def apply_attr_corrections(plan: dict, corrections: dict, attr_map: dict) -> dic
                     if attr:
                         attr_dept_ty.setdefault(attr, {})[dept] = dinfo.get("ty", 0.0)
 
-                # Apply each attribute's target cont%
-                for attr, new_pct in attr_pcts.items():
-                    if attr not in attr_dept_ty:
-                        continue
-                    target_ty = total_ty * new_pct / 100.0
-                    old_ty = sum(attr_dept_ty[attr].values())
-                    if old_ty <= 0:
-                        continue
-                    scale = target_ty / old_ty
-                    for dept in attr_dept_ty[attr]:
-                        depts[dept]["ty"] = round(depts[dept]["ty"] * scale, 4)
-                        if "ty_p1" in depts[dept]:
-                            depts[dept]["ty_p1"] = round(depts[dept]["ty_p1"] * scale, 4)
-                        if "ty_p2" in depts[dept]:
-                            depts[dept]["ty_p2"] = round(depts[dept]["ty_p2"] * scale, 4)
+                # The corrected attributes share out exactly what they had between them, by their new cont % (the
+                # % are shares of the attributed departments, as the preview computes them), so the store x division
+                # x month total never moves; departments without an attribute are untouched. (2026-09-30: the %
+                # were applied to the whole division total and every value rounded to 4 dp - the total drifted and
+                # was then overwritten with the drifted sum.)
+                fix = {a: p for a, p in attr_pcts.items() if a in attr_dept_ty and sum(attr_dept_ty[a].values()) > 0}
+                pool = sum(sum(attr_dept_ty[a].values()) for a in fix)
+                if pool <= 0:
+                    continue
+                for attr, target_ty in split(pool, fix).items():
+                    for dept, new_ty in split(target_ty, attr_dept_ty[attr]).items():
+                        d = depts[dept]
+                        old = d.get("ty", 0.0)
+                        f = new_ty / old if old else 0.0
+                        p1 = d.get("ty_p1", old / 2.0) * f
+                        d.update(ty=new_ty, ty_p1=p1, ty_p2=new_ty - p1)
 
             # Recalculate cont_pcts for this store × div after all months corrected
             for month, month_data in div_data.get("months", {}).items():
                 depts = month_data.get("departments", {})
-                total_ty = sum(d.get("ty", 0.0) for d in depts.values() if d.get("active"))
-                month_data["div_total_ty"] = round(total_ty, 4)
-                month_data["div_total_p1"] = round(sum(d.get("ty_p1", 0.0) for d in depts.values() if d.get("active")), 4)
-                month_data["div_total_p2"] = round(sum(d.get("ty_p2", 0.0) for d in depts.values() if d.get("active")), 4)
-                for dept, dinfo in depts.items():
-                    if dinfo.get("active"):
-                        dinfo["cont_pct"] = round(dinfo.get("ty", 0.0) / total_ty * 100, 4) if total_ty > 0 else 0.0
+                act = {d: v for d, v in depts.items() if v.get("active")}
+                month_data["div_total_ty"] = sum(v.get("ty", 0.0) for v in act.values())
+                month_data["div_total_p1"] = sum(v.get("ty_p1", 0.0) for v in act.values())
+                month_data["div_total_p2"] = sum(v.get("ty_p2", 0.0) for v in act.values())
+                pcts = shares_pct({d: v.get("ty", 0.0) for d, v in act.items()})
+                for dept, dinfo in act.items():
+                    dinfo["cont_pct"] = pcts[dept]
 
     return result
 

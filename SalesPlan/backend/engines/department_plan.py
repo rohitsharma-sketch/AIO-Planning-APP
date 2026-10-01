@@ -2,8 +2,10 @@ from fastapi import APIRouter, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import datetime
-import io, json, os
+import io, json, os, sys
 import pandas as pd
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from apportion import shares_pct, split  # noqa: E402
 
 router = APIRouter()
 
@@ -197,12 +199,11 @@ def _merge_state(master: dict, state: dict) -> dict:
                 active_depts.append(d["name"])
 
         # Fill missing contrib_pct with equal distribution
-        n = len(active_depts)
-        default_pct = round(100.0 / n, 4) if n else 0.0
+        eq = shares_pct({d: 1.0 for d in active_depts})   # equal shares adding to exactly 100 (was round(100/n, 4))
 
         for row in rows:
             if row["contrib_pct"] is None:
-                row["contrib_pct"] = default_pct if row["active"] else 0.0
+                row["contrib_pct"] = eq.get(row["name"], 0.0) if row["active"] else 0.0
 
         result[div] = rows
     return result
@@ -250,7 +251,7 @@ class CalculateInput(BaseModel):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _contrib_sum(rows: list) -> float:
-    return round(sum(r["contrib_pct"] for r in rows if r["active"]), 4)
+    return sum(r["contrib_pct"] for r in rows if r["active"])
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -281,12 +282,10 @@ def toggle_department(payload: DeptToggle):
     all_rows = master.get(payload.division, [])
     dept_states = state[payload.division]
     active_names = [d["name"] for d in all_rows if dept_states.get(d["name"], {}).get("active", True)]
-    n = len(active_names)
-    if n:
-        default = round(100.0 / n, 4)
-        for name in active_names:
-            if "contrib_pct" not in dept_states.get(name, {}):
-                state[payload.division].setdefault(name, {})["contrib_pct"] = default
+    eq = shares_pct({n: 1.0 for n in active_names})   # equal shares adding to exactly 100
+    for name in active_names:
+        if "contrib_pct" not in dept_states.get(name, {}):
+            state[payload.division].setdefault(name, {})["contrib_pct"] = eq[name]
 
     _save_state(state)
     return {"ok": True}
@@ -319,12 +318,10 @@ def auto_balance(payload: dict):
         all_rows = master.get(div, [])
         div_state = state.get(div, {})
         active_names = [d["name"] for d in all_rows if div_state.get(d["name"], {}).get("active", True)]
-        n = len(active_names)
-        if n:
-            eq = round(100.0 / n, 4)
-            state.setdefault(div, {})
-            for name in active_names:
-                state[div].setdefault(name, {})["contrib_pct"] = eq
+        eq = shares_pct({n: 1.0 for n in active_names})   # equal shares adding to exactly 100
+        state.setdefault(div, {})
+        for name in active_names:
+            state[div].setdefault(name, {})["contrib_pct"] = eq[name]
 
     _save_state(state)
     return {"ok": True}
@@ -353,21 +350,23 @@ def calculate(payload: CalculateInput):
         rows = config.get(div, [])
         active = [r for r in rows if r["active"]]
         total_pct = sum(r["contrib_pct"] for r in active)
-        dept_breakdown = []
-        for r in active:
-            effective_pct = (r["contrib_pct"] / total_pct * 100) if total_pct else 0.0
-            sales = round(daop.annual_target * r["contrib_pct"] / 100, 2)
-            dept_breakdown.append({
-                "name": r["name"],
-                "attribute": r["attribute"],
-                "contrib_pct": r["contrib_pct"],
-                "effective_pct": round(effective_pct, 4),
-                "sales_lakhs": sales,
-            })
+        # the target split by the shares - the departments add back to it exactly (was contrib % x target, each
+        # rounded to 2 dp, so a share total off 100 or the rounding left the division short / over)
+        sales = split(daop.annual_target, {r["name"]: r["contrib_pct"] for r in active})
+        eff = shares_pct({r["name"]: r["contrib_pct"] for r in active})
+        dept_breakdown = [{
+            "name": r["name"],
+            "attribute": r["attribute"],
+            "contrib_pct": r["contrib_pct"],
+            "effective_pct": eff[r["name"]],
+            "sales_lakhs": sales[r["name"]],
+        } for r in active]
         results.append({
             "division": div,
             "annual_target": daop.annual_target,
-            "contrib_sum": round(total_pct, 4),
+            "contrib_sum": total_pct,
+            "allocated": sum(sales.values()),
+            "difference": sum(sales.values()) - daop.annual_target,   # the reconciliation: 0 to 8 decimals
             "dept_breakdown": dept_breakdown,
         })
     return {"results": results}

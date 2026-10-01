@@ -20,6 +20,7 @@ import SorDeviation from './pages/SorDeviation'
 import DisplayTypePlan from './pages/DisplayTypePlan'
 import MrpReapportionment from './pages/MrpReapportionment'
 import SyncEngine from './pages/SyncEngine'
+import Reconciliation from './pages/Reconciliation'
 
 // Served standalone at the root (:8002) or mounted under /planning/* on the
 // unified platform (:8010) - detect which at runtime so deep links, hard
@@ -63,6 +64,7 @@ export default function App() {
             <Route path="/display-type" element={<DisplayTypePlan />} />
             <Route path="/mrp-plan/reapportionment" element={<MrpReapportionment />} />
             <Route path="/sync" element={<SyncEngine />} />
+            <Route path="/reconciliation" element={<Reconciliation />} />
           </Routes>
         </div>
       </div>

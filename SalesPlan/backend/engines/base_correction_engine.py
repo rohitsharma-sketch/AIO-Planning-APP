@@ -33,6 +33,7 @@ import pandas as pd
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from actuals_manager import load_actuals, locked_ly_months
+from apportion import shares_pct, split  # noqa: E402
 
 router = APIRouter()
 
@@ -273,8 +274,8 @@ def apply_corrections(plan: dict, gaps: list) -> dict:
             depts = result["stores"][store]["divisions"][div]["months"][month]["departments"]
             if dept in depts:
                 depts[dept]["ty"] = ty
-                depts[dept]["ty_p1"] = round(ty / 2.0, 4)
-                depts[dept]["ty_p2"] = round(ty / 2.0, 4)
+                depts[dept]["ty_p1"] = ty / 2.0
+                depts[dept]["ty_p2"] = ty - ty / 2.0   # the halves add back to TY exactly
         except (KeyError, TypeError):
             pass
 
@@ -286,13 +287,13 @@ def apply_corrections(plan: dict, gaps: list) -> dict:
         for div, div_data in sdata.get("divisions", {}).items():
             for month, month_data in div_data.get("months", {}).items():
                 depts = month_data.get("departments", {})
-                total = sum(d.get("ty", 0.0) for d in depts.values() if d.get("active"))
-                month_data["div_total_ty"] = round(total, 4)
-                month_data["div_total_p1"] = round(sum(d.get("ty_p1", d.get("ty",0)/2) for d in depts.values() if d.get("active")), 4)
-                month_data["div_total_p2"] = round(sum(d.get("ty_p2", d.get("ty",0)/2) for d in depts.values() if d.get("active")), 4)
-                for dinfo in depts.values():
-                    if dinfo.get("active"):
-                        dinfo["cont_pct"] = round(dinfo.get("ty", 0.0) / total * 100, 4) if total > 0 else 0.0
+                act = {d: v for d, v in depts.items() if v.get("active")}
+                month_data["div_total_ty"] = sum(v.get("ty", 0.0) for v in act.values())
+                month_data["div_total_p1"] = sum(v.get("ty_p1", v.get("ty", 0) / 2) for v in act.values())
+                month_data["div_total_p2"] = sum(v.get("ty_p2", v.get("ty", 0) / 2) for v in act.values())
+                pcts = shares_pct({d: v.get("ty", 0.0) for d, v in act.items()})   # add to exactly 100
+                for d, dinfo in act.items():
+                    dinfo["cont_pct"] = pcts[d]
 
     return result
 
@@ -346,7 +347,7 @@ def apply_nso_reapportionment(corrected_plan: dict, ly_actuals: dict,
                     )
                     if ly_div_sum > 0:
                         div_growth = _avg_division_growth(growth_matrix, div, ty_month)
-                        div_total_ty = round(ly_div_sum * div_growth / 100.0, 4)
+                        div_total_ty = ly_div_sum * div_growth / 100.0
 
                 if div_total_ty <= 0:
                     continue
@@ -355,18 +356,23 @@ def apply_nso_reapportionment(corrected_plan: dict, ly_actuals: dict,
                 ref_depts = ref_month.get("departments", {})
                 depts = month_data.get("departments", {})
 
-                new_total = 0.0
-                for dept, dinfo in depts.items():
-                    if not dinfo.get("active"):
-                        continue
-                    ref_dept = ref_depts.get(dept, {})
-                    cont_pct = ref_dept.get("cont_pct", 0.0)
-                    new_ty = round(div_total_ty * cont_pct / 100.0, 4)
-                    dinfo["ty"]       = new_ty
-                    dinfo["cont_pct"] = round(cont_pct, 4)
-                    new_total        += new_ty
+                # the NSO store's division total split by its ref SSG store's cont % - the departments add back to it
+                # exactly, and P1 / P2 move with TY (2026-09-30: values were rounded to 4 dp, P1 / P2 were left
+                # untouched, and a ref store with no plan in the division wiped the total to 0)
+                act = [d for d, v in depts.items() if v.get("active")]
+                cont = {d: ref_depts.get(d, {}).get("cont_pct", 0.0) for d in act}
+                if sum(cont.values()) <= 0:
+                    continue   # nothing to split by: the store keeps its plan
+                tys, pcts = split(div_total_ty, cont), shares_pct(cont)
+                for dept in act:
+                    r = ref_depts.get(dept, {})
+                    ref_ty = r.get("ty", 0.0)
+                    p1 = tys[dept] * r.get("ty_p1", 0.0) / ref_ty if ref_ty > 0 else tys[dept] / 2.0
+                    depts[dept].update(ty=tys[dept], ty_p1=p1, ty_p2=tys[dept] - p1, cont_pct=pcts[dept])
 
-                month_data["div_total_ty"] = round(new_total, 4)
+                month_data["div_total_ty"] = div_total_ty
+                month_data["div_total_p1"] = sum(depts[d]["ty_p1"] for d in act)
+                month_data["div_total_p2"] = sum(depts[d]["ty_p2"] for d in act)
                 store_touched = True
 
         if store_touched:

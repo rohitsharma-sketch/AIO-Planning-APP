@@ -6,6 +6,7 @@ const PATHS = {
   mrp:      'M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8zM7.5 7.5h.01',
   display:  'M3 4h18v12H3zM8 20h8M12 16v4',
   sync:     'M21 12a9 9 0 0 1-15.5 6.2M3 12A9 9 0 0 1 18.5 5.8M21 4v5h-5M3 20v-5h5',
+  check:    'M20 6 9 17l-5-5',
 }
 
 export default function Icon({ name, size = 18, strokeWidth = 1.8 }) {

@@ -34,8 +34,11 @@ import warnings
 import datetime
 from typing import Optional, Dict, List
 
+import sys
 import pandas as pd
 import openpyxl
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from apportion import SHOWN, shares_pct, split  # noqa: E402
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from fastapi import APIRouter, HTTPException
@@ -218,13 +221,8 @@ def _build_groups(mapping_df: pd.DataFrame) -> dict:
 
 def _default_cont_pcts(valid_mrps: list) -> list:
     """Equal split across valid MRPs."""
-    n = len(valid_mrps)
-    if n == 0:
-        return []
-    base = round(100.0 / n, 4)
-    pcts = [base] * (n - 1)
-    pcts.append(round(100.0 - sum(pcts), 4))
-    return pcts
+    eq = shares_pct({i: 1.0 for i in range(len(valid_mrps))})   # adds to exactly 100
+    return [eq[i] for i in range(len(valid_mrps))]
 
 
 def _redistribute(sales_df: pd.DataFrame, mapping_df: pd.DataFrame,
@@ -336,12 +334,11 @@ def _redistribute(sales_df: pd.DataFrame, mapping_df: pd.DataFrame,
                 # Actually don't emit zero-sales rows — skip
                 continue
 
-            allocated = 0.0
+            # the month's total split by the shares at full precision; the remainder lands on the largest part, so
+            # the valid MRPs add back to it exactly (was rounded to 6 dp, last row plugged)
+            parts = split(total, {i: pct for i, (_, pct) in enumerate(splits)})
             for i, (mrp_valid, pct) in enumerate(splits):
-                frac = pct / total_pct
-                alloc = round(total - allocated, 6) if i == len(splits) - 1 else round(total * frac, 6)
-                if i < len(splits) - 1:
-                    allocated += alloc
+                alloc = parts[i]
                 # Build month dict for this row (all months 0 except the current one)
                 mc_vals = {m: 0.0 for m in month_cols}
                 mc_vals[mc] = alloc
@@ -371,7 +368,7 @@ def _redistribute(sales_df: pd.DataFrame, mapping_df: pd.DataFrame,
 
 def _validate(sales_df: pd.DataFrame, output_df: pd.DataFrame,
               month_cols: list) -> tuple[list[dict], bool]:
-    tol = 0.01
+    tol = SHOWN   # any difference that shows at 8 decimals (was 0.01)
     val_rows = []
     val_pass = True
 
@@ -437,11 +434,12 @@ def _build_excel(output_df, unmapped_df, val_rows, val_pass, log_lines, sales_df
                 cell.fill = fill(bg); cell.font = fnt(); cell.border = bdr()
                 cell.alignment = aln("right" if c in num_cols else "left")
                 if c in num_cols and isinstance(v, (int, float)):
-                    cell.value = round(float(v), 2)
+                    # full precision to 8 dp (was round(v, 2) - it undid the exact split in the file)
+                    cell.value = round(float(v), 8) + 0.0
                     if c in ("MRP_CURRENT", "LISTED_MRP"):
                         cell.number_format = "#,##0"
                     else:
-                        cell.number_format = "#,##0.00"
+                        cell.number_format = "#,##0.00000000"
         ws.freeze_panes = "A2"
         if len(df) > 0:
             ws.auto_filter.ref = ws.dimensions
@@ -466,7 +464,7 @@ def _build_excel(output_df, unmapped_df, val_rows, val_pass, log_lines, sales_df
             cell = ws2.cell(ri, ci, v)
             cell.fill = fill(bg); cell.font = fnt(r["STATUS"]!="PASS", "000000"); cell.border = bdr()
             cell.alignment = aln("right" if ci >= 3 else "left")
-            if ci in (3,4,5) and isinstance(v, float): cell.number_format = "#,##0.00"
+            if ci in (3,4,5) and isinstance(v, float): cell.number_format = "#,##0.00000000"
 
     ws3 = wb.create_sheet("Unmapped (Listed MRP 0)")
     write_df(ws3, unmapped_df if not unmapped_df.empty else pd.DataFrame(), "Unmapped Sales")
@@ -619,8 +617,8 @@ def run_engine(body: RunRequest):
 
     val_rows, val_pass = _validate(sales_df, output_df, month_cols)
 
-    total_before = round(float(sales_df[month_cols].sum().sum()), 2)
-    total_after  = round(float(output_df[month_cols].sum().sum()), 2) if not output_df.empty else 0.0
+    total_before = round(float(sales_df[month_cols].sum().sum()), 8)
+    total_after  = round(float(output_df[month_cols].sum().sum()), 8) if not output_df.empty else 0.0
 
     full_log = [
         f"Sales       : sales engine {os.path.basename(sales_path)} (tie to Calendar dept sales: max {check['max_diff_lakh']} L)",
@@ -676,7 +674,7 @@ def run_engine(body: RunRequest):
         "unmapped":     len(unmapped_df),
         "total_before": total_before,
         "total_after":  total_after,
-        "diff":         round(abs(total_after - total_before), 6),
+        "diff":         round(abs(total_after - total_before), 8),
         "val_pass":     val_pass,
         "val_rows":     val_rows,
         "output_file":  out_filename,

@@ -26,7 +26,8 @@ sub = sales[sales["DEPARTMENT"] == dept].reset_index(drop=True)
 out, unmapped, _ = m._redistribute(sub, mapping, months, None)
 val, ok = m._validate(sub, out, months)
 assert ok and unmapped.empty, (len(unmapped), [v for v in val if v["STATUS"] != "PASS"][:3])
-assert abs(out[months].sum().sum() - sub[months].sum().sum()) < 0.01
+assert abs(out[months].sum().sum() - sub[months].sum().sum()) < 5e-9 * len(out)   # exact: nothing lost to rounding
+assert max(v["DIFF"] for v in val) < 5e-9, max(v["DIFF"] for v in val)            # every store x dept to 8 decimals
 assert not set(out["LISTED_MRP"]) & set(mapping.loc[mapping["MRP_LISTED"] == 0, "MRP_CURRENT"]) - set(mapping["MRP_LISTED"])
 
 # planted: 0.02 L on one store x dept x month must break the tie

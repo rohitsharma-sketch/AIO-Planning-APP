@@ -13,8 +13,10 @@ Expected upload columns:
   Contribution % per dept per period must sum to 100 across its MRP bands.
 """
 
-import os, json, io
+import os, json, io, sys
 from fastapi import APIRouter, UploadFile, File, HTTPException
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from apportion import split  # noqa: E402
 from fastapi.responses import StreamingResponse
 
 router = APIRouter()
@@ -78,7 +80,9 @@ def _resolve_col(headers: list, key: str) -> str | None:
 
 def _load_dept_plan() -> dict:
     for fname in ["base_corrected_plan.json", "attr_corrected_plan.json", "final_dept_plan.json"]:
-        path = os.path.join(os.path.dirname(__file__), fname)
+        # the plan files live in backend/, one level up, like every other engine reads them (2026-09-30: this looked in
+        # engines/, found nothing, and every MRP band showed 0)
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", fname)
         if os.path.exists(path):
             with open(path) as f:
                 return json.load(f)
@@ -309,20 +313,18 @@ def get_mrp_data():
             period_ty = dept_ty_period.get(div, {}).get(dept, {})
             dept_total_ty = sum(period_ty.values())
 
+            # each period's department TY split over its MRP bands by their share - the bands add back to the
+            # department exactly, even when the shares total 99.6 or 100.4 (2026-09-30: each band was rounded to 2 dp)
+            keys = sorted(bands.keys(), key=lambda x: float(x))
+            per = {p: split(period_ty.get(p, 0.0), {k: bands[k].get(p, 0.0) for k in keys}) for p in all_periods}
             band_list = []
-            for mrp_key in sorted(bands.keys(), key=lambda x: float(x)):
-                period_vals = bands[mrp_key]
-                period_split = {}
-                for p in all_periods:
-                    pct = period_vals.get(p, 0.0)
-                    pty = period_ty.get(p, 0.0)
-                    period_split[p] = round(pty * pct / 100, 2) if pty else 0.0
-
+            for mrp_key in keys:
+                period_split = {p: per[p][mrp_key] for p in all_periods}
                 band_list.append({
                     "mrp": float(mrp_key),
-                    "period_contrib": {p: period_vals.get(p, 0.0) for p in all_periods},
+                    "period_contrib": {p: bands[mrp_key].get(p, 0.0) for p in all_periods},
                     "period_ty": period_split,
-                    "band_total_ty": round(sum(period_split.values()), 2),
+                    "band_total_ty": sum(period_split.values()),
                 })
 
             # contrib validation per period
@@ -331,8 +333,12 @@ def get_mrp_data():
                 total = sum(b["period_contrib"].get(p, 0.0) for b in band_list)
                 contrib_ok[p] = abs(total - 100) <= 0.5
 
+            allocated = sum(b["band_total_ty"] for b in band_list)
             result[div][dept] = {
-                "dept_total_ty": round(dept_total_ty, 2),
+                "dept_total_ty": dept_total_ty,
+                "allocated_ty": allocated,
+                # the reconciliation: department TY vs its MRP bands (0 to 8 dp unless no band has a share in a period)
+                "difference": allocated - sum(period_ty.get(p, 0.0) for p in all_periods),
                 "bands": band_list,
                 "contrib_ok": contrib_ok,
                 "all_ok": all(contrib_ok.values()),
@@ -419,12 +425,14 @@ def export_mrp():
     for div in sorted(mrp.keys()):
         for dept in sorted(mrp[div].keys()):
             period_ty = dept_ty_period.get(div, {}).get(dept, {})
-            for mrp_key in sorted(mrp[div][dept].keys(), key=lambda x: float(x)):
+            keys = sorted(mrp[div][dept].keys(), key=lambda x: float(x))
+            per = {p: split(period_ty.get(p, 0.0), {k: mrp[div][dept][k].get(p, 0.0) for k in keys}) for p in periods}
+            for mrp_key in keys:
                 period_vals = mrp[div][dept][mrp_key]
                 contrib_row = [period_vals.get(p, "") for p in periods]
-                ty_row = [round(period_ty.get(p, 0) * period_vals.get(p, 0) / 100, 2) if period_ty.get(p) else "" for p in periods]
-                band_total = sum(period_ty.get(p, 0) * period_vals.get(p, 0) / 100 for p in periods if period_ty.get(p) and period_vals.get(p))
-                writer.writerow([div, dept, mrp_key] + contrib_row + ty_row + [round(band_total, 2)])
+                ty_row = [round(per[p][mrp_key], 8) if period_ty.get(p) else "" for p in periods]
+                band_total = sum(per[p][mrp_key] for p in periods)
+                writer.writerow([div, dept, mrp_key] + contrib_row + ty_row + [round(band_total, 8)])
 
     buf.seek(0)
     return StreamingResponse(

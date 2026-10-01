@@ -31,6 +31,7 @@ from actuals_manager import (
     load_store_div_actuals, actuals_source,
 )
 from store_master import load_store_master as _universal_store_master, is_ssg as _universal_is_ssg
+from apportion import plug, shares_pct, split
 
 router = APIRouter()
 
@@ -133,27 +134,34 @@ def apply_new_dept_adjustments(plan_result: dict, new_dept_map: dict) -> dict:
                     ref_d = depts.get(ref_dept)
                     if ref_d is None or not ref_d.get("active", True):
                         continue
-                    ref_ty   = ref_d.get("ty", 0.0)
-                    ref_cont = ref_d.get("cont_pct", 0.0)
-                    # New dept gains new_dept_pct of ref
-                    carve_ty   = round(ref_ty   * new_dept_pct, 4)
-                    carve_cont = round(ref_cont * new_dept_pct, 4)
-                    # Ref dept loses ref_reduction_pct (independent)
-                    reduce_ty   = round(ref_ty   * ref_reduction_pct, 4)
-                    reduce_cont = round(ref_cont * ref_reduction_pct, 4)
-                    depts[ref_dept]["ty"]       = round(ref_ty   - reduce_ty,   4)
-                    depts[ref_dept]["cont_pct"] = round(ref_cont - reduce_cont, 4)
+                    # full precision, and P1 / P2 move with TY so TY = P1 + P2 stays exact (2026-09-30: P1 / P2 were
+                    # left untouched - BHR KIDS KB_BABA SUIT DNM H/S Mar'27 was 3.06 L off its own halves)
+                    ref_ty = ref_d.get("ty", 0.0)
+                    ref_p1 = ref_d.get("ty_p1", ref_ty / 2.0)
+                    ref_p2 = ref_ty - ref_p1
+                    carve = {"ty": ref_ty * new_dept_pct, "ty_p1": ref_p1 * new_dept_pct, "ty_p2": ref_p2 * new_dept_pct}
+                    keep = 1.0 - ref_reduction_pct   # ref dept loses ref_reduction_pct (independent of the carve)
+                    depts[ref_dept].update(ty=ref_ty * keep, ty_p1=ref_p1 * keep, ty_p2=ref_p2 * keep)
                     if new_dept in depts:
-                        depts[new_dept]["ty"]       = round(depts[new_dept]["ty"]       + carve_ty,   4)
-                        depts[new_dept]["cont_pct"] = round(depts[new_dept]["cont_pct"] + carve_cont, 4)
+                        for k, v in carve.items():
+                            depts[new_dept][k] = depts[new_dept].get(k, 0.0) + v
                     else:
                         depts[new_dept] = {
-                            "ly": 0.0, "ty": carve_ty, "growth_pct": None,
-                            "cont_pct": carve_cont, "active": True, "is_new": True,
+                            "ly": 0.0, **carve, "growth_pct": None,
+                            "cont_pct": 0.0, "active": True, "is_new": True,
                             "ref_dept": ref_dept,
                             "new_dept_pct": cfg.get("new_dept_pct", legacy),
                             "ref_reduction_pct": cfg.get("ref_reduction_pct", legacy),
                         }
+                # the division total follows its departments (the two % are independent, so it may shift - by design)
+                # and the contribution % are re-derived from the new values, adding to exactly 100
+                act = {d: v for d, v in depts.items() if v.get("active", True)}
+                month_data["div_total_ty"] = sum(v["ty"] for v in act.values())
+                month_data["div_total_p1"] = sum(v.get("ty_p1", 0.0) for v in act.values())
+                month_data["div_total_p2"] = sum(v.get("ty_p2", 0.0) for v in act.values())
+                pcts = shares_pct({d: v["ty"] for d, v in act.items()})
+                for d, v in depts.items():
+                    v["cont_pct"] = pcts.get(d, 0.0)
 
     return result
 
@@ -294,11 +302,12 @@ def run_dept_plan():
                     g_p1, g_p2 = _growth_p1_p2(growth_matrix, div, dept, ty_month)
                     g = (g_p1 + g_p2) / 2.0
                     ly_half = ly_val / 2.0
-                    ty_p1 = round(ly_half * g_p1 / 100.0, 4)
-                    ty_p2 = round(ly_half * g_p2 / 100.0, 4)
-                    ty_val = round(ty_p1 + ty_p2, 4)
+                    # full precision - never rounded before summing (2026-09-30, "least apportioned difference")
+                    ty_p1 = ly_half * g_p1 / 100.0
+                    ty_p2 = ly_half * g_p2 / 100.0
+                    ty_val = ty_p1 + ty_p2
                     dept_vals[dept] = {
-                        "ly": ly_val, "ly_p1": round(ly_half, 4), "ly_p2": round(ly_half, 4),
+                        "ly": ly_val, "ly_p1": ly_half, "ly_p2": ly_half,
                         "ty": ty_val, "ty_p1": ty_p1, "ty_p2": ty_p2,
                         "growth_pct": g, "g_p1": g_p1, "g_p2": g_p2,
                         "active": True,
@@ -309,7 +318,7 @@ def run_dept_plan():
                 for dept in all_depts - active:
                     ly_val = store_dept_data.get(dept, {}).get(ly_month, 0.0)
                     dept_vals[dept] = {
-                        "ly": ly_val, "ly_p1": round(ly_val/2.0, 4), "ly_p2": round(ly_val/2.0, 4),
+                        "ly": ly_val, "ly_p1": ly_val / 2.0, "ly_p2": ly_val / 2.0,
                         "ty": 0.0, "ty_p1": 0.0, "ty_p2": 0.0,
                         "growth_pct": 0.0, "g_p1": 0.0, "g_p2": 0.0, "active": False,
                     }
@@ -319,17 +328,15 @@ def run_dept_plan():
                 div_total_p1 = sum(v.get("ty_p1", v["ty"] / 2.0) for v in dept_vals.values() if v["active"])
                 div_total_p2 = sum(v.get("ty_p2", v["ty"] / 2.0) for v in dept_vals.values() if v["active"])
 
-                # Derive contribution %
+                # Contribution % - the active departments add to exactly 100
+                pcts = shares_pct({d: v["ty"] for d, v in dept_vals.items() if v["active"]})
                 for dept, v in dept_vals.items():
-                    if v["active"] and div_total_ty > 0:
-                        v["cont_pct"] = round(v["ty"] / div_total_ty * 100, 4)
-                    else:
-                        v["cont_pct"] = 0.0
+                    v["cont_pct"] = pcts.get(dept, 0.0)
 
                 months_out[ty_month] = {
-                    "div_total_ty": round(div_total_ty, 4),
-                    "div_total_p1": round(div_total_p1, 4),
-                    "div_total_p2": round(div_total_p2, 4),
+                    "div_total_ty": div_total_ty,
+                    "div_total_p1": div_total_p1,
+                    "div_total_p2": div_total_p2,
                     "departments": dept_vals,
                 }
 
@@ -375,22 +382,21 @@ def run_dept_plan():
                 if ref_data:
                     ref_month = ref_data.get(div, {}).get("months", {}).get(ty_month, {})
                     ref_depts  = ref_month.get("departments", {})
+                    # the division total split by the ref store's shares - the parts add back to it exactly
+                    cont = {d: ref_depts.get(d, {}).get("cont_pct", 0.0) for d in active}
+                    tys, lys, pcts = split(div_total_ty, cont), split(ly_div_total, cont), shares_pct(cont)
                     for dept in active:
                         ref_dept = ref_depts.get(dept, {})
-                        cont_pct = ref_dept.get("cont_pct", 0.0)
-                        ty_val   = div_total_ty * (cont_pct / 100.0)
+                        ty_val = tys[dept]
                         g        = ref_dept.get("growth_pct", 100.0)
-                        ly_implied = ly_div_total * (cont_pct / 100.0)
-                        ref_p1 = ref_dept.get("ty_p1", ty_val / 2.0)
-                        ref_p2 = ref_dept.get("ty_p2", ty_val / 2.0)
-                        ref_ty = ref_dept.get("ty", ty_val) or ty_val
-                        ty_p1 = round(ty_val * ref_p1 / ref_ty, 4) if ref_ty > 0 else round(ty_val / 2.0, 4)
-                        ty_p2 = round(ty_val * ref_p2 / ref_ty, 4) if ref_ty > 0 else round(ty_val / 2.0, 4)
+                        ref_p1 = ref_dept.get("ty_p1", 0.0)
+                        ref_ty = ref_dept.get("ty", 0.0)
+                        ty_p1 = ty_val * ref_p1 / ref_ty if ref_ty > 0 else ty_val / 2.0
                         dept_vals[dept] = {
-                            "ly": ly_implied, "ly_p1": round(ly_implied / 2.0, 4), "ly_p2": round(ly_implied / 2.0, 4),
-                            "ty": round(ty_val, 4), "ty_p1": ty_p1, "ty_p2": ty_p2,
+                            "ly": lys[dept], "ly_p1": lys[dept] / 2.0, "ly_p2": lys[dept] / 2.0,
+                            "ty": ty_val, "ty_p1": ty_p1, "ty_p2": ty_val - ty_p1,
                             "growth_pct": g, "g_p1": ref_dept.get("g_p1", g), "g_p2": ref_dept.get("g_p2", g),
-                            "cont_pct": round(cont_pct, 4),
+                            "cont_pct": pcts[dept],
                             "active": True,
                         }
                     for dept in all_depts - active:
@@ -411,9 +417,9 @@ def run_dept_plan():
                 nsg_p1 = sum(v.get("ty_p1", v["ty"]/2.0) for v in dept_vals.values() if v.get("active"))
                 nsg_p2 = sum(v.get("ty_p2", v["ty"]/2.0) for v in dept_vals.values() if v.get("active"))
                 months_out[ty_month] = {
-                    "div_total_ty": round(div_total_ty, 4),
-                    "div_total_p1": round(nsg_p1, 4),
-                    "div_total_p2": round(nsg_p2, 4),
+                    "div_total_ty": div_total_ty,
+                    "div_total_p1": nsg_p1,
+                    "div_total_p2": nsg_p2,
                     "departments": dept_vals,
                 }
 
@@ -797,8 +803,8 @@ def export_plan():
                 for ty_month in available_ty_months():
                     m_data = months_data.get(ty_month, {})
                     dept_d = m_data.get("departments", {}).get(dept, {})
-                    row_val[ty_month]  = round(dept_d.get("ty", 0.0), 2)
-                    row_cont[ty_month] = round(dept_d.get("cont_pct", 0.0), 4)
+                    row_val[ty_month]  = round(dept_d.get("ty", 0.0), 8)   # 8 dp (was 2): rows add back to totals
+                    row_cont[ty_month] = round(dept_d.get("cont_pct", 0.0), 8)
 
                 rows_val.append(row_val)
                 rows_cont.append(row_cont)
@@ -850,8 +856,7 @@ def get_plan_summary():
     for div, month_data in divs.items():
         summary[div] = {}
         for m, vals in month_data.items():
-            ty = round(vals["ty"], 2)
-            ly = round(vals["ly"], 2)
+            ty, ly = vals["ty"], vals["ly"]   # full precision - the grand total is the sum, not a sum of rounded parts
             growth = round((ty - ly) / ly * 100, 1) if ly > 0 else None
             summary[div][m] = {"ty": ty, "ly": ly, "growth": growth}
             grand_ty += ty
@@ -861,8 +866,8 @@ def get_plan_summary():
     return {
         "months": months,
         "divisions": summary,
-        "grand_ty": round(grand_ty, 2),
-        "grand_ly": round(grand_ly, 2),
+        "grand_ty": grand_ty,
+        "grand_ly": grand_ly,
         "grand_growth": grand_growth,
     }
 
@@ -909,14 +914,9 @@ def get_cluster_plan():
         for div, months in divs.items():
             result[cluster][div] = {}
             for month, depts in months.items():
-                div_ty_total = sum(d["ty"] for d in depts.values())
-                result[cluster][div][month] = {}
-                for dept, vals in depts.items():
-                    result[cluster][div][month][dept] = {
-                        "ty":       round(vals["ty"], 2),
-                        "ly":       round(vals["ly"], 2),
-                        "cont_pct": round(vals["ty"] / div_ty_total * 100, 4) if div_ty_total else 0.0,
-                    }
+                pcts = shares_pct({d: v["ty"] for d, v in depts.items()})   # adds to exactly 100
+                result[cluster][div][month] = {
+                    dept: {"ty": vals["ty"], "ly": vals["ly"], "cont_pct": pcts[dept]} for dept, vals in depts.items()}
 
     all_clusters = sorted(result.keys())
     all_divs     = sorted({d for cl in result.values() for d in cl.keys()})
@@ -943,8 +943,8 @@ def export_cluster_plan():
                 row = {"Cluster": cluster, "Division": div, "Department": dept}
                 for month in data["months"]:
                     dd = months.get(month, {}).get(dept, {})
-                    row[f"{month} TY"]      = round(dd.get("ty", 0.0), 2)
-                    row[f"{month} Cont%"]   = round(dd.get("cont_pct", 0.0), 4)
+                    row[f"{month} TY"]      = round(dd.get("ty", 0.0), 8)
+                    row[f"{month} Cont%"]   = round(dd.get("cont_pct", 0.0), 8)
                 rows.append(row)
 
     buf = io.BytesIO()
