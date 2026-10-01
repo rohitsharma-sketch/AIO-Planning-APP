@@ -498,16 +498,21 @@ def prepare_listing(df, info, rep, orig, months, shift=False, section_of=None):
         rep.info(f"{len(changes)} change(s) · {info['departments']} department(s) incl. targets · {info['stores']} stores.")
         return r, months, source, info, rep
     try:
-        r, source, counts = listing_targets(orig, changes, months)
+        r, source, counts, how = listing_targets(orig, changes, months, _store_col(orig, REF_NAMES))
     except ValueError as e:
         rep.error(str(e))
         return None, [], {}, info, rep
+    # a store x division with a new listing is re-split over all its departments, so it is capped at division level
+    info["div_cap"] = sorted({(h[STORE], h[DIV]) for h in how})
+    info["_how"] = how   # server.py keeps it for the check file (not sent to the page)
     if counts["delisted"]:
         rep.info(f"{counts['delisted']} delisting(s): the department goes to 0 from its FROM MONTH (the first month if "
                  f"blank); the rest of that store x division x attribute absorbs it.")
     if counts["estimated"]:
-        rep.info(f"{counts['estimated']} new listing(s) sized from same-cluster stores: the department's share of "
-                 f"its division there x this store's division plan, month by month.")
+        rep.info(f"{counts['estimated']} new listing(s) sized as the department's cont % of its division x this store's "
+                 f"division AOP, month by month - the cont % from the store's REF store ({counts['ref']}), else from "
+                 f"same-cluster stores ({counts['estimated'] - counts['ref']}). The rest of that store x division gives way "
+                 f"pro-rata (capped at store x division). Download the Listing check file to see every department before running.")
     if counts["given"]:
         rep.info(f"{counts['given']} new listing(s) use the values given in the file.")
     ch = pd.DataFrame(changes)
@@ -677,6 +682,31 @@ def template_listing(orig, months, kb=None):
              for s in sorted(set(orig[STORE]) & set(kb["data"])) for d, f in sorted(kb["data"][s].items())
              if f[li:li + 1] == "Y" and d in div_of and (s, d) not in planned]
     return pd.DataFrame(rows, columns=cols), pd.DataFrame(skipped, columns=cols[:6])
+
+
+def listing_check(orig, out, months, how):
+    """Method 1 check file, like Method 2's re-phase file (user, 2026-10-01: "give me a comparitive plan just like
+    method 2 in method 1"): for every store x division a listing change touches, each department Original vs New in
+    the unlocked months (out = the realigned plan), with what it is - newly listed, delisted, gives way; plus how each
+    new listing was sized and a store x division summary."""
+    lm = live_months(months)
+    V = [m + " Plan" for m in lm]
+    lab = [c for c in ("ATTRIBUTE",) if c in out.columns]
+    a = orig.groupby([STORE, DIV, *lab, DEPT])[V].sum()
+    b = out.groupby([STORE, DIV, *lab, DEPT])[V].sum()
+    idx = a.index.union(b.index)
+    a, b = a.reindex(idx).fillna(0.0), b.reindex(idx).fillna(0.0)
+    t = idx.to_frame(index=False)
+    touched = set(map(tuple, t.loc[(a - b).abs().to_numpy().max(1) > 5e-9, [STORE, DIV]].to_numpy()))
+    keep = np.array([(s, d) in touched for s, d in zip(t[STORE], t[DIV])], dtype=bool)
+    t, A, B = t[keep].reset_index(drop=True), a.to_numpy()[keep], b.to_numpy()[keep]
+    sa, sb = np.abs(A).sum(1), np.abs(B).sum(1)   # from the numbers, so it holds without `how` (e.g. after a restart)
+    t["WHAT"] = np.where((sa <= 5e-9) & (sb > 5e-9), "newly listed", np.where((sb <= 5e-9) & (sa > 5e-9), "delisted", "gives way"))
+    for j, m in enumerate(lm):
+        t[f"{m} Original"], t[f"{m} New"], t[f"{m} Change"] = A[:, j], B[:, j], B[:, j] - A[:, j]
+    t["Season Original"], t["Season New"], t["Season Change"] = A.sum(1), B.sum(1), B.sum(1) - A.sum(1)
+    summ = t.groupby([STORE, DIV])[["Season Original", "Season New", "Season Change"]].sum().reset_index()
+    return [("Comparison", t), ("How it was built", pd.DataFrame(how)), ("Store x Division", summ)]
 
 
 def template_split():

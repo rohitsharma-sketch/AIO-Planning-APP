@@ -113,8 +113,9 @@ assert st4["Store × Division × Month = original (the cap)"] == "ok" and st4["R
 o1 = orig.assign(CLUSTER=orig["Store Name"].map({"S1": "X", "S2": "X", "S3": "Y"}), **{"REF Name": "R-" + orig["Store Name"]})
 changes = [{"store": "S1", "dept": "D", "listing": "N", "start": 1, "values": None},   # delisted from Nov
            {"store": "S2", "dept": "C", "listing": "Y", "start": 0, "values": None}]   # newly listed, sized from S1
-r1, src1, counts = listing_targets(o1, changes, M)
-assert src1 == {("S2", "C"): ("S1", "C")} and counts == {"delisted": 1, "estimated": 1, "given": 0}
+r1, src1, counts, how1 = listing_targets(o1, changes, M)
+assert src1 == {("S2", "C"): ("S1", "C")} and counts == {"delisted": 1, "estimated": 1, "given": 0, "ref": 0}
+assert how1[0]["SIZED FROM"] == "cluster" and np.isclose(how1[0]["Sep'26 CONT %"], 100 / 7)
 rv = r1.set_index(["Store Name", "DEPARTMENT"])
 assert list(rv.loc[("S1", "D")]) == [40, 0, 40]                    # Sep before FROM, Jan frozen
 assert np.allclose(rv.loc[("S2", "C")], [10 * 10 / 70, 20 * 20 / 80, 0])  # C's share of LADIES in S1 x S2's LADIES
@@ -131,6 +132,23 @@ try:
     raise AssertionError("a listing nobody plans must fail")
 except ValueError as e:
     assert "Method 3" in str(e)
+# REF store first (user, 2026-10-01): S3 (cluster Y, nobody there plans B) lists B. With no usable REF it pools every
+# store planning B: (10 + 5) / (70 + 10) of S3's LADIES; with REF = S2 it takes S2's own cont %: 5 / 10 -> 0.5 x 8 = 4
+chB = [{"store": "S3", "dept": "B", "listing": "Y", "start": 0, "values": None}]
+rB, _, cB, hB = listing_targets(o1, chB, M)
+assert np.isclose(rB.iloc[0]["Sep'26"], 15 / 80 * 8) and hB[0]["SIZED FROM"] == "all stores planning it"
+rB, sB, cB, hB = listing_targets(o1, chB, M, {"S3": "S2"})
+assert np.isclose(rB.iloc[0]["Sep'26"], 4) and sB[("S3", "B")] == ("S2", "B") and cB["ref"] == 1 and hB[0]["SIZED FROM"] == "REF store"
+# the whole store x division gives way (capped at division level), even when B's attribute isn't planned in S3
+o1a = o1.assign(ATTRIBUTE=o1["DEPARTMENT"].map({"A": "REGULAR", "B": "SUMMER", "C": "SUMMER", "D": "SUMMER"}))
+outB, _, _, _ = realign(o1a, rB, M, sB, {("S3", "LADIES")})
+gB = lambda d: outB[(outB["Store Name"] == "S3") & (outB.DEPARTMENT == d)]["Sep'26 Plan"].sum()
+assert np.isclose(gB("B"), 4) and np.isclose(gB("A"), 4)                      # A gave way: 8 x (1 - 50%)
+stB = {ch["name"]: ch["status"] for ch in verify(o1a, rB, outB, M, {("S3", "LADIES")})[0]}
+assert stB["Store × Division × Attribute × Month = original (the cap)"] == "ok" and stB["Store × Division × Month = original"] == "ok", stB
+assert set(engine.compare_levels(o1a, outB, M, {("S3", "LADIES")})[0].query("`Store Name` == 'S3'")["Within cap"]) <= {"Yes", "n/a - new listing, capped at store x division"}
+chk = dict(importer.listing_check(o1a, outB, M, hB))
+assert set(chk["Comparison"]["WHAT"]) == {"newly listed", "gives way"} and np.isclose(chk["Store x Division"]["Season Change"].abs().max(), 0)
 
 # ------------------------------------------------------------------ method 3: split an existing department
 splits = [{"parent": "B", "child": "B H/S", "share": 0.4, "store": None},

@@ -7,6 +7,28 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-01
 
+### Sales Plan Re-Aligner Method 1: new listings sized from the REF store's cont %, the whole store × division gives way, and a Listing check file
+- **Asked (user):** "first the store if found in such a case should look for refernce store cont % if not found then only cluster cont % will be taken will be apportioned on the respective store's cont % scale and then store x divsion aop will be multiplied on store's cont % on display so that the final plan can get adjusted according to the new listing. Also, give me a comparitive plan just like mehtod 2 in method 1". The user chose "Whole store × division" and "Check-file before running".
+- **Sizing** (`engine.listing_targets`, new `ref_of`): a Y listing with no plan in the store takes, month by month, the department's **cont % of its division in the store's REF store** (the plan's REF Name column) when that store plans it.
+  - Fallbacks: pooled over same-cluster stores that plan it, then every store that does.
+  - Value = that cont % × **this store's division AOP**.
+  - Its MRP × display rows come from the REF store, otherwise the biggest peer.
+  - Returns a `how` list with, per month: cont %, division AOP and new value.
+- **Giving way** (`cap_key`, `realign`, `verify` and `compare_levels` take `div_cap`):
+  - A store × division with a new listing is capped at **store × division**, so all its other departments scale by (1 − cont %) and the division AOP stays exact.
+  - Every other bucket keeps the attribute cap, and delistings stay inside their attribute.
+  - The comparison marks those attribute rows "n/a - new listing, capped at store x division".
+- **Listing check file:** a step-2 button once a valid Method 1 file is uploaded; `GET /api/template?method=listing&kind=check` → `importer.listing_check`. It runs the realignment in memory and gives three sheets:
+  - **Comparison**: every department of the touched store × divisions, Original / New / Change per unlocked month and season, marked newly listed / delisted / gives way.
+  - **How it was built**: REF store or cluster, cont %, division AOP, new value.
+  - **Store x Division**: season totals.
+- **Real plan check ("Realigned Plan (Final).xlsx", in memory):**
+  - NAH lists L_EW_SAREE_TANT and takes REF store BGI's cont % (Oct 1.4787%) × NAH LADIES AOP 19.0462 = 0.281636.
+  - The other 51 NAH LADIES departments scale by exactly 0.98521305, and NAH LADIES stays at 58.888313. All checks are ok.
+  - 174 of 304 stores have a REF store in the plan.
+- **Ops:** a stale Re-Aligner process (16:58) was still answering on 8070 next to the restarted one, since Windows lets two servers bind the same port. It was stopped; the live process now post-dates every edit.
+- `test_realign.py` covers: REF-first sizing (S3 with REF S2 → 0.5 × 8 = 4, vs 15/80 pooled), the division-level giving way even when the attribute isn't planned in the store, the cap checks, the "n/a" label, and the check file's labels.
+
 ### Sales Plan Re-Aligner: Method 1 blank template is Department | Store | Listing (Y/N) — `2730379`, renamed in the next commit
 - **Asked (user):** "i want this as blank template headers instead of the current one" (screenshot: Department | Store | Value); Value = the Y / N listing flag (user's choice). Then "rename Value to Listing (y/n)".
 - **Rename:** the third column is now **Listing (Y/N)**, which was already a LISTING alias. A file with a "Value" header still reads; the test covers both.

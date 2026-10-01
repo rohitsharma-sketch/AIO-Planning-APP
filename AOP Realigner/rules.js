@@ -19,7 +19,9 @@ const RULES_NOW = [
   ['Method 1 - store listing changes', [
     'The blank template is <b>Department | Store | Listing (Y/N)</b>. An optional FROM MONTH column and "&lt;Month&gt; New" values are still read if added.',
     'Listing = N: the department goes to 0 from FROM MONTH (blank = the first month).',
-    "LISTING = Y (not planned there): sized, month by month, as its share of the division in same-cluster stores that plan it × this store's division plan - or your own values - with rows borrowed from the peer store that plans it most.",
+    "Listing = Y (not planned there): month by month, the department's <b>cont % of its division in the store's REF store</b> (when the REF store plans it), else pooled over the same-cluster stores that plan it (else every store that does), × <b>this store's division AOP</b> - or your own values. Its MRP × display rows come from that REF store (else the peer planning it most).",
+    "A store × division with a new listing is re-split over <b>all</b> its departments: the others give way pro-rata (scaled by 1 − the new cont %), so the store × division AOP stays exact - capped at store × division, not attribute, for that store × division only. Delistings stay inside their attribute.",
+    '<b>Listing check file</b> (after uploading): every department of the store × divisions the changes touch, original vs new per month (newly listed / delisted / gives way), a "How it was built" sheet (REF store or cluster, cont %, division AOP) and a store × division summary - the realigned result, before Run.',
     'The "From Listing / Delisting Analyser" template leaves out a store × division whose every department is delisted (a closing or not-yet-open store): nothing would be left to absorb it.',
   ]],
   ['Method 2 - existing department changes', [
@@ -68,6 +70,7 @@ const RULES_LATEST = {
     'The cap is now <b>Store × Division × Attribute × Month</b> (was Store × Division × Month): a department change is absorbed only by the other departments of its own attribute in that store × division - nothing is apportioned across attributes. Store × division × month still matches, as it follows.',
     'A department that is alone in its attribute in a store has nothing to absorb its change: flagged ("couldn\'t fully land"), never spread to another attribute.',
     'Method 4: a shift target must be in the same division <b>and attribute</b>; a section target takes only its departments of that attribute.',
+    'Method 1 new listings: sized from the REF store\'s cont % first, then the cluster\'s, × the store\'s division AOP; the rest of that store × division gives way pro-rata (division-level cap there). New <b>Listing check file</b> to see it before running.',
     'Negative plan cells in the unlocked months are set to 0 after apportioning; the balance is re-apportioned inside their store × division × attribute × month (new check: "No negative plan in the unlocked months").',
     'New download <b>Plan to plan</b>: the full original vs final plan, row for row (Store × Department × MRP × Display Type), every month, Changed flag to filter on.',
     'Checks: "Store × Division × Attribute × Month = original (the cap)" plus "Store × Division × Month = original". The comparison download\'s cap sheet is now Store x Div x Attribute x Month.',

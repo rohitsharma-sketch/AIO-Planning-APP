@@ -479,8 +479,10 @@ def _check_revised(job, data, name, sheet=None, method="dept"):
     if df is not None:
         with job.step("Check against the original", "check:revised", len(orig)):
             r, use, source, info, rep = prep(df, info, rep, orig, months)
+    how = info.pop("_how", None)   # Method 1: how each new listing was sized - for the check file only
     info.update(name=name, loaded_at=stamp(), method=method)
     with lock:
+        state.update(rev_how=how)
         state.update(rev=r if rep.ok else None, rev_months=use if rep.ok else [], rev_info=info, rev_source=source if rep.ok else {},
                      rev_report=rep.items, rev_upload=(data, name, sheet, method), **NO_RESULT)
     if not rep.ok:
@@ -491,16 +493,17 @@ def job_run(job):
     with lock:
         o, r, months, source = state["orig"], state["rev"], state["months"], state["rev_source"]
         method = (state["rev_info"] or {}).get("method", "dept")
+        div_cap = (state["rev_info"] or {}).get("div_cap")   # Method 1 new listings: capped at store x division
         names = (state["orig_info"] or {}).get("name"), (state["rev_info"] or {}).get("name")
     if o is None or r is None:
         raise UserError("Load a valid original plan (step 1) and revised plan (step 2) first.")
     with job.step("Realign", "realign", len(o)):
         try:
-            out, summ, warn, compare = engine.realign(o, r, months, source)
+            out, summ, warn, compare = engine.realign(o, r, months, source, div_cap)
         except ValueError as e:
             raise UserError(str(e))
     with job.step("Verify totals", "verify", len(o)):
-        checks, dept_table = engine.verify(o, r, out, months)
+        checks, dept_table = engine.verify(o, r, out, months, div_cap)
     res = {"id": job.id, "method": method, "finished_at": stamp(), "secs": round(job.elapsed(), 1), "original": names[0], "revised": names[1],
            "rows": len(out), "changed_rows": len(compare), "summary": summ, "warnings": warn,
            "checks": checks, "dept_table": dept_table,
@@ -554,7 +557,7 @@ def job_export(job, kind, fmt):
             data, ctype, ext = engine.export(out.rename(columns={k: v for k, v in colmap.items() if k in out.columns}),
                                              fmt, job.progress)
         else:
-            levels = engine.compare_levels(orig, out, months) if fmt == "xlsx" else None
+            levels = engine.compare_levels(orig, out, months, (state["rev_info"] or {}).get("div_cap")) if fmt == "xlsx" else None
             data, ctype, ext = engine.export_compare(summ, compare, fmt, job.progress, levels)
     name = "Realigned Plan" + {"compare": " - Comparison", "plan": " - Plan to Plan"}.get(kind, "") + f".{ext}"
     with lock:
@@ -648,6 +651,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(400, {"error": "Load the original plan first."})
             method, kind, dept = q.get("method") or "dept", q.get("kind"), q.get("dept") or None
             sheets = None
+            if method == "listing" and kind == "check":   # Method 1 check file: the realigned result, before Run
+                with lock:
+                    r, src, how = state["rev"], state["rev_source"], state.get("rev_how") or []
+                    info = state["rev_info"] or {}
+                if r is None or info.get("method") != "listing":
+                    return self._send(400, {"error": "Upload a valid listing changes file first (step 2)."})
+                try:
+                    out = engine.realign(o, r, months, src, info.get("div_cap"))[0]
+                except ValueError as e:
+                    return self._send(400, {"error": str(e)})
+                return self._send(200, engine.write_xlsx(importer.listing_check(o, out, months, how), None, "0.00000000"),
+                                  engine.XLSX_CTYPE, {"Content-Disposition": 'attachment; filename="Listing check file.xlsx"'})
             if method in ("listing", "shift"):
                 kb = None
                 if kind == "kb":

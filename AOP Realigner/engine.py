@@ -65,12 +65,20 @@ def cap_label(o):
     return "Store × Division × Attribute × Month" if has_attr(o) else "Store × Division × Month"
 
 
-def cap_key(o):
+def cap_key(o, div_cap=None):
     """Per row, its cap bucket (less the month): store||division||attribute (user, 2026-10-01: "apportion and match at
     Store x Division x Attribute x Month ... so that the department changes made are contained within the attribute");
-    store||division when the plan has no ATTRIBUTE column."""
+    store||division when the plan has no ATTRIBUTE column, and for the (store, division) pairs in `div_cap` - a store x
+    division with a new listing, whose AOP is re-split over all its departments (user, 2026-10-01: "store x division aop
+    will be multiplied on store's cont %")."""
     k = o[STORE].astype(str) + "||" + o[DIV].astype(str)
-    return (k + "||" + o[ATTR].fillna("").astype(str) if has_attr(o) else k).to_numpy()
+    if not has_attr(o):
+        return k.to_numpy()
+    ka = k + "||" + o[ATTR].fillna("").astype(str)
+    if div_cap:
+        at_div = pd.MultiIndex.from_arrays([o[STORE], o[DIV]]).isin([tuple(x) for x in div_cap])
+        ka = ka.where(~at_div, k)
+    return ka.to_numpy()
 
 
 def add_new_departments(o, r, months, source=None):
@@ -127,13 +135,15 @@ def _sd_totals(o, months, by=DEPT):
     return dict(zip(g.index, g.to_numpy(float)))
 
 
-def listing_targets(o, changes, months):
-    """Method 1 - store listing changes -> (revised Store x Dept values, source rows, counts).
+def listing_targets(o, changes, months, ref_of=None):
+    """Method 1 - store listing changes -> (revised Store x Dept values, source rows, counts, how each listing was sized).
     changes: [{store, dept, listing "Y"/"N", start (first month index it applies from), values (list or None)}].
-    Delisted: the dept goes to 0 from `start`. Newly listed: from `start` it gets the share its department has of
-    the division in same-cluster stores that plan it (pooled per month; all stores if no cluster peer) x this
-    store's division total - or the given values. Its MRP/display rows come from the peer store that plans the
-    most of it. Frozen months (Jan/Feb) and months before `start` keep the original."""
+    Delisted: the dept goes to 0 from `start`. Newly listed (user, 2026-10-01: "first ... look for reference store cont
+    % if not found then only cluster cont %"): from `start` it gets, month by month, the department's cont % of its
+    division in the store's REF store (ref_of[store]) when that store plans it, else pooled over the same-cluster
+    stores that plan it (all stores if none), x this store's division AOP - or the given values. Its MRP/display rows
+    come from that REF store, else the peer that plans the most of it. Frozen months and months before `start` keep
+    the original."""
     n = len(months)
     fz = np.array([locked(m) for m in months])
     sd, dv = _sd_totals(o, months), _sd_totals(o, months, DIV)
@@ -143,7 +153,8 @@ def listing_targets(o, changes, months):
     for (s, d), v in sd.items():
         if np.abs(v).sum() > TOL:
             planners.setdefault(d, []).append(s)
-    rows, source, counts, nopeer = [], {}, {"delisted": 0, "estimated": 0, "given": 0}, []
+    ref_of = ref_of or {}
+    rows, source, counts, nopeer, how = [], {}, {"delisted": 0, "estimated": 0, "given": 0, "ref": 0}, [], []
     for c in changes:
         s, d = c["store"], c["dept"]
         base = sd.get((s, d), np.zeros(n))
@@ -153,25 +164,39 @@ def listing_targets(o, changes, months):
             counts["delisted"] += 1
         else:
             peers = [p for p in planners.get(d, []) if p != s]
-            peers = [p for p in peers if cluster.get(p) == cluster.get(s)] or peers
+            ref = ref_of.get(s)
+            if ref and ref != s and ref in peers:
+                peers, frm = [ref], "REF store"
+            else:
+                same = [p for p in peers if cluster.get(p) == cluster.get(s)]
+                peers, frm = (same, "cluster") if same else (peers, "all stores planning it")
             if not peers:
                 nopeer.append(f"{s} / {d}")
                 continue
             source[(s, d)] = (max(peers, key=lambda p: sd[(p, d)].sum()), d)
+            num = np.sum([sd[(p, d)] for p in peers], axis=0)
+            den = np.sum([dv.get((p, div_of[d]), np.zeros(n)) for p in peers], axis=0)
+            cont = np.divide(num, den, out=np.zeros(n), where=np.abs(den) > TOL)   # the department's cont % of the division
+            aop = dv.get((s, div_of[d]), np.zeros(n))                              # this store's division AOP
             if c.get("values") is not None:
                 vec = np.asarray(c["values"], float)
                 counts["given"] += 1
             else:
-                num = np.sum([sd[(p, d)] for p in peers], axis=0)
-                den = np.sum([dv.get((p, div_of[d]), np.zeros(n)) for p in peers], axis=0)
-                vec = np.divide(num, den, out=np.zeros(n), where=np.abs(den) > TOL) * dv.get((s, div_of[d]), np.zeros(n))
+                vec = cont * aop
                 counts["estimated"] += 1
+                counts["ref"] += frm == "REF store"
             vec = np.where(apply, vec, base)
+            how.append({STORE: s, DIV: div_of[d], DEPT: d, "LISTED FROM": months[c["start"]],
+                        "SIZED FROM": "your values" if c.get("values") is not None else frm,
+                        "CONT % FROM": ", ".join(peers[:5]) + (f" +{len(peers) - 5} more" if len(peers) > 5 else ""),
+                        **{f"{m} CONT %": cont[j] * 100 for j, m in enumerate(months) if apply[j]},
+                        **{f"{m} DIVISION AOP": aop[j] for j, m in enumerate(months) if apply[j]},
+                        **{f"{m} NEW": vec[j] for j, m in enumerate(months) if apply[j]}})
         rows.append({STORE: s, DEPT: d, **dict(zip(months, vec))})
     if nopeer:
         raise ValueError("No store plans these departments, so there is nothing to size or copy a new listing from "
                          "(add them with Method 3 instead): " + ", ".join(nopeer[:10]) + (" ..." if len(nopeer) > 10 else ""))
-    return pd.DataFrame(rows, columns=[STORE, DEPT, *months]), source, counts
+    return pd.DataFrame(rows, columns=[STORE, DEPT, *months]), source, counts, how
 
 
 def split_targets(o, splits, months):
@@ -230,7 +255,7 @@ def shift_targets(o, changes, months, section_of=None):
     ys = [c for c in changes if c["listing"] == "Y"]
     sized, source = {}, {}
     if ys:
-        r1, source, _ = listing_targets(o, ys, months)
+        r1, source, _, _ = listing_targets(o, ys, months)
         sized = {(s, d): np.asarray(v, float) for s, d, *v in r1.itertuples(index=False)}
     target, capped, errors, moved = {}, [], [], 0.0
     get = lambda k: target.setdefault(k, sd.get(k, np.zeros(n)).copy())
@@ -338,7 +363,7 @@ def _take_back(new, add, pool, key):
     return new, add * (1 - np.divide(took, need, out=np.zeros_like(need), where=need > TOL))
 
 
-def realign(o, r, months, source=None):
+def realign(o, r, months, source=None, div_cap=None):
     """o: original rows (numeric cols clean), r: revised Store x Dept values over `months`, source: where a new
     store-dept's rows come from (see add_new_departments). Every store x division x attribute x month lands on the
     original - the cap (the "other departments stay as they are" option was removed, user 2026-09-30).
@@ -390,7 +415,7 @@ def realign(o, r, months, source=None):
     #    to the same revised departments' other live months that still have room (other departments shrink there by
     #    the same amount) - so every month total AND the revised departments' season total still match. Only excess
     #    with no room anywhere stays over its month (flagged).
-    grp = cap_key(o)
+    grp = cap_key(o, div_cap)   # a store x division with a new listing (Method 1) is capped at division level
     T = pd.DataFrame(orig).groupby(grp).transform("sum").to_numpy()
     L = pd.DataFrame(np.where(lk, new, 0.0)).groupby(grp).transform("sum").to_numpy()
     U = pd.DataFrame(np.where(lk, 0.0, orig)).groupby(grp).transform("sum").to_numpy()
@@ -507,7 +532,7 @@ def realign(o, r, months, source=None):
     return o, summ, warn, compare
 
 
-def verify(o, r, out, months):
+def verify(o, r, out, months, div_cap=None):
     """Independent after-the-fact checks of a realign result, plus a per-department table of
     original vs revised (file) vs realigned (output) - the numbers a planner would eyeball."""
     V = [m + " Plan" for m in months]
@@ -539,13 +564,14 @@ def verify(o, r, out, months):
     add("Store × Division totals match — whole season", "ok" if season == 0 else "fail",
         f"{season} of {len(a):,} store-divisions differ")
     if has_attr(o):   # the cap is per attribute; the division month total follows from it
-        ka, kb = cap_key(o), cap_key(out)
+        ka, kb = cap_key(o, div_cap), cap_key(out, div_cap)
         ca = o.groupby(ka)[V].sum()
         dc = (out.groupby(kb)[V].sum().reindex(ca.index).fillna(0.0) - ca).to_numpy()
         cc = int((np.abs(dc) > SHOWN).sum())
         add(f"{cap_label(o)} = original (the cap)", "ok" if cc == 0 else "fail",
             f"{cc} of {dc.size:,} store-division-attribute-months differ from the original file" +
-            ("" if cc == 0 else f" (largest {float(np.abs(dc).max()):.4f}) - see the {CAP_SHEET} sheet of the comparison"))
+            ("" if cc == 0 else f" (largest {float(np.abs(dc).max()):.4f}) - see the {CAP_SHEET} sheet of the comparison")
+            + (f"; {len(div_cap)} store-division(s) with a new listing are capped at store x division" if div_cap else ""))
     add("Store × Division × Month = original" + ("" if has_attr(o) else " (the cap)"), "ok" if cells == 0 else "fail",
         f"{cells} of {d.size:,} store-division-months differ from the original file" +
         ("" if cells == 0 else f" (largest {float(np.abs(d).max()):.4f}) - see the comparison"))
@@ -628,7 +654,7 @@ def export(df, fmt, on_progress=None):
     return write_xlsx([("Realigned Plan", df.round(6))], on_progress), XLSX_CTYPE, "xlsx"
 
 
-def compare_levels(o, out, months):
+def compare_levels(o, out, months, div_cap=None):
     """Original plan vs the new plan at the two levels a planner checks (user, 2026-09-30: "a comparitive ... original
     plan v new revised plan ... to see where the difference is"):
       the cap level (Store x Division x Attribute x Month, or x Division x Month without attributes) - EVERY cell,
@@ -654,6 +680,9 @@ def compare_levels(o, out, months):
     sdm = table([STORE, DIV, ATTR] if has_attr(o) else [STORE, DIV], False)
     sdm["Within cap"] = np.where(sdm["Difference"].abs() <= SHOWN, "Yes",
                                  np.where(sdm["Difference"] > 0, "No - over the original", "No - under the original"))
+    if div_cap and has_attr(o):   # a new listing re-splits the whole store x division: its attributes may move
+        dl = pd.MultiIndex.from_arrays([sdm[STORE], sdm[DIV]]).isin([tuple(x) for x in div_cap])
+        sdm.loc[dl & (sdm["Within cap"] != "Yes"), "Within cap"] = "n/a - new listing, capped at store x division"
     return sdm, table([STORE, DIV, DEPT], True)
 
 

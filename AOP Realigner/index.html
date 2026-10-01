@@ -309,9 +309,9 @@ const METHODS = {
   listing: {no: 1, title: 'Store listing changes', short: 'A department delisted from a store, or newly listed in one.',
     drop: 'Upload the listing changes',
     howto: `One row per change: <code>Department</code>, <code>Store</code>, <code>Listing (Y/N)</code> (Y = newly listed, N = delisted) — the blank template's columns. Optional: a <code>FROM MONTH</code> column (blank = the first month).
-      A <b>delisted</b> department goes to 0 from that month. A <b>newly listed</b> one is sized from same-cluster stores — its share of the division there × this store's division plan, month by month — or from your own figures in the “&lt;Month&gt; New” columns.
-      The rest of the store × division × attribute flexes to stay on the original. “From Listing / Delisting Analyser” pre-fills every difference between this plan and the latest listing month.`,
-    run: 'Delisted departments go to 0 from their month and new listings take their sized value; every other department in the same store × division × attribute absorbs the difference pro-rata.'},
+      A <b>delisted</b> department goes to 0 from that month; the rest of its store × division × attribute absorbs it. A <b>newly listed</b> one takes, month by month, the department's cont % of the division in the store's <b>REF store</b> (if the REF store plans it, else the same-cluster stores) × this store's division AOP — or your own figures in “&lt;Month&gt; New” columns — and the <b>whole store × division</b> gives way pro-rata, so the division AOP stays exact.
+      After uploading, <b>Listing check file</b> shows every department of the touched store × divisions, original vs new, and how each new listing was sized — before you run. “From Listing / Delisting Analyser” pre-fills every difference between this plan and the latest listing month.`,
+    run: 'Delisted departments go to 0 from their month (their attribute absorbs it); a new listing takes its REF-store (else cluster) cont % of the store × division AOP and the rest of that store × division gives way pro-rata.'},
   dept: {no: 2, title: 'Existing department changes', short: 'New values for departments already in the plan.',
     drop: 'Upload the revised plan',
     howto: `Only the departments you changed — Store × Department rows with “&lt;Month&gt; New” columns. Pick a department and download the template: it comes pre-filled with that department's original values in every store, ready to edit. <b>Re-phase &amp; run</b> does it all for you: pick the department (and, if needed, whose last-year shape to use) - each store keeps its total for the unlocked months, re-split by last year's month shape (its own if it is a comparable store, else its REF / REF OLD store's, else its cluster's comparable stores), loaded here and run to the final plan - the other departments absorb it, so every store × division × attribute × month stays on the original. <b>Re-phase file</b> downloads the same file to check or edit first.`,
@@ -474,7 +474,9 @@ function renderOrig() {
 }
 
 function templateActions() {
-  if (S.method === 'listing') return `<button class="btn btn-outline btn-sm" onclick="template('listing')">${icon('dl')}Blank template</button>${S.listing_app
+  // the check file, like Method 2's re-phase file: the uploaded listing changes realigned, before Run (user, 2026-10-01)
+  if (S.method === 'listing') return `${S.revised && S.revised.ok && S.revised.method === 'listing'
+    ? `<button class="btn btn-outline btn-sm" onclick="toast('Building the Listing check file - it runs the realignment, about 10 s…'); template('listing','check')" title="Every department of the store × divisions your listing changes touch: original vs new, and how each new listing was sized">${icon('dl')}Listing check file</button>` : ''}<button class="btn btn-outline btn-sm" onclick="template('listing')">${icon('dl')}Blank template</button>${S.listing_app
     ? `<button class="btn btn-outline btn-sm" onclick="template('listing','kb')" title="Every planned department the Listing / Delisting Analyser now shows as delisted, and every listed one with no plan">${icon('dl')}From Listing / Delisting Analyser</button>` : ''}`;
   if (S.method === 'shift') return `<button class="btn btn-outline btn-sm" onclick="template('shift')">${icon('dl')}Blank template</button>${S.listing_app
     ? `<button class="btn btn-outline btn-sm" onclick="template('shift','kb')" title="The Listing / Delisting Analyser's changes vs this plan, with an empty TARGET column to fill">${icon('dl')}From Listing / Delisting Analyser</button>` : ''}`;
