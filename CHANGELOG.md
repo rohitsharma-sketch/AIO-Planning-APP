@@ -7,6 +7,15 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-02
 
+### Sales Plan Re-Aligner: Method 1 new listings stay inside their attribute; exact 6-decimal download — `d8d1888`
+- **Asked (user):** "check pdh its original plan differs from the final output … new final is the source … fix the method 1" (files: Realigned Plan NEW FINAL = original, Realigned Plan Post Listing = the Method 1 output).
+- **What PDH showed:** PDH plans about 173 of its 176 Y listings already in NEW FINAL, so they were correctly left as they are (the file's L_EW_DRESS FABRIC / L_EW_SAREE_TANT are N, and already 0). PDH's one truly new listing, MSE_JAMAICAN (SUMMER), was re-split over the **whole** MENS division (`div_cap`), so every MENS attribute (HVY WINTER, REGULAR …) gave a little.
+- **Fix 1 — attribute cap for listings:** `prepare_listing` no longer sets `div_cap`. A new listing comes out of its own store × division × attribute; a month the attribute can't carry moves to the listing's other months, and only an attribute with no room at all spills to the store × division (29 on your file, flagged). PDH's attributes are now untouched; MSE_JAMAICAN keeps its season 0.0514 (Jan P1 moves to later months: SUMMER is 0 there).
+- **Fix 2 — each listing keeps its own season:** when several revised departments overflow one bucket, the move kept only their combined season (ANG KIDS SUMMER listings up to 0.026 L off each). An iterative proportional fit (month totals and each store-dept's season both fixed; whole store-depts scaled, so MRP × display mix is kept) now keeps each one's own. The check reads "warn: moved to fit the cap; every revised store-department keeps its season total".
+- **Fix 3 — exact download:** the final plan was rounded to 6 dp cell by cell, which put 227 store × divisions up to 1e-5 off and the grand total +0.0008. `engine.round6` rounds with largest remainder inside each store × division × attribute × month (division for spilled ones): every total now matches to 1e-15, grand 73,685.195573 = original; no cell moves more than 1e-6.
+- Re-run on your files: every hard check ok (cap 0 of 37,289 off, store × division × month 0 of 6,384, grand total, no negatives, display-type mix).
+- `test_realign.py`: two revised departments overflowing one attribute keep their own seasons, the other attribute untouched; `round6` lands thirds on their exact total.
+
 ### Sales Plan Re-Aligner: Method 4 template fixed, Method 5 grows P1 / P2 months, no default month lock — `227f2f2`
 - **Asked (user):** "method 4 is broken check it, and check why method 5 has a lock in it for JF as it is not there. the month lock only can be configured if the user has set it"
 - **Method 4 — blank template crashed:** `template_shift` added TARGET after FROM MONTH, which the Method 1 blank template (`Department | Store | Listing (Y/N)`) no longer has. It is now `Department | Store | Listing (Y/N) | Target`; the Listing-app pre-filled one is unchanged.
