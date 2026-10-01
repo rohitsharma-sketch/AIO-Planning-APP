@@ -59,8 +59,10 @@ assert np.isclose(g("S2", "A", 299, "Sep'26"), 10) and np.isclose(g("S2", "B", 2
 assert np.isclose(g("S2", "A", 299, "Nov'26"), 15) and np.isclose(g("S2", "B", 299, "Nov'26"), 5)
 assert np.isclose(bucket("S2", "Sep'26"), 10) and np.isclose(bucket("S2", "Nov'26"), 20)
 assert any("excess" in w and "S2/LADIES" in w for w in warn)
-# S3: sole department revised down, nothing else to absorb -> bucket stays under original, flagged
-assert np.isclose(g("S3", "A", 299, "Sep'26"), 5) and any("couldn't fully land" in w and "S3/LADIES" in w for w in warn)
+# S3: sole department revised down, nothing else to absorb -> the store x division x month is held on the original
+# file anyway (user, 2026-10-01: "should match with the sales plan in the original file always"), flagged
+assert np.isclose(g("S3", "A", 299, "Sep'26"), 8) and any("still off the original" in w and "S3/LADIES" in w for w in warn)
+assert out.attrs["forced_div"] == [("S3", "LADIES")]
 # qty = value / original ASP of that Department x MRP x Display Type x Month
 assert np.isclose(cell("S1", "B", 299, "Sep'26", " Plan Qty"), 9.166666666 / 2)
 assert np.isclose(cell("S1", "C", 299, "Nov'26", " Plan Qty"), 18.75 / 2)
@@ -74,12 +76,11 @@ assert ("S1", "A", 299, "Jan'27 P1") not in c.index
 # verify(): independent checks agree with the rules
 checks, table = verify(orig, rev, out, M)
 status = {ch["name"]: ch["status"] for ch in checks}
-assert status["Revised values kept exactly"] == "warn" and status["Grand total unchanged"] == "fail"  # S2 moved to fit; S3 short
-assert status["Store × Division × Month = original (the cap)"] == "fail"   # S3: sole dept revised down, nothing to absorb
-# the comparison levels: every store x division x month, flagged against the cap; S3 Sep is the only one off
+assert status["Revised values kept exactly"] == "fail" and status["Grand total unchanged"] == "ok"  # S2 moved months, S3 held
+assert status["Store × Division × Month = original (the cap)"] == "ok"     # S3 held on the original file
+# the comparison levels: every store x division x month, flagged against the cap - all on it now
 sdm, sdd = engine.compare_levels(orig, out, M)
-assert len(sdm) == 3 * len(M) and set(sdm.loc[sdm["Within cap"] != "Yes", "Store Name"]) == {"S3"}
-assert sdm.loc[(sdm["Store Name"] == "S3") & (sdm["Month"] == "Sep'26"), "Within cap"].item() == "No - under the original"
+assert len(sdm) == 3 * len(M) and (sdm["Within cap"] == "Yes").all()
 assert ((sdd["Store Name"] == "S2") & (sdd["DEPARTMENT"] == "A") & (sdd["Month"] == "Nov'26")).any() and not (sdd["Locked month"] == "Yes").any()
 assert status["Locked months untouched (value and qty)"] == "ok"
 assert [t["dept"] for t in table] == ["A", "A F/S"] and np.isclose(table[0]["months"][0]["revised"], 37)
@@ -146,7 +147,19 @@ gB = lambda d: outB[(outB["Store Name"] == "S3") & (outB.DEPARTMENT == d)]["Sep'
 assert np.isclose(gB("B"), 4) and np.isclose(gB("A"), 4)                      # A gave way: 8 x (1 - 50%)
 stB = {ch["name"]: ch["status"] for ch in verify(o1a, rB, outB, M, {("S3", "LADIES")})[0]}
 assert stB["Store × Division × Attribute × Month = original (the cap)"] == "ok" and stB["Store × Division × Month = original"] == "ok", stB
-assert set(engine.compare_levels(o1a, outB, M, {("S3", "LADIES")})[0].query("`Store Name` == 'S3'")["Within cap"]) <= {"Yes", "n/a - new listing, capped at store x division"}
+assert set(engine.compare_levels(o1a, outB, M, {("S3", "LADIES")})[0].query("`Store Name` == 'S3'")["Within cap"]) <= {"Yes", "n/a - capped at store x division"}
+# nothing of the same attribute to absorb -> the rest of the store x division does (user, 2026-10-01): S1's A is its only
+# OCCASIONAL department; delisting it in Sep (10) is taken up by B, C, D (REGULAR) pro-rata, so S1 LADIES Sep stays 70
+o1o = o1.assign(ATTRIBUTE=o1["DEPARTMENT"].map({"A": "OCCASIONAL", "B": "REGULAR", "C": "REGULAR", "D": "REGULAR"}))
+rO = pd.DataFrame([{"Store Name": "S1", "DEPARTMENT": "A", "Sep'26": 0}])
+outO, _, warnO, _ = realign(o1o, rO, ["Sep'26"])
+gO = lambda d: outO[(outO["Store Name"] == "S1") & (outO.DEPARTMENT == d)]["Sep'26 Plan"].sum()
+assert np.isclose(gO("A"), 0) and np.isclose(outO[outO["Store Name"] == "S1"]["Sep'26 Plan"].sum(), 70)
+assert np.isclose(gO("B"), 10 * 70 / 60) and np.isclose(gO("D"), 40 * 70 / 60) and outO.attrs["spill_div"] == [("S1", "LADIES")]
+assert any("no other department of the same attribute" in w for w in warnO) and not any("couldn't fully land" in w for w in warnO), warnO
+stO = {ch["name"]: ch["status"] for ch in verify(o1o, rO, outO, ["Sep'26"])[0]}
+assert all(stO[k] == "ok" for k in ("Store × Division × Attribute × Month = original (the cap)", "Store × Division × Month = original",
+                                    "Grand total unchanged", "Store × Division totals match — whole season")), stO
 chk = dict(importer.listing_check(o1a, outB, M, hB))
 assert set(chk["Comparison"]["WHAT"]) == {"newly listed", "gives way"} and np.isclose(chk["Store x Division"]["Season Change"].abs().max(), 0)
 
@@ -405,8 +418,10 @@ assert rrep.ok, rrep.items
 rout, _, rwarn, _ = realign(ro, rr, RM, rsrc)
 rsdm = engine.compare_levels(ro, rout, RM)[0].set_index("Store Name")
 assert (rsdm.loc[["S1", "S2"], "Within cap"] == "Yes").all()   # stores with another department to absorb: exactly on the cap
-# S3 / S4 / S5 plan only A in LADIES: nothing can absorb a re-phase there, so they are flagged, never hidden
-assert any("couldn't fully land" in w and "S3/LADIES" in w for w in rwarn), rwarn
+# S3 / S4 / S5 plan only A in LADIES: nothing else can absorb a re-phase there, yet every store x division x month still
+# equals the original file (user, 2026-10-01) - A is held on it (scaled, or kept as original where it went to 0), flagged
+assert (rsdm["Within cap"] == "Yes").all() and any("still off the original" in w and "S3/LADIES" in w for w in rwarn), rwarn
+assert any("kept exactly as the original" in w for w in rwarn), rwarn
 assert np.allclose(rout[rout["Store Name"] == "S1"].query("DEPARTMENT == 'A'")[["Sep'26 Plan", "Oct'26 Plan", "Nov'26 Plan"]], [[2, 6, 0]])
 
 # store overrides: REF OLD (before the cluster) and a fixed month mix (any scale, rescaled to 100%)

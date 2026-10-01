@@ -4,7 +4,10 @@
 const RULES_NOW = [
   ['What is kept', [
     'Every <b>Store × Division × Attribute × Month</b> total of the original plan - the file imported in step 1 - is the <b>cap</b>: the output lands exactly on it, and every run checks it (pass / fail). So a department change stays <b>inside its own attribute</b> - nothing is apportioned across attributes - and the store × division × month follows. (A plan without an ATTRIBUTE column is capped at store × division × month.)',
-    'The values you give (revised, newly listed or split departments) are kept <b>exactly</b> within the cap; every other department of the same attribute in that store × division absorbs the difference, pro-rata to its original value. A department alone in its attribute in a store has nothing to absorb into: its change is flagged, never spread to another attribute.',
+    '<b>Store × Division × Month always equals the original file</b> - never more, never less - and the grand total with it. Checked on every run.',
+    'The values you give (revised, newly listed or split departments) are kept <b>exactly</b> within the cap; every other department of the same attribute in that store × division absorbs the difference, pro-rata to its original value.',
+    'If nothing of the same attribute can absorb a change (e.g. a delisted department that is the only one of its attribute in the store), the <b>rest of that store × division</b> absorbs it pro-rata - that store × division is then checked at division level. Listed in the notes.',
+    'Last resort, so the plan is never up or down: a store × division × month still off after all this has every department scaled onto the original (revised ones included, flagged); one with nothing left to carry its plan (every department 0) keeps its original plan that month (flagged).',
     '<b>No negative plan</b>: after apportioning, every negative cell in an unlocked month (e.g. -0.01) is set to <b>0</b>, and the balance comes back out of the same store × division × attribute × month by the same rules - a revised department’s negative row out of that department’s own other rows (its value stays as given), any other out of the other departments pro-rata - so the cap still holds. Negatives in locked months stay as they are. Checked on every run.',
     '<b>Locked months are never changed</b> (value and qty) - the planner locks / unlocks each month of the original plan (Jan / Feb locked by default). Locked-month figures in an upload are ignored and flagged.',
   ]],
@@ -72,6 +75,7 @@ const RULES_LATEST = {
     'Method 4: a shift target must be in the same division <b>and attribute</b>; a section target takes only its departments of that attribute.',
     'Method 1 new listings: sized from the REF store\'s cont % first, then the cluster\'s, × the store\'s division AOP; the rest of that store × division gives way pro-rata (division-level cap there). New <b>Listing check file</b> to see it before running.',
     'Method 4 new listings are sized the same way (REF store first, then cluster) and still come only out of their target.',
+    'Store × Division × Month now always equals the original file: no same-attribute department to absorb → the rest of the store × division does; anything still off is scaled onto it, or kept as the original where nothing is left.',
     'Negative plan cells in the unlocked months are set to 0 after apportioning; the balance is re-apportioned inside their store × division × attribute × month (new check: "No negative plan in the unlocked months").',
     'New download <b>Plan to plan</b>: the full original vs final plan, row for row (Store × Department × MRP × Display Type), every month, Changed flag to filter on.',
     'Checks: "Store × Division × Attribute × Month = original (the cap)" plus "Store × Division × Month = original". The comparison download\'s cap sheet is now Store x Div x Attribute x Month.',

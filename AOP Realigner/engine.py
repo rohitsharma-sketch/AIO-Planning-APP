@@ -437,7 +437,27 @@ def realign(o, r, months, source=None, div_cap=None):
     spilled = over.any(1)
     unplaced = excess[:, 0] - take.sum(1)  # excess with no room left in any other month
     # nothing left to absorb into (bucket stays under target), or excess that couldn't be placed (stays over)
-    short = ((~has_u) & live & (T - Lnew > 1e-6)).any(1) | (unplaced > 1e-6)
+
+    # 2a. nothing of the same attribute to absorb (user, 2026-10-01: a delisted department alone in its attribute in a
+    #     store lost its AOP - chose "Rest of the store x division"): a bucket still off its original hands the balance
+    #     to the other departments of its store x division, pro-rata to their plan (the revised ones keep their values),
+    #     so the division AOP stays exact. Those store x divisions are then checked at division level (out.attrs).
+    sdv = (o[STORE].astype(str) + "||" + o[DIV].astype(str)).to_numpy()
+    spill_div = []
+    if has_attr(o):
+        resid = T - pd.DataFrame(new).groupby(grp).transform("sum").to_numpy()     # each row's bucket miss, per month
+        miss = (grp != sdv)[:, None] & live & (np.abs(resid) > 1e-6)              # same for every row of a bucket
+        if miss.any():
+            first = ~pd.Series(grp).duplicated().to_numpy()                       # count each bucket's miss once
+            need = pd.DataFrame(np.where(miss & first[:, None], resid, 0.0)).groupby(sdv).transform("sum").to_numpy()
+            room = np.where(~lk & live & ~miss & (new > TOL), new, 0.0)
+            rsum = pd.DataFrame(room).groupby(sdv).transform("sum").to_numpy()
+            new = new + room * np.where(rsum > TOL, np.maximum(need / np.where(rsum > TOL, rsum, 1), -1.0), 0.0)
+            spill_div = sorted({tuple(x.split("||", 1)) for x in set(sdv[miss.any(1)])})
+    # what still misses its original, at the level it is capped at (division for the store x divisions above)
+    lvl = np.where(np.isin(sdv, ["||".join(x) for x in spill_div]), sdv, grp) if spill_div else grp
+    short = (live & (np.abs(pd.DataFrame(orig).groupby(lvl).transform("sum").to_numpy()
+                            - pd.DataFrame(new).groupby(lvl).transform("sum").to_numpy()) > 1e-6)).any(1)
 
     # 2b. no negative plan (user, 2026-10-01: "if there was a plan of -0.01 ... it should be covered to 0 and the balance
     #     should follow the rules set for apportion ... readjusting the value to its respective store x div x attribute x
@@ -455,6 +475,30 @@ def realign(o, r, months, source=None, div_cap=None):
         new, left = _take_back(new, np.where(lk, 0.0, add) + left, ~lk & (new > TOL) & ~frozen[None, :], grp)
         new, left = _take_back(new, left, lk & (new > TOL), grp)
         neg_left = float(left.sum())
+
+    # 2c. the store x division x month always equals the original file (user, 2026-10-01: "should match with the sales
+    #     plan in the original file always ... not incremental or decremental"): whatever is still off after the rules
+    #     above (revised values alone over a whole division with no month left to move to, a short with nothing left to
+    #     absorb) is closed by scaling every positive cell of that store x division x month - revised ones included,
+    #     flagged. One left with no plan at all to carry its original (every department 0 after the change, e.g. all
+    #     delisted, or a sole department re-phased to 0) keeps its original plan that month - flagged, never lost.
+    Td = pd.DataFrame(orig).groupby(sdv).transform("sum").to_numpy()
+    Nd = pd.DataFrame(new).groupby(sdv).transform("sum").to_numpy()
+    off = live & (np.abs(Td - Nd) > SHOWN)
+    forced, kept_orig = [], []
+    if off.any():
+        pos = np.where(off & (new > TOL), new, 0.0)
+        psum = pd.DataFrame(pos).groupby(sdv).transform("sum").to_numpy()
+        stuck = off & (psum <= TOL)
+        if stuck.any():
+            kept_orig = sorted({f"{x.replace('||', '/')}/{months[j]}" for x, j in zip(sdv[np.nonzero(stuck)[0]], np.nonzero(stuck)[1])})
+            new = np.where(stuck, orig, new)
+        new = np.where(pos > 0, new * (Td - (Nd - psum)) / np.where(psum > TOL, psum, 1), new)
+        forced = sorted({tuple(x.split("||", 1)) for x in set(sdv[off.any(1)])})
+        spill_div = sorted(set(spill_div) | set(forced))   # their attributes may move: checked at division level
+        lvl = np.where(np.isin(sdv, ["||".join(x) for x in spill_div]), sdv, grp)
+        short = (live & (np.abs(pd.DataFrame(orig).groupby(lvl).transform("sum").to_numpy()
+                                - pd.DataFrame(new).groupby(lvl).transform("sum").to_numpy()) > 1e-6)).any(1)
 
 
     # 3. qty = new value / the original plan's ASP for that Department x MRP x Display Type x Month, pooled
@@ -506,7 +550,7 @@ def realign(o, r, months, source=None, div_cap=None):
     lab = np.char.replace(grp.astype(str), "||", "/")
     spilled_sd = sorted(set(lab[spilled]))
     spilled_amt = float(pd.Series(excess[:, 0]).groupby(grp).first().sum())
-    short_sd = sorted(set(lab[short]))
+    short_sd = sorted(set(np.char.replace(lvl.astype(str), "||", "/")[short]))
     bucket = "store-division-attribute(s)" if has_attr(o) else "store-division(s)"
     warn = []
     if n_new_sd:
@@ -527,15 +571,29 @@ def realign(o, r, months, source=None, div_cap=None):
     if asp_fb:
         warn.append(f"{asp_fb} changed row-months had no original qty for their Department x MRP x Display Type that month - "
                     f"qty uses that combination's all-month ASP instead.")
+    if spill_div:
+        warn.append(f"{len(spill_div)} store-division(s) had a change with no other department of the same attribute to "
+                    f"absorb it - the balance went to the rest of that store x division pro-rata (checked at division level): "
+                    f"{', '.join('/'.join(x) for x in spill_div[:15])}")
+    if forced:
+        warn.append(f"{len(forced)} store-division(s) were still off the original file after the rules - every department "
+                    f"of that store x division x month (revised ones included) was scaled to land exactly on it: "
+                    f"{', '.join('/'.join(x) for x in forced[:15])}")
+    if kept_orig:
+        warn.append(f"{len(kept_orig)} store x division x month(s) had nothing left to carry their plan (every department 0 "
+                    f"after the change) - kept exactly as the original file there, the change not applied: {', '.join(kept_orig[:15])}")
     if short_sd:
-        warn.append(f"{len(short_sd)} {bucket} couldn't fully land on the original total (no other department "
-                    f"of the same attribute, or month, left to absorb into): {', '.join(short_sd[:15])}")
+        warn.append(f"{len(short_sd)} bucket(s) couldn't fully land on the original total (no other department or month "
+                    f"left to absorb into): {', '.join(short_sd[:15])}")
+    o.attrs["spill_div"] = spill_div   # verify() / compare_levels() check these store x divisions at division level
+    o.attrs["forced_div"] = forced     # held on the original by scaling everything there, revised values included
     return o, summ, warn, compare
 
 
 def verify(o, r, out, months, div_cap=None):
     """Independent after-the-fact checks of a realign result, plus a per-department table of
     original vs revised (file) vs realigned (output) - the numbers a planner would eyeball."""
+    div_cap = sorted(set(map(tuple, div_cap or ())) | set(map(tuple, out.attrs.get("spill_div", ()))))
     V = [m + " Plan" for m in months]
     rm = [m for m in months if m in r.columns]
     live = [m for m in rm if not locked(m)]
@@ -551,8 +609,16 @@ def verify(o, r, out, months, div_cap=None):
         dm = np.abs(out_sd[lvp].to_numpy() - r[live].to_numpy())
         diff, moved = float(dm.max()), int((dm > 1e-6).sum())
         season_kept = float(np.abs(out_sd[lvp].to_numpy().sum(1) - r[live].to_numpy().sum(1)).max())
+        # revised values changed only where the store x division x month had to be held on the original (step 2c)
+        forced = set(map(tuple, out.attrs.get("forced_div", ())))
+        div_r = out.groupby([STORE, DEPT])[DIV].first().reindex(keys).to_numpy()
+        only_forced = bool(forced) and all((s, d) in forced for s, d in zip(r[STORE].to_numpy()[(dm > 1e-6).any(1)],
+                                                                            div_r[(dm > 1e-6).any(1)]))
         if diff < 1e-6:
             add("Revised values kept exactly", "ok", f"largest difference {diff:.2g}")
+        elif only_forced:
+            add("Revised values kept exactly", "warn", f"{moved} revised store-department-months were scaled so their "
+                f"store x division x month stays exactly on the original file (largest {diff:.4f}) - see the notes")
         elif season_kept < 1e-6:   # moved between months only to fit the cap
             add("Revised values kept exactly", "warn", f"{moved} revised store-department-months moved to fit the "
                 f"{cap_label(o).lower()} cap (largest {diff:.4f}); every revised store-department keeps its season total")
@@ -572,7 +638,8 @@ def verify(o, r, out, months, div_cap=None):
         add(f"{cap_label(o)} = original (the cap)", "ok" if cc == 0 else "fail",
             f"{cc} of {dc.size:,} store-division-attribute-months differ from the original file" +
             ("" if cc == 0 else f" (largest {float(np.abs(dc).max()):.4f}) - see the {CAP_SHEET} sheet of the comparison")
-            + (f"; {len(div_cap)} store-division(s) with a new listing are capped at store x division" if div_cap else ""))
+            + (f"; {len(div_cap)} store-division(s) capped at store x division (a new listing, or nothing of the same "
+               f"attribute to absorb)" if div_cap else ""))
     add("Store × Division × Month = original" + ("" if has_attr(o) else " (the cap)"), "ok" if cells == 0 else "fail",
         f"{cells} of {d.size:,} store-division-months differ from the original file" +
         ("" if cells == 0 else f" (largest {float(np.abs(d).max()):.4f}) - see the comparison"))
@@ -656,6 +723,7 @@ def export(df, fmt, on_progress=None):
 
 
 def compare_levels(o, out, months, div_cap=None):
+    div_cap = sorted(set(map(tuple, div_cap or ())) | set(map(tuple, out.attrs.get("spill_div", ()))))
     """Original plan vs the new plan at the two levels a planner checks (user, 2026-09-30: "a comparitive ... original
     plan v new revised plan ... to see where the difference is"):
       the cap level (Store x Division x Attribute x Month, or x Division x Month without attributes) - EVERY cell,
@@ -683,7 +751,7 @@ def compare_levels(o, out, months, div_cap=None):
                                  np.where(sdm["Difference"] > 0, "No - over the original", "No - under the original"))
     if div_cap and has_attr(o):   # a new listing re-splits the whole store x division: its attributes may move
         dl = pd.MultiIndex.from_arrays([sdm[STORE], sdm[DIV]]).isin([tuple(x) for x in div_cap])
-        sdm.loc[dl & (sdm["Within cap"] != "Yes"), "Within cap"] = "n/a - new listing, capped at store x division"
+        sdm.loc[dl & (sdm["Within cap"] != "Yes"), "Within cap"] = "n/a - capped at store x division"
     return sdm, table([STORE, DIV, DEPT], True)
 
 

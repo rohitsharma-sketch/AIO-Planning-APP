@@ -7,6 +7,19 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-01
 
+### Sales Plan Re-Aligner: Store × Division × Month always equals the original file
+- **Asked (user):** "how to reload the checks if they fail" (screenshot: 4 failed checks, grand total 73,459.07 → 73,422.05). Chose "Rest of the store × division" for the cause. Then: "the store x division x month wise data should match with the sales plan i nthe original file always. Also, make sure that the plan is intact not incremental or decremental against the sales plan in the original file".
+- **Cause:** 11 delistings (all OCCASIONAL) of a department that was the only one of its attribute in that store × division. The attribute cap left nothing to absorb them, so 37.02 L of AOP was lost.
+  - Stores: AKN, BKR, BWR, CNW, PBS, SBA in LADIES; BRP, DMB, DTG, GPG, KGT in MENS.
+  - Re-running can't fix it: the checks are recomputed from the output.
+- **Step 2a (fallback):** a bucket still off its original after the attribute-level apportioning hands its balance to the other departments of its store × division, pro-rata. Revised departments keep their values.
+  - Those store × divisions are checked at division level (`out.attrs["spill_div"]`, merged into `verify` / `compare_levels`).
+- **Step 2c (guarantee):** after all the rules and the negative pass, a store × division × month that is still off has every positive cell scaled onto the original. Revised ones are included; this is flagged and recorded in `out.attrs["forced_div"]`, and "Revised values kept exactly" is a warn there.
+  - One with nothing left to carry its plan (every department 0) keeps its **original** plan that month, flagged as "kept exactly as the original file there, the change not applied".
+  - So the plan is never up or down against the original.
+- **Your run replayed** (your original + "Listing changes template (4).xlsx", in memory): every check is ok. Store × Division × Month 0 / 6,384 off, grand total 73,459.07 → 73,459.07, attribute cap 0 / 26,964 off (324 store × divisions at division level).
+- **Tests:** a new fallback case (a lone OCCASIONAL delisting absorbed by REGULAR, S1 stays 70). The old "sole department revised down stays short" cases now expect it held on the original.
+
 ### Sales Plan Re-Aligner Method 4: new listings sized by the REF store rule too
 - **Asked (user):** "yes, apply the REF store rule in method 4 too"
 - **Change:** `engine.shift_targets(..., ref_of)` passes the plan's REF Name column to `listing_targets`.
