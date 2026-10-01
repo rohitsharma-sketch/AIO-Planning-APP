@@ -20,7 +20,7 @@ Data required in inputs.xlsx:
     Columns: Store | Division | Department | Apr'26 | May'26 | … | Mar'27
 """
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 import io, json, os
 import pandas as pd
@@ -43,10 +43,6 @@ DEPT_GROWTH_PATH   = os.path.join(_BASE, "..", "department_growth.json")
 NEW_DEPT_MAP_PATH  = os.path.join(_BASE, "..", "new_dept_mapping.json")
 FINAL_PLAN_PATH    = os.path.join(_BASE, "..", "final_dept_plan.json")
 
-# Auto-sync source for New Departments file
-NEW_DEPT_SOURCE_DIR  = r"C:\Users\A9820\Documents\CLaude - New Projects\SalesPlan\New Departments"
-NEW_DEPT_SOURCE_NAME = "NEW Departments.xlsx"
-NEW_DEPT_SOURCE_PATH = os.path.join(NEW_DEPT_SOURCE_DIR, NEW_DEPT_SOURCE_NAME)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 DIVISIONS = ["GM", "KIDS", "LADIES", "MENS", "RETAIL"]
@@ -530,170 +526,149 @@ def clear_new_depts():
     return {"ok": True, "cleared": removed}
 
 
-@router.get("/new-depts/sync-status")
-def get_new_depts_sync_status():
-    """Check if the New Departments source file is available on disk."""
-    if not os.path.exists(NEW_DEPT_SOURCE_PATH):
-        return {"file_found": False, "file_date": None, "size_kb": None, "path": NEW_DEPT_SOURCE_PATH}
-    st = os.stat(NEW_DEPT_SOURCE_PATH)
-    import datetime
-    return {
-        "file_found": True,
-        "file_date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
-        "size_kb": round(st.st_size / 1024, 1),
-        "path": NEW_DEPT_SOURCE_PATH,
-    }
+# ── New departments: template + upload (user, 2026-10-01: "I want a template made for this instead of sync from
+#    directory" - replaces the fixed-folder sync of NEW Departments.xlsx) ─────────────────────────────────────────
+ND_COLS = ["DIVISION", "NEW DEPT", "REF DEPT", "NEW DEPT %", "REF REDUCTION %"]
 
 
-@router.post("/new-depts/sync")
-def sync_new_depts():
-    """
-    Read NEW Departments.xlsx from the source folder, parse it, infer divisions
-    from the ref dept lookup, build new_dept_mapping.json, and regenerate the plan.
+def _dept_divisions() -> dict:
+    """{DEPT (upper): division} for every department the plan knows."""
+    return {r["name"].strip().upper(): div for div, rows in _load_dept_config().items() for r in rows}
 
-    File columns: NEW MC | REF. MC | Mar P1 | Mar P2 | Apr P1 | Apr P2 | ...
-    Values are decimal fractions (0.5 = 50%). Division is looked up from the
-    existing dept actuals / state config; falls back to prefix heuristics.
-    """
-    if not os.path.exists(NEW_DEPT_SOURCE_PATH):
-        raise HTTPException(status_code=404, detail=f"Source file not found: {NEW_DEPT_SOURCE_PATH}")
 
-    # --- Parse the Excel file ---
-    try:
-        df = pd.read_excel(NEW_DEPT_SOURCE_PATH, header=0)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Could not read file: {e}")
-
-    df.columns = [str(c).strip() for c in df.columns]
-
-    # Find NEW MC and REF MC columns (flexible matching)
-    new_col = next((c for c in df.columns if "new" in c.lower() and "mc" in c.lower()), None)
-    ref_col = next((c for c in df.columns if "ref" in c.lower() and "mc" in c.lower()), None)
-    if not new_col or not ref_col:
-        raise HTTPException(status_code=422, detail=f"Could not find NEW MC / REF. MC columns. Got: {list(df.columns)}")
-
-    # Month abbreviation → TY month (Mar'27 etc.)
-    _MONTH_MAP = {
-        "mar": "Mar'27", "apr": "Apr'27", "may": "May'27", "jun": "Jun'27",
-        "june": "Jun'27", "jul": "Jul'27", "aug": "Aug'27", "sep": "Sep'27",
-        "sept": "Sep'27", "oct": "Oct'27", "nov": "Nov'27", "dec": "Dec'27",
-        "jan": "Jan'28", "feb": "Feb'28",
-    }
-
-    # Identify period columns: "Mar P1", "Mar P2", "June P1" etc.
+def parse_new_dept_template(df: pd.DataFrame, dept_div: dict) -> tuple[dict, list]:
+    """The filled template (or the old folder file: NEW MC | REF. MC | <Mon> P1 / P2 as fractions, averaged) ->
+    ({division: {new_dept: {ref_dept, new_dept_pct, ref_reduction_pct}}}, problems). Any problem refuses the file."""
     import re as _re
-    period_cols = {}  # col_name → TY period string "Mar'27 P1"
-    for c in df.columns:
-        m = _re.match(r"([A-Za-z]+)\s+(P[12])$", c.strip(), _re.IGNORECASE)
-        if m:
-            mon_raw, p = m.group(1).lower(), m.group(2).upper()
-            ty_mon = _MONTH_MAP.get(mon_raw)
-            if ty_mon:
-                period_cols[c] = f"{ty_mon} {p}"
-
-    if not period_cols:
-        raise HTTPException(status_code=422, detail=f"No period columns found. Got: {list(df.columns)}")
-
-    # --- Build division lookup from existing dept state/actuals ---
-    # dept_state.json: {division: {dept_code: {...}}}
-    dept_to_div: dict[str, str] = {}
-    if os.path.exists(DEPT_STATE_PATH):
-        try:
-            with open(DEPT_STATE_PATH) as f:
-                state = json.load(f)
-            for div, depts in state.items():
-                if isinstance(depts, dict):
-                    for d in depts:
-                        dept_to_div[str(d).strip().upper()] = div
-        except Exception:
-            pass
-
-    # Prefix heuristics as fallback
-    _PREFIX_DIV = [
-        ("KB_", "KIDS"), ("KG_", "KIDS"), ("KI_", "KIDS"), ("KBW_", "KIDS"), ("KGW_", "KIDS"),
-        ("LWW_", "LADIES"), ("LW_", "LADIES"), ("L_", "LADIES"), ("LY_", "LADIES"),
-        ("M_", "MENS"), ("MW_", "MENS"),
-        ("GM_", "GM"), ("RT_", "RETAIL"),
-    ]
-
-    def _infer_div(dept_code: str) -> str:
-        upper = dept_code.strip().upper()
-        if upper in dept_to_div:
-            return dept_to_div[upper]
-        for prefix, div in _PREFIX_DIV:
-            if upper.startswith(prefix):
-                return div
-        return "UNKNOWN"
-
-    # --- Build the mapping dict ---
-    mapping: dict[str, dict] = {}
-    errors = []
-    for _, row in df.iterrows():
-        new_dept = str(row[new_col]).strip() if pd.notna(row[new_col]) else ""
-        ref_dept = str(row[ref_col]).strip() if pd.notna(row[ref_col]) else ""
-        if not new_dept or not ref_dept or new_dept.lower() in ("nan", "") or ref_dept.lower() in ("nan", ""):
+    df = df.copy()
+    df.columns = [str(c).strip() for c in df.columns]
+    up = {c.upper(): c for c in df.columns}
+    problems, mapping, seen = [], {}, {}
+    new_c = up.get("NEW DEPT") or next((c for c in df.columns if "new" in c.lower() and "mc" in c.lower()), None)
+    ref_c = up.get("REF DEPT") or next((c for c in df.columns if "ref" in c.lower() and "mc" in c.lower()), None)
+    if not new_c or not ref_c:
+        return {}, [f"Columns NEW DEPT and REF DEPT not found - use the template. Got: {', '.join(df.columns)}"]
+    legacy = [c for c in df.columns if _re.match(r"[A-Za-z]+\s+P[12]$", c)] if "NEW DEPT %" not in up else []
+    if "NEW DEPT %" not in up and not legacy:
+        return {}, ["Column NEW DEPT % not found - use the template."]
+    for i, row in df.iterrows():
+        r = i + 2   # the sheet's row number (header is row 1)
+        new = str(row[new_c]).strip() if pd.notna(row[new_c]) else ""
+        ref = str(row[ref_c]).strip() if pd.notna(row[ref_c]) else ""
+        if not new and not ref:
             continue
-
-        # Average allocation across all period columns (convert decimal → %)
-        pct_vals = []
-        for col in period_cols:
-            v = row.get(col)
-            if pd.notna(v):
-                try:
-                    pct_vals.append(float(v) * 100.0)
-                except (ValueError, TypeError):
-                    pass
-
-        if not pct_vals:
-            errors.append(f"No allocation values for {new_dept}")
+        if not new or not ref:
+            problems.append(f"Row {r}: give both NEW DEPT and REF DEPT.")
             continue
+        if new.upper() == ref.upper():
+            problems.append(f"Row {r} ({new}): NEW DEPT is its own REF DEPT - the row adds and takes the same share of one "
+                            f"department, so it changes nothing. Name the existing department it is carved from.")
+            continue
+        if legacy:   # old folder file: month fractions (0.5 = 50%), averaged - both % the same
+            vals = [float(row[c]) * 100 for c in legacy if pd.notna(row[c])]
+            if not vals:
+                problems.append(f"Row {r} ({new}): no allocation values.")
+                continue
+            new_pct = red_pct = sum(vals) / len(vals)
+        else:
+            try:
+                new_pct = float(row[up["NEW DEPT %"]]) if pd.notna(row[up["NEW DEPT %"]]) else None
+                red_c = up.get("REF REDUCTION %")
+                red_pct = float(row[red_c]) if red_c and pd.notna(row[red_c]) else new_pct
+            except (TypeError, ValueError):
+                problems.append(f"Row {r} ({new}): NEW DEPT % and REF REDUCTION % must be numbers (50 = 50%).")
+                continue
+            if new_pct is None:
+                problems.append(f"Row {r} ({new}): NEW DEPT % is blank.")
+                continue
+        if new_pct < 0:   # a new department may be bigger than its reference (e.g. 120 = 1.2x), never negative
+            problems.append(f"Row {r} ({new}): NEW DEPT % {new_pct:g} is below 0 (enter 50 for 50%).")
+            continue
+        if not 0 <= red_pct <= 100:   # the reference can't lose more than it has
+            problems.append(f"Row {r} ({new}): REF REDUCTION % {red_pct:g} is outside 0-100 - the reference can't lose more than it has.")
+            continue
+        div_c = up.get("DIVISION")
+        div = str(row[div_c]).strip().upper() if div_c and pd.notna(row[div_c]) and str(row[div_c]).strip() else ""
+        ref_div = dept_div.get(ref.upper())
+        if ref_div is None:
+            problems.append(f"Row {r} ({new}): REF DEPT {ref} is not a department in the plan - pick one from the Departments sheet.")
+            continue
+        div = div or ref_div
+        if div != ref_div:
+            problems.append(f"Row {r} ({new}): REF DEPT {ref} is in {ref_div}, not {div}.")
+            continue
+        if new.upper() in seen:
+            problems.append(f"Row {r}: {new} is also on row {seen[new.upper()]} - one row per new department.")
+            continue
+        seen[new.upper()] = r
+        mapping.setdefault(div, {})[new] = {"ref_dept": ref, "new_dept_pct": new_pct, "ref_reduction_pct": red_pct}
+    if not mapping and not problems:
+        problems.append("The file has no new departments - fill at least one row.")
+    return mapping, problems
 
-        avg_pct = round(sum(pct_vals) / len(pct_vals), 2)
-        div = _infer_div(ref_dept)
 
-        if div not in mapping:
-            mapping[div] = {}
-        mapping[div][new_dept] = {
-            "ref_dept": ref_dept,
-            "new_dept_pct": avg_pct,
-            "ref_reduction_pct": avg_pct,
-        }
-
-    if not mapping:
-        raise HTTPException(status_code=422, detail=f"No valid rows parsed. Errors: {errors}")
-
-    # --- Save and regenerate plan ---
+def _apply_new_dept_map(mapping: dict) -> dict:
+    """Save the mapping and regenerate the plan with it (downstream corrected plans go stale, so they are cleared)."""
     _save_new_dept_map(mapping)
+    base = run_dept_plan()
+    final = apply_new_dept_adjustments(base, mapping)
+    with open(FINAL_PLAN_PATH, "w") as f:
+        json.dump(final, f)
+    for fname in ("attr_corrected_plan.json", "base_corrected_plan.json"):
+        p = os.path.join(_BASE, "..", fname)
+        if os.path.exists(p):
+            os.remove(p)
+    return final
 
+
+@router.get("/new-depts/template")
+def new_depts_template():
+    """The template, pre-filled with the current new departments, plus a Departments sheet to pick REF DEPT from."""
+    cur = [{"DIVISION": div, "NEW DEPT": nd, "REF DEPT": c.get("ref_dept", ""),
+            "NEW DEPT %": float(c.get("new_dept_pct", c.get("alloc_pct", 0))),
+            "REF REDUCTION %": float(c.get("ref_reduction_pct", c.get("alloc_pct", 0)))}
+           for div, entries in _load_new_dept_map().items() for nd, c in entries.items()]
+    depts = sorted((div, r["name"], "active" if r.get("active", True) else "inactive")
+                   for div, rows in _load_dept_config().items() for r in rows)
+    how = pd.DataFrame({"How to fill": [
+        "One row per new department (MC) introduced this year.",
+        "DIVISION: KIDS / LADIES / MENS / GM / RETAIL - optional, taken from REF DEPT when blank.",
+        "NEW DEPT: the new department's name.",
+        "REF DEPT: the existing department it is carved from - exactly as on the Departments sheet.",
+        "NEW DEPT %: the new department's plan = this % of the REF DEPT's plan, every store and month (50 = 50%; over 100 = bigger than the REF).",
+        "REF REDUCTION %: how much the REF DEPT loses, 0-100 (independent of NEW DEPT %; blank = same as NEW DEPT %).",
+        "NEW DEPT and REF DEPT must differ - a department can't be carved from itself.",
+        "Upload replaces the whole list - delete a row to drop that new department. Any problem refuses the file.",
+    ]})
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as xw:
+        pd.DataFrame(cur, columns=ND_COLS).to_excel(xw, sheet_name="New Departments", index=False)
+        pd.DataFrame(depts, columns=["DIVISION", "DEPARTMENT", "STATUS"]).to_excel(xw, sheet_name="Departments", index=False)
+        how.to_excel(xw, sheet_name="How to fill", index=False)
+        ws = xw.sheets["New Departments"]
+        ws.set_column(0, 0, 12)
+        ws.set_column(1, 2, 32)
+        ws.set_column(3, 4, 18)
+        xw.sheets["Departments"].set_column(0, 2, 30)
+        xw.sheets["How to fill"].set_column(0, 0, 110)
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                             headers={"Content-Disposition": 'attachment; filename="New Departments - template.xlsx"'})
+
+
+@router.post("/new-depts/upload")
+async def upload_new_depts(file: UploadFile = File(...)):
+    """The filled template -> checked, saved as the new-department mapping, plan regenerated (as Save & Apply)."""
     try:
-        base = run_dept_plan()
-        final = apply_new_dept_adjustments(base, mapping)
-        with open(FINAL_PLAN_PATH, "w") as f:
-            json.dump(final, f)
-        # Invalidate downstream stale files
-        _BASE_DIR = os.path.join(_BASE, "..")
-        for fname in ("attr_corrected_plan.json", "base_corrected_plan.json"):
-            p = os.path.join(_BASE_DIR, fname)
-            if os.path.exists(p):
-                os.remove(p)
-        plan_ok = True
-        store_count = len(final.get("stores", {}))
-    except Exception as e:
-        plan_ok = False
-        store_count = 0
-
-    total_entries = sum(len(v) for v in mapping.values())
-    import datetime
-    return {
-        "ok": True,
-        "file_date": datetime.datetime.fromtimestamp(os.stat(NEW_DEPT_SOURCE_PATH).st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
-        "divisions": list(mapping.keys()),
-        "total_entries": total_entries,
-        "period_columns": list(period_cols.values()),
-        "errors": errors,
-        "plan_regenerated": plan_ok,
-        "stores": store_count,
-    }
+        df = pd.read_excel(io.BytesIO(await file.read()), sheet_name=0, header=0)
+    except Exception as e:  # noqa: BLE001 - not an Excel file
+        raise HTTPException(422, f"Could not read {file.filename}: {e}")
+    mapping, problems = parse_new_dept_template(df, _dept_divisions())
+    if problems:
+        raise HTTPException(422, {"message": f"{len(problems)} problem(s) - nothing was changed.", "problems": problems[:50]})
+    final = _apply_new_dept_map(mapping)
+    return {"ok": True, "divisions": sorted(mapping), "total_entries": sum(len(v) for v in mapping.values()),
+            "plan_regenerated": True, "stores": len(final.get("stores", {}))}
 
 
 @router.post("/generate-base")

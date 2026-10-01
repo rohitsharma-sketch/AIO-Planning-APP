@@ -386,37 +386,34 @@ export default function NewDeptPlan() {
   const [refFilter, setRefFilter]    = useState(new Set())
   const [planFinalized, setPlanFinalized] = useState(false)
   const [showStorePlan, setShowStorePlan] = useState(false)
-  const [syncStatus, setSyncStatus]       = useState(null)
-  const [syncing, setSyncing]             = useState(false)
-  const [syncMsg, setSyncMsg]             = useState('')
+  const [uploading, setUploading]         = useState(false)
+  const [uploadMsg, setUploadMsg]         = useState('')
+  const [uploadProblems, setUploadProblems] = useState([])
   const navigate = useNavigate()
   const inPipeline = currentEngineKey() === 'new-depts'
 
-  const fetchSyncStatus = useCallback(async () => {
+  // New departments from a filled template (user, 2026-10-01 - replaces "Sync from Folder")
+  const handleUpload = async (file) => {
+    if (!file) return
+    setUploading(true); setUploadMsg(''); setUploadProblems([])
     try {
-      const r = await fetch('/api/planning/dept-sales/new-depts/sync-status')
-      setSyncStatus(await r.json())
-    } catch {}
-  }, [])
-
-  const handleSync = async () => {
-    setSyncing(true); setSyncMsg('')
-    try {
-      const r = await fetch('/api/planning/dept-sales/new-depts/sync', { method: 'POST' })
+      const fd = new FormData(); fd.append('file', file)
+      const r = await fetch('/api/planning/dept-sales/new-depts/upload', { method: 'POST', body: fd })
       const d = await r.json()
-      if (d.ok) {
-        setSyncMsg(`Synced — ${d.total_entries} entries across ${d.divisions.join(', ')}`)
+      if (r.ok && d.ok) {
+        setUploadMsg(`Applied ${file.name} - ${d.total_entries} new departments across ${d.divisions.join(', ')}; plan regenerated for ${d.stores} stores.`)
         await fetchMapping()
         await fetchPreview()
-        setPlanFinalized(d.plan_regenerated !== false)
+        setPlanFinalized(true)
       } else {
-        setSyncMsg(d.detail || 'Sync failed')
+        const det = d.detail || {}
+        setUploadMsg(typeof det === 'string' ? det : det.message || 'Upload refused')
+        setUploadProblems(Array.isArray(det.problems) ? det.problems : [])
       }
     } catch (e) {
-      setSyncMsg('Sync error: ' + e.message)
+      setUploadMsg('Upload error: ' + e.message)
     } finally {
-      setSyncing(false)
-      setTimeout(() => setSyncMsg(''), 6000)
+      setUploading(false)
     }
   }
 
@@ -450,9 +447,8 @@ export default function NewDeptPlan() {
   }, [])
 
   useEffect(() => {
-    fetchSyncStatus()
     Promise.all([fetchDepts(), fetchMapping()]).then(() => fetchPreview())
-  }, [fetchDepts, fetchMapping, fetchPreview, fetchSyncStatus])
+  }, [fetchDepts, fetchMapping, fetchPreview])
 
   const aggTY = useCallback((deptName) => {
     const out = {}
@@ -585,7 +581,7 @@ export default function NewDeptPlan() {
         </div>
       </div>
 
-      {/* Sync from folder panel */}
+      {/* New departments template panel (replaces Sync from Folder, 2026-10-01) */}
       <div style={{
         background: theme.surface, border: `1px solid ${theme.border}`,
         borderRadius: 10, padding: '16px 20px', marginBottom: 20,
@@ -593,43 +589,42 @@ export default function NewDeptPlan() {
       }}>
         <div style={{ flex: 1, minWidth: 240 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: theme.textPrimary, marginBottom: 4 }}>
-            Sync from Folder
+            New departments template
           </div>
-          <div style={{ fontSize: 11, color: theme.textMuted, fontFamily: theme.fontMono }}>
-            {syncStatus?.path || '…'}
+          <div style={{ fontSize: 11.5, color: theme.textSecondary }}>
+            Download it (pre-filled with today's list, plus every department to pick a reference from), fill one row per
+            new department - REF DEPT, NEW DEPT %, REF REDUCTION % - and upload it. The upload replaces the whole list and
+            regenerates the plan; any problem refuses the file and nothing changes.
           </div>
-          {syncStatus && (
-            <div style={{ fontSize: 11, color: theme.textSecondary, marginTop: 3 }}>
-              {syncStatus.file_found
-                ? `File found · ${syncStatus.file_date} · ${syncStatus.size_kb} KB`
-                : 'File not found — drop NEW Departments.xlsx in the folder above'}
-            </div>
-          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button
-            onClick={fetchSyncStatus}
+          <a href="/api/planning/dept-sales/new-depts/template"
             style={{
-              padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 500,
-              background: 'none', color: theme.textSecondary,
-              border: `1px solid ${theme.border}`, cursor: 'pointer',
+              padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 500, textDecoration: 'none',
+              background: 'none', color: theme.textSecondary, border: `1px solid ${theme.border}`,
             }}
-          >Refresh</button>
-          <button
-            onClick={handleSync}
-            disabled={syncing || !syncStatus?.file_found}
+          >Download template</a>
+          <label
             style={{
               padding: '6px 18px', borderRadius: 7, fontSize: 12, fontWeight: 600,
-              background: syncStatus?.file_found ? 'var(--st-btn,#A8CBB7)' : theme.border,
-              color: syncStatus?.file_found ? 'var(--st-btn-text,#1F4D3A)' : theme.textMuted,
-              border: 'none', cursor: (syncing || !syncStatus?.file_found) ? 'default' : 'pointer',
-              opacity: syncing ? 0.7 : 1,
+              background: 'var(--st-btn,#A8CBB7)', color: 'var(--st-btn-text,#1F4D3A)',
+              cursor: uploading ? 'default' : 'pointer', opacity: uploading ? 0.7 : 1,
             }}
-          >{syncing ? 'Syncing…' : 'Sync from Folder'}</button>
+          >
+            {uploading ? 'Uploading…' : 'Upload filled template'}
+            <input type="file" accept=".xlsx,.xls" hidden disabled={uploading}
+              onChange={e => { handleUpload(e.target.files[0]); e.target.value = '' }} />
+          </label>
         </div>
-        {syncMsg && (
-          <div style={{ width: '100%', fontSize: 12, color: theme.accent, fontWeight: 600, marginTop: 4 }}>
-            {syncMsg}
+        {uploadMsg && (
+          <div style={{ width: '100%', fontSize: 12, fontWeight: 600, marginTop: 4,
+                        color: uploadProblems.length ? theme.danger : theme.accent }}>
+            {uploadMsg}
+            {uploadProblems.length > 0 && (
+              <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontWeight: 400, color: theme.textPrimary }}>
+                {uploadProblems.map((p, i) => <li key={i}>{p}</li>)}
+              </ul>
+            )}
           </div>
         )}
       </div>

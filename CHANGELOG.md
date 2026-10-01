@@ -7,6 +7,23 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-01
 
+### Sales Plan New Departments: template download + upload (replaces "Sync from Folder")
+- **Asked (user):** "I want a template made for this instead of sync from directory".
+- **Template** (`GET /api/planning/dept-sales/new-depts/template`), pre-filled with today's list:
+  - **New Departments** sheet: DIVISION | NEW DEPT | REF DEPT | NEW DEPT % | REF REDUCTION %.
+  - **Departments** sheet: every department with its division and status, to pick a REF DEPT from.
+  - **How to fill** sheet.
+- **Upload** (`POST /api/planning/dept-sales/new-depts/upload`): every row is checked (`parse_new_dept_template`), then the mapping is saved and the plan regenerated, as the sync did. Any problem refuses the whole file and nothing changes. The checks:
+  - REF DEPT must be a department in the plan, in the row's division (DIVISION is optional and taken from REF DEPT when blank).
+  - NEW DEPT % ≥ 0, and may be over 100 (bigger than the REF).
+  - REF REDUCTION % 0–100 (blank = NEW DEPT %).
+  - One row per new department.
+  - **NEW DEPT ≠ REF DEPT.**
+  - The old folder file layout (NEW MC / REF. MC / month fractions) is still read.
+- **Removed:** the Sync from Folder panel, `/new-depts/sync-status`, `/new-depts/sync` (404 now) and the fixed folder path.
+- **Found:** 7 of today's 15 entries (KG_HIPSTER SET F/S, KI_AP_HIPSTER SET F/S, KGW_JACKET, KGW_PYJAMA, KB_T-SHIRT F/S, LWW_WINTER TOP, LWW_KURTI SET) name themselves as their own REF DEPT. With the same department on both sides the row adds and removes the same share, so these rows have never changed the plan. The template refuses them until a real reference is given.
+- **Checked live:** the template downloads (17 KB, 3 sheets); uploading it back is refused with those 7 rows listed; the saved list is unchanged. Tests: `engines/test_new_dept_template.py`.
+
 ### Least apportioned difference, Phase 1: Sales Plan (every split adds back exactly) + Reconciliation page
 - **Asked (user):** "embed the matrix to give me the least apportioned difference all time in all models across apps wherever apportioning is present". Chosen: phase by app, Sales Plan first; AOP targets to be kept at full precision in their phase.
 - **Rule (`SalesPlan/backend/apportion.py`):** parts are kept at full precision, never rounded before being summed or saved. A split's float remainder goes to its largest part (`split`, `shares_pct`, `plug`), so totals equal the sum of their parts at 8 decimals (`SHOWN = 5e-9`). Rounding is display only.
