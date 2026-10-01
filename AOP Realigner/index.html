@@ -164,10 +164,12 @@ td.frozen,th.frozen{color:var(--muted-foreground)}
 @keyframes indet{0%{transform:translateX(-100%)}100%{transform:translateX(290%)}}
 
 /* checks */
-.checks{display:grid;gap:8px}
-.check{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius)}
-.check .t{font-weight:500}
-.check .d{font-size:12.5px;color:var(--muted-foreground)}
+.checks{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:6px}
+.check{display:flex;gap:8px;align-items:flex-start;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);min-width:0}
+.check.wide{grid-column:1/-1}
+.check.warn{border-color:color-mix(in srgb,var(--warning) 45%,var(--border))}.check.fail{border-color:color-mix(in srgb,var(--destructive) 45%,var(--border))}
+.check .t{font-weight:500;font-size:13px;line-height:1.3}
+.check .d{font-size:12px;line-height:1.35;color:var(--muted-foreground)}
 .ok-i{color:var(--success)}.warn-i{color:var(--warning)}.fail-i{color:var(--destructive)}.info-i{color:var(--info)}
 .rephase-note{font-size:13px;margin:0}.link-upload{cursor:pointer;text-decoration:underline;color:var(--foreground)}
 
@@ -551,7 +553,9 @@ function renderResults() {
   el.hidden = !res;
   if (!res) return;
   const sc = res.status_counts || {}, fails = res.checks.filter(c => c.status === 'fail').length;
-  const chk = res.checks.map(c => `<div class="check">${icon(c.status === 'ok' ? 'ok' : c.status === 'warn' ? 'warn' : c.status === 'info' ? 'info' : 'error', c.status + '-i')}<div><div class="t">${esc(c.name)}</div><div class="d">${esc(c.detail)}</div></div></div>`).join('');
+  // compact: problems first and full width, the passing ones two to a row (user, 2026-10-01: "squeeze the layout")
+  const rank = {fail: 0, warn: 1, info: 2, ok: 3};
+  const chk = [...res.checks].sort((a, b) => (rank[a.status] ?? 2) - (rank[b.status] ?? 2)).map(c => `<div class="check ${c.status}${c.status === 'fail' || c.status === 'warn' ? ' wide' : ''}">${icon(c.status === 'ok' ? 'ok' : c.status === 'warn' ? 'warn' : c.status === 'info' ? 'info' : 'error', c.status + '-i')}<div><div class="t">${esc(c.name)}</div><div class="d">${esc(c.detail)}</div></div></div>`).join('');
   el.innerHTML = `<div class="card-header">${stepNo(4, 'done')}<div class="grow"><h2 class="card-title" id="t-res">Results
       <span class="badge ${fails ? 'b-error' : 'b-success'}"><span class="dot"></span>${fails ? `${fails} check${fails > 1 ? 's' : ''} failed` : 'All checks passed'}</span></h2>
     <p class="card-desc">${METHODS[res.method] ? `Method ${METHODS[res.method].no} · ${esc(METHODS[res.method].title)} · ` : ''}Run ${esc(res.finished_at)} in ${secs(res.secs)} · ${esc(res.revised)} against ${esc(res.original)}</p></div></div>
@@ -562,13 +566,12 @@ function renderResults() {
         <div class="stat"><div class="stat-label">Revised departments</div><div class="stat-value">${res.dept_table.length}</div><div class="stat-sub" title="${esc(res.dept_table.map(d => d.dept).join(', '))}">${esc(res.dept_table.map(d => d.dept).join(', '))}</div></div>
         <div class="stat"><div class="stat-label">Run time</div><div class="stat-value">${secs(res.secs)}</div><div class="stat-sub">realign + verify</div></div>
       </div>
+      <div class="tabs" role="tablist" style="margin-top:14px"><button class="tab" role="tab" aria-selected="${tab === 'depts'}" onclick="setTab('depts')">Revised departments</button>
+        <button class="tab" role="tab" aria-selected="${tab === 'div'}" onclick="setTab('div')">Division × Month</button></div>
+      <div>${tab === 'depts' ? deptTable(res) : divTable(res)}</div>
       <div class="sep"></div><strong class="small">Checks — recomputed independently from the output</strong><div class="checks" style="margin-top:8px">${chk}</div>
       ${res.warnings.length ? `<details class="report" id="rep-res" ${opened.has('rep-res') ? 'open' : ''} ontoggle="toggleD(this)"><summary>What the realign had to decide · ${res.warnings.length} note${res.warnings.length > 1 ? 's' : ''}</summary><div class="body">${
         res.warnings.map(w => `<div class="alert alert-info">${icon('info')}<div>${esc(w)}</div></div>`).join('')}</div></details>` : ''}
-      <div class="sep"></div>
-      <div class="tabs" role="tablist"><button class="tab" role="tab" aria-selected="${tab === 'depts'}" onclick="setTab('depts')">Revised departments</button>
-        <button class="tab" role="tab" aria-selected="${tab === 'div'}" onclick="setTab('div')">Division × Month</button></div>
-      <div>${tab === 'depts' ? deptTable(res) : divTable(res)}</div>
       <div class="sep"></div><div id="dls"></div>
     </div>`;
   renderDownloads();

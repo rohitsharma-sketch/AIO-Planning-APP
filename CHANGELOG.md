@@ -7,6 +7,15 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-01
 
+### Sales Plan Re-Aligner: results laid out tighter, tables first
+- **Asked (user):** "can we squeeze the layout a bit - and move the results up so it can look less calutrophobic as of now"
+- **New order in Results:** summary stats → **Revised departments / Division × Month** tables → checks → notes → downloads. The tables used to sit below all the checks.
+- **Compact checks:**
+  - a grid, two to a row on desktop and one on a phone, with smaller padding and type;
+  - a warning or failed check sorts first, spans the full width and gets a tinted border.
+  - At desktop width the eight checks take ~300 px (was ~600).
+- **Checked in the browser** at desktop and phone width.
+
 ### Sales Plan Re-Aligner: no negative plan — negatives set to 0, balance re-apportioned in the bucket
 - **Asked (user):** "if there was a plan of -0.01 and in the apportion it should be covered to 0 and the balance should follow the rules set for apportion. this rule is just for redacting the negative plan to 0 and readjusting the value to its respective store x div x attribute x month after apportion."
 - **Rule** (`engine.realign` step 2b, helper `_take_back`): after apportioning, every negative cell in an **unlocked** month becomes 0. What that adds comes back out of the same Store × Division × Attribute × Month:
