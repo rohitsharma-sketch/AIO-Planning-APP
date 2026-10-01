@@ -514,6 +514,25 @@ try:   # a shift must stay inside its attribute
 except ValueError as e:
     assert "another attribute" in str(e), e
 
+# two revised departments overflowing one attribute's month (user, 2026-10-02): the excess moves to their other months
+# and each keeps its OWN season total, not just the two together; the other attribute never moves
+def arow(dept, attr, sep, nov):
+    return {"Store Name": "S7", "DIVISION": "LADIES", "DEPARTMENT": dept, "MRP": 1, "DISPLAY TYPE": "T", "ATTRIBUTE": attr,
+            "Tag": "Original", "Sep'26 Plan": sep, "Sep'26 Plan Qty": sep, "Nov'26 Plan": nov, "Nov'26 Plan Qty": nov}
+o7 = pd.DataFrame([arow("X", "SUMMER", 1, 9), arow("Y", "SUMMER", 1, 9), arow("W", "SUMMER", 0, 10), arow("Z", "REGULAR", 10, 10)])
+r7 = pd.DataFrame([{"Store Name": "S7", "DEPARTMENT": "X", "Sep'26": 3, "Nov'26": 1}, {"Store Name": "S7", "DEPARTMENT": "Y", "Sep'26": 1, "Nov'26": 3}])
+out7 = realign(o7, r7, ["Sep'26", "Nov'26"])[0]
+v7 = out7.set_index("DEPARTMENT")[["Sep'26 Plan", "Nov'26 Plan"]]
+assert np.isclose(v7.loc["X"].sum(), 4) and np.isclose(v7.loc["Y"].sum(), 4)                 # each its own season
+assert np.isclose(v7.loc[["X", "Y", "W"], "Sep'26 Plan"].sum(), 2) and np.isclose(v7.loc[["X", "Y", "W"], "Nov'26 Plan"].sum(), 28)
+assert list(v7.loc["Z"]) == [10, 10]                                                          # REGULAR untouched
+st7 = {c["name"]: c["status"] for c in verify(o7, r7, out7, ["Sep'26", "Nov'26"])[0]}
+assert st7["Revised values kept exactly"] == "warn" and st7["Store × Division × Attribute × Month = original (the cap)"] == "ok", st7
+# the download rounds to 6 decimals with each bucket landing on its own total (thirds would lose 1e-6 cell by cell)
+o6 = pd.DataFrame({"Store Name": "S", "DIVISION": "D", "ATTRIBUTE": "A", "Sep'26 Plan": [1 / 3] * 3, "Sep'26 Plan Qty": [1 / 3] * 3})
+assert abs(engine.round6(o6)["Sep'26 Plan"].sum() - 1) < 1e-12 and abs(o6.round(6)["Sep'26 Plan"].sum() - 1) > 5e-7
+assert (np.abs(engine.round6(o6)["Sep'26 Plan"] - 1 / 3) < 1e-6).all()
+
 # plan to plan (user, 2026-10-01): every row of either plan, original vs final, changed ones flagged
 pp = engine.plan_to_plan(orig, out, M)
 assert len(pp) == len(out) and (pp["Row"] == "new in final").sum() == 2            # A F/S: 2 new MRP rows in S1

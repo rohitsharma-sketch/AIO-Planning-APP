@@ -24,7 +24,7 @@ const RULES_NOW = [
     'Listing = N: the department goes to 0 from FROM MONTH (blank = the first month).',
     "Listing = Y (not planned there): month by month, the department's <b>cont % of its division in the store's REF store</b>; in a month the REF store has it at 0% (or there is no REF store), the <b>average cont % of the same-cluster stores that are above 0% that month</b> (0% stores left out), else the same over every store planning it - × <b>this store's division AOP</b>, or your own values. Its MRP × display rows come from that REF store (else the peer planning it most). The Listing check file shows, per month, where the cont % came from.",
     "A new listing stays 0 only where the store has no division plan that month, or no store at all plans the department that month - nothing to size it from.",
-    "A store × division with a new listing is re-split over <b>all</b> its departments: the others give way pro-rata (scaled by 1 − the new cont %), so the store × division AOP stays exact - capped at store × division, not attribute, for that store × division only. Delistings stay inside their attribute.",
+    "A new listing comes out of <b>its own attribute</b> only: the other departments of that attribute in the store × division give way pro-rata, so every store × division × attribute × month stays on the original - nothing moves across attributes. A month its attribute has no room for moves to the listing’s other months (each listing keeps its own season total); only an attribute with no room at all hands the rest to the store × division (flagged). Delistings work the same way.",
     '<b>Listing check file</b> (after uploading): every department of the store × divisions the changes touch, original vs new per month (newly listed / delisted / gives way), a "How it was built" sheet (REF store or cluster, cont %, division AOP) and a store × division summary - the realigned result, before Run.',
     'The "From Listing / Delisting Analyser" template leaves out a store × division whose every department is delisted (a closing or not-yet-open store): nothing would be left to absorb it.',
   ]],
@@ -73,6 +73,9 @@ const RULES_NOW = [
 const RULES_LATEST = {
   date: '2026-10-02',
   changes: [
+    'Method 1: a new listing now comes out of <b>its own attribute</b> only (was the whole store × division) - e.g. PDH’s new MSE_JAMAICAN (SUMMER) no longer takes from its winter and regular departments.',
+    'Several new listings overflowing one attribute’s month: each now keeps its own season total (the move used to keep only their combined total).',
+    'Final plan download: rounded to 6 decimals so that every store × division × attribute × month still adds up exactly to the original (rounding each cell alone put the grand total 0.0008 off).',
     '<b>No default month lock</b>: Jan / Feb are no longer locked when a plan is loaded - a month is locked only when you lock it (click it in step 1).',
     'Method 5: Jan / Feb <b>P1 / P2</b> months are no longer skipped - each pair is grown against last year’s whole month, with one "&lt;Month&gt; GROWTH %" column for both halves.',
     'Method 4: the blank template downloads again (Department | Store | Listing (Y/N) | Target); a section target with no department of the same attribute in the store now says so.',

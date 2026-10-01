@@ -571,7 +571,7 @@ def job_export(job, kind, fmt):
         if kind == "plan":   # every row, original vs final (user, 2026-10-01)
             data, ctype, ext = engine.export_plan_to_plan(orig, out, months, fmt, job.progress)
         elif kind == "full":
-            data, ctype, ext = engine.export(out.rename(columns={k: v for k, v in colmap.items() if k in out.columns}),
+            data, ctype, ext = engine.export(engine.round6(out).rename(columns={k: v for k, v in colmap.items() if k in out.columns}),
                                              fmt, job.progress)
         else:
             levels = engine.compare_levels(orig, out, months, (state["rev_info"] or {}).get("div_cap")) if fmt == "xlsx" else None

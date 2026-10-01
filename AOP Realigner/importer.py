@@ -526,8 +526,8 @@ def prepare_listing(df, info, rep, orig, months, shift=False, section_of=None):
     except ValueError as e:
         rep.error(str(e))
         return None, [], {}, info, rep
-    # a store x division with a new listing is re-split over all its departments, so it is capped at division level
-    info["div_cap"] = sorted({(h[STORE], h[DIV]) for h in how})
+    # a new listing comes out of its own attribute only (user, 2026-10-02: PDH's MSE_JAMAICAN (SUMMER) took from every
+    # MENS attribute) - no division-level cap; a month its attribute can't carry is moved / spilled by realign as usual
     info["_how"] = how   # server.py keeps it for the check file (not sent to the page)
     if counts["delisted"]:
         rep.info(f"{counts['delisted']} delisting(s): the department goes to 0 from its FROM MONTH (the first month if "
@@ -535,8 +535,8 @@ def prepare_listing(df, info, rep, orig, months, shift=False, section_of=None):
     if counts["estimated"]:
         rep.info(f"{counts['estimated']} new listing(s) sized as the department's cont % of its division x this store's "
                  f"division AOP, month by month - the cont % from the store's REF store ({counts['ref']}), else from "
-                 f"same-cluster stores ({counts['estimated'] - counts['ref']}). The rest of that store x division gives way "
-                 f"pro-rata (capped at store x division). Download the Listing check file to see every department before running.")
+                 f"same-cluster stores ({counts['estimated'] - counts['ref']}). The other departments of its own attribute in "
+                 f"that store x division give way pro-rata (the cap: store x division x attribute x month). Download the Listing check file to see every department before running.")
     if counts["given"]:
         rep.info(f"{counts['given']} new listing(s) use the values given in the file.")
     ch = pd.DataFrame(changes)

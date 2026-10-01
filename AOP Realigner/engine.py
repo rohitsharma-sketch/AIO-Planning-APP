@@ -474,6 +474,24 @@ def realign(o, r, months, source=None, div_cap=None):
     f = np.where(has_u & ~over, (T - Lnew) / np.where(has_u, U, 1), 0.0)
     new = np.where(lk, new, orig * f)
     spilled = over.any(1)
+    # several revised departments in one bucket that overflowed: the move keeps their month totals and their season total
+    # together, but can shift value between them (user, 2026-10-02: ANG KIDS SUMMER new listings were up to 0.026 L off
+    # their own season once listings were capped per attribute). Fit back - iterative proportional fitting over row x
+    # month in those buckets: month totals = Lnew, each store-dept's own season = the file's. Whole store-depts and
+    # whole bucket-months are scaled, so the MRP x display mix is kept.
+    ix = np.where((lk & np.isin(grp, grp[spilled])[:, None]).any(1))[0] if spilled.any() else []
+    if len(ix):
+        g_, s_, lv = grp[ix], sd[ix], (lk[ix] & live)
+        want_s = np.where(lv, R[ix], 0.0).sum(1)         # R = the store-dept's value, same on each of its rows
+        M = np.where(lv, new[ix], 0.0)
+        for _ in range(200):
+            cs = pd.DataFrame(M).groupby(g_).transform("sum").to_numpy()
+            M = np.where(cs > TOL, M * Lnew[ix] / np.where(cs > TOL, cs, 1), M)
+            rs = pd.Series(M.sum(1)).groupby(s_).transform("sum").to_numpy()   # the store-dept's season now
+            M = M * np.where(rs > TOL, want_s / np.where(rs > TOL, rs, 1), 1.0)[:, None]
+            if np.abs(pd.DataFrame(M).groupby(g_).transform("sum").to_numpy() - Lnew[ix])[lv].max(initial=0) < 1e-12:
+                break
+        new[ix] = np.where(lv, M, new[ix])
     unplaced = excess[:, 0] - take.sum(1)  # excess with no room left in any other month
     # nothing left to absorb into (bucket stays under target), or excess that couldn't be placed (stays over)
 
@@ -805,8 +823,26 @@ def write_xlsx(sheets, on_progress=None, num_format=None):
     return buf.getvalue()
 
 
+def round6(df):
+    """6 decimals, but every Store x Division x Attribute x Month "<m> Plan" total still lands on its own 6-decimal
+    total - largest remainder within the bucket (user, 2026-10-02: rounding each cell on its own put 227 store x
+    divisions up to 1e-5 off the original and the grand total 0.0008 off). Qty is rounded cell by cell."""
+    out = df.round(6)
+    key = pd.factorize(cap_key(df, df.attrs.get("spill_div")))[0]   # a spilled store x division: at division level
+    for c in [c for c in df.columns if c.endswith(" Plan")]:
+        x = df[c].to_numpy(float) * 1e6
+        fl = np.floor(x)
+        need = (np.round(pd.Series(x).groupby(key).transform("sum").to_numpy())
+                - pd.Series(fl).groupby(key).transform("sum").to_numpy())   # cells to round up, per bucket
+        order = np.lexsort((-(x - fl), key))                                 # bucket, biggest remainder first
+        rank = np.empty(len(x), int)
+        rank[order] = pd.Series(key[order]).groupby(key[order]).cumcount().to_numpy()
+        out[c] = (fl + (rank < need)) / 1e6
+    return out
+
+
 def export(df, fmt, on_progress=None):
-    """csv ~9s; xlsx ~2.5 min for the full 680k-row plan."""
+    """csv ~9s; xlsx ~2.5 min for the full 680k-row plan. df = round6(out) (before renaming to the file's headers)."""
     if fmt == "csv":
         return df.round(6).to_csv(index=False).encode("utf-8-sig"), "text/csv", "csv"
     return write_xlsx([("Realigned Plan", df.round(6))], on_progress), XLSX_CTYPE, "xlsx"
