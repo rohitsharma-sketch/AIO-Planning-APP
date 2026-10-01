@@ -141,6 +141,7 @@ def apply_new_dept_adjustments(plan_result: dict, new_dept_map: dict) -> dict:
                     if new_dept in depts:
                         for k, v in carve.items():
                             depts[new_dept][k] = depts[new_dept].get(k, 0.0) + v
+                        depts[new_dept]["active"] = True   # planned by the template, even if inactive in the master (2026-10-01)
                     else:
                         depts[new_dept] = {
                             "ly": 0.0, **carve, "growth_pct": None,
@@ -267,10 +268,19 @@ def run_dept_plan():
     active_pairs = [(ty, ly) for ty, ly in MONTH_PAIR if ly in ly_locked]
     active_ty_months = [ty for ty, _ in active_pairs]
 
-    # Build active dept sets per division
+    # Build active dept sets per division. The Department Master's inactive flag holds in the BIS divisions (user,
+    # 2026-10-01: a department BIS doesn't plan, e.g. the new LW_U_CORD SETS, carried its stray LY at 0% growth, so the
+    # base plan wasn't BIS's); a new one gets its plan from the New Department template instead. GM / RETAIL keep every
+    # department: their flags came from the BIS sync, which doesn't cover them (95-99% of their plan is "inactive").
+    # A department BIS gives growth to stays planned whatever the flag says - BIS is the plan (L_EW_BLOUSE: inactive in
+    # the master, +10% in BIS); BIS's delisted ones come as -100% (index 0) and drop out either way.
+    from engines.department_plan import BIS_DIVISIONS, _load_state
+    state = _load_state()
     active_depts = {}
     for div, rows in dept_config.items():
-        active_depts[div] = {r["name"] for r in rows if r.get("active", True)}
+        bis = {d for d, p in growth_matrix.get(div, {}).items() if any(float(x) > 0 for x in p.values())}
+        off = ({n for n, v in state.get(div, {}).items() if not v.get("active", True)} - bis) if div in BIS_DIVISIONS else set()
+        active_depts[div] = {r["name"] for r in rows if r.get("active", True) and r["name"] not in off}
 
     # Build store lookup
     store_info = {}

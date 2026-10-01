@@ -31,4 +31,15 @@ m, p = parse_new_dept_template(legacy, DIVS)
 assert not p and abs(m["KIDS"]["KB_JEANS F/S"]["new_dept_pct"] - 50.0) < 1e-12, (m, p)
 
 assert parse_new_dept_template(pd.DataFrame(columns=ND_COLS), DIVS)[1] == ["The file has no new departments - fill at least one row."]
+
+# a new department the master marks inactive (2026-10-01, LW_U_CORD SETS) is planned by the template: it turns active
+# and its carve counts in the division total
+from engines.dept_sales_engine import apply_new_dept_adjustments  # noqa: E402
+plan = {"stores": {"S": {"divisions": {"LADIES": {"months": {"Mar'27": {"departments": {
+    "LW_U_DRESS": {"ly": 10.0, "ty": 10.0, "ty_p1": 4.0, "ty_p2": 6.0, "active": True},
+    "LW_U_CORD SETS": {"ly": 0.0, "ty": 0.0, "ty_p1": 0.0, "ty_p2": 0.0, "active": False}}}}}}}}}
+md = apply_new_dept_adjustments(plan, {"LADIES": {"LW_U_CORD SETS": {"ref_dept": "LW_U_DRESS", "new_dept_pct": 20,
+                                                                      "ref_reduction_pct": 20}}})["stores"]["S"]["divisions"]["LADIES"]["months"]["Mar'27"]
+c = md["departments"]["LW_U_CORD SETS"]
+assert c["active"] and abs(c["ty"] - 2) < 1e-12 and abs(md["div_total_ty"] - 10) < 1e-12 and abs(c["cont_pct"] - 20) < 1e-9, md
 print("new dept template checks passed")
