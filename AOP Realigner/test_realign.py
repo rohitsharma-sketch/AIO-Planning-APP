@@ -524,4 +524,26 @@ stn = {ch["name"]: ch["status"] for ch in verify(on, rn, outn, MN)[0]}
 assert stn["No negative plan in the unlocked months"] == "ok" and stn["Revised values kept exactly"] == "ok", stn
 assert stn["Store × Division × Month = original (the cap)"] == "ok" and stn["Display-type cont % kept as in the original"] == "ok", stn
 
+# the recheck (user, 2026-10-01: "auto run till it passes"): break a good output - S9 Sep pushed 5 over the original and
+# one cell negative - and repair / verify round by round until every hard check passes (bounded, like job_run)
+bad = outn.copy(); bad.attrs = dict(outn.attrs)
+bad.loc[bad.DEPARTMENT == "D", "Sep'26 Plan"] += 5
+bad.loc[(bad.DEPARTMENT == "B"), "Sep'26 Plan"] = -0.25
+st = lambda x: {ch["name"]: ch["status"] for ch in verify(on, rn, x, MN)[0]}
+assert st(bad)["Store × Division × Month = original (the cap)"] == "fail" and st(bad)["No negative plan in the unlocked months"] == "fail"
+fixedo, rounds = bad, 0
+while any(v == "fail" for k, v in st(fixedo).items() if k != "Revised values kept exactly") and rounds < 5:
+    fixedo, rows = engine.repair(on, fixedo, MN)
+    rounds += 1
+    if not len(rows):
+        break
+sf = st(fixedo)
+assert rounds >= 1 and all(sf[k] == "ok" for k in ("Store × Division × Month = original (the cap)", "No negative plan in the unlocked months",
+                                                   "Grand total unchanged", "Locked months untouched (value and qty)")), (rounds, sf)
+assert np.isclose(fixedo["Sep'26 Plan"].sum(), 34.5) and (fixedo["Sep'26 Plan"] >= 0).all()
+assert np.isclose(fixedo[fixedo.DEPARTMENT == "C"]["Jan'27 P1 Plan"].sum(), -0.3)          # locked month untouched
+assert len(engine.repair(on, fixedo, MN)[1]) == 0                                           # nothing left to fix
+cm = engine.merge_compare(cmpn, rows if len(rows) else engine.repair(on, bad, MN)[1])
+assert (cm.Status == "rechecked - fixed to fit the original").any()
+
 print("all realign checks passed")

@@ -702,6 +702,57 @@ def verify(o, r, out, months, div_cap=None):
     return checks, table
 
 
+def repair(o, out, months):
+    """The recheck (user, 2026-10-01: "if the check fails at any level then it should auto run till it passes
+    through"): one pass that puts the hard rules back on a realigned output - no negative plan in the unlocked months
+    (set to 0, the amount out of the rest of that store x division x month) and every store x division x month exactly
+    on the original file (its positive cells scaled; one with nothing left keeps its original rows). Locked months are
+    never touched. Returns (out, the cells it moved as comparison rows) - nothing moved = nothing left it can fix."""
+    live = [m for m in months if not locked(m)]
+    cols = [STORE, DIV, DEPT, MRP, DISP, "Month", "Original", "Realigned", "Delta", "Delta %", "Status"]
+    if not live:
+        return out, pd.DataFrame(columns=cols)
+    V, Q = [m + " Plan" for m in live], [m + " Plan Qty" for m in live]
+    out = out.copy()
+    X0, Qt = out[V].to_numpy(float), out[Q].to_numpy(float)
+    k = [STORE, DEPT, MRP, DISP]
+    O = o.groupby(k, dropna=False)[V + Q].sum().reindex(pd.MultiIndex.from_frame(out[k])).fillna(0.0)
+    Ov, Oq = O[V].to_numpy(), O[Q].to_numpy()
+    key = (out[STORE].astype(str) + "||" + out[DIV].astype(str)).to_numpy()
+    T = o.groupby(o[STORE].astype(str) + "||" + o[DIV].astype(str))[V].sum().reindex(key).fillna(0.0).to_numpy()
+    total = lambda a: pd.DataFrame(a).groupby(key).transform("sum").to_numpy()
+    neg = X0 < -TOL
+    X, _ = _take_back(np.where(neg, 0.0, X0), np.where(neg, -X0, 0.0), ~neg & (X0 > TOL), key)
+    N, P = total(X), total(np.where(X > TOL, X, 0.0))
+    off = np.abs(T - N) > SHOWN
+    X = np.where(off & (X > TOL) & (P > TOL), X * (T - (N - P)) / np.where(P > TOL, P, 1), X)
+    stuck = off & (P <= TOL)
+    X = np.where(stuck, Ov, X)
+    moved = np.abs(X - X0) > 1e-12
+    out[Q] = np.where(stuck, Oq, np.where(moved, np.divide(Qt * X, X0, out=np.zeros_like(X), where=np.abs(X0) > TOL), Qt))
+    out[V] = X
+    sdv = sorted({tuple(x.split("||", 1)) for x in set(key[moved.any(1)])})
+    for a in ("spill_div", "forced_div"):   # checked at division level, like the in-run guarantee (step 2c)
+        out.attrs[a] = sorted(set(map(tuple, out.attrs.get(a, ()))) | set(sdv))
+    ri, ci = np.nonzero(moved)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        pct = np.where(np.abs(Ov[ri, ci]) > TOL, (X[ri, ci] - Ov[ri, ci]) / np.abs(Ov[ri, ci]) * 100, np.nan)
+    rows = pd.DataFrame({STORE: out[STORE].to_numpy()[ri], DIV: out[DIV].to_numpy()[ri], DEPT: out[DEPT].to_numpy()[ri],
+                         MRP: out[MRP].to_numpy()[ri], DISP: out[DISP].to_numpy()[ri], "Month": np.asarray(live)[ci],
+                         "Original": Ov[ri, ci], "Realigned": X[ri, ci], "Delta": X[ri, ci] - Ov[ri, ci], "Delta %": pct,
+                         "Status": "rechecked - fixed to fit the original"}, columns=cols)
+    return out, rows
+
+
+def merge_compare(compare, fixed):
+    """The comparison table with the recheck's cells in place of their earlier rows."""
+    if not len(fixed):
+        return compare
+    k = [STORE, DEPT, MRP, DISP, "Month"]
+    drop = pd.MultiIndex.from_frame(compare[k]).isin(pd.MultiIndex.from_frame(fixed[k]))
+    return pd.concat([compare[~drop], fixed[np.abs(fixed["Delta"]) > SHOWN]], ignore_index=True)
+
+
 def _cell(v):
     """numpy scalar -> native Python, and NaN/Inf -> blank (xlsxwriter can't write either directly)."""
     if hasattr(v, "item"):

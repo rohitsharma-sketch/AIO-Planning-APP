@@ -7,6 +7,21 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-01
 
+### Sales Plan Re-Aligner: recheck — a failed check repairs the output and verifies again until it passes
+- **Asked (user):** "also install a rechecker if the check fails at any level then it should auto run till it passes through"
+- **Why not a plain rerun:** the realign is deterministic, so the same inputs give the same output and the same failure. Each recheck round therefore **repairs** the output instead.
+- **One repair round** (`engine.repair`):
+  - negative cells in unlocked months go to 0, the amount out of the rest of that store × division × month;
+  - every store × division × month is put back exactly on the original (positive cells scaled; one with nothing left gets its original rows back);
+  - qty is rescaled for the cells it moved, and locked months are never touched.
+- **The loop** (`server.job_run`): repair → verify, until every check passes, a round fixes nothing more, or **5 rounds** (never endless).
+  - The repaired store × divisions are checked at division level.
+  - The cells it moved show in the comparison as "rechecked - fixed to fit the original" (`engine.merge_compare`).
+  - A note says how many rounds ran and anything still failing that it can't fix, e.g. a revised value that conflicts with the original totals.
+  - The Results line shows "rechecked n×".
+- `test_realign.py`: a good output is broken on purpose (S9 Sep +5 over the original and one negative cell). The repair loop brings every hard check back to ok, leaves the locked month untouched, and a further round finds nothing to fix.
+- On your current listing run every check already passes, so the recheck doesn't trigger; it's a safety net.
+
 ### Sales Plan Re-Aligner: new listings fall back, month by month, to the cluster's non-zero average cont % — `461ca9b`
 - **Asked (user):** pasted ~7,800 store × department listings that came out at 0: "Check these cases, even though plan is present in their respective refernce stores, so either it should check the sales of store's respective cluster average without 0% cont % and appportioning should be there within the same store xdivision".
 - **Found** (replaying "Listing changes template (4).xlsx"): 7,841 of 7,991 new listings were 0.

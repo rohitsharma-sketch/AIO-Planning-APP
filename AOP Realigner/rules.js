@@ -63,6 +63,7 @@ const RULES_NOW = [
   ]],
   ['Checks on every run', [
     'Recomputed from the output: kept values exact, store × division season totals, <b>Store × Division × Attribute × Month = original (the cap)</b>, store × division × month, grand total, locked months untouched, display-type cont % as the original. Any input error blocks the run; warnings and notes are listed with row examples.',
+    '<b>Recheck</b>: if any check fails, the run repairs the output (negatives to 0, every store × division × month put back exactly on the original) and runs every check again - round after round until all pass, a round has nothing left to fix, or 5 rounds. The result says "rechecked n×", the notes say what is still failing if anything, and the repaired cells show as "rechecked" in the comparison.',
     '<b>Comparison vs original</b> (download after a run): Summary (division × month), <b>Store x Div x Attribute x Month</b> - every one, original vs new, difference and "Within cap" - <b>Store x Dept x Month</b> - every department month that moved - and <b>Changed Rows</b> (every MRP × display cell, with why).',
     '<b>Plan to plan</b> (download after a run): the <b>whole</b> plan, not just the changes - every Store × Department × MRP × Display Type row of the original and the final, each month Original / Final / Difference plus the season, with Changed / Months changed up front to filter on (rows of a new department say "new in final").',
   ]],

@@ -504,8 +504,24 @@ def job_run(job):
             raise UserError(str(e))
     with job.step("Verify totals", "verify", len(o)):
         checks, dept_table = engine.verify(o, r, out, months, div_cap)
+    # the recheck (user, 2026-10-01: "if the check fails at any level then it should auto run till it passes"): a rerun
+    # of the same inputs gives the same output, so each round REPAIRS the output (no negatives, every store x division x
+    # month on the original) and verifies again - until all pass, a round fixes nothing more, or 5 rounds
+    rechecks = 0
+    while any(c["status"] == "fail" for c in checks) and rechecks < 5:
+        with job.step(f"Recheck {rechecks + 1}: repair and verify again", "recheck", len(o)):
+            out, fixed = engine.repair(o, out, months)
+            if not len(fixed):
+                break
+            rechecks += 1
+            compare = engine.merge_compare(compare, fixed)
+            checks, dept_table = engine.verify(o, r, out, months, div_cap)
+    if rechecks:
+        left = [c["name"] for c in checks if c["status"] == "fail"]
+        warn.append(f"Recheck: {rechecks} round(s) repaired the output and re-ran every check - "
+                    + (f"still failing (nothing more it can fix): {', '.join(left)}" if left else "all checks now pass") + ".")
     res = {"id": job.id, "method": method, "finished_at": stamp(), "secs": round(job.elapsed(), 1), "original": names[0], "revised": names[1],
-           "rows": len(out), "changed_rows": len(compare), "summary": summ, "warnings": warn,
+           "rows": len(out), "changed_rows": len(compare), "summary": summ, "warnings": warn, "rechecks": rechecks,
            "checks": checks, "dept_table": dept_table,
            "status_counts": compare["Status"].value_counts().to_dict() if len(compare) else {}}
     with lock:
