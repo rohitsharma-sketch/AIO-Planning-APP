@@ -7,6 +7,21 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-01
 
+### Sales Plan Re-Aligner: the cap is now Store × Division × Attribute × Month (no cross-attribute apportioning) — `8287980`
+- **Asked (user):** "change the rule to apportion and match at Store x Division x Attribute x Month instead of Store x Division x Month so that the department changes made are contained with in the attribute and no cross apportioning is there."
+- **Engine:**
+  - `engine.cap_key` groups by store || division || ATTRIBUTE, and `realign` uses it for the cap and the absorbing.
+  - A revised department is absorbed only by the other departments of its own attribute in that store × division. Store × division × month still lands on the original, since it is the sum of its attributes.
+  - A plan without an ATTRIBUTE column falls back to Store × Division × Month.
+- **Departments alone in their attribute:** in the loaded plan, 539 of 4,621 store × division × attribute buckets hold one planned department (e.g. LW_U_TEES F/S, LADIES PREWINTER). A change to such a department has nothing to absorb it, so it is flagged ("couldn't fully land") and not spread to another attribute.
+- **Method 4 (shift):** the target must be in the same division **and attribute**. A section target takes only its departments of that attribute.
+- **Checks:** "Store × Division × Attribute × Month = original (the cap)" plus "Store × Division × Month = original".
+- **Comparison download:** the cap sheet is now **Store x Div x Attribute x Month**, with ATTRIBUTE and "Within cap" columns.
+- **Rules panel, method texts and REPHASE_DEPARTMENT_MONTHS.md (G3a):** updated.
+- **Verified:**
+  - `test_realign.py` gains an attribute case: A (REGULAR) Sep 10→15 moves only B (REGULAR), C and D (SUMMER) don't move, and a cross-attribute shift is refused.
+  - Real plan, in memory, an LW_U_T-TOP re-phase (674k rows, 5.8 s): only REGULAR departments moved. 0 of 43,632 store-division-attribute-months and 0 of 7,272 store-division-months differ, and revised values are kept exactly.
+
 ### Sales Plan: AOP-by-attribute window (capped), pick the attributes to work on, a clear "what next" prompt, plan generation ~7x faster
 - **Asked (user):**
   - "i need a window for what is the current AOP as per the attributes selected and it will give me a column for every attribute and re-apportion according to the changes made against it. It should always be capped to the division AOP."
