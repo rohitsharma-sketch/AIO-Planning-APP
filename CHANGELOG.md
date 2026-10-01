@@ -7,6 +7,16 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-01
 
+### Sales Plan Re-Aligner: Method 1 blank template is Department | Store | Value — `2730379`
+- **Asked (user):** "i want this as blank template headers instead of the current one" (screenshot: Department | Store | Value); Value = the Y / N listing flag (user's choice).
+- **Template:** `importer.template_listing` (blank, without the Listing app) returns just **Department, Store, Value**. It used to be STORE NAME, DIVISION, DEPARTMENT, LISTING, FROM MONTH, NOTE and "<Month> New".
+- **Reading:** "VALUE" is a new name for the LISTING column (Y = newly listed, N = delisted). An optional FROM MONTH and "<Month> New" values are still read if added.
+- **Unchanged:** the "From Listing / Delisting Analyser" pre-filled template keeps its columns.
+- **Text:** the Method 1 how-to and rules text are updated.
+- **Verified:**
+  - `test_realign.py` checks the blank columns, and that a Department,Store,Value file delists correctly.
+  - The live download ("Listing changes template.xlsx") has exactly Department | Store | Value.
+
 ### Sales Plan Re-Aligner: results laid out tighter, tables first
 - **Asked (user):** "can we squeeze the layout a bit - and move the results up so it can look less calutrophobic as of now"
 - **New order in Results:** summary stats → **Revised departments / Division × Month** tables → checks → notes → downloads. The tables used to sit below all the checks.
