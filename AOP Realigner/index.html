@@ -308,7 +308,7 @@ const frozen = m => (S.locks || []).includes(m);   // the user's locked months (
 const METHODS = {
   listing: {no: 1, title: 'Store listing changes', short: 'A department delisted from a store, or newly listed in one.',
     drop: 'Upload the listing changes',
-    howto: `One row per change: <code>STORE NAME</code>, <code>DEPARTMENT</code>, <code>LISTING</code> (Y / N) and an optional <code>FROM MONTH</code> (blank = the first month).
+    howto: `One row per change: <code>Department</code>, <code>Store</code>, <code>Value</code> (Y = newly listed, N = delisted) — the blank template's columns. Optional: a <code>FROM MONTH</code> column (blank = the first month).
       A <b>delisted</b> department goes to 0 from that month. A <b>newly listed</b> one is sized from same-cluster stores — its share of the division there × this store's division plan, month by month — or from your own figures in the “&lt;Month&gt; New” columns.
       The rest of the store × division × attribute flexes to stay on the original. “From Listing / Delisting Analyser” pre-fills every difference between this plan and the latest listing month.`,
     run: 'Delisted departments go to 0 from their month and new listings take their sized value; every other department in the same store × division × attribute absorbs the difference pro-rata.'},
