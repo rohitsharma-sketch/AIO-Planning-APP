@@ -95,38 +95,42 @@ def add_new_departments(o, r, months, source=None):
         o = o[~(pd.MultiIndex.from_arrays([o[STORE], o[DEPT]]).isin(list(source)) & empty)].reset_index(drop=True)
     o["_basis"] = np.arange(len(o))
     have = set(zip(o[STORE], o[DEPT]))
-    by_store = dict(tuple(o.groupby(STORE)))
-    clones, unmatched = [], []
-    for s, d in zip(r[STORE], r[DEPT]):
-        if (s, d) in have:
-            continue
+    need = [k for k in dict.fromkeys(zip(r[STORE], r[DEPT])) if k not in have]
+    if not need:
+        return o, 0, 0
+    # one merge for every new store-dept (user, 2026-10-02: "cut the delays" - a copy per listing took ~120 s for 7,818)
+    depts_of = {}
+    pairs = []
+    for s, d in need:
         fs, fd = source.get((s, d), (s, None))
-        g = by_store.get(fs)
         if fd is None:
-            fd = parent_for(d, set(g[DEPT])) if g is not None else None
-        c = g[g[DEPT] == fd].copy() if g is not None and fd else None
-        if c is None or not len(c):
-            unmatched.append(f"{s} / {d}")
-            continue
-        c[DEPT] = d
-        if fs != s:  # rows borrowed from another store: take this store's own name, ref, cluster and tags
-            t = by_store[s]
-            for col in c.columns:
-                if col not in KEEP_ROW_COLS and not pd.api.types.is_numeric_dtype(c[col]):
-                    c[col] = t[col].mode().iat[0]
-        c[[m + " Plan" for m in months] + [m + " Plan Qty" for m in months]] = 0.0
-        if "CONC - UDF" in c:
-            c["CONC - UDF"] = c[STORE] + d + c[MRP].astype(str) + c[DISP]
-        if "CONC - MRP" in c:
-            c["CONC - MRP"] = c[STORE] + d + c[MRP].astype(str)
-        if "Tag" in c:
-            c["Tag"] = "New Dept"
-        clones.append(c)
+            if fs not in depts_of:
+                depts_of[fs] = set(o.loc[o[STORE] == fs, DEPT])
+            fd = parent_for(d, depts_of[fs]) if depts_of[fs] else None
+        pairs.append((len(pairs), s, d, fs, fd))
+    P = pd.DataFrame(pairs, columns=["_k", "_s", "_d", STORE, DEPT])
+    c = P.merge(o, on=[STORE, DEPT], how="inner").sort_values(["_k", "_basis"], kind="stable")
+    got = set(c["_k"])
+    unmatched = [f"{s} / {d}" for k, s, d, _, _ in pairs if k not in got]
     if unmatched:
         raise ValueError("Revised departments with no original department to borrow MRP/display rows from: "
                          + ", ".join(unmatched[:10]) + (" ..." if len(unmatched) > 10 else ""))
-    n = sum(len(c) for c in clones)
-    return (pd.concat([o, *clones], ignore_index=True) if clones else o), len(clones), n
+    cross = (c[STORE] != c["_s"]).to_numpy()
+    if cross.any():   # rows borrowed from another store: take this store's own name, ref, cluster and tags (its mode)
+        cols = [x for x in o.columns if x not in KEEP_ROW_COLS and not pd.api.types.is_numeric_dtype(o[x])]
+        want = set(c.loc[cross, "_s"])
+        modes = o[o[STORE].isin(want)].groupby(STORE)[cols].agg(lambda x: x.mode().iat[0] if x.notna().any() else np.nan)
+        c.loc[cross, cols] = modes.reindex(c.loc[cross, "_s"]).to_numpy()
+    c[STORE], c[DEPT] = c["_s"], c["_d"]
+    c[[m + " Plan" for m in months] + [m + " Plan Qty" for m in months]] = 0.0
+    if "CONC - UDF" in c:
+        c["CONC - UDF"] = c[STORE] + c[DEPT] + c[MRP].astype(str) + c[DISP]
+    if "CONC - MRP" in c:
+        c["CONC - MRP"] = c[STORE] + c[DEPT] + c[MRP].astype(str)
+    if "Tag" in c:
+        c["Tag"] = "New Dept"
+    c = c[o.columns]
+    return pd.concat([o, c], ignore_index=True), len(pairs), len(c)
 
 
 def _sd_totals(o, months, by=DEPT):
@@ -155,6 +159,7 @@ def listing_targets(o, changes, months, ref_of=None):
             planners.setdefault(d, []).append(s)
     ref_of = ref_of or {}
     rows, source, counts, nopeer, how = [], {}, {"delisted": 0, "estimated": 0, "given": 0, "ref": 0}, [], []
+    cont_memo, avg_memo = {}, {}   # the same peers' cont % recurs for every listing of a department (2026-10-02: 1.7M calls)
     for c in changes:
         s, d = c["store"], c["dept"]
         base = sd.get((s, d), np.zeros(n))
@@ -170,15 +175,20 @@ def listing_targets(o, changes, months, ref_of=None):
             dvd = div_of[d]
 
             def cont_of(p):   # the department's cont % of its division in store p, per month
-                den = dv.get((p, dvd), np.zeros(n))
-                return np.divide(sd[(p, d)], den, out=np.zeros(n), where=np.abs(den) > TOL)
+                if (p, d) not in cont_memo:
+                    den = dv.get((p, dvd), np.zeros(n))
+                    cont_memo[(p, d)] = np.divide(sd[(p, d)], den, out=np.zeros(n), where=np.abs(den) > TOL)
+                return cont_memo[(p, d)]
 
             def nz_avg(stores):   # average cont % over the stores above 0% that month (user, 2026-10-01: "cluster
                 if not stores:    # average without 0% cont %")
                     return np.zeros(n)
-                cs = np.array([cont_of(p) for p in stores])
-                pos = cs > TOL
-                return np.divide(np.where(pos, cs, 0.0).sum(0), pos.sum(0), out=np.zeros(n), where=pos.sum(0) > 0)
+                k = (d, tuple(stores))
+                if k not in avg_memo:
+                    cs = np.array([cont_of(p) for p in stores])
+                    pos = cs > TOL
+                    avg_memo[k] = np.divide(np.where(pos, cs, 0.0).sum(0), pos.sum(0), out=np.zeros(n), where=pos.sum(0) > 0)
+                return avg_memo[k]
 
             # month by month: the REF store's cont %; where it is 0% (or there is no REF store) the cluster's average of
             # its non-zero cont %, then every planning store's (user, 2026-10-01: AD-NS-10 opens in Feb, its REF LAM
@@ -479,7 +489,7 @@ def realign(o, r, months, source=None, div_cap=None):
     # their own season once listings were capped per attribute). Fit back - iterative proportional fitting over row x
     # month in those buckets: month totals = Lnew, each store-dept's own season = the file's. Whole store-depts and
     # whole bucket-months are scaled, so the MRP x display mix is kept.
-    ix = np.where((lk & np.isin(grp, grp[spilled])[:, None]).any(1))[0] if spilled.any() else []
+    ix = np.where((lk & pd.Series(grp).isin(set(grp[spilled])).to_numpy()[:, None]).any(1))[0] if spilled.any() else []
     if len(ix):
         g_, s_, lv = grp[ix], sd[ix], (lk[ix] & live)
         want_s = np.where(lv, R[ix], 0.0).sum(1)         # R = the store-dept's value, same on each of its rows
@@ -512,7 +522,7 @@ def realign(o, r, months, source=None, div_cap=None):
             new = new + room * np.where(rsum > TOL, np.maximum(need / np.where(rsum > TOL, rsum, 1), -1.0), 0.0)
             spill_div = sorted({tuple(x.split("||", 1)) for x in set(sdv[miss.any(1)])})
     # what still misses its original, at the level it is capped at (division for the store x divisions above)
-    lvl = np.where(np.isin(sdv, ["||".join(x) for x in spill_div]), sdv, grp) if spill_div else grp
+    lvl = np.where(pd.Series(sdv).isin({"||".join(x) for x in spill_div}).to_numpy(), sdv, grp) if spill_div else grp
     short = (live & (np.abs(pd.DataFrame(orig).groupby(lvl).transform("sum").to_numpy()
                             - pd.DataFrame(new).groupby(lvl).transform("sum").to_numpy()) > 1e-6)).any(1)
 
@@ -553,7 +563,7 @@ def realign(o, r, months, source=None, div_cap=None):
         new = np.where(pos > 0, new * (Td - (Nd - psum)) / np.where(psum > TOL, psum, 1), new)
         forced = sorted({tuple(x.split("||", 1)) for x in set(sdv[off.any(1)])})
         spill_div = sorted(set(spill_div) | set(forced))   # their attributes may move: checked at division level
-        lvl = np.where(np.isin(sdv, ["||".join(x) for x in spill_div]), sdv, grp)
+        lvl = np.where(pd.Series(sdv).isin({"||".join(x) for x in spill_div}).to_numpy(), sdv, grp)
         short = (live & (np.abs(pd.DataFrame(orig).groupby(lvl).transform("sum").to_numpy()
                                 - pd.DataFrame(new).groupby(lvl).transform("sum").to_numpy()) > 1e-6)).any(1)
 
