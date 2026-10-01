@@ -5,6 +5,7 @@ const RULES_NOW = [
   ['What is kept', [
     'Every <b>Store × Division × Attribute × Month</b> total of the original plan - the file imported in step 1 - is the <b>cap</b>: the output lands exactly on it, and every run checks it (pass / fail). So a department change stays <b>inside its own attribute</b> - nothing is apportioned across attributes - and the store × division × month follows. (A plan without an ATTRIBUTE column is capped at store × division × month.)',
     'The values you give (revised, newly listed or split departments) are kept <b>exactly</b> within the cap; every other department of the same attribute in that store × division absorbs the difference, pro-rata to its original value. A department alone in its attribute in a store has nothing to absorb into: its change is flagged, never spread to another attribute.',
+    '<b>No negative plan</b>: after apportioning, every negative cell in an unlocked month (e.g. -0.01) is set to <b>0</b>, and the balance comes back out of the same store × division × attribute × month by the same rules - a revised department’s negative row out of that department’s own other rows (its value stays as given), any other out of the other departments pro-rata - so the cap still holds. Negatives in locked months stay as they are. Checked on every run.',
     '<b>Locked months are never changed</b> (value and qty) - the planner locks / unlocks each month of the original plan (Jan / Feb locked by default). Locked-month figures in an upload are ignored and flagged.',
   ]],
   ['When a month overflows', [
@@ -66,6 +67,7 @@ const RULES_LATEST = {
     'The cap is now <b>Store × Division × Attribute × Month</b> (was Store × Division × Month): a department change is absorbed only by the other departments of its own attribute in that store × division - nothing is apportioned across attributes. Store × division × month still matches, as it follows.',
     'A department that is alone in its attribute in a store has nothing to absorb its change: flagged ("couldn\'t fully land"), never spread to another attribute.',
     'Method 4: a shift target must be in the same division <b>and attribute</b>; a section target takes only its departments of that attribute.',
+    'Negative plan cells in the unlocked months are set to 0 after apportioning; the balance is re-apportioned inside their store × division × attribute × month (new check: "No negative plan in the unlocked months").',
     'New download <b>Plan to plan</b>: the full original vs final plan, row for row (Store × Department × MRP × Display Type), every month, Changed flag to filter on.',
     'Checks: "Store × Division × Attribute × Month = original (the cap)" plus "Store × Division × Month = original". The comparison download\'s cap sheet is now Store x Div x Attribute x Month.',
   ],

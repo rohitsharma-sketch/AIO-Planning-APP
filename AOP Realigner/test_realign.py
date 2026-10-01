@@ -450,4 +450,23 @@ assert np.isclose(r_["Sep'26 Difference"], r_["Sep'26 Final"] - 10) and r_["Mont
 assert np.isclose(pp["Season Final"].sum(), out[[m + " Plan" for m in M]].to_numpy().sum())
 assert (pp.loc[pp["Changed"] == "", [f"{m} Difference" for m in M]].abs() <= engine.SHOWN).all().all()
 
+# negative plan -> 0 after apportioning, the balance back out of the same bucket (user, 2026-10-01)
+MN = ["Sep'26", "Jan'27 P1"]   # Jan locked: its negative stays
+def nrow(dept, mrp, disp, sep, jan):
+    return {"Store Name": "S9", "DIVISION": "LADIES", "DEPARTMENT": dept, "MRP": mrp, "DISPLAY TYPE": disp, "Tag": "Original",
+            "Sep'26 Plan": sep, "Sep'26 Plan Qty": sep, "Jan'27 P1 Plan": jan, "Jan'27 P1 Plan Qty": jan}
+on = pd.DataFrame([nrow("A", 299, "TABLE", 6, 6), nrow("A", 399, "NON_TABLE", -1, 0),   # revised dept with a negative row
+                   nrow("B", 299, "TABLE", 10, 10), nrow("C", 299, "TABLE", -0.5, -0.3), nrow("D", 299, "TABLE", 20, 20)])
+rn = pd.DataFrame([{"Store Name": "S9", "DEPARTMENT": "A", "Sep'26": 10}])
+outn, _, warnn, cmpn = realign(on, rn, MN)
+gn = lambda d, mrp, m="Sep'26": outn[(outn.DEPARTMENT == d) & (outn.MRP == mrp)][m + " Plan"].sum()
+assert np.isclose(outn["Sep'26 Plan"].sum(), 34.5) and (outn["Sep'26 Plan"] >= 0).all()         # the cap holds, no negatives
+assert np.isclose(gn("A", 399), 0) and np.isclose(gn("A", 299), 10)                              # A's value stays as given
+assert np.isclose(gn("C", 299), 0) and np.isclose(gn("B", 299) / gn("D", 299), 0.5)              # C's balance out of B / D pro-rata
+assert np.isclose(gn("C", 299, "Jan'27 P1"), -0.3)                                              # a locked month is never changed
+assert set(cmpn.loc[cmpn.Status == "negative set to 0", "DEPARTMENT"]) == {"A", "C"} and any("negative plan cells" in w for w in warnn)
+stn = {ch["name"]: ch["status"] for ch in verify(on, rn, outn, MN)[0]}
+assert stn["No negative plan in the unlocked months"] == "ok" and stn["Revised values kept exactly"] == "ok", stn
+assert stn["Store × Division × Month = original (the cap)"] == "ok" and stn["Display-type cont % kept as in the original"] == "ok", stn
+
 print("all realign checks passed")

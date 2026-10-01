@@ -7,6 +7,25 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-01
 
+### Sales Plan Re-Aligner: no negative plan — negatives set to 0, balance re-apportioned in the bucket
+- **Asked (user):** "if there was a plan of -0.01 and in the apportion it should be covered to 0 and the balance should follow the rules set for apportion. this rule is just for redacting the negative plan to 0 and readjusting the value to its respective store x div x attribute x month after apportion."
+- **Rule** (`engine.realign` step 2b, helper `_take_back`): after apportioning, every negative cell in an **unlocked** month becomes 0. What that adds comes back out of the same Store × Division × Attribute × Month:
+  - from a revised department's own positive rows, for its negative row, so its value stays as given;
+  - otherwise from the other departments' positive cells, pro-rata;
+  - then from the revised ones;
+  - anything still uncovered is flagged.
+  - Locked months are never changed, negatives included.
+- **Shown in:**
+  - Status "negative set to 0" in the comparison.
+  - A note with the count and total.
+  - A new check, "No negative plan in the unlocked months".
+- **Display-type check:** the cont % check skips store-dept-months that had a negative row, since its mix moves by design.
+- **Real plan (in memory, LW_U_T-TOP re-phase):**
+  - The original has 1,720 negative cells (−4.92 L); 113 are in the locked Jan/Feb months and stay.
+  - All 1,607 in unlocked months (−4.75 L) went to 0, and every check is ok: cap 0/43,632 and 0/7,272 off, revised values exact, grand total 83,848.99 unchanged, display-type mix kept.
+  - Each balance is spread pro-rata over its bucket, so many more cells move by tiny amounts (≈244k "absorbed").
+- `test_realign.py`: a revised department's negative row and another department's negative both go to 0. The revised value stays exact, the balance comes pro-rata out of the others, and a locked-month negative is kept.
+
 ### Sales Plan Re-Aligner: downloads in two groups with one XLSX ⇄ CSV slider
 - **Asked (user):** "compile the downloaded options in 2 categories - comparison and final plan and give a slider for the user to download in xlsx or csv"
 - **Groups:**

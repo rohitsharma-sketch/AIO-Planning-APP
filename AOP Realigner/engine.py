@@ -327,6 +327,17 @@ def growth_targets(o, rows, months, ly):
     return r, detail
 
 
+def _take_back(new, add, pool, key):
+    """Take `add` (per cell, >= 0) back out of the `pool` cells of the same key x month, pro-rata to their value.
+    Returns (new, the part of `add` per cell that found no room)."""
+    need = pd.DataFrame(add).groupby(key).transform("sum").to_numpy()
+    room = np.where(pool, new, 0.0)
+    rsum = pd.DataFrame(room).groupby(key).transform("sum").to_numpy()
+    took = np.minimum(need, rsum)
+    new = new - room * np.divide(took, rsum, out=np.zeros_like(rsum), where=rsum > TOL)
+    return new, add * (1 - np.divide(took, need, out=np.zeros_like(need), where=need > TOL))
+
+
 def realign(o, r, months, source=None):
     """o: original rows (numeric cols clean), r: revised Store x Dept values over `months`, source: where a new
     store-dept's rows come from (see add_new_departments). Every store x division x attribute x month lands on the
@@ -402,6 +413,23 @@ def realign(o, r, months, source=None):
     # nothing left to absorb into (bucket stays under target), or excess that couldn't be placed (stays over)
     short = ((~has_u) & live & (T - Lnew > 1e-6)).any(1) | (unplaced > 1e-6)
 
+    # 2b. no negative plan (user, 2026-10-01: "if there was a plan of -0.01 ... it should be covered to 0 and the balance
+    #     should follow the rules set for apportion ... readjusting the value to its respective store x div x attribute x
+    #     month after apportion"). In every unlocked month a negative cell becomes 0 and what that adds comes back out
+    #     of the same bucket by the apportion rules: a revised department's row out of that department's own positive
+    #     rows (its value stays as given), anything else - or what the department couldn't cover - out of the other
+    #     departments' positive cells pro-rata, then the revised ones'; so the cap still holds. Locked months are never
+    #     changed, negatives included.
+    neg = (new < -TOL) & ~frozen[None, :]
+    neg_amt, neg_left = float(-new[neg].sum()), 0.0
+    if neg.any():
+        add = np.where(neg, -new, 0.0)
+        new = np.where(neg, 0.0, new)
+        new, left = _take_back(new, np.where(lk, add, 0.0), lk & (new > TOL), sd)
+        new, left = _take_back(new, np.where(lk, 0.0, add) + left, ~lk & (new > TOL) & ~frozen[None, :], grp)
+        new, left = _take_back(new, left, lk & (new > TOL), grp)
+        neg_left = float(left.sum())
+
 
     # 3. qty = new value / the original plan's ASP for that Department x MRP x Display Type x Month, pooled
     #    across stores (in the original it's identical across stores anyway). A new dept uses its parent's.
@@ -424,7 +452,8 @@ def realign(o, r, months, source=None):
     #    okay" check against the original. "kept" = a revised row; "absorbed" = everything else that
     #    moved to make room (frozen months never change - f==1 there - so they're filtered out).
     status = np.where(lk, np.where(np.abs(scale - 1) > TOL, "kept, moved to fit the cap", "kept"),
-                      np.where(np.abs(f - 1) > TOL, "absorbed", "unchanged"))
+                      np.where(np.abs(new - orig) > TOL, "absorbed", "unchanged"))
+    status = np.where(neg, "negative set to 0", status)
     delta = new - orig
     changed = np.abs(delta) > SHOWN
     if changed.any():
@@ -465,6 +494,10 @@ def realign(o, r, months, source=None):
                     f"{cap_label(o).lower()} total) - cut to the cap, other departments 0 that month, and the excess "
                     f"({spilled_amt:.4f}) moved into the same revised departments' other months, so every month total and "
                     f"their season total still match: {', '.join(spilled_sd[:15])}")
+    if neg.any():
+        warn.append(f"{int(neg.sum()):,} negative plan cells (total {-neg_amt:.6f}) set to 0 in the unlocked months; the "
+                    f"balance came back out of the same {cap_label(o).lower()} by the apportion rules"
+                    + (f" - {neg_left:.6f} found no positive plan to come out of (flagged)" if neg_left > 1e-9 else "") + ".")
     if asp_fb:
         warn.append(f"{asp_fb} changed row-months had no original qty for their Department x MRP x Display Type that month - "
                     f"qty uses that combination's all-month ASP instead.")
@@ -517,6 +550,9 @@ def verify(o, r, out, months):
         f"{cells} of {d.size:,} store-division-months differ from the original file" +
         ("" if cells == 0 else f" (largest {float(np.abs(d).max()):.4f}) - see the comparison"))
     add("Grand total unchanged", "ok" if abs(g1 - g0) < 1e-6 else "fail", f"{g0:,.2f} → {g1:,.2f}")
+    lv = [m + " Plan" for m in months if not locked(m)]
+    nn = int((out[lv].to_numpy(float) < -TOL).sum()) if lv else 0
+    add("No negative plan in the unlocked months", "ok" if nn == 0 else "fail", f"{nn} negative cells")
     if fz:
         cols = [m + " Plan" for m in fz] + [m + " Plan Qty" for m in fz]
         k = [STORE, DEPT, MRP, DISP]  # by key: a rebuilt empty store-dept can move rows around
@@ -528,6 +564,9 @@ def verify(o, r, out, months):
     k = [STORE, DEPT, DISP]
     a = o.groupby(k)[V].sum()
     b = out.groupby(k)[V].sum().reindex(a.index).fillna(0.0)
+    # a store-dept-month whose original had a negative row is left out: that row is set to 0, so its mix moves by design
+    had_neg = (o[V] < -TOL).groupby([o[STORE], o[DEPT]]).any().reindex(a.index.droplevel(2)).to_numpy()
+    a, b = a.where(~had_neg, 0.0), b.where(~had_neg, 0.0)
     at, bt = a.groupby(level=[0, 1]).transform("sum"), b.groupby(level=[0, 1]).transform("sum")
     both = (at.abs() > 1e-9) & (bt.abs() > 1e-9)
     dd = float(np.abs((a / at.where(both, 1) - b / bt.where(both, 1)).where(both, 0.0)).to_numpy().max()) if len(a) else 0.0
