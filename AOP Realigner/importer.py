@@ -484,7 +484,7 @@ def prepare_listing(df, info, rep, orig, months, shift=False, section_of=None):
         n_del = sum(c["listing"] == "N" for c in changes)
         rep.info(f"{n_del} delisting(s) move their plan into the named target only; {len(changes) - n_del} listing(s) take "
                  f"theirs out of the target only (sized from same-cluster stores unless values are given). Nothing else "
-                 f"moves - every store x division x month stays as in the original.")
+                 f"moves - every store x division x attribute x month stays as in the original.")
         if notes["capped"]:
             rep.warn(f"{len(notes['capped'])} listing(s) wanted more than their target had in some month - capped at the "
                      f"target's value there (the target goes to 0 that month).", notes["capped"])
@@ -503,7 +503,7 @@ def prepare_listing(df, info, rep, orig, months, shift=False, section_of=None):
         return None, [], {}, info, rep
     if counts["delisted"]:
         rep.info(f"{counts['delisted']} delisting(s): the department goes to 0 from its FROM MONTH (the first month if "
-                 f"blank); the rest of that store x division absorbs it.")
+                 f"blank); the rest of that store x division x attribute absorbs it.")
     if counts["estimated"]:
         rep.info(f"{counts['estimated']} new listing(s) sized from same-cluster stores: the department's share of "
                  f"its division there x this store's division plan, month by month.")
@@ -586,7 +586,7 @@ def prepare_growth(df, info, rep, orig, months, ly):
                                                    + (" · by month" if x["months"] else "") for x in detail}))
     info["departments"] = len(info["preview"]["rows"])
     rep.info(f"Months compared: {', '.join(lm)} vs {', '.join(ly_label(m) for m in lm)}. The rest of each store x division "
-             f"absorbs the change (capped at store x division x month); other divisions are not touched.")
+             f"x attribute absorbs the change (the cap); other attributes and divisions are not touched.")
     return r, months, {}, info, rep
 
 

@@ -424,4 +424,21 @@ _, _, n4 = importer.template_rephase(ro, RM, rly, "A", "A F/S")
 assert any("Jan'27 P1" in n and "half-month" in n for n in n4), n4
 engine.LOCKED = None
 
+# ------------------------------------------------------------------ the cap per attribute (user, 2026-10-01)
+# S1 LADIES: A, B are REGULAR; C, D are SUMMER. A Sep 10 -> 15: only B (same attribute) gives way, C / D untouched
+oa = orig.assign(ATTRIBUTE=orig["DEPARTMENT"].map({"A": "REGULAR", "B": "REGULAR", "C": "SUMMER", "D": "SUMMER"}))
+outa, _, _, cmpa = realign(oa, pd.DataFrame([{"Store Name": "S1", "DEPARTMENT": "A", "Sep'26": 15}]), ["Sep'26"])
+ga = lambda d: outa[(outa["Store Name"] == "S1") & (outa.DEPARTMENT == d)]["Sep'26 Plan"].sum()
+assert np.isclose(ga("A"), 15) and np.isclose(ga("B"), 5) and np.isclose(ga("C"), 10) and np.isclose(ga("D"), 40)
+assert set(cmpa["DEPARTMENT"]) == {"A", "B"}                                    # nothing moved outside REGULAR
+sta = {ch["name"]: ch["status"] for ch in verify(oa, pd.DataFrame([{"Store Name": "S1", "DEPARTMENT": "A", "Sep'26": 15}]), outa, ["Sep'26"])[0]}
+assert sta["Store × Division × Attribute × Month = original (the cap)"] == "ok" and sta["Store × Division × Month = original"] == "ok", sta
+capa = engine.compare_levels(oa, outa, ["Sep'26"])[0]
+assert "ATTRIBUTE" in capa and (capa["Within cap"] == "Yes").all()
+try:   # a shift must stay inside its attribute
+    shift_targets(oa, [{"store": "S1", "dept": "D", "listing": "N", "start": 0, "values": None, "target": "B"}], M, sec)
+    raise AssertionError("a cross-attribute shift must fail")
+except ValueError as e:
+    assert "another attribute" in str(e), e
+
 print("all realign checks passed")

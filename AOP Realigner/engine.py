@@ -12,10 +12,11 @@ Three ways to revise an existing plan, all ending in the same realign (a revised
   5. growth changes         - growth_targets(): the dept's plan scaled to its new growth over last year
 Every method's output follows the original plan's display-type cont % (verify() checks it).
 
-Per Store x Division x Month the original total is the target. Revised departments keep their new
-value exactly (split to MRP x Display Type by the original cont %); every other department in that
-bucket absorbs the difference pro-rata. If revised alone exceed a month's total, the excess comes out
-of the same store-division's other live months instead. Jan/Feb are never touched. Qty = value /
+Per Store x Division x Attribute x Month the original total is the target - the cap (user, 2026-10-01: a department
+change stays inside its own attribute, no cross-attribute apportioning). Revised departments keep their new value
+exactly (split to MRP x Display Type by the original cont %); every other department in that bucket absorbs the
+difference pro-rata. If revised alone exceed a month's total, the excess comes out of the same bucket's other live
+months instead. A plan without an ATTRIBUTE column falls back to Store x Division x Month. Jan/Feb are never touched. Qty = value /
 the original ASP for that Department x MRP x Display Type x Month.
 """
 import io
@@ -52,6 +53,24 @@ def parent_for(dept, depts):
 
 
 KEEP_ROW_COLS = {DIV, DEPT, MRP, DISP, "ATTRIBUTE", "Tag", "CONC - UDF", "CONC - MRP", "_basis"}
+ATTR = "ATTRIBUTE"
+
+
+def has_attr(o):
+    return ATTR in o.columns
+
+
+def cap_label(o):
+    """The cap level, as the checks and the comparison name it."""
+    return "Store × Division × Attribute × Month" if has_attr(o) else "Store × Division × Month"
+
+
+def cap_key(o):
+    """Per row, its cap bucket (less the month): store||division||attribute (user, 2026-10-01: "apportion and match at
+    Store x Division x Attribute x Month ... so that the department changes made are contained within the attribute");
+    store||division when the plan has no ATTRIBUTE column."""
+    k = o[STORE].astype(str) + "||" + o[DIV].astype(str)
+    return (k + "||" + o[ATTR].fillna("").astype(str) if has_attr(o) else k).to_numpy()
 
 
 def add_new_departments(o, r, months, source=None):
@@ -195,13 +214,15 @@ def shift_targets(o, changes, months, section_of=None):
     section (every department of that section the store plans in the same division). Delisted: its value (from
     `start`, live months) moves into the target, split by the target departments' own value that month. Listed:
     its value (sized from same-cluster peers as Method 1, or given) comes out of the target only, capped at what
-    the target has. Nothing else moves, so every store x division x month total is unchanged."""
+    the target has. Nothing else moves, so every store x division x attribute x month total is unchanged (the target
+    must be in the same division and attribute)."""
     section_of = section_of or {}
     n = len(months)
     live = ~np.array([locked(m) for m in months])
     sd = _sd_totals(o, months)
     div_sd = o.groupby([STORE, DEPT])[DIV].first().to_dict()
     div_of = o.groupby(DEPT)[DIV].agg(lambda s: s.mode().iat[0]).to_dict()
+    attr_of = o.groupby(DEPT)[ATTR].first().to_dict() if has_attr(o) else {}   # one attribute per department
     planned = {}
     for (s, d), v in sd.items():
         if np.abs(v).sum() > TOL:
@@ -217,12 +238,17 @@ def shift_targets(o, changes, months, section_of=None):
         s, d, t = c["store"], c["dept"], c["target"]
         div = div_sd.get((s, d), div_of.get(d))
         have = planned.get(s, set())
-        tg = [t] if t in have else sorted(x for x in have if section_of.get(x) == t and x != d and div_sd[(s, x)] == div)
+        tg = [t] if t in have else sorted(x for x in have if section_of.get(x) == t and x != d and div_sd[(s, x)] == div
+                                          and attr_of.get(x) == attr_of.get(d))
         if not tg:
             errors.append(f"{s} / {d}: target {t} isn't planned in this store")
             continue
         if any(div_sd[(s, x)] != div for x in tg):
             errors.append(f"{s} / {d}: target {t} is in another division ({div_sd[(s, tg[0])]}) - a shift must stay inside {div}")
+            continue
+        if any(attr_of.get(x) != attr_of.get(d) for x in tg):   # the cap is per attribute: no cross-attribute shift
+            errors.append(f"{s} / {d}: target {t} is in another attribute ({attr_of.get(tg[0])}) - a shift must stay "
+                          f"inside {attr_of.get(d)}")
             continue
         apply = (np.arange(n) >= c["start"]) & live
         vec = get((s, d))
@@ -262,7 +288,7 @@ def growth_targets(o, rows, months, ly):
     the department row for that store. ly: {(store, dept): {"Sep'25": value in the plan's units}}.
     Current growth = plan / last year over the live months, on the stores that have both (store-level for a store
     row); the department's plan in scope is scaled by (1 + new) / (1 + current) in every live month, so its month
-    phasing is kept. The rest of the store x division absorbs it in realign (capped at store x division x month)."""
+    phasing is kept. The rest of its store x division x attribute absorbs it in realign (the cap)."""
     live = [j for j, m in enumerate(months) if not locked(m) and ly_label(m)]
     sd = _sd_totals(o, months)
     plan_live = {k: float(v[live].sum()) for k, v in sd.items()}
@@ -303,8 +329,8 @@ def growth_targets(o, rows, months, ly):
 
 def realign(o, r, months, source=None):
     """o: original rows (numeric cols clean), r: revised Store x Dept values over `months`, source: where a new
-    store-dept's rows come from (see add_new_departments). Every store x division x month lands on the original - the
-    cap (the "other departments stay as they are" option was removed, user 2026-09-30).
+    store-dept's rows come from (see add_new_departments). Every store x division x attribute x month lands on the
+    original - the cap (the "other departments stay as they are" option was removed, user 2026-09-30).
     Returns (realigned rows in original layout, division x month summary, warnings,
     a long-format table of every cell that actually changed - for the comparison download)."""
     V = [m + " Plan" for m in months]
@@ -346,14 +372,14 @@ def realign(o, r, months, source=None):
     ignored = int((kept[:, None] & (frozen & rev.notna().any().to_numpy())[None, :]
                    & (np.abs(R - pd.DataFrame(orig).groupby(sd).transform("sum").to_numpy()) > 1e-6)).any(1).sum())
 
-    # 2. every other department in the Store x Division x Month absorbs the difference pro-rata, so each
-    #    store x division x month lands exactly on the original - the cap (user, 2026-09-30: "cap the target for the
-    #    month x store x division should be matching as per the original file imported"). If the revised departments
+    # 2. every other department in the Store x Division x Attribute x Month absorbs the difference pro-rata, so each
+    #    lands exactly on the original - the cap (user, 2026-09-30: "cap the target for the month x store x division";
+    #    2026-10-01: at attribute level, so a change never spills into another attribute). If the revised departments
     #    alone exceed a month's cap, they are cut to it (the other departments go to 0 that month) and the cut moves
     #    to the same revised departments' other live months that still have room (other departments shrink there by
     #    the same amount) - so every month total AND the revised departments' season total still match. Only excess
     #    with no room anywhere stays over its month (flagged).
-    grp = (o[STORE] + "||" + o[DIV]).to_numpy()
+    grp = cap_key(o)
     T = pd.DataFrame(orig).groupby(grp).transform("sum").to_numpy()
     L = pd.DataFrame(np.where(lk, new, 0.0)).groupby(grp).transform("sum").to_numpy()
     U = pd.DataFrame(np.where(lk, 0.0, orig)).groupby(grp).transform("sum").to_numpy()
@@ -422,9 +448,11 @@ def realign(o, r, months, source=None):
         for j, m in enumerate(months):
             summ.append({"division": d, "month": m, "original": float(orig[i, j].sum()), "final": float(new[i, j].sum()),
                          "revised_before": float(orig[i, j][kept[i]].sum()), "revised_after": float(new[i, j][kept[i]].sum())})
-    spilled_sd = sorted({f"{s}/{d}" for s, d in zip(o[STORE][spilled], o[DIV][spilled])})
+    lab = np.char.replace(grp.astype(str), "||", "/")
+    spilled_sd = sorted(set(lab[spilled]))
     spilled_amt = float(pd.Series(excess[:, 0]).groupby(grp).first().sum())
-    short_sd = sorted({f"{s}/{d}" for s, d in zip(o[STORE][short], o[DIV][short])})
+    short_sd = sorted(set(lab[short]))
+    bucket = "store-division-attribute(s)" if has_attr(o) else "store-division(s)"
     warn = []
     if n_new_sd:
         warn.append(f"{n_new_sd} new store-departments created ({n_new_rows} MRP/display rows) from their parent department's rows.")
@@ -433,16 +461,16 @@ def realign(o, r, months, source=None):
     if ignored:
         warn.append(f"{ignored} revised rows had values in locked months different from the original - ignored, locked months stay as original.")
     if spilled_sd:
-        warn.append(f"{len(spilled_sd)} store-division(s) had revised departments exceeding a month's cap (the original "
-                    f"store x division x month total) - cut to the cap, other departments 0 that month, and the excess "
+        warn.append(f"{len(spilled_sd)} {bucket} had revised departments exceeding a month's cap (the original "
+                    f"{cap_label(o).lower()} total) - cut to the cap, other departments 0 that month, and the excess "
                     f"({spilled_amt:.4f}) moved into the same revised departments' other months, so every month total and "
                     f"their season total still match: {', '.join(spilled_sd[:15])}")
     if asp_fb:
         warn.append(f"{asp_fb} changed row-months had no original qty for their Department x MRP x Display Type that month - "
                     f"qty uses that combination's all-month ASP instead.")
     if short_sd:
-        warn.append(f"{len(short_sd)} store-division(s) couldn't fully land on the original total (no other department "
-                    f"or month left to absorb into): {', '.join(short_sd[:15])}")
+        warn.append(f"{len(short_sd)} {bucket} couldn't fully land on the original total (no other department "
+                    f"of the same attribute, or month, left to absorb into): {', '.join(short_sd[:15])}")
     return o, summ, warn, compare
 
 
@@ -466,9 +494,9 @@ def verify(o, r, out, months):
         season_kept = float(np.abs(out_sd[lvp].to_numpy().sum(1) - r[live].to_numpy().sum(1)).max())
         if diff < 1e-6:
             add("Revised values kept exactly", "ok", f"largest difference {diff:.2g}")
-        elif season_kept < 1e-6:   # moved between months only to fit the store x division x month cap
+        elif season_kept < 1e-6:   # moved between months only to fit the cap
             add("Revised values kept exactly", "warn", f"{moved} revised store-department-months moved to fit the "
-                f"store × division × month cap (largest {diff:.4f}); every revised store-department keeps its season total")
+                f"{cap_label(o).lower()} cap (largest {diff:.4f}); every revised store-department keeps its season total")
         else:
             add("Revised values kept exactly", "fail", f"largest difference {diff:.2g}")
     a = o.groupby([STORE, DIV])[V].sum()
@@ -477,9 +505,17 @@ def verify(o, r, out, months):
     g0, g1 = float(o[V].to_numpy().sum()), float(out[V].to_numpy().sum())
     add("Store × Division totals match — whole season", "ok" if season == 0 else "fail",
         f"{season} of {len(a):,} store-divisions differ")
-    add("Store × Division × Month = original (the cap)", "ok" if cells == 0 else "fail",
+    if has_attr(o):   # the cap is per attribute; the division month total follows from it
+        ka, kb = cap_key(o), cap_key(out)
+        ca = o.groupby(ka)[V].sum()
+        dc = (out.groupby(kb)[V].sum().reindex(ca.index).fillna(0.0) - ca).to_numpy()
+        cc = int((np.abs(dc) > SHOWN).sum())
+        add(f"{cap_label(o)} = original (the cap)", "ok" if cc == 0 else "fail",
+            f"{cc} of {dc.size:,} store-division-attribute-months differ from the original file" +
+            ("" if cc == 0 else f" (largest {float(np.abs(dc).max()):.4f}) - see the {CAP_SHEET} sheet of the comparison"))
+    add("Store × Division × Month = original" + ("" if has_attr(o) else " (the cap)"), "ok" if cells == 0 else "fail",
         f"{cells} of {d.size:,} store-division-months differ from the original file" +
-        ("" if cells == 0 else f" (largest {float(np.abs(d).max()):.4f}) - see the Store x Division x Month sheet of the comparison"))
+        ("" if cells == 0 else f" (largest {float(np.abs(d).max()):.4f}) - see the comparison"))
     add("Grand total unchanged", "ok" if abs(g1 - g0) < 1e-6 else "fail", f"{g0:,.2f} → {g1:,.2f}")
     if fz:
         cols = [m + " Plan" for m in fz] + [m + " Plan Qty" for m in fz]
@@ -556,11 +592,12 @@ def export(df, fmt, on_progress=None):
 def compare_levels(o, out, months):
     """Original plan vs the new plan at the two levels a planner checks (user, 2026-09-30: "a comparitive ... original
     plan v new revised plan ... to see where the difference is"):
-      Store x Division x Month - EVERY cell, with "Within cap" (the original file's total is the cap);
-      Store x Dept x Month     - the cells that moved."""
+      the cap level (Store x Division x Attribute x Month, or x Division x Month without attributes) - EVERY cell,
+        with "Within cap" (the original file's total is the cap);
+      Store x Dept x Month - the cells that moved."""
     V = [m + " Plan" for m in months]
     def long(df, by):
-        g = df.groupby(by)[V].sum()
+        g = df.groupby(by, dropna=False)[V].sum()
         g.columns = pd.Index(months, name="Month")
         return g.stack()
     def table(by, only_moved):
@@ -575,10 +612,13 @@ def compare_levels(o, out, months):
         t["Month"] = t["Month"].astype(str)
         t["Locked month"] = np.where([locked(m) for m in t["Month"]], "Yes", "")
         return t[t["Difference"].abs() > SHOWN].reset_index(drop=True) if only_moved else t
-    sdm = table([STORE, DIV], False)
+    sdm = table([STORE, DIV, ATTR] if has_attr(o) else [STORE, DIV], False)
     sdm["Within cap"] = np.where(sdm["Difference"].abs() <= SHOWN, "Yes",
                                  np.where(sdm["Difference"] > 0, "No - over the original", "No - under the original"))
     return sdm, table([STORE, DIV, DEPT], True)
+
+
+CAP_SHEET = "Store x Div x Attribute x Month"   # 31 characters, Excel's sheet-name limit
 
 
 def export_compare(summ, compare, fmt, on_progress=None, levels=None):
@@ -588,7 +628,8 @@ def export_compare(summ, compare, fmt, on_progress=None, levels=None):
         return _r8(compare).to_csv(index=False, float_format="%.8f").encode("utf-8-sig"), "text/csv", "csv"
     sheets = [("Summary", _r8(pd.DataFrame(summ)))]
     if levels is not None:
-        sheets += [("Store x Division x Month", _r8(levels[0])), ("Store x Dept x Month", _r8(levels[1]))]
+        cap = CAP_SHEET if ATTR in levels[0].columns else "Store x Division x Month"
+        sheets += [(cap, _r8(levels[0])), ("Store x Dept x Month", _r8(levels[1]))]
     return write_xlsx(sheets + [("Changed Rows", _r8(compare))], on_progress, "0.00000000"), XLSX_CTYPE, "xlsx"
 
 

@@ -529,7 +529,7 @@ def job_rephase(job, dept, mix=None):
         except ValueError as e:
             raise UserError(str(e))
         data = engine.write_xlsx([("Revised plan", df), ("How it was built", how), ("Summary", pd.DataFrame({"NOTE": notes}))])
-    with lock:   # the other departments absorb it, so every store x division x month stays on the original (the cap)
+    with lock:   # the other departments absorb it, so every store x division x attribute x month stays on the original (the cap)
         state.update(method="dept")
     _check_revised(job, data, f"Re-phase from LY - {dept}.xlsx", None, "dept")
     with lock:

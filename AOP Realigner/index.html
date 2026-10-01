@@ -248,7 +248,7 @@ dialog.rules::backdrop{background:rgba(15,23,42,.45)}
     <div class="logo" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg></div>
     <div class="brand">
       <h1>Sales Plan Re-Aligner</h1>
-      <p>Revise an existing plan — listing changes, department changes, new or split departments, shifts to a target, growth — while every store × division stays on the original.</p>
+      <p>Revise an existing plan — listing changes, department changes, new or split departments, shifts to a target, growth — while every store × division × attribute stays on the original.</p>
     </div>
     <div class="right"><span id="ws-user" class="badge b-muted" style="display:none" title="Your own copy - your plan, locks, overrides and results; nobody else's changes reach it"></span><span id="conn" class="badge b-muted"><span class="dot"></span>Connecting…</span><button class="rules-btn" type="button" onclick="openRules()">Rules</button><a class="home" id="home-link" href="/">&larr; Landing</a></div>
   </div>
@@ -297,12 +297,12 @@ const METHODS = {
     drop: 'Upload the listing changes',
     howto: `One row per change: <code>STORE NAME</code>, <code>DEPARTMENT</code>, <code>LISTING</code> (Y / N) and an optional <code>FROM MONTH</code> (blank = the first month).
       A <b>delisted</b> department goes to 0 from that month. A <b>newly listed</b> one is sized from same-cluster stores — its share of the division there × this store's division plan, month by month — or from your own figures in the “&lt;Month&gt; New” columns.
-      The rest of the store × division flexes to stay on the original. “From Listing / Delisting Analyser” pre-fills every difference between this plan and the latest listing month.`,
-    run: 'Delisted departments go to 0 from their month and new listings take their sized value; every other department in the same store × division absorbs the difference pro-rata.'},
+      The rest of the store × division × attribute flexes to stay on the original. “From Listing / Delisting Analyser” pre-fills every difference between this plan and the latest listing month.`,
+    run: 'Delisted departments go to 0 from their month and new listings take their sized value; every other department in the same store × division × attribute absorbs the difference pro-rata.'},
   dept: {no: 2, title: 'Existing department changes', short: 'New values for departments already in the plan.',
     drop: 'Upload the revised plan',
-    howto: `Only the departments you changed — Store × Department rows with “&lt;Month&gt; New” columns. Pick a department and download the template: it comes pre-filled with that department's original values in every store, ready to edit. <b>Re-phase &amp; run</b> does it all for you: pick the department (and, if needed, whose last-year shape to use) - each store keeps its total for the unlocked months, re-split by last year's month shape (its own if it is a comparable store, else its REF / REF OLD store's, else its cluster's comparable stores), loaded here and run to the final plan - the other departments absorb it, so every store × division × month stays on the original. <b>Re-phase file</b> downloads the same file to check or edit first.`,
-    run: 'Revised departments keep their values exactly; every other department in the same store × division absorbs the difference pro-rata, so each store × division lands back on the original.'},
+    howto: `Only the departments you changed — Store × Department rows with “&lt;Month&gt; New” columns. Pick a department and download the template: it comes pre-filled with that department's original values in every store, ready to edit. <b>Re-phase &amp; run</b> does it all for you: pick the department (and, if needed, whose last-year shape to use) - each store keeps its total for the unlocked months, re-split by last year's month shape (its own if it is a comparable store, else its REF / REF OLD store's, else its cluster's comparable stores), loaded here and run to the final plan - the other departments absorb it, so every store × division × attribute × month stays on the original. <b>Re-phase file</b> downloads the same file to check or edit first.`,
+    run: 'Revised departments keep their values exactly; every other department in the same store × division × attribute absorbs the difference pro-rata, so each lands back on the original - a change never spills into another attribute.'},
   newdept: {no: 3, title: 'New or split departments', short: 'A department added late, or one split into several.',
     drop: 'Upload the split or new-department file',
     howto: `<b>Split</b> — <code>PARENT DEPARTMENT</code>, <code>NEW DEPARTMENT</code>, <code>SHARE %</code> and an optional <code>STORE NAME</code> (blank = every store; a store's own row overrides). The parent's plan is shared out with its MRP × display mix and ASPs; nothing else moves.
@@ -587,7 +587,7 @@ function divTable(res) {
 }
 
 const DL = [
-  ['compare', 'xlsx', 'Comparison vs original', 'Original plan vs the new plan: Summary, Store × Division × Month (every one, with “Within cap”), Store × Dept × Month (what moved) and every changed cell with why (kept / absorbed). The quick way to see where the difference is.'],
+  ['compare', 'xlsx', 'Comparison vs original', 'Original plan vs the new plan: Summary, Store × Division × Attribute × Month (every one, with “Within cap”), Store × Dept × Month (what moved) and every changed cell with why (kept / absorbed). The quick way to see where the difference is.'],
   ['compare', 'csv', 'Comparison — CSV', 'Just the changed cells, as CSV. Builds in seconds and opens fastest.'],
   ['full', 'xlsx', 'Full realigned plan', 'Every row in the original layout (Store × Department × MRP × Display Type), value and qty — the file to load back.'],
   ['full', 'csv', 'Full realigned plan — CSV', 'The same as CSV — builds in seconds instead of minutes.'],
