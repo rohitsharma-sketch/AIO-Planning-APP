@@ -111,8 +111,8 @@ def apply_new_dept_adjustments(plan_result: dict, new_dept_map: dict) -> dict:
     if not new_dept_map:
         return plan_result
 
-    import copy
-    result = copy.deepcopy(plan_result)
+    # in place: every caller passes a fresh run_dept_plan() (a deep copy of the ~350 MB plan cost ~5 s, 2026-10-01)
+    result = plan_result
 
     for store, sdata in result["stores"].items():
         for div, entries in new_dept_map.items():

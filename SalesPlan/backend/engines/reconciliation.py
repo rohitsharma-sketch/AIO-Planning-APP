@@ -20,6 +20,8 @@ from fastapi.responses import StreamingResponse
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from apportion import SHOWN  # noqa: E402
 
+from plan_cache import load_json as _load_plan_json  # noqa: E402
+
 router = APIRouter()
 
 
@@ -29,8 +31,7 @@ def _active_plan():
     f = st.get("active_file")
     if not f or not os.path.exists(f):
         return None, None, None
-    with open(f, encoding="utf-8") as fh:
-        plan = json.load(fh)
+    plan = _load_plan_json(f)
     return plan, st["active_source"], datetime.datetime.fromtimestamp(os.path.getmtime(f)).strftime("%d %b %Y %H:%M")
 
 

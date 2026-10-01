@@ -18,6 +18,7 @@ Sales" Excel import is gone).
 
 import calendar as _cal
 import datetime as _dt
+import functools
 import json, os, re, sys
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -60,6 +61,7 @@ def _plan_div(raw):
     return DIVISION_COL_TO_PLAN.get(" ".join(str(raw or "").upper().split())) or DIVISION_COL_TO_PLAN.get(str(raw or "").upper())
 
 
+@functools.lru_cache(maxsize=None)   # a handful of distinct month columns, asked ~1.5M times per plan run
 def _ly_label(col, kind):
     """'2027-04' (reindexed: the TY month) or '2026-04' (actual: the LY month) -> "Apr'26"."""
     y, m = int(col[:4]), int(col[5:7])
@@ -93,9 +95,17 @@ def _snapshot(kind):
     return _cache[kind]
 
 
+_built = {}
+
+
 def load_actuals(kind: str = "reindexed") -> dict:
-    """Returns {store: {division: {dept: {ly_month: Rs lakhs}}}} for closed LY months (see module docstring)."""
-    _, rows = _snapshot(kind)
+    """Returns {store: {division: {dept: {ly_month: Rs lakhs}}}} for closed LY months (see module docstring).
+    Built once per snapshot and day, then shared (2026-10-01: it was rebuilt on every call - twice per plan run and
+    on every page load); callers only read it."""
+    at, rows = _snapshot(kind)
+    key = (kind, at, _dt.date.today())
+    if _built.get(kind, (None,))[0] == key:
+        return _built[kind][1]
     out = {}
     for r in rows:
         div = _plan_div(r.get("division"))
@@ -107,10 +117,10 @@ def load_actuals(kind: str = "reindexed") -> dict:
             continue
         d = out.setdefault(str(r["store"]).strip().upper(), {}).setdefault(div, {}).setdefault(dept, {})
         d[label] = d.get(label, 0.0) + float(r["value"]) / LAKH
-    at = _cache.get(kind, (None,))[0]
     if kind == "reindexed" and at is not None and _registered.get("at") != at:
         _sync_depts_to_master(out)          # once per new snapshot, as the old Excel import did
         _registered["at"] = at
+    _built[kind] = (key, out)
     return out
 
 
@@ -143,7 +153,11 @@ def _sync_depts_to_master(actuals: dict):
 
 
 def load_store_div_actuals(kind: str = "reindexed") -> dict:
-    """{store: {division: {ly_month: Rs lakhs}}} - the department snapshot summed per plan division."""
+    """{store: {division: {ly_month: Rs lakhs}}} - the department snapshot summed per plan division (built once per
+    snapshot and day, like load_actuals)."""
+    key = ("div", kind, _snapshot(kind)[0], _dt.date.today())
+    if _built.get(("div", kind), (None,))[0] == key:
+        return _built[("div", kind)][1]
     out = {}
     for store, divs in load_actuals(kind).items():
         for div, depts in divs.items():
@@ -151,18 +165,25 @@ def load_store_div_actuals(kind: str = "reindexed") -> dict:
             for months in depts.values():
                 for m, v in months.items():
                     acc[m] = acc.get(m, 0.0) + v
+    _built[("div", kind)] = (key, out)
     return out
 
 
 def locked_ly_months() -> list[str]:
-    """LY months the plan can use: closed and present in the reindexed snapshot (name kept for callers)."""
-    _, rows = _snapshot("reindexed")
+    """LY months the plan can use: closed and present in the reindexed snapshot (name kept for callers). Cached per
+    snapshot and day."""
+    at, rows = _snapshot("reindexed")
+    key = ("ly", at, _dt.date.today())
+    if _built.get("ly", (None,))[0] == key:
+        return list(_built["ly"][1])
     labels = {}
     for r in rows:
         label, ym = _ly_label(r["col"], "reindexed")
         if _closed(*ym) and label in PLAN_LY_MONTHS:
             labels[label] = ym
-    return sorted(labels, key=labels.get)
+    out = sorted(labels, key=labels.get)
+    _built["ly"] = (key, out)
+    return list(out)
 
 
 def actuals_source() -> dict:

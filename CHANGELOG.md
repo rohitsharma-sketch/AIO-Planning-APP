@@ -7,6 +7,27 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-01
 
+### Sales Plan: AOP-by-attribute window (capped), pick the attributes to work on, a clear "what next" prompt, plan generation ~7x faster
+- **Asked (user):**
+  - "i need a window for what is the current AOP as per the attributes selected and it will give me a column for every attribute and re-apportion according to the changes made against it. It should always be capped to the division AOP."
+  - "what if i want to only work on only some attributes and its departments and the others even if they have ly sales i still want them filtered out somehow"
+  - "post growth matrix there should be a prompt redirecting me if i want to select the optional engines or i want to opt out and see the final results, also the population time to load the data should be shortened up. I can select multiple optional engines in department or perhaps an individual too."
+- **Attribute Correction → "AOP by attribute" window:**
+  - Rows are months plus Season. Columns are Division AOP (cap), one per attribute (₹ L, editable, with "was" and %), Σ attributes, and Σ − cap to 8 dp.
+  - Typing an attribute's new AOP re-apportions the other unlocked attributes pro-rata at once (`reapportionToCap`). The month always adds back to the division AOP exactly, so an attribute can't exceed what's left.
+  - It edits the same correction % as the grid, so Save & Apply uses the exact, total-keeping apply from Phase 1.
+- **"Work on" chips:** pick the attributes to work on. The others are **held out**: they and their departments keep their AOP, even with LY sales, shown in one "Held" column. They are locked for Auto Balance, and greyed and locked in the % grid. The selected attributes share what's left of the cap.
+- **Empty page:** when the saved plan has no months (today's, from 23 Sep), the page says so and offers **▶ Generate the department plan**, run by the user.
+- **Prompt after Growth Matrix:**
+  - **▶ Generate Base Plan & continue** opens "Base plan ready — N stores. What next?".
+  - Tick one or more optional engines (they run in order) and **Run n selected →**, or **Only this →** on any one, or **Opt out — see Final Results**.
+  - Nothing is pre-ticked (Base Correction used to be).
+- **Faster:**
+  - LY sales are built once per snapshot and day and shared (they were built twice per run and on every page load), and the month labels are cached (`actuals_manager`).
+  - The new-department pass no longer deep-copies the ~350 MB plan.
+  - Plan generation went from **~36 s → 5.3 s** (3.4 s warm), with an identical plan: all 1,410,912 department-months match. The only differences are that Sep'27 is now included because September closed on 1 Oct, and the order of the missing-ref store list.
+  - Pages that read the plan file (Final Results ×2, Reconciliation, MRP plan, Display Type, Base Correction) keep the last one read in memory (`plan_cache.py`, one slot), instead of 3.5 s per read.
+
 ### Sales Plan New Departments: template download + upload (replaces "Sync from Folder")
 - **Asked (user):** "I want a template made for this instead of sync from directory".
 - **Template** (`GET /api/planning/dept-sales/new-depts/template`), pre-filled with today's list:

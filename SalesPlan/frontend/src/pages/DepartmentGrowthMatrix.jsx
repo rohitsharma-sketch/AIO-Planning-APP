@@ -53,7 +53,8 @@ export default function DepartmentGrowthMatrix() {
   const [generating, setGenerating]   = useState(false)
   const [genMsg, setGenMsg]           = useState('')
   const [showPipelineModal, setShowPipelineModal] = useState(false)
-  const [pipelineChecked, setPipelineChecked] = useState({ 'new-depts': false, 'attr-correction': false, 'base-correction': true })
+  const [pipelineChecked, setPipelineChecked] = useState({ 'new-depts': false, 'attr-correction': false, 'base-correction': false })
+  const [genStores, setGenStores] = useState(null)
   const navigate = useNavigate()
 
   // Buyer upload state
@@ -144,7 +145,8 @@ export default function DepartmentGrowthMatrix() {
       const r = await fetch('/api/planning/dept-sales/generate-base', { method: 'POST' })
       const d = await r.json()
       if (d.ok) {
-        setGenMsg(`✓ ${d.stores} stores — select engines below`)
+        setGenMsg(`✓ ${d.stores} stores`)
+        setGenStores(d.stores)
         setShowPipelineModal(true)
       } else {
         setGenMsg('Error generating plan')
@@ -156,8 +158,9 @@ export default function DepartmentGrowthMatrix() {
     }
   }
 
-  const handleStartPipeline = () => {
-    const queue = Object.keys(pipelineChecked).filter(k => pipelineChecked[k])
+  const handleStartPipeline = (only) => {
+    // engines run in the pipeline's own order (New Depts -> Attr -> Base); `only` runs just that one
+    const queue = only ? [only] : Object.keys(ENGINE_META).filter(k => pipelineChecked[k])
     if (queue.length === 0) {
       navigate('/department-plan/final-results')
       return
@@ -273,9 +276,12 @@ export default function DepartmentGrowthMatrix() {
             background: theme.surface, borderRadius: 14, border: `1px solid ${theme.border}`,
             padding: '28px 32px', width: 420, boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
           }}>
-            <div style={{ fontSize: 17, fontWeight: 700, color: theme.textPrimary, marginBottom: 6 }}>Base plan ready</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: theme.textPrimary, marginBottom: 6 }}>
+              Base plan ready{genStores ? ` — ${genStores} stores` : ''}. What next?
+            </div>
             <div style={{ fontSize: 13, color: theme.textMuted, marginBottom: 22 }}>
-              Select optional engines to run before viewing the final output.
+              Tick one or more optional engines - they run in this order, each taking you to the next - or run just one
+              with <b>Only this</b>. Or opt out and go straight to the final results.
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
@@ -293,10 +299,15 @@ export default function DepartmentGrowthMatrix() {
                     onChange={e => setPipelineChecked(prev => ({ ...prev, [key]: e.target.checked }))}
                     style={{ marginTop: 2, accentColor: theme.primary }}
                   />
-                  <div>
+                  <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: theme.textPrimary }}>{meta.label}</div>
                     <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>{meta.desc}</div>
                   </div>
+                  <button type="button" onClick={e => { e.preventDefault(); setShowPipelineModal(false); handleStartPipeline(key) }}
+                    style={{ alignSelf: 'center', fontSize: 11.5, fontWeight: 600, padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+                             background: 'none', border: `1px solid ${theme.border}`, color: theme.textSecondary, whiteSpace: 'nowrap' }}>
+                    Only this →
+                  </button>
                 </label>
               ))}
             </div>
@@ -305,12 +316,14 @@ export default function DepartmentGrowthMatrix() {
               <button
                 onClick={() => { setShowPipelineModal(false); navigate('/department-plan/final-results') }}
                 style={{ flex: 1, padding: '9px 0', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer', background: 'none', border: `1px solid ${theme.border}`, color: theme.textMuted }}
-              >Skip to Final Results</button>
+              >Opt out — see Final Results</button>
               <button
                 onClick={() => { setShowPipelineModal(false); handleStartPipeline() }}
-                style={{ flex: 1, padding: '9px 0', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', background: 'var(--st-btn,#A8CBB7)', border: 'none', color: 'var(--st-btn-text,#1F4D3A)' }}
+                disabled={!Object.values(pipelineChecked).some(Boolean)}
+                style={{ flex: 1, padding: '9px 0', borderRadius: 8, fontSize: 13, fontWeight: 700, background: 'var(--st-btn,#A8CBB7)', border: 'none', color: 'var(--st-btn-text,#1F4D3A)',
+                         cursor: Object.values(pipelineChecked).some(Boolean) ? 'pointer' : 'default', opacity: Object.values(pipelineChecked).some(Boolean) ? 1 : 0.5 }}
               >
-                {Object.values(pipelineChecked).some(Boolean) ? 'Run Pipeline →' : 'Go to Final Results'}
+                {(() => { const n = Object.values(pipelineChecked).filter(Boolean).length; return n ? `Run ${n} selected →` : 'Tick an engine to run' })()}
               </button>
             </div>
           </div>
@@ -418,7 +431,7 @@ export default function DepartmentGrowthMatrix() {
               fontWeight: 700, opacity: generating ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 6,
             }}
           >
-            {generating ? 'Generating…' : '▶ Generate Base Plan'}
+            {generating ? 'Generating…' : '▶ Generate Base Plan & continue'}
           </button>
 
           <SearchSlicer

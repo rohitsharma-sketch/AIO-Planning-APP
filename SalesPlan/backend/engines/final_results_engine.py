@@ -21,6 +21,8 @@ _DEPT_ATTR: dict = {}   # {div: {dept: attribute}}
 for _div, _dept, _attr in _MASTER_RAW:
     _DEPT_ATTR.setdefault(_div, {})[_dept] = _attr
 
+from plan_cache import load_json as _load_plan_json  # noqa: E402
+
 router = APIRouter()
 
 _BASE             = os.path.dirname(__file__)
@@ -196,8 +198,7 @@ def get_final_results():
     if not ps["active_file"]:
         raise HTTPException(status_code=404, detail="No department plan has been generated yet.")
 
-    with open(ps["active_file"]) as f:
-        plan = json.load(f)
+    plan = _load_plan_json(ps["active_file"])   # kept between page loads (2026-10-01)
 
     agg = _aggregate_plan(plan)
 
@@ -233,8 +234,7 @@ def get_dashboard():
     if not ps["active_file"]:
         raise HTTPException(status_code=404, detail="No department plan has been generated yet.")
 
-    with open(ps["active_file"]) as f:
-        plan = json.load(f)
+    plan = _load_plan_json(ps["active_file"])
 
     dept_attr = _load_dept_attr_map()
 

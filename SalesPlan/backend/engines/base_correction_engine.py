@@ -35,6 +35,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from actuals_manager import load_actuals, locked_ly_months
 from apportion import shares_pct, split  # noqa: E402
 
+from plan_cache import load_json as _load_plan_json  # noqa: E402
+
 router = APIRouter()
 
 _BASE            = os.path.dirname(__file__)
@@ -57,8 +59,7 @@ def _load_source_plan() -> dict:
     """Use attr_corrected_plan if available, else final_dept_plan."""
     for path in (ATTR_PLAN_PATH, FINAL_PLAN_PATH):
         if os.path.exists(path):
-            with open(path) as f:
-                return json.load(f)
+            return _load_plan_json(path)   # read-only here: apply_corrections works on a copy
     return {}
 
 

@@ -19,6 +19,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from apportion import split  # noqa: E402
 from fastapi.responses import StreamingResponse
 
+from plan_cache import load_json as _load_plan_json  # noqa: E402
+
 router = APIRouter()
 
 DATA_PATH = os.path.join(os.path.dirname(__file__), "mrp_plan.json")
@@ -84,8 +86,7 @@ def _load_dept_plan() -> dict:
         # engines/, found nothing, and every MRP band showed 0)
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", fname)
         if os.path.exists(path):
-            with open(path) as f:
-                return json.load(f)
+            return _load_plan_json(path)
     return {}
 
 

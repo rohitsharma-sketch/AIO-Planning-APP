@@ -14,6 +14,8 @@ import pandas as pd
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from apportion import SHOWN, split  # noqa: E402
 
+from plan_cache import load_json as _load_plan_json  # noqa: E402
+
 router = APIRouter()
 
 _BASE          = os.path.dirname(__file__)
@@ -191,7 +193,7 @@ async def import_asp(file: UploadFile = File(...)):
 def _dept_plan():
     """The latest department plan - corrected first, like every other engine (was the uncorrected plan only)."""
     for f in ("base_corrected_plan.json", "attr_corrected_plan.json", "final_dept_plan.json"):
-        d = _load(os.path.join(_PARENT, f))
+        d = _load_plan_json(os.path.join(_PARENT, f))
         if d:
             return d
     return None
