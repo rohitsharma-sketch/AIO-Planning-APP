@@ -178,6 +178,17 @@ td.frozen,th.frozen{color:var(--muted-foreground)}
 .dl h4{margin:0;font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:8px}
 .dl p{margin:0;font-size:12.5px;color:var(--muted-foreground)}
 .dl .foot{margin-top:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dlgrp{margin-top:14px}.dlgrp:first-of-type{margin-top:0}
+.dlgrp h5{margin:0 0 2px;font-size:12.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.dlgrp>p{margin:0 0 8px;font-size:12px;color:var(--muted-foreground)}
+.fmt{position:relative;display:inline-flex;padding:2px;border:1px solid var(--border);border-radius:999px;background:var(--muted)}
+.fmt button{position:relative;z-index:1;min-width:52px;padding:4px 12px;border:0;border-radius:999px;background:none;cursor:pointer;
+  font:600 12px/1.2 inherit;color:var(--muted-foreground)}
+.fmt button[aria-pressed="true"]{color:var(--foreground)}
+.fmt .knob{position:absolute;top:2px;bottom:2px;left:2px;width:calc(50% - 2px);border-radius:999px;background:var(--card);
+  box-shadow:0 1px 2px rgba(0,0,0,.15);transition:transform .18s ease}
+.fmt.csv .knob{transform:translateX(100%)}
+.fmt button:focus-visible{outline:2px solid var(--ring);outline-offset:1px}
 
 /* activity */
 .act-job{border:1px solid var(--border);border-radius:var(--radius);padding:12px}
@@ -558,9 +569,7 @@ function renderResults() {
       <div class="tabs" role="tablist"><button class="tab" role="tab" aria-selected="${tab === 'depts'}" onclick="setTab('depts')">Revised departments</button>
         <button class="tab" role="tab" aria-selected="${tab === 'div'}" onclick="setTab('div')">Division × Month</button></div>
       <div>${tab === 'depts' ? deptTable(res) : divTable(res)}</div>
-      <div class="sep"></div><div class="row" style="justify-content:space-between;margin-bottom:10px"><strong class="small">Downloads</strong>
-        <span class="muted small">Built once on the server, then instant — kept until the next run.</span></div>
-      <div class="dls" id="dls"></div>
+      <div class="sep"></div><div id="dls"></div>
     </div>`;
   renderDownloads();
 }
@@ -586,18 +595,30 @@ function divTable(res) {
         <td>${L(s.revised_before)} → ${L(s.revised_after)}</td><td class="${cls(o)}">${L(o)}</td></tr>`; }).join('')}</tbody></table></div>`;
 }
 
-const DL = [
-  ['compare', 'xlsx', 'Comparison vs original', 'Original plan vs the new plan: Summary, Store × Division × Attribute × Month (every one, with “Within cap”), Store × Dept × Month (what moved) and every changed cell with why (kept / absorbed). The quick way to see where the difference is.'],
-  ['compare', 'csv', 'Comparison — CSV', 'Just the changed cells, as CSV. Builds in seconds and opens fastest.'],
-  ['plan', 'xlsx', 'Plan to plan — original vs final', 'The whole plan, not just the changes: every Store × Department × MRP × Display Type row, each month Original / Final / Difference plus the season, with Changed and Months changed up front - filter Changed = Yes to see exactly where it moved.'],
-  ['plan', 'csv', 'Plan to plan — CSV', 'The same, as CSV - builds in seconds.'],
-  ['full', 'xlsx', 'Full realigned plan', 'Every row in the original layout (Store × Department × MRP × Display Type), value and qty — the file to load back.'],
-  ['full', 'csv', 'Full realigned plan — CSV', 'The same as CSV — builds in seconds instead of minutes.'],
+// two groups, one format slider for all of them (user, 2026-10-01: "compile the downloaded options in 2 categories -
+// comparison and final plan and give a slider for the user to download in xlsx or csv")
+const DL_GROUPS = [
+  ['Comparison', 'Original plan vs the realigned plan — where it moved.', [
+    ['compare', 'Comparison vs original', {
+      xlsx: 'Summary, Store × Division × Attribute × Month (every one, with “Within cap”), Store × Dept × Month (what moved) and every changed cell with why (kept / absorbed). The quick way to see where the difference is.',
+      csv: 'Just the changed cells (every MRP × display cell, with why). Builds in seconds and opens fastest.'}],
+    ['plan', 'Plan to plan — original vs final', {
+      xlsx: 'The whole plan, not just the changes: every Store × Department × MRP × Display Type row, each month Original / Final / Difference plus the season, with Changed and Months changed up front - filter Changed = Yes to see exactly where it moved.',
+      csv: 'The whole plan, row for row, original vs final for every month and the season, with Changed and Months changed up front. CSV builds in under a minute.'}],
+  ]],
+  ['Final plan', 'The realigned plan itself — the file to load back.', [
+    ['full', 'Full realigned plan', {
+      xlsx: 'Every row in the original layout (Store × Department × MRP × Display Type), value and qty.',
+      csv: 'Every row in the original layout, value and qty, as CSV — builds in seconds instead of minutes.'}],
+  ]],
 ];
+let dlFmt = (() => { try { return localStorage.getItem('dlFmt') === 'csv' ? 'csv' : 'xlsx'; } catch (e) { return 'xlsx'; } })();
+function setFmt(f) { dlFmt = f; try { localStorage.setItem('dlFmt', f); } catch (e) {} renderDownloads(); }
 function renderDownloads() {
   const el = $('#dls');
   if (!el || !S.result) return;
-  const h = DL.map(([k, f, title, desc]) => {
+  const f = dlFmt;
+  const card = ([k, title, desc]) => {
     const key = `${k}-${f}`, e = S.exports[key];
     const job = S.jobs.find(j => j.kind === 'export' && j.status === 'running' && j.label.includes({full: 'full', compare: 'comparison', plan: 'plan-to-plan'}[k]) && j.label.includes(f.toUpperCase()));
     let foot;
@@ -605,9 +626,14 @@ function renderDownloads() {
     else if (job) { const st = job.steps[job.steps.length - 1] || {}, pct = st.total ? st.done / st.total * 100 : null;
       foot = `<div style="flex:1;min-width:180px"><div class="progress ${pct == null ? 'indet' : ''}" role="progressbar" aria-valuenow="${Math.round(pct || 0)}" aria-valuemin="0" aria-valuemax="100"><div style="width:${pct ?? 0}%"></div></div>
         <div class="muted small" style="margin-top:4px">${st.total ? `${N(st.done)} / ${N(st.total)} rows · ` : ''}${secs(job.secs)} elapsed${st.left != null ? ` · ~${secs(st.left)} left` : ''} · downloads when done</div></div>`; }
-    else foot = `<button class="btn btn-outline btn-sm" onclick="exportFile('${k}','${f}')">${icon('dl')}Build &amp; download</button><span class="muted small">about ${secs(S.estimates[key])}</span>`;
-    return `<div class="dl"><h4>${icon('sheet')}${esc(title)} <span class="chip">${f.toUpperCase()}</span></h4><p>${esc(desc)}</p><div class="foot">${foot}</div></div>`;
-  }).join('');
+    else foot = `<button class="btn btn-outline btn-sm" onclick="exportFile('${k}','${f}')">${icon('dl')}Build &amp; download</button>${S.estimates[key] ? `<span class="muted small">about ${secs(S.estimates[key])}</span>` : ''}`;
+    return `<div class="dl"><h4>${icon('sheet')}${esc(title)} <span class="chip">${f.toUpperCase()}</span></h4><p>${esc(desc[f])}</p><div class="foot">${foot}</div></div>`;
+  };
+  const h = `<div class="row" style="justify-content:space-between;margin-bottom:10px;gap:10px;flex-wrap:wrap"><strong class="small">Downloads</strong>
+      <div class="row" style="gap:10px;flex-wrap:wrap"><span class="muted small">Built once on the server, then instant — kept until the next run.</span>
+      <div class="fmt ${f}" role="group" aria-label="Download format"><span class="knob" aria-hidden="true"></span>${['xlsx', 'csv'].map(x =>
+        `<button type="button" aria-pressed="${x === f}" onclick="setFmt('${x}')">${x.toUpperCase()}</button>`).join('')}</div></div></div>` +
+    DL_GROUPS.map(([g, sub, items]) => `<div class="dlgrp"><h5>${esc(g)}</h5><p>${esc(sub)}</p><div class="dls">${items.map(card).join('')}</div></div>`).join('');
   setHTML(el, h);
 }
 
