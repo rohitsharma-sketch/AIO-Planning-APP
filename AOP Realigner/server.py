@@ -509,7 +509,7 @@ def job_run(job):
         state.update(out=out, compare=compare, summary=summ, result=res, exports={})
 
 
-EXPORTS = {"compare": "Comparison vs original", "full": "Full realigned plan"}
+EXPORTS = {"compare": "Comparison vs original", "full": "Full realigned plan", "plan": "Plan-to-plan mapping"}
 
 
 def job_rephase(job, dept, mix=None):
@@ -546,15 +546,17 @@ def job_export(job, kind, fmt):
         colmap = (state["orig_info"] or {}).get("colmap") or {}
     if not res:
         raise UserError("Run the realignment first.")
-    size = len(out) if kind == "full" else len(compare) + len(summ)
+    size = len(out) if kind in ("full", "plan") else len(compare) + len(summ)
     with job.step(f"Build {EXPORTS[kind].lower()} ({fmt.upper()})", f"export:{kind}:{fmt}", size):
-        if kind == "full":
+        if kind == "plan":   # every row, original vs final (user, 2026-10-01)
+            data, ctype, ext = engine.export_plan_to_plan(orig, out, months, fmt, job.progress)
+        elif kind == "full":
             data, ctype, ext = engine.export(out.rename(columns={k: v for k, v in colmap.items() if k in out.columns}),
                                              fmt, job.progress)
         else:
             levels = engine.compare_levels(orig, out, months) if fmt == "xlsx" else None
             data, ctype, ext = engine.export_compare(summ, compare, fmt, job.progress, levels)
-    name = "Realigned Plan" + (" - Comparison" if kind == "compare" else "") + f".{ext}"
+    name = "Realigned Plan" + {"compare": " - Comparison", "plan": " - Plan to Plan"}.get(kind, "") + f".{ext}"
     with lock:
         if state["result"] and state["result"]["id"] == res["id"]:  # a newer run makes this build stale
             state["exports"][f"{kind}-{fmt}"] = {"data": data, "ctype": ctype, "filename": name, "size": len(data),
@@ -577,7 +579,7 @@ def public_state():
     if res:
         for kind in EXPORTS:
             for fmt in ("xlsx", "csv"):
-                size = res["rows"] if kind == "full" else res["changed_rows"] + len(res["summary"])
+                size = res["rows"] if kind in ("full", "plan") else res["changed_rows"] + len(res["summary"])
                 est[f"{kind}-{fmt}"] = timings.estimate(f"export:{kind}:{fmt}", size)
     return {
         "original": s["orig_info"] and {**{k: v for k, v in s["orig_info"].items() if k != "colmap"}, "report": s["orig_report"]},

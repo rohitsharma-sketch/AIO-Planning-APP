@@ -7,6 +7,15 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-01
 
+### Sales Plan Re-Aligner: "Plan to plan" download — the whole plan, original vs final, row for row
+- **Asked (user):** "i want a full plan to plan comparison not just the changes which have happened, the comparison should be covering a full display type plan mapping original vs final so that i can easily point where the changes are made"
+- **New download (XLSX and CSV):** `engine.plan_to_plan` / `export_plan_to_plan`, export kind `plan`.
+  - **Rows:** one per Store × Department × MRP × Display Type of either plan, with Division and Attribute.
+  - **Up-front columns:** **Changed** (Yes), **Months changed** and **Row** ("new in final" for a new department's rows).
+  - **Values:** per month, Original / Final / Difference, then the season, all at 8 dp.
+- **Real plan (LW_U_T-TOP re-phase):** 674,478 rows. 48,710 changed, all LADIES REGULAR departments. Season Final = plan total. Built in 3.4 s; CSV ~50 s (235 MB), XLSX ~4 min (84 MB).
+- `test_realign.py` checks every row is present, new rows are flagged, Original / Final / Difference are right, and unchanged rows have 0 difference.
+
 ### Sales Plan Re-Aligner: the cap is now Store × Division × Attribute × Month (no cross-attribute apportioning) — `8287980`
 - **Asked (user):** "change the rule to apportion and match at Store x Division x Attribute x Month instead of Store x Division x Month so that the department changes made are contained with in the attribute and no cross apportioning is there."
 - **Engine:**

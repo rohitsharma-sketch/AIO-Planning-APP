@@ -56,6 +56,7 @@ const RULES_NOW = [
   ['Checks on every run', [
     'Recomputed from the output: kept values exact, store × division season totals, <b>Store × Division × Attribute × Month = original (the cap)</b>, store × division × month, grand total, locked months untouched, display-type cont % as the original. Any input error blocks the run; warnings and notes are listed with row examples.',
     '<b>Comparison vs original</b> (download after a run): Summary (division × month), <b>Store x Div x Attribute x Month</b> - every one, original vs new, difference and "Within cap" - <b>Store x Dept x Month</b> - every department month that moved - and <b>Changed Rows</b> (every MRP × display cell, with why).',
+    '<b>Plan to plan</b> (download after a run): the <b>whole</b> plan, not just the changes - every Store × Department × MRP × Display Type row of the original and the final, each month Original / Final / Difference plus the season, with Changed / Months changed up front to filter on (rows of a new department say "new in final").',
   ]],
 ];
 
@@ -65,6 +66,7 @@ const RULES_LATEST = {
     'The cap is now <b>Store × Division × Attribute × Month</b> (was Store × Division × Month): a department change is absorbed only by the other departments of its own attribute in that store × division - nothing is apportioned across attributes. Store × division × month still matches, as it follows.',
     'A department that is alone in its attribute in a store has nothing to absorb its change: flagged ("couldn\'t fully land"), never spread to another attribute.',
     'Method 4: a shift target must be in the same division <b>and attribute</b>; a section target takes only its departments of that attribute.',
+    'New download <b>Plan to plan</b>: the full original vs final plan, row for row (Store × Department × MRP × Display Type), every month, Changed flag to filter on.',
     'Checks: "Store × Division × Attribute × Month = original (the cap)" plus "Store × Division × Month = original". The comparison download\'s cap sheet is now Store x Div x Attribute x Month.',
   ],
 };

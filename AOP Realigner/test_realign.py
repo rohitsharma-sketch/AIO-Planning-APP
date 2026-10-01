@@ -441,4 +441,13 @@ try:   # a shift must stay inside its attribute
 except ValueError as e:
     assert "another attribute" in str(e), e
 
+# plan to plan (user, 2026-10-01): every row of either plan, original vs final, changed ones flagged
+pp = engine.plan_to_plan(orig, out, M)
+assert len(pp) == len(out) and (pp["Row"] == "new in final").sum() == 2            # A F/S: 2 new MRP rows in S1
+r_ = pp[(pp["Store Name"] == "S1") & (pp.DEPARTMENT == "B")].iloc[0]
+assert r_["Changed"] == "Yes" and np.isclose(r_["Sep'26 Original"], 10) and np.isclose(r_["Sep'26 Final"], 9.166666666)
+assert np.isclose(r_["Sep'26 Difference"], r_["Sep'26 Final"] - 10) and r_["Months changed"] == 2   # Sep, Nov (Jan locked)
+assert np.isclose(pp["Season Final"].sum(), out[[m + " Plan" for m in M]].to_numpy().sum())
+assert (pp.loc[pp["Changed"] == "", [f"{m} Difference" for m in M]].abs() <= engine.SHOWN).all().all()
+
 print("all realign checks passed")

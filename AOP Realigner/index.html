@@ -589,6 +589,8 @@ function divTable(res) {
 const DL = [
   ['compare', 'xlsx', 'Comparison vs original', 'Original plan vs the new plan: Summary, Store × Division × Attribute × Month (every one, with “Within cap”), Store × Dept × Month (what moved) and every changed cell with why (kept / absorbed). The quick way to see where the difference is.'],
   ['compare', 'csv', 'Comparison — CSV', 'Just the changed cells, as CSV. Builds in seconds and opens fastest.'],
+  ['plan', 'xlsx', 'Plan to plan — original vs final', 'The whole plan, not just the changes: every Store × Department × MRP × Display Type row, each month Original / Final / Difference plus the season, with Changed and Months changed up front - filter Changed = Yes to see exactly where it moved.'],
+  ['plan', 'csv', 'Plan to plan — CSV', 'The same, as CSV - builds in seconds.'],
   ['full', 'xlsx', 'Full realigned plan', 'Every row in the original layout (Store × Department × MRP × Display Type), value and qty — the file to load back.'],
   ['full', 'csv', 'Full realigned plan — CSV', 'The same as CSV — builds in seconds instead of minutes.'],
 ];
@@ -597,7 +599,7 @@ function renderDownloads() {
   if (!el || !S.result) return;
   const h = DL.map(([k, f, title, desc]) => {
     const key = `${k}-${f}`, e = S.exports[key];
-    const job = S.jobs.find(j => j.kind === 'export' && j.status === 'running' && j.label.includes(k === 'full' ? 'full' : 'comparison') && j.label.includes(f.toUpperCase()));
+    const job = S.jobs.find(j => j.kind === 'export' && j.status === 'running' && j.label.includes({full: 'full', compare: 'comparison', plan: 'plan-to-plan'}[k]) && j.label.includes(f.toUpperCase()));
     let foot;
     if (e) foot = `<button class="btn btn-primary btn-sm" onclick="exportFile('${k}','${f}')">${icon('dl')}Download</button><span class="muted small">${bytes(e.size)} · built ${esc(e.built_at.slice(-8))} in ${secs(e.secs)}</span>`;
     else if (job) { const st = job.steps[job.steps.length - 1] || {}, pct = st.total ? st.done / st.total * 100 : null;

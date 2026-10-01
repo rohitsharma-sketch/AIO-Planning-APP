@@ -633,6 +633,38 @@ def export_compare(summ, compare, fmt, on_progress=None, levels=None):
     return write_xlsx(sheets + [("Changed Rows", _r8(compare))], on_progress, "0.00000000"), XLSX_CTYPE, "xlsx"
 
 
+def plan_to_plan(o, out, months):
+    """The whole plan, original vs final, row for row (user, 2026-10-01: "a full plan to plan comparison not just the
+    changes ... a full display type plan mapping original vs final so that i can easily point where the changes are
+    made"): every Store x Dept x MRP x Display Type row of either plan, Changed / Months changed up front to filter on,
+    then per month Original / Final / Difference and the season. A row only in the final plan (a new department) shows
+    "new in final"."""
+    V = [m + " Plan" for m in months]
+    k = [STORE, DEPT, MRP, DISP]
+    a, b = o.groupby(k, dropna=False)[V].sum(), out.groupby(k, dropna=False)[V].sum()
+    idx = a.index.union(b.index)
+    A, B = a.reindex(idx).fillna(0.0).to_numpy(), b.reindex(idx).fillna(0.0).to_numpy()
+    lab = [c for c in (DIV, ATTR) if c in out.columns]
+    t = pd.concat([out, o])[k + lab].drop_duplicates(k).set_index(k).reindex(idx).reset_index()[[STORE, *lab, DEPT, MRP, DISP]]
+    d = np.abs(B - A) > SHOWN
+    t["Changed"] = np.where(d.any(1), "Yes", "")
+    t["Months changed"] = d.sum(1)
+    t["Row"] = np.where(idx.isin(a.index), "", "new in final")
+    cols = {}
+    for j, m in enumerate(months):
+        cols[f"{m} Original"], cols[f"{m} Final"], cols[f"{m} Difference"] = A[:, j], B[:, j], B[:, j] - A[:, j]
+    cols["Season Original"], cols["Season Final"], cols["Season Difference"] = A.sum(1), B.sum(1), B.sum(1) - A.sum(1)
+    t = pd.concat([t, pd.DataFrame(cols)], axis=1)
+    return t.sort_values([STORE, *lab, DEPT, MRP, DISP], kind="stable").reset_index(drop=True)
+
+
+def export_plan_to_plan(o, out, months, fmt, on_progress=None):
+    t = _r8(plan_to_plan(o, out, months))
+    if fmt == "csv":
+        return t.to_csv(index=False, float_format="%.8f").encode("utf-8-sig"), "text/csv", "csv"
+    return write_xlsx([("Plan to plan", t)], on_progress, "0.00000000"), XLSX_CTYPE, "xlsx"
+
+
 def _r8(df):
     """8 decimals (user, 2026-09-30: "zero in difference to 0.00000000 instead of the full blown 0.0001"): a real
     difference shows in full and float noise (1e-13) becomes a clean 0, never -0."""
