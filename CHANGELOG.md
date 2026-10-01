@@ -7,6 +7,24 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-01
 
+### Sales Plan Re-Aligner: new listings fall back, month by month, to the cluster's non-zero average cont % — `461ca9b`
+- **Asked (user):** pasted ~7,800 store × department listings that came out at 0: "Check these cases, even though plan is present in their respective refernce stores, so either it should check the sales of store's respective cluster average without 0% cont % and appportioning should be there within the same store xdivision".
+- **Found** (replaying "Listing changes template (4).xlsx"): 7,841 of 7,991 new listings were 0.
+  - **7,129**: the store has **no division plan** in the unlocked months (40 stores not trading yet: AD-NS-04…09, NS-40…90, CND, KRB), and x% × 0 = 0.
+  - **712**: the REF store plans the department, but **not in the months the store trades**. E.g. AD-NS-10 opens Feb'27, and its REF LAM plans KB_T-SHIRT F/S Oct–Jan only.
+- **Rule** (`engine.listing_targets`, Methods 1 and 4):
+  - Per month: the REF store's cont %.
+  - Where that is 0% (or there is no REF store): the **average cont % of the same-cluster stores above 0% that month**, with 0% stores left out.
+  - Else the same over every store planning it.
+  - × the store's division AOP. The store × division gives way as before.
+  - The cluster fallback is now this non-zero average (was a pooled share).
+  - The "How it was built" sheet gains a per-month "<m> CONT FROM".
+- **Your file replayed:**
+  - **418 listings get a plan (was 150)**. Still 0: 7,129 with no division AOP and 444 that no store plans in those months; nothing to size from.
+  - All checks ok: Store × Division × Month 0 / 6,384 off, grand total 73,459.07 → 73,459.07.
+  - The upload check takes 8.3 s.
+- **Tests:** a REF store at 0% in Nov now takes all stores' non-zero average (20/80 × 8 = 2), and Sep stays REF 0.5 × 8 = 4. The no-REF cases now expect the non-zero average.
+
 ### Sales Plan Re-Aligner: Store × Division × Month always equals the original file
 - **Asked (user):** "how to reload the checks if they fail" (screenshot: 4 failed checks, grand total 73,459.07 → 73,422.05). Chose "Rest of the store × division" for the cause. Then: "the store x division x month wise data should match with the sales plan i nthe original file always. Also, make sure that the plan is intact not incremental or decremental against the sales plan in the original file".
 - **Cause:** 11 delistings (all OCCASIONAL) of a department that was the only one of its attribute in that store × division. The attribute cap left nothing to absorb them, so 37.02 L of AOP was lost.
