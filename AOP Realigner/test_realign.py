@@ -116,7 +116,7 @@ changes = [{"store": "S1", "dept": "D", "listing": "N", "start": 1, "values": No
            {"store": "S2", "dept": "C", "listing": "Y", "start": 0, "values": None}]   # newly listed, sized from S1
 r1, src1, counts, how1 = listing_targets(o1, changes, M)
 assert src1 == {("S2", "C"): ("S1", "C")} and counts == {"delisted": 1, "estimated": 1, "given": 0, "ref": 0}
-assert how1[0]["SIZED FROM"] == "cluster" and np.isclose(how1[0]["Sep'26 CONT %"], 100 / 7)
+assert how1[0]["SIZED FROM"].startswith("cluster") and np.isclose(how1[0]["Sep'26 CONT %"], 100 / 7)
 rv = r1.set_index(["Store Name", "DEPARTMENT"])
 assert list(rv.loc[("S1", "D")]) == [40, 0, 40]                    # Sep before FROM, Jan frozen
 assert np.allclose(rv.loc[("S2", "C")], [10 * 10 / 70, 20 * 20 / 80, 0])  # C's share of LADIES in S1 x S2's LADIES
@@ -133,13 +133,21 @@ try:
     raise AssertionError("a listing nobody plans must fail")
 except ValueError as e:
     assert "Method 3" in str(e)
-# REF store first (user, 2026-10-01): S3 (cluster Y, nobody there plans B) lists B. With no usable REF it pools every
-# store planning B: (10 + 5) / (70 + 10) of S3's LADIES; with REF = S2 it takes S2's own cont %: 5 / 10 -> 0.5 x 8 = 4
+# REF store first (user, 2026-10-01): S3 (cluster Y, nobody there plans B) lists B. With no usable REF it takes the
+# average of the non-zero cont % of every store planning B: (10/70 + 5/10) / 2 of S3's LADIES; with REF = S2, S2's own
+# cont %: 5 / 10 -> 0.5 x 8 = 4
 chB = [{"store": "S3", "dept": "B", "listing": "Y", "start": 0, "values": None}]
 rB, _, cB, hB = listing_targets(o1, chB, M)
-assert np.isclose(rB.iloc[0]["Sep'26"], 15 / 80 * 8) and hB[0]["SIZED FROM"] == "all stores planning it"
+assert np.isclose(rB.iloc[0]["Sep'26"], (10 / 70 + 5 / 10) / 2 * 8) and hB[0]["SIZED FROM"].startswith("all stores")
 rB, sB, cB, hB = listing_targets(o1, chB, M, {"S3": "S2"})
 assert np.isclose(rB.iloc[0]["Sep'26"], 4) and sB[("S3", "B")] == ("S2", "B") and cB["ref"] == 1 and hB[0]["SIZED FROM"] == "REF store"
+# REF store at 0% in a month (user, 2026-10-01: a REF that doesn't plan the department the month the store trades): that
+# month takes the cluster's non-zero average, else every planning store's - S2's B Nov set to 0 -> Nov from S1 alone:
+# 20/80 x S3's LADIES Nov 8 = 2; Sep still S2's 0.5 x 8 = 4
+o1z = o1.copy(); o1z.loc[(o1z["Store Name"] == "S2") & (o1z.DEPARTMENT == "B"), "Nov'26 Plan"] = 0.0
+rZ, _, _, hZ = listing_targets(o1z, chB, M, {"S3": "S2"})
+assert np.isclose(rZ.iloc[0]["Sep'26"], 4) and np.isclose(rZ.iloc[0]["Nov'26"], 20 / 80 * 8), rZ
+assert hZ[0]["Nov'26 CONT FROM"] == "all stores" and hZ[0]["Sep'26 CONT FROM"] == "REF store" and "REF is 0%" in hZ[0]["SIZED FROM"]
 # the whole store x division gives way (capped at division level), even when B's attribute isn't planned in S3
 o1a = o1.assign(ATTRIBUTE=o1["DEPARTMENT"].map({"A": "REGULAR", "B": "SUMMER", "C": "SUMMER", "D": "SUMMER"}))
 outB, _, _, _ = realign(o1a, rB, M, sB, {("S3", "LADIES")})
@@ -198,7 +206,8 @@ assert list(v4.loc[("S3", "B")]) == [8, 0, 0] and list(v4.loc[("S3", "A")]) == [
 # REF store first in Method 4 too (user, 2026-10-01): S3 lists B out of A - pooled 15/80 x 8 = 1.5, with REF S2 0.5 x 8 = 4
 chR = [{"store": "S3", "dept": "B", "listing": "Y", "start": 0, "values": None, "target": "A"}]
 vR = shift_targets(o1, chR, M, sec)[0].set_index(["Store Name", "DEPARTMENT"])
-assert np.isclose(vR.loc[("S3", "B"), "Sep'26"], 1.5) and np.isclose(vR.loc[("S3", "A"), "Sep'26"], 6.5)
+nzB = (10 / 70 + 5 / 10) / 2 * 8   # no REF: the non-zero average of every store planning B
+assert np.isclose(vR.loc[("S3", "B"), "Sep'26"], nzB) and np.isclose(vR.loc[("S3", "A"), "Sep'26"], 8 - nzB)
 rR, sR, nR = shift_targets(o1, chR, M, sec, {"S3": "S2"})
 vR = rR.set_index(["Store Name", "DEPARTMENT"])
 assert np.isclose(vR.loc[("S3", "B"), "Sep'26"], 4) and np.isclose(vR.loc[("S3", "A"), "Sep'26"], 4)

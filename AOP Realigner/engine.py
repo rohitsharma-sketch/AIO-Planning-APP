@@ -164,32 +164,55 @@ def listing_targets(o, changes, months, ref_of=None):
             counts["delisted"] += 1
         else:
             peers = [p for p in planners.get(d, []) if p != s]
-            ref = ref_of.get(s)
-            if ref and ref != s and ref in peers:
-                peers, frm = [ref], "REF store"
-            else:
-                same = [p for p in peers if cluster.get(p) == cluster.get(s)]
-                peers, frm = (same, "cluster") if same else (peers, "all stores planning it")
             if not peers:
                 nopeer.append(f"{s} / {d}")
                 continue
-            source[(s, d)] = (max(peers, key=lambda p: sd[(p, d)].sum()), d)
-            num = np.sum([sd[(p, d)] for p in peers], axis=0)
-            den = np.sum([dv.get((p, div_of[d]), np.zeros(n)) for p in peers], axis=0)
-            cont = np.divide(num, den, out=np.zeros(n), where=np.abs(den) > TOL)   # the department's cont % of the division
-            aop = dv.get((s, div_of[d]), np.zeros(n))                              # this store's division AOP
+            dvd = div_of[d]
+
+            def cont_of(p):   # the department's cont % of its division in store p, per month
+                den = dv.get((p, dvd), np.zeros(n))
+                return np.divide(sd[(p, d)], den, out=np.zeros(n), where=np.abs(den) > TOL)
+
+            def nz_avg(stores):   # average cont % over the stores above 0% that month (user, 2026-10-01: "cluster
+                if not stores:    # average without 0% cont %")
+                    return np.zeros(n)
+                cs = np.array([cont_of(p) for p in stores])
+                pos = cs > TOL
+                return np.divide(np.where(pos, cs, 0.0).sum(0), pos.sum(0), out=np.zeros(n), where=pos.sum(0) > 0)
+
+            # month by month: the REF store's cont %; where it is 0% (or there is no REF store) the cluster's average of
+            # its non-zero cont %, then every planning store's (user, 2026-10-01: AD-NS-10 opens in Feb, its REF LAM
+            # plans KB_T-SHIRT F/S only Oct-Jan, so the listing came out 0)
+            ref = ref_of.get(s)
+            same = [p for p in peers if cluster.get(p) == cluster.get(s)]
+            has_ref = bool(ref and ref != s and ref in peers)
+            cont = cont_of(ref) if has_ref else np.zeros(n)
+            src_m = np.where(cont > TOL, "REF store", "")
+            for label, stores in (("cluster", same), ("all stores", peers)):
+                gap = cont <= TOL
+                if gap.any():
+                    fill = nz_avg(stores)
+                    src_m = np.where(gap & (fill > TOL), label, src_m)
+                    cont = np.where(gap, fill, cont)
+            frm = ("REF store" if has_ref else "") + (" + cluster / all stores where REF is 0%" if has_ref and (src_m[apply] != "REF store").any() else "")
+            frm = frm or ("cluster (average of non-zero cont %)" if same else "all stores planning it (average of non-zero cont %)")
+            src_store = ref if has_ref else max(same or peers, key=lambda p: sd[(p, d)].sum())
+            source[(s, d)] = (src_store, d)   # MRP x display rows from the REF store, else the biggest peer
+            peers = [ref] if has_ref else (same or peers)
+            aop = dv.get((s, dvd), np.zeros(n))                                   # this store's division AOP
             if c.get("values") is not None:
                 vec = np.asarray(c["values"], float)
                 counts["given"] += 1
             else:
                 vec = cont * aop
                 counts["estimated"] += 1
-                counts["ref"] += frm == "REF store"
+                counts["ref"] += has_ref
             vec = np.where(apply, vec, base)
             how.append({STORE: s, DIV: div_of[d], DEPT: d, "LISTED FROM": months[c["start"]],
                         "SIZED FROM": "your values" if c.get("values") is not None else frm,
                         "CONT % FROM": ", ".join(peers[:5]) + (f" +{len(peers) - 5} more" if len(peers) > 5 else ""),
                         **{f"{m} CONT %": cont[j] * 100 for j, m in enumerate(months) if apply[j]},
+                        **{f"{m} CONT FROM": src_m[j] or "-" for j, m in enumerate(months) if apply[j]},
                         **{f"{m} DIVISION AOP": aop[j] for j, m in enumerate(months) if apply[j]},
                         **{f"{m} NEW": vec[j] for j, m in enumerate(months) if apply[j]}})
         rows.append({STORE: s, DEPT: d, **dict(zip(months, vec))})
