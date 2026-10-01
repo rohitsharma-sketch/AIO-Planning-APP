@@ -379,6 +379,7 @@
     <symbol id="i-lagan" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 0 12 6 6 0 0 1 0-12zM4 21h16M7 18h10"/></symbol>
     <symbol id="i-store" viewBox="0 0 24 24"><path d="M3 9l2-5h14l2 5M4 9v11h16V9M3 9h18M9 20v-6h6v6"/></symbol>
     <symbol id="i-listing" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18h2"/></symbol>
+    <symbol id="i-growth" viewBox="0 0 24 24"><path d="M3 3v18h18M7 15l4-4 3 3 6-6M15 8h5v5"/></symbol>
     <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 3v18M5 21h14M6 7h12M6 7l-3 7a3 3 0 0 0 6 0zM18 7l-3 7a3 3 0 0 0 6 0z"/></symbol>
   </svg>
 
@@ -481,6 +482,13 @@
         <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-scale"/></svg></span></div>
         <h2>Sales Plan Re-Aligner</h2>
         <p class="desc">Rebalance a finished plan after listing or department changes.</p>
+        <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
+      </a>
+      <!-- Growth vs LY (2026-10-02): final sales plan against last year, by the plan's hierarchy -->
+      <a class="card" href="/growth/" target="_blank" data-check="/api/port-status/8075">
+        <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-growth"/></svg></span></div>
+        <h2>Growth vs LY</h2>
+        <p class="desc">The final sales plan against last year, by division, attribute and department.</p>
         <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
       </a>
       <!-- Listing/Delisting (joined the suite 2026-09-26): data rebuilt by the daily data-lake sync -->

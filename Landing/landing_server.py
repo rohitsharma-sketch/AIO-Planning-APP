@@ -6,13 +6,14 @@ ONE ADDRESS for the whole suite (user, 2026-09-26): every app - core and
 additional - is exposed through this single port, so the platform is reachable
 at http://<host>:7800 from anywhere on the LAN, and one start of this server
 launches (and its watchdog keeps up) every app. Only port 7800 needs a firewall
-rule; every sub-app port (5050, 8000, 8010, 8060, 8070, 8123) is loopback-only.
+rule; every sub-app port (5050, 8000, 8010, 8060, 8070, 8075, 8123) is loopback-only.
 
 Proxy routing (first match wins):
   /buyer/*                       → http://127.0.0.1:5050  (BIS, prefix stripped)
   /nso/*                         → http://127.0.0.1:8060  (NSO Plan Distributor, prefix stripped)
   /realigner/*                   → http://127.0.0.1:8070  (Sales Plan Re-Aligner, prefix stripped)
   /listing/*                     → http://127.0.0.1:8123  (Listing / Delisting Analyser, prefix stripped)
+  /growth/*                      → http://127.0.0.1:8075  (Growth vs LY, prefix stripped)
   /api/otb/*, /api/status,
     /api/config/aop-div-targets  → http://127.0.0.1:5050  (BIS API, same path)
   /api/config/db-sync*           → http://127.0.0.1:8000  (AOP standalone, no auth)
@@ -74,6 +75,10 @@ APPS = [
     {"name": "NSO Plan Distributor", "port": 8060,
      "cmd": [sys.executable, "nso_distributor.py"],
      "cwd": os.path.join(_REPO_ROOT, "Buyer's Input Sheet")},
+    # Additional app (2026-10-02): the final sales plan against LY by the plan's hierarchy (GR % PLAN workbook).
+    {"name": "Growth vs LY", "port": 8075,
+     "cmd": [sys.executable, "server.py"],
+     "cwd": os.path.join(_REPO_ROOT, "GR Plan Converter")},
     {"name": "Listing / Delisting Analyser", "port": 8123,
      "cmd": [sys.executable, "serve.py"],   # static app/ with no-cache (data files change daily)
      "cwd": os.path.join(_REPO_ROOT, "Listing Delisting")},
@@ -90,6 +95,7 @@ PROXY_ROUTES = [
     ('/nso',                             'http://127.0.0.1:8060', '/nso'),
     ('/realigner',                       'http://127.0.0.1:8070', '/realigner'),
     ('/listing',                         'http://127.0.0.1:8123', '/listing'),
+    ('/growth',                          'http://127.0.0.1:8075', '/growth'),
     # BIS API routes — same path at 5050
     ('/api/otb/',                        'http://127.0.0.1:5050', ''),
     ('/api/status',                      'http://127.0.0.1:5050', ''),
@@ -118,7 +124,7 @@ _SKIP_REQ_HEADERS  = {'host', 'content-length'}
 _SKIP_RESP_HEADERS = {'transfer-encoding', 'connection', 'content-length'}
 PROXY_IDLE_TIMEOUT = 600   # s of upstream silence before giving up (was a flat 60 s for the whole response)
 # Prefixed apps must be opened with a trailing slash so their relative api/ paths resolve under the prefix
-_SLASH_REDIRECT = {'/buyer', '/nso', '/realigner', '/listing'}
+_SLASH_REDIRECT = {'/buyer', '/nso', '/realigner', '/listing', '/growth'}
 
 
 class _BodyReader:

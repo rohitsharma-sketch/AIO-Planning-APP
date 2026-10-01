@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script>/* suite colour theme - one choice for every app, picked on Landing */(function(){var p=location.port,o=(p==='7800'||p==='8010')?'':'//'+location.hostname+':8010';document.write('<script src="'+o+'/api/suite-theme.js"><\/script>')})()</script>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Growth vs LY</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* RS Planning suite look: same chrome, sand page and theme (var(--st-*), sage fallback) as the other apps */
+:root{
+  --foreground:var(--st-ink,#1E2723);--card:#FFFFFF;--muted:var(--st-surface-3,#F3F2EC);--muted-foreground:var(--st-muted,#5F6B64);
+  --border:var(--st-line,#E5E3DA);--input:var(--st-line-2,#D3D0C4);--primary:var(--st-accent,#4F7A66);--page:var(--st-page,#F7F6F2);
+  --chrome:var(--st-chrome,#34453F);--btn:var(--st-btn,#A8CBB7);--btn-h:var(--st-btn-hover,#95BFA7);--btn-t:var(--st-btn-text,#1F4D3A);
+  --up:#15803D;--down:#B42318;--ty:var(--st-accent,#4F7A66);--ly:#B8B4A6;--radius:.625rem;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--page);color:var(--foreground);font:14px/1.5 var(--st-font-body,'Plus Jakarta Sans'),ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+td,th,.num{font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.topbar{position:sticky;top:0;z-index:20;background:var(--chrome);color:#fff}
+.topbar-inner{max-width:1360px;margin:0 auto;padding:0 28px;height:60px;display:flex;align-items:center;gap:14px}
+.logo{width:32px;height:32px;border-radius:9px;background:var(--btn);color:var(--btn-t);display:grid;place-items:center;flex:none;font-weight:800}
+.brand h1{margin:0;font-size:17px;font-weight:500;font-family:var(--st-font-display,inherit)}
+.brand p{margin:0;color:rgba(255,255,255,.55);font-size:12px}
+.home{margin-left:auto;white-space:nowrap;font-size:12.5px;font-weight:700;color:#fff;text-decoration:none;padding:6px 13px;border-radius:999px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18)}
+.wrap{max-width:1360px;margin:0 auto;padding:20px 28px;display:flex;flex-direction:column;gap:16px}
+@media (max-width:640px){.wrap,.topbar-inner{padding-left:16px;padding-right:16px}.brand p{display:none}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:calc(var(--radius) + 2px)}
+.card-h{padding:16px 20px 0;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.card-h h2{margin:0;font-size:15px;font-weight:800}
+.card-h .grow{flex:1;min-width:200px}
+.desc{margin:2px 0 0;color:var(--muted-foreground);font-size:13px}
+.card-c{padding:14px 20px 18px}
+.drop{display:block;border:1.5px dashed var(--input);border-radius:var(--radius);padding:18px;text-align:center;cursor:pointer;background:var(--muted)}
+.drop:hover,.drop.over{border-color:var(--primary)}
+.drop small{display:block;color:var(--muted-foreground);font-size:12px}
+.meta{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:12px;font-size:13px;color:var(--muted-foreground)}
+.meta b{color:var(--foreground);font-weight:700}
+.status{margin-top:10px;font-size:13px}.status.err{color:var(--down)}
+.btn{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:999px;padding:7px 14px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;background:var(--btn);color:var(--btn-t)}
+.btn:hover{background:var(--btn-h)}.btn.ghost{background:transparent;border:1px solid var(--input);color:var(--foreground)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{border:1px solid var(--input);background:#fff;border-radius:999px;padding:4px 11px;font:inherit;font-size:12.5px;cursor:pointer}
+.chip.on{background:var(--btn);border-color:var(--btn);color:var(--btn-t);font-weight:700}
+.tw{overflow:auto;max-height:62vh;border:1px solid var(--border);border-radius:var(--radius)}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
+th,td{padding:5px 9px;border-bottom:1px solid var(--border);white-space:nowrap;text-align:right}
+th{position:sticky;background:var(--muted);font-weight:700;z-index:1}
+thead tr:first-child th{top:0}thead tr:nth-child(2) th{top:28px}
+th.grp{text-align:center;border-left:1px solid var(--border)}
+td.l,th.l{text-align:left;position:sticky;left:0;background:#fff}
+th.l{background:var(--muted);z-index:2}
+td.b{border-left:1px solid var(--border)}
+tr.r{cursor:pointer}tr.r:hover td{background:var(--muted)}tr.sel td{background:#EEF4F0}
+tr.Division td{font-weight:800}tr.Attribute td{font-weight:600}tr.Grand td{font-weight:800;border-top:2px solid var(--input)}
+.tg{display:inline-block;width:14px;color:var(--muted-foreground)}
+.up{color:var(--up)}.down{color:var(--down)}
+.chart{width:100%;height:auto;display:block}
+.legend{display:flex;gap:14px;font-size:12.5px;color:var(--muted-foreground)}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+</style>
+</head>
+<body>
+<header class="topbar"><div class="topbar-inner">
+  <div class="logo">%</div>
+  <div class="brand"><h1>Growth vs LY</h1><p>The final sales plan against last year, by the plan's own hierarchy</p></div>
+  <a class="home" href="/">&larr; Landing</a>
+</div></header>
+<main class="wrap">
+  <section class="card">
+    <div class="card-h"><div class="grow"><h2>1 &middot; Final sales plan</h2>
+      <p class="desc">Upload the final plan (Store &times; Department &times; MRP &times; Display Type with &ldquo;&lt;Month&gt; Plan&rdquo; and &ldquo;&lt;Month&gt; Plan Qty&rdquo; columns, e.g. the Re-Aligner&rsquo;s final plan). Last year comes from the data lake&rsquo;s day-wise sales by itself &mdash; the same months a year earlier, P1 = 1st to the middle day (15th; Feb 14th), P2 = the rest.</p></div></div>
+    <div class="card-c">
+      <label class="drop" id="drop"><input type="file" id="file" accept=".xlsx,.xlsb,.xls,.csv" hidden>
+        <b>Drop the final sales plan here or click to browse</b><small>.xlsx, .xlsb, .xls or .csv &middot; up to 400 MB</small></label>
+      <div class="meta" id="meta"></div>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+    </div>
+  </section>
+  <section class="card" id="res" hidden>
+    <div class="card-h"><div class="grow"><h2>2 &middot; Growth vs LY</h2>
+      <p class="desc">Value in &#8377; lakhs. Growth = TY &divide; LY &minus; 1 over the same stores. Click a row to see it month by month; Division and Attribute rows open and close.</p></div>
+      <button class="btn ghost" type="button" id="expand">Expand all</button>
+      <button class="btn" type="button" id="dl">Download GR % workbook</button></div>
+    <div class="card-c">
+      <div class="chips" id="tags" aria-label="Stores by SSG TAG"></div>
+      <div class="tw" style="margin-top:12px"><table><thead id="th"></thead><tbody id="tb"></tbody></table></div>
+    </div>
+  </section>
+  <section class="card" id="chartCard" hidden>
+    <div class="card-h"><div class="grow"><h2 id="ctitle">Month by month</h2><p class="desc" id="csub"></p></div>
+      <div class="legend"><span><i style="background:var(--ty)"></i>TY plan</span><span><i style="background:var(--ly)"></i>LY sales</span></div></div>
+    <div class="card-c"><svg class="chart" id="chart" role="img" aria-label="TY plan against LY sales by month"></svg></div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+const f2 = v => v == null ? '–' : v.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const pct = v => v == null ? '–' : `<span class="${v >= 0 ? 'up' : 'down'}">${(v * 100).toFixed(1)}%</span>`;
+let S = {}, P = null, tags = null, open = new Set(), sel = null, poll = null;
+try { tags = JSON.parse(localStorage.getItem('gr-tags') || 'null'); } catch (e) {}
+
+async function api(p, opt) {
+  const r = await fetch(p, opt);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+async function refresh() {
+  S = await api('api/state');
+  const j = S.job, st = $('status');
+  st.className = 'status' + (j && j.status === 'error' ? ' err' : '');
+  st.textContent = !j ? '' : j.status === 'running' ? `${j.name}: ${j.step}…` : j.status === 'error' ? `${j.name}: ${j.error}` : '';
+  if (j && j.status === 'running') { clearTimeout(poll); poll = setTimeout(refresh, 1500); }
+  const p = S.plan, l = S.ly;
+  $('meta').innerHTML = p ? [`<span>Plan <b>${esc(p.name)}</b></span>`, `<span>${p.rows.toLocaleString('en-IN')} rows · ${p.stores} stores · ${p.departments} departments</span>`,
+    `<span>Months <b>${esc(S.months[0])} – ${esc(S.months[S.months.length - 1])}</b></span>`,
+    l ? `<span>LY <b>${esc(l.months[0])} – ${esc(l.months[l.months.length - 1])}</b> · data lake export ${esc(l.exported)}</span>` : '',
+    `<span>Built ${esc(p.loaded_at)}</span>`].join('') : '';
+  $('res').hidden = !p;
+  if (p) {
+    const all = Object.keys(S.tags);
+    if (!tags || !tags.every(t => all.includes(t))) tags = all.includes('SSG') ? ['SSG'] : [];
+    $('tags').innerHTML = '<span class="desc" style="margin:0 4px 0 0">SSG TAG:</span>' + all.map(t =>
+      `<button type="button" class="chip${tags.includes(t) ? ' on' : ''}" aria-pressed="${tags.includes(t)}" data-t="${esc(t)}">${esc(t)} <span class="desc">${S.tags[t].toLocaleString('en-IN')}</span></button>`).join('')
+      + `<button type="button" class="chip${!tags.length ? ' on' : ''}" aria-pressed="${!tags.length}" data-t="">All stores</button>`;
+    await loadPivot();
+  }
+}
+async function loadPivot() {
+  const q = tags.length ? '?tags=' + encodeURIComponent(tags.join('|')) : '';
+  P = await api('api/pivot' + q);
+  $('dl').onclick = () => { location.href = 'api/download' + q; };
+  draw();
+  chart(P.rows[sel != null && P.rows[sel] ? sel : P.rows.length - 1]);
+}
+function draw() {
+  const B = [...P.blocks, 'TTL'];
+  $('th').innerHTML = `<tr><th class="l" rowspan="2">Division › Attribute › Department</th>${B.map(b => `<th class="grp" colspan="3">${b}</th>`).join('')}</tr>
+    <tr>${B.map(() => '<th class="grp">TY</th><th>LY</th><th>Growth</th>').join('')}</tr>`;
+  $('tb').innerHTML = P.rows.map((r, i) => {
+    const show = r.level === 'Division' || r.level === 'Grand Total' || (r.level === 'Attribute' && open.has(r.div))
+      || (r.level === 'Department' && open.has(r.div) && open.has(r.div + '|' + r.attr));
+    if (!show) return '';
+    const key = r.level === 'Division' ? r.div : r.level === 'Attribute' ? r.div + '|' + r.attr : '';
+    const name = r.level === 'Grand Total' ? 'Grand Total' : r.level === 'Division' ? r.div : r.level === 'Attribute' ? r.attr : r.dept;
+    const pad = {Division: 0, Attribute: 18, Department: 36}[r.level] || 0;
+    const tg = `<span class="tg">${key ? (open.has(key) ? '▾' : '▸') : ''}</span>`;
+    const cells = [...P.blocks.map(b => r.blocks[b]), r.ttl].map(([t, l, g]) => `<td class="b">${f2(t)}</td><td>${f2(l)}</td><td>${pct(g)}</td>`).join('');
+    return `<tr class="r ${r.level.split(' ')[0]}${sel === i ? ' sel' : ''}" data-i="${i}" data-k="${esc(key)}"><td class="l" style="padding-left:${9 + pad}px">${tg}${esc(name)}</td>${cells}</tr>`;
+  }).join('');
+}
+function chart(r) {
+  $('chartCard').hidden = !r;
+  if (!r) return;
+  $('ctitle').textContent = r.level === 'Grand Total' ? 'Grand total' : [r.div, r.attr, r.dept].filter(Boolean).join(' › ');
+  $('csub').innerHTML = `${tags.length ? 'Stores tagged ' + esc(tags.join(', ')) : 'All stores'} · TTL ${f2(r.ttl[0])} vs ${f2(r.ttl[1])} L · ${pct(r.ttl[2])}`;
+  const M = P.months, n = M.length, W = 980, H = 300, L = 56, Bm = 46, T = 30;
+  const max = Math.max(1e-9, ...r.ty.map(v => v || 0), ...r.ly.map(v => v || 0));
+  const gw = (W - L - 10) / n, bw = Math.min(34, gw / 3), y = v => T + (H - T - Bm) * (1 - Math.max(0, v || 0) / max);
+  let s = '';
+  for (let k = 0; k <= 4; k++) {
+    const v = max * k / 4, yy = y(v);
+    s += `<line x1="${L}" x2="${W - 10}" y1="${yy}" y2="${yy}" stroke="var(--border)"/><text x="${L - 6}" y="${yy + 4}" text-anchor="end" font-size="11" fill="var(--muted-foreground)">${v.toFixed(v < 10 ? 2 : 0)}</text>`;
+  }
+  M.forEach((m, i) => {
+    const x = L + gw * i + gw / 2, t = r.ty[i] || 0, l = r.ly[i] || 0, g = l > 1e-12 ? t / l - 1 : null;
+    s += `<rect x="${x - bw - 2}" y="${y(t)}" width="${bw}" height="${Math.max(0, y(0) - y(t))}" fill="var(--ty)" rx="2"><title>${esc(m)} TY ${f2(t)} L</title></rect>`;
+    s += `<rect x="${x + 2}" y="${y(l)}" width="${bw}" height="${Math.max(0, y(0) - y(l))}" fill="var(--ly)" rx="2"><title>${esc(P.ly_months[i])} LY ${f2(l)} L</title></rect>`;
+    s += `<text x="${x}" y="${H - Bm + 16}" text-anchor="middle" font-size="11.5" fill="var(--foreground)">${esc(m)}</text>`;
+    s += `<text x="${x}" y="${H - Bm + 30}" text-anchor="middle" font-size="10.5" fill="var(--muted-foreground)">vs ${esc(P.ly_months[i])}</text>`;
+    if (g != null) s += `<text x="${x}" y="${Math.min(y(t), y(l)) - 7}" text-anchor="middle" font-size="11.5" font-weight="700" fill="${g >= 0 ? 'var(--up)' : 'var(--down)'}">${(g * 100).toFixed(1)}%</text>`;
+  });
+  const c = $('chart'); c.setAttribute('viewBox', `0 0 ${W} ${H}`); c.innerHTML = s;
+}
+$('tb').addEventListener('click', e => {
+  const tr = e.target.closest('tr.r'); if (!tr) return;
+  const k = tr.dataset.k, i = +tr.dataset.i;
+  if (k && e.target.closest('td.l')) { if (open.has(k)) open.delete(k); else open.add(k); }
+  sel = i; draw(); chart(P.rows[i]);
+});
+$('tags').addEventListener('click', e => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  const t = b.dataset.t;
+  tags = !t ? [] : tags.includes(t) ? tags.filter(x => x !== t) : [...tags, t];
+  try { localStorage.setItem('gr-tags', JSON.stringify(tags)); } catch (e2) {}
+  [...$('tags').querySelectorAll('.chip')].forEach(c => { const on = c.dataset.t ? tags.includes(c.dataset.t) : !tags.length; c.classList.toggle('on', on); c.setAttribute('aria-pressed', on); });
+  sel = null;
+  loadPivot().catch(err => alert(err.message));
+});
+$('expand').onclick = () => {
+  const any = open.size; open.clear();
+  if (!any) P.rows.forEach(r => { if (r.level === 'Division') open.add(r.div); if (r.level === 'Attribute') open.add(r.div + '|' + r.attr); });
+  $('expand').textContent = any ? 'Expand all' : 'Collapse all'; draw();
+};
+async function upload(f) {
+  if (!f) return;
+  $('status').className = 'status'; $('status').textContent = `Uploading ${f.name}…`;
+  try { await api('api/plan', {method: 'POST', body: f, headers: {'X-File-Name': encodeURIComponent(f.name)}}); }
+  catch (e) { $('status').className = 'status err'; $('status').textContent = e.message; return; }
+  sel = null; refresh();
+}
+$('file').onchange = e => upload(e.target.files[0]);
+const d = $('drop');
+['dragenter', 'dragover'].forEach(ev => d.addEventListener(ev, e => { e.preventDefault(); d.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => d.addEventListener(ev, e => { e.preventDefault(); d.classList.remove('over'); }));
+d.addEventListener('drop', e => upload(e.dataTransfer.files[0]));
+refresh().catch(e => { $('status').className = 'status err'; $('status').textContent = e.message; });
+</script>
+</body>
+</html>
