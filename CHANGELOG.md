@@ -5,6 +5,17 @@ Newest first. Each entry names its commit.
 
 ---
 
+## 2026-10-02
+
+### Sales Plan Re-Aligner: Method 4 template fixed, Method 5 grows P1 / P2 months, no default month lock — `227f2f2`
+- **Asked (user):** "method 4 is broken check it, and check why method 5 has a lock in it for JF as it is not there. the month lock only can be configured if the user has set it"
+- **Method 4 — blank template crashed:** `template_shift` added TARGET after FROM MONTH, which the Method 1 blank template (`Department | Store | Listing (Y/N)`) no longer has. It is now `Department | Store | Listing (Y/N) | Target`; the Listing-app pre-filled one is unchanged.
+  - Checked on your plan: a delisting into a section and the checks all pass (cap, store × division × month, grand total 73,685.20 → 73,685.20).
+  - A section target with no department of the listed one's attribute in that store (e.g. LW_U_TEES F/S is PREWINTER; AD-NS-08's L_WESTERN_UPPER has none) now says that instead of "target isn't planned".
+- **Method 5 — Jan / Feb looked locked:** growth needs a last-year month, and a P1 / P2 half-month has none, so Jan'27 P1/P2 and Feb'27 P1/P2 were dropped. `engine.ly_groups` now pairs the halves and compares them with last year's whole month (Jan'27 P1 + P2 vs Jan'26). One `Jan'27 GROWTH %` column sets both halves. A month with a locked half is left out.
+- **No default lock:** `engine.FROZEN` was Jan / Feb, so every newly loaded plan had them locked. It is now empty: a month is locked only when the user clicks it. Five older workspaces whose saved locks were exactly that default were reset (backups `locks.json.bak`); your main workspace had none.
+- `test_realign.py`: no default lock; fixtures lock Jan / Feb explicitly; P1 grown vs last year's Jan; one locked half drops the month; Method 4 blank template columns.
+
 ## 2026-10-01
 
 ### Sales Plan Re-Aligner: step-2 warning for new listings in stores with no plan — `e6a89c5`
