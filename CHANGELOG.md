@@ -7,6 +7,16 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-02
 
+### Sales Plan Re-Aligner: engine delays cut — Method 1 run 100 s → 10 s — `cda7b06`
+- **Asked (user):** "cut the delays in all the method engines"
+- **Timed on your plan** (676k rows; check → realign → verify), old → new:
+  - Method 1 (your 53,504-row listing file): 7.9 + 90.6 + 2.0 s → **3.0 + 5.9 + 1.4 s**
+  - Method 2 re-phase LW_U_T-TOP: 0.6 + 5.2 + 1.2 → 0.6 + 4.9 + 1.2 s
+  - Method 3 split, Method 4 shift, Method 5 growth: ~9 s → ~8 s each
+- **Causes:** `add_new_departments` copied rows once per new listing and rebuilt a set inside its loop (37 s); `np.isin` on string keys is quadratic (53 s, two calls); `listing_targets` recomputed the same peers' cont % 1.7M times. Now: one merge, hash-based `isin`, memoised cont % / cluster averages.
+- **Same results:** every method's output compared old vs new engine on the real plan — identical rows, max difference 0.0.
+- **Not changed:** the xlsx downloads (full plan ~75 s, plan-to-plan longer) are xlsxwriter's own speed; CSV takes ~9 s.
+
 ### Sales Plan Re-Aligner: Method 1 new listings stay inside their attribute; exact 6-decimal download — `d8d1888`
 - **Asked (user):** "check pdh its original plan differs from the final output … new final is the source … fix the method 1" (files: Realigned Plan NEW FINAL = original, Realigned Plan Post Listing = the Method 1 output).
 - **What PDH showed:** PDH plans about 173 of its 176 Y listings already in NEW FINAL, so they were correctly left as they are (the file's L_EW_DRESS FABRIC / L_EW_SAREE_TANT are N, and already 0). PDH's one truly new listing, MSE_JAMAICAN (SUMMER), was re-split over the **whole** MENS division (`div_cap`), so every MENS attribute (HVY WINTER, REGULAR …) gave a little.
