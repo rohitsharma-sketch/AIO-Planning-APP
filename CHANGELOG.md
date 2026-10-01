@@ -7,6 +7,14 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-01
 
+### Sales Plan Re-Aligner: step-2 warning for new listings in stores with no plan — `e6a89c5`
+- **Asked (user):** "yes, add the warning in step 2", after PDH (an FY27 Q3 opening store, 0 in the whole original) got no plan for KB_BABA SUIT TXTL H/S though its REF NGC plans it.
+- **`importer.prepare_listing` (Methods 1 and 4):** every Y listing (no own values) whose store × division has **no plan in the original for the months it applies** is counted.
+  - The warning names every store, and the store × division examples with listing counts.
+  - It says why the listings stay 0 (Store × Division × Month always matches the original) and the fix: give the store its plan (AOP / NSO opening plan) in the original file and reload it.
+- **Your file:** "7129 new listing(s) in 123 store x division(s) … Stores (41): AD-NS-04 … NS-90, PDH".
+- `test_realign.py`: S3 with no LADIES plan lists B → named; S2 / C has a plan → not named.
+
 ### Sales Plan Re-Aligner: recheck — a failed check repairs the output and verifies again until it passes
 - **Asked (user):** "also install a rechecker if the check fails at any level then it should auto run till it passes through"
 - **Why not a plain rerun:** the realign is deterministic, so the same inputs give the same output and the same failure. Each recheck round therefore **repairs** the output instead.
