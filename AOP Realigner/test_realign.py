@@ -182,6 +182,14 @@ assert list(v4.loc[("S1", "D")]) == [40, 0, 40] and list(v4.loc[("S1", "A")]) ==
 assert np.allclose(v4.loc[("S1", "B")], [15, 60, 10]) and np.allclose(v4.loc[("S1", "C")], [15, 20, 10])  # +5/+5 Sep, +40 Nov to B
 assert np.allclose(v4.loc[("S2", "C")], [10 / 7, 5, 0]) and np.allclose(v4.loc[("S2", "B")], [5 - 10 / 7, 10, 5])
 assert list(v4.loc[("S3", "B")]) == [8, 0, 0] and list(v4.loc[("S3", "A")]) == [0, 8, 8] and notes4["capped"] == ["S3 / B"]
+# REF store first in Method 4 too (user, 2026-10-01): S3 lists B out of A - pooled 15/80 x 8 = 1.5, with REF S2 0.5 x 8 = 4
+chR = [{"store": "S3", "dept": "B", "listing": "Y", "start": 0, "values": None, "target": "A"}]
+vR = shift_targets(o1, chR, M, sec)[0].set_index(["Store Name", "DEPARTMENT"])
+assert np.isclose(vR.loc[("S3", "B"), "Sep'26"], 1.5) and np.isclose(vR.loc[("S3", "A"), "Sep'26"], 6.5)
+rR, sR, nR = shift_targets(o1, chR, M, sec, {"S3": "S2"})
+vR = rR.set_index(["Store Name", "DEPARTMENT"])
+assert np.isclose(vR.loc[("S3", "B"), "Sep'26"], 4) and np.isclose(vR.loc[("S3", "A"), "Sep'26"], 4)
+assert sR[("S3", "B")] == ("S2", "B") and nR["ref"] == 1 and nR["sized"] == 1
 out4, _, _, cmp4 = realign(orig, r4, M, src4)
 for st, m in [("S1", "Sep'26"), ("S1", "Nov'26"), ("S2", "Sep'26"), ("S3", "Sep'26")]:   # store x division x month untouched
     assert np.isclose(out4[out4["Store Name"] == st][m + " Plan"].sum(), orig[orig["Store Name"] == st][m + " Plan"].sum())

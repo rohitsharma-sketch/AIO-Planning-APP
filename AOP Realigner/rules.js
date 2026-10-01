@@ -71,6 +71,7 @@ const RULES_LATEST = {
     'A department that is alone in its attribute in a store has nothing to absorb its change: flagged ("couldn\'t fully land"), never spread to another attribute.',
     'Method 4: a shift target must be in the same division <b>and attribute</b>; a section target takes only its departments of that attribute.',
     'Method 1 new listings: sized from the REF store\'s cont % first, then the cluster\'s, × the store\'s division AOP; the rest of that store × division gives way pro-rata (division-level cap there). New <b>Listing check file</b> to see it before running.',
+    'Method 4 new listings are sized the same way (REF store first, then cluster) and still come only out of their target.',
     'Negative plan cells in the unlocked months are set to 0 after apportioning; the balance is re-apportioned inside their store × division × attribute × month (new check: "No negative plan in the unlocked months").',
     'New download <b>Plan to plan</b>: the full original vs final plan, row for row (Store × Department × MRP × Display Type), every month, Changed flag to filter on.',
     'Checks: "Store × Division × Attribute × Month = original (the cap)" plus "Store × Division × Month = original". The comparison download\'s cap sheet is now Store x Div x Attribute x Month.',

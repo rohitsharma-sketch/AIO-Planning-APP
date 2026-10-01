@@ -233,12 +233,13 @@ def split_targets(o, splits, months):
     return r, source
 
 
-def shift_targets(o, changes, months, section_of=None):
+def shift_targets(o, changes, months, section_of=None, ref_of=None):
     """Method 4 - listing / delisting shifted to a chosen target -> (revised Store x Dept values, source rows, notes).
     changes: [{store, dept, listing "Y"/"N", start, values (list or None), target}]; target = a department, or a
     section (every department of that section the store plans in the same division). Delisted: its value (from
     `start`, live months) moves into the target, split by the target departments' own value that month. Listed:
-    its value (sized from same-cluster peers as Method 1, or given) comes out of the target only, capped at what
+    its value (sized as Method 1 - the REF store's cont % first, then the cluster's, x the store's division AOP
+    (user, 2026-10-01: "apply the REF store rule in method 4 too") - or given) comes out of the target only, capped at what
     the target has. Nothing else moves, so every store x division x attribute x month total is unchanged (the target
     must be in the same division and attribute)."""
     section_of = section_of or {}
@@ -253,9 +254,9 @@ def shift_targets(o, changes, months, section_of=None):
         if np.abs(v).sum() > TOL:
             planned.setdefault(s, set()).add(d)
     ys = [c for c in changes if c["listing"] == "Y"]
-    sized, source = {}, {}
+    sized, source, lc = {}, {}, {"ref": 0, "estimated": 0}
     if ys:
-        r1, source, _, _ = listing_targets(o, ys, months)
+        r1, source, lc, _ = listing_targets(o, ys, months, ref_of)
         sized = {(s, d): np.asarray(v, float) for s, d, *v in r1.itertuples(index=False)}
     target, capped, errors, moved = {}, [], [], 0.0
     get = lambda k: target.setdefault(k, sd.get(k, np.zeros(n)).copy())
@@ -297,7 +298,7 @@ def shift_targets(o, changes, months, section_of=None):
     if errors:
         raise ValueError("; ".join(errors[:10]) + (" ..." if len(errors) > 10 else ""))
     r = pd.DataFrame([{STORE: s, DEPT: d, **dict(zip(months, v))} for (s, d), v in target.items()], columns=[STORE, DEPT, *months])
-    return r, source, {"capped": capped, "moved": moved}
+    return r, source, {"capped": capped, "moved": moved, "ref": lc["ref"], "sized": lc["estimated"]}
 
 
 def ly_label(m):

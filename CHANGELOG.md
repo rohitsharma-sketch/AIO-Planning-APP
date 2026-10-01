@@ -7,6 +7,16 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-01
 
+### Sales Plan Re-Aligner Method 4: new listings sized by the REF store rule too
+- **Asked (user):** "yes, apply the REF store rule in method 4 too"
+- **Change:** `engine.shift_targets(..., ref_of)` passes the plan's REF Name column to `listing_targets`.
+  - A Y listing shifted out of a target is sized like Method 1: the REF store's cont % first, then the same-cluster stores, then all stores, × the store's division AOP.
+  - It still comes **only out of its target** (capped at what the target has); nothing else moves.
+  - The step-2 note says how many listings used the REF store.
+- **Real plan check (in memory):** NAH + L_EW_SAREE_TANT out of L_EW_SAREE_FNCY. Oct 0.281636 (same as Method 1, from BGI); L_EW_SAREE_FNCY 1.931350 → 1.649714. All checks are ok.
+- `test_realign.py`: S3 lists B out of A, pooled 15/80 × 8 = 1.5 vs REF S2 0.5 × 8 = 4.
+- **Restart:** stopped every 8070 listener, and confirmed the new process post-dates the edit.
+
 ### Sales Plan Re-Aligner Method 1: new listings sized from the REF store's cont %, the whole store × division gives way, and a Listing check file
 - **Asked (user):** "first the store if found in such a case should look for refernce store cont % if not found then only cluster cont % will be taken will be apportioned on the respective store's cont % scale and then store x divsion aop will be multiplied on store's cont % on display so that the final plan can get adjusted according to the new listing. Also, give me a comparitive plan just like mehtod 2 in method 1". The user chose "Whole store × division" and "Check-file before running".
 - **Sizing** (`engine.listing_targets`, new `ref_of`): a Y listing with no plan in the store takes, month by month, the department's **cont % of its division in the store's REF store** (the plan's REF Name column) when that store plans it.

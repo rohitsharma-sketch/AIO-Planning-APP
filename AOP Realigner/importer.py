@@ -478,14 +478,16 @@ def prepare_listing(df, info, rep, orig, months, shift=False, section_of=None):
         return None, [], {}, info, rep
     if shift:
         try:
-            r, source, notes = shift_targets(orig, changes, months, section_of)
+            r, source, notes = shift_targets(orig, changes, months, section_of, _store_col(orig, REF_NAMES))
         except ValueError as e:
             rep.error(str(e))
             return None, [], {}, info, rep
         n_del = sum(c["listing"] == "N" for c in changes)
         rep.info(f"{n_del} delisting(s) move their plan into the named target only; {len(changes) - n_del} listing(s) take "
-                 f"theirs out of the target only (sized from same-cluster stores unless values are given). Nothing else "
-                 f"moves - every store x division x attribute x month stays as in the original.")
+                 f"theirs out of the target only - sized as the department's cont % of its division x the store's division "
+                 f"AOP, the cont % from the store's REF store ({notes['ref']}), else same-cluster stores "
+                 f"({notes['sized'] - notes['ref']}), unless values are given. Nothing else moves - every store x division x "
+                 f"attribute x month stays as in the original.")
         if notes["capped"]:
             rep.warn(f"{len(notes['capped'])} listing(s) wanted more than their target had in some month - capped at the "
                      f"target's value there (the target goes to 0 that month).", notes["capped"])
