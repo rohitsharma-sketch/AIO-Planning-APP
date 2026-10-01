@@ -476,6 +476,28 @@ def prepare_listing(df, info, rep, orig, months, shift=False, section_of=None):
         rep.error("None of the rows changes the plan - every delisted department is already unplanned and every "
                   "listed one already planned.")
         return None, [], {}, info, rep
+    # a new listing in a store x division with no plan in the original for its months stays 0 - Store x Division x
+    # Month always matches the original (user, 2026-10-01: PDH, an FY27 Q3 opening store, is 0 in the whole file)
+    dvt = orig.groupby([STORE, DIV])[[m + " Plan" for m in months]].sum()
+    dept_div = orig.groupby(DEPT)[DIV].first()
+    unlocked = np.array([not locked(m) for m in months])
+    empty = {}
+    for c in changes:
+        if c["listing"] != "Y" or c.get("values") is not None:
+            continue
+        k = (c["store"], dept_div.get(c["dept"]))
+        v = dvt.loc[k].to_numpy(float) if k in dvt.index else np.zeros(len(months))
+        if np.abs(v[(np.arange(len(months)) >= c["start"]) & unlocked]).sum() <= 1e-9:
+            empty.setdefault(k, 0)
+            empty[k] += 1
+    if empty:
+        stores = sorted({s for s, _ in empty})
+        rep.warn(f"{sum(empty.values())} new listing(s) in {len(empty)} store x division(s) with no plan in the original file "
+                 f"for their months - they stay 0, since Store x Division x Month always matches the original (nothing "
+                 f"to take a share of). Give these stores their plan (AOP / NSO opening plan) in the original file and "
+                 f"reload it; the listings then size by themselves. Stores ({len(stores)}): {', '.join(stores[:60])}"
+                 + (f" +{len(stores) - 60} more" if len(stores) > 60 else "") + ".",
+                 [f"{s} / {d}: {n} listing(s)" for (s, d), n in sorted(empty.items())])
     if shift:
         try:
             r, source, notes = shift_targets(orig, changes, months, section_of, _store_col(orig, REF_NAMES))

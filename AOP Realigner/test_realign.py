@@ -546,4 +546,12 @@ assert len(engine.repair(on, fixedo, MN)[1]) == 0                               
 cm = engine.merge_compare(cmpn, rows if len(rows) else engine.repair(on, bad, MN)[1])
 assert (cm.Status == "rechecked - fixed to fit the original").any()
 
+# step-2 warning (user, 2026-10-01): a new listing in a store x division with no plan in its months (PDH - an opening
+# store at 0 in the whole original) is named, since it can only stay 0
+o1e = o1.copy(); o1e.loc[o1e["Store Name"] == "S3", ["Sep'26 Plan", "Nov'26 Plan"]] = 0.0
+dfe, infe, repe = importer.read_table(b"Department,Store,Listing (Y/N)\nB,S3,Y\nC,S2,Y\n", "x.csv", importer.NEED_LISTING, "file")
+_, _, _, _, repe = importer.prepare_listing(dfe, infe, repe, o1e, M)
+we = [i for i in repe.items if i["level"] == "warning" and "no plan in the original" in i["msg"]]
+assert repe.ok and len(we) == 1 and we[0]["examples"] == ["S3 / LADIES: 1 listing(s)"], repe.items   # S2 / C has a plan: not named
+
 print("all realign checks passed")
