@@ -125,7 +125,8 @@ class H(BaseHTTPRequestHandler):
                     tags = main["SSG TAG"].replace("", "(blank)").value_counts().to_dict() if main is not None else {}
                     return self._send(200, {"job": state["job"], "plan": state["plan"], "ly": state["ly"], "months": state["months"],
                                             "blocks": [b for b, _ in ge.blocks(state["months"])] if state["months"] else [],
-                                            "tags": {str(k): int(v) for k, v in tags.items()}})
+                                            "tags": {str(k): int(v) for k, v in tags.items()},
+                                            "not_ssg": ge.not_comparable(main) if main is not None else {}})
             if path in ("/api/pivot", "/api/download"):
                 with lock:
                     if state["main"] is None:

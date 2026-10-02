@@ -146,7 +146,22 @@ def build_main(plan, months, ly):
     for name, _ in bl:
         out[f"{name} Growth % Val"] = _growth(out[f"TTL {name} Val TY"], out[f"TTL {name} Val LY"])
     out["TTL Growth % Val"] = _growth(out["TTL Val TY"], out["TTL Val LY"])
-    return pd.DataFrame(out).sort_values(["Division", "STORE NAME", "DEPARTMENT"]).reset_index(drop=True)
+    main = pd.DataFrame(out)
+    # a like-for-like (SSG) store must have last year's sales in every LY month - else it counts as OTHERS (user,
+    # 2026-10-02: BRN, SAH, SBW tagged SSG with no LY lifted SSG growth by ~3 points). The plan's tag is kept beside it.
+    lyst = main.groupby("STORE NAME")[lm].sum()
+    full = (lyst > 1e-9).all(axis=1)
+    tag = main["SSG TAG"].astype(str)
+    no_ly = tag.str.replace(" ", "").str.upper().str.startswith("SSG") & ~main["STORE NAME"].map(full).fillna(False).astype(bool)
+    main.insert(main.columns.get_loc("SSG TAG") + 1, "SSG TAG (plan)", tag)
+    main["SSG TAG"] = np.where(no_ly, "OTHERS", tag)
+    return main.sort_values(["Division", "STORE NAME", "DEPARTMENT"]).reset_index(drop=True)
+
+
+def not_comparable(main):
+    """Stores the plan tags SSG that count as OTHERS here (no LY in some month), with their plan tag."""
+    x = main[main["SSG TAG"] != main["SSG TAG (plan)"]] if "SSG TAG (plan)" in main else main.iloc[:0]
+    return x.groupby("STORE NAME")["SSG TAG (plan)"].first().to_dict()
 
 
 def pivot(main, months, tags=None):
