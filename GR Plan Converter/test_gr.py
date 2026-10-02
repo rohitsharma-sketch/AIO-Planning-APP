@@ -47,10 +47,4 @@ g = p[p.Level == "Grand Total"].iloc[0]
 assert np.isclose(g["TTL Val TY"], 15) and np.isclose(g["TTL Val LY"], 17) and np.isclose(g["TTL Growth %"], 15 / 17 - 1)
 assert list(p.Level) == ["Division", "Attribute", "Department", "Attribute", "Department", "Department", "Grand Total"]
 assert np.isclose(ge.pivot(main, M)["TTL Val LY"].iloc[-1], 18)                                     # all stores: S2's LY too
-# an SSG-tagged store with no LY in some month counts as OTHERS (S3: plan says SSG, no sales last year)
-main3 = ge.build_main(pd.concat([plan, pd.DataFrame([row("S3", "A", "SSG", 4.0)])]), M, ly)
-r3 = main3.set_index(["STORE NAME", "DEPARTMENT"])
-assert r3.loc[("S3", "A"), "SSG TAG"] == "OTHERS" and r3.loc[("S3", "A"), "SSG TAG (plan)"] == "SSG"
-assert ge.not_comparable(main3) == {"S3": "SSG"} and r3.loc[("S1", "A"), "SSG TAG"] == "SSG"
-assert np.isclose(ge.pivot(main3, M, ["SSG"])["TTL Val TY"].iloc[-1], 15)                          # S3's TY stays out of SSG
 print("all growth-vs-LY checks passed")

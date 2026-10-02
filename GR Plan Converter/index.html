@@ -86,7 +86,6 @@ tr.Division td{font-weight:800}tr.Attribute td{font-weight:600}tr.Grand td{font-
       <button class="btn" type="button" id="dl">Download GR % workbook</button></div>
     <div class="card-c">
       <div class="chips" id="tags" aria-label="Stores by SSG TAG"></div>
-      <p class="desc" id="notssg" hidden></p>
       <div class="tw" style="margin-top:12px"><table><thead id="th"></thead><tbody id="tb"></tbody></table></div>
     </div>
   </section>
@@ -128,9 +127,6 @@ async function refresh() {
     $('tags').innerHTML = '<span class="desc" style="margin:0 4px 0 0">SSG TAG:</span>' + all.map(t =>
       `<button type="button" class="chip${tags.includes(t) ? ' on' : ''}" aria-pressed="${tags.includes(t)}" data-t="${esc(t)}">${esc(t)} <span class="desc">${S.tags[t].toLocaleString('en-IN')}</span></button>`).join('')
       + `<button type="button" class="chip${!tags.length ? ' on' : ''}" aria-pressed="${!tags.length}" data-t="">All stores</button>`;
-    const ns = Object.keys(S.not_ssg || {});
-    $('notssg').hidden = !ns.length;
-    $('notssg').innerHTML = ns.length ? `<b>${ns.length} store(s) tagged SSG in the plan count as OTHERS here</b> - a like-for-like store needs last year's sales in every month and these have none in some: ${ns.map(esc).join(', ')}. Their plan tag stays in the workbook's &ldquo;SSG TAG (plan)&rdquo; column.` : '';
     await loadPivot();
   }
 }
