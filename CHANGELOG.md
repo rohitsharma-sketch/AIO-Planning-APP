@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-02
 
+### Sales Plan Re-Aligner: the final plan keeps the original rows in their order; new row-order check — `54a615b`
+- **Asked (user):** "Check this - why is the output changing in method 1 after re-allignment, put a check in mehtod 1 that the store x division x month should be the same after re-allignment" (a pivot of Original / Method 2 / Method 1 by store, Oct'26: Method 1 gave MAR 51.94 vs 55.34, AD-NS-04 20.56 vs 0, NS-41 190.41 vs 0 …).
+- **Cause:** the plan was right — every store × division × month of "Realigned Plan Post Listing" equals the original (the run's check: 0 of 6,384 off; per store Oct'26 MAR 55.34 = 55.34). But its **rows were in a different order**: a department rebuilt for a new listing (all-zero rows in the original) was dropped and re-added at the end, so only 0.34% of rows stayed in place. Taking the Method 1 values row by row against the original's rows reproduces the pivot exactly.
+- **Fix:** every original row now keeps its place. A rebuilt store-dept reuses its own rows where MRP × display match the source store and only adds the source's other rows, after all original rows. On your file: 676,704 of 676,704 rows in place; values identical to before (1e-14); a row-by-row pivot now equals the original per store (max difference 0.0).
+- **Checks:** "Store × Division × Month = original" already runs on every method; new **"Original rows kept in the file's order"** fails if rows ever move again. All five methods re-run on the real plan: every check ok.
+- `test_realign.py`: a rebuilt department keeps its row in place and adds the missing MRP row at the end, with the source's 3 : 1 mix.
+
 ### Growth vs LY — new app on Landing (`/growth/`, port 8075) — `156a0ac`
 - **Asked (user):** "check this format and design a convertor for me so that whenever i want to input old data and the final sales plan it can plot the data against ly according to the hierarchy given in the sale splan" (format: GR % PLAN - 3.9.26.xlsb). Chose: LY "Auto from data lake"; "New app on Landing".
 - **Input:** the final sales plan (xlsx / xlsb / csv, any header row — the Re-Aligner's importer).
