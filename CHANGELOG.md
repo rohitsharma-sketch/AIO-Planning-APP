@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-02
 
+### Growth vs LY: block headers name their TY and LY months — `995ea29`
+- **Asked (user):** "LY should be 2025 OND and 2026 JF, and TY should be 2026 OND Plan and 2027 JF Plan" — already the pairing (each plan month vs the same month a year earlier); the headers only said OND / JF.
+- Headers now read "OND · TY Oct'26–Dec'26 plan vs LY Oct'25–Dec'25 sales", "JF · TY Jan'27–Feb'27 plan vs LY Jan'26–Feb'26 sales", "TTL · TY Oct'26–Feb'27 plan vs LY Oct'25–Feb'26 sales" (worked out from the plan's own months).
+
 ### Growth vs LY: LY covers every department of the plan's divisions; lake names normalised — `ae89c5f`
 - **Asked (user):** "This is my LY figures check why is there big difference in between mine and yours" — theirs (GR % PLAN 3.9.26, all stores) Oct'25 9,623.45 … Feb'26 P2 4,439.56 = 43,221.84; the app's screen showed 35,033.40.
 - **Why:** (1) the screen had the **SSG** filter on (SSG stores only); all stores was 42,671.84. (2) **133 L**: the lake spells KI_AP_BABA SUIT NEW BORN  F/S with two spaces, the plan with one — no match. (3) **~416 L**: departments that sold last year but have no line in the final plan (LW_U_T-TOP F/S 214, KB_BABA SUIT DNM F/S 156, KI_AP_CASUAL SHIRT F/S 24, KI_AP_TOP F/S 19, MU_CORD SETS 3) weren't counted. Renamed / split departments (MSE_PYJAMA = MSE_HSR + TXTL PYJAMA, LW_L_JEGGING / PALAZZO → JOGGER / PALAZZO splits, KB_T-SHIRT H/S = POLO + R/N …) net to 0.
