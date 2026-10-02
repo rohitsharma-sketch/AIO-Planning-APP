@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-02
 
+### Growth vs LY: LY covers every department of the plan's divisions; lake names normalised — `ae89c5f`
+- **Asked (user):** "This is my LY figures check why is there big difference in between mine and yours" — theirs (GR % PLAN 3.9.26, all stores) Oct'25 9,623.45 … Feb'26 P2 4,439.56 = 43,221.84; the app's screen showed 35,033.40.
+- **Why:** (1) the screen had the **SSG** filter on (SSG stores only); all stores was 42,671.84. (2) **133 L**: the lake spells KI_AP_BABA SUIT NEW BORN  F/S with two spaces, the plan with one — no match. (3) **~416 L**: departments that sold last year but have no line in the final plan (LW_U_T-TOP F/S 214, KB_BABA SUIT DNM F/S 156, KI_AP_CASUAL SHIRT F/S 24, KI_AP_TOP F/S 19, MU_CORD SETS 3) weren't counted. Renamed / split departments (MSE_PYJAMA = MSE_HSR + TXTL PYJAMA, LW_L_JEGGING / PALAZZO → JOGGER / PALAZZO splits, KB_T-SHIRT H/S = POLO + R/N …) net to 0.
+- **Fix:** LY = every lake department of the plan's divisions (KIDS / LADIES / MENS) in the plan's stores, a department the plan doesn't have shown with TY 0 under the lake's division / attribute; names collapsed to one space.
+- **Now:** all stores LY 43,336.15 (vs 43,221.84). The 114 L left = departments with LY in neither the final plan nor the 3.9.26 file (ME_BLAZER SUIT 43.9, LW_L_CULOTTES 25.8, KB_BLAZER SUIT 24.0, LW_U_CROP TEES 6.4, KG_CAPRI SET 6.0, MU_SHACKET 3.6 …) — that file's department list came from the plan as it was on 3 Sep. SSG stores: LY 35,589.74, growth +18.9%.
+- `test_gr.py`: a double-spaced lake name lands on the plan's name; a KIDS department the plan dropped keeps its LY (TY 0, lake attribute); a FOOTWEAR department is left out.
+
 ### Sales Plan Re-Aligner: the final plan keeps the original rows in their order; new row-order check — `54a615b`
 - **Asked (user):** "Check this - why is the output changing in method 1 after re-allignment, put a check in mehtod 1 that the store x division x month should be the same after re-allignment" (a pivot of Original / Method 2 / Method 1 by store, Oct'26: Method 1 gave MAR 51.94 vs 55.34, AD-NS-04 20.56 vs 0, NS-41 190.41 vs 0 …).
 - **Cause:** the plan was right — every store × division × month of "Realigned Plan Post Listing" equals the original (the run's check: 0 of 6,384 off; per store Oct'26 MAR 55.34 = 55.34). But its **rows were in a different order**: a department rebuilt for a new listing (all-zero rows in the original) was dropped and re-added at the end, so only 0.34% of rows stayed in place. Taking the Method 1 values row by row against the original's rows reproduces the pivot exactly.
