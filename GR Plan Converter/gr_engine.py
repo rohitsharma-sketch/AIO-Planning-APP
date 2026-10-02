@@ -58,7 +58,7 @@ def load_ly(months, cache_dir, path=None):
     if not path:
         raise FileNotFoundError("The data lake's day-wise sales can't be read - it is reachable only on the office LAN.")
     lm = [ly_label(m) for m in months]
-    key = hashlib.md5(f"{path}|{os.path.getmtime(path)}|{'|'.join(lm)}".encode()).hexdigest()[:16]
+    key = hashlib.md5(f"v2|{path}|{os.path.getmtime(path)}|{'|'.join(lm)}".encode()).hexdigest()[:16]
     cache = os.path.join(cache_dir, f"ly_{key}.pkl")
     info = {"file": os.path.basename(path), "months": lm,
             "exported": datetime.fromtimestamp(os.path.getmtime(path)).strftime("%d %b %Y %H:%M")}
@@ -69,8 +69,10 @@ def load_ly(months, cache_dir, path=None):
     lo = min(datetime(y, mo, 1) for mo, y in span)
     hi_mo, hi_y = max(span, key=lambda x: (x[1], x[0]))
     hi = datetime(hi_y + (hi_mo == 12), hi_mo % 12 + 1, 1)
-    df = ds.dataset(path).to_table(columns=["STORE_NAME", "DEPARTMENT", "BILLDATE", "SL_V", "SL_Q"],
+    df = ds.dataset(path).to_table(columns=["STORE_NAME", "DIVISION", "DEPARTMENT", "ATTRIBUTE1", "BILLDATE", "SL_V", "SL_Q"],
                                    filter=(pc.field("BILLDATE") >= lo) & (pc.field("BILLDATE") < hi)).to_pandas()
+    for c in ("STORE_NAME", "DIVISION", "DEPARTMENT", "ATTRIBUTE1"):   # one space, as the plan reader writes names
+        df[c] = df[c].astype(str).str.replace(r"\s+", " ", regex=True).str.strip()   # (2026-10-02: KI_AP_BABA SUIT NEW BORN  F/S)
     d = df.pop("BILLDATE")
     mo, yr, day = d.dt.month.to_numpy(), d.dt.year.to_numpy(), d.dt.day.to_numpy()
     lab = pd.Series(d.dt.strftime("%b'%y").to_numpy(), index=df.index)
@@ -84,6 +86,9 @@ def load_ly(months, cache_dir, path=None):
     q.columns = [c + " Q" for c in lm]
     ly = pd.concat([v, q], axis=1)
     ly.index.names = [STORE, DEPT]
+    meta = df.groupby("DEPARTMENT")[["DIVISION", "ATTRIBUTE1"]].first()   # the lake's division / attribute of a department
+    ly["_DIV"] = ly.index.get_level_values(1).map(meta["DIVISION"])
+    ly["_ATTR"] = ly.index.get_level_values(1).map(meta["ATTRIBUTE1"])
     os.makedirs(cache_dir, exist_ok=True)
     with open(cache + ".tmp", "wb") as fh:
         pickle.dump(ly, fh)
@@ -103,22 +108,28 @@ def _growth(ty, ly):
 
 
 def build_main(plan, months, ly):
-    """The MAIN sheet: one row per Store x Department of the plan (plus any department of the plan its stores sold
-    last year but have no plan for), with the plan's hierarchy - Division, ST TAG, Attribute, SSG TAG - then TY value,
+    """The MAIN sheet: one row per Store x Department of the plan, plus every department of the plan's divisions its
+    stores sold last year but have no plan for (TY 0 - user, 2026-10-02: LY must be the whole of last year, e.g.
+    LW_U_T-TOP F/S, KB_BABA SUIT DNM F/S, which the final plan dropped), with the plan's hierarchy - Division, ST TAG,
+    Attribute (the lake's for a department the plan doesn't have), SSG TAG - then TY value,
     TY qty, LY value, LY qty by month, each with its block (SOND / JF) and season totals, and growth % per block and
     season (TY / LY - 1)."""
     st_tag, ssg, attr = _col(plan, "ST TAG"), _col(plan, "SSG TAG"), _col(plan, "ATTRIBUTE")
     V = [m + " Plan" for m in months]
     Q = [m + " Plan Qty" for m in months if m + " Plan Qty" in plan.columns]
     ty = plan.groupby([STORE, DEPT])[V + Q].sum()
-    lyk = ly[ly.index.get_level_values(0).isin(set(plan[STORE])) & ly.index.get_level_values(1).isin(set(plan[DEPT]))]
+    divs = set(plan[DIV])
+    in_div = ly["_DIV"].isin(divs).to_numpy() if "_DIV" in ly else ly.index.get_level_values(1).isin(set(plan[DEPT]))
+    lyk = ly[ly.index.get_level_values(0).isin(set(plan[STORE])) & in_div]
     idx = ty.index.union(lyk.index)
     ty, lyk = ty.reindex(idx).fillna(0.0), lyk.reindex(idx).fillna(0.0)
     first = lambda by, c: plan.groupby(by)[c].agg(lambda x: x.dropna().astype(str).mode().iat[0] if x.notna().any() else "")
     s, d = idx.get_level_values(0), idx.get_level_values(1)
-    div = d.map(first(DEPT, DIV))
+    lake = ly.groupby(level=1)[["_DIV", "_ATTR"]].first() if "_DIV" in ly else pd.DataFrame(columns=["_DIV", "_ATTR"])
+    div = pd.Series(d.map(first(DEPT, DIV))).fillna(pd.Series(d.map(lake["_DIV"]))).fillna("").to_numpy()
+    att = (pd.Series(d.map(first(DEPT, attr))) if attr else pd.Series([np.nan] * len(d))).fillna(pd.Series(d.map(lake["_ATTR"]))).fillna("").to_numpy()
     out = {"Div Conc": s + div, "Dep Conc": s + d, "Division": div, "STORE NAME": s, "DEPARTMENT": d,
-           "ST TAG": s.map(first(STORE, st_tag)) if st_tag else "", "ATTRIBUTE": d.map(first(DEPT, attr)) if attr else "",
+           "ST TAG": s.map(first(STORE, st_tag)) if st_tag else "", "ATTRIBUTE": att,
            "SSG TAG": s.map(first(STORE, ssg)) if ssg else ""}
     lm = [ly_label(m) for m in months]
     bl = blocks(months)
@@ -126,7 +137,7 @@ def build_main(plan, months, ly):
     for what, cols, vals in (
             ("Val TY", months, [ty[m + " Plan"].to_numpy() for m in months]),
             ("Qty TY", [m + " Q" for m in months], [ty[m + " Plan Qty"].to_numpy() if m + " Plan Qty" in ty else zero for m in months]),
-            ("Val LY", lm, [lyk[m].to_numpy() if m in lyk else zero for m in lm]),
+            ("Val LY", lm, [lyk[m].to_numpy() if m in lyk else zero for m in lm]),   # LY rows not sold: 0
             ("Qty LY", [m + " Q" for m in lm], [lyk[m + " Q"].to_numpy() if m + " Q" in lyk else zero for m in lm])):
         out.update(zip(cols, vals))
         for name, ms in bl:
