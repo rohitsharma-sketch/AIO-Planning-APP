@@ -47,4 +47,10 @@ g = p[p.Level == "Grand Total"].iloc[0]
 assert np.isclose(g["TTL Val TY"], 15) and np.isclose(g["TTL Val LY"], 17) and np.isclose(g["TTL Growth %"], 15 / 17 - 1)
 assert list(p.Level) == ["Division", "Attribute", "Department", "Attribute", "Department", "Department", "Grand Total"]
 assert np.isclose(ge.pivot(main, M)["TTL Val LY"].iloc[-1], 18)                                     # all stores: S2's LY too
+# the plan's tags group the stores as they are (user, 2026-10-02): S3, tagged SSG with no LY, stays SSG with LY 0
+main3 = ge.build_main(pd.concat([plan, pd.DataFrame([row("S3", "A", "SSG", 4.0)])]), M, ly)
+r3 = main3.set_index(["STORE NAME", "DEPARTMENT"])
+assert r3.loc[("S3", "A"), "SSG TAG"] == "SSG" and r3.loc[("S3", "A"), "TTL Val LY"] == 0
+p3 = ge.pivot(main3, M, ["SSG"]).iloc[-1]
+assert np.isclose(p3["TTL Val TY"], 15 + 20) and np.isclose(p3["TTL Val LY"], 17)
 print("all growth-vs-LY checks passed")
