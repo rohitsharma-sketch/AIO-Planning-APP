@@ -139,7 +139,13 @@ async function loadPivot() {
 }
 function draw() {
   const B = [...P.blocks, 'TTL'];
-  $('th').innerHTML = `<tr><th class="l" rowspan="2">Division › Attribute › Department</th>${B.map(b => `<th class="grp" colspan="3">${b}</th>`).join('')}</tr>
+  // each block's months, TY and LY, in the header (user, 2026-10-02: "LY should be 2025 OND and 2026 JF, TY 2026 OND / 2027 JF")
+  const yr = m => m.match(/'(\d\d)/)[1], grp = [];
+  P.months.forEach((m, i) => { if (!grp.length || yr(P.months[grp[grp.length - 1][0]]) !== yr(m)) grp.push([]); grp[grp.length - 1].push(i); });
+  grp.push(P.months.map((_, i) => i));
+  const span = (a, ix) => { const f = a[ix[0]].replace(/ P\d$/, ''), l = a[ix[ix.length - 1]].replace(/ P\d$/, ''); return f === l ? f : `${f}–${l}`; };
+  $('th').innerHTML = `<tr><th class="l" rowspan="2">Division › Attribute › Department</th>${B.map((b, k) =>
+    `<th class="grp" colspan="3">${b} <span class="desc" style="font-weight:500">· TY ${esc(span(P.months, grp[k]))} plan vs LY ${esc(span(P.ly_months, grp[k]))} sales</span></th>`).join('')}</tr>
     <tr>${B.map(() => '<th class="grp">TY</th><th>LY</th><th>Growth</th>').join('')}</tr>`;
   $('tb').innerHTML = P.rows.map((r, i) => {
     const show = r.level === 'Division' || r.level === 'Grand Total' || (r.level === 'Attribute' && open.has(r.div))
