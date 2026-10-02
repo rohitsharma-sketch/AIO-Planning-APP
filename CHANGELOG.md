@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-02
 
+### Growth vs LY: the source plan's tags group the stores, as they are — `ce49347` (reverts `55de313`)
+- **Asked (user):** "this rule is to be changed - follow tags from source plan as that will guide you to group you just have to plot ly numbers accordingly without fail according to the tag, and the new tags will follow without ly numbers"
+- The comparable-store rule (SSG only with LY in every month) is removed: every store is grouped by its own SSG TAG in the source plan; a store with no LY (e.g. BRN, SAH, SBW, tagged SSG in main.xlsx) shows LY 0 under its tag. No "SSG TAG (plan)" column any more.
+- main.xlsx, SSG stores: OND +23.1%, JF +9.9%, TTL +18.9% (KIDS 20.0%, LADIES 18.2%, MENS 18.5%). `test_gr.py`: an SSG-tagged store with no LY stays SSG with LY 0.
+
 ### Growth vs LY: an SSG store needs last year's sales in every month — `55de313`
 - **Asked (user):** "i have uploaded the main source plan with correct tags now implement the fix" (main.xlsx: one tag per store now; BRN / SAH / SBW are SSG, "032 - Stores" / "125 - Stores").
 - **Rule:** a store tagged SSG counts as like-for-like only with LY sales in **every** LY month (Oct'25 … Feb'26 P2) — the Re-Aligner's comparable-store rule; otherwise it counts as OTHERS. The plan's tag is kept in the workbook's new "SSG TAG (plan)" column and the page names those stores.
