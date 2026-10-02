@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-02
 
+### Growth vs LY: an SSG store needs last year's sales in every month — `55de313`
+- **Asked (user):** "i have uploaded the main source plan with correct tags now implement the fix" (main.xlsx: one tag per store now; BRN / SAH / SBW are SSG, "032 - Stores" / "125 - Stores").
+- **Rule:** a store tagged SSG counts as like-for-like only with LY sales in **every** LY month (Oct'25 … Feb'26 P2) — the Re-Aligner's comparable-store rule; otherwise it counts as OTHERS. The plan's tag is kept in the workbook's new "SSG TAG (plan)" column and the page names those stores.
+- **main.xlsx:** BRN, SAH, SBW have no LY in the data lake at all (under any store name; the lake's unplanned stores NBR, BDN, ABT, VSM, GPB, TZP are closed ones) → OTHERS here. SSG growth: OND **+20.1%** (was 23.1%), JF **+7.6%** (was 9.9%), TTL **+16.1%** — the same 120 stores as the 3.9.26 file.
+- `test_gr.py`: an SSG-tagged store with no LY counts as OTHERS, its TY stays out of the SSG pivot.
+
 ### Growth vs LY: block headers name their TY and LY months — `995ea29`
 - **Asked (user):** "LY should be 2025 OND and 2026 JF, and TY should be 2026 OND Plan and 2027 JF Plan" — already the pairing (each plan month vs the same month a year earlier); the headers only said OND / JF.
 - Headers now read "OND · TY Oct'26–Dec'26 plan vs LY Oct'25–Dec'25 sales", "JF · TY Jan'27–Feb'27 plan vs LY Jan'26–Feb'26 sales", "TTL · TY Oct'26–Feb'27 plan vs LY Oct'25–Feb'26 sales" (worked out from the plan's own months).
