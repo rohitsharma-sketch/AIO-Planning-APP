@@ -533,6 +533,17 @@ o6 = pd.DataFrame({"Store Name": "S", "DIVISION": "D", "ATTRIBUTE": "A", "Sep'26
 assert abs(engine.round6(o6)["Sep'26 Plan"].sum() - 1) < 1e-12 and abs(o6.round(6)["Sep'26 Plan"].sum() - 1) > 5e-7
 assert (np.abs(engine.round6(o6)["Sep'26 Plan"] - 1 / 3) < 1e-6).all()
 
+# row order (user, 2026-10-02): every original row keeps its place, new rows come after. S1's X has only zero rows
+# (MRP 1, 2); a new listing of X in S1 from S2 (MRP 1, 3) reuses S1's own MRP 1 row in place and adds MRP 3 at the end
+def xrow(store, dept, mrp, v):
+    return {"Store Name": store, "DIVISION": "MENS", "DEPARTMENT": dept, "MRP": mrp, "DISPLAY TYPE": "T", "Tag": "Original",
+            "Sep'26 Plan": v, "Sep'26 Plan Qty": v}
+o8 = pd.DataFrame([xrow("S1", "X", 1, 0.0), xrow("S1", "X", 2, 0.0), xrow("S1", "Y", 1, 10.0), xrow("S2", "X", 1, 3.0), xrow("S2", "X", 3, 1.0)])
+out8 = realign(o8, pd.DataFrame([{"Store Name": "S1", "DEPARTMENT": "X", "Sep'26": 4.0}]), ["Sep'26"], {("S1", "X"): ("S2", "X")})[0]
+assert out8.iloc[:5][["Store Name", "DEPARTMENT", "MRP"]].values.tolist() == o8[["Store Name", "DEPARTMENT", "MRP"]].values.tolist()
+assert len(out8) == 6 and out8.iloc[5][["Store Name", "DEPARTMENT", "MRP"]].tolist() == ["S1", "X", 3]
+assert np.allclose(out8["Sep'26 Plan"], [3, 0, 6, 3, 1, 1])   # S2's mix 3 : 1 on S1's MRP 1 row and the new MRP 3 row
+
 # plan to plan (user, 2026-10-01): every row of either plan, original vs final, changed ones flagged
 pp = engine.plan_to_plan(orig, out, M)
 assert len(pp) == len(out) and (pp["Row"] == "new in final").sum() == 2            # A F/S: 2 new MRP rows in S1

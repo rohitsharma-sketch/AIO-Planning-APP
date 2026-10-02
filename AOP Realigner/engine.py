@@ -86,16 +86,20 @@ def add_new_departments(o, r, months, source=None):
     MRP/display rows, zero original value. The rows come from source[(store, dept)] = (from_store, from_dept)
     when given (a split parent, a COPY FROM dept, or the same dept in a peer store for a new listing), else
     from the parent_for() dept in the same store. `_basis` = the row whose values give the MRP/display mix and
-    ASP (itself, or the source row for a clone). A sourced store-dept whose rows are all zero is rebuilt too."""
+    ASP (itself, or the source row for a clone). A sourced store-dept whose rows are all zero is rebuilt too: its own
+    rows take the source's mix where MRP x display match, and only the source's other rows are added.
+    Every original row keeps its place in the file - new rows come after them (user, 2026-10-02: the Method 1 output,
+    pivoted against the original row by row, came out shifted - rebuilt rows used to be dropped and re-added at the end)."""
     source = source or {}
     o = o.reset_index(drop=True)
-    if source:
-        V = [m + " Plan" for m in months]
-        empty = o[V].abs().sum(axis=1).groupby([o[STORE], o[DEPT]]).transform("sum").to_numpy() <= TOL
-        o = o[~(pd.MultiIndex.from_arrays([o[STORE], o[DEPT]]).isin(list(source)) & empty)].reset_index(drop=True)
     o["_basis"] = np.arange(len(o))
     have = set(zip(o[STORE], o[DEPT]))
-    need = [k for k in dict.fromkeys(zip(r[STORE], r[DEPT])) if k not in have]
+    rebuild = set()
+    if source:
+        V = [m + " Plan" for m in months]
+        tot = o[V].abs().sum(axis=1).groupby([o[STORE], o[DEPT]]).sum()
+        rebuild = {k for k in source if k in have and tot.get(k, 0.0) <= TOL}
+    need = [k for k in dict.fromkeys(zip(r[STORE], r[DEPT])) if k not in have or k in rebuild]
     if not need:
         return o, 0, 0
     # one merge for every new store-dept (user, 2026-10-02: "cut the delays" - a copy per listing took ~120 s for 7,818)
@@ -115,6 +119,14 @@ def add_new_departments(o, r, months, source=None):
     if unmatched:
         raise ValueError("Revised departments with no original department to borrow MRP/display rows from: "
                          + ", ".join(unmatched[:10]) + (" ..." if len(unmatched) > 10 else ""))
+    if rebuild:   # a rebuilt store-dept's own row takes the source row of the same MRP x display as its basis
+        own = o.loc[pd.MultiIndex.from_arrays([o[STORE], o[DEPT]]).isin(list(rebuild)), [STORE, DEPT, MRP, DISP]]
+        own = own.assign(_row=own.index).drop_duplicates([STORE, DEPT, MRP, DISP])
+        m = c[["_s", "_d", MRP, DISP, "_basis"]].reset_index().merge(
+            own.rename(columns={STORE: "_s", DEPT: "_d"}), on=["_s", "_d", MRP, DISP], how="inner")
+        o.loc[m["_row"].to_numpy(), "_basis"] = m["_basis"].to_numpy()
+        reb = pd.MultiIndex.from_arrays([c["_s"], c["_d"]]).isin(list(rebuild))
+        c = c[~(reb & c.index.isin(m["index"]))]   # only the source's MRP x display rows the store didn't have are added
     cross = (c[STORE] != c["_s"]).to_numpy()
     if cross.any():   # rows borrowed from another store: take this store's own name, ref, cluster and tags (its mode)
         cols = [x for x in o.columns if x not in KEEP_ROW_COLS and not pd.api.types.is_numeric_dtype(o[x])]
@@ -710,6 +722,15 @@ def verify(o, r, out, months, div_cap=None):
     add("Store × Division × Month = original" + ("" if has_attr(o) else " (the cap)"), "ok" if cells == 0 else "fail",
         f"{cells} of {d.size:,} store-division-months differ from the original file" +
         ("" if cells == 0 else f" (largest {float(np.abs(d).max()):.4f}) - see the comparison"))
+    # the original rows stay in their own order (user, 2026-10-02: a row-by-row pivot of the output against the original
+    # came out shifted - rebuilt rows had moved to the end); new rows only come after them
+    k4 = [STORE, DEPT, MRP, DISP]
+    n_o = len(o)
+    same = (len(out) >= n_o and (out[k4].iloc[:n_o].reset_index(drop=True).astype(str)
+                                  == o[k4].reset_index(drop=True).astype(str)).all(axis=1).all())
+    add("Original rows kept in the file's order", "ok" if same else "fail",
+        f"{n_o:,} original rows in place" + (f", {len(out) - n_o:,} new rows after them" if len(out) > n_o else "")
+        if same else "the output's rows are not in the original file's order - compare by key, not by row")
     add("Grand total unchanged", "ok" if abs(g1 - g0) < 1e-6 else "fail", f"{g0:,.2f} → {g1:,.2f}")
     lv = [m + " Plan" for m in months if not locked(m)]
     nn = int((out[lv].to_numpy(float) < -TOL).sum()) if lv else 0

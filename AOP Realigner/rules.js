@@ -63,7 +63,7 @@ const RULES_NOW = [
     "The final plan is split to MRP × display rows by the <b>original plan's display-type cont %</b> in every store × department × month; the other departments are scaled as a whole, so theirs is kept too. Every run checks it.",
   ]],
   ['Checks on every run', [
-    'Recomputed from the output: kept values exact, store × division season totals, <b>Store × Division × Attribute × Month = original (the cap)</b>, store × division × month, grand total, locked months untouched, display-type cont % as the original. Any input error blocks the run; warnings and notes are listed with row examples.',
+    'Recomputed from the output: kept values exact, store × division season totals, <b>Store × Division × Attribute × Month = original (the cap)</b>, store × division × month, grand total, locked months untouched, display-type cont % as the original, and <b>the original rows kept in the file’s order</b> (new rows only after them, so the output lines up row for row with the original). Any input error blocks the run; warnings and notes are listed with row examples.',
     '<b>Recheck</b>: if any check fails, the run repairs the output (negatives to 0, every store × division × month put back exactly on the original) and runs every check again - round after round until all pass, a round has nothing left to fix, or 5 rounds. The result says "rechecked n×", the notes say what is still failing if anything, and the repaired cells show as "rechecked" in the comparison.',
     '<b>Comparison vs original</b> (download after a run): Summary (division × month), <b>Store x Div x Attribute x Month</b> - every one, original vs new, difference and "Within cap" - <b>Store x Dept x Month</b> - every department month that moved - and <b>Changed Rows</b> (every MRP × display cell, with why).',
     '<b>Plan to plan</b> (download after a run): the <b>whole</b> plan, not just the changes - every Store × Department × MRP × Display Type row of the original and the final, each month Original / Final / Difference plus the season, with Changed / Months changed up front to filter on (rows of a new department say "new in final").',
@@ -73,6 +73,7 @@ const RULES_NOW = [
 const RULES_LATEST = {
   date: '2026-10-02',
   changes: [
+    '<b>Row order kept</b>: every original row stays in its place in the final plan; a department rebuilt for a new listing reuses its own rows and only adds the MRP × display rows it did not have, after the original rows (it used to move them to the end, so a row-by-row pivot against the original came out shifted). New check: “Original rows kept in the file’s order”.',
     'Method 1: a new listing now comes out of <b>its own attribute</b> only (was the whole store × division) - e.g. PDH’s new MSE_JAMAICAN (SUMMER) no longer takes from its winter and regular departments.',
     'Several new listings overflowing one attribute’s month: each now keeps its own season total (the move used to keep only their combined total).',
     'Final plan download: rounded to 6 decimals so that every store × division × attribute × month still adds up exactly to the original (rounding each cell alone put the grand total 0.0008 off).',
