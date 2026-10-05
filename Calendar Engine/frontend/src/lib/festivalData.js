@@ -33,6 +33,22 @@ function knownDate(name, year, fallback) {
   return old
 }
 
+// Every festival the app knows (its festival database, the Google reference cache and the built-in table) with
+// its date in each year fromYear..toYear - the "Download Festival Dates" list (user, 2026-10-05: "festivals and their
+// bulk year dates ... no clusters"). Same source order as everywhere: Google reference, then the built-in table;
+// '' when neither has that year (no estimate). Await loadFestivalReference() first. Rows in calendar order of the
+// first year that has a date, then by name.
+export function festivalYearTable(fromYear, toYear) {
+  const years = []
+  for (let y = Number(fromYear); y <= Number(toYear); y++) years.push(String(y))
+  const names = [...new Set([...FESTIVAL_DB.map(f => f.name), ...Object.keys(FESTIVAL_REFERENCE), ...Object.keys(FESTIVAL_DATES)])]
+  const rows = names.map(name => ({ name, dates: years.map(y => knownDate(name, y) || '') }))
+    .filter(r => r.dates.some(Boolean))
+  const md = r => { const d = r.dates.find(Boolean); return d ? d.slice(5) : '99-99' }
+  rows.sort((a, b) => md(a).localeCompare(md(b)) || a.name.localeCompare(b.name))
+  return { years, rows }
+}
+
 // ─── Default Festivals ───────────────────────────────────────────────────────
 // Ported verbatim from `Calendar Engine/calendar_engine.html` lines 1097-1160.
 export const DEFAULT_FESTIVALS = [

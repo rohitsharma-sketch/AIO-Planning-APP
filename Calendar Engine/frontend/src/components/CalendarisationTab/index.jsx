@@ -916,7 +916,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
                       Mapping's own upload+diff-preview flow - see
                       FestivalImportPanel for why this is an upsert per
                       (festival, cluster) row, never a full replace. */}
-                  <FestivalImportPanel profiles={profiles} onApply={handleImportFestivals} isPlanner={isPlanner} />
+                  <FestivalImportPanel profiles={profiles} onApply={handleImportFestivals} isPlanner={isPlanner} refYear={refYear} futYear={futYear} />
                 </div>
               )}
               {dateSyncChanges && (

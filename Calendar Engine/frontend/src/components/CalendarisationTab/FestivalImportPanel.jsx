@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { importFestivals } from '../../lib/api'
+import { festivalYearTable, loadFestivalReference } from '../../lib/festivalData'
 
 // Bulk festival-to-cluster import, modeled on StoreClusterMappingTab's own
 // "upload a template, review a diff before it applies" flow - upload a file,
@@ -11,6 +12,7 @@ import { importFestivals } from '../../lib/api'
 
 const KEY_SEP = ''
 const csvField = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 function downloadCsv(text, filename) {
   const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }))
@@ -47,7 +49,13 @@ function computeDiff(profiles, rows, clusterNames) {
   return { added, updated, unchanged, invalid }
 }
 
-export default function FestivalImportPanel({ profiles, onApply, isPlanner, busy }) {
+export default function FestivalImportPanel({ profiles, onApply, isPlanner, busy, refYear, futYear }) {
+  // "Download Festival Dates" (user, 2026-10-05): every festival with its date in each year of the chosen range -
+  // no clusters. Range defaults to the Version Setting years until the user picks their own.
+  const [yrFrom, setYrFrom] = useState(null)
+  const [yrTo, setYrTo] = useState(null)
+  useEffect(() => { if (yrFrom == null && refYear) setYrFrom(Number(refYear)) }, [refYear])  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (yrTo == null && futYear) setYrTo(Number(futYear)) }, [futYear])      // eslint-disable-line react-hooks/exhaustive-deps
   const [preview, setPreview] = useState(null)
   const [status, setStatus] = useState(null)
 
@@ -116,6 +124,19 @@ export default function FestivalImportPanel({ profiles, onApply, isPlanner, busy
     downloadCsv(rows.join('\n'), 'festival_cluster_template.csv')
   }
 
+  async function downloadFestivalDates() {
+    const a = Number(yrFrom), b = Number(yrTo)
+    if (!a || !b || a > b) { setStatus({ ok: false, msg: 'Pick a From year that is not after the To year.' }); return }
+    if (b - a > 20) { setStatus({ ok: false, msg: 'Pick at most 21 years.' }); return }
+    await loadFestivalReference()   // the Google reference first, as the calendar itself uses
+    const { years, rows } = festivalYearTable(a, b)
+    const fmt = iso => { if (!iso) return ''; const [y, m, dd] = iso.split('-'); return `${dd}-${MON[+m - 1]}-${y}` }
+    const out = [['Festival', ...years].map(csvField).join(',')]
+    rows.forEach(r => out.push([r.name, ...r.dates.map(fmt)].map(csvField).join(',')))
+    downloadCsv(out.join('\n'), `festival_dates_${a}-${b}.csv`)
+    setStatus({ ok: true, msg: `Downloaded ${rows.length} festivals x ${years.length} year${years.length === 1 ? '' : 's'} (${a}-${b})` })
+  }
+
   const d = preview?.diff
 
   return (
@@ -130,6 +151,14 @@ export default function FestivalImportPanel({ profiles, onApply, isPlanner, busy
       <button onClick={downloadTemplate} title="Download every cluster's current festivals as one long-form CSV - edit rows or add new ones for other clusters, then re-upload with Import Festivals">
         Download Festival Template (CSV)
       </button>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}
+        title="Every festival with its date in each year of the range - no clusters">
+        Festival dates from
+        <input type="number" min="2000" max="2100" value={yrFrom ?? ''} onChange={e => setYrFrom(e.target.value)} style={{ width: '70px' }} />
+        to
+        <input type="number" min="2000" max="2100" value={yrTo ?? ''} onChange={e => setYrTo(e.target.value)} style={{ width: '70px' }} />
+        <button onClick={downloadFestivalDates}>Download Festival Dates (CSV)</button>
+      </span>
       {status && (
         <span style={{ color: status.ok ? 'var(--green)' : 'var(--red)', fontSize: '12px' }}>{status.msg}</span>
       )}
