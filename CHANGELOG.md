@@ -7,6 +7,18 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### Pre-demo re-check of Calendar / AOP / BIS + BIS warm-up on start
+- **Asked (user):** "now re-check all 3 apps again as i am going to show it to the stakeholders tomorrow".
+- **Green:**
+  - one process per port, and the hostname link answers;
+  - every test passes except the known-stale `test_lfl_auto.py`;
+  - all 10 syncs succeeded today;
+  - AOP Version 2 is live and locked (MAMJ Rs.431.85 Cr, +11.1%), and opening it only reads (no re-run or publish);
+  - a first-time BIS browser lands exactly on AOP for every division (KIDS 136.41 / LADIES 128.15 / MENS 167.29) in Phase 1, with 125 fill rates loaded and no console errors;
+  - all four V2 calendars match today's engine (0 changed pairs, 0 reuse);
+  - the Calendar dist is current.
+- **Fixed (`sync_server.py`):** BIS's three data pulls (sales, history, sell-thru) run once per server process and are then served instantly. After a restart, the first visitor waited minutes with empty sell-thru / LY-growth columns and neutral planner factors. The server now starts all three itself 3 s after launch.
+
 ### BIS: the "use" control is now an accessible button
 - **Asked (user):** "make the use button a bit more accessible".
 - It's a real `<button>` labelled "Use" instead of tiny underlined text, so it can be reached with Tab and pressed with Enter / Space. It's 40×24 px with the suite's pale-fill style (contrast 8.4:1) and a visible focus ring.

@@ -950,5 +950,20 @@ if __name__ == "__main__":
     print("    GET /api/sync/history   - FY19 + FY26 full year -> JSON")
     print("    GET /api/sync/sellthru  - pull latest ST file  -> JSON")
     print()
+
+    def _warm_up():
+        """Start the three data pulls as soon as the server is up (user, 2026-10-05, before a stakeholder demo):
+        each job runs once per process and is then served instantly, so without this the FIRST browser after a
+        restart waited minutes with empty sell-thru / history columns and neutral planner factors."""
+        import time
+        import urllib.request as _ur
+        time.sleep(3)
+        for path in ("/api/sync/sales", "/api/sync/history", "/api/sync/sellthru"):
+            try:
+                _ur.urlopen("http://127.0.0.1:5050" + path, timeout=30).read()
+            except Exception as e:  # noqa: BLE001 - a browser's own sync still runs it later
+                print(f"  warm-up {path} failed: {e}")
+    import threading
+    threading.Thread(target=_warm_up, daemon=True).start()
     app.run(host="127.0.0.1", port=5050,   # reached via Landing /buyer/ (one address)
             debug=False, threaded=True)
