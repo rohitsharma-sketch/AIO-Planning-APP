@@ -7,6 +7,17 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### Calendar: three V2 calendars re-synced with the lagan rule + reindexed (data, no code)
+- **Asked (user):** "sync now the three V2 calendars and reindex".
+- Backed up first (scratchpad `calendar_backup_before_lagan.json`). Day maps were regenerated in place with today's engine and the Drik lagan dates, keeping the same calendar ids and saved_at:
+  - 2024→25: 860 of 3,650 pairs changed;
+  - 2025→26 All: 1,289 changed;
+  - 2026→27 All: 751 changed.
+- Without the lagan rule the engine reproduces every stored map exactly, so these changes come only from lagan. Lagan mismatches fell from 922 to 480, 920 to 328 and 1,026 to 474. No LY day is reused.
+- Day-count month shares are unchanged. Sales-weighted shares move a little: for 2026→27 only N. EAST / N. EAST - PUJA, where Mar'26 now splits about 72–77% to Mar'27 and 23–28% to Feb'27 (was 77–80%). AOP was not re-run, and the Mar'27 AOP override stays as given.
+- Reindex against "2026 -> 2027 Calendar - All": `calendar_reindex_sync` (mw + mw_dept, 4.13M rows read) and `calendar_reindex_dw_sync` (dw, 17.99M rows) both succeeded; `calendar_check_sync` passed all checks.
+- The 2021→22 V2 calendar saved this morning was not touched.
+
 ### BIS: Phase 1 / Phase 2 + fill rates from the PLAN vs FILL RATE pivot
 - **Asked (user):** "transform the model into 2 phases remove the prompt banner keep the model button on topbar, and rename Block wise to phase 1 and the month wise to phase 2 ... Phase 2 changes will be taken to the sales plan ... Pivot has fillrates now configure it accordingly". Choices: Phase 2 keeps BOTH each department's Phase 1 block total and each division-month AOP; fill rate = NEW FILL RATE % (W_CAP).
 - The login prompt is gone. The top-bar button reads **Phase 1 · Block** / **Phase 2 · Month** and switches with one click.
