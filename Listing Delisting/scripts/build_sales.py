@@ -8,19 +8,16 @@ latest file" pattern as the Calendar Engine day-wise source -- see memory).
 
 Usage: python build_sales.py
 """
-import glob
 import json
 import os
 import re
 import pyarrow.parquet as pq
-import pyarrow.compute as pc
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _paths import sales_dir  # noqa: E402  - same data-lake setting as the core syncs
 SALES_DIR = sales_dir()
-import sys  # noqa: E402
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))  # repo root
 from rs_common.lake_files import latest_path  # noqa: E402 - the one "which file" rule (29 Sep 2026)
 
@@ -103,7 +100,6 @@ def demo():
 
 
 if __name__ == '__main__':
-    import sys
     if len(sys.argv) > 1 and sys.argv[1] == '--test':
         demo()
     else:

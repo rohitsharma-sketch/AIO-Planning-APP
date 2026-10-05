@@ -17,7 +17,6 @@ Usage: python build_daily.py [--force]
 import datetime
 import json
 import os
-import re
 import sys
 import time
 
@@ -39,7 +38,6 @@ COLS = ["BILLDATE", "STORE_NAME", "DEPARTMENT", "SL_V"]
 DAILY_FROM = datetime.datetime(2022, 1, 1)  # benchmark years start here (festival dates exist from 2021; 2021 H1 = lockdowns)
 
 
-import sys  # noqa: E402
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))  # repo root
 from rs_common.lake_files import latest_path  # noqa: E402 - the one "which file" rule (29 Sep 2026)
 

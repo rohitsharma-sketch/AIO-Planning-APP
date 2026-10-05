@@ -30,7 +30,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE_DIR = os.path.join(HERE, ".cache")  # gitignored: real plan data
 ORIG_PKL = os.path.join(CACHE_DIR, "original.pkl")
 TIMINGS_JSON = os.path.join(CACHE_DIR, "timings.json")
-HISTORY_JSON = os.path.join(CACHE_DIR, "history.json")
 LOCKS_JSON = os.path.join(CACHE_DIR, "locks.json")
 REPHASE_OV_JSON = os.path.join(CACHE_DIR, "rephase_overrides.json")   # Re-phase store overrides (REF OLD, fixed mix)
 # Each signed-in user has their own workspace (user, 2026-09-30: "make it so each user gets their own copy"):
@@ -64,7 +63,6 @@ def _cached(path, build):
 def sections():
     """Attribute Master (the planning one): department -> section, names normalised like the importer."""
     def build(path):
-        import pandas as pd
         am = pd.read_excel(path, engine="calamine")
         am.columns = [str(c).strip().upper() for c in am.columns]
         n = lambda x: " ".join(str(x).split()).upper()

@@ -1,6 +1,5 @@
 import csv
 import glob
-import sys
 import openpyxl
 from openpyxl.styles import Font
 

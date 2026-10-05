@@ -514,7 +514,6 @@ def realign(o, r, months, source=None, div_cap=None):
             if np.abs(pd.DataFrame(M).groupby(g_).transform("sum").to_numpy() - Lnew[ix])[lv].max(initial=0) < 1e-12:
                 break
         new[ix] = np.where(lv, M, new[ix])
-    unplaced = excess[:, 0] - take.sum(1)  # excess with no room left in any other month
     # nothing left to absorb into (bucket stays under target), or excess that couldn't be placed (stays over)
 
     # 2a. nothing of the same attribute to absorb (user, 2026-10-01: a delisted department alone in its attribute in a
