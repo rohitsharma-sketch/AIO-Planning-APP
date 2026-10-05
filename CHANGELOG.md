@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### Calendar Engine: lagan days match lagan days (Drik Panchang dates)
+- **Asked (user):** "use the drik lagan dates in the calendar engine too"; chose "match lagan to lagan".
+- When the engine picks an LY day for an ordinary TY day, a Drik marriage-muhurat day now pairs with an LY muhurat day and a non-lagan day with a non-lagan day. This is weighed after month, before weekday (`getWeights().lagan = 196`), in both V1 and V2. Festival anchors are unchanged.
+- The rule only runs when both years were synced from Drik (`GET /api/calendar/lagan-dates`, read from `Landing/lagan-drik.json`); otherwise the engine behaves exactly as before.
+- BIHAR 2026→27 test: lagan mismatches 91→32 (V1), 93→33 (V2). The rest are months where the two years have different lagan counts (e.g. Jan 2026 has 0, Jan 2027 has 9). Same-weekday pairs drop by about 20 days, as that rule now comes second. Month placement, no-reuse (V2) and month adjacency are unchanged (`engine.test.mjs` test10).
+- **Locked calendars are not regenerated.** Their Calendar Library cards will show "Out of sync" until Sync Now (or Create Calendar → Lock & Save), followed by a reindex.
+
 ### Landing: Lagan Calendar = Drik Panchang's own list + "Sync with Drik Panchang" button
 - **Asked (user):** "check why is there a difference with drik panchang in lagan dates and give me a proper refresh button to sync it".
 - **Why it differed:** the page computed dates itself from tithi, weekday, Holashtak, Chaturmas, Navratri and Pitru Paksha only. Drik also rules out Kharmas (Sun in Dhanu / Meena), Guru / Shukra asta, Adhik maas, days without an auspicious nakshatra and bad yoga / karana, so 2026 showed 99 dates against Drik's 59 (e.g. Jan 2026: 13 vs 0, Shukra asta).

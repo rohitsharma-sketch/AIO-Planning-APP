@@ -32,8 +32,8 @@ const PRIORITY = {
       [null, "month's days used up - unused day from the adjacent month (Month Priority direction first), non-festive days only"]],
 }
 const PRIORITY_NOTE = {
-  1: 'Non-festive days never leave their month, so a short month reuses a last-year day.',
-  2: 'No last-year day is ever used twice.',
+  1: 'Non-festive days never leave their month, so a short month reuses a last-year day. Lagan (Drik Panchang) days pair with last-year lagan days before weekday is matched.',
+  2: 'No last-year day is ever used twice. Lagan (Drik Panchang) days pair with last-year lagan days before weekday is matched.',
 }
 // V1 = same month only, reuses a day when a month runs short; V2 = never
 // reuses, borrows the adjacent month instead (user decision 2026-09-25 - both

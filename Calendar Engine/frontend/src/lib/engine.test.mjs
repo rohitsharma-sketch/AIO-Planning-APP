@@ -193,6 +193,26 @@ function test9_dayTypePreserved() {
   console.log('PASS test9_dayTypePreserved');
 }
 
+// Lagan to lagan (user, 2026-10-05): with Drik's real 2026/2027 muhurat dates, far fewer ordinary days pair a
+// lagan day with a non-lagan day; no LY day is reused and nothing leaves the own/adjacent month; no lagan = unchanged.
+import { readFileSync } from 'node:fs';
+function test10_laganMatched() {
+  const drik = JSON.parse(readFileSync(new URL('../../../../Landing/lagan-drik.json', import.meta.url), 'utf8')).years;
+  const lagan = new Set();
+  for (const y of ['2026', '2027']) for (const [m, ds] of Object.entries(drik[y])) for (const d of ds)
+    lagan.add(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+  const miss = ms => ms.filter(m => m.mappingPriority > 2 && lagan.has(fmtISO(m.refDate)) !== lagan.has(fmtISO(m.futureDate))).length;
+  for (const version of [1, 2]) {
+    const off = generateMappings(BIHAR_FESTIVALS, REF_YR, FUT_YR, MAX_SHIFT, MO_PRI, null, version);
+    const on = generateMappings(BIHAR_FESTIVALS, REF_YR, FUT_YR, MAX_SHIFT, MO_PRI, null, version, lagan);
+    assert.deepEqual(off.map(m => fmtISO(m.refDate)), runsForVersion(version).map(m => fmtISO(m.refDate)), 'no lagan set must change nothing');
+    assert.ok(miss(on) < miss(off) / 2, `V${version}: lagan mismatches ${miss(on)} vs ${miss(off)} without the rule`);
+    for (const m of on.filter(m => m.mappingPriority > 2)) assert.ok(monthsAdjacent(m.refDate.getMonth(), m.futureDate.getMonth()));
+    if (version === 2) assert.equal(new Set(on.map(m => fmtISO(m.refDate))).size, on.length, 'V2 with lagan reused an LY day');
+    console.log(`PASS test10_laganMatched V${version} (lagan mismatches ${miss(off)} -> ${miss(on)})`);
+  }
+}
+test10_laganMatched();
 test1_noMonthAdjacencyViolations();
 test1b_reportedRowsRejected();
 test9_dayTypePreserved();

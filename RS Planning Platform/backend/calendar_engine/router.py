@@ -686,6 +686,21 @@ def sync_festival_reference(actor: dict = Depends(require_role("planner"))):
     return {"ok": True, **out}
 
 
+# Drik Panchang marriage-muhurat (Lagan) dates for the engine's lagan-to-lagan rule (user, 2026-10-05). The file
+# lives with the Landing page's Lagan Calendar, whose "Sync with Drik Panchang" button rewrites it.
+_LAGAN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "Landing", "lagan-drik.json")
+
+
+@router.get("/lagan-dates")
+def get_lagan_dates(user: dict = Depends(require_login)):
+    import json
+    try:
+        with open(_LAGAN_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {"years": {}, "synced": {}}
+
+
 @router.get("/app-state")
 def get_app_state(user: dict = Depends(require_login)):
     session = SessionLocal()

@@ -71,6 +71,8 @@ export async function importFestivals(file) {
 export const getClusterDaySales = () => fetchJson('/cluster-day-sales')
 export const getFestivalReference = (years) => fetchJson(`/festival-reference${years ? `?years=${years.join(',')}` : ''}`)
 export const syncFestivalReference = () => fetchJson('/festival-reference/sync', { method: 'POST' })
+// Drik Panchang marriage-muhurat (Lagan) dates - Landing/lagan-drik.json, re-synced from the Lagan Calendar
+export const getLaganDates = () => fetchJson('/lagan-dates')
 
 // app-state
 export const getAppState = () => fetchJson('/app-state')

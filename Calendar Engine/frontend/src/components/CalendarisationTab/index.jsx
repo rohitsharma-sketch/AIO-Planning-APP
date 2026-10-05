@@ -8,7 +8,7 @@ import FestivalImportPanel from './FestivalImportPanel'
 import OutputSection from './OutputSection'
 import CalendarLibrary from './CalendarLibrary'
 import ChangeLogViewer from './ChangeLogViewer'
-import { DEFAULT_FESTIVALS, applyYearToProfiles, yearSyncMessage, resolveFestivalDefaults, coreFestivalNamesFor, loadFestivalReference } from '../../lib/festivalData'
+import { DEFAULT_FESTIVALS, applyYearToProfiles, yearSyncMessage, resolveFestivalDefaults, coreFestivalNamesFor, loadFestivalReference, laganDaysFor } from '../../lib/festivalData'
 
 let _nextFestivalId = 1000
 
@@ -209,8 +209,8 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
 
     let workingProfiles = profiles
     let syncMsg = ''
+    await loadFestivalReference()  // everyone: it also loads the Drik lagan dates the engine matches on
     if (isPlanner) {
-      await loadFestivalReference()
       const sync = applyYearToProfiles(profiles, ry, fy)
       workingProfiles = sync.profiles
       if (sync.updated) {
@@ -237,7 +237,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
     try {
       const perCluster = workingProfiles.map(cp => ({
         name: cp.name,
-        mappings: generateMappings(cp.festivals, ry, fy, ms, moPri, coreFestivalNamesFor(cp.name), engineVersion),
+        mappings: generateMappings(cp.festivals, ry, fy, ms, moPri, coreFestivalNamesFor(cp.name), engineVersion, laganDaysFor(ry, fy)),
       }))
       setClusterMappingsRaw(perCluster)
       setAllDayMap(perCluster.flatMap(cm => cm.mappings.map(m => toRow(m, cm.name))))

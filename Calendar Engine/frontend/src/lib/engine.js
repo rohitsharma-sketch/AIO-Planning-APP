@@ -90,9 +90,14 @@ export function assignMinCost(C) {
   return a;
 }
 
+// lagan (user, 2026-10-05: "use the drik lagan dates in the calendar engine too" -> match lagan to lagan):
+// a Drik Panchang marriage-muhurat day maps to an LY muhurat day, an ordinary day to an ordinary day.
+// Weighed after month, before weekday: 196 > weekday + dayType + full proximity (100 + 50 + 45), < month (200).
+// Only applies when both years' Drik dates are known (W.laganDays = Set of ISO dates, else null).
 export function getWeights() {
-  return { festival: 1000, position: 500, month: 200, weekday: 100, dayType: 50, prox: 1 };
+  return { festival: 1000, position: 500, month: 200, lagan: 196, weekday: 100, dayType: 50, prox: 1 };
 }
+const laganMatch = (W, rDay, fDay) => !W.laganDays || W.laganDays.has(fmtISO(rDay)) === W.laganDays.has(fmtISO(fDay));
 export function scoreMapping(rDay, fDay, rInfo, fInfo, W, maxShift, moPri) {
   let score = 0, mtype, mpri;
   const monthMatch   = rDay.getMonth() === fDay.getMonth();
@@ -104,7 +109,8 @@ export function scoreMapping(rDay, fDay, rInfo, fInfo, W, maxShift, moPri) {
   } else if (rInfo && fInfo && rInfo.position === fInfo.position) {
     score += W.position; mtype = 'Festive Relative Day'; mpri = 2;
   }
-  score += (monthMatch ? W.month : 0) + (weekdayMatch ? W.weekday : 0) + (dayTypeMatch ? (W.dayType || 0) : 0)
+  score += (monthMatch ? W.month : 0) + (W.laganDays && laganMatch(W, rDay, fDay) ? W.lagan : 0)
+         + (weekdayMatch ? W.weekday : 0) + (dayTypeMatch ? (W.dayType || 0) : 0)
          + W.prox * Math.max(0, maxShift - Math.abs(diff));
   if (!mtype) {
     if (monthMatch && weekdayMatch)         { mtype = 'Same Month + Same Weekday';    mpri = 3; }
@@ -138,9 +144,9 @@ export function scoreMapping(rDay, fDay, rInfo, fInfo, W, maxShift, moPri) {
 // coreFestivalNamesFor() returns as of 2026-09-18 (see that file), but the
 // parameter itself stays general so a caller could still pass a real
 // restriction if a future need for one ever comes back.
-function _v1Core(fests, refYr, futYr, maxShift, moPri, coreNames) {
+function _v1Core(fests, refYr, futYr, maxShift, moPri, coreNames, lagan) {
   maxShift = +maxShift || 45;
-  const W = getWeights();
+  const W = { ...getWeights(), laganDays: lagan || null };
   const rDays = yearDays(refYr), fDays = yearDays(futYr);
 
   // Full festival map (every festival on the cluster's list, core or not) -
@@ -324,9 +330,9 @@ function _v1Core(fests, refYr, futYr, maxShift, moPri, coreNames) {
 // further month only if nothing else fits; festive TY days stay in their own
 // month. Then same weekday > same day type > nearest date. Replaces the
 // earlier greedy Rounds A/B/C + tier-4 reuse (5-15 reused days per cluster).
-function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
+function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames, lagan) {
   maxShift = +maxShift || 45;
-  const W = getWeights();
+  const W = { ...getWeights(), laganDays: lagan || null };
   const rDays = yearDays(refYr), fDays = yearDays(futYr);
   const rMapFull = buildFestMap(refYr, fests, refYr), fMapFull = buildFestMap(futYr, fests, refYr);
   const coreFests = coreNames ? fests.filter(f => coreNames.includes(f.name)) : fests;
@@ -378,7 +384,7 @@ function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
   const cost = (rd, fd) => {
     const dm = ((rd.getMonth() - fd.getMonth()) % 12 + 12) % 12, md = Math.min(dm, 12 - dm);
     const monthCost = md === 0 ? 0 : fMapFull[fmtISO(fd)] ? 1e7 : md === 1 ? (dm === prefDm ? 10000 : 10500) : 1e5 * md;
-    return monthCost + (rd.getDay() !== fd.getDay() ? 100 : 0) + (isWeekend(rd) !== isWeekend(fd) ? 50 : 0)
+    return monthCost + (laganMatch(W, rd, fd) ? 0 : W.lagan) + (rd.getDay() !== fd.getDay() ? 100 : 0) + (isWeekend(rd) !== isWeekend(fd) ? 50 : 0)
          + Math.abs(calDiff(rd, fd));
   };
   const n = Math.max(tyDays.length, lyFree.length);
@@ -436,9 +442,10 @@ function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) {
 // Public entry point. V2 runs V1 in full, then remaps non-festive ref dates
 // to the adjacent LY month - V2 is a transformation of V1's output, not a
 // separate algorithm.
-export function generateMappings(fests, refYr, futYr, maxShift, moPri, coreNames, version = 1) {
-  const v1 = _v1Core(fests, refYr, futYr, maxShift, moPri, coreNames);
-  return version === 2 ? _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames) : v1;
+// lagan: Set of ISO Drik muhurat dates covering refYr and futYr (festivalData.laganDaysFor), or null = no lagan rule.
+export function generateMappings(fests, refYr, futYr, maxShift, moPri, coreNames, version = 1, lagan = null) {
+  const v1 = _v1Core(fests, refYr, futYr, maxShift, moPri, coreNames, lagan);
+  return version === 2 ? _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames, lagan) : v1;
 }
 
 // Greedy assignment can strand a few non-festive future days far from any free

@@ -1,5 +1,5 @@
 import { parseDate, fmtISO } from './dateUtils'
-import { getFestivalReference } from './api'
+import { getFestivalReference, getLaganDates } from './api'
 
 // ─── Festival reference cache (Google "Holidays in India") ────────────────────
 // { name: { 'YYYY': 'YYYY-MM-DD' } } from GET /festival-reference, which the
@@ -13,6 +13,7 @@ let FESTIVAL_REFERENCE = {}
 // Refetches the cache; await it before applyYearToProfiles. On failure the
 // previous cache is kept (lookups fall back to FESTIVAL_DATES, with a warning).
 export async function loadFestivalReference() {
+  await loadLaganDates()
   try {
     const { dates } = await getFestivalReference()
     const next = {}
@@ -21,6 +22,22 @@ export async function loadFestivalReference() {
   } catch (e) {
     console.warn('Festival reference cache unavailable - using built-in FESTIVAL_DATES', e)
   }
+}
+
+// ─── Lagan (Drik Panchang marriage muhurat) dates ─────────────────────────────
+// { 'YYYY': { 'M': [day, ...] } } from GET /lagan-dates. The engine matches lagan to lagan only when BOTH years were
+// synced from Drik (user, 2026-10-05); an unsynced year means no lagan rule, never the approximate computed list.
+let LAGAN = {}
+async function loadLaganDates() {
+  try { LAGAN = (await getLaganDates()).years || {} } catch (e) { console.warn('Lagan dates unavailable - calendar runs without the lagan rule', e) }
+}
+const pad = n => String(n).padStart(2, '0')
+export function laganDaysFor(refYr, futYr) {
+  const ys = [String(refYr), String(futYr)]
+  if (!ys.every(y => LAGAN[y])) return null
+  const out = new Set()
+  for (const y of ys) for (const [m, days] of Object.entries(LAGAN[y])) for (const d of days) out.add(`${y}-${pad(m)}-${pad(d)}`)
+  return out
 }
 
 // Reference date for (name, year), else the old hard-coded table (name added

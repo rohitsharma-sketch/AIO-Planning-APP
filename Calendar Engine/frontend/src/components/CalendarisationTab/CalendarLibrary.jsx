@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { listCalendarLibrary, getCalendar, saveCalendar, deleteCalendar, renameCalendar, getAppState } from '../../lib/api'
 import { generateMappings } from '../../lib/engine'
-import { coreFestivalNamesFor } from '../../lib/festivalData'
+import { coreFestivalNamesFor, laganDaysFor, loadFestivalReference } from '../../lib/festivalData'
 import { fmtISO, yearDays } from '../../lib/dateUtils'
 
 // Saved-date format used on every library card, matching the old app's
@@ -53,7 +53,7 @@ function checkIntegrity(full, appSettings) {
     for (const d of expectedFut) if (!futSeen.has(d)) missingDays++
 
     if (isV2) {
-      const fresh = generateMappings(cl.festivals, ry, fy, ms, moPri, coreFestivalNamesFor(cl.name), 2)
+      const fresh = generateMappings(cl.festivals, ry, fy, ms, moPri, coreFestivalNamesFor(cl.name), 2, laganDaysFor(ry, fy))
       const freshSet = new Set(fresh.map(m => `${fmtISO(m.refDate)}|${fmtISO(m.futureDate)}`))
       const storedSet = new Set(pairs.map(([r, f]) => `${r}|${f}`))
       const same = freshSet.size === storedSet.size && [...freshSet].every(k => storedSet.has(k))
@@ -71,7 +71,7 @@ export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSaveP
   // getCalendar(id) resolves - never blocks the initial list render.
   const [integrity, setIntegrity] = useState({})
   const [syncingId, setSyncingId] = useState(null)
-  const [appSettings, setAppSettings] = useState({ maxShift: 45, moPri: 'prev' })
+  const [appSettings, setAppSettings] = useState(null)  // null until app-state + lagan dates are in
 
   function refresh() {
     listCalendarLibrary().then(setItems).catch(e => setStatus({ ok: false, msg: e.message }))
@@ -79,7 +79,10 @@ export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSaveP
 
   useEffect(refresh, [])
   useEffect(() => {
-    getAppState().then(s => setAppSettings({ maxShift: s.maxShift ?? 45, moPri: s.moPri || 'prev' })).catch(() => {})
+    // lagan dates load with the festival reference; the staleness check must see them like Create Calendar does
+    Promise.all([getAppState(), loadFestivalReference()])
+      .then(([s]) => setAppSettings({ maxShift: s.maxShift ?? 45, moPri: s.moPri || 'prev' }))
+      .catch(() => setAppSettings({ maxShift: 45, moPri: 'prev' }))
   }, [])
 
   // Re-checks every card whenever the library list changes (including after
@@ -87,6 +90,7 @@ export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSaveP
   // present in `integrity` is skipped, so this never re-fetches a card that
   // hasn't changed just because some OTHER card in the list changed.
   useEffect(() => {
+    if (!appSettings) return
     items.forEach(c => {
       if (integrity[c.id] !== undefined) return
       getCalendar(c.id)
@@ -104,7 +108,7 @@ export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSaveP
   // calendar's own stored clusters, independent of whatever's currently
   // loaded in the live editor.
   async function handleSyncNow(item) {
-    if (!isPlanner || syncingId) return
+    if (!isPlanner || syncingId || !appSettings) return
     setSyncingId(item.id)
     try {
       const full = await getCalendar(item.id)
@@ -114,7 +118,7 @@ export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSaveP
       const dayMap = {}
       let changed = 0, total = 0
       full.clusters.forEach(cl => {
-        const fresh = generateMappings(cl.festivals, ry, fy, ms, moPri, coreFestivalNamesFor(cl.name), 2)
+        const fresh = generateMappings(cl.festivals, ry, fy, ms, moPri, coreFestivalNamesFor(cl.name), 2, laganDaysFor(ry, fy))
         dayMap[cl.name] = fresh.map(m => [fmtISO(m.refDate), fmtISO(m.futureDate)])
         const freshSet = new Set(dayMap[cl.name].map(([r, f]) => `${r}|${f}`))
         const stored = (full.dayMap && full.dayMap[cl.name]) || []
