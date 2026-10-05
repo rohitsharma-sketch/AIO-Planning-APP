@@ -381,7 +381,9 @@ td.aop-col-bg input.gi{background:var(--sf)}
 .gtsep{width:1px;height:34px;background:var(--bd)}
 
 /* ── MODALS (AOP sync, add dept) ────────────────────────────────────── */
-.pl-use{cursor:pointer;color:var(--ac);font-size:9.5px;font-weight:700;text-decoration:underline;margin-left:3px}
+.pl-use{cursor:pointer;margin-left:6px;min-height:24px;min-width:40px;padding:3px 9px;border:1px solid var(--st-line-2,var(--bd));border-radius:6px;background:var(--st-btn,var(--sf));color:var(--st-btn-text,var(--tx));font:inherit;font-size:11px;font-weight:700;line-height:1;vertical-align:middle}
+.pl-use:hover{background:var(--st-btn-hover,var(--st-btn))}
+.pl-use:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 .pl-tag{display:inline-block;padding:0 7px;border:1px solid var(--bd);border-radius:999px;margin:0 2px;font-size:10px}
 .pl-ft{width:100%;border-collapse:collapse;font-size:11px}.pl-ft th,.pl-ft td{padding:4px 8px;border-bottom:1px solid var(--bd);text-align:center}
 .pl-ft th{position:sticky;top:0;background:var(--sf);font-weight:700}
@@ -2724,7 +2726,7 @@ function cellVal(row,def){
       if(!a||a.gr==null)return '<span style="color:var(--mu)">-</span>';
       const isDept=row._key&&!row._isGrand&&!_parseAttrKey(row._key);
       const bg=isDept?_effGrowth(row,AOP_MIS):null;
-      const use=isDept&&bg!=null&&Math.abs(bg-a.gr)>0.005?` <span class="pl-use" onclick="event.stopPropagation();usePlannerGr('${row._key}')" title="Use the planner's Gr % for this department">use</span>`:'';
+      const use=isDept&&bg!=null&&Math.abs(bg-a.gr)>0.005?` <button type="button" class="pl-use" onclick="event.stopPropagation();usePlannerGr('${row._key}')" title="Set this department's buyer Gr % to the planner's ${fP(a.gr)} (now ${fP(bg)})" aria-label="Use the planner's Gr % ${fP(a.gr)} for ${DVDATA.find(d=>d.id===row._divId)?.secs.find(x=>x.id===row._key)?.nm||row._key}, buyer now ${fP(bg)}">Use</button>`:'';
       return `<span class="${gCls(a.gr)}" style="cursor:help" title="${_attr(_plannerWhy(row,AOP_MIS)+'\nLocked - it moves only with the factor table or its inputs')}">&#x1F512; ${fP(a.gr)}</span>${use}`;
     }
     case 'pl_val': {
@@ -5182,7 +5184,10 @@ function usePlannerGr(secId){
   AOP_MIS.forEach(mi=>{const o=_plannerCalc()[dv.id]?.[mi]?.[secId];if(o&&o.gr!=null)S.inputs[secId+'__'+mi]=o.gr;});
   S.buyerSet.add(secId); // taking the planner's Gr % is the buyer's choice - a re-seed keeps it
   AOP_MIS.forEach(mi=>_divReapp(dv,mi,secId));
-  refresh();toast("Planner's Gr % applied ✓");
+  refresh();
+  // the button goes once the two match - keep keyboard focus on this department's own growth input
+  (document.querySelector(`input[data-bk="${secId}"]`)||document.querySelector(`input[data-key^="${secId}__"]`))?.focus({preventScroll:true});
+  toast(`Planner's Gr % applied to ${dv.secs.find(s=>s.id===secId)?.nm||secId} ✓`);
 }
 /* Two phases (user, 2026-10-05: "transform the model into 2 phases remove the prompt banner keep the model button on
    topbar, and rename Block wise to phase 1 and the month wise to phase 2"). Stored as 'block' / 'month' as before.
@@ -5912,7 +5917,7 @@ function parseAopCSV(text,fname){
     </div>
   </div>
 </div>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div id="col-flt-dd" class="cfd" onclick="event.stopPropagation()"></div>
 
 <!-- MAGNIFIED ROW VIEW MODAL -->

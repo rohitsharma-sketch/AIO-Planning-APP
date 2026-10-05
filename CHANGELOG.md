@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### BIS: the "use" control is now an accessible button
+- **Asked (user):** "make the use button a bit more accessible".
+- It's a real `<button>` labelled "Use" instead of tiny underlined text, so it can be reached with Tab and pressed with Enter / Space. It's 40×24 px with the suite's pale-fill style (contrast 8.4:1) and a visible focus ring.
+- Screen readers hear e.g. "Use the planner's Gr % +8.4% for M_IN_BRIEF, buyer now +9.3%", and the hover text says the same.
+- After it's pressed, focus moves to that department's own growth input (the button disappears once the two match). The confirmation message names the department and is announced (`role="status"`).
+
 ### BIS: hover message on every Planner Gr% cell explains the number
 - **Asked (user):** "how is the planner's growth coming on each cell i want a small message".
 - Hovering a Planner Gr% cell (Phase 1 block, or each Phase 2 month) shows four lines:
