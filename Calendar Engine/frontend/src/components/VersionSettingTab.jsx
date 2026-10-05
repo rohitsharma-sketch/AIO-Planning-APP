@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { getAppState, putAppState, getClusterProfiles, putClusterProfiles } from '../lib/api'
 import { applyYearToProfiles, yearSyncMessage, loadFestivalReference } from '../lib/festivalData'
+import FestivalDatesCard from './FestivalDatesCard'
 
 // The seven mapping-type strings `lib/engine.js`'s scoreMapping() actually
 // assigns to `mappingType` (see its `mtype = ...` branches) - these are the
@@ -156,6 +157,8 @@ export default function VersionSettingTab({ isPlanner, onNavigate }) {
           </div>
         </div>
       </div>
+
+      <FestivalDatesCard refYear={refYear} futYear={futYear} />
 
       <div className="card">
         <div className="card-label">Festive Category Legend</div>
