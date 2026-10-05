@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### Calendar: Lock & Save name defaults to "LY -> TY Calendar - All" — `8cc5ea2`
+- **Asked (user):** "when i lock and save the default field should be LY -> TY Calendar - All always, where LY & TY is to be taken from version setting".
+- The prompt pre-fills `<Reference year> -> <Future year> Calendar - All` from Version Setting (was `<cluster> Calendar`); still editable, and an existing name still overwrites that template. Calendar `dist` rebuilt and committed in full.
+
 ### BIS: buyer growth reaches Sales Plan only on Save — `103de79`
 - **Asked (user):** "yes, push only on Save" (readiness review CRITICAL: opening BIS in a fresh browser silently overwrote the live buyer plan in Sales Plan with plain AOP seeds).
 - `saveState()` pushes only from the **Save** button; seeding, version loads, department moves and visibility changes save in the browser only. Verified: a fresh load seeds 944 cells and sends nothing; Save sends one POST (944 rows).
