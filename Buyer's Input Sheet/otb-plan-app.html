@@ -2721,7 +2721,7 @@ function cellVal(row,def){
     }
     case 'pl_val': {
       const a=_plannerRowAgg(row,c.filter(mi=>AOP_MIS.includes(mi)));
-      return a?(row._key==null||row._isGrand?`<b>${fCr(a.val)} Cr</b>`:fCr(a.val)):'<span style="color:var(--mu)">-</span>';
+      return a?(row._key==null||row._isGrand?`<b>${fCr(a.val)} Cr</b>`:`${fCr(a.val)} Cr`):'<span style="color:var(--mu)">-</span>';
     }
     case 'pl_gr_m': {
       const a=_plannerRowAgg(row,[def.mi]);

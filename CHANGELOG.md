@@ -7,6 +7,9 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### BIS: Planner Value shows "Cr" on every row
+- **Asked (user):** "missing the Cr in the end of each value" (Planner's input -> Planner Value). Only the grand total had it; department/attribute rows now read e.g. Rs.1.0 Cr.
+
 ### Calendar: MW Comparison tab removed (month-wise too)
 - **Asked (user):** "remove mw comparison" (on a month-wise result).
 - Tab, its store-month table and its CSV export deleted. Month-wise tabs: Reindexed Sales, Monthly Summary, By Cluster, Month Wise Matrix, P1 / P2 Comparison, Run Details.
