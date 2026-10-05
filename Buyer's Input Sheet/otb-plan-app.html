@@ -381,6 +381,10 @@ td.aop-col-bg input.gi{background:var(--sf)}
 .gtsep{width:1px;height:34px;background:var(--bd)}
 
 /* ── MODALS (AOP sync, add dept) ────────────────────────────────────── */
+.pl-use{cursor:pointer;color:var(--ac);font-size:9.5px;font-weight:700;text-decoration:underline;margin-left:3px}
+.pl-tag{display:inline-block;padding:0 7px;border:1px solid var(--bd);border-radius:999px;margin:0 2px;font-size:10px}
+.pl-ft{width:100%;border-collapse:collapse;font-size:11px}.pl-ft th,.pl-ft td{padding:4px 8px;border-bottom:1px solid var(--bd);text-align:center}
+.pl-ft th{position:sticky;top:0;background:var(--sf);font-weight:700}
 .aop-ov{position:fixed;inset:0;background:rgba(var(--st-ink-rgb,30,39,35),.45);z-index:800;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
 .aop-modal{background:var(--sf);border:1px solid var(--bd);border-radius:14px;width:880px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow-lg)}
 .aop-mhd{padding:16px 20px 14px;border-bottom:1px solid var(--bd);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-shrink:0}
@@ -558,7 +562,7 @@ tr:hover .mag-trig{display:inline}
         <div class="tmenu" id="planMenu">
           <div class="tbtn" onclick="toggleMenu('planMenu',event)">Plan tools <span class="caret">&#x25BE;</span></div>
           <div class="tmenu-pop">
-            <button class="tmenu-item" onclick="closeMenus();resetPlanToAop()">Reset to AOP<small>Re-seed every cell from the synced AOP</small></button>
+            <button class="tmenu-item" onclick="closeMenus();resetPlanToAop()">Reset to Planner's input<small>Re-seed every cell from the planner's Gr % (AOP &times; LY cont % &times; factor)</small></button>
             <button class="tmenu-item" onclick="closeMenus();revertToLyCont()">Re-apportion by LY Cont%<small>Split each division's AOP by LY contribution</small></button>
             <button class="tmenu-item" onclick="closeMenus();toggleLockAllMAMJ()"><span id="lockallbtn">&#x1F512; Lock All</span><small>Lock / unlock every buyer input in the MAMJ block</small></button>
             <div class="tmenu-sep"></div>
@@ -566,6 +570,8 @@ tr:hover .mag-trig{display:inline}
           </div>
         </div>
         <div class="tbar-sep"></div>
+        <div class="tbtn" id="mode-btn" onclick="openModeModal()" title="Block wise or Month wise - the Planner's input follows it">Mode: Block wise</div>
+        <div class="tbtn" onclick="openFactorTable()" title="The factor table behind the Planner's input">Factors</div>
         <div class="tbtn" onclick="openVersionLog()" id="history-btn">History</div>
         <div class="tbtn" onclick="exportCSV()">Export</div>
         <div class="tbtn pri" onclick="saveState(true)">Save</div>
@@ -1645,6 +1651,7 @@ let S = {
     dept: null,  // dept-level whitelist: null=all visible, Set=show only listed depts, empty Set=none visible
   },
   locked: new Set(),
+  buyerSet: new Set(),       // departments whose growth the buyer typed - kept over re-seeds (Planner's input, 2026-10-05)
   divLocked: new Set(),       // division ids locked by the buyer
   openFGroups: new Set(['mon','div','attr','sec']), // sidebar filter groups open state
   aopSeeds: {},
@@ -1991,6 +1998,10 @@ function _sortVal(row,def){
       if(ty==null||!ly)return -Infinity;
       return (ty-ly)/ly*100;
     }
+    case 'pl_gr':    return _plannerRowAgg(row,AOP_MIS)?.gr??-Infinity;
+    case 'pl_val':   return _plannerRowAgg(row,AOP_MIS)?.val??-Infinity;
+    case 'pl_gr_m':  return _plannerRowAgg(row,[def.mi])?.gr??-Infinity;
+    case 'pl_fac':   return AOP_MIS.map(mi=>_plannerCalc()[row._divId]?.[mi]?.[row._key]).find(Boolean)?.fc.f??-Infinity;
     case 'tot_ly':   return row._ly??0;
     case 'tot_ty':   return row._ty??-Infinity;
     case 'growth':{
@@ -2223,7 +2234,7 @@ function magCommit(mi,inp){
   if(inp.value===inp.defaultValue)return; // untouched: don't overwrite the exact value with its 2 dp display
   const k=_magSec.id+'__'+mi;
   const gr=parseFloat(inp.value);
-  if(!isNaN(gr)){S.inputs[k]=gr;S.locked.add(k);}else{delete S.inputs[k];S.locked.delete(k);}
+  if(!isNaN(gr)){S.inputs[k]=gr;S.locked.add(k);S.buyerSet.add(_magSec.id);}else{delete S.inputs[k];S.locked.delete(k);}
   _flashLiveBadges();
   reapportion(_magSec.id,mi);
   _refreshMagInputs();
@@ -2423,7 +2434,21 @@ function buildColDefs(){
 
     // ③ AOP Plan — MAMJ block input: one growth% per section, auto-distributed to months
     const hasAopBlk=S.aopLocked&&AOP_MIS.some(mi=>['mens','ladies','kids'].some(id=>(S.aop[id]?.[mi]||0)>0));
-    defs.push({block:'plan',group:'MAMJ Block',id:'block_input',sub:'Block Growth%',type:'block_input',hasAop:hasAopBlk});
+    // Planner's input beside the buyer's (user, 2026-10-05): Block mode = the MAMJ block; Month mode = month by month.
+    // The final value / growth stay in Plan Total and vs LY% below.
+    const pmons=c.filter(mi=>AOP_MIS.includes(mi));
+    if(_planMode()==='month'&&pmons.length){
+      pmons.forEach(mi=>{
+        defs.push({block:'plan',group:MO[mi],id:'plg_'+mi,sub:'Planner Gr%',mi,type:'pl_gr_m',hasAop:hasAopBlk});
+        defs.push({block:'plan',group:MO[mi],id:'big_'+mi,sub:'Buyer Gr%',mi,type:'buyer_gr_m',hasAop:hasAopBlk});
+      });
+      defs.push({block:'plan',group:"Planner's input",id:'pl_val',sub:'Planner Value',type:'pl_val',sum:true});
+    } else {
+      defs.push({block:'plan',group:"Planner's input",id:'pl_fac',sub:'Factor',type:'pl_fac'});
+      defs.push({block:'plan',group:"Planner's input",id:'pl_gr',sub:'Planner Gr%',type:'pl_gr',hasAop:hasAopBlk});
+      defs.push({block:'plan',group:"Planner's input",id:'pl_val',sub:'Planner Value',type:'pl_val',sum:true});
+      defs.push({block:'plan',group:"Buyer's input",id:'block_input',sub:'Block Growth%',type:'block_input',hasAop:hasAopBlk});
+    }
     // Optional monthly plan breakdown (read-only auto-apportioned)
     if(S.showPlanDetail){
       c.forEach(mi=>{
@@ -2678,6 +2703,43 @@ function cellVal(row,def){
       const lockBtn=isLkDiv?'':_lkBtn(isLkSec,anim,`toggleSecLock('${sec.id}')`,
         isLkSec?'Unlock section — allow reapportion':'Lock section — freeze vs reapportion',` data-sbk="${sec.id}"`);
       return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="${cls}" data-bk="${sec.id}" type="number" step="0.01" placeholder="%" value="${bg!=null?bg:''}" ${isLkDiv?'disabled title="Division locked"':''} oninput="setBlockGrowth('${sec.id}',this.value)" onblur="refresh()"></span>`;
+    }
+    case 'pl_fac': {
+      if(row._key==null||row._isGrand||_parseAttrKey(row._key))return '';
+      const o=AOP_MIS.map(mi=>_plannerCalc()[row._divId]?.[mi]?.[row._key]).find(Boolean);
+      if(!o)return '<span style="color:var(--mu)">-</span>';
+      const t=o.fc.tags,tip=`Sell-thru ${t.st||'-'} · LY growth ${t.growth||'-'} · Fill rate ${t.fill||'-'}`+
+        `${o.fc.inp.ref?' (inputs from '+o.fc.inp.ref+')':''} - ${o.fc.why}`;
+      return `<span title="${tip.replace(/"/g,'&quot;')}"${o.fc.f===1?' style="color:var(--mu)"':''}>${o.fc.f.toFixed(2)}</span>`;
+    }
+    case 'pl_gr': {
+      const a=_plannerRowAgg(row,AOP_MIS);
+      if(!a||a.gr==null)return '<span style="color:var(--mu)">-</span>';
+      const isDept=row._key&&!row._isGrand&&!_parseAttrKey(row._key);
+      const use=isDept&&S.buyerSet.has(row._key)?` <span class="pl-use" onclick="event.stopPropagation();usePlannerGr('${row._key}')" title="Use the planner's Gr % for this department">use</span>`:'';
+      return `<span class="${gCls(a.gr)}" title="Planner's Gr % - locked; it moves only with the factor table or its inputs">&#x1F512; ${fP(a.gr)}</span>${use}`;
+    }
+    case 'pl_val': {
+      const a=_plannerRowAgg(row,c.filter(mi=>AOP_MIS.includes(mi)));
+      return a?(row._key==null||row._isGrand?`<b>${fCr(a.val)} Cr</b>`:fCr(a.val)):'<span style="color:var(--mu)">-</span>';
+    }
+    case 'pl_gr_m': {
+      const a=_plannerRowAgg(row,[def.mi]);
+      if(!a||a.gr==null)return '<span style="color:var(--mu)">-</span>';
+      return `<span class="${gCls(a.gr)}" title="Planner's Gr % - locked">${fP(a.gr)}</span>`;
+    }
+    case 'buyer_gr_m': {
+      const isDept=row._key&&!row._isGrand&&!_parseAttrKey(row._key)&&row._divId;
+      if(!isDept){ // division / attribute / grand: the effective growth that month
+        let l=0,t=0;
+        _plannerScope(row).forEach(({dvId,ids})=>{const dv=DVDATA.find(d=>d.id===dvId);
+          ids.forEach(id=>{const sec=dv.secs.find(x=>x.id===id);const ly=_secMonLY(sec,dv,def.mi);l+=ly;t+=ly*(1+(S.inputs[id+'__'+def.mi]??0)/100);});});
+        if(!l)return '<span style="color:var(--mu)">-</span>';
+        const g=(t/l-1)*100;return `<span class="${gCls(g)}">${fP(g)}</span>`;
+      }
+      const k=row._key+'__'+def.mi,v=S.inputs[k];
+      const cls='gi'+(v==null?'':v<0?' neg':' has')+(S.locked.has(k)?' lkd':'');
+      return `<input class="${cls}" data-key="${k}" type="number" step="0.01" placeholder="%" value="${v!=null?+(+v).toFixed(2):''}" ${S.divLocked.has(row._divId)?'disabled':''} oninput="setGrowth('${row._key}',${def.mi},this.value)" onblur="refresh()">`;
     }
     case 'attr_label': return row._attr?`<span style="font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--mu)">${row._attr}</span>`:'—';
     case 'tot_ly': return `<b>${fCr(row._ly)} Cr</b>`;
@@ -3727,7 +3789,7 @@ function renderTable(){
       const lockBtn=(dvId&&S.report==='buyers')?`<span class="div-lock-btn${dvIsLocked?' locked':''}" onclick="event.stopPropagation();toggleDivLock('${dvId}')" title="${dvIsLocked?'Unlock division':'Lock division — freeze buyer inputs'}">${dvIsLocked?'🔒 Locked':'🔓 Lock'}</span>`:'';
       tbody+=`<tr class="grphd"><td class="c0 l" colspan="${dimCols}">${dot}${r._name}${lockBtn}</td>`;
       defs.forEach((d,di)=>{
-        const DEPT_TYPES=['dept_st','lfl_yoy','lfl_base','avg_st','period_lfl_yoy','period_lfl_base','ty','aop_mon','block_input','attr_label'];
+        const DEPT_TYPES=['dept_st','lfl_yoy','lfl_base','avg_st','period_lfl_yoy','period_lfl_base','ty','aop_mon','block_input','attr_label','pl_gr','pl_val','pl_gr_m','buyer_gr_m'];
         const v=d.type==='tot_ly'?`<b>${fCr(r._ly)} Cr</b>`:
                  DEPT_TYPES.includes(d.type)?cellVal(r,d):
                  d.type==='tot_ty'||d.type==='growth'||d.type==='contrib'?cellVal(r,d):'';
@@ -3751,7 +3813,7 @@ function renderTable(){
       tbody+='</tr>';
     } else if(r._isGrand){
       tbody+=`<tr class="grandtot"><td class="c0 l">GRAND TOTAL</td>${noC1?'':'<td class="c1"></td>'}`;
-      const SUM_TYPES=['sum_ly','sum_ty','sum_gr','ty','aop_mon'];
+      const SUM_TYPES=['sum_ly','sum_ty','sum_gr','ty','aop_mon','pl_gr','pl_val','pl_gr_m','buyer_gr_m'];
       defs.forEach((d,di)=>{
         const v=d.type==='tot_ly'?`${fCr(r._ly)} Cr`:
                  d.type==='tot_ty'?(r._ty!=null?`${fCr(r._ty)} Cr`:'-'):
@@ -3826,7 +3888,7 @@ function _flashLiveBadges(){
 }
 function setGrowth(key,mi,val){
   const k=key+'__'+mi, v=parseFloat(val);
-  if(!isNaN(v)){S.inputs[k]=v;S.locked.add(k);}else{delete S.inputs[k];S.locked.delete(k);}
+  if(!isNaN(v)){S.inputs[k]=v;S.locked.add(k);S.buyerSet.add(key);}else{delete S.inputs[k];S.locked.delete(k);}
   _flashLiveBadges();
   const el=document.activeElement;
   if(el&&el.classList.contains('gi')){
@@ -3860,9 +3922,11 @@ function setBlockGrowth(secKey,val){
   const v=parseFloat(val);
   if(!isNaN(v)){
     AOP_MIS.forEach(mi=>{S.inputs[secKey+'__'+mi]=v;});
+    S.buyerSet.add(secKey);
     AOP_MIS.forEach(mi=>_divReapp(dv,mi,secKey));
   } else {
     AOP_MIS.forEach(mi=>{delete S.inputs[secKey+'__'+mi];S.locked.delete(secKey+'__'+mi);});
+    S.buyerSet.delete(secKey);
     AOP_MIS.forEach(mi=>_divReapp(dv,mi,null));
   }
   // Update all block-input fields in the table (reapportion changes sibling sections' values)
@@ -4079,7 +4143,7 @@ function setAttrBlockGrowth(dvId,attr,val){
   const v=parseFloat(val);
   const secs=_attrActiveSecs(dv,attr);
   if(!isNaN(v)){
-    secs.forEach(sec=>AOP_MIS.forEach(mi=>{S.inputs[sec.id+'__'+mi]=v;}));
+    secs.forEach(sec=>{AOP_MIS.forEach(mi=>{S.inputs[sec.id+'__'+mi]=v;});S.buyerSet.add(sec.id);});
     AOP_MIS.forEach(mi=>_divReappAttr(dv,mi,attr));
   } else {
     secs.forEach(sec=>AOP_MIS.forEach(mi=>{delete S.inputs[sec.id+'__'+mi];S.locked.delete(sec.id+'__'+mi);}));
@@ -4137,7 +4201,8 @@ function _divReappAttr(dv,mi,tempLockAttr=null){
     if(!groups[attr])groups[attr]={secs:[],ly:0};
     groups[attr].secs.push(sec);
   });
-  Object.values(groups).forEach(g=>{g.ly=g.secs.reduce((a,sec)=>a+_secMonLY(sec,dv,mi),0);});
+  Object.values(groups).forEach(g=>{g.ly=g.secs.reduce((a,sec)=>a+_secMonLY(sec,dv,mi),0);
+    g.w=g.secs.reduce((a,sec)=>{const ly=_secMonLY(sec,dv,mi);return a+(ly>0?(_plannerVal(sec.id,dv.id,mi)??ly):0);},0);}); // planner share (2026-10-05)
   let lockedTY=0;
   const unlockedAttrs=[];
   Object.entries(groups).forEach(([attr,g])=>{
@@ -4153,10 +4218,10 @@ function _divReappAttr(dv,mi,tempLockAttr=null){
     }
   });
   const remaining=aopMon-lockedTY;
-  const totalUnlockedLY=unlockedAttrs.reduce((a,g)=>a+g.ly,0);
+  const totalUnlockedLY=unlockedAttrs.reduce((a,g)=>a+g.w,0);
   if(!totalUnlockedLY)return;
   unlockedAttrs.forEach(g=>{
-    const targetTY=remaining*(g.ly/totalUnlockedLY);
+    const targetTY=remaining*(g.w/totalUnlockedLY);
     const newG=g.ly>0?(targetTY/g.ly-1)*100:0; // unrounded: a 2 dp growth missed AOP by up to 0.21 L (deep check 2026-09-26)
     g.secs.forEach(sec=>{
       const k=sec.id+'__'+mi;
@@ -4181,15 +4246,18 @@ function _divReapp(dv,mi,tempLock=null){
   activeSecs.forEach(sec=>{
     const ly=_secMonLY(sec,dv,mi);
     const k=sec.id+'__'+mi;
-    // Locked: explicit 🔒 freeze OR the section currently being edited (tempLock anchor)
-    if(S.locked.has(k)||sec.id===tempLock){lockedTY+=ly*(1+(S.inputs[k]??0)/100);}
-    else{unlocked.push({sec,ly});}
+    // Locked: explicit 🔒 freeze OR the section(s) being edited / kept (tempLock anchor: an id or a Set)
+    const anchor=tempLock instanceof Set?tempLock.has(sec.id):sec.id===tempLock;
+    if(S.locked.has(k)||anchor){lockedTY+=ly*(1+(S.inputs[k]??0)/100);}
+    // weight = the planner's value (factor x AOP x LY cont %), so a re-balance keeps the planner's shape;
+    // identical to the LY weight while every factor is 1.00 (Planner's input, 2026-10-05)
+    else{unlocked.push({sec,ly,w:ly>0?(_plannerVal(sec.id,dv.id,mi)??ly):0});}
   });
   const remaining=aopMon-lockedTY;
-  const totalUnlockedLY=unlocked.reduce((a,{ly})=>a+ly,0);
+  const totalUnlockedLY=unlocked.reduce((a,{w})=>a+w,0);
   if(!totalUnlockedLY)return;
-  unlocked.forEach(({sec,ly})=>{
-    const targetTY=remaining*(ly/totalUnlockedLY);
+  unlocked.forEach(({sec,ly,w})=>{
+    const targetTY=remaining*(w/totalUnlockedLY);
     const newG=ly>0?(targetTY/ly-1)*100:0; // unrounded: a 2 dp growth missed AOP by up to 0.21 L (deep check 2026-09-26)
     const k=sec.id+'__'+mi;
     S.inputs[k]=newG;
@@ -4327,7 +4395,7 @@ function resetPlanToAop(){
 /* ── SAVE & EXPORT ─────────────────────────────── */
 function saveState(logVersion=false){
   const now=new Date();
-  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopVersionId:S.aopVersionId,aopUnit:S.aopUnit,locked:[...S.locked],aopSeeds:S.aopSeeds,aopSeededFrom:S.aopSeededFrom,aopSeedFp:S.aopSeedFp,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],customDepts:S.customDepts,deptSplit:1,at:now.toISOString()}))}catch(e){}
+  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopVersionId:S.aopVersionId,aopUnit:S.aopUnit,locked:[...S.locked],buyerSet:[...S.buyerSet],aopSeeds:S.aopSeeds,aopSeededFrom:S.aopSeededFrom,aopSeedFp:S.aopSeedFp,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],customDepts:S.customDepts,deptSplit:1,at:now.toISOString()}))}catch(e){}
   _updateSaveLabel(now);
   if(logVersion)_maybeSaveVersion(now);
   toast('State saved ✓');
@@ -4485,6 +4553,7 @@ function loadState(){
     // The pinned AOP version IS restored (unlike S.aop): it decides WHICH AOP publish the startup fetch applies.
     if(p.aopVersionId!=null)S.aopVersionId=p.aopVersionId;
     if(p.locked)S.locked=new Set(p.locked);
+    if(p.buyerSet)S.buyerSet=new Set(p.buyerSet);
     if(p.divTab!=null)S.divTab=p.divTab;
     if(p.hiddenSecs)S.hiddenSecs=new Set(p.hiddenSecs);
     if(p.manualInactive)S.manualInactive=new Set(p.manualInactive);
@@ -4920,6 +4989,160 @@ function _buildPaletteSwatches(){
 // Single theme (2026-09-25): palettes retired - clear any accent a previous palette pick left inline.
 (function(){const st=document.documentElement.style;['--ac','--ac-h','--ac-grad'].forEach(p=>st.removeProperty(p));try{localStorage.removeItem('ck_palette');}catch(_){}_recomputeAccentDerived();})();
 
+/* ── PLANNER'S INPUT (user, 5 Oct 2026 - logic-base "BIS buy plan / fill rate - planner's input") ───────
+   Planner's value per department = factor x (division AOP x the department's LY cont % among active departments),
+   re-balanced so each division x month still totals its AOP (factors move share between departments). The factor
+   comes from the shared factor table by three tags: Avg Weekly Sell-Thru % (the live ST BIS already shows), LY Growth
+   (25V26 cohort, MAMJ'26 vs MAMJ'25, value) and Fill Rate (an uploaded file - none yet, so every factor is a neutral
+   1.00, "fill rate pending"). Block mode: one factor per department from its MAMJ inputs; Month mode: one per
+   department x month. A department without ST / LY growth of its own takes them from its reference department
+   (Sales Plan's new-department mapping). Planner's Gr % = planner value / LY - 1, locked - it moves only when the
+   factor table or its inputs change. The buyer's Gr % starts on it; a buyer's own entry (S.buyerSet) supersedes.
+   Value only - no quantity anywhere. */
+const PLANNER={ft:null,refs:{},fill:null,canEdit:false};
+let _plMemo={k:null,v:null};
+function _planMode(){try{return localStorage.getItem('bis_plan_mode')==='month'?'month':'block';}catch(_){return 'block';}}
+function loadPlannerConfig(){
+  return fetch(SYNC_BASE+'/api/planner/config').then(r=>r.ok?r.json():null).then(j=>{
+    if(!j)return;
+    PLANNER.ft=j.factor_table||null;PLANNER.refs=j.refs||{};PLANNER.fill=j.fill_rate||null;_plMemo.k=null;
+  }).catch(()=>{});
+}
+function _band(list,x){
+  if(x==null||!list)return null;
+  let hit=null;list.forEach(b=>{if(b.from==null||x>=b.from)hit=b;});
+  return hit;
+}
+function _secByName(nm){if(!nm)return null;for(const dv of DVDATA){const s=dv.secs.find(x=>x.nm===nm);if(s)return s;}return null;}
+function _plannerFill(deptName,mis){return null;} // the fill-rate file is still to come (its template follows the user's pivot)
+// The factor's three inputs as fractions (ST 0.08 = 8%) - the department's own, else its reference department's
+function _plannerInputs(sec,mis){
+  const st=id=>{const o=(window._SELLTHRU_LIVE_DEPT||{})[id];if(!o)return null;
+    const v=mis.map(mi=>o[mi]).filter(x=>x!=null);return v.length?v.reduce((a,b)=>a+b,0)/v.length/100:null;};
+  const gr=id=>{const g=_lflTot([SEC_LFL_GROWTH[id]],'yoy',mis);return g==null?null:g/100;};
+  const r={st:st(sec.id),gr:gr(sec.id),fill:_plannerFill(sec.nm,mis),ref:null};
+  if(r.st==null||r.gr==null||r.fill==null){
+    const ref=_secByName(PLANNER.refs[sec.nm]);
+    if(ref){r.ref=ref.nm;r.st=r.st??st(ref.id);r.gr=r.gr??gr(ref.id);r.fill=r.fill??_plannerFill(ref.nm,mis);}
+  }
+  return r;
+}
+function _plannerFactor(sec,mis){
+  const ft=PLANNER.ft,x=_plannerInputs(sec,mis),b=ft?.bands||{};
+  const tags={st:_band(b.st,x.st)?.tag||null,growth:_band(b.growth,x.gr)?.tag||null,fill:_band(b.fill,x.fill)?.tag||null};
+  let f=1,why;
+  if(!ft)why='no factor table';
+  else if(x.fill==null)why='fill rate pending - neutral 1.00';
+  else if(!tags.st||!tags.growth)why='no '+(!tags.st?'sell-thru':'LY growth')+' history - neutral 1.00';
+  else{const row=(ft.factors||[]).find(r=>r.st===tags.st&&r.growth===tags.growth&&r.fill===tags.fill);
+    if(row){f=+row.factor;why=row.reason;}else why='no matching row - neutral 1.00';}
+  return {f,why,tags,inp:x};
+}
+// {divId:{mi:{secId:{ly,fc,val,gr}}}} over the AOP months - recomputed only when one of its inputs changes
+function _plannerCalc(){
+  const mode=_planMode();
+  const k=JSON.stringify([S.aop,[...S.hiddenSecs].sort(),mode,PLANNER.ft?.version??null,!!PLANNER.ft,!!PLANNER.fill,
+    Object.keys(PLANNER.refs).length,_lyHash(),Object.keys(window._SELLTHRU_LIVE_DEPT||{}).length,Object.keys(SEC_LFL_GROWTH).length]);
+  if(_plMemo.k===k)return _plMemo.v;
+  const out={};
+  DVDATA.forEach(dv=>{
+    out[dv.id]={};
+    const divAnn=dv.secs.reduce((a,s)=>a+s.ly,0);
+    const act=dv.secs.filter(s=>!S.hiddenSecs.has(s.id));
+    const blockF={};if(mode==='block')act.forEach(s=>{blockF[s.id]=_plannerFactor(s,AOP_MIS);});
+    AOP_MIS.forEach(mi=>{
+      const aop=S.aop[dv.id]?.[mi];if(!aop||aop<=0)return;
+      let lyTot=0;const ly={};act.forEach(s=>{ly[s.id]=_secMonLY(s,dv,mi,divAnn);lyTot+=ly[s.id];});
+      if(!lyTot)return;
+      const m={};let raw=0;
+      act.forEach(s=>{const fc=mode==='block'?blockF[s.id]:_plannerFactor(s,[mi]);
+        m[s.id]={ly:ly[s.id],fc,v:aop*ly[s.id]/lyTot*fc.f};raw+=m[s.id].v;});
+      const scale=raw>0?aop/raw:0; // re-balance: the division x month lands exactly on its AOP target
+      Object.values(m).forEach(o=>{o.val=o.v*scale;o.gr=o.ly>0?(o.val/o.ly-1)*100:null;});
+      out[dv.id][mi]=m;
+    });
+  });
+  _plMemo={k,v:out};
+  return out;
+}
+function _plannerVal(secId,dvId,mi){return _plannerCalc()[dvId]?.[mi]?.[secId]?.val??null;}
+// 'neutral' while every factor is 1.00 - the seed fingerprint changes (and browsers re-seed) only once factors bite
+function _plannerSig(){
+  const fs=[];Object.values(_plannerCalc()).forEach(m=>Object.entries(m).forEach(([mi,secs])=>
+    Object.entries(secs).forEach(([id,o])=>{if(o.fc.f!==1)fs.push(id+'@'+mi+':'+o.fc.f);})));
+  return fs.length?fs.sort().join('|'):'neutral';
+}
+// the departments a planner cell covers: one department, an attribute group, a division header, or the grand total
+function _plannerScope(row){
+  const ids=dv=>dv.secs.filter(s=>!S.hiddenSecs.has(s.id)).map(s=>s.id);
+  if(row._isGrand)return DVDATA.filter(dv=>(!S.divTab||dv.id===S.divTab)&&(!S.filters.div.size||S.filters.div.has(dv.id))).map(dv=>({dvId:dv.id,ids:ids(dv)}));
+  if(row._key==null&&row._divId){const dv=DVDATA.find(d=>d.id===row._divId);return dv?[{dvId:dv.id,ids:ids(dv)}]:[];}
+  const ai=row._key?_parseAttrKey(row._key):null;
+  if(ai){const dv=DVDATA.find(d=>d.id===ai.dvId);return dv?[{dvId:dv.id,ids:_attrActiveSecs(dv,ai.attr).map(s=>s.id)}]:[];}
+  return row._divId&&row._key?[{dvId:row._divId,ids:[row._key]}]:[];
+}
+// planner value + growth of a row over months: {val, ly, gr} or null
+function _plannerRowAgg(row,mis){
+  let v=0,l=0,any=false;const P=_plannerCalc();
+  _plannerScope(row).forEach(({dvId,ids})=>mis.forEach(mi=>ids.forEach(id=>{const o=P[dvId]?.[mi]?.[id];if(o){v+=o.val;l+=o.ly;any=true;}})));
+  return any?{val:v,ly:l,gr:l>0?(v/l-1)*100:null}:null;
+}
+// "use" - the department's buyer growth goes back to the planner's Gr % (month by month), the rest re-balance
+function usePlannerGr(secId){
+  const dv=DVDATA.find(d=>d.secs.some(s=>s.id===secId));if(!dv||S.divLocked.has(dv.id))return;
+  AOP_MIS.forEach(mi=>{const o=_plannerCalc()[dv.id]?.[mi]?.[secId];if(o&&o.gr!=null)S.inputs[secId+'__'+mi]=o.gr;});
+  S.buyerSet.delete(secId);
+  AOP_MIS.forEach(mi=>_divReapp(dv,mi,secId));
+  refresh();toast("Planner's Gr % applied ✓");
+}
+/* Block wise or Month wise - asked once per sign-in session (the browser session); the layout follows it.
+   Generic (user, 2026-10-05: "do not hardcode the prompt banner to block MAMJ") - the block is whatever months the plan holds. */
+function openModeModal(){const o=document.getElementById('modeOv');if(o)o.style.display='flex';}
+function setPlanMode(m){
+  try{localStorage.setItem('bis_plan_mode',m);sessionStorage.setItem('bis_mode_asked','1');}catch(_){}
+  document.getElementById('modeOv').style.display='none';
+  _plMemo.k=null;_syncModeBtn();
+  if(S.aopLocked&&_aopSeedFp()!==S.aopSeedFp)seedPlanFromAop(true); // block vs month factors differ only once they bite
+  refresh();
+}
+function _syncModeBtn(){const b=document.getElementById('mode-btn');if(b)b.textContent='Mode: '+(_planMode()==='month'?'Month wise':'Block wise');}
+function _askModeOnce(){let asked=false;try{asked=!!sessionStorage.getItem('bis_mode_asked');}catch(_){}if(!asked)openModeModal();}
+/* Factor table - everyone can see it; only an admin or a planner can change it (the server checks again) */
+function openFactorTable(){
+  fetch('/api/auth/me').then(r=>r.ok?r.json():null).catch(()=>null).then(me=>{
+    PLANNER.canEdit=!!(me&&(me.is_admin||me.role==='admin'||me.role==='planner'));
+    _renderFactorTable();document.getElementById('factorOv').style.display='flex';
+  });
+}
+function _renderFactorTable(){
+  const ft=PLANNER.ft,el=document.getElementById('factorBody'),ed=PLANNER.canEdit&&!!ft;
+  document.getElementById('factorSave').style.display=ed?'':'none';
+  document.getElementById('factorWho').textContent=ed?'You can change the factors (admin / planner).':'Read-only - only an admin or a planner can change the factors.';
+  if(!ft){el.innerHTML='<p style="padding:14px">No factor table on the server yet.</p>';return;}
+  const lbl=(k,t)=>(ft.bands[k].find(b=>b.tag===t)||{}).label||t;
+  const bands=k=>ft.bands[k].map(b=>`<span class="pl-tag">${b.tag} ${b.label}</span>`).join(' ');
+  el.innerHTML=`<div style="padding:10px 14px;font-size:11px;line-height:2">
+      <b>Avg Weekly Sell-Thru %</b> ${bands('st')}<br><b>LY Growth</b> (25V26, MAMJ'26 vs MAMJ'25, value) ${bands('growth')}<br><b>Fill Rate</b> ${bands('fill')}
+      ${PLANNER.fill?'':'<br><span style="color:var(--ne)">Fill-rate file not loaded yet - every factor is a neutral 1.00 until it is.</span>'}</div>
+    <table class="pl-ft"><thead><tr><th>Sell-Thru</th><th>LY Growth</th><th>Fill Rate</th><th>Factor</th><th style="text-align:left">Reason</th></tr></thead><tbody>${
+      ft.factors.map((r,i)=>`<tr><td>${r.st} ${lbl('st',r.st)}</td><td>${r.growth} ${lbl('growth',r.growth)}</td><td>${r.fill} ${lbl('fill',r.fill)}</td>
+        <td>${ed?`<input class="gi has" type="number" step="0.01" min="0.01" max="3" value="${r.factor}" data-fi="${i}" style="width:64px">`:(+r.factor).toFixed(2)}</td>
+        <td style="text-align:left">${r.reason||''}</td></tr>`).join('')}</tbody></table>
+    ${ft.updated_by?`<div style="padding:8px 14px;font-size:10px;color:var(--mu)">Last changed by ${ft.updated_by} · ${ft.updated_at}</div>`:''}`;
+}
+function saveFactorTable(){
+  const ft=JSON.parse(JSON.stringify(PLANNER.ft));
+  document.querySelectorAll('#factorBody input[data-fi]').forEach(inp=>{const v=parseFloat(inp.value);if(!isNaN(v))ft.factors[+inp.dataset.fi].factor=v;});
+  fetch(SYNC_BASE+'/api/planner/factor-table',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(ft)})
+    .then(r=>r.json().then(j=>({ok:r.ok,j}))).then(({ok,j})=>{
+      if(!ok){toast('Factor table NOT saved - '+(j.error||'error'));return;}
+      PLANNER.ft=j.factor_table;_plMemo.k=null;
+      document.getElementById('factorOv').style.display='none';
+      if(S.aopLocked&&_aopSeedFp()!==S.aopSeedFp)seedPlanFromAop(true); // planner defaults move; buyers' own entries stay
+      refresh();toast('Factor table saved ✓');
+    }).catch(()=>toast('Factor table NOT saved - server unreachable'));
+}
+
 loadState();
 // Populate auto-saved label from persisted timestamp
 (function(){try{const p=JSON.parse(localStorage.getItem('ck_otb_state')||'{}');if(p.at)_updateSaveLabel(new Date(p.at));}catch(_){}})();
@@ -4929,9 +5152,13 @@ _buildPaletteSwatches();
 _initNavDnD();
 loadSyncCache();
 // Fetch live AOP targets from Forecaster and auto-apply — always overrides stale state
-fetchAopTargets().then(()=>{
+// the planner's factor table first (local, fast) so a seed made on open already uses it (2026-10-05)
+loadPlannerConfig().finally(()=>fetchAopTargets().then(()=>{
   if(_aopCache&&_aopCache.targets)_autoApplyAop();
-}).catch(()=>{});
+}).catch(()=>{}));
+// the Block / Month prompt's markup sits after this script: ask once the page has finished loading
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{_syncModeBtn();_askModeOnce();});
+else{_syncModeBtn();_askModeOnce();}
 seedPlanDefaults(false);
 setTimeout(syncAopLockUI, 0); // fill any un-saved slots with division LFL YoY growth
 buildPills();
@@ -5258,7 +5485,8 @@ function _lyHash(){
 }
 // 'z1': 28 Sep fix - a department missing from a delivered month is 0, not the old share estimate (seeds set before it
 // counted winter lines in April and planned MENS Apr at -0.35%); the tag makes every browser re-seed once.
-function _aopSeedFp(){return JSON.stringify([S.aop,S.aopBase,_lyHash(),'z1']);}
+// + the planner's factors once any of them is not 1.00 (2026-10-05) - so browsers re-seed only when factors bite
+function _aopSeedFp(){const p=_plannerSig();return JSON.stringify([S.aop,S.aopBase,_lyHash(),'z1'].concat(p==='neutral'?[]:[p]));}
 // keepLocked (page open with a changed AOP, Sync AOP): the buyer's locked cells stay and the other departments
 // are re-balanced so each division x month still equals AOP. Without it (the "Re-seed plan" button) every cell
 // is reset to AOP and its lock cleared (it used to keep the lock flag on a value it had overwritten).
@@ -5266,6 +5494,7 @@ function seedPlanFromAop(keepLocked=false){
   if(!S.aopLocked){toast('Lock AOP first');return;}
   let seeded=0;
   S.aopSeeds={};
+  if(!keepLocked)S.buyerSet.clear(); // a full reset hands every department back to the planner's Gr %
   DVDATA.forEach(dv=>{
     for(let mi=0;mi<12;mi++){
       const aopCr=S.aop[dv.id]?.[mi]; // Rs. Crore
@@ -5291,15 +5520,20 @@ function seedPlanFromAop(keepLocked=false){
       // showed +8.8% vs AOP Summary's +11.1%. Kept unrounded (2026-09-26 audit):
       // a 2 dp growth missed the target by up to 0.15 L per division x month.
       const gr=(aopCr/activeLY-1)*100;
+      // Planner's Gr % by default (user, 2026-10-05) - factor x AOP x LY cont %, re-balanced to AOP; equals the
+      // division growth above while every factor is 1.00. A buyer's own entry (S.buyerSet) supersedes it.
+      const P=AOP_MIS.includes(mi)?_plannerCalc()[dv.id]?.[mi]:null;
+      const kept=new Set(keepLocked?dv.secs.filter(sec=>S.buyerSet.has(sec.id)).map(sec=>sec.id):[]);
       dv.secs.forEach(sec=>{
         const k=sec.id+'__'+mi;
-        S.aopSeeds[k]=gr;
-        if(keepLocked&&S.locked.has(k))return;
-        S.inputs[k]=gr;
+        const g=P?.[sec.id]?.gr??gr;
+        S.aopSeeds[k]=g;
+        if(keepLocked&&(S.locked.has(k)||kept.has(sec.id)))return;
+        S.inputs[k]=g;
         S.locked.delete(k);
         seeded++;
       });
-      if(keepLocked&&dv.secs.some(sec=>S.locked.has(sec.id+'__'+mi)))_divReapp(dv,mi);
+      if(keepLocked&&(kept.size||dv.secs.some(sec=>S.locked.has(sec.id+'__'+mi))))_divReapp(dv,mi,kept);
     }
   });
   S.aopSeededFrom=_aopCache?.version_id??null; // the publish these seeds came from (stamped on every push)
@@ -5542,6 +5776,24 @@ function parseAopCSV(text,fname){
 }
 </script>
 <!-- AOP SYNC MODAL -->
+<div class="aop-ov" id="modeOv" style="display:none">
+  <div class="aop-modal" style="width:540px">
+    <div class="aop-mhd"><div><div class="aop-mtitle">How are you planning today?</div>
+      <div class="aop-msub">The Planner's input and your growth % follow this. You can change it any time from <b>Mode</b> in the toolbar.</div></div></div>
+    <div class="aop-mbody" style="display:flex;flex-wrap:wrap;gap:12px;padding:18px">
+      <button class="tbtn pri" style="flex:1 1 200px;padding:16px;height:auto;text-align:left;line-height:1.5;white-space:normal" onclick="setPlanMode('block')"><b>Block wise</b><br><small>One factor and one growth % per department for the whole block of months</small></button>
+      <button class="tbtn" style="flex:1 1 200px;padding:16px;height:auto;text-align:left;line-height:1.5;white-space:normal" onclick="setPlanMode('month')"><b>Month wise</b><br><small>A factor and a growth % per department for each month</small></button>
+    </div>
+  </div>
+</div>
+<div class="aop-ov" id="factorOv" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="aop-modal" style="width:920px">
+    <div class="aop-mhd"><div><div class="aop-mtitle">Planner's factor table</div><div class="aop-msub" id="factorWho"></div></div>
+      <div style="display:flex;gap:8px"><button class="tbtn pri" id="factorSave" style="display:none" onclick="saveFactorTable()">Save</button>
+      <button class="tbtn" onclick="document.getElementById('factorOv').style.display='none'">&#x2715; Close</button></div></div>
+    <div class="aop-mbody" id="factorBody" style="overflow:auto"></div>
+  </div>
+</div>
 <div class="aop-ov" id="aopOv" style="display:none" onclick="if(event.target===this)closeAopModal()">
   <div class="aop-modal" id="aopModal">
     <div class="aop-mhd">

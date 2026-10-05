@@ -1,0 +1,316 @@
+{
+ "version": 1,
+ "source": "factor table.xlsx (revised 5 Oct 2026)",
+ "bands": {
+  "st": [
+   {
+    "tag": "Low",
+    "from": 0.0,
+    "label": "<5%"
+   },
+   {
+    "tag": "Average",
+    "from": 0.05,
+    "label": "5–10%"
+   },
+   {
+    "tag": "High",
+    "from": 0.1,
+    "label": "10–15%"
+   },
+   {
+    "tag": "Excellent",
+    "from": 0.15,
+    "label": "15%+"
+   }
+  ],
+  "growth": [
+   {
+    "tag": "Low",
+    "from": null,
+    "label": "<20%"
+   },
+   {
+    "tag": "Medium",
+    "from": 0.2,
+    "label": "20–50%"
+   },
+   {
+    "tag": "High",
+    "from": 0.5,
+    "label": "50%+"
+   }
+  ],
+  "fill": [
+   {
+    "tag": "Low",
+    "from": 0.0,
+    "label": "<50%"
+   },
+   {
+    "tag": "Avg",
+    "from": 0.5,
+    "label": "50–70%"
+   },
+   {
+    "tag": "Good",
+    "from": 0.7,
+    "label": "70%+"
+   }
+  ]
+ },
+ "factors": [
+  {
+   "st": "Low",
+   "growth": "Low",
+   "fill": "Low",
+   "factor": 0.98,
+   "reason": "Under-supplied → avoid aggressive cut"
+  },
+  {
+   "st": "Low",
+   "growth": "Low",
+   "fill": "Avg",
+   "factor": 0.92,
+   "reason": "Some supply constraint → mild protection"
+  },
+  {
+   "st": "Low",
+   "growth": "Low",
+   "fill": "Good",
+   "factor": 0.88,
+   "reason": "Weak ST despite good supply → clear demand issue"
+  },
+  {
+   "st": "Low",
+   "growth": "Medium",
+   "fill": "Low",
+   "factor": 0.95,
+   "reason": "Supply issue present → soften"
+  },
+  {
+   "st": "Low",
+   "growth": "Medium",
+   "fill": "Avg",
+   "factor": 0.9,
+   "reason": "Moderate supply → controlled cut"
+  },
+  {
+   "st": "Low",
+   "growth": "Medium",
+   "fill": "Good",
+   "factor": 0.85,
+   "reason": "Weak ST + decent LY + full supply → correction"
+  },
+  {
+   "st": "Low",
+   "growth": "High",
+   "fill": "Low",
+   "factor": 0.92,
+   "reason": "High LY but supply constrained → avoid over-cut"
+  },
+  {
+   "st": "Low",
+   "growth": "High",
+   "fill": "Avg",
+   "factor": 0.85,
+   "reason": "Still overgrown despite some constraint"
+  },
+  {
+   "st": "Low",
+   "growth": "High",
+   "fill": "Good",
+   "factor": 0.8,
+   "reason": "Weak ST + high LY + full supply → strongest correction"
+  },
+  {
+   "st": "Average",
+   "growth": "Low",
+   "fill": "Low",
+   "factor": 1.1,
+   "reason": "Under-supplied → unlock"
+  },
+  {
+   "st": "Average",
+   "growth": "Low",
+   "fill": "Avg",
+   "factor": 1.05,
+   "reason": "Some constraint → upside"
+  },
+  {
+   "st": "Average",
+   "growth": "Low",
+   "fill": "Good",
+   "factor": 1.02,
+   "reason": "Stable demand → slight push"
+  },
+  {
+   "st": "Average",
+   "growth": "Medium",
+   "fill": "Low",
+   "factor": 1.07,
+   "reason": "Supply constrained"
+  },
+  {
+   "st": "Average",
+   "growth": "Medium",
+   "fill": "Avg",
+   "factor": 1.03,
+   "reason": "Mild push"
+  },
+  {
+   "st": "Average",
+   "growth": "Medium",
+   "fill": "Good",
+   "factor": 1.0,
+   "reason": "Balanced"
+  },
+  {
+   "st": "Average",
+   "growth": "High",
+   "fill": "Low",
+   "factor": 1.02,
+   "reason": "Supply constraint offsets LY"
+  },
+  {
+   "st": "Average",
+   "growth": "High",
+   "fill": "Avg",
+   "factor": 0.98,
+   "reason": "Partial offset"
+  },
+  {
+   "st": "Average",
+   "growth": "High",
+   "fill": "Good",
+   "factor": 0.95,
+   "reason": "High LY → normalize"
+  },
+  {
+   "st": "High",
+   "growth": "Low",
+   "fill": "Low",
+   "factor": 1.16,
+   "reason": "High demand underfed"
+  },
+  {
+   "st": "High",
+   "growth": "Low",
+   "fill": "Avg",
+   "factor": 1.12,
+   "reason": "Constraint → more upside"
+  },
+  {
+   "st": "High",
+   "growth": "Low",
+   "fill": "Good",
+   "factor": 1.08,
+   "reason": "Strong ST → scale"
+  },
+  {
+   "st": "High",
+   "growth": "Medium",
+   "fill": "Low",
+   "factor": 1.1,
+   "reason": "Supply constrained"
+  },
+  {
+   "st": "High",
+   "growth": "Medium",
+   "fill": "Avg",
+   "factor": 1.05,
+   "reason": "Slight push"
+  },
+  {
+   "st": "High",
+   "growth": "Medium",
+   "fill": "Good",
+   "factor": 1.02,
+   "reason": "Core segment"
+  },
+  {
+   "st": "High",
+   "growth": "High",
+   "fill": "Low",
+   "factor": 1.05,
+   "reason": "Constraint offsets LY"
+  },
+  {
+   "st": "High",
+   "growth": "High",
+   "fill": "Avg",
+   "factor": 1.0,
+   "reason": "Balanced"
+  },
+  {
+   "st": "High",
+   "growth": "High",
+   "fill": "Good",
+   "factor": 0.95,
+   "reason": "Normalize inflated base"
+  },
+  {
+   "st": "Excellent",
+   "growth": "Low",
+   "fill": "Low",
+   "factor": 1.2,
+   "reason": "Under-supplied winner → max push"
+  },
+  {
+   "st": "Excellent",
+   "growth": "Low",
+   "fill": "Avg",
+   "factor": 1.16,
+   "reason": "Constraint → push harder"
+  },
+  {
+   "st": "Excellent",
+   "growth": "Low",
+   "fill": "Good",
+   "factor": 1.12,
+   "reason": "Top performer → scale"
+  },
+  {
+   "st": "Excellent",
+   "growth": "Medium",
+   "fill": "Low",
+   "factor": 1.15,
+   "reason": "Demand > supply"
+  },
+  {
+   "st": "Excellent",
+   "growth": "Medium",
+   "fill": "Avg",
+   "factor": 1.1,
+   "reason": "Upside exists"
+  },
+  {
+   "st": "Excellent",
+   "growth": "Medium",
+   "fill": "Good",
+   "factor": 1.05,
+   "reason": "Strong steady"
+  },
+  {
+   "st": "Excellent",
+   "growth": "High",
+   "fill": "Low",
+   "factor": 1.1,
+   "reason": "Supply constraint drives growth"
+  },
+  {
+   "st": "Excellent",
+   "growth": "High",
+   "fill": "Avg",
+   "factor": 1.05,
+   "reason": "Slight upside"
+  },
+  {
+   "st": "Excellent",
+   "growth": "High",
+   "fill": "Good",
+   "factor": 1.0,
+   "reason": "Maintain (base already high)"
+  }
+ ]
+}

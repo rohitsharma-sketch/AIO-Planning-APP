@@ -8,6 +8,7 @@ Start: python sync_server.py
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+import json
 import pandas as pd
 import os
 import glob
@@ -329,6 +330,90 @@ def aop_versions():
             return Response(r.read(), status=r.status, content_type="application/json")
     except Exception as e:
         return jsonify({"versions": [], "note": f"AOP Forecaster unreachable: {e}"})
+
+
+# ── Planner's input (user, 5 Oct 2026 - logic-base "BIS buy plan / fill rate - planner's input vs buyer's input") ──
+# The factor table (sell-thru tag x LY-growth tag x fill-rate tag -> factor) is shared by every browser, so it lives
+# here; only an admin or a planner may change it. New departments take their factor inputs from the reference
+# department in Sales Plan's new-department mapping. Fill rate comes from a file the user refreshes ad hoc (template to
+# follow); until it exists every factor is a neutral 1.00 ("fill rate pending").
+_HERE = os.path.dirname(os.path.abspath(__file__))
+FACTOR_TABLE_JSON = os.path.join(_HERE, "factor_table.json")
+FILL_RATE_JSON = os.path.join(_HERE, "fill_rate.json")
+NEW_DEPT_MAP_JSON = os.path.join(_HERE, "..", "SalesPlan", "backend", "new_dept_mapping.json")
+
+
+def _read_json(path, default):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return default
+
+
+@app.route("/api/planner/config")
+def planner_config():
+    refs = {}
+    for depts in (_read_json(NEW_DEPT_MAP_JSON, {}) or {}).values():
+        for dept, v in (depts or {}).items():
+            ref = (v or {}).get("ref_dept") if isinstance(v, dict) else None
+            if ref and ref != dept:
+                refs[dept] = ref
+    return jsonify({"factor_table": _read_json(FACTOR_TABLE_JSON, None), "refs": refs,
+                    "fill_rate": _read_json(FILL_RATE_JSON, None)})
+
+
+def _planner_editor():
+    """The signed-in user if they may edit the factor table (admin or planner), else None. BIS has no login of its
+    own: Landing forwards the platform's session cookie, which 8010 resolves (direct :5050 has none - refused)."""
+    import urllib.request as _ur
+    cookie = request.headers.get("Cookie")
+    if not cookie:
+        return None
+    try:
+        with _ur.urlopen(_ur.Request("http://127.0.0.1:8010/api/auth/me", headers={"Cookie": cookie}), timeout=5) as r:
+            me = json.load(r)
+    except Exception:
+        return None
+    return me if (me.get("is_admin") or me.get("role") in ("admin", "planner")) else None
+
+
+def _factor_table_error(ft):
+    """None if `ft` is a complete factor table: three band lists and one factor for every tag combination."""
+    try:
+        bands = ft["bands"]
+        tags = {k: [b["tag"] for b in bands[k]] for k in ("st", "growth", "fill")}
+        if any(not t or len(set(t)) != len(t) for t in tags.values()):
+            return "each band list needs distinct tags"
+        seen = set()
+        for f in ft["factors"]:
+            key = (f["st"], f["growth"], f["fill"])
+            if f["st"] not in tags["st"] or f["growth"] not in tags["growth"] or f["fill"] not in tags["fill"]:
+                return f"unknown tag in {key}"
+            if not (0 < float(f["factor"]) <= 3):
+                return f"factor out of range in {key}"
+            seen.add(key)
+        need = len(tags["st"]) * len(tags["growth"]) * len(tags["fill"])
+        return None if len(seen) == need == len(ft["factors"]) else f"need exactly one factor per combination ({need})"
+    except (KeyError, TypeError, ValueError) as e:
+        return f"malformed factor table: {e}"
+
+
+@app.route("/api/planner/factor-table", methods=["POST"])
+def planner_factor_table_save():
+    me = _planner_editor()
+    if not me:
+        return jsonify({"ok": False, "error": "Only an admin or a planner can change the factor table."}), 403
+    ft = request.get_json(silent=True) or {}
+    err = _factor_table_error(ft)
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
+    ft.update(version=int((_read_json(FACTOR_TABLE_JSON, {}) or {}).get("version", 0)) + 1,
+              updated_by=me.get("username"), updated_at=datetime.now().isoformat(timespec="seconds"))
+    with open(FACTOR_TABLE_JSON + ".tmp", "w", encoding="utf-8") as fh:
+        json.dump(ft, fh, ensure_ascii=False, indent=1)
+    os.replace(FACTOR_TABLE_JSON + ".tmp", FACTOR_TABLE_JSON)
+    return jsonify({"ok": True, "factor_table": ft})
 
 
 @app.route("/api/config/buyer-department-growth", methods=["GET", "POST"])
