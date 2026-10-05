@@ -5,6 +5,20 @@ Newest first. Each entry names its commit.
 
 ---
 
+## 2026-10-05
+
+### Readiness review (Calendar, AOP Forecaster, BIS) — security fixes — `ccd94d4`
+- **Asked (user):** "deploy agents to check the whole 3 core apps till BIS so that its made to be ready for deployment post review to the stakeholders"
+- **AOP Forecaster — CRITICAL fixed:** `_session_dir` took any session id, so `GET /api/session/..` (also `%2e%2e`, `..%5C`) returned 200 from the app folder and `DELETE /api/sessions/{id}` (no login on 8000) could `rmtree` the app folder or above. Session ids must now be UUIDs (all 132 real ones are) — else 404. Verified live.
+- **AOP Forecaster — a run no longer freezes the server:** `/api/run` was `async def` around the CPU-bound engine, blocking 8000 and, when mounted, Calendar / Sales Plan on 8010 for every user. Now a worker thread; runs stay one at a time (shared engine files).
+- **Calendar — path fix:** `_recover_reindex_job` joined any job id into a path (`..\..\Users`, `C:\Windows`); non-UUID ids are now ignored; real jobs still recover.
+- **Ops:** a second Landing server was bound to 7800 again (Windows lets two processes share the port); the duplicate was stopped, 8000/8010 relaunched by the real Landing's watchdog.
+- AOP + platform tests identical to the baseline.
+
+### Cleanup — dead code and stale files, no behaviour change — `9e85e6d`, `4c1726c`
+- **Asked (user):** "analyse the whole app and the functionality, delete extra lines of code, duplicate codes or extra trash stores without hampering the rules and code in the app"
+- Five read-only reviewers mapped proven-unused code per app; only items referenced at their own definition (git grep + AST) were removed: Sales Plan 96 lines (dead loaders / constants, unused imports); Re-Aligner 3 lines; Listing scripts / CSS 15 lines; `Landing/lagan-dates.json`. Each app's tests match the baseline.
+
 ## 2026-10-02
 
 ### Growth vs LY: the source plan's tags group the stores, as they are — `ce49347` (reverts `55de313`)
