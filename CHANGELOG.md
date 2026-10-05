@@ -7,8 +7,9 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
-### Calendar: 2021 calendar renamed (data)
+### Calendar: 2021 and 2024 calendars renamed (data)
 - **Asked (user):** "yes rename the 2021 calendar". "2021-> 2022 Calendar - All" → "2021 -> 2022 Calendar - All" (name only; id 1791178013513, saved_at and day map unchanged).
+- **Asked (user):** "yes add - All to the 2024 calendar". "2024 -> 2025 Calendar" → "2024 -> 2025 Calendar - All" (id 1790655101158, name only). All four now read "<ref> -> <fut> Calendar - All". The old name survives only in the legacy `Calendar Engine/Local DB/calendar_library.json` and `docs/HANDOVER.md` (an older calendar id); nothing live looks calendars up by name.
 
 ### Pre-demo re-check of Calendar / AOP / BIS + BIS warm-up on start
 - **Asked (user):** "now re-check all 3 apps again as i am going to show it to the stakeholders tomorrow".
