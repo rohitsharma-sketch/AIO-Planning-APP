@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### Cleanup: unused data files removed, 30 GB of old reindex jobs pruned — `eb00a6a`
+- **Asked (user):** "yes, prune the old reindex folders, remove the unused data files."
+- **Reindex jobs:** 146 folders (24 Aug – 26 Sep, 30.0 GB) under the platform's `calendar_engine/Local DB/reindex_jobs` deleted (untracked; regenerable by re-running a reindex); the 8 newest kept.
+- **Removed from git (recoverable from history):** Sales Plan old Actual Sales workbook, old parquet-sync caches, a duplicate MRP Cont % copy, Attribute Master outputs, NEW Departments.xlsx, start.bat.bak, watchdog.log; AOP inputs_from_config.xlsx, output/AOP_Forecast.xlsx, backend.log, diff_archive; BIS AOP/ reference workbooks + the stale `/buyer/demo` page; Calendar legacy `local_server.py` + `calendar_engine.html`, backup JSONs, Default Template.xlsx, an old CSV export. Kept: Sales Plan MRP Cont % / PPO Cont % (the only versioned backups of files the engines read from outside the repo).
+- Test sweep 39/43 (baseline 38/43) — the same 4 stale tests fail. Listing/delisting sync re-run after the 11:01 MemoryError: ok — all 10 syncs green.
+
 ### Calendar: Download Festival Dates (festivals × years, no clusters) — `0a27f8e`
 - **Asked (user):** "download the festival list with their bulk year dates ... ranging from year to year as per the selection. No clusters nothing just festivals".
 - **Moved to the Version Setting tab** (`8d517ed`, user: "give me the festival bulk year feature here"): a **Festival Dates** card under Calendar Years — From Year → To Year + **Download Festival Dates (CSV)**; the Festival Master toolbar copy was removed. One row per festival (calendar order), one column per year (DD-Mon-YYYY): Google reference first, then the built-in table, blank if neither (no estimate). Defaults to the Version Setting years; up to 21 years.
