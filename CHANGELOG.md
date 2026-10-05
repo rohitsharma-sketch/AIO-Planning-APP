@@ -7,6 +7,16 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### BIS: hover message on every Planner Gr% cell explains the number
+- **Asked (user):** "how is the planner's growth coming on each cell i want a small message".
+- Hovering a Planner Gr% cell (Phase 1 block, or each Phase 2 month) shows four lines:
+  1. the factor and its reason;
+  2. the three inputs with their bands (sell-thru, LY growth, fill rate, plus the reference department if borrowed);
+  3. AOP share by LY cont % × factor → re-balanced ×scale to the division AOP;
+  4. the result vs LY.
+
+  Example: "Mar: factor 1.08 - Strong ST → scale / Sell-thru 10.1% (High) · LY growth 19.2% (Low) · Fill rate 85.7% (Good) / AOP share Rs.0.27 Cr × 1.08 = Rs.0.30 Cr → re-balanced ×0.919 = Rs.0.27 Cr / vs LY Rs.0.26 Cr = +6.7%". Division, attribute and grand-total rows say they are the sum of their departments. `_plannerCalc` now keeps each cell's plain share and re-balance scale.
+
 ### BIS: the buyer's Gr % starts from the plain AOP share; the gap to the planner's is the factor
 - **Asked (user):** "how can buyer's input and planner's input be the same in all departments there must be a difference on the basis of factor"; chose "Plain AOP share".
 - Before, the buyer's Gr % was seeded with a copy of the Planner's Gr %. Now it's seeded with the department's share of the division AOP by LY contribution (factor 1.00, i.e. the division's growth that month). The Planner's Gr % keeps the factor and the re-balance to AOP. Example, MENS: M_IN_BRIEF factor 1.08 → planner +8.44% vs buyer +9.28%; ME_BLAZER factor 1.00 → +0.31% vs +8.94% (the factor-above-1 departments take share, so a 1.00 department loses some in the re-balance).

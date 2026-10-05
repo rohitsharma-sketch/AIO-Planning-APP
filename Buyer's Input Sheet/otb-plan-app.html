@@ -2725,7 +2725,7 @@ function cellVal(row,def){
       const isDept=row._key&&!row._isGrand&&!_parseAttrKey(row._key);
       const bg=isDept?_effGrowth(row,AOP_MIS):null;
       const use=isDept&&bg!=null&&Math.abs(bg-a.gr)>0.005?` <span class="pl-use" onclick="event.stopPropagation();usePlannerGr('${row._key}')" title="Use the planner's Gr % for this department">use</span>`:'';
-      return `<span class="${gCls(a.gr)}" title="Planner's Gr % - locked; it moves only with the factor table or its inputs">&#x1F512; ${fP(a.gr)}</span>${use}`;
+      return `<span class="${gCls(a.gr)}" style="cursor:help" title="${_attr(_plannerWhy(row,AOP_MIS)+'\nLocked - it moves only with the factor table or its inputs')}">&#x1F512; ${fP(a.gr)}</span>${use}`;
     }
     case 'pl_val': {
       const a=_plannerRowAgg(row,c.filter(mi=>AOP_MIS.includes(mi)));
@@ -2734,7 +2734,7 @@ function cellVal(row,def){
     case 'pl_gr_m': {
       const a=_plannerRowAgg(row,[def.mi]);
       if(!a||a.gr==null)return '<span style="color:var(--mu)">-</span>';
-      return `<span class="${gCls(a.gr)}" title="Planner's Gr % - locked">${fP(a.gr)}</span>`;
+      return `<span class="${gCls(a.gr)}" style="cursor:help" title="${_attr(_plannerWhy(row,[def.mi]))}">${fP(a.gr)}</span>`;
     }
     case 'p1_gr': {
       const g=_effGrowth(row,AOP_MIS);
@@ -5133,9 +5133,9 @@ function _plannerCalc(){
       if(!lyTot)return;
       const m={};let raw=0;
       act.forEach(s=>{const fc=mode==='block'?blockF[s.id]:_plannerFactor(s,[mi]);
-        m[s.id]={ly:ly[s.id],fc,v:aop*ly[s.id]/lyTot*fc.f};raw+=m[s.id].v;});
+        const share=aop*ly[s.id]/lyTot;m[s.id]={ly:ly[s.id],fc,share,v:share*fc.f};raw+=m[s.id].v;});
       const scale=raw>0?aop/raw:0; // re-balance: the division x month lands exactly on its AOP target
-      Object.values(m).forEach(o=>{o.val=o.v*scale;o.gr=o.ly>0?(o.val/o.ly-1)*100:null;});
+      Object.values(m).forEach(o=>{o.scale=scale;o.val=o.v*scale;o.gr=o.ly>0?(o.val/o.ly-1)*100:null;});
       out[dv.id][mi]=m;
     });
   });
@@ -5151,6 +5151,25 @@ function _plannerScope(row){
   if(ai){const dv=DVDATA.find(d=>d.id===ai.dvId);return dv?[{dvId:dv.id,ids:_attrActiveSecs(dv,ai.attr).map(s=>s.id)}]:[];}
   return row._divId&&row._key?[{dvId:row._divId,ids:[row._key]}]:[];
 }
+// How a planner's growth came about (user, 2026-10-05: "how is the planner's growth coming on each cell i want a small
+// message") - the hover text on a Planner Gr% cell: the factor and its three inputs, then AOP share x factor ->
+// re-balanced to the division AOP -> vs LY. A division / attribute / grand row is the sum of its departments.
+function _plannerWhy(row,mis){
+  const isDept=row._key&&!row._isGrand&&!_parseAttrKey(row._key)&&row._divId;
+  const lbl=mis.length===1?MO[mis[0]]:'Block '+MO[mis[0]]+'-'+MO[mis[mis.length-1]];
+  if(!isDept)return `${lbl}: the departments' planner values added up, vs their LY. Hover a department to see its factor.`;
+  const P=_plannerCalc()[row._divId]||{},os=mis.map(mi=>P[mi]?.[row._key]).filter(Boolean);
+  if(!os.length)return '';
+  const cr=v=>'Rs.'+v.toFixed(2)+' Cr',pc=v=>v==null?'n/a':(v*100).toFixed(1)+'%',fc=os[0].fc,t=fc.tags,x=fc.inp;
+  const sum=k=>os.reduce((a,o)=>a+o[k],0),sh=sum('share'),v=sum('v'),val=sum('val'),ly=sum('ly');
+  const g=ly>0?(val/ly-1)*100:null;
+  return `${lbl}: factor ${fc.f.toFixed(2)} - ${fc.why}\n`+
+    `Sell-thru ${pc(x.st)} (${t.st||'-'}) · LY growth ${pc(x.gr)} (${t.growth||'-'}) · Fill rate ${pc(x.fill)} (${t.fill||'-'})${x.ref?' - inputs from '+x.ref:''}\n`+
+    `AOP share by LY cont % ${cr(sh)} × ${fc.f.toFixed(2)} = ${cr(v)} → re-balanced ×${(v>0?val/v:0).toFixed(3)} to the division AOP = ${cr(val)}\n`+
+    `vs LY ${cr(ly)} = ${fP(g)}`;
+}
+const _attr=t=>String(t).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/\n/g,'&#10;');
+
 // planner value + growth of a row over months: {val, ly, gr} or null
 function _plannerRowAgg(row,mis){
   let v=0,l=0,any=false;const P=_plannerCalc();
