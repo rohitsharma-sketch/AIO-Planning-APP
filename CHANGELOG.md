@@ -7,6 +7,9 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### Calendar: 2021 calendar renamed (data)
+- **Asked (user):** "yes rename the 2021 calendar". "2021-> 2022 Calendar - All" → "2021 -> 2022 Calendar - All" (name only; id 1791178013513, saved_at and day map unchanged).
+
 ### Pre-demo re-check of Calendar / AOP / BIS + BIS warm-up on start
 - **Asked (user):** "now re-check all 3 apps again as i am going to show it to the stakeholders tomorrow".
 - **Green:**
