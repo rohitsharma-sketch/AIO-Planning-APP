@@ -2,359 +2,2171 @@
   "KIDS": {
     "BOYS DESIGNER": {
       "contrib_pct": 0.8475,
-      "active": true
+      "active": false
     },
     "GIRLS DESIGNER": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "KB_BABA SUIT DNM F/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KB_BABA SUIT DNM H/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KB_BABA SUIT HSR F/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "KB_BABA SUIT HSR H/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KB_BABA SUIT TXTL H/S": {
-      "contrib_pct": 0.8475
-    },
-    "KB_BERMUDA": {
       "contrib_pct": 0.8475,
       "active": true
     },
     "KB_BLAZER SUIT": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KB_BLAZER": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "KB_CASUAL SHIRT F/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KB_CASUAL SHIRT H/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KB_HALF PANT": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "KB_IN_BRIEF": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KB_IN_VEST": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KB_INDO WESTERN": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KB_J_CTN TROUSER": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KB_J_JEANS": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KB_JAMAICAN": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KB_KURTA": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "KB_MIX": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "KB_NIGHT SUIT": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "KB_PYJAMA": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KB_SANDO SET": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KB_SANDO": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KB_T-SHIRT F/S": {
-      "contrib_pct": 0.8475
-    },
-    "KB_T-SHIRT H/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KB_Y_CTN TROUSER": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KB_Y_JEANS": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KBW_BABA SUIT": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "KBW_JACKET": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KBW_PULLOVER": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KBW_PYJAMA": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KBW_THERMAL LOWER": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KBW_THERMAL UPPER": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KBW_TRACK SUIT": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KBW_WINTER T-SHIRT": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_CAPRI SET": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_CAPRI": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_DANGRI F/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "KG_DRESS": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_FANCY_FROCK": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_FROCK F/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "KG_FROCK": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_HIPSTER SET F/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_HOT PANT SET": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_HOT PANT": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_IN_PANTY": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_IN_VEST": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_J_JEANS": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_KURTI": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "KG_LEGGING SET": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_LEGGING": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "KG_NIGHT SUIT": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "KG_PALAZZO": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_PARALLEL": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_SALWAR SUIT": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "KG_SKIRT TOP SET": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_SKIRT": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_TEES F/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_TEES": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_T-TOP F/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_T-TOP": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KG_Y_JEANS": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KGW_HIPSTER SET": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KGW_JACKET": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KGW_PYJAMA": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KGW_WINTER TOP": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_BABA SUIT DANGRI H/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_BABA SUIT DNM F/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_BABA SUIT DNM H/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_BABA SUIT HSR F/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_BABA SUIT HSR H/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_BABA SUIT NEW BORN  F/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_BABA SUIT NEW BORN H/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_BABA SUIT TXTL H/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_CAPRI SET": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_CAPRI": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_CASUAL SHIRT F/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_CASUAL SHIRT H/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_DANGRI_F/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "KI_AP_FANCY_FROCK": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_FROCK F/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "KI_AP_FROCK": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_HALF PANT": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_HIPSTER SET F/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_HOT PANT SET": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_HOT PANT": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_INDO WESTERN": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_JEANS": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_NEW BORN FROCK": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_NEW BORN GIRLS SET": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_NIGHT SUIT": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "KI_AP_PYJAMA": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_SANDO": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_SKIRT TOP SET": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_SKIRT": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "KI_AP_TOP F/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_TOP H/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_TROUSER": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_T-SHIRT F/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_AP_T-SHIRT H/S": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_IN_BLOOMER": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_IN_GIFT SET": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KI_IN_VEST": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KIW_BLANKET": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "KIW_BOYS JACKET": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KIW_GIFT SET": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KIW_GIRLS JACKET": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KIW_HIPSTER SET": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KIW_PULLOVER": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KIW_PYJAMA": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KIW_VEST": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "KIW_WINTER BABA_SUIT": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KIW_WINTER TOP": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KIW_WINTER T-SHIRT": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
     },
     "KW_MIX": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": false
     },
     "RAINCOAT": {
-      "contrib_pct": 0.8475
+      "contrib_pct": 0.8475,
+      "active": true
+    },
+    "KB_HSR BERMUDA": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "KB_TXTL BERMUDA": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "KB_R/N T-SHIRT H/S": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "KB_POLO T-SHIRT H/S": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "KIW_THERMAL LOWER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "KGW_PULLOVER": {
+      "active": false,
+      "contrib_pct": null
+    }
+  },
+  "LADIES": {
+    "L_EW_BLOUSE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "L_EW_DRESS FABRIC": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_EW_DUPATTA": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_EW_KURTI S/L": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_EW_KURTI SET": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_EW_KURTI": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_EW_LEGGING": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_EW_LEHANGA": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_EW_MIX": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_EW_NIGHT SUIT": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_EW_NIGHTY": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_EW_PETTICOAT": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "L_EW_SALWAR SUIT": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_EW_SALWAR": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "L_EW_SAREE_COTTON": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_EW_SAREE_FNCY": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_EW_SAREE_JAIPURI": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_EW_SAREE_PRINTED": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_EW_SAREE_SILK": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_EW_SAREE_TANT": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_EW_SHORT KURTA": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_IN_BRA": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_IN_PANTY": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_IN_SLIPS": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_L_CAPRI": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_L_CULOTTES": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_L_HAREM_DHOTI": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_L_JEANS": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_L_PARALLEL": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_L_PYJAMA": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_L_SETS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LW_L_SHORTS": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_L_SKIRT": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_L_TROUSER": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_U_ACCESSORIES": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LW_U_CROP TEES": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_U_DRESS": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_U_ETHNIC DRESS": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_U_F.O TOP": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_U_RAINCOAT": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_U_SETS": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_U_TEES F/S": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_U_TEES": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_U_T-TOP F/S": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_U_T-TOP": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LWW_BLAZER": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LWW_CARDIGAN": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LWW_JACKET": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LWW_KURTI SET": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LWW_KURTI": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LWW_LEGGING": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LWW_MIX": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LWW_NIGHT SUIT": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LWW_NIGHTY": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LWW_PYJAMA": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LWW_SHAWL": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LWW_THERMAL LOWER": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LWW_THERMAL UPPER": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LWW_TRACK SUIT": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LWW_WINDCHEATER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LWW_WINTER TOP": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LWW_WINTER T-SHIRT": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_L_DNM JOGGER": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_L_WVN JOGGER": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_L_WES PALAZZO": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_L_ETH PALAZZO": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "L_IN_SPRT BRA": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "LW_U_CORD SETS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "L_EW_SAREE_WORK": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LWW_K-TOP": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LWW_MUFFLER": {
+      "active": false,
+      "contrib_pct": null
+    }
+  },
+  "MENS": {
+    "FABRIC-SUITING": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "M_IN_BRIEF": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "M_IN_VEST": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "ME_BLAZER S/L": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "ME_BLAZER SUIT": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "ME_BLAZER": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "ME_INDO WESTERN": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ME_KURTA PYJAMA": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "ME_KURTA": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "ME_PYJAMA": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ML_CASUAL TROUSER": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "ML_CORDROY TROUSER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ML_FORMAL TROUSER": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "ML_JEANS": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "ML_JOGGERS": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MSE_BERMUDA": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MSE_BOXER": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MSE_JAMAICAN": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MSE_MIX": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MSE_POLO T-SHIRT H/S": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MSE_R/N T-SHIRT H/S": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MSE_RAINCOAT": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MSE_SANDO": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MSE_T-SHIRT F/S": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MU_CASUAL SHIRT F/S": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MU_CASUAL SHIRT H/S": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MU_CORD SETS": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MU_FORMAL SHIRT F/S": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MU_FORMAL SHIRT H/S": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "MU_KNITTED SHIRT H/S": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MU_PARTY WEAR SHIRT F/S": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "MU_SEMI CASUAL SHIRT F/S": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MU_SHACKET": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MW_BLAZER S/L": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MW_JACKET S/L": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "MW_JACKET": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MW_MIX": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "MW_PULLOVER S/L": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MW_PULLOVER": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MW_PYJAMA": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MW_SHACKET": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MW_THERMAL LOWER": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MW_THERMAL UPPER": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MW_TRACK-SUIT": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MW_WINDCHEATER": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MW_WINTER T-SHIRT S/L": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "MW_WINTER T-SHIRT": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MSE_HSR PYJAMA": {
+      "active": true,
+      "contrib_pct": null
+    },
+    "MSE_TXTL PYJAMA": {
+      "active": true,
+      "contrib_pct": null
+    }
+  },
+  "GM": {
+    "FW_B_SANDAL": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "FW_B_SHOES": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "FW_B_SLIPPER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "FW_G_SANDAL": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "FW_G_SHOES": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "FW_L_BELLY_SHOES": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "FW_L_CASUAL SANDAL": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "FW_L_FANCY_SLIPPER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "FW_L_SHOES": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "FW_L_SLIPPER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "FW_M_CASUAL SANDAL": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "FW_M_SHOES": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "FW_M_SLIPPER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_BF_CUSHION": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_BF_DOUB BEDSHEET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_BF_PILLOW": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_BF_PILLOW COVER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_BF_SINGLE BEDSHEET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_DF_BOLSTER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_DF_CURTAIN": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_DF_DURRIE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_KF_TABLE MAT": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_TL_BABY TOWEL": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_TL_BATH TOWEL": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_TL_FACE TOWEL": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_TL_HAND TOWEL": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_TL_KITCHEN NAPKIN": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_BC_COFFEE MUG": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_BC_COFFEE SET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_G_BEER MUG": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_G_BOWL SET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_G_JAR SET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_G_TUMBLER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_G_WATER BOTTLE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_M_BABY PLATE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_M_DINNER SET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_M_FULL PLATE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_M_GIFT SET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_M_HALF PLATE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_M_SERVING TRAY": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_M_SNACKS PLATE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_M_VEG BOWL": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_PO_COFFEE MUG": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_S_BASKET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_CA_BRUSH": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_CA_DUST PAN": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_CA_DUSTER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_CA_MOP": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_CA_SCRUBBER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_CA_WIPER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_CUTLERY STAND": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_CYLINDER TROLEY": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_HANGER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_HOOK": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_KA_CHOPPING BOARD": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_KA_CUTTER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_KA_GAS LIGHTER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_KA_GRATER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_KA_KNIFE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_KA_MASALA BOX": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_KA_POTATO MASHER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_KA_SKIMMER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_KA_SQUEEZER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_KA_STRAINER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_BASKET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_BATH MUG": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_BOWL": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_CLOTH CLIP": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_CONTAINER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_CUP": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_FRIDGE BOTTLE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_JUG": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_KIDSLUNCH BOX": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_KIDSWATER BOTTLE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_LUNCH BOX": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_MULTI PUR. RACK": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_PATLA": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_PLATE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_ROPE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_SIPPER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_SNACK TRAY": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_SOAP DISH": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_WATER BOTTLE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_N_FRY PAN": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_N_GIFT SET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_N_KADAHI": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_N_TAWA": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_S_BOWL": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_S_CONTANIER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_S_FORK": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_S_GLASS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_S_MUG": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_S_PATILA": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_S_PLATE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_S_ROASTER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_S_SAUCE PAN": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_S_SPOON": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_S_WATER BOTTLE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_T_CASSEROLE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_T_FLASK": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_OTHER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_HD_PHOTOFRAME": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_HD_PLANTS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_BABY BEDING": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_BIB": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_BOOTY": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_BOTTLE COVER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_BRUSH": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_CAP": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_DIAPER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_LANGOT": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_PILLOW": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_PUFF": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_RATTLE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_TEETHER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_TOWEL": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_WIPES": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_KB_CAP": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_KB_SOCKS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_KG_HAIR ACCESSORIES": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_KG_SOCKS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_MA_BELT": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_MA_CAP": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_MA_HANDKERCHIEF": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_MA_SOCKS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_MA_WALLET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_OP_KIDS SUNGLASS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_OP_LADIES SUNGLASS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_OP_MENS SUNGLASS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_S_BALLOON": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_S_GULAL": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_S_KIDS PITCHKARI": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_S_KIDS UMBRELLA": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_S_LADIES UMBRELLA": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_S_MENS UMBRELLA": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_TZ_CLOCK": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_WA_BAG": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_WA_BELT": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_WA_HA_COMB": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_WA_PURSE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_WA_SOCKS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_WA_WALLET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "SF_ID_BALLS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "TG_NS_BLOCKS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "TG_NS_BO": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "TG_NS_DOLLS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "TG_NS_FRICTION": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "TG_NS_GUN": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "TG_NS_KIDS CHAIR": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "TG_NS_MUSICAL": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "TG_NS_P_RIDER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "TG_NS_P_SET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "TG_NS_P_TOYS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "TG_NS_PULL ALONG": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "TG_NS_VNL_TOYS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "TG_ST_OTHERS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "TG_ST_TEDDY BEAR": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ST_NP_BOOKS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ST_NP_CLAY": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ST_NP_COIN BANK": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ST_NP_COLOR": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ST_NP_ERASER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ST_NP_KIDS BAG": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ST_NP_KIT": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ST_NP_PEN": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ST_NP_PEN STAND": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ST_NP_PENCIL": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ST_NP_PENCIL BOX": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ST_NP_POUCH": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ST_NP_SHARPNER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ST_NP_KEY CHAIN": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ST_NP_STICKERS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ST_NP_DIARY": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "TA_L_DUFFLE TROLLEY": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "TA_L_UPRIGHT": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "TA_P_SCHOOL BAG": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "TA_P_BACKPACK": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "FW_G_SLIPPER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_KA_LADLE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_GLASS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_SOCKS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_MA_TIE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_WA_HANKY": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "SF_ID_BOARD_GAMES": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ST_NP_ACC": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "FW_B_WINTER SLIPPER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_DF_LAUNDRY BAG": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_CA_GARBAGE BUCKET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_PLANT POT": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_HARDWARE SET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_ACC_KEYCHAIN": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_MITTEN": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_KGW_EARMUFF": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_KIW_WINTER BOOTY": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_LWW_MUFFLER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "CLOTH ORGANIZER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "TA_P_FILE BAG": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "FW_L_WINTER SLIPPER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_S_CUP STAND": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "SF_ID_CAROM BOARD": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_KIW_BLANKET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_DF_WALL HANGING": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_KA_COASTER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_MOSQUITO RACKET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_WA_HA_BABYCLIP": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_BATH GOWN": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_CA_GARBAGE BAG": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_G_CONTAINER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_BF_BED SERVER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_BF_POLAR": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_CUP": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_BF_COMFORTER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_LWW_SOCKS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_MW_GLOVES": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_MW_MUFFLER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_WA_HA_DYE BRUSH": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_CL_PILLOW COVER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_BOTTLE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "ST_NP_NOTEBOOK": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_CL_APPLIANCE COVER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_CA_BROOM": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_TE_EXTENSION CORD": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_DF_CNTR TBL CVR": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_WA_HA_HAIRBAND": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_WA_HA_RUBBER BAND": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_KGW_GLOVES": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_KIW_CAP": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_SPOON": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_M_SPOON": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_LWW_CAP": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_LWW_GLOVES": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_MW_CAP": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_KF_APRON": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_T_MUG": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_KA_GRIP": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_TL_FACE MASK": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_BF_FLANEL": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_GIFT SET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_CARRY BAG": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_ICE TRAY": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_WA_FOOT SCRUBBER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_M_BASKET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_C_G_JUG": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_KGW_CAP": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_KA_TONG": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_WATER TAP": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "SF_FT_YOGA MAT": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_S_KALAVA RAKSHA SUTRA": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_IA_SLEEPING BAG": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "SF_ID_SOFT BALL": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "SF_OD_FOOTBALL": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_WA_MIRROR": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_KA_SERV SPOON": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_P_COOK & SERVE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_T_WATER BOTTLE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_WA_HA_HAIRCLUTCHER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HF_CL_CUSHION COVER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_OP_SUNGLASS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "TG_NS_STUDY SET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "SF_ID_BADMINTON RACKET": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "HH_U_S_PLATE STAND": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "SF_OD_BALLS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_KGW_MUFFLER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_KBW_GLOVES": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "FW_M_WINTER SLIPPER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_KIW_GLOVES": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "LS_W_MIX": {
+      "active": false,
+      "contrib_pct": null
+    }
+  },
+  "RETAIL": {
+    "NF_B_SHOWER GEL": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_F_DEO": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_B_LOTION": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_B_CREME": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_F_ROOM FRESHENER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_CC_NAILS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_B_SHAMPOO": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_C_DISHWASHER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_CC_FACE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_C_DETERGENT": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_B_HANDWASH": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_C_FLOOR CLEANER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_B_FACEWASH": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_C_TOILET CLEANER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_C_GLASS CLEANER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_CC_EYE": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_F_PERFUME": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_B_SUNSCREEN": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_CC_LIPS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_C_BATHROOM CLEANER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_CC_ACCESSORIES": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_B_SOAP": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_F_TALCUM": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_CC_SANITARY PAD": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_C_FABRIC CONDITIONER": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "MIX_ITEM": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "PROMO_ITEM": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "RT_CO_PACKAGING BAGS": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "RT_CO_STAFF UNIFORM": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_B_SCRUB": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_B_FACIAL KIT": {
+      "active": false,
+      "contrib_pct": null
     }
   }
 }

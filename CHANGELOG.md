@@ -7,6 +7,9 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### Sales Plan: department_state.json committed
+- **Asked (user):** "commit department_state.json too". This is the live Department Master state (contribution % and active flag per department, synced from BIS), committed as it stands; it had been left out of commits until now.
+
 ### Builds: Sales Plan and AOP Forecaster dist folders committed in full
 - **Asked (user):** "commit the dist folders too".
 - Both frontends rebuilt from the current source and force-added in full (`git add -A -f`; their `assets/` are git-ignored, so before this only `index.html` was tracked and the committed index pointed at asset files that weren't in the repo). A fresh clone now serves both apps without a build step.
