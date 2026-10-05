@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### Landing: the shared link works every time (one server owns 7800) + 2021→22 calendar re-synced
+- **Asked (user):** "sync the 2021 calendar too ... i had shared the ip to other machines too, link is not seeming to work ... make sure that the link works everytime".
+- **Cause:** two Landing servers were both listening on 0.0.0.0:7800: the 11:09 one (old code) and a later restart. Python's server sets SO_REUSEADDR, which on Windows lets a second process bind the same port, so each visitor reached one of them at random. Each copy also ran its own watchdog, which is why there were two BIS servers.
+- **Fix (`landing_server.py`):** `_ExclusiveServer` binds with SO_EXCLUSIVEADDRUSE and no reuse, and it binds BEFORE launching any app or watchdog. A second copy (scheduled task, Keep Alive, start.bat) now prints "already running" and exits. I cleared the duplicates and restarted from the "RS Planning - Landing Server 7800" task: one Landing, one BIS.
+- Checked from this machine: `http://10.0.1.50:7800`, `http://CKHO-L-A9820:7800` and `http://CKHO-L-A9820.citykr.com:7800` all answer (→ sign-in). Firewall allows 7800 on every profile, and sleep is off. The IP comes from DHCP, so share the hostname link.
+- 2021 → 2022 Calendar - All re-synced with the lagan rule in place (670 of 3,650 pairs changed, lagan-only; lagan mismatches 792 → 356; 0 reuse). No reindex was needed: snapshots use 2026 → 2027.
+
 ### Calendar: three V2 calendars re-synced with the lagan rule + reindexed (data, no code)
 - **Asked (user):** "sync now the three V2 calendars and reindex".
 - Backed up first (scratchpad `calendar_backup_before_lagan.json`). Day maps were regenerated in place with today's engine and the Drik lagan dates, keeping the same calendar ids and saved_at:

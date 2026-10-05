@@ -521,13 +521,30 @@ class Handler(SimpleHTTPRequestHandler):
         self._json({"ok": True, "stopped": stopped, "alreadyOffline": already_offline})
 
 
+class _ExclusiveServer(ThreadingHTTPServer):
+    """Owns port 7800 alone. The stock server sets SO_REUSEADDR, which on Windows lets a SECOND Landing bind the same
+    port - found 2026-10-05: an old and a new Landing (each with its own watchdog, so two BIS servers too) both
+    listened on 7800 and every visitor hit one at random, so the shared link "didn't work" half the time."""
+    allow_reuse_address = False
+
+    def server_bind(self):
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 if __name__ == "__main__":
     os.chdir(_HERE)
+    try:   # bind before anything else: a second copy must stop here, before it launches apps or a second watchdog
+        server = _ExclusiveServer(("", PORT), Handler)
+    except OSError:
+        print(f"Landing is already running on port {PORT} - not starting a second copy")
+        sys.exit(0)
     for app in APPS:
         if not _is_online(app["port"]):
             _launch(app)
     threading.Thread(target=_watchdog, daemon=True).start()
     if "--no-browser" not in sys.argv:   # keep_alive.py restarts Landing in the background - no new tab each time
         webbrowser.open(f"http://localhost:{PORT}")
-    print(f"RS Planning landing page at http://localhost:{PORT}")
-    ThreadingHTTPServer(("", PORT), Handler).serve_forever()
+    print(f"RS Planning landing page at http://localhost:{PORT} - on the network: http://{socket.getfqdn()}:{PORT}")
+    server.serve_forever()
