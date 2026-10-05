@@ -287,14 +287,6 @@ def serve_app():
     return Response(content, mimetype="text/html; charset=utf-8")
 
 
-@app.route("/demo")
-def serve_demo():
-    """Standalone demo — no server calls, all data baked in. Share this URL on the local network."""
-    html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "otb-plan-standalone.html")
-    from flask import send_file
-    return send_file(html_path, mimetype="text/html")
-
-
 @app.route("/api/status")
 def api_status():
     return jsonify({"ok": True, "last_sync": _last_sync, "server": "CityKart OTB Sync v1.0", "data_version": _data_version()})

@@ -55,3 +55,10 @@ Listing Delisting/app/*.json
 Landing/keep_alive.log
 RS Planning Platform/backend/data/user_rights.json
 RS Planning Platform/backend/data/sign_in_as.log
+
+# logs / backups / generated outputs (cleanup 2026-10-05)
+*.bak
+SalesPlan/watchdog.log
+Tentative AOP Forecaster/backend.log
+Tentative AOP Forecaster/output/
+Tentative AOP Forecaster/diff_archive/
