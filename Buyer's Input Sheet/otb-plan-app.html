@@ -4331,7 +4331,10 @@ function saveState(logVersion=false){
   _updateSaveLabel(now);
   if(logVersion)_maybeSaveVersion(now);
   toast('State saved ✓');
-  pushBuyerGrowthLive(logVersion);   // the Save button (logVersion) reports whether Sales Plan got it
+  // Sales Plan gets the buyer growth ONLY from the Save button (user, 2026-10-05: "push only on Save") - seeding,
+  // version loads, dept moves and auto-saves used to push too, so opening BIS in a fresh browser overwrote the live
+  // buyer plan in Sales Plan with plain AOP seeds (readiness review, CRITICAL). They now save in this browser only.
+  if(logVersion)pushBuyerGrowthLive(true);   // reports whether Sales Plan got it
 }
 // Live push to SalesPlan's Department Growth Matrix — every department/month
 // growth % currently entered (not just locked MAMJ cells; "automatic, live"
@@ -5140,7 +5143,7 @@ function syncFromAop(){
   const aopMonths=new Set();
   AOP_DIVS.forEach(d=>{for(let mi=0;mi<12;mi++){if((S.aop[d.id]?.[mi]||0)>0)aopMonths.add(mi);}});
   if(aopMonths.size>0)S.selM=aopMonths;
-  seedPlanFromAop(true); // saves + pushes itself (a saveState() before it pushed the OLD seeds, 2026-09-26); locked cells kept
+  seedPlanFromAop(true); // saves itself (browser only - Sales Plan gets it on Save, 2026-10-05); locked cells kept
   syncAopLockUI();
   buildAopGrid();
   syncAopLockStatus();
@@ -5187,8 +5190,8 @@ function _autoApplyAop(){
   // Opening BIS keeps the buyer's growth and pushes nothing (user, 2026-09-26: the last browser to open used to
   // overwrite everyone's edits in Sales Plan); it re-seeds - locked cells kept - only when the live AOP changed.
   if(_aopSeedFp()!==S.aopSeedFp||!Object.keys(S.aopSeeds||{}).length)seedPlanFromAop(true);
-  // A plan saved on the pre-split department names was just carried onto the new ones: save it once so
-  // Sales Plan's growth matrix switches to the new names too (the server replaces the whole set).
+  // A plan saved on the pre-split department names was just carried onto the new ones: save it once in this
+  // browser; Sales Plan's growth matrix switches to the new names on the next Save (push only on Save, 2026-10-05).
   else if(_deptMigrated){_deptMigrated=false;saveState();}
   // A plan saved before _afterVisChange existed can sit off AOP after a dept was made inactive: put each division
   // back on target here (local only - opening still pushes nothing) and ask for one Save.
