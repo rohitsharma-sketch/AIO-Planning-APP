@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### AOP: calendar-only re-run checked - Version 2 kept (no publish)
+- **Asked (user):** "re-run AOP with the new calendars", then "keep version 2".
+- I copied Version 2's session (`193eea12`) into the scratchpad and ran it with the same inputs and growth, once on the old (pre-lagan) calendars and once on the new ones. MAMJ (all stores): 954.59 → 954.57 Cr; Jun'27 −0.019 / Jul'27 +0.019 Cr; Mar'27 (override), Apr and May unchanged; Mar'27–Mar'28 total unchanged at 1,337.58 Cr. Nothing was published, saved or locked. Version 2 stays the live, locked AOP.
+
 ### Landing: the shared link works every time (one server owns 7800) + 2021→22 calendar re-synced
 - **Asked (user):** "sync the 2021 calendar too ... i had shared the ip to other machines too, link is not seeming to work ... make sure that the link works everytime".
 - **Cause:** two Landing servers were both listening on 0.0.0.0:7800: the 11:09 one (old code) and a later restart. Python's server sets SO_REUSEADDR, which on Windows lets a second process bind the same port, so each visitor reached one of them at random. Each copy also ran its own watchdog, which is why there were two BIS servers.
