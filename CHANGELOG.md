@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### BIS: the buyer's Gr % starts from the plain AOP share; the gap to the planner's is the factor
+- **Asked (user):** "how can buyer's input and planner's input be the same in all departments there must be a difference on the basis of factor"; chose "Plain AOP share".
+- Before, the buyer's Gr % was seeded with a copy of the Planner's Gr %. Now it's seeded with the department's share of the division AOP by LY contribution (factor 1.00, i.e. the division's growth that month). The Planner's Gr % keeps the factor and the re-balance to AOP. Example, MENS: M_IN_BRIEF factor 1.08 → planner +8.44% vs buyer +9.28%; ME_BLAZER factor 1.00 → +0.31% vs +8.94% (the factor-above-1 departments take share, so a 1.00 department loses some in the re-balance).
+- Buyer-side re-balancing weights are back to LY (they had been the planner's values). "use" now shows wherever the two columns differ; taking it counts as the buyer's choice and survives a re-seed. The seed fingerprint is bumped (`z2`), so every browser re-seeds once; buyers' own entries and locks stay. Removed the now-unused `_plannerVal` / `_plannerSig`.
+
 ### Sales Plan: department_state.json committed
 - **Asked (user):** "commit department_state.json too". This is the live Department Master state (contribution % and active flag per department, synced from BIS), committed as it stands; it had been left out of commits until now.
 

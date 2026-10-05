@@ -2723,7 +2723,8 @@ function cellVal(row,def){
       const a=_plannerRowAgg(row,AOP_MIS);
       if(!a||a.gr==null)return '<span style="color:var(--mu)">-</span>';
       const isDept=row._key&&!row._isGrand&&!_parseAttrKey(row._key);
-      const use=isDept&&S.buyerSet.has(row._key)?` <span class="pl-use" onclick="event.stopPropagation();usePlannerGr('${row._key}')" title="Use the planner's Gr % for this department">use</span>`:'';
+      const bg=isDept?_effGrowth(row,AOP_MIS):null;
+      const use=isDept&&bg!=null&&Math.abs(bg-a.gr)>0.005?` <span class="pl-use" onclick="event.stopPropagation();usePlannerGr('${row._key}')" title="Use the planner's Gr % for this department">use</span>`:'';
       return `<span class="${gCls(a.gr)}" title="Planner's Gr % - locked; it moves only with the factor table or its inputs">&#x1F512; ${fP(a.gr)}</span>${use}`;
     }
     case 'pl_val': {
@@ -4220,7 +4221,7 @@ function _divReappAttr(dv,mi,tempLockAttr=null){
     groups[attr].secs.push(sec);
   });
   Object.values(groups).forEach(g=>{g.ly=g.secs.reduce((a,sec)=>a+_secMonLY(sec,dv,mi),0);
-    g.w=g.secs.reduce((a,sec)=>{const ly=_secMonLY(sec,dv,mi);return a+(ly>0?(_plannerVal(sec.id,dv.id,mi)??ly):0);},0);}); // planner share (2026-10-05)
+    g.w=g.ly;}); // LY weight: the buyer's side is the plain AOP share (2026-10-05); the factor lives in the Planner's columns
   let lockedTY=0;
   const unlockedAttrs=[];
   Object.entries(groups).forEach(([attr,g])=>{
@@ -4267,9 +4268,8 @@ function _divReapp(dv,mi,tempLock=null){
     // Locked: explicit 🔒 freeze OR the section(s) being edited / kept (tempLock anchor: an id or a Set)
     const anchor=tempLock instanceof Set?tempLock.has(sec.id):sec.id===tempLock;
     if(S.locked.has(k)||anchor){lockedTY+=ly*(1+(S.inputs[k]??0)/100);}
-    // weight = the planner's value (factor x AOP x LY cont %), so a re-balance keeps the planner's shape;
-    // identical to the LY weight while every factor is 1.00 (Planner's input, 2026-10-05)
-    else{unlocked.push({sec,ly,w:ly>0?(_plannerVal(sec.id,dv.id,mi)??ly):0});}
+    // weight = LY: the buyer's side is the plain AOP share (2026-10-05); the factor lives in the Planner's columns
+    else{unlocked.push({sec,ly,w:ly});}
   });
   const remaining=aopMon-lockedTY;
   const totalUnlockedLY=unlocked.reduce((a,{w})=>a+w,0);
@@ -5070,7 +5070,8 @@ function _buildPaletteSwatches(){
    1.00, "fill rate pending"). Block mode: one factor per department from its MAMJ inputs; Month mode: one per
    department x month. A department without ST / LY growth of its own takes them from its reference department
    (Sales Plan's new-department mapping). Planner's Gr % = planner value / LY - 1, locked - it moves only when the
-   factor table or its inputs change. The buyer's Gr % starts on it; a buyer's own entry (S.buyerSet) supersedes.
+   factor table or its inputs change. The buyer's Gr % starts from the plain AOP share (factor 1.00), so the gap
+   between the two is the factor; "use" or a buyer's own entry (S.buyerSet) supersedes it.
    Value only - no quantity anywhere. */
 const PLANNER={ft:null,refs:{},fill:null,canEdit:false};
 let _plMemo={k:null,v:null};
@@ -5141,13 +5142,6 @@ function _plannerCalc(){
   _plMemo={k,v:out};
   return out;
 }
-function _plannerVal(secId,dvId,mi){return _plannerCalc()[dvId]?.[mi]?.[secId]?.val??null;}
-// 'neutral' while every factor is 1.00 - the seed fingerprint changes (and browsers re-seed) only once factors bite
-function _plannerSig(){
-  const fs=[];Object.values(_plannerCalc()).forEach(m=>Object.entries(m).forEach(([mi,secs])=>
-    Object.entries(secs).forEach(([id,o])=>{if(o.fc.f!==1)fs.push(id+'@'+mi+':'+o.fc.f);})));
-  return fs.length?fs.sort().join('|'):'neutral';
-}
 // the departments a planner cell covers: one department, an attribute group, a division header, or the grand total
 function _plannerScope(row){
   const ids=dv=>dv.secs.filter(s=>!S.hiddenSecs.has(s.id)).map(s=>s.id);
@@ -5167,7 +5161,7 @@ function _plannerRowAgg(row,mis){
 function usePlannerGr(secId){
   const dv=DVDATA.find(d=>d.secs.some(s=>s.id===secId));if(!dv||S.divLocked.has(dv.id))return;
   AOP_MIS.forEach(mi=>{const o=_plannerCalc()[dv.id]?.[mi]?.[secId];if(o&&o.gr!=null)S.inputs[secId+'__'+mi]=o.gr;});
-  S.buyerSet.delete(secId);
+  S.buyerSet.add(secId); // taking the planner's Gr % is the buyer's choice - a re-seed keeps it
   AOP_MIS.forEach(mi=>_divReapp(dv,mi,secId));
   refresh();toast("Planner's Gr % applied ✓");
 }
@@ -5576,7 +5570,7 @@ function _lyHash(){
 // 'z1': 28 Sep fix - a department missing from a delivered month is 0, not the old share estimate (seeds set before it
 // counted winter lines in April and planned MENS Apr at -0.35%); the tag makes every browser re-seed once.
 // + the planner's factors once any of them is not 1.00 (2026-10-05) - so browsers re-seed only when factors bite
-function _aopSeedFp(){const p=_plannerSig();return JSON.stringify([S.aop,S.aopBase,_lyHash(),'z1'].concat(p==='neutral'?[]:[p]));}
+function _aopSeedFp(){return JSON.stringify([S.aop,S.aopBase,_lyHash(),'z2']);} // z2: buyer seed = plain AOP share (2026-10-05)
 // keepLocked (page open with a changed AOP, Sync AOP): the buyer's locked cells stay and the other departments
 // are re-balanced so each division x month still equals AOP. Without it (the "Re-seed plan" button) every cell
 // is reset to AOP and its lock cleared (it used to keep the lock flag on a value it had overwritten).
@@ -5584,7 +5578,7 @@ function seedPlanFromAop(keepLocked=false){
   if(!S.aopLocked){toast('Lock AOP first');return;}
   let seeded=0;
   S.aopSeeds={};
-  if(!keepLocked)S.buyerSet.clear(); // a full reset hands every department back to the planner's Gr %
+  if(!keepLocked)S.buyerSet.clear(); // a full reset hands every department back to the plain AOP share
   DVDATA.forEach(dv=>{
     for(let mi=0;mi<12;mi++){
       const aopCr=S.aop[dv.id]?.[mi]; // Rs. Crore
@@ -5610,13 +5604,14 @@ function seedPlanFromAop(keepLocked=false){
       // showed +8.8% vs AOP Summary's +11.1%. Kept unrounded (2026-09-26 audit):
       // a 2 dp growth missed the target by up to 0.15 L per division x month.
       const gr=(aopCr/activeLY-1)*100;
-      // Planner's Gr % by default (user, 2026-10-05) - factor x AOP x LY cont %, re-balanced to AOP; equals the
-      // division growth above while every factor is 1.00. A buyer's own entry (S.buyerSet) supersedes it.
-      const P=AOP_MIS.includes(mi)?_plannerCalc()[dv.id]?.[mi]:null;
+      // The buyer's Gr % starts from the plain AOP share (user, 2026-10-05: "how can buyer's input and planner's
+      // input be the same ... there must be a difference on the basis of factor"): AOP x LY cont %, factor 1.00, i.e.
+      // the division's growth on every department. The Planner's Gr % keeps the factor, so the gap between the two
+      // columns is the factor's effect; a buyer's own entry (S.buyerSet, or "use") supersedes the seed.
       const kept=new Set(keepLocked?dv.secs.filter(sec=>S.buyerSet.has(sec.id)).map(sec=>sec.id):[]);
       dv.secs.forEach(sec=>{
         const k=sec.id+'__'+mi;
-        const g=P?.[sec.id]?.gr??gr;
+        const g=gr;
         S.aopSeeds[k]=g;
         if(keepLocked&&(S.locked.has(k)||kept.has(sec.id)))return;
         S.inputs[k]=g;
