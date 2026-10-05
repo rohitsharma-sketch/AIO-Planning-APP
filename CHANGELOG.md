@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### Landing: Lagan Calendar = Drik Panchang's own list + "Sync with Drik Panchang" button
+- **Asked (user):** "check why is there a difference with drik panchang in lagan dates and give me a proper refresh button to sync it".
+- **Why it differed:** the page computed dates itself from tithi, weekday, Holashtak, Chaturmas, Navratri and Pitru Paksha only. Drik also rules out Kharmas (Sun in Dhanu / Meena), Guru / Shukra asta, Adhik maas, days without an auspicious nakshatra and bad yoga / karana, so 2026 showed 99 dates against Drik's 59 (e.g. Jan 2026: 13 vs 0, Shukra asta).
+- Now: `Landing/lagan_drik.py` reads Drik's marriage-muhurat page (New Delhi) per year into `Landing/lagan-drik.json` (2000-2030 seeded today). The calendar shows those dates, with "Drik Panchang · synced <date>" per year; an unsynced year falls back to the computed list, marked "Approximate".
+- **↻ Sync with Drik Panchang** re-fetches the selected years (`POST /api/lagan/refresh`, sign-in needed). A year Drik can't be reached for keeps its last synced dates and the error is shown. Check: `python Landing/test_lagan_drik.py`.
+
 ### BIS: Planner Value shows "Cr" on every row
 - **Asked (user):** "missing the Cr in the end of each value" (Planner's input -> Planner Value). Only the grand total had it; department/attribute rows now read e.g. Rs.1.0 Cr.
 

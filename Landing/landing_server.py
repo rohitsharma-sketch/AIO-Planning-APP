@@ -20,7 +20,8 @@ Proxy routing (first match wins):
   /calendar/, /aop/, /planning/,
     /plan-cycles, /auth/, /api/,
     /docs, /openapi.json         → http://127.0.0.1:8010  (unified platform)
-  /api/launch-all, /api/shutdown-all, /api/port-status/* → handled here
+  /api/launch-all, /api/shutdown-all, /api/port-status/*,
+    /api/lagan/refresh (Drik Panchang re-sync) → handled here
   everything else                → serve Landing page files from this directory
 """
 import json
@@ -37,6 +38,8 @@ import webbrowser
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 
 import psutil
+
+import lagan_drik
 
 PORT = 7800
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -458,6 +461,8 @@ class Handler(SimpleHTTPRequestHandler):
             self._launch_all()
         elif self.path == "/api/shutdown-all":
             self._shutdown_all()
+        elif self.path == "/api/lagan/refresh":
+            self._lagan_refresh()
         else:
             self._proxy_or_404()
 
@@ -496,6 +501,19 @@ class Handler(SimpleHTTPRequestHandler):
                 _launch(app)
                 launched.append(app["name"])
         self._json({"ok": True, "launched": launched, "alreadyOnline": already_online})
+
+    def _lagan_refresh(self):
+        """Re-sync the asked years' Lagan dates from Drik Panchang (body {"years": [2026, ...]})."""
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+            years = sorted({int(y) for y in body.get("years", [])})
+        except (ValueError, TypeError, AttributeError):
+            years = []
+        if not years or len(years) > 40 or not all(1990 <= y <= 2050 for y in years):
+            self.send_error(400, "years: a list of 1-40 years between 1990 and 2050")
+            return
+        data, errors = lagan_drik.refresh(years)
+        self._json({"ok": not errors, "errors": errors, **data})
 
     def _shutdown_all(self):
         _watch_paused.set()

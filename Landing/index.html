@@ -285,6 +285,8 @@
   .lm-yr-num { font-size: 28px; font-weight: 800; color: var(--navy); line-height: 1; letter-spacing: -.02em; }
   .lm-yr-meta { font-size: 13px; color: var(--muted); }
   .lm-yr-meta strong { color: var(--accent); font-weight: 800; font-size: 14px; }
+  .lm-src { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+  .lm-src.approx { color: var(--st-warn, #A15C07); font-weight: 600; }
   .lm-mo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(185px, 1fr)); gap: 10px; }
   .lm-mo-card { background: var(--white); border-radius: 10px; border: 1px solid var(--border); overflow: hidden; }
   .lm-mo-card.has { border-top: 3px solid var(--accent); }
@@ -536,7 +538,7 @@
             <span class="lm-mark" aria-hidden="true">LC</span>
             <div>
               <h2 class="lm-logo">Lagan Calendar</h2>
-              <p class="lm-sub">Auspicious dates 2000&#x2013;2030 &#xB7; Drik astronomical method &#xB7; RS Planning &#xB7; CityKart</p>
+              <p class="lm-sub">Marriage muhurat dates 2000&#x2013;2030 &#xB7; Drik Panchang (New Delhi) &#xB7; RS Planning &#xB7; CityKart</p>
             </div>
           </div>
           <button class="lm-close" id="lagan-modal-close" type="button" aria-label="Close">&#x2715;</button>
@@ -565,6 +567,7 @@
         </div>
         <button class="lm-btn lm-btn-sec" id="lm-btn-summary" type="button">&#x2193; Monthly Summary</button>
         <button class="lm-btn lm-btn-pri" id="lm-btn-dates" type="button">&#x2193; All Dates</button>
+        <button class="lm-btn lm-btn-sec" id="lm-btn-sync" type="button" title="Re-fetch the selected years' marriage muhurat dates from drikpanchang.com">&#x21BB; Sync with Drik Panchang</button>
         <div class="lm-res-count" id="lm-res-count"></div>
       </div>
       <div class="lm-content" id="lm-content"></div>
@@ -835,9 +838,23 @@
     }
     var BAD_T={1:1,4:1,8:1,9:1,14:1,16:1,19:1,23:1,24:1,29:1,30:1};
     var BAD_W={2:1,6:1};
+    // Drik Panchang's own list (Landing/lagan-drik.json, re-synced by the Sync button) is the source of truth.
+    // The engine below only knows tithi / weekday / Holashtak / Chaturmas / Navratri / Pitru Paksha - no
+    // nakshatra, Kharmas, Guru-Shukra asta or Adhik maas - so it over-counts; it's the fallback for an unsynced year.
+    var DRIK=null;
+    function drikMonths(y){ var o=DRIK&&DRIK.years&&DRIK.years[y]; if(!o) return null; var r=[]; for(var m=1;m<=12;m++) r.push((o[m]||[]).slice()); return r; }
+    function srcHtml(y){
+      var t=DRIK&&DRIK.synced&&DRIK.synced[y];
+      return t ? '<span class="lm-src">Drik Panchang &#xB7; synced '+new Date(t).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})+'</span>'
+               : '<span class="lm-src approx">Approximate (computed) &#x2014; not synced with Drik yet</span>';
+    }
+    function loadDrik(){
+      return fetch('/lagan-drik.json?t='+Date.now()).then(function(r){return r.ok?r.json():null;}).then(function(d){ if(d){DRIK=d;ldCache={};} }).catch(function(){});
+    }
     var ldCache={};
     function ld(y){
       if(ldCache[y]) return ldCache[y];
+      var dk=drikMonths(y); if(dk) return(ldCache[y]=dk);
       var ev=getEv(y),res=[];
       for(var m=0;m<12;m++) res.push([]);
       for(var m=1;m<=12;m++){
@@ -943,7 +960,7 @@
               : '<span class="lm-no-d">No Lagan dates</span>')+
             '</div></div>';
         }).join('');
-        return '<div class="lm-yr-sec"><div class="lm-yr-hdr"><span class="lm-yr-num">'+y+'</span><span class="lm-yr-meta"><strong>'+total+'</strong> Lagan dates</span></div><div class="lm-mo-grid">'+cards+'</div></div>';
+        return '<div class="lm-yr-sec"><div class="lm-yr-hdr"><span class="lm-yr-num">'+y+'</span><span class="lm-yr-meta"><strong>'+total+'</strong> Lagan dates</span>'+srcHtml(y)+'</div><div class="lm-mo-grid">'+cards+'</div></div>';
       }).join('');
     }
 
@@ -981,7 +998,7 @@
 
     function renderContent(){
       if(!selYears.length){content.innerHTML=emptyHtml();resCount.innerHTML='';return;}
-      var note='<div class="lm-method-note">Drik astronomical method &#x2014; moon&#x2013;sun elongation for tithi, Lahiri ayanamsha, Holashtak / Chaturmas / Navratri / Pitru Paksha detected per year. Verify exact muhurtas with a local Panchang.</div>';
+      var note='<div class="lm-method-note">Dates from Drik Panchang&#x2019;s marriage muhurat list (New Delhi). If they ever differ from drikpanchang.com, press <b>&#x21BB; Sync with Drik Panchang</b> to re-fetch the selected years. A year never synced falls back to an approximate computed list.</div>';
       content.innerHTML=note+(lmView==='cal'?calHtml():tblHtml());
       var total=selYears.reduce(function(s,y){return s+ld(y).reduce(function(a,m){return a+m.length;},0);},0);
       resCount.innerHTML='<strong>'+total+'</strong> dates across <strong>'+selYears.length+'</strong> year'+(selYears.length===1?'':'s');
@@ -1032,7 +1049,22 @@
       overlay.classList.add('open');
       closeBtn.focus();
       buildOpts(); renderChips(); updateLabel(); renderContent();
+      loadDrik().then(renderContent);
     }
+    var syncBtn=document.getElementById('lm-btn-sync');
+    syncBtn.addEventListener('click',function(){
+      if(!selYears.length){ alert('Select one or more years to sync.'); return; }
+      var label=syncBtn.innerHTML; syncBtn.disabled=true; syncBtn.textContent='Syncing '+selYears.length+' year'+(selYears.length===1?'':'s')+'…';
+      fetch('/api/lagan/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({years:selYears})})
+        .then(function(r){ return r.json().catch(function(){return{};}).then(function(d){ if(!r.ok) throw new Error(d.detail||d.error||('HTTP '+r.status)); return d; }); })
+        .then(function(d){
+          DRIK={years:d.years,synced:d.synced}; ldCache={}; renderContent();
+          var bad=Object.keys(d.errors||{});
+          if(bad.length) alert('Could not reach Drik Panchang for '+bad.join(', ')+' - those years keep their last synced dates.'+String.fromCharCode(10,10)+bad.map(function(y){return y+': '+d.errors[y];}).join(String.fromCharCode(10)));
+        })
+        .catch(function(e){ alert('Sync failed: '+e.message); })
+        .finally(function(){ syncBtn.disabled=false; syncBtn.innerHTML=label; });
+    });
     function closeModal(){
       overlay.classList.remove('open');
       if(laganCard) laganCard.focus();
