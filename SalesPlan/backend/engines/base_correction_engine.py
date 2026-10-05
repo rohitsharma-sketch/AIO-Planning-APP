@@ -26,13 +26,13 @@ Grade = numeric prefix of tag ("032 - Stores" → "032");
 
 Review sheet: every correction journaled with full audit trail.
 """
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 import io, json, os, copy
 import pandas as pd
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from actuals_manager import load_actuals, locked_ly_months
+from actuals_manager import load_actuals
 from apportion import shares_pct, split  # noqa: E402
 
 from plan_cache import load_json as _load_plan_json  # noqa: E402

@@ -5,13 +5,12 @@ import sys
 import pandas as pd
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "Tentative AOP Forecaster"))
-from store_master import load_store_master as _universal_store_master, is_ssg as _universal_is_ssg
+from store_master import load_store_master as _universal_store_master
 from apportion import split  # noqa: E402
 
 router = APIRouter()
 
 SEASONALITY_CURVE = [0.75, 0.80, 0.90, 0.95, 1.00, 1.05, 1.10, 1.15, 1.20, 1.10, 0.90, 1.10]
-MONTH_NAMES = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"]
 
 AOP_INPUTS = os.path.join(
     os.path.dirname(__file__),
@@ -34,79 +33,11 @@ FY28_MONTHS = [
 ]
 
 
-def _load_growth_rates():
-    """
-    Read Growth % sheet from inputs.xlsx.
-    Returns {div: float} using the average across months per division.
-    Falls back to 6.0 if the file is unreadable.
-    """
-    try:
-        path = os.path.abspath(AOP_INPUTS)
-        df = pd.read_excel(path, sheet_name="Growth %", header=3)
-        df.columns = [str(c).strip().replace("’", "’").replace("‘", "’") for c in df.columns]
-        df = df[df.iloc[:, 0].notna()]
-        df = df[~df.iloc[:, 0].astype(str).str.upper().str.startswith("HOW")]
-        df.rename(columns={df.columns[0]: "Division"}, inplace=True)
-        df["Division"] = df["Division"].astype(str).str.strip().str.upper()
-        df = df.set_index("Division")
-
-        month_cols = [c for c in FY28_MONTHS if c in df.columns]
-        overall_fallback = 6.0
-
-        overall_row = df.loc["OVERALL", month_cols] if "OVERALL" in df.index else None
-        if overall_row is not None:
-            overall_vals = pd.to_numeric(overall_row, errors="coerce").dropna()
-            overall_fallback = float(overall_vals.mean()) if len(overall_vals) else 6.0
-
-        result = {}
-        for div in DIVISIONS:
-            if div in df.index:
-                row = pd.to_numeric(df.loc[div, month_cols], errors="coerce").dropna()
-                result[div] = float(row.mean()) if len(row) else overall_fallback
-            else:
-                result[div] = overall_fallback
-        return result
-    except Exception:
-        return {div: 6.0 for div in DIVISIONS}
-
 
 def _load_store_master():
     return list(_universal_store_master())
 
 
-def _load_aop_targets():
-    """Read MAMJ AOP targets. Prefers locked (aop_locked_target) over staging
-    (aop_division_target) — locked is set by the explicit Promote action in
-    the AOP Forecaster after a run is approved.
-    Returns ({div: {period_id: lakhs}}, lever_key_used | None).
-    """
-    try:
-        from db.base import SessionLocal
-        from sqlalchemy import text
-        with SessionLocal() as db:
-            for lever in ("aop_locked_target", "aop_division_target"):
-                rows = db.execute(text(
-                    "SELECT row_key, period_id, value FROM planning_inputs.input_values "
-                    "WHERE lever_key=:lk AND row_key = ANY(:divs) "
-                    "ORDER BY row_key, period_id"
-                ), {"lk": lever, "divs": list(DIVISIONS)}).fetchall()
-                if rows:
-                    result = {}
-                    for row_key, period_id, value in rows:
-                        result.setdefault(row_key, {})[period_id] = float(value)
-                    return result, lever
-        return {}, None
-    except Exception:
-        return {}, None
-
-
-def _aop_mamj_total(aop_by_div: dict) -> dict:
-    """Sum MAMJ (period_ids 202703..202706) per division → Lakhs."""
-    MAMJ = {202703, 202704, 202705, 202706}
-    return {
-        div: sum(v for pid, v in periods.items() if pid in MAMJ)
-        for div, periods in aop_by_div.items()
-    }
 
 
 PLAN_MONTHS = {202703: "Mar'27", 202704: "Apr'27", 202705: "May'27", 202706: "Jun'27"}
@@ -205,7 +136,6 @@ def get_stores():
 # Growth Structure endpoints
 # ──────────────────────────────────────────────
 
-SEASON_SUM = sum(SEASONALITY_CURVE)
 
 
 class GrowthMatrixInput(BaseModel):

@@ -19,7 +19,7 @@ Sales" Excel import is gone).
 import calendar as _cal
 import datetime as _dt
 import functools
-import json, os, re, sys
+import os, re, sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Tentative AOP Forecaster"))
@@ -53,8 +53,6 @@ DIVISION_COL_TO_PLAN = {
     # DIVISION values to exclude: DND, NON-TRADING, FIXED ASSETS, CONSIGNMENT, CDIT
 }
 
-# Store tags to exclude (kept for callers that still import it)
-EXCLUDE_TAGS = {"DC", "CLOSED"}
 
 
 def _plan_div(raw):

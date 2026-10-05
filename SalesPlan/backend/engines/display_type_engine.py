@@ -29,7 +29,6 @@ DT_QTY_PATH     = os.path.join(_PARENT, "dt_qty_result.json")
 
 DT_TABLE    = "Table"
 DT_NONTABLE = "Non-Table"
-DISPLAY_TYPES = [DT_TABLE, DT_NONTABLE]
 
 
 def _ts(): return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")

@@ -7,8 +7,7 @@ Proportionally reapportions dept TYs within each attribute group.
 Generates pre vs post comparison for audit.
 """
 from fastapi import APIRouter, Request, HTTPException
-from fastapi.responses import StreamingResponse
-import io, json, os, copy
+import json, os, copy
 import pandas as pd
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))

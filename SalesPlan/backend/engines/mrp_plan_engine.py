@@ -14,7 +14,7 @@ Expected upload columns:
 """
 
 import os, json, io, sys
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, HTTPException
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from apportion import split  # noqa: E402
 from fastapi.responses import StreamingResponse

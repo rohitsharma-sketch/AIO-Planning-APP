@@ -31,14 +31,12 @@ from actuals_manager import (
     load_store_div_actuals, actuals_source,
 )
 from store_master import load_store_master as _universal_store_master, is_ssg as _universal_is_ssg
-from apportion import plug, shares_pct, split
+from apportion import shares_pct, split
 
 router = APIRouter()
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 _BASE     = os.path.dirname(__file__)
-DEPT_STATE_PATH    = os.path.join(_BASE, "..", "department_state.json")
-DEPT_CUSTOM_PATH   = os.path.join(_BASE, "..", "department_custom.json")
 DEPT_GROWTH_PATH   = os.path.join(_BASE, "..", "department_growth.json")
 NEW_DEPT_MAP_PATH  = os.path.join(_BASE, "..", "new_dept_mapping.json")
 FINAL_PLAN_PATH    = os.path.join(_BASE, "..", "final_dept_plan.json")
@@ -62,9 +60,6 @@ FY28_MONTHS = TY_MONTHS
 def _is_ssg(tag: str, store: str = "") -> bool:
     return _universal_is_ssg(tag, store)
 
-
-def _norm(s) -> str:
-    return str(s).strip().upper()
 
 
 # ── Data Loaders ──────────────────────────────────────────────────────────────
@@ -186,14 +181,6 @@ def _growth_p1_p2(growth_matrix, div, dept, ty_month):
     g_p1 = float(dept_data.get(f"{ty_month} P1", 100.0))
     g_p2 = float(dept_data.get(f"{ty_month} P2", 100.0))
     return g_p1, g_p2
-
-def _avg_monthly_growth(growth_matrix, div, dept, ty_month):
-    """
-    Returns average of P1 and P2 growth % for a dept in a given TY month.
-    Falls back to 100.0 (no growth) if not found.
-    """
-    g_p1, g_p2 = _growth_p1_p2(growth_matrix, div, dept, ty_month)
-    return (g_p1 + g_p2) / 2.0
 
 
 def _avg_division_growth(growth_matrix, div, ty_month):
@@ -871,7 +858,7 @@ def get_cluster_plan():
       {clusters: [...], divisions: [...], months: [...],
        result: {cluster → {division → {month → {dept → {ty, ly, cont_pct}}}}}}
     """
-    from store_master import get_store_cluster_map, get_clusters
+    from store_master import get_store_cluster_map
 
     plan = run_dept_plan()
     cluster_map = get_store_cluster_map()
