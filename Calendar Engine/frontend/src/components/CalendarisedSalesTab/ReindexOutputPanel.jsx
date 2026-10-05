@@ -56,8 +56,8 @@ const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct',
 export default function ReindexOutputPanel({ result, festivalByCluster, refDateByCluster, refMonthsByCluster, fwdSplitByCluster, moveInfo }) {
   const [activeSub, setActiveSub] = useState('reindexed')
   const isDayWise = result?.source === 'dw'
-  // a day-wise result has no Monthly Summary / MW Comparison tab - leave either one if it was open
-  useEffect(() => { if (isDayWise && (activeSub === 'summary' || activeSub === 'divmonth')) setActiveSub('reindexed') }, [isDayWise, activeSub])
+  // a day-wise result has no Monthly Summary tab; MW Comparison is gone for both (user, 2026-10-05) - leave either one if it was open
+  useEffect(() => { if ((isDayWise && activeSub === 'summary') || activeSub === 'divmonth') setActiveSub('reindexed') }, [isDayWise, activeSub])
   const [search, setSearch] = useState('')
   // Month Wise Matrix: which store's split to preview (Download XLSX always
   // covers every store regardless of this selection).
@@ -368,57 +368,6 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
       .map(([cluster, vals]) => ({ cluster, vals }))
   }, [ok, result, storeCluster, visibleColumns])
 
-  // Store-level month-wise comparison: actual vs reindexed per store (+ division).
-  // Actual rows use reference-year month strings (e.g. 2026-04); reindexed use
-  // future-year strings (e.g. 2027-04). Match by MM only, same rule as p1p2.
-  const storeMonthComp = useMemo(() => {
-    if (!ok || !result.actualRows) return null
-    // Actual: keyed by grain-key -> {mm -> total}
-    const actualByKey = new Map()
-    for (const row of result.actualRows) {
-      const k = keyFields.map(f => row[f] ?? '').join(KEY_SEP)
-      const mm = row.col.slice(5, 7)
-      let e = actualByKey.get(k)
-      if (!e) { e = { meta: {}, byMM: {} }; for (const f of keyFields) e.meta[f] = row[f] ?? ''; actualByKey.set(k, e) }
-      e.byMM[mm] = (e.byMM[mm] || 0) + row.value
-    }
-    // Reindexed: keyed by grain-key -> {ym -> total}
-    const cols = new Set(visibleColumns)
-    const rxByKey = new Map()
-    for (const row of result.rows) {
-      if (!cols.has(row.col)) continue
-      const k = keyFields.map(f => row[f] ?? '').join(KEY_SEP)
-      const ym = row.col.slice(0, 7)
-      let e = rxByKey.get(k)
-      if (!e) { e = { meta: {}, byYM: {} }; for (const f of keyFields) e.meta[f] = row[f] ?? ''; rxByKey.set(k, e) }
-      e.byYM[ym] = (e.byYM[ym] || 0) + row.value
-    }
-    // Merge keys from both sides
-    const allKeys = [...new Set([...actualByKey.keys(), ...rxByKey.keys()])]
-    allKeys.sort((a, b) => a.localeCompare(b))
-    const rows = allKeys.map(k => ({
-      meta: (actualByKey.get(k) || rxByKey.get(k)).meta,
-      actualByMM: actualByKey.get(k)?.byMM || {},
-      rxByYM: rxByKey.get(k)?.byYM || {},
-    }))
-    // Grand total
-    const grandActualMM = {}, grandRxYM = {}
-    for (const { actualByMM, rxByYM } of rows) {
-      for (const [mm, v] of Object.entries(actualByMM)) grandActualMM[mm] = (grandActualMM[mm] || 0) + v
-      for (const [ym, v] of Object.entries(rxByYM)) grandRxYM[ym] = (grandRxYM[ym] || 0) + v
-    }
-    return { rows, grandActualMM, grandRxYM }
-  }, [ok, result, visibleColumns, keyFields])
-
-  const filteredStoreMonthComp = useMemo(() => {
-    if (!storeMonthComp) return null
-    const q = search.toLowerCase().trim()
-    if (!q) return storeMonthComp.rows
-    return storeMonthComp.rows.filter(r =>
-      keyFields.some(f => String(r.meta[f] ?? '').toLowerCase().includes(q)) ||
-      clusterOf(r.meta.store).toLowerCase().includes(q))
-  }, [storeMonthComp, search, storeCluster])
-
   // Day-wise Comparison: stacked two rows per store (Actual + Reindexed).
   // DW only - MW has no day-of-month field, so date columns don't exist there.
   // Actual side: reference-year dates (e.g. 2026-04-15) → keyed by MM-DD so
@@ -470,22 +419,6 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
       keyFields.some(f => String(r.meta[f] ?? '').toLowerCase().includes(q)) ||
       clusterOf(r.meta.store).toLowerCase().includes(q))
   }, [storeDayComp, search, storeCluster])
-
-  function downloadStoreMonth() {
-    if (!storeMonthComp) return
-    const hdr = visibleMonthCols.flatMap(ym => [`${ym} Actual`, `${ym} Reindexed`, `${ym} Diff`, `${ym} Diff %`])
-    const makeDataCells = (aByMM, rByYM) => visibleMonthCols.flatMap(ym => {
-      const a = aByMM[ym.slice(5, 7)] || 0, r = rByYM[ym] || 0
-      return [round2(a), round2(r), round2(r - a), fmtPct(pctDiff(a, r))]
-    })
-    const { rows, grandActualMM, grandRxYM } = storeMonthComp
-    downloadCsv([
-      ['Cluster', ...kfHeaders, ...hdr],
-      ...rows.map(({ meta, actualByMM, rxByYM }) =>
-        [clusterOf(meta.store), ...keyFields.map(f => meta[f]), ...makeDataCells(actualByMM, rxByYM)]),
-      ['', ...keyFields.map((_, i) => i === 0 ? 'Grand Total' : ''), ...makeDataCells(grandActualMM, grandRxYM)],
-    ], `${fileStem}_store_month_comparison.csv`)
-  }
 
   function downloadStoreDayComp(dlMonths, fmt) {
     if (!storeDayComp) return
@@ -720,7 +653,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
       )}
       <div className="tabs">
         <button className={activeSub === 'reindexed' ? 'active' : ''} onClick={() => setActiveSub('reindexed')}>Reindexed Sales</button>
-        {/* Monthly Summary and MW Comparison are month-wise views: shown for month-wise indexing only (user, 2026-10-05:
+        {/* Monthly Summary is a month-wise view: shown for month-wise indexing only (user, 2026-10-05:
             "remove monthly and mw comparison from date wise indexing citing no relevance") */}
         {!isDayWise && <button className={activeSub === 'summary' ? 'active' : ''} onClick={() => setActiveSub('summary')}>Monthly Summary</button>}
         <button className={activeSub === 'cluster' ? 'active' : ''} onClick={() => setActiveSub('cluster')}>By Cluster</button>
@@ -729,7 +662,6 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
             all, so its P1/P2 here is an even half-and-half of the month total
             (isEven, see p1p2Rows) - shown either way for a consistent shape
             across sources, but clearly labeled below when it's the even case. */}
-        {ok && result.actualRows && !isDayWise && <button className={activeSub === 'divmonth' ? 'active' : ''} onClick={() => setActiveSub('divmonth')}>MW Comparison</button>}
         {isMwMatrix && <button className={activeSub === 'mwmatrix' ? 'active' : ''} onClick={() => setActiveSub('mwmatrix')}>Month Wise Matrix</button>}
         {ok && result.actualRows && result.source === 'dw' && !result.isSnapshot && result.columns?.[0]?.length >= 10 && <button className={activeSub === 'daycomp' ? 'active' : ''} onClick={() => setActiveSub('daycomp')}>DW Comparison</button>}
         {ok && result.actualRows && <button className={activeSub === 'p1p2' ? 'active' : ''} onClick={() => setActiveSub('p1p2')}>P1 / P2 Comparison</button>}
@@ -982,124 +914,6 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
           </div>
         </>
       )}
-
-      {activeSub === 'divmonth' && storeMonthComp && (() => {
-        // Actual reference-year label - first actual row's col gives the year (e.g. "2026")
-        const actualYear = result.actualRows?.[0]?.col?.slice(0, 4) ?? 'Actual'
-        const rxYear = visibleMonthCols[0]?.slice(0, 4) ?? 'Reindexed'
-        const { rows: smRows, grandActualMM, grandRxYM } = storeMonthComp
-        const displayRows = filteredStoreMonthComp || smRows
-        // For each TY month column, collect EVERY distinct LY month that actually
-        // contributed a day to it, across every cluster - refMonthsByCluster[cluster][ym]
-        // is the full list (not refDateByCluster's single majority pick, which is
-        // what the sales NUMBER gets counted against but silently drops a real
-        // minority month, e.g. 20 Feb days + 10 Mar days would show as "Feb" only).
-        // Falls back to the majority value if the full-list map isn't populated yet
-        // (e.g. a job resumed without a fresh getCalendar call) so this never regresses
-        // to blank.
-        const lyMonthLabelByYM = {}
-        for (const ym of visibleMonthCols) {
-          const tyMonthIdx = parseInt(ym.slice(5, 7), 10) - 1
-          const lyMonths = new Set()
-          for (const cl of Object.keys(refMonthsByCluster || refDateByCluster || {})) {
-            const list = refMonthsByCluster?.[cl]?.[ym]
-            if (list?.length) { list.forEach(ly => lyMonths.add(ly)); continue }
-            const ly = refDateByCluster?.[cl]?.[ym]
-            if (ly) lyMonths.add(ly.slice(0, 7))
-          }
-          const parts = [...lyMonths].sort().map(m => MONTH_ABBR[parseInt(m.slice(5, 7), 10) - 1])
-          lyMonthLabelByYM[ym] = { label: parts.join(' + '), isCross: parts.length > 0 && parts.some(p => p !== MONTH_ABBR[tyMonthIdx]) }
-        }
-        return (
-          <>
-            <div className="scm-toolbar">
-              <input id="rx-mwcomp-search" type="search" aria-label="Search" style={{ width: '240px' }}
-                  placeholder="Search store, division, cluster"
-                  value={search} onChange={e => setSearch(e.target.value)} />
-              <div className="scm-toolbar-right"><button className="btn" onClick={downloadStoreMonth} disabled={!smRows.length}>Download CSV</button></div>
-            </div>
-            <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
-              {countText(displayRows.length)} · Each month: <strong>{actualYear} Actual</strong> vs <strong>{rxYear} Reindexed</strong> (matched by month number - difference reflects festival/calendar shifts)
-            </div>
-            <div className="tbl-wrap">
-              <table>
-                <thead>
-                  {/* Row 0: LY reference month labels – shows which LY month feeds each TY month column.
-                      Amber highlight when the LY month differs from the TY month (cross-month pull). */}
-                  <tr>
-                    <th rowSpan={3}>Cluster</th>
-                    {kfHeaders.map(h => <th key={h} rowSpan={3}>{h}</th>)}
-                    {visibleMonthCols.map(ym => {
-                      const { label, isCross } = lyMonthLabelByYM[ym] || { label: '', isCross: false }
-                      return (
-                        <th key={ym} colSpan={2} style={{
-                          ...num,
-                          borderLeft: '2px solid var(--border)',
-                          fontSize: '10px',
-                          background: isCross ? 'rgba(245,158,11,0.15)' : undefined,
-                          color: isCross ? '#d97706' : 'var(--muted)',
-                          fontWeight: isCross ? 600 : 400,
-                        }}>
-                          {label || ''}
-                        </th>
-                      )
-                    })}
-                  </tr>
-                  {/* Row 1: TY month group headers */}
-                  <tr>
-                    {visibleMonthCols.map(ym => (
-                      <th key={ym} colSpan={2} style={{ ...num, borderLeft: '2px solid var(--border)' }}>{ym}</th>
-                    ))}
-                  </tr>
-                  {/* Row 2: Actual / Reindexed sub-headers */}
-                  <tr>
-                    {visibleMonthCols.map(ym => (
-                      <Fragment key={ym}>
-                        <th style={{ ...num, borderLeft: '2px solid var(--border)', fontSize: '10px', color: 'var(--muted)' }}>{actualYear}</th>
-                        <th style={{ ...num, fontSize: '10px', color: 'var(--navy2)' }}>{rxYear}</th>
-                      </Fragment>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {displayRows.slice(0, RX_CAP).map(({ meta, actualByMM, rxByYM }) => (
-                    <tr key={keyFields.map(f => meta[f]).join(KEY_SEP)}>
-                      <td>{clusterOf(meta.store)}</td>
-                      {keyFields.map(f => <td key={f} style={{ fontWeight: f === 'store' ? 600 : 400 }}>{meta[f]}</td>)}
-                      {visibleMonthCols.map(ym => {
-                        const mm = ym.slice(5, 7)
-                        const a = actualByMM[mm] ?? null
-                        const r = rxByYM[ym] ?? null
-                        const diff = (a != null && r != null) ? r - a : null
-                        return (
-                          <Fragment key={ym}>
-                            <td style={{ ...num, borderLeft: '2px solid var(--border)' }}>{money(a)}</td>
-                            <td style={{ ...num, color: diff == null ? undefined : diff > 0.005 ? 'var(--navy2)' : diff < -0.005 ? 'var(--red)' : undefined }}>{money(r)}</td>
-                          </Fragment>
-                        )
-                      })}
-                    </tr>
-                  ))}
-                  <tr style={{ borderTop: '2px solid var(--border)', fontWeight: 700 }}>
-                    <td />
-                    {keyFields.map((f, i) => <td key={f}>{i === 0 ? 'Grand Total' : ''}</td>)}
-                    {visibleMonthCols.map(ym => {
-                      const mm = ym.slice(5, 7)
-                      const a = grandActualMM[mm] || 0, r = grandRxYM[ym] || 0
-                      return (
-                        <Fragment key={ym}>
-                          <td style={{ ...num, borderLeft: '2px solid var(--border)' }}>{money(a)}</td>
-                          <td style={{ ...num, color: r > a + 0.005 ? 'var(--navy2)' : r < a - 0.005 ? 'var(--red)' : undefined }}>{money(r)}</td>
-                        </Fragment>
-                      )
-                    })}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </>
-        )
-      })()}
 
       {activeSub === 'mwmatrix' && isMwMatrix && (() => {
         const hasSplitMap = fwdSplitByCluster && Object.keys(fwdSplitByCluster).length > 0

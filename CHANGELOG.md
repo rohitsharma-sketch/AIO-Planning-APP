@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### Calendar: MW Comparison tab removed (month-wise too)
+- **Asked (user):** "remove mw comparison" (on a month-wise result).
+- Tab, its store-month table and its CSV export deleted. Month-wise tabs: Reindexed Sales, Monthly Summary, By Cluster, Month Wise Matrix, P1 / P2 Comparison, Run Details.
+
 ### Calendar: Monthly Summary and MW Comparison only for month-wise reindex — `e9433ca`
 - **Asked (user):** "remove monthly and mw comparison from date wise indexing citing no relevance, keep them in the month wise indexing".
 - Day-wise results: Reindexed Sales, By Cluster, DW Comparison, P1 / P2 Comparison, Run Details. Month-wise keeps Monthly Summary and MW Comparison.
