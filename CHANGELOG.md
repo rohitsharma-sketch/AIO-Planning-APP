@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### Calendar: Download Festival Dates (festivals × years, no clusters) — `0a27f8e`
+- **Asked (user):** "download the festival list with their bulk year dates ... ranging from year to year as per the selection. No clusters nothing just festivals".
+- Festival Master toolbar: **Festival dates from [year] to [year] → Download Festival Dates (CSV)**. One row per festival (calendar order), one column per year (DD-Mon-YYYY): Google reference first, then the built-in table, blank if neither (no estimate). Defaults to the Version Setting years; up to 21 years.
+
 ### BIS: Planner's input beside the buyer's growth — `1b7d384`
 - **Asked (user):** a planner's input from a fill-rate / factor grid, in parallel with the buyer's input — "Planner's input to be parallel to the final Value ... both the growth % will be in parallel and both values will be in parallel for the buyer to choose"; factor table revised 5 Oct; SSG = the 25V26 cohort; reference departments = Sales Plan's mapping; "do not hardcode the prompt banner to block MAMJ".
 - **Planner's value** = factor × (division AOP × department LY cont %), re-balanced so each division × month equals AOP; **Planner Gr %** = value ÷ LY − 1, locked. Columns: Factor | Planner Gr% | Planner Value | Block Growth% (buyer) | Plan Total / vs LY% (final); Month wise shows Planner Gr% + Buyer Gr% per month.
