@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### Builds: Sales Plan and AOP Forecaster dist folders committed in full
+- **Asked (user):** "commit the dist folders too".
+- Both frontends rebuilt from the current source and force-added in full (`git add -A -f`; their `assets/` are git-ignored, so before this only `index.html` was tracked and the committed index pointed at asset files that weren't in the repo). A fresh clone now serves both apps without a build step.
+
 ### AOP: calendar-only re-run checked - Version 2 kept (no publish)
 - **Asked (user):** "re-run AOP with the new calendars", then "keep version 2".
 - I copied Version 2's session (`193eea12`) into the scratchpad and ran it with the same inputs and growth, once on the old (pre-lagan) calendars and once on the new ones. MAMJ (all stores): 954.59 → 954.57 Cr; Jun'27 −0.019 / Jul'27 +0.019 Cr; Mar'27 (override), Apr and May unchanged; Mar'27–Mar'28 total unchanged at 1,337.58 Cr. Nothing was published, saved or locked. Version 2 stays the live, locked AOP.
