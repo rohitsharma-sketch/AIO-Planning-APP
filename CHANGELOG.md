@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### BIS: buyer growth reaches Sales Plan only on Save — `103de79`
+- **Asked (user):** "yes, push only on Save" (readiness review CRITICAL: opening BIS in a fresh browser silently overwrote the live buyer plan in Sales Plan with plain AOP seeds).
+- `saveState()` pushes only from the **Save** button; seeding, version loads, department moves and visibility changes save in the browser only. Verified: a fresh load seeds 944 cells and sends nothing; Save sends one POST (944 rows).
+
 ### Readiness review (Calendar, AOP Forecaster, BIS) — security fixes — `ccd94d4`
 - **Asked (user):** "deploy agents to check the whole 3 core apps till BIS so that its made to be ready for deployment post review to the stakeholders"
 - **AOP Forecaster — CRITICAL fixed:** `_session_dir` took any session id, so `GET /api/session/..` (also `%2e%2e`, `..%5C`) returned 200 from the app folder and `DELETE /api/sessions/{id}` (no login on 8000) could `rmtree` the app folder or above. Session ids must now be UUIDs (all 132 real ones are) — else 404. Verified live.
