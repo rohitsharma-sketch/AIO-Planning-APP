@@ -287,7 +287,9 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
     })
     return {
       id: Date.now(),
-      name: `${sourceProfiles[activeIdx].name} Calendar`,
+      // default Lock & Save name = "LY -> TY Calendar - All" from the Version Setting years the calendar was
+      // generated with (user, 2026-10-05; was "<cluster> Calendar")
+      name: `${Number(refYear)} -> ${Number(futYear)} Calendar - All`,
       refYear: Number(refYear),
       futYear: Number(futYear),
       savedAt: new Date().toISOString(),
