@@ -238,12 +238,16 @@ This was a multi-day session prompted by a user report ("Raksha Bandhan dates lo
 
 **Current saved calendars** (query `calendar.calendars` to reconfirm — this table will drift as new templates get created):
 
+As of 2026-10-05 — all four are V2, re-synced that day with the Drik lagan-to-lagan rule, and every name follows `<ref> -> <fut> Calendar - All`:
+
 | id | Name | ref_year → fut_year | Engine | Purpose |
 |---|---|---|---|---|
-| `1788330819929` | `2024 -> 2025 Calendar` | 2024 → 2025 | v1 | Historical, V1 |
-| `1788330849067` | `2025 -> 2026 Calendar - All` | 2025 → 2026 | v1 | Historical, V1 |
-| `1789555936689` | `2026 -> 2027 Calendar - All` | 2026 → 2027 | v2 | Current, V2 |
-| `1789556012651` | `2026 -> 2027 Calendar - Version 1` | 2026 → 2027 | v1 | Current, V1 (repurposed from "W/ Core Only" — see §7.2) |
+| `1791178013513` | `2021 -> 2022 Calendar - All` | 2021 → 2022 | v2 | Historical (saved 2026-10-05; renamed from `2021-> 2022 Calendar - All`) |
+| `1790655101158` | `2024 -> 2025 Calendar - All` | 2024 → 2025 | v2 | Historical (renamed from `2024 -> 2025 Calendar`) |
+| `1790655106264` | `2025 -> 2026 Calendar - All` | 2025 → 2026 | v2 | AOP's FY26 placeholder shift (2025 → 2026) |
+| `1790655109215` | `2026 -> 2027 Calendar - All` | 2026 → 2027 | v2 | Current: AOP bases + the reindex snapshots Sales Plan reads |
+
+Superseded (the 2026-09-17 to 2026-09-21 audit's set, kept for history): `1788330819929` "2024 -> 2025 Calendar" (v1), `1788330849067` "2025 -> 2026 Calendar - All" (v1), `1789555936689` "2026 -> 2027 Calendar - All" (v2) and `1789556012651` "2026 -> 2027 Calendar - Version 1" (v1, repurposed from "W/ Core Only" — see §7.2). The V2 calendars have since been re-saved under new ids (latest 2026-09-29), and the V1 one was dropped by the user's choice ("keep the ver 1 calendar as is").
 
 **Real festival dates corrected this session** (all cross-checked against Wikipedia/DrikPanchang/multiple independent Panchang sites, not guessed): Raksha Bandhan, Rath Yatra, Basant Panchami, Milad-un-Nabi, Makar Sankranti, Navratri 2027 (was 2027-09-22, corrected to 2027-09-30), Dussehra 2027 (was 2027-10-01, corrected to 2027-10-09), and Shraad 2027 (corrected TWICE — first to 2027-09-07 based on the then-current Navratri date, then to the actually-correct **2027-09-15** after Navratri itself got corrected and the Pitru-Paksha-ends-the-day-before-Navratri-starts derivation went stale). **Lesson embedded in that double-fix: whenever a festival's date changes, check whether any OTHER festival's date was derived from it** (Nuakhai from Ganesh Chaturthi+1, Kali Puja from Diwali, Shraad's end from Navratri's start) **and re-verify those too** — a derivation is a dependency, and dependencies go stale silently. Also fixed: two stale `FESTIVAL_DATES` table entries (Diwali, Chhath Puja) whose 2026/2027 columns had never been updated when the live DB was corrected in an even earlier session — this is exactly what caused the two older (2024/2025, 2025/2026) templates to pick up wrong dates when the general "make every festival core" fix ran against them.
 
