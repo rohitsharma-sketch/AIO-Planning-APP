@@ -1495,6 +1495,11 @@ def _recover_reindex_job(job_id):
     very first thing start_reindex_job does) - an approximation, but only used
     for the elapsed/ETA display on a job that's still running; a job that's
     already done doesn't need it at all."""
+    import uuid as _uuid
+    try:   # job ids are uuid4 (start_reindex_job): anything else ("..\..") could reach outside reindex_jobs/
+        job_id = str(_uuid.UUID(str(job_id)))   # (readiness review 2026-10-05)
+    except ValueError:
+        return None
     job_dir = os.path.join(_REINDEX_JOB_DIR, job_id)
     if not os.path.isdir(job_dir):
         return None

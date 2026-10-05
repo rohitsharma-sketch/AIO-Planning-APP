@@ -2,7 +2,7 @@
 AOP Forecaster — FastAPI backend
 Run: uvicorn app:app --reload --port 8000
 """
-import json, os, uuid, shutil
+import json, os, uuid, shutil, threading
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Body, Request, APIRouter, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,7 +38,13 @@ os.makedirs(SESSIONS_DIR, exist_ok=True)
 
 
 def _session_dir(session_id: str) -> str:
-    return os.path.join(SESSIONS_DIR, session_id)
+    # a session id is a UUID (session-from-db / upload) - anything else ("..", "..\\") could reach outside sessions/
+    # and DELETE /api/sessions/{id} would rmtree it (readiness review 2026-10-05)
+    try:
+        sid = str(uuid.UUID(session_id))
+    except (ValueError, AttributeError, TypeError):
+        raise HTTPException(status_code=404, detail="Session not found")
+    return os.path.join(SESSIONS_DIR, sid)
 
 def _input_path(session_id: str) -> str:
     return os.path.join(_session_dir(session_id), "inputs.xlsx")
@@ -98,8 +104,19 @@ class RunRequest(BaseModel):
     growth_overrides: Optional[dict] = None
     overall_override: Optional[dict] = None
 
+_RUN_LOCK = threading.Lock()
+
+
 @router.post("/api/run/{session_id}")
-async def run(session_id: str, body: RunRequest = RunRequest()):
+def run(session_id: str, body: RunRequest = RunRequest()):
+    # plain def (was async def calling the CPU-bound engine, which froze the whole server - 8000, and Calendar / Sales
+    # Plan on 8010 - for every user during a run; readiness review 2026-10-05): FastAPI runs it in a worker thread.
+    # Runs stay one at a time, as before - each rewrites shared engine files (cumulative_diff.json, the publish).
+    with _RUN_LOCK:
+        return _run(session_id, body)
+
+
+def _run(session_id: str, body: RunRequest):
     inp = _input_path(session_id)
     if not os.path.exists(inp):
         raise HTTPException(404, "Session not found — upload inputs.xlsx first")
