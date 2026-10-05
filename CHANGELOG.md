@@ -7,6 +7,14 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### BIS: Phase 1 / Phase 2 + fill rates from the PLAN vs FILL RATE pivot
+- **Asked (user):** "transform the model into 2 phases remove the prompt banner keep the model button on topbar, and rename Block wise to phase 1 and the month wise to phase 2 ... Phase 2 changes will be taken to the sales plan ... Pivot has fillrates now configure it accordingly". Choices: Phase 2 keeps BOTH each department's Phase 1 block total and each division-month AOP; fill rate = NEW FILL RATE % (W_CAP).
+- The login prompt is gone. The top-bar button reads **Phase 1 · Block** / **Phase 2 · Month** and switches with one click.
+- **Phase 1** is unchanged: one Block Growth % per department, flat across the months, re-balanced to each month's AOP.
+- **Phase 2** shows a read-only Phase 1 Block Gr% column, then Planner Gr% / Buyer Gr% per month, each with a lock. Editing a month no longer auto-locks it, the same as Phase 1. The edited cell and the locked cells stay; every other cell in the division re-balances (iterative proportional fit), so each department's block total and each month's AOP both hold. If a department has no other unlocked month, AOP wins and the page says how far its block total moved. The magnified monthly editor follows the same rule in Phase 2. Check: `node "Buyer's Input Sheet/test_phase2.js"`.
+- Sales Plan: unchanged path. On Save, each department × month growth goes to Sales Plan, which applies it to that month's P1 and P2.
+- **Fill rates:** `fill_rate_import.py` reads the DIV - SUMMARY pivot into `fill_rate.json`: 114 departments, plus 11 split departments that take their old name's rate, so 125 in all (78 Good, 35 Avg, 12 Low). Factors → Refresh fill rates re-uploads the workbook (`POST /api/planner/fill-rate`, admin / planner). A department missing from the pivot uses its reference department's rate, else a neutral 1.00 ("not in the fill-rate pivot").
+
 ### Calendar Engine: lagan days match lagan days (Drik Panchang dates)
 - **Asked (user):** "use the drik lagan dates in the calendar engine too"; chose "match lagan to lagan".
 - When the engine picks an LY day for an ordinary TY day, a Drik marriage-muhurat day now pairs with an LY muhurat day and a non-lagan day with a non-lagan day. This is weighed after month, before weekday (`getWeights().lagan = 196`), in both V1 and V2. Festival anchors are unchanged.

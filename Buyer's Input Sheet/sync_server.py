@@ -327,8 +327,8 @@ def aop_versions():
 # ── Planner's input (user, 5 Oct 2026 - logic-base "BIS buy plan / fill rate - planner's input vs buyer's input") ──
 # The factor table (sell-thru tag x LY-growth tag x fill-rate tag -> factor) is shared by every browser, so it lives
 # here; only an admin or a planner may change it. New departments take their factor inputs from the reference
-# department in Sales Plan's new-department mapping. Fill rate comes from a file the user refreshes ad hoc (template to
-# follow); until it exists every factor is a neutral 1.00 ("fill rate pending").
+# department in Sales Plan's new-department mapping. Fill rate = fill_rate.json, built by fill_rate_import.py from the
+# user's PLAN vs FILL RATE workbook (DIV - SUMMARY pivot) and refreshed ad hoc by uploading it (POST below).
 _HERE = os.path.dirname(os.path.abspath(__file__))
 FACTOR_TABLE_JSON = os.path.join(_HERE, "factor_table.json")
 FILL_RATE_JSON = os.path.join(_HERE, "fill_rate.json")
@@ -406,6 +406,28 @@ def planner_factor_table_save():
         json.dump(ft, fh, ensure_ascii=False, indent=1)
     os.replace(FACTOR_TABLE_JSON + ".tmp", FACTOR_TABLE_JSON)
     return jsonify({"ok": True, "factor_table": ft})
+
+
+@app.route("/api/planner/fill-rate", methods=["POST"])
+def planner_fill_rate_upload():
+    """Refresh fill_rate.json from the uploaded PLAN vs FILL RATE workbook (its DIV - SUMMARY pivot) - admin / planner."""
+    import tempfile
+    import fill_rate_import
+    if not _planner_editor():
+        return jsonify({"ok": False, "error": "Only an admin or a planner can refresh the fill rates."}), 403
+    f = request.files.get("file")
+    if not f or not f.filename.lower().endswith((".xlsb", ".xlsx", ".xlsm")):
+        return jsonify({"ok": False, "error": "Upload the fill-rate workbook (.xlsb / .xlsx)."}), 400
+    fd, path = tempfile.mkstemp(suffix=os.path.splitext(f.filename)[1])
+    os.close(fd)
+    try:
+        f.save(path)
+        data = fill_rate_import.save(path, source_name=f.filename)
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    finally:
+        os.remove(path)
+    return jsonify({"ok": True, "fill_rate": data})
 
 
 @app.route("/api/config/buyer-department-growth", methods=["GET", "POST"])
