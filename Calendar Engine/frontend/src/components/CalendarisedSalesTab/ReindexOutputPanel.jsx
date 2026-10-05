@@ -55,6 +55,9 @@ const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct',
 
 export default function ReindexOutputPanel({ result, festivalByCluster, refDateByCluster, refMonthsByCluster, fwdSplitByCluster, moveInfo }) {
   const [activeSub, setActiveSub] = useState('reindexed')
+  const isDayWise = result?.source === 'dw'
+  // a day-wise result has no Monthly Summary / MW Comparison tab - leave either one if it was open
+  useEffect(() => { if (isDayWise && (activeSub === 'summary' || activeSub === 'divmonth')) setActiveSub('reindexed') }, [isDayWise, activeSub])
   const [search, setSearch] = useState('')
   // Month Wise Matrix: which store's split to preview (Download XLSX always
   // covers every store regardless of this selection).
@@ -717,14 +720,16 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
       )}
       <div className="tabs">
         <button className={activeSub === 'reindexed' ? 'active' : ''} onClick={() => setActiveSub('reindexed')}>Reindexed Sales</button>
-        <button className={activeSub === 'summary' ? 'active' : ''} onClick={() => setActiveSub('summary')}>Monthly Summary</button>
+        {/* Monthly Summary and MW Comparison are month-wise views: shown for month-wise indexing only (user, 2026-10-05:
+            "remove monthly and mw comparison from date wise indexing citing no relevance") */}
+        {!isDayWise && <button className={activeSub === 'summary' ? 'active' : ''} onClick={() => setActiveSub('summary')}>Monthly Summary</button>}
         <button className={activeSub === 'cluster' ? 'active' : ''} onClick={() => setActiveSub('cluster')}>By Cluster</button>
         {/* P1/P2 (first/second half of a month) is a real day 1-15/16-end split
             for day-wise; month-wise has no day-of-month field in its source at
             all, so its P1/P2 here is an even half-and-half of the month total
             (isEven, see p1p2Rows) - shown either way for a consistent shape
             across sources, but clearly labeled below when it's the even case. */}
-        {ok && result.actualRows && <button className={activeSub === 'divmonth' ? 'active' : ''} onClick={() => setActiveSub('divmonth')}>MW Comparison</button>}
+        {ok && result.actualRows && !isDayWise && <button className={activeSub === 'divmonth' ? 'active' : ''} onClick={() => setActiveSub('divmonth')}>MW Comparison</button>}
         {isMwMatrix && <button className={activeSub === 'mwmatrix' ? 'active' : ''} onClick={() => setActiveSub('mwmatrix')}>Month Wise Matrix</button>}
         {ok && result.actualRows && result.source === 'dw' && !result.isSnapshot && result.columns?.[0]?.length >= 10 && <button className={activeSub === 'daycomp' ? 'active' : ''} onClick={() => setActiveSub('daycomp')}>DW Comparison</button>}
         {ok && result.actualRows && <button className={activeSub === 'p1p2' ? 'active' : ''} onClick={() => setActiveSub('p1p2')}>P1 / P2 Comparison</button>}
