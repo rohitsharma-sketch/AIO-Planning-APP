@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### Calendar: Monthly Summary and MW Comparison only for month-wise reindex — `e9433ca`
+- **Asked (user):** "remove monthly and mw comparison from date wise indexing citing no relevance, keep them in the month wise indexing".
+- Day-wise results: Reindexed Sales, By Cluster, DW Comparison, P1 / P2 Comparison, Run Details. Month-wise keeps Monthly Summary and MW Comparison.
+
 ### Cleanup: unused data files removed, 30 GB of old reindex jobs pruned — `eb00a6a`
 - **Asked (user):** "yes, prune the old reindex folders, remove the unused data files."
 - **Reindex jobs:** 146 folders (24 Aug – 26 Sep, 30.0 GB) under the platform's `calendar_engine/Local DB/reindex_jobs` deleted (untracked; regenerable by re-running a reindex); the 8 newest kept.
