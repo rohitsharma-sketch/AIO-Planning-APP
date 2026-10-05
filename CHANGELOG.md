@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-05
 
+### BIS: Planner's input beside the buyer's growth — `1b7d384`
+- **Asked (user):** a planner's input from a fill-rate / factor grid, in parallel with the buyer's input — "Planner's input to be parallel to the final Value ... both the growth % will be in parallel and both values will be in parallel for the buyer to choose"; factor table revised 5 Oct; SSG = the 25V26 cohort; reference departments = Sales Plan's mapping; "do not hardcode the prompt banner to block MAMJ".
+- **Planner's value** = factor × (division AOP × department LY cont %), re-balanced so each division × month equals AOP; **Planner Gr %** = value ÷ LY − 1, locked. Columns: Factor | Planner Gr% | Planner Value | Block Growth% (buyer) | Plan Total / vs LY% (final); Month wise shows Planner Gr% + Buyer Gr% per month.
+- **Factor table** (`factor_table.json`, shared): Avg Weekly Sell-Thru % × LY Growth (25V26, MAMJ'26 vs '25, value) × Fill Rate → 0.80–1.20. **No fill-rate file yet → every factor 1.00 ("fill rate pending")**, so numbers are unchanged today (verified: planner Gr % = current growth to 1e-13, planner sums = AOP). Only an admin / planner can save it (server checks the platform session; 403 otherwise).
+- Buyer's Gr % defaults to the planner's; a buyer's own entry supersedes and survives re-seeds; **use** restores the planner's. Re-balance weights by planner value. **Block wise / Month wise** prompt once per session + Mode button. Value only — no quantity.
+
 ### Calendar: Lock & Save name defaults to "LY -> TY Calendar - All" — `8cc5ea2`
 - **Asked (user):** "when i lock and save the default field should be LY -> TY Calendar - All always, where LY & TY is to be taken from version setting".
 - The prompt pre-fills `<Reference year> -> <Future year> Calendar - All` from Version Setting (was `<cluster> Calendar`); still editable, and an existing name still overwrites that template. Calendar `dist` rebuilt and committed in full.
