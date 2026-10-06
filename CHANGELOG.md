@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-06
 
+### Re-Aligner: final Excel outputs in seconds instead of minutes
+- **Asked (user):** "re-aligner is delaying the final output process check it and try to reduce it".
+- **Cause:** the xlsx exports wrote the ~675k-row plan cell by cell in Python (xlsxwriter). The server's last timings were 650 s for Plan-to-plan and 260 s for the Full realigned plan (93 s / 78 s on an idle machine; slower in the server alongside other work).
+- **Fix (`engine.write_xlsx`, same interface for every caller):** the sheet XML is now built column-wise in polars (already installed, so no new dependency) and zipped straight into the .xlsx. Measured on the 674,478-row plan: Plan-to-plan 10.4 s, Full plan 8.0 s, about the same file size (deflate level 6). The files are standard SpreadsheetML: every cell keeps its address, text is inline, the 8-decimal number format is kept, booleans stay true/false, and characters XML can't hold are stripped.
+- **Checked:** read back, every value and text cell equals the source (max difference 0.0); multi-sheet / categorical / boolean / mixed columns round-trip; `test_realign.py` and `test_workspaces.py` pass. Re-Aligner restarted (8070); a result on screen needs one more Run.
+
 ### BIS: Attribute Summary = read-only summary, with an "Edit by attribute" pane carrying every Buyer's Plan tool
 - **Asked (user):** "i want similar to the buyer's input sheet in this module also … attribute is optional but in case if the user wants to work on to change it then only open a similar pane with all BIS components intact as the main sheet. otherwise just highlight it as a summary of the BIS output derivative".
 - **Default:** a bar reads "Summary of the Buyer's Plan - every figure here is the departments added up by attribute (read-only)". There are no inputs, locks or Use buttons. The Factor column now shows each attribute's factor (its departments' factors weighted by AOP share, e.g. MENS REGULAR 1.07, OCCASIONAL 0.98). The Planner Gr% hover message explains the attribute's build-up.

@@ -21,10 +21,12 @@ the original ASP for that Department x MRP x Display Type x Month.
 """
 import io
 import threading
+import zipfile
+from xml.sax.saxutils import escape
 
 import numpy as np
 import pandas as pd
-import xlsxwriter
+import polars as pl
 
 TOL = 1e-9
 SHOWN = 5e-9   # the comparison shows 8 decimals: any difference that would show there counts (user, 2026-09-30)
@@ -817,39 +819,111 @@ def merge_compare(compare, fixed):
     return pd.concat([compare[~drop], fixed[np.abs(fixed["Delta"]) > SHOWN]], ignore_index=True)
 
 
-def _cell(v):
-    """numpy scalar -> native Python, and NaN/Inf -> blank (xlsxwriter can't write either directly)."""
-    if hasattr(v, "item"):
-        v = v.item()
-    return None if isinstance(v, float) and not np.isfinite(v) else v
+_XML_BAD = r"[\x00-\x08\x0b\x0c\x0e-\x1f]"   # characters XML (and so Excel) can't hold
+
+
+def _col_letters(n):
+    out = []
+    for j in range(n):
+        s, k = "", j + 1
+        while k:
+            k, r = divmod(k - 1, 26)
+            s = chr(65 + r) + s
+        out.append(s)
+    return out
+
+
+def _xlsx_frame(df):
+    """pandas -> polars, with object columns made plain (numbers stay numbers, the rest text) so polars can take them."""
+    df = df.reset_index(drop=True).copy()
+    for c in df.columns:
+        if df[c].dtype == object:
+            num = pd.to_numeric(df[c], errors="coerce")
+            df[c] = num if num.notna().sum() == df[c].notna().sum() else df[c].map(lambda v: None if v is None or v != v else str(v))
+    df.columns = [str(c) for c in df.columns]
+    return pl.from_pandas(df)
+
+
+def _sheet_rows(df, num_style):
+    """The worksheet's <row> elements, built column-wise in polars - no Python per cell (user, 2026-10-06: "re-aligner
+    is delaying the final output"; xlsxwriter's cell-by-cell write took 4-11 minutes for the ~680k-row plan in the
+    server, this takes seconds). Blank / NaN / Inf cells are left out, as xlsxwriter did."""
+    pdf = _xlsx_frame(df)
+    rn = (pl.int_range(0, pl.len(), dtype=pl.Int64) + 2).cast(pl.String)
+    cells = []
+    for letter, c, dt in zip(_col_letters(len(pdf.columns)), pdf.columns, pdf.dtypes):
+        col, ref = pl.col(c), pl.concat_str([pl.lit(f'<c r="{letter}'), rn, pl.lit('"')])
+        if dt == pl.Boolean:
+            body = pl.when(col.is_not_null()).then(pl.concat_str([ref, pl.lit(' t="b"><v>'), col.cast(pl.Int8).cast(pl.String), pl.lit("</v></c>")]))
+        elif dt.is_numeric():
+            f = col.cast(pl.Float64)
+            st = f' s="{num_style}"' if num_style and dt.is_float() else ""
+            v = (col.cast(pl.Int64) if dt.is_integer() else f).cast(pl.String)
+            body = pl.when(f.is_not_null() & f.is_finite()).then(pl.concat_str([ref, pl.lit(f"{st}><v>"), v, pl.lit("</v></c>")]))
+        else:
+            t = (col.cast(pl.String).str.replace_all(_XML_BAD, "").str.replace_all("&", "&amp;", literal=True)
+                 .str.replace_all("<", "&lt;", literal=True).str.replace_all(">", "&gt;", literal=True))
+            body = pl.when(t.is_not_null() & (t != "")).then(
+                pl.concat_str([ref, pl.lit(' t="inlineStr"><is><t xml:space="preserve">'), t, pl.lit("</t></is></c>")]))
+        cells.append(body.otherwise(pl.lit("")))
+    out = pdf.select(pl.concat_str([pl.lit('<row r="'), rn, pl.lit('">')] + cells + [pl.lit("</row>")]).alias("r"))["r"]
+    head = '<row r="1">' + "".join(f'<c r="{l}1" t="inlineStr"><is><t xml:space="preserve">{escape(str(c))}</t></is></c>'
+                                  for l, c in zip(_col_letters(len(df.columns)), df.columns)) + "</row>"
+    return head, out
 
 
 def write_xlsx(sheets, on_progress=None, num_format=None):
-    """sheets: [(name, df), ...]. Written row by row with xlsxwriter's own API (not pandas' .to_excel)
-    so on_progress(done, total) can report real rows - the full plan is ~680k rows and takes minutes.
-    num_format (e.g. "0.00000000") is applied to every float column, so Excel shows the figures in full."""
+    """sheets: [(name, df), ...] -> .xlsx bytes. The sheet XML is generated column-wise (_sheet_rows) and zipped
+    directly; on_progress(done, total) reports rows. num_format (e.g. "0.00000000") applies to every float column,
+    so Excel shows the figures in full."""
     total = sum(len(df) for _, df in sheets)
     tick = on_progress or (lambda done, total: None)
     tick(0, total)
+    ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+    rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    hdr = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+    n = len(sheets)
     buf = io.BytesIO()
-    wb = xlsxwriter.Workbook(buf, {"in_memory": True, "constant_memory": True})
-    done = 0
-    fmt = wb.add_format({"num_format": num_format}) if num_format else None
-    for name, df in sheets:
-        ws = wb.add_worksheet(name[:31])  # Excel's own sheet-name length limit
-        if fmt:
-            for j, c in enumerate(df.columns):
-                if pd.api.types.is_float_dtype(df[c]):
-                    ws.set_column(j, j, 14, fmt)
-        for j, c in enumerate(df.columns):
-            ws.write(0, j, str(c))
-        for i, row in enumerate(df.itertuples(index=False, name=None)):
-            ws.write_row(i + 1, 0, [_cell(v) for v in row])
-            if i % 3000 == 0:
-                tick(done + i, total)
-        done += len(df)
-        tick(done, total)
-    wb.close()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:   # 6 = the same size as xlsxwriter wrote
+        z.writestr("[Content_Types].xml", hdr + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                   '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+                   '<Default Extension="xml" ContentType="application/xml"/>'
+                   '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+                   '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+                   + "".join(f'<Override PartName="/xl/worksheets/sheet{i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+                             for i in range(n)) + "</Types>")
+        z.writestr("_rels/.rels", hdr + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                   f'<Relationship Id="rId1" Type="{rel}/officeDocument" Target="xl/workbook.xml"/></Relationships>')
+        z.writestr("xl/workbook.xml", hdr + f'<workbook {ns} xmlns:r="{rel}"><sheets>'
+                   + "".join(f'<sheet name="{escape(nm[:31], {chr(34): "&quot;"})}" sheetId="{i + 1}" r:id="rId{i + 1}"/>'
+                             for i, (nm, _) in enumerate(sheets)) + "</sheets></workbook>")
+        z.writestr("xl/_rels/workbook.xml.rels", hdr + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                   + "".join(f'<Relationship Id="rId{i + 1}" Type="{rel}/worksheet" Target="worksheets/sheet{i + 1}.xml"/>' for i in range(n))
+                   + f'<Relationship Id="rId{n + 1}" Type="{rel}/styles" Target="styles.xml"/></Relationships>')
+        xf = '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+        z.writestr("xl/styles.xml", hdr + f"<styleSheet {ns}>"
+                   + (f'<numFmts count="1"><numFmt numFmtId="164" formatCode="{escape(num_format, {chr(34): "&quot;"})}"/></numFmts>' if num_format else "")
+                   + '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>'
+                   '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>'
+                   '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+                   '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+                   + (f'<cellXfs count="2">{xf}<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>'
+                      if num_format else f'<cellXfs count="1">{xf}</cellXfs>')
+                   + '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>')
+        done = 0
+        for i, (nm, df) in enumerate(sheets):
+            head, rows = _sheet_rows(df, 1 if num_format else None)
+            with z.open(f"xl/worksheets/sheet{i + 1}.xml", "w", force_zip64=True) as fh:
+                fh.write((hdr + f"<worksheet {ns}><cols>"
+                          + "".join(f'<col min="{j + 1}" max="{j + 1}" width="14" customWidth="1"/>' for j in range(len(df.columns)))
+                          + f"</cols><sheetData>{head}").encode())
+                step = 50000
+                for k in range(0, len(rows), step):
+                    fh.write("".join(rows.slice(k, step).to_list()).encode())
+                    tick(done + min(k + step, len(rows)), total)
+                fh.write(b"</sheetData></worksheet>")
+            done += len(df)
+            tick(done, total)
     return buf.getvalue()
 
 
@@ -872,7 +946,7 @@ def round6(df):
 
 
 def export(df, fmt, on_progress=None):
-    """csv ~9s; xlsx ~2.5 min for the full 680k-row plan. df = round6(out) (before renaming to the file's headers)."""
+    """csv ~9s; xlsx a few seconds for the full 680k-row plan. df = round6(out) (before renaming to the file's headers)."""
     if fmt == "csv":
         return df.round(6).to_csv(index=False).encode("utf-8-sig"), "text/csv", "csv"
     return write_xlsx([("Realigned Plan", df.round(6))], on_progress), XLSX_CTYPE, "xlsx"
