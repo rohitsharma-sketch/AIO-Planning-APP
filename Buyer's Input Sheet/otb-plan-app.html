@@ -382,6 +382,11 @@ td.aop-col-bg input.gi{background:var(--sf)}
 
 /* ── MODALS (AOP sync, add dept) ────────────────────────────────────── */
 .pl-use{cursor:pointer;margin-left:6px;min-height:24px;min-width:40px;padding:3px 9px;border:1px solid var(--st-line-2,var(--bd));border-radius:6px;background:var(--st-btn,var(--sf));color:var(--st-btn-text,var(--tx));font:inherit;font-size:11px;font-weight:700;line-height:1;vertical-align:middle}
+.attr-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:9px 14px;margin:0 0 10px;border:1px solid var(--st-line-2,var(--bd));border-radius:8px;background:var(--st-surface-2,var(--sf));font-size:12px;line-height:1.45;color:var(--tx)}
+.attr-bar b{font-weight:800}
+.attr-bar .ab-txt{flex:1 1 320px}
+.attr-bar.editing{border:2px solid var(--ac);background:var(--st-tint,var(--sf))}
+.twrap.attr-editing{outline:2px solid var(--ac);outline-offset:-2px}
 .pl-use:hover{background:var(--st-btn-hover,var(--st-btn))}
 .pl-use:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 .pl-tag{display:inline-block;padding:0 7px;border:1px solid var(--bd);border-radius:999px;margin:0 2px;font-size:10px}
@@ -637,6 +642,8 @@ tr:hover .mag-trig{display:inline}
           </button>
           <span id="inact-bar-lbl" style="font-size:11px;color:var(--mu)"></span>
         </div>
+        <!-- Attribute Summary: read-only summary bar, or the editing pane's header (user, 2026-10-06) -->
+        <div class="attr-bar" id="attr-bar" style="display:none" role="region" aria-label="Attribute Summary mode"></div>
         <!-- TABLE -->
         <div class="twrap" id="twrap">
           <table class="dtbl" id="dtbl"></table>
@@ -2684,6 +2691,10 @@ function cellVal(row,def){
       // Attribute row (Attribute Summary view) — editable block growth% cascading to every
       // department in the div+attr group, with a group-level lock in place of a per-section one.
       const attrInfo=_parseAttrKey(row._key);
+      if(attrInfo&&!_attrEdit){ // summary: the departments' block growth added up, read-only
+        const g=_effGrowth(row,AOP_MIS);
+        return g==null?'<span style="color:var(--mu)">—</span>':`<span class="${gCls(g)}">${fP(g)}</span>`;
+      }
       if(attrInfo){
         const dv=DVDATA.find(d=>d.id===attrInfo.dvId);
         if(!dv)return '<span style="color:var(--mu)">—</span>';
@@ -2714,7 +2725,10 @@ function cellVal(row,def){
       return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="${cls}" data-bk="${sec.id}" type="number" step="0.01" placeholder="%" value="${bg!=null?bg:''}" ${isLkDiv?'disabled title="Division locked"':''} oninput="setBlockGrowth('${sec.id}',this.value)" onblur="refresh()"></span>`;
     }
     case 'pl_fac': {
-      if(row._key==null||row._isGrand||_parseAttrKey(row._key))return '';
+      if(row._key==null||row._isGrand||_parseAttrKey(row._key)){ // a group: its departments' factors weighted by AOP share
+        const f=_plannerFactorAgg(row,AOP_MIS);
+        return f==null?'':`<span title="Weighted by each department's AOP share - hover Planner Gr% for the build-up">${f.toFixed(2)}</span>`;
+      }
       const o=AOP_MIS.map(mi=>_plannerCalc()[row._divId]?.[mi]?.[row._key]).find(Boolean);
       if(!o)return '<span style="color:var(--mu)">-</span>';
       const t=o.fc.tags,tip=`Sell-thru ${t.st||'-'} · LY growth ${t.growth||'-'} · Fill rate ${t.fill||'-'}`+
@@ -2725,8 +2739,10 @@ function cellVal(row,def){
       const a=_plannerRowAgg(row,AOP_MIS);
       if(!a||a.gr==null)return '<span style="color:var(--mu)">-</span>';
       const isDept=row._key&&!row._isGrand&&!_parseAttrKey(row._key);
-      const bg=isDept?_effGrowth(row,AOP_MIS):null;
-      const use=isDept&&bg!=null&&Math.abs(bg-a.gr)>0.005?` <button type="button" class="pl-use" onclick="event.stopPropagation();usePlannerGr('${row._key}')" title="Set this department's buyer Gr % to the planner's ${fP(a.gr)} (now ${fP(bg)})" aria-label="Use the planner's Gr % ${fP(a.gr)} for ${DVDATA.find(d=>d.id===row._divId)?.secs.find(x=>x.id===row._key)?.nm||row._key}, buyer now ${fP(bg)}">Use</button>`:'';
+      const ai=_attrEdit&&row._key?_parseAttrKey(row._key):null;
+      const bg=isDept||ai?_effGrowth(row,AOP_MIS):null;
+      const useAttr=ai&&bg!=null&&Math.abs(bg-a.gr)>0.005&&!S.divLocked.has(ai.dvId)?` <button type="button" class="pl-use" onclick="event.stopPropagation();useAttrPlannerGr('${ai.dvId}','${ai.attr.replace(/'/g,"\\'")}')" title="Set every ${ai.attr} department to the planner's Gr % ${fP(a.gr)} (now ${fP(bg)})" aria-label="Use the planner's Gr % ${fP(a.gr)} for ${ai.attr}, buyer now ${fP(bg)}">Use</button>`:'';
+      const use=useAttr||isDept&&bg!=null&&Math.abs(bg-a.gr)>0.005?useAttr||` <button type="button" class="pl-use" onclick="event.stopPropagation();usePlannerGr('${row._key}')" title="Set this department's buyer Gr % to the planner's ${fP(a.gr)} (now ${fP(bg)})" aria-label="Use the planner's Gr % ${fP(a.gr)} for ${DVDATA.find(d=>d.id===row._divId)?.secs.find(x=>x.id===row._key)?.nm||row._key}, buyer now ${fP(bg)}">Use</button>`:'';
       return `<span class="${gCls(a.gr)}" style="cursor:help" title="${_attr(_plannerWhy(row,AOP_MIS)+'\nLocked - it moves only with the factor table or its inputs')}">&#x1F512; ${fP(a.gr)}</span>${use}`;
     }
     case 'pl_val': {
@@ -2744,6 +2760,15 @@ function cellVal(row,def){
     }
     case 'buyer_gr_m': {
       const isDept=row._key&&!row._isGrand&&!_parseAttrKey(row._key)&&row._divId;
+      const am=_attrEdit&&row._key?_parseAttrKey(row._key):null;
+      if(am){ // the attribute pane: one month's growth for every department of the attribute, with its own lock
+        const g=_effGrowth(row,[def.mi]),dl=S.divLocked.has(am.dvId),aa=am.attr.replace(/'/g,"\\'");
+        const dvA=DVDATA.find(d=>d.id===am.dvId),ks=dvA?_attrActiveSecs(dvA,am.attr).map(s=>s.id+'__'+def.mi):[];
+        const isLk=ks.length>0&&ks.every(k=>S.locked.has(k)),ak=row._key+'@@'+def.mi;
+        const lockBtn=dl?'':_lkBtn(isLk,_lkAnim===ak?' lk-anim':'',`toggleAttrMonLock('${am.dvId}','${aa}',${def.mi},'${row._key}')`,
+          isLk?'Unlock this month for the attribute':'Lock this month for the attribute');
+        return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="gi${g==null?'':g<0?' neg':' has'}${isLk?' lkd':''}" data-amkey="${ak}" type="number" step="0.01" placeholder="%" value="${g!=null?+g.toFixed(2):''}" ${dl?'disabled title="Division locked"':''} oninput="setAttrMonGrowth('${am.dvId}','${aa}',${def.mi},this.value)" onblur="refresh()"></span>`;
+      }
       if(!isDept){ // division / attribute / grand: the effective growth that month
         const g=_effGrowth(row,[def.mi]);
         return g==null?'<span style="color:var(--mu)">-</span>':`<span class="${gCls(g)}">${fP(g)}</span>`;
@@ -4286,6 +4311,70 @@ function _divReapp(dv,mi,tempLock=null){
   });
 }
 
+/* Attribute Summary = a read-only summary of the Buyer's Plan by default - every figure is its departments added up
+   (user, 2026-10-06: "attribute is optional but in case if the user wants to work on to change it then only open a
+   similar pane with all BIS components intact as the main sheet. otherwise just highlight it as a summary of the BIS
+   output derivative"). "Edit by attribute" opens the editing pane: the same Phase 1 / Phase 2 inputs, locks, factor,
+   planner columns and "Use" as the Buyer's Plan, one row per division x attribute; a change goes to every department
+   of that attribute and follows the same rules (AOP held; Phase 2 also holds each department's block total). */
+let _attrEdit=false;
+function toggleAttrEdit(on){
+  _attrEdit=on??!_attrEdit;refresh();
+  document.getElementById(_attrEdit?'attr-done':'attr-edit')?.focus({preventScroll:true});
+}
+function _syncAttrBar(){
+  const bar=document.getElementById('attr-bar'),wrap=document.getElementById('twrap');if(!bar)return;
+  const on=S.report==='attr';
+  if(!on)_attrEdit=false;
+  bar.style.display=on?'flex':'none';
+  bar.classList.toggle('editing',on&&_attrEdit);
+  wrap?.classList.toggle('attr-editing',on&&_attrEdit);
+  if(!on)return;
+  const ph=_planMode()==='month'?'Phase 2 · Month':'Phase 1 · Block';
+  bar.innerHTML=_attrEdit
+    ?`<span class="ab-txt"><b>Editing by attribute</b> (${ph}) - a change goes to every department of that attribute and follows the Buyer's Plan rules: locks hold, each month still lands on the division AOP${_planMode()==='month'?', and every department keeps its Phase 1 block total':''}.</span>
+      <button type="button" class="tbtn pri" id="attr-done" onclick="toggleAttrEdit(false)">Done</button>`
+    :`<span class="ab-txt"><b>Summary of the Buyer's Plan</b> - every figure here is the departments added up by attribute (read-only). Plan in the Buyer's Plan, or edit by attribute here.</span>
+      <button type="button" class="tbtn" id="attr-edit" onclick="toggleAttrEdit(true)">&#x270E; Edit by attribute</button>`;
+}
+// Attribute-level "Use": every department of the attribute takes the planner's Gr %, the other attributes re-balance
+function useAttrPlannerGr(dvId,attr){
+  const dv=DVDATA.find(d=>d.id===dvId);if(!dv||S.divLocked.has(dv.id))return;
+  const secs=_attrActiveSecs(dv,attr),P=_plannerCalc()[dv.id]||{};
+  secs.forEach(sec=>{AOP_MIS.forEach(mi=>{const o=P[mi]?.[sec.id];if(o&&o.gr!=null)S.inputs[sec.id+'__'+mi]=o.gr;});S.buyerSet.add(sec.id);});
+  AOP_MIS.forEach(mi=>_divReappAttr(dv,mi,attr));
+  refresh();
+  document.querySelector(`input[data-abk="${_attrKey(dvId,attr)}"]`)?.focus({preventScroll:true});
+  toast(`Planner's Gr % applied to ${dv.nm} ${attr} ✓`);
+}
+// Phase 2 by attribute: one month's growth for every department of the attribute (uniform, like Phase 1's attribute
+// input), balanced exactly as a department edit (_phase2Edit with the whole group as the edited cells)
+function setAttrMonGrowth(dvId,attr,mi,val){
+  const v=parseFloat(val);if(isNaN(v)||!S.aopLocked)return;
+  const dv=DVDATA.find(d=>d.id===dvId);if(!dv||S.divLocked.has(dv.id))return;
+  const res=_phase2Edit(_attrActiveSecs(dv,attr).map(s=>s.id),mi,v);
+  document.querySelectorAll('input[data-amkey]').forEach(inp=>{
+    if(inp===document.activeElement)return;
+    const [rk,m]=inp.dataset.amkey.split('@@'),a=_parseAttrKey(rk),g=_effGrowth({_key:rk,_divId:a.dvId},[+m]);
+    if(g!=null){inp.value=+g.toFixed(2);inp.className='gi'+(g<0?' neg':' has');}
+  });
+  _flashLiveBadges();
+  const rows=getRows();renderKPI(rows);renderGT(rows);
+  if(res&&res.stuck)toast(`${res.name}: no other unlocked month - its block total moved ${fCr(res.moved)} Cr`);
+}
+function toggleAttrMonLock(dvId,attr,mi,rowKey){
+  const dv=DVDATA.find(d=>d.id===dvId);if(!dv||S.divLocked.has(dv.id))return;
+  const ks=_attrActiveSecs(dv,attr).map(s=>s.id+'__'+mi),all=ks.length&&ks.every(k=>S.locked.has(k));
+  ks.forEach(k=>{if(all)S.locked.delete(k);else{if(S.inputs[k]==null)S.inputs[k]=0;S.locked.add(k);}});
+  _flashLiveBadges();_lkRefresh(rowKey+'@@'+mi);
+}
+// LY-share-weighted factor of a group row (attribute / division / grand): its departments' (AOP share x factor) / AOP share
+function _plannerFactorAgg(row,mis){
+  let sh=0,v=0;const P=_plannerCalc();
+  _plannerScope(row).forEach(({dvId,ids})=>mis.forEach(mi=>ids.forEach(id=>{const o=P[dvId]?.[mi]?.[id];if(o){sh+=o.share;v+=o.v;}})));
+  return sh>0?v/sh:null;
+}
+
 // Effective growth % of a row (department / attribute / division / grand) over months, from S.inputs - null if no LY
 function _effGrowth(row,mis){
   let l=0,t=0;
@@ -4306,22 +4395,22 @@ function toggleMonLock(secKey,mi){
    cell and every locked cell stay; every other cell of the division re-balances by iterative proportional fitting so
    that BOTH hold: each department's block total (as Phase 1 left it) and each month's division AOP. A department with
    no other unlocked month can't keep its total - AOP wins (returned as stuck, the page says so). */
-function _phase2Edit(secId,mi,v){
+function _phase2Edit(secIdOrIds,mi,v){
+  const ed=new Set([].concat(secIdOrIds)),secId=[...ed][0];
   const dv=DVDATA.find(d=>d.secs.some(s=>s.id===secId));
-  if(!dv||S.divLocked.has(dv.id))return null;
-  const k0=secId+'__'+mi;
+  if(!dv||S.divLocked.has(dv.id)||!ed.size)return null;
   const months=AOP_MIS.filter(m=>(S.aop[dv.id]?.[m]||0)>0);
-  S.buyerSet.add(secId);
-  if(!months.includes(mi)){S.inputs[k0]=v;return null;}
+  ed.forEach(id=>S.buyerSet.add(id));
+  if(!months.includes(mi)){ed.forEach(id=>{S.inputs[id+'__'+mi]=v;});return null;}
   const secs=dv.secs.filter(s=>!S.hiddenSecs.has(s.id));
   const L=secs.map(s=>months.map(m=>_secMonLY(s,dv,m)));
   const T=secs.map((s,i)=>months.map((m,j)=>L[i][j]*(1+(S.inputs[s.id+'__'+m]??0)/100)));
   const R=T.map(r=>r.reduce((a,b)=>a+b,0));          // block totals before the edit = Phase 1's
   const C=months.map(m=>S.aop[dv.id][m]);
-  const si=secs.findIndex(s=>s.id===secId),mj=months.indexOf(mi);
-  if(si<0)return null;
-  S.inputs[k0]=v;T[si][mj]=L[si][mj]*(1+v/100);
-  const fixed=secs.map((s,i)=>months.map((m,j)=>(i===si&&j===mj)||S.locked.has(s.id+'__'+m)||!(L[i][j]>0)));
+  const mj=months.indexOf(mi),eis=secs.map((s,i)=>ed.has(s.id)?i:-1).filter(i=>i>=0);
+  if(!eis.length)return null;
+  eis.forEach(i=>{S.inputs[secs[i].id+'__'+mi]=v;T[i][mj]=L[i][mj]*(1+v/100);});
+  const fixed=secs.map((s,i)=>months.map((m,j)=>(ed.has(s.id)&&j===mj)||S.locked.has(s.id+'__'+m)||!(L[i][j]>0)));
   secs.forEach((s,i)=>months.forEach((m,j)=>{if(!fixed[i][j]&&!(T[i][j]>0))T[i][j]=L[i][j]*0.01;})); // a zero can't scale
   const fit=(cells,target)=>{let fx=0,fr=0;cells.forEach(([i,j])=>{if(fixed[i][j])fx+=T[i][j];else fr+=T[i][j];});
     if(fr<=0)return 0;const f=Math.max(target-fx,0)/fr;cells.forEach(([i,j])=>{if(!fixed[i][j])T[i][j]*=f;});return Math.abs(fr*f-fr);};
@@ -4337,8 +4426,8 @@ function _phase2Edit(secId,mi,v){
     const k=s.id+'__'+m,g=(T[i][j]/L[i][j]-1)*100;S.inputs[k]=g;
     const inp=document.querySelector(`input[data-key="${k}"]`);
     if(inp&&inp!==document.activeElement){inp.value=+g.toFixed(2);inp.className='gi'+(g<0?' neg':' has');}}));
-  const moved=T[si].reduce((a,b)=>a+b,0)-R[si];
-  return {stuck:Math.abs(moved)>1e-4,moved,name:secs[si].nm};
+  const moved=eis.reduce((a,i)=>a+T[i].reduce((x,y)=>x+y,0)-R[i],0);
+  return {stuck:Math.abs(moved)>1e-4,moved,name:eis.length>1?eis.length+' departments':secs[eis[0]].nm};
 }
 
 // Called on every individual cell commit — reapportions the changed cell's division
@@ -4920,6 +5009,7 @@ function refresh(){
   }
   _syncInactiveBadge();
   _syncLockAllBtns();
+  _syncAttrBar();
   buildFP(); // keep sidebar counts in sync with divTab + filters
   renderTable();
 }
@@ -5159,7 +5249,15 @@ function _plannerScope(row){
 function _plannerWhy(row,mis){
   const isDept=row._key&&!row._isGrand&&!_parseAttrKey(row._key)&&row._divId;
   const lbl=mis.length===1?MO[mis[0]]:'Block '+MO[mis[0]]+'-'+MO[mis[mis.length-1]];
-  if(!isDept)return `${lbl}: the departments' planner values added up, vs their LY. Hover a department to see its factor.`;
+  if(!isDept){
+    let sh=0,v=0,val=0,ly=0,n=0;const PC=_plannerCalc();
+    _plannerScope(row).forEach(({dvId,ids})=>ids.forEach(id=>{let any=false;mis.forEach(mi=>{const o=PC[dvId]?.[mi]?.[id];if(o){sh+=o.share;v+=o.v;val+=o.val;ly+=o.ly;any=true;}});if(any)n++;}));
+    if(!sh)return `${lbl}: no planner value yet.`;
+    const cr=x=>'Rs.'+x.toFixed(2)+' Cr',f=v/sh;
+    return `${lbl}: ${n} departments, factor ${f.toFixed(2)} (weighted by their AOP share)\n`+
+      `AOP share by LY cont % ${cr(sh)} × ${f.toFixed(2)} = ${cr(v)} → re-balanced ×${(v>0?val/v:0).toFixed(3)} to the division AOP = ${cr(val)}\n`+
+      `vs LY ${cr(ly)} = ${fP(ly>0?(val/ly-1)*100:null)} · hover a department in the Buyer's Plan for its own inputs`;
+  }
   const P=_plannerCalc()[row._divId]||{},os=mis.map(mi=>P[mi]?.[row._key]).filter(Boolean);
   if(!os.length)return '';
   const cr=v=>'Rs.'+v.toFixed(2)+' Cr',pc=v=>v==null?'n/a':(v*100).toFixed(1)+'%',fc=os[0].fc,t=fc.tags,x=fc.inp;

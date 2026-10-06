@@ -32,4 +32,12 @@ assert.ok(S.inputs.a__0 < 10 && S.inputs.b__11 < 10, 'a gives up other months, o
 const r2 = _phase2Edit('a', 11, 50);
 assert.ok(r2.stuck && r2.moved > 0, 'stuck reported');
 AOP_MIS.forEach(mi => assert.ok(Math.abs(Object.keys(LY).reduce((a, id) => a + ty(id, mi), 0) - S.aop.mens[mi]) < 1e-6, `AOP month ${mi} still kept`));
+// a whole group (the attribute pane) edited at once: a and b both set to +20% in Apr; c re-balances, block totals kept
+[0, 1, 2].forEach(mi => S.locked.delete('a__' + mi));
+const blk2 = Object.fromEntries(Object.keys(LY).map(id => [id, block(id)]));
+const r3 = _phase2Edit(['a', 'b'], 0, 20);
+assert.ok(S.inputs.a__0 === 20 && S.inputs.b__0 === 20, 'group cells set');
+for (const id in LY) assert.ok(Math.abs(block(id) - blk2[id]) < 1e-6, `${id} block total kept (group edit)`);
+AOP_MIS.forEach(mi => assert.ok(Math.abs(Object.keys(LY).reduce((a, id) => a + ty(id, mi), 0) - S.aop.mens[mi]) < 1e-6, `AOP month ${mi} kept (group edit)`));
+assert.ok(!r3.stuck && r3.name === '2 departments');
 console.log('phase 2 balancing checks passed');

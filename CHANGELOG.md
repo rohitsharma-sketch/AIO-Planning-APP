@@ -5,6 +5,16 @@ Newest first. Each entry names its commit.
 
 ---
 
+## 2026-10-06
+
+### BIS: Attribute Summary = read-only summary, with an "Edit by attribute" pane carrying every Buyer's Plan tool
+- **Asked (user):** "i want similar to the buyer's input sheet in this module also … attribute is optional but in case if the user wants to work on to change it then only open a similar pane with all BIS components intact as the main sheet. otherwise just highlight it as a summary of the BIS output derivative".
+- **Default:** a bar reads "Summary of the Buyer's Plan - every figure here is the departments added up by attribute (read-only)". There are no inputs, locks or Use buttons. The Factor column now shows each attribute's factor (its departments' factors weighted by AOP share, e.g. MENS REGULAR 1.07, OCCASIONAL 0.98). The Planner Gr% hover message explains the attribute's build-up.
+- **✎ Edit by attribute** opens the editing pane: an outlined table, a header bar naming the phase and its rules, and a Done button. It has the Buyer's Plan tools per division × attribute:
+  - Phase 1: Block Growth% with lock, and "Use" (every department of the attribute takes the planner's Gr %; the other attributes re-balance to AOP).
+  - Phase 2: month growth per attribute with its own lock, balanced like a department edit (`_phase2Edit` now takes a group), so each department's block total and each month's AOP both hold.
+- **Checked live (MENS):** Use on SUMMER → buyer +11.89% = planner +11.89%, AOP exact every month. Phase 2: REGULAR May → +5%; AOP exact, largest block-total drift 0.00000000003 Cr. `test_phase2.js` gained a group-edit case.
+
 ## 2026-10-05
 
 ### Docs: handover calendar table updated
