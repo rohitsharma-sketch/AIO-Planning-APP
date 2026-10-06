@@ -41,7 +41,7 @@ def run():
     with sync_run(SOURCE_KEY) as (session, result):
         cal, day_map, store_cluster, months = calendar_inputs(session)
         rx = _run_worker({"source": "dw", "months": months, "storeCluster": store_cluster, "dayMap": day_map,
-                          "extraDims": [], "metric": None, "snapshotSuffix": ""})
+                          "extraDims": [], "metric": None, "snapshotSuffix": "", "persistSnapshot": True})
         cols = rx.get("actualColumns") or []
         result["rows_read"] = rx.get("rowsRead")
         result["rows_updated"] = rx.get("rowsMapped")

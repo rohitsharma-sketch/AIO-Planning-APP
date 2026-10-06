@@ -152,7 +152,9 @@ def build_main(plan, months, ly):
 def pivot(main, months, tags=None):
     """Division -> Attribute -> Department (the plan's hierarchy) over the stores whose SSG TAG is in `tags` (None =
     every store): TY, LY and growth % per month, block and season, then the grand total."""
-    m = main if not tags else main[main["SSG TAG"].isin(tags)]
+    # the page shows untagged stores as "(blank)" and sends that label back (audit 2026-10-06: it matched nothing)
+    tags = tags and ["" if t == "(blank)" else t for t in tags]
+    m = main if not tags else main[main["SSG TAG"].fillna("").isin(tags)]
     lm = [ly_label(x) for x in months]
     bl = blocks(months)
     val = months + lm + [f"TTL {b} Val {w}" for b, _ in bl for w in ("TY", "LY")] + ["TTL Val TY", "TTL Val LY"]

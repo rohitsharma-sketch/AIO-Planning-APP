@@ -55,6 +55,14 @@ export async function savePlanVersion(sessionId, rates, baseSource, labelOverrid
   return isMajor
 }
 
+// True when a run of this session with these rates would be saved as a NEW version while the session already belongs
+// to a saved one - the run then goes on a forked copy so the saved version's files stay its own (audit 2026-10-06)
+export async function needsFork(sessionId, rates) {
+  if (!rates) return false
+  const existing = (await loadPlanVersions()).find(v => v.sessionId === sessionId)
+  return !!existing && _isMajorChange(existing.fingerprint, _fingerprint(rates))
+}
+
 export async function deletePlanVersion(id) {
   await fetch(apiUrl(`/api/plan-versions/${id}`), { method: 'DELETE' }).catch(() => {})
 }

@@ -44,6 +44,7 @@ from openpyxl.utils import get_column_letter
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from plan_cache import save_json  # noqa: E402 - atomic JSON writes (audit 2026-10-06)
 
 warnings.filterwarnings("ignore")
 
@@ -664,8 +665,7 @@ def run_engine(body: RunRequest):
         "departments":  int(sales_df["DEPARTMENT"].nunique()),
         "month_cols":   month_cols,
     }
-    with open(LAST_RUN_JSON, "w") as f:
-        json.dump(run_meta, f, indent=2)
+    save_json(LAST_RUN_JSON, run_meta, indent=2)
 
     return {
         "ok":           True,

@@ -911,12 +911,10 @@ def api_start():
             file_names = {}
 
         def _read(key):
-            fname = file_names.get(key)
-            if fname:
-                p = os.path.join(folder, fname)
-                if os.path.isfile(p):
-                    with open(p, 'rb') as f:
-                        return f.read()
+            p = _input_path(folder, file_names.get(key))
+            if p:
+                with open(p, 'rb') as f:
+                    return f.read()
             return None
 
         nso_bytes         = _read('nso_details')
@@ -1012,6 +1010,20 @@ def api_job_status(job_id):
     })
 
 
+SHEET_EXT = ('.xlsx', '.xlsm', '.xlsb', '.xls', '.csv')
+
+
+def _input_path(folder, name):
+    """The input file `name` inside `folder`, or None. A bare file name with a spreadsheet extension only (audit
+    2026-10-06: folder + name came straight from the request, so any signed-in user could read any file on the host
+    through Landing's /nso/ route, e.g. a name climbing out of the folder with "..")."""
+    if (not folder or not name or os.path.basename(name) != name or name in ('.', '..')
+            or not name.lower().endswith(SHEET_EXT) or not os.path.isdir(folder)):
+        return None
+    path = os.path.join(folder, name)
+    return path if os.path.isfile(path) else None
+
+
 @app.route('/api/read-file')
 def api_read_file():
     """Serve a file from the scanned folder for client-side parsing (AOP table)."""
@@ -1019,8 +1031,8 @@ def api_read_file():
     name   = request.args.get('name', '').strip()
     if not folder or not name:
         return jsonify({'error': 'Missing folder or name'}), 400
-    path = os.path.join(folder, name)
-    if not os.path.isfile(path):
+    path = _input_path(folder, name)
+    if not path:
         return jsonify({'error': 'File not found'}), 404
     return send_file(path, as_attachment=False)
 
@@ -1033,8 +1045,8 @@ def api_parse_nso():
     name   = request.args.get('name', '').strip()
     if not folder or not name:
         return jsonify({'error': 'Missing folder or name'}), 400
-    path = os.path.join(folder, name)
-    if not os.path.isfile(path):
+    path = _input_path(folder, name)
+    if not path:
         return jsonify({'error': 'File not found'}), 404
     try:
         with open(path, 'rb') as f:

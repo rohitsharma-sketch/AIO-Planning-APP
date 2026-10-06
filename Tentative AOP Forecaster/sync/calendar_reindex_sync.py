@@ -95,6 +95,7 @@ def run():
             rx_result = _run_worker({
                 "source": "mw", "months": months, "storeCluster": store_cluster,
                 "dayMap": day_map, "extraDims": extra_dims, "metric": None, "snapshotSuffix": suffix,
+                "persistSnapshot": True,
             })
             details.append({"snapshot": "mw" + suffix, "extra_dims": extra_dims,
                             "columns": rx_result.get("columns"), "key_fields": rx_result.get("keyFields"),

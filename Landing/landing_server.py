@@ -33,6 +33,7 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import webbrowser
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
@@ -195,10 +196,23 @@ def _shutdown_many(ports_and_names):
 
 
 _last_launch = {}  # port -> time.monotonic() of our last launch attempt
+_launch_lock = threading.Lock()
 
 
-def _launch(app):
-    _last_launch[app["port"]] = time.monotonic()
+def _launch(app, force=False):
+    """Start an app unless it is already up or was started < LAUNCH_GRACE s ago (still binding). One lock for the
+    watchdog, start-up and "Launch all" (audit 2026-10-06: "Launch all" skipped the grace check and could race the
+    watchdog, starting a second BIS / platform on the same port). force = right after "Shutdown all". -> True if started."""
+    with _launch_lock:
+        port = app["port"]
+        if _is_online(port) or (not force and time.monotonic() - _last_launch.get(port, -LAUNCH_GRACE) < LAUNCH_GRACE):
+            return False
+        _last_launch[port] = time.monotonic()
+        _popen(app)
+        return True
+
+
+def _popen(app):
     creationflags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
     subprocess.Popen(
         app["cmd"], cwd=app["cwd"], creationflags=creationflags,
@@ -220,10 +234,11 @@ def _watchdog():
         if _watch_paused.is_set():
             continue
         for app in APPS:
-            recent = time.monotonic() - _last_launch.get(app["port"], -LAUNCH_GRACE) < LAUNCH_GRACE
-            if not recent and not _is_online(app["port"]):
-                print(f"watchdog: {app['name']} (:{app['port']}) is down - relaunching", flush=True)
-                _launch(app)
+            try:
+                if _launch(app):
+                    print(f"watchdog: {app['name']} (:{app['port']}) was down - relaunched", flush=True)
+            except Exception as e:  # noqa: BLE001 - one failed start must not kill the watchdog for every app
+                print(f"watchdog: {app['name']} (:{app['port']}) could not be started: {e}", flush=True)
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -418,7 +433,9 @@ class Handler(SimpleHTTPRequestHandler):
     def _right_refusal(self):
         """403 text when this request is a guarded action the signed-in person has had switched off, else None.
         Asks 8010 fresh each time (these are rare, deliberate clicks), so a revoke applies at once."""
-        path = self.path.split('?')[0]
+        # matched on the DECODED path (audit 2026-10-06: "/api/suite-%74heme" missed the guard and 8010's uvicorn
+        # decoded it into the real route); a "//" path is refused before this (_auth_guard_api)
+        path = urllib.parse.unquote(self.path.split('?')[0])
         need = next((r for m, rx, r in self.GUARDED if m == self.command and rx.search(path)), None)
         if need is None:
             return None
@@ -435,6 +452,15 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _auth_guard_api(self):
         """For mutating API routes: return 401 JSON if not authenticated."""
+        if "//" in urllib.parse.unquote(self.path.split('?')[0]):
+            # "/realigner//x/api/run" slipped past the rights check and the app's urlsplit read it as "/api/run"
+            body = json.dumps({"detail": "Bad path"}).encode()
+            self.send_response(400)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            SimpleHTTPRequestHandler.end_headers(self)
+            self.wfile.write(body)
+            return True
         if self._requires_auth() and not self._is_authenticated():
             body = json.dumps({"detail": "Not authenticated"}).encode()
             self.send_response(401)
@@ -495,11 +521,8 @@ class Handler(SimpleHTTPRequestHandler):
         _watch_paused.clear()
         launched, already_online = [], []
         for app in APPS:
-            if _is_online(app["port"]):
-                already_online.append(app["name"])
-            else:
-                _launch(app)
-                launched.append(app["name"])
+            # a just-started app that hasn't bound yet counts as already on its way up, not launched twice
+            (launched if _launch(app) else already_online).append(app["name"])
         self._json({"ok": True, "launched": launched, "alreadyOnline": already_online})
 
     def _lagan_refresh(self):
@@ -518,6 +541,7 @@ class Handler(SimpleHTTPRequestHandler):
     def _shutdown_all(self):
         _watch_paused.set()
         stopped, already_offline = _shutdown_many([(app["port"], app["name"]) for app in APPS])
+        _last_launch.clear()   # a deliberate shutdown: the next "Launch all" starts them straight away
         self._json({"ok": True, "stopped": stopped, "alreadyOffline": already_offline})
 
 

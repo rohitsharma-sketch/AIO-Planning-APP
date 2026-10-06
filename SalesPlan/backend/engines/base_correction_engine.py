@@ -36,6 +36,7 @@ from actuals_manager import load_actuals
 from apportion import shares_pct, split  # noqa: E402
 
 from plan_cache import load_json as _load_plan_json  # noqa: E402
+from plan_cache import save_json  # noqa: E402 - atomic JSON writes (audit 2026-10-06)
 
 router = APIRouter()
 
@@ -246,18 +247,9 @@ def run_check(plan: dict, ly_actuals: dict) -> list:
 
 
 def _avg_division_growth(growth_matrix: dict, div: str, ty_month: str) -> float:
-    """Average growth % across all depts in a division for a month. Fallback 100.0."""
-    dept_growths = growth_matrix.get(div, {})
-    if not dept_growths:
-        return 100.0
-    p1_key = f"{ty_month} P1"
-    p2_key = f"{ty_month} P2"
-    vals = []
-    for dg in dept_growths.values():
-        p1 = float(dg.get(p1_key, 100.0))
-        p2 = float(dg.get(p2_key, 100.0))
-        vals.append((p1 + p2) / 2.0)
-    return sum(vals) / len(vals) if vals else 100.0
+    """The same division average the base plan uses (delisted departments left out) - one copy, in dept_sales_engine."""
+    from engines.dept_sales_engine import _avg_division_growth as avg
+    return avg(growth_matrix, div, ty_month)
 
 
 def apply_corrections(plan: dict, gaps: list) -> dict:
@@ -435,11 +427,9 @@ def apply_base_correction():
         corrected_plan, ly_actuals, growth_matrix
     )
 
-    with open(BASE_PLAN_PATH, "w") as f:
-        json.dump(corrected_plan, f)
+    save_json(BASE_PLAN_PATH, corrected_plan)
 
-    with open(REVIEW_PATH, "w") as f:
-        json.dump({"gaps": gaps, "applied": True, "nso_stores_updated": nso_updated}, f, indent=2)
+    save_json(REVIEW_PATH, {"gaps": gaps, "applied": True, "nso_stores_updated": nso_updated}, indent=2)
 
     from collections import Counter
     div_counts = Counter(g["division"] for g in gaps)

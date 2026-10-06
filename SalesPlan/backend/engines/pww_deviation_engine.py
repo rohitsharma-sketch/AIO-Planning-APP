@@ -31,6 +31,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from apportion import shares_pct  # noqa: E402
 from actuals_manager import load_actuals, locked_ly_months
 from store_master import load_store_master as _universal_store_master, is_ssg as _universal_is_ssg
+from plan_cache import save_json  # noqa: E402 - atomic JSON writes (audit 2026-10-06)
 
 router = APIRouter()
 
@@ -166,8 +167,7 @@ def _load_ppo() -> dict:
     return {}
 
 def _save_ppo(data: dict):
-    with open(PWW_PPO_PATH, "w") as f:
-        json.dump(data, f, indent=2)
+    save_json(PWW_PPO_PATH, data, indent=2)
 
 
 # ── Sync endpoint ──────────────────────────────────────────────────────────────
@@ -240,8 +240,7 @@ def sync_ppo():
     st = os.stat(PWW_SOURCE_PATH)
     meta = {"block": block_key, "ty_months": block_def["ty_months"], "ly_months": block_def["ly_months"],
             "file_date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S")}
-    with open(PWW_META_PATH, "w") as f:
-        json.dump(meta, f, indent=2)
+    save_json(PWW_META_PATH, meta, indent=2)
     return {
         "ok":        True,
         "file_date": meta["file_date"],
@@ -406,8 +405,7 @@ def run_phase1(block: str | None = Query(default=None, description="Omit: the bl
         "divisions":         divisions,
     }
 
-    with open(PWW_RESULT_PATH, "w") as f:
-        json.dump(result, f, indent=2)
+    save_json(PWW_RESULT_PATH, result, indent=2)
 
     return result
 
@@ -605,8 +603,7 @@ def run_phase2(block: str | None = Query(default=None)):
         "clusters":  clusters,
         "result":    result,
     }
-    with open(PWW_P2_PATH, "w") as f:
-        json.dump(output, f, indent=2)
+    save_json(PWW_P2_PATH, output, indent=2)
 
     return {
         "ok":       True,
@@ -714,8 +711,7 @@ def reapportion():
         "clusters":  clusters,
         "result":    result,
     }
-    with open(PWW_REAPP_PATH, "w") as f:
-        json.dump(output, f, indent=2)
+    save_json(PWW_REAPP_PATH, output, indent=2)
 
     total_depts = sum(len(v) for v in result.values())
     return {

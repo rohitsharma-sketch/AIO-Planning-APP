@@ -39,8 +39,10 @@ def load_store_master() -> tuple[dict, ...]:
                 }
                 for r in rows if r.store_id
             )
-    except Exception:
-        return tuple()
+    except Exception as e:
+        # raise, don't return (): lru_cache would keep an empty master for the life of the process and Generate Base
+        # would then write a plan with no stores (audit 2026-10-06); an exception isn't cached, so the next call retries
+        raise RuntimeError(f"Store master unavailable (Postgres): {e}") from e
 
 
 def is_ssg(tag: str, store: str = "") -> bool:

@@ -834,13 +834,15 @@ def _col_letters(n):
 
 
 def _xlsx_frame(df):
-    """pandas -> polars, with object columns made plain (numbers stay numbers, the rest text) so polars can take them."""
+    """pandas -> polars, with object columns made plain (numbers stay numbers, the rest text) so polars can take them.
+    Columns are worked on by position and renamed c0, c1, ... (the header row keeps the real names): a file with two
+    columns of the same name made df[c] a DataFrame and the export failed (audit 2026-10-06)."""
     df = df.reset_index(drop=True).copy()
+    df.columns = [f"c{j}" for j in range(df.shape[1])]
     for c in df.columns:
         if df[c].dtype == object:
             num = pd.to_numeric(df[c], errors="coerce")
             df[c] = num if num.notna().sum() == df[c].notna().sum() else df[c].map(lambda v: None if v is None or v != v else str(v))
-    df.columns = [str(c) for c in df.columns]
     return pl.from_pandas(df)
 
 
@@ -872,10 +874,27 @@ def _sheet_rows(df, num_style):
     return head, out
 
 
+XLSX_MAX_ROWS = 1_048_575   # Excel's sheet limit (1,048,576) less the header row
+
+
+def _excel_sheets(sheets):
+    """A frame longer than an Excel sheet continues on "<name> (2)", "(3)", ... - one sheet past the limit made the whole
+    file unopenable (audit 2026-10-06: the Comparison's Changed Rows can pass a million on a whole-division re-phase)."""
+    out = []
+    for nm, df in sheets:
+        if len(df) <= XLSX_MAX_ROWS:
+            out.append((nm, df))
+            continue
+        for k, i in enumerate(range(0, len(df), XLSX_MAX_ROWS)):
+            out.append((nm if k == 0 else f"{nm[:31 - len(f' ({k + 1})')]} ({k + 1})", df.iloc[i:i + XLSX_MAX_ROWS]))
+    return out
+
+
 def write_xlsx(sheets, on_progress=None, num_format=None):
     """sheets: [(name, df), ...] -> .xlsx bytes. The sheet XML is generated column-wise (_sheet_rows) and zipped
     directly; on_progress(done, total) reports rows. num_format (e.g. "0.00000000") applies to every float column,
     so Excel shows the figures in full."""
+    sheets = _excel_sheets(sheets)
     total = sum(len(df) for _, df in sheets)
     tick = on_progress or (lambda done, total: None)
     tick(0, total)
@@ -914,9 +933,9 @@ def write_xlsx(sheets, on_progress=None, num_format=None):
         for i, (nm, df) in enumerate(sheets):
             head, rows = _sheet_rows(df, 1 if num_format else None)
             with z.open(f"xl/worksheets/sheet{i + 1}.xml", "w", force_zip64=True) as fh:
-                fh.write((hdr + f"<worksheet {ns}><cols>"
-                          + "".join(f'<col min="{j + 1}" max="{j + 1}" width="14" customWidth="1"/>' for j in range(len(df.columns)))
-                          + f"</cols><sheetData>{head}").encode())
+                cols = "".join(f'<col min="{j + 1}" max="{j + 1}" width="14" customWidth="1"/>' for j in range(len(df.columns)))
+                # an empty <cols/> makes Excel refuse the file (a sheet with no columns, e.g. Method 1's "How it was built")
+                fh.write((hdr + f"<worksheet {ns}>" + (f"<cols>{cols}</cols>" if cols else "") + f"<sheetData>{head}").encode())
                 step = 50000
                 for k in range(0, len(rows), step):
                     fh.write("".join(rows.slice(k, step).to_list()).encode())

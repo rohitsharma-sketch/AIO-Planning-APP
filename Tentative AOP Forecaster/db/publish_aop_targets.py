@@ -242,7 +242,7 @@ def list_aop_history(session, limit: int = 15) -> list[dict]:
         _ensure_history_table(session)
         versions = session.execute(text("""
             SELECT data->>'label', data->>'sessionId', data->>'createdAt',
-                   COALESCE(data->>'lastModifiedAt', last_modified_at::text)
+                   COALESCE(last_modified_at::text, data->>'lastModifiedAt')   -- the DB's clock, not the browser's (audit 2026-10-06)
             FROM planning_inputs.plan_versions
         """)).fetchall()
         pubs = session.execute(text("""

@@ -53,4 +53,7 @@ r3 = main3.set_index(["STORE NAME", "DEPARTMENT"])
 assert r3.loc[("S3", "A"), "SSG TAG"] == "SSG" and r3.loc[("S3", "A"), "TTL Val LY"] == 0
 p3 = ge.pivot(main3, M, ["SSG"]).iloc[-1]
 assert np.isclose(p3["TTL Val TY"], 15 + 20) and np.isclose(p3["TTL Val LY"], 17)
+# "(blank)" from the page = the untagged stores
+mb = main.copy(); mb.loc[mb["STORE NAME"] == "S2", "SSG TAG"] = ""
+assert np.isclose(ge.pivot(mb, M, ["(blank)"])["TTL Val LY"].iloc[-1], ge.pivot(mb, M)["TTL Val LY"].iloc[-1] - ge.pivot(mb, M, ["SSG"])["TTL Val LY"].iloc[-1])
 print("all growth-vs-LY checks passed")

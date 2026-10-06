@@ -53,7 +53,9 @@ METHOD_FILE = {"listing": "Method 1 - Listing Re-alignment", "dept": "Method 2 -
 def file_name(method, rest):
     """'Method 2 - Dept Re-alignment - Realigned Plan.xlsx' - safe for a Content-Disposition header and Windows."""
     name = f"{METHOD_FILE.get(method, METHOD_FILE['dept'])} - {rest}"
-    return "".join("-" if ch in '/\\:*?"<>|' else ch for ch in name)
+    # printable ASCII only: a CR/LF in a department name could inject headers, and a non-latin-1 character (’ –)
+    # made send_header raise so the download died (audit 2026-10-06)
+    return "".join("-" if ch in '/\\:*?"<>|' else ch for ch in name if 32 <= ord(ch) < 127)
 
 
 SALES_JSON = os.path.join(HERE, "..", "Listing Delisting", "app", "sales.json")   # month-wise SL_V, rebuilt by the daily sync
@@ -678,6 +680,8 @@ class Handler(BaseHTTPRequestHandler):
             if o is None:
                 return self._send(400, {"error": "Load the original plan first."})
             method, kind, dept = q.get("method") or "dept", q.get("kind"), q.get("dept") or None
+            if dept and dept not in set(o[DEPT].astype(str)) | set(ly_departments() if last_year() else ()):
+                return self._send(400, {"error": f"Unknown department: {dept[:60]!r}"})
             sheets = None
             if method == "listing" and kind == "check":   # Method 1 check file: the realigned result, before Run
                 with lock:

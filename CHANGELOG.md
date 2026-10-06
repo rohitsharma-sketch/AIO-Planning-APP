@@ -7,6 +7,45 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-06
 
+### Suite audit: 26 high-severity issues fixed across core and additional apps
+- **Asked (user):** "check and run a quick audit if there are any issues - fix them in the whole module -core or additionals".
+- **How:** six read-only reviewers (BIS, Calendar, AOP, Sales Plan, Re-Aligner / NSO / Growth vs LY, Landing / auth), critical/high only. Every finding was re-checked in code or on live data before fixing.
+- **Sales Plan:**
+  1. Non-SSG stores were planned 13–25% low. The division average counted BIS-delisted departments (index 0): KIDS Apr'27 used 89.8 instead of 110, MENS 85.3. Delisted departments now stay out (`_avg_division_growth`; one copy shared with Base Correction).
+  2. 39 inactive departments were switched back on and planned at LY from Jul'27, because the growth matrix filled every unsent period with 100. `live_growth_matrix` now returns only the periods BIS or a saved value supplies.
+  3. A non-SSG division whose ref store had no share kept a total with every department at 0. It now splits by the store's own LY department mix, and the division total is always the sum of its departments. Full run, in memory only: 0 mismatches.
+  4. Save & Apply on New Depts kept stale corrected plans and hid failures. It now runs `_apply_new_dept_map`.
+  5. A one-off Postgres error cached an empty store master. It now raises, which isn't cached.
+  6. All 21 JSON plan / state writes are atomic (`plan_cache.save_json`: .tmp + os.replace).
+- **BIS:**
+  1. A re-seed with every department buyer-set could leave a division off AOP; `_divRescale` now runs after it.
+  2. Attribute Block / Use / lock overwrote individually locked departments; they now use `_divReapp` with the attribute as anchor and skip locked cells. `_divReappAttr` is removed.
+  3. Stored script injection in the Factors dialog: reasons, labels and the upload file name are now escaped.
+  4. Unlocking a division left all its cells locked. Only the locks it added are removed, and `divLocked` is now saved.
+- **AOP:**
+  1. The auto-rebuild re-ran the OLD session at engine-default growth and silently made it the live AOP. It no longer runs automatically: a "Rebuild from database" notice lands on Review for the planner to check and Run.
+  2. A major change ran on the saved version's own session (two versions shared it; Lock could pick the wrong one). It now forks the session first (`POST /api/session/{id}/fork`).
+  3. A re-run after a later sync closed a month zeroed that month's base. Sessions record `closed_through`, and a re-run uses the session's own.
+  4. Version ownership used the browser clock; it now uses the DB clock.
+- **Calendar:**
+  1. Sync Now / Lock & Save / Save-to-template deleted the old calendar before saving the new one. They now save first.
+  2. Save-to-template deleted by name and could hit a same-named calendar; it now deletes by id.
+  3. A partial what-if Run Reindex replaced the shared snapshot AOP / Sales Plan read. Only the nightly sync jobs save it now (`persistSnapshot`).
+- **Re-Aligner (fast-xlsx follow-ups):**
+  1. A sheet over 1,048,575 rows made the file unopenable; it now continues on "(2)" sheets.
+  2. An empty `<cols/>` made a sheet unopenable.
+  3. Duplicate column names crashed the export.
+  4. Download names keep printable ASCII only (no header injection, no crash on ’ –); an unknown template department returns 400.
+- **NSO:** the read-file / parse / start routes served any file on the host to any signed-in user. They now accept only a bare spreadsheet file name in an existing folder.
+- **Growth vs LY:** the "(blank)" SSG tag matched nothing; it now selects the untagged stores.
+- **Landing / auth:**
+  1. Per-person rights could be bypassed with percent-encoded or "//" paths. Landing now matches the decoded path and refuses "//".
+  2. `login?next=` could run `javascript:` or send users off-site; it now accepts same-site paths only.
+  3. A switched-off or demoted user kept access through their old cookie. Every request now re-checks the user (sign-in-as keeps its flags).
+  4. "Launch all" could start a second copy of an app. One locked, grace-aware `_launch` now serves the watchdog, start-up and Launch all, and a failed start no longer kills the watchdog.
+- **Left as designed:** with no saved AOP version, the latest run stays live (an existing rule).
+- **Checks:** every app's tests pass. The 5 failing platform tests are the known stale ones and fail the same way without these changes. Restarted Landing, 8010, 8000, 8060, 8070 and 8075, one listener each. Live checks: "//" → 400, unauthenticated encoded guard → 401, NSO traversal → 404, the fork route is present, AOP live = Version 2 (43,184.66 L).
+
 ### Re-Aligner: every download is named after its method
 - **Asked (user):** "give rename to the download files according to the method numbers or the listing like - if the output is for the Dept Re-aligner then it should say that, if it is listing re-alignment then it should say that".
 - Each file now starts with the method: "Method 1 - Listing Re-alignment", "Method 2 - Dept Re-alignment", "Method 3 - New Dept Re-alignment", "Method 4 - Listing Shift Re-alignment", "Method 5 - Growth Re-alignment". Examples:

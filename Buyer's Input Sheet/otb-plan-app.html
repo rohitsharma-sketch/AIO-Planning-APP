@@ -1662,6 +1662,7 @@ let S = {
   locked: new Set(),
   buyerSet: new Set(),       // departments whose growth the buyer typed - kept over re-seeds (Planner's input, 2026-10-05)
   divLocked: new Set(),       // division ids locked by the buyer
+  divLockAdded: {},           // {division id: [the cell keys its lock added]} - removed again on unlock
   openFGroups: new Set(['mon','div','attr','sec']), // sidebar filter groups open state
   aopSeeds: {},
   divTab: null,
@@ -4098,12 +4099,16 @@ function setDivTab(id){
 function toggleDivLock(dvId){
   if(S.divLocked.has(dvId)){
     S.divLocked.delete(dvId);
+    // only the locks the division lock added go (audit 2026-10-06: they all stayed, so after an unlock nothing could
+    // re-balance and the division drifted off AOP); a department the buyer had locked before keeps its lock
+    (S.divLockAdded[dvId]||[]).forEach(k=>S.locked.delete(k));delete S.divLockAdded[dvId];
     toast(`${dvId.charAt(0).toUpperCase()+dvId.slice(1)} unlocked`);
   } else {
     S.divLocked.add(dvId);
     // Lock all MAMJ section-month keys for this division so reapportion can't touch them
-    const dv=DVDATA.find(d=>d.id===dvId);
-    if(dv) AOP_MIS.forEach(mi=>dv.secs.forEach(sec=>S.locked.add(sec.id+'__'+mi)));
+    const dv=DVDATA.find(d=>d.id===dvId),added=[];
+    if(dv) AOP_MIS.forEach(mi=>dv.secs.forEach(sec=>{const k=sec.id+'__'+mi;if(!S.locked.has(k)){S.locked.add(k);added.push(k);}}));
+    S.divLockAdded[dvId]=added;
     toast(`${dvId.charAt(0).toUpperCase()+dvId.slice(1)} locked — inputs frozen`);
   }
   refresh();
@@ -4189,11 +4194,12 @@ function setAttrBlockGrowth(dvId,attr,val){
   const v=parseFloat(val);
   const secs=_attrActiveSecs(dv,attr);
   if(!isNaN(v)){
-    secs.forEach(sec=>{AOP_MIS.forEach(mi=>{S.inputs[sec.id+'__'+mi]=v;});S.buyerSet.add(sec.id);});
-    AOP_MIS.forEach(mi=>_divReappAttr(dv,mi,attr));
+    secs.forEach(sec=>{AOP_MIS.forEach(mi=>{if(!S.locked.has(sec.id+'__'+mi))S.inputs[sec.id+'__'+mi]=v;});S.buyerSet.add(sec.id);});
+    const ids=new Set(secs.map(s=>s.id));
+    AOP_MIS.forEach(mi=>_divReapp(dv,mi,ids));
   } else {
     secs.forEach(sec=>AOP_MIS.forEach(mi=>{delete S.inputs[sec.id+'__'+mi];S.locked.delete(sec.id+'__'+mi);}));
-    AOP_MIS.forEach(mi=>_divReappAttr(dv,mi,null));
+    AOP_MIS.forEach(mi=>_divReapp(dv,mi));
   }
   // Patch sibling attribute-row inputs in place (avoids losing focus on the edited field)
   document.querySelectorAll('input[data-abk]').forEach(inp=>{
@@ -4227,55 +4233,9 @@ function toggleAttrLock(dvId,attr,rowKey){
       S.locked.add(sec.id+'__'+mi);
     }));
   }
-  AOP_MIS.forEach(mi=>_divReappAttr(dv,mi));
+  AOP_MIS.forEach(mi=>_divReapp(dv,mi));
   _flashLiveBadges();
   _lkRefresh(rowKey);
-}
-
-// Division-level reapportion, one level up from _divReapp: groups active departments
-// by attribute, then spreads (aopMon - lockedTY) proportionally across UNLOCKED
-// attribute groups by their combined monthly LY weight. Every dept inside a chosen
-// attribute group gets the SAME resulting growth% (Uniform), keeping the group's
-// department-level detail internally consistent with its own displayed Block Growth%.
-function _divReappAttr(dv,mi,tempLockAttr=null){
-  if(S.divLocked.has(dv.id))return;
-  const aopMon=S.aop[dv.id]?.[mi];
-  if(!aopMon)return;
-  const groups={};
-  dv.secs.filter(s=>!S.hiddenSecs.has(s.id)).forEach(sec=>{
-    const attr=sec.attr||'(Other)';
-    if(!groups[attr])groups[attr]={secs:[],ly:0};
-    groups[attr].secs.push(sec);
-  });
-  Object.values(groups).forEach(g=>{g.ly=g.secs.reduce((a,sec)=>a+_secMonLY(sec,dv,mi),0);
-    g.w=g.ly;}); // LY weight: the buyer's side is the plain AOP share (2026-10-05); the factor lives in the Planner's columns
-  let lockedTY=0;
-  const unlockedAttrs=[];
-  Object.entries(groups).forEach(([attr,g])=>{
-    const isLocked=attr===tempLockAttr||g.secs.every(sec=>S.locked.has(sec.id+'__'+mi));
-    if(isLocked){
-      g.secs.forEach(sec=>{
-        const ly=_secMonLY(sec,dv,mi);
-        const gr=S.inputs[sec.id+'__'+mi]??0;
-        lockedTY+=ly*(1+gr/100);
-      });
-    } else {
-      unlockedAttrs.push(g);
-    }
-  });
-  const remaining=aopMon-lockedTY;
-  const totalUnlockedLY=unlockedAttrs.reduce((a,g)=>a+g.w,0);
-  if(!totalUnlockedLY)return;
-  unlockedAttrs.forEach(g=>{
-    const targetTY=remaining*(g.w/totalUnlockedLY);
-    const newG=g.ly>0?(targetTY/g.ly-1)*100:0; // unrounded: a 2 dp growth missed AOP by up to 0.21 L (deep check 2026-09-26)
-    g.secs.forEach(sec=>{
-      const k=sec.id+'__'+mi;
-      S.inputs[k]=newG;
-      const inp=document.querySelector(`input[data-key="${k}"]`);
-      if(inp){inp.value=+newG.toFixed(2);inp.className='gi'+(newG<0?' neg':' has');}
-    });
-  });
 }
 
 // Core: given a division + month, spread (aopMon - lockedTY) proportionally
@@ -4341,8 +4301,9 @@ function _syncAttrBar(){
 function useAttrPlannerGr(dvId,attr){
   const dv=DVDATA.find(d=>d.id===dvId);if(!dv||S.divLocked.has(dv.id))return;
   const secs=_attrActiveSecs(dv,attr),P=_plannerCalc()[dv.id]||{};
-  secs.forEach(sec=>{AOP_MIS.forEach(mi=>{const o=P[mi]?.[sec.id];if(o&&o.gr!=null)S.inputs[sec.id+'__'+mi]=o.gr;});S.buyerSet.add(sec.id);});
-  AOP_MIS.forEach(mi=>_divReappAttr(dv,mi,attr));
+  secs.forEach(sec=>{AOP_MIS.forEach(mi=>{const o=P[mi]?.[sec.id],k=sec.id+'__'+mi;if(o&&o.gr!=null&&!S.locked.has(k))S.inputs[k]=o.gr;});S.buyerSet.add(sec.id);});
+  const ids=new Set(secs.map(s=>s.id));
+  AOP_MIS.forEach(mi=>_divReapp(dv,mi,ids));
   refresh();
   document.querySelector(`input[data-abk="${_attrKey(dvId,attr)}"]`)?.focus({preventScroll:true});
   toast(`Planner's Gr % applied to ${dv.nm} ${attr} ✓`);
@@ -4352,7 +4313,9 @@ function useAttrPlannerGr(dvId,attr){
 function setAttrMonGrowth(dvId,attr,mi,val){
   const v=parseFloat(val);if(isNaN(v)||!S.aopLocked)return;
   const dv=DVDATA.find(d=>d.id===dvId);if(!dv||S.divLocked.has(dv.id))return;
-  const res=_phase2Edit(_attrActiveSecs(dv,attr).map(s=>s.id),mi,v);
+  const ids=_attrActiveSecs(dv,attr).map(s=>s.id).filter(id=>!S.locked.has(id+'__'+mi)); // a locked department keeps its month
+  if(!ids.length)return;
+  const res=_phase2Edit(ids,mi,v);
   document.querySelectorAll('input[data-amkey]').forEach(inp=>{
     if(inp===document.activeElement)return;
     const [rk,m]=inp.dataset.amkey.split('@@'),a=_parseAttrKey(rk),g=_effGrowth({_key:rk,_divId:a.dvId},[+m]);
@@ -4559,7 +4522,7 @@ function resetPlanToAop(){
 /* ── SAVE & EXPORT ─────────────────────────────── */
 function saveState(logVersion=false){
   const now=new Date();
-  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopVersionId:S.aopVersionId,aopUnit:S.aopUnit,locked:[...S.locked],buyerSet:[...S.buyerSet],aopSeeds:S.aopSeeds,aopSeededFrom:S.aopSeededFrom,aopSeedFp:S.aopSeedFp,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],customDepts:S.customDepts,deptSplit:1,at:now.toISOString()}))}catch(e){}
+  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopVersionId:S.aopVersionId,aopUnit:S.aopUnit,locked:[...S.locked],buyerSet:[...S.buyerSet],divLocked:[...S.divLocked],divLockAdded:S.divLockAdded,aopSeeds:S.aopSeeds,aopSeededFrom:S.aopSeededFrom,aopSeedFp:S.aopSeedFp,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],customDepts:S.customDepts,deptSplit:1,at:now.toISOString()}))}catch(e){}
   _updateSaveLabel(now);
   if(logVersion)_maybeSaveVersion(now);
   toast('State saved ✓');
@@ -4718,6 +4681,8 @@ function loadState(){
     if(p.aopVersionId!=null)S.aopVersionId=p.aopVersionId;
     if(p.locked)S.locked=new Set(p.locked);
     if(p.buyerSet)S.buyerSet=new Set(p.buyerSet);
+    if(p.divLocked)S.divLocked=new Set(p.divLocked);
+    if(p.divLockAdded)S.divLockAdded=p.divLockAdded;
     if(p.divTab!=null)S.divTab=p.divTab;
     if(p.hiddenSecs)S.hiddenSecs=new Set(p.hiddenSecs);
     if(p.manualInactive)S.manualInactive=new Set(p.manualInactive);
@@ -5307,22 +5272,23 @@ function openFactorTable(){
     _renderFactorTable();document.getElementById('factorOv').style.display='flex';
   });
 }
+const _h=t=>String(t??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 function _renderFactorTable(){
   const ft=PLANNER.ft,el=document.getElementById('factorBody'),ed=PLANNER.canEdit&&!!ft;
   document.getElementById('factorSave').style.display=ed?'':'none';
   document.getElementById('factorWho').textContent=ed?'You can change the factors (admin / planner).':'Read-only - only an admin or a planner can change the factors.';
   if(!ft){el.innerHTML='<p style="padding:14px">No factor table on the server yet.</p>';return;}
-  const lbl=(k,t)=>(ft.bands[k].find(b=>b.tag===t)||{}).label||t;
-  const bands=k=>ft.bands[k].map(b=>`<span class="pl-tag">${b.tag} ${b.label}</span>`).join(' ');
+  const lbl=(k,t)=>_h((ft.bands[k].find(b=>b.tag===t)||{}).label||t);
+  const bands=k=>ft.bands[k].map(b=>`<span class="pl-tag">${_h(b.tag)} ${_h(b.label)}</span>`).join(' ');
   el.innerHTML=`<div style="padding:10px 14px;font-size:11px;line-height:2">
       <b>Avg Weekly Sell-Thru %</b> ${bands('st')}<br><b>LY Growth</b> (25V26, MAMJ'26 vs MAMJ'25, value) ${bands('growth')}<br><b>Fill Rate</b> ${bands('fill')}
-      <br>${PLANNER.fill?`Fill rates: <b>${Object.keys(PLANNER.fill.departments||{}).length}</b> departments from ${PLANNER.fill.source} (${PLANNER.fill.column}) · ${PLANNER.fill.imported_at}`:'<span style="color:var(--ne)">Fill-rate file not loaded yet - every factor is a neutral 1.00 until it is.</span>'}
+      <br>${PLANNER.fill?`Fill rates: <b>${Object.keys(PLANNER.fill.departments||{}).length}</b> departments from ${_h(PLANNER.fill.source)} (${_h(PLANNER.fill.column)}) · ${_h(PLANNER.fill.imported_at)}`:'<span style="color:var(--ne)">Fill-rate file not loaded yet - every factor is a neutral 1.00 until it is.</span>'}
       ${PLANNER.canEdit?`<label class="tbtn" style="margin-left:8px;cursor:pointer">&#x2191; Refresh fill rates<input type="file" accept=".xlsb,.xlsx,.xlsm" style="display:none" onchange="uploadFillRate(this)"></label>`:''}</div>
     <table class="pl-ft"><thead><tr><th>Sell-Thru</th><th>LY Growth</th><th>Fill Rate</th><th>Factor</th><th style="text-align:left">Reason</th></tr></thead><tbody>${
-      ft.factors.map((r,i)=>`<tr><td>${r.st} ${lbl('st',r.st)}</td><td>${r.growth} ${lbl('growth',r.growth)}</td><td>${r.fill} ${lbl('fill',r.fill)}</td>
-        <td>${ed?`<input class="gi has" type="number" step="0.01" min="0.01" max="3" value="${r.factor}" data-fi="${i}" style="width:64px">`:(+r.factor).toFixed(2)}</td>
-        <td style="text-align:left">${r.reason||''}</td></tr>`).join('')}</tbody></table>
-    ${ft.updated_by?`<div style="padding:8px 14px;font-size:10px;color:var(--mu)">Last changed by ${ft.updated_by} · ${ft.updated_at}</div>`:''}`;
+      ft.factors.map((r,i)=>`<tr><td>${_h(r.st)} ${lbl('st',r.st)}</td><td>${_h(r.growth)} ${lbl('growth',r.growth)}</td><td>${_h(r.fill)} ${lbl('fill',r.fill)}</td>
+        <td>${ed?`<input class="gi has" type="number" step="0.01" min="0.01" max="3" value="${+r.factor}" data-fi="${i}" style="width:64px">`:(+r.factor).toFixed(2)}</td>
+        <td style="text-align:left">${_h(r.reason)}</td></tr>`).join('')}</tbody></table>
+    ${ft.updated_by?`<div style="padding:8px 14px;font-size:10px;color:var(--mu)">Last changed by ${_h(ft.updated_by)} · ${_h(ft.updated_at)}</div>`:''}`;
 }
 // refresh the fill rates from the PLAN vs FILL RATE workbook (its DIV - SUMMARY pivot) - admin / planner only
 function uploadFillRate(inp){
@@ -5740,7 +5706,10 @@ function seedPlanFromAop(keepLocked=false){
         S.locked.delete(k);
         seeded++;
       });
-      if(keepLocked&&(kept.size||dv.secs.some(sec=>S.locked.has(sec.id+'__'+mi))))_divReapp(dv,mi,kept);
+      if(keepLocked&&(kept.size||dv.secs.some(sec=>S.locked.has(sec.id+'__'+mi)))){
+        _divReapp(dv,mi,kept);
+        _divRescale(dv,mi); // audit 2026-10-06: every department buyer-set -> nothing absorbed the new AOP; no-op when on target
+      }
     }
   });
   S.aopSeededFrom=_aopCache?.version_id??null; // the publish these seeds came from (stamped on every push)

@@ -175,7 +175,8 @@
         const params = new URLSearchParams(window.location.search);
         window.location.href = user.must_change_password
           ? '/change-password'
-          : (params.get('next') || LANDING);
+          // only a same-site path (audit 2026-10-06: next=javascript:... or //evil ran script / redirected off-site after sign-in)
+          : (/^\/(?![\/\\])/.test(params.get('next') || '') ? params.get('next') : LANDING);
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.style.display = 'block';

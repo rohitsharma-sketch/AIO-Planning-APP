@@ -136,8 +136,10 @@ export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSaveP
         clusters: full.clusters.map(cl => ({ name: cl.name, region: cl.region, festivals: cl.festivals })),
         dayMap,
       }
-      await deleteCalendar(item.id)
+      // save first, delete the old one only once the new one is in (audit 2026-10-06: a failed save after the
+      // delete lost the locked calendar for good)
       await saveCalendar(payload)
+      await deleteCalendar(item.id)
       setStatus({ ok: true, msg: `"${item.name}" synced to today's V2 rules.` })
       refresh()
     } catch (e) {
@@ -181,10 +183,11 @@ export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSaveP
 
     setBusy(true)
     try {
-      const existing = items.find(c => (c.name || '') === name)
-      if (existing) await deleteCalendar(existing.id)
+      // save first, then drop every older calendar of that name (same name overwrites); a failed save keeps them
+      const existing = items.filter(c => (c.name || '') === name && c.id !== payload.id)
       await saveCalendar({ ...payload, name })
-      setStatus({ ok: true, msg: existing ? `Template "${name}" updated with your changes` : `Template "${name}" locked & saved` })
+      for (const c of existing) await deleteCalendar(c.id)
+      setStatus({ ok: true, msg: existing.length ? `Template "${name}" updated with your changes` : `Template "${name}" locked & saved` })
       onSaved?.(payload.id, name)
       refresh()
     } catch (e) {

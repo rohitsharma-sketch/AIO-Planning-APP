@@ -4,7 +4,7 @@ import UploadStep from './components/UploadStep'
 import ReviewStep from './components/ReviewStep'
 import ResultsDashboard from './components/ResultsDashboard'
 import PlanningInputsEditor from './components/PlanningInputsEditor'
-import PlanLanding, { loadPlanVersions, savePlanVersion, isMajorChangeVsLog } from './components/PlanLanding'
+import PlanLanding, { loadPlanVersions, savePlanVersion, isMajorChangeVsLog, needsFork } from './components/PlanLanding'
 import { loadAutosave, useAutosave, clearAutosave, touchAutosaveIndex } from './lib/autosave'
 import { apiUrl } from './lib/apiBase'
 import './App.css'
@@ -140,7 +140,15 @@ export default function App() {
     setError(null)
     setRunning(true)
     try {
-      const res = await fetch(apiUrl(`/api/run/${session.session_id}`), {
+      // a major change to a saved version becomes a new version: run it on a copy, never over the saved one's files
+      let sid = session.session_id
+      if (await needsFork(sid, rates)) {
+        const fr = await fetch(apiUrl(`/api/session/${sid}/fork`), { method: 'POST' })
+        if (!fr.ok) throw new Error('Could not start a new version from this plan')
+        sid = (await fr.json()).session_id
+        setSession(s => ({ ...s, session_id: sid }))
+      }
+      const res = await fetch(apiUrl(`/api/run/${sid}`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ palette, include_debug: includeDebug, growth_overrides: growthOverrides, overall_override: overallOverride }),
@@ -158,7 +166,7 @@ export default function App() {
       setRunKey(k => k + 1)
       setStep(2)
       // Record this run in the plan version log (only if rates are ready)
-      if (rates) await savePlanVersion(session.session_id, rates, session.from_db ? 'db' : 'upload')
+      if (rates) await savePlanVersion(sid, rates, session.from_db ? 'db' : 'upload')
     } catch (e) {
       setError(e.message)
     } finally {
@@ -292,27 +300,20 @@ export default function App() {
   const configChangedAt = Number(localStorage.getItem('aop-config-changed-at') || 0)
   const planIsStale = sessionBuiltAt && configChangedAt > sessionBuiltAt && (step === 1 || step === 2)
 
-  // Rebuild the session fresh from the DB (picks up any Planning Inputs edit,
-  // ref_store included) and re-run the forecast with it.
+  // Rebuild the session fresh from the DB (picks up any Planning Inputs edit, ref_store included) and land on Review,
+  // where the planner checks the growth and presses Run. No automatic run (audit 2026-10-06): the old effect re-ran the
+  // PREVIOUS session (stale closure) with no growth rates, so engine defaults published and became the live AOP with
+  // no click, overwriting the saved version's files.
   async function handleRebuild() {
     setRebuilding(true)
     try {
-      await handleUseDb()   // fresh session from current DB → adoptSession() → step 1
-      await handleRun()     // re-forecast on the fresh session → step 2
+      await handleUseDb()   // fresh session from current DB → adoptSession() → step 1 (Review)
     } catch (e) {
       setError(e.message)
     } finally {
       setRebuilding(false)
     }
   }
-
-  // Auto-rebuild: the instant a stale plan is showing (Planning Inputs saved
-  // something after this session was built), rebuild it with no click needed.
-  // sessionBuiltAt updates synchronously inside handleRebuild → adoptSession(),
-  // so planIsStale flips false before this can re-fire — self-limiting, no loop.
-  useEffect(() => {
-    if (planIsStale && !rebuilding) handleRebuild()
-  }, [planIsStale, rebuilding])
 
   return (
     <div className="app-shell">
@@ -389,9 +390,12 @@ export default function App() {
           </div>
         )}
 
-        {rebuilding && (
-          <div className="info-banner">
-            Planning Inputs changed since this plan was built — rebuilding automatically with the current data…
+        {(planIsStale || rebuilding) && (
+          <div className="info-banner" role="status">
+            {rebuilding
+              ? 'Rebuilding the plan from the current database…'
+              : 'Planning Inputs changed since this plan was built. Rebuild it from the database, check the growth on Review, then Run.'}
+            {!rebuilding && <button type="button" className="btn-primary" style={{ marginLeft: 12 }} onClick={handleRebuild}>Rebuild from database</button>}
           </div>
         )}
 

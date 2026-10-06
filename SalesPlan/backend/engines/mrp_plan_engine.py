@@ -20,6 +20,7 @@ from apportion import split  # noqa: E402
 from fastapi.responses import StreamingResponse
 
 from plan_cache import load_json as _load_plan_json  # noqa: E402
+from plan_cache import save_json  # noqa: E402 - atomic JSON writes (audit 2026-10-06)
 
 router = APIRouter()
 
@@ -68,8 +69,7 @@ def _load() -> dict:
 
 
 def _save(data: dict):
-    with open(DATA_PATH, "w") as f:
-        json.dump(data, f, indent=2)
+    save_json(DATA_PATH, data, indent=2)
 
 
 def _resolve_col(headers: list, key: str) -> str | None:

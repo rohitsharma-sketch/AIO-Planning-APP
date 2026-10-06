@@ -23,3 +23,12 @@ def load_json(path):
     _slot.clear()
     _slot.update(key=(path, mt), data=data)
     return data
+
+
+def save_json(path, obj, **kw):
+    """Write JSON atomically: a .tmp file, then os.replace (audit 2026-10-06). The ~350 MB plan and the small state files
+    were written in place, so a reader mid-write got a truncated file (500) and a crash mid-write left a corrupt plan."""
+    tmp = f"{path}.tmp"
+    with open(tmp, "w") as f:
+        json.dump(obj, f, **kw)
+    os.replace(tmp, path)

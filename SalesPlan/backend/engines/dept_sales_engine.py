@@ -32,6 +32,7 @@ from actuals_manager import (
 )
 from store_master import load_store_master as _universal_store_master, is_ssg as _universal_is_ssg
 from apportion import shares_pct, split
+from plan_cache import save_json  # noqa: E402 - atomic JSON writes (audit 2026-10-06)
 
 router = APIRouter()
 
@@ -90,8 +91,7 @@ def _load_new_dept_map() -> dict:
 
 
 def _save_new_dept_map(data: dict):
-    with open(NEW_DEPT_MAP_PATH, "w") as f:
-        json.dump(data, f, indent=2)
+    save_json(NEW_DEPT_MAP_PATH, data, indent=2)
 
 
 def apply_new_dept_adjustments(plan_result: dict, new_dept_map: dict) -> dict:
@@ -186,8 +186,8 @@ def _growth_p1_p2(growth_matrix, div, dept, ty_month):
 def _avg_division_growth(growth_matrix, div, ty_month):
     """
     Division-level average growth for a month — used for non-SSG stores.
-    Averages growth across all departments in the division for that month.
-    Falls back to 100.0.
+    Averages growth across the division's departments for that month, leaving out the ones BIS delisted that month
+    (index 0 = -100%): counting them pulled KIDS Apr'27 to 89.8 instead of 110 (audit 2026-10-06). Falls back to 100.0.
     """
     dept_growths = growth_matrix.get(div, {})
     if not dept_growths:
@@ -198,7 +198,8 @@ def _avg_division_growth(growth_matrix, div, ty_month):
     for dept_periods in dept_growths.values():
         p1 = float(dept_periods.get(p1_key, 100.0))
         p2 = float(dept_periods.get(p2_key, 100.0))
-        vals.append((p1 + p2) / 2.0)
+        if p1 + p2 > 0:
+            vals.append((p1 + p2) / 2.0)
     return sum(vals) / len(vals) if vals else 100.0
 
 
@@ -372,40 +373,37 @@ def run_dept_plan():
 
                 dept_vals = {}
 
-                if ref_data:
-                    ref_month = ref_data.get(div, {}).get("months", {}).get(ty_month, {})
-                    ref_depts  = ref_month.get("departments", {})
-                    # the division total split by the ref store's shares - the parts add back to it exactly
-                    cont = {d: ref_depts.get(d, {}).get("cont_pct", 0.0) for d in active}
-                    tys, lys, pcts = split(div_total_ty, cont), split(ly_div_total, cont), shares_pct(cont)
-                    for dept in active:
-                        ref_dept = ref_depts.get(dept, {})
-                        ty_val = tys[dept]
-                        g        = ref_dept.get("growth_pct", 100.0)
-                        ref_p1 = ref_dept.get("ty_p1", 0.0)
-                        ref_ty = ref_dept.get("ty", 0.0)
-                        ty_p1 = ty_val * ref_p1 / ref_ty if ref_ty > 0 else ty_val / 2.0
-                        dept_vals[dept] = {
-                            "ly": lys[dept], "ly_p1": lys[dept] / 2.0, "ly_p2": lys[dept] / 2.0,
-                            "ty": ty_val, "ty_p1": ty_p1, "ty_p2": ty_val - ty_p1,
-                            "growth_pct": g, "g_p1": ref_dept.get("g_p1", g), "g_p2": ref_dept.get("g_p2", g),
-                            "cont_pct": pcts[dept],
-                            "active": True,
-                        }
-                    for dept in all_depts - active:
-                        dept_vals[dept] = {"ly": 0.0, "ly_p1": 0.0, "ly_p2": 0.0,
-                                           "ty": 0.0, "ty_p1": 0.0, "ty_p2": 0.0,
-                                           "growth_pct": 0.0, "g_p1": 0.0, "g_p2": 0.0,
-                                           "cont_pct": 0.0, "active": False}
-                else:
-                    # No ref store — mark zero
-                    for dept in all_depts:
-                        dept_vals[dept] = {
-                            "ly": 0.0, "ly_p1": 0.0, "ly_p2": 0.0,
-                            "ty": 0.0, "ty_p1": 0.0, "ty_p2": 0.0,
-                            "growth_pct": 100.0, "g_p1": 100.0, "g_p2": 100.0,
-                            "cont_pct": 0.0, "active": dept in active,
-                        }
+                ref_month = (ref_data or {}).get(div, {}).get("months", {}).get(ty_month, {})
+                ref_depts  = ref_month.get("departments", {})
+                # the division total split by the ref store's shares - the parts add back to it exactly. A store whose
+                # ref store has no share in this division x month (or no ref store) splits by its OWN LY department mix
+                # (audit 2026-10-06: it kept a division total with every department at 0, so division != sum of depts)
+                cont = {d: ref_depts.get(d, {}).get("cont_pct", 0.0) for d in active}
+                if sum(cont.values()) <= 0:
+                    own = dept_actuals.get(store, {}).get(div, {})
+                    cont = {d: (own.get(d) or {}).get(ly_month, 0.0) if isinstance(own.get(d), dict) else 0.0 for d in active}
+                tys, lys, pcts = split(div_total_ty, cont), split(ly_div_total, cont), shares_pct(cont)
+                for dept in active:
+                    ref_dept = ref_depts.get(dept, {})
+                    ty_val = tys[dept]
+                    g        = ref_dept.get("growth_pct", div_growth)
+                    ref_p1 = ref_dept.get("ty_p1", 0.0)
+                    ref_ty = ref_dept.get("ty", 0.0)
+                    ty_p1 = ty_val * ref_p1 / ref_ty if ref_ty > 0 else ty_val / 2.0
+                    dept_vals[dept] = {
+                        "ly": lys[dept], "ly_p1": lys[dept] / 2.0, "ly_p2": lys[dept] / 2.0,
+                        "ty": ty_val, "ty_p1": ty_p1, "ty_p2": ty_val - ty_p1,
+                        "growth_pct": g, "g_p1": ref_dept.get("g_p1", g), "g_p2": ref_dept.get("g_p2", g),
+                        "cont_pct": pcts[dept],
+                        "active": True,
+                    }
+                for dept in all_depts - active:
+                    dept_vals[dept] = {"ly": 0.0, "ly_p1": 0.0, "ly_p2": 0.0,
+                                       "ty": 0.0, "ty_p1": 0.0, "ty_p2": 0.0,
+                                       "growth_pct": 0.0, "g_p1": 0.0, "g_p2": 0.0,
+                                       "cont_pct": 0.0, "active": False}
+                # nothing to split by at all (no ref share and no own LY by department): the division carries no plan
+                div_total_ty = sum(v["ty"] for v in dept_vals.values() if v.get("active"))
 
                 nsg_p1 = sum(v.get("ty_p1", v["ty"]/2.0) for v in dept_vals.values() if v.get("active"))
                 nsg_p2 = sum(v.get("ty_p2", v["ty"]/2.0) for v in dept_vals.values() if v.get("active"))
@@ -488,16 +486,10 @@ async def save_new_depts(request: Request):
                 raise HTTPException(status_code=422, detail=f"Entry {new_dept} missing % fields")
             # Negative % allowed — carve or boost logic handled in apply_new_dept_adjustments
             pass
-    _save_new_dept_map(body)
-    # Compute and persist the final plan immediately so it's ready for downstream use
-    try:
-        base = run_dept_plan()
-        final = apply_new_dept_adjustments(base, body)
-        with open(FINAL_PLAN_PATH, "w") as f:
-            json.dump(final, f)
-        finalized = True
-    except Exception:
-        finalized = False
+    # save, regenerate and clear the stale corrected plans - the same as the template upload (audit 2026-10-06: this
+    # path left attr/base-corrected plans in front of the new one and hid a failed regeneration behind ok: true)
+    _apply_new_dept_map(body)
+    finalized = True
     return {"ok": True, "saved": sum(len(v) for v in body.values()), "plan_finalized": finalized}
 
 
@@ -511,8 +503,7 @@ def clear_new_depts():
     removed = []
     # Clear mapping
     if os.path.exists(NEW_DEPT_MAP_PATH):
-        with open(NEW_DEPT_MAP_PATH, "w") as f:
-            json.dump({}, f)
+        save_json(NEW_DEPT_MAP_PATH, {})
         removed.append("new_dept_mapping.json")
     # Remove downstream plan files so Final Results reflects the cleared state
     for fname in ("final_dept_plan.json", "attr_corrected_plan.json", "base_corrected_plan.json"):
@@ -609,8 +600,7 @@ def _apply_new_dept_map(mapping: dict) -> dict:
     _save_new_dept_map(mapping)
     base = run_dept_plan()
     final = apply_new_dept_adjustments(base, mapping)
-    with open(FINAL_PLAN_PATH, "w") as f:
-        json.dump(final, f)
+    save_json(FINAL_PLAN_PATH, final)
     for fname in ("attr_corrected_plan.json", "base_corrected_plan.json"):
         p = os.path.join(_BASE, "..", fname)
         if os.path.exists(p):
@@ -680,8 +670,7 @@ def generate_base_plan():
     # Apply new-dept mapping if one exists (empty mapping = no change)
     new_dept_map = _load_new_dept_map()
     final = apply_new_dept_adjustments(plan, new_dept_map)
-    with open(FINAL_PLAN_PATH, "w") as f:
-        json.dump(final, f)
+    save_json(FINAL_PLAN_PATH, final)
     # Invalidate downstream optional engines
     stale_cleared = []
     for fname in ("attr_corrected_plan.json", "base_corrected_plan.json"):

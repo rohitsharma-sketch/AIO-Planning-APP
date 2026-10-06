@@ -6,6 +6,7 @@ import io, json, os, sys
 import pandas as pd
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from apportion import shares_pct, split  # noqa: E402
+from plan_cache import save_json  # noqa: E402 - atomic JSON writes (audit 2026-10-06)
 
 router = APIRouter()
 
@@ -148,8 +149,7 @@ def _load_custom() -> list:
 
 
 def _save_custom(entries: list):
-    with open(CUSTOM_PATH, "w") as f:
-        json.dump(entries, f, indent=2)
+    save_json(CUSTOM_PATH, entries, indent=2)
 
 
 def _load_state() -> dict:
@@ -161,8 +161,7 @@ def _load_state() -> dict:
 
 
 def _save_state(state: dict):
-    with open(STATE_PATH, "w") as f:
-        json.dump(state, f, indent=2)
+    save_json(STATE_PATH, state, indent=2)
 
 
 def _build_master() -> dict:
@@ -396,8 +395,7 @@ def _load_growth() -> dict:
 
 
 def _save_growth(data: dict):
-    with open(GROWTH_PATH, "w") as f:
-        json.dump(data, f, indent=2)
+    save_json(GROWTH_PATH, data, indent=2)
 
 
 # 127.0.0.1, not localhost: on Windows 'localhost' tries IPv6 first and each call waited ~10 s (deep check 2026-09-26).
@@ -481,7 +479,12 @@ def live_growth_matrix() -> dict:
     out = {}
     for div in _build_master():
         rows, _ = _get_growth_matrix(div, strict=div in BIS_DIVISIONS)
-        out[div] = {d["name"]: d["periods"] for d in rows if d["buyer_periods"] or d["name"] in saved.get(div, {})}
+        # Only the periods BIS or a saved value supplies (audit 2026-10-06): the full 26-period dict carried a default
+        # 100 everywhere else, so a department BIS sends at -100% (delisted) still "had growth" from Jul'27 on and was
+        # switched back on and planned at LY. The engines default a missing period to 100 themselves.
+        out[div] = {d["name"]: {p: v for p, v in d["periods"].items()
+                                if p in d["buyer_periods"] or p in saved.get(div, {}).get(d["name"], {})}
+                    for d in rows if d["buyer_periods"] or d["name"] in saved.get(div, {})}
     return out
 
 
@@ -533,8 +536,7 @@ def _load_buyer_meta() -> dict:
     return {}
 
 def _save_buyer_meta(meta: dict):
-    with open(BUYER_UPLOAD_META_PATH, "w") as f:
-        json.dump(meta, f, indent=2)
+    save_json(BUYER_UPLOAD_META_PATH, meta, indent=2)
 
 
 @router.get("/buyer-upload-meta")
@@ -718,8 +720,7 @@ def sync_from_aop_forecaster():
         "synced_at": datetime.datetime.now().isoformat(timespec="seconds"),
         "division_aops": payload["division_aops"],
     }
-    with open(_AOP_SYNC_CACHE_PATH, "w") as f:
-        json.dump(cached, f, indent=2)
+    save_json(_AOP_SYNC_CACHE_PATH, cached, indent=2)
     return {"ok": True, **cached}
 
 

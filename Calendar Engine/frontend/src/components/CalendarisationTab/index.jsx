@@ -326,15 +326,16 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
       }
 
       const items = await listCalendarLibrary()
-      const existing = items.find(c => (c.name || '') === previewCalendarName)
+      // the template that is loaded, by id - names can repeat, and deleting by name hit the other one (audit 2026-10-06)
+      const existing = items.find(c => c.id === previewCalendarId)
       // Same delete-then-create overwrite CalendarLibrary's own Lock & Save
       // uses (see its handleSave comment - the backend has no update
       // endpoint for a saved calendar). existing should always be found
       // here (previewCalendarName only ever comes from an already-loaded
       // template), but if it was deleted from another tab in the meantime,
       // this still succeeds - just as a fresh save under the same name.
+      await saveCalendar({ ...payload, name: previewCalendarName })   // save first: a failed save keeps the old one
       if (existing) await deleteCalendar(existing.id)
-      await saveCalendar({ ...payload, name: previewCalendarName })
       setPreviewCalendarId(payload.id)
       setEngineStatus({ ok: true, msg: `Template "${previewCalendarName}" overwritten with your current festival changes.` })
     } catch (e) {

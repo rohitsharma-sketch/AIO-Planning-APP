@@ -1330,7 +1330,9 @@ def run_reindex(payload, progress=None):
         # with only the cached months (or nothing). Leave it untouched.
         if computed_months and fresh_rows_read == 0:
             result["sourceUnreachable"] = True
-        elif result.get("ok"):
+        elif result.get("ok") and payload.get("persistSnapshot"):
+            # only the nightly sync jobs replace the shared snapshot AOP / Sales Plan read (audit 2026-10-06: a
+            # what-if Run Reindex from the page - one month, another calendar, no DIVISION - replaced it until night)
             suffix = payload.get("snapshotSuffix") or ""
             save_error = (_save_calendarised_sales_snapshot(result, suffix) if suffix in _PERSIST_DIMS_BY_SUFFIX
                           else f"unknown snapshotSuffix {suffix!r}")

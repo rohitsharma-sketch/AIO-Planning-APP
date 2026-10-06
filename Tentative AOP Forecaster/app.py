@@ -136,7 +136,7 @@ def _run(session_id: str, body: RunRequest):
     # genuine forward-looking estimate feed is wanted later, it needs its own
     # distinctly-tagged source, not a blanket bypass of this guard.
     try:
-        results = run_engine(inp, _output_path(session_id), palette=palette,
+        results = run_engine(inp, _output_path(session_id), palette=palette, open_months=_session_open_months(session_id),
                              detail_file=_detail_path(session_id),
                              include_debug=body.include_debug,
                              growth_overrides=body.growth_overrides,
@@ -182,6 +182,23 @@ def _run(session_id: str, body: RunRequest):
             _pub.close()
 
     return {**results, "run_id": run_id}
+
+
+def _session_open_months(session_id):
+    """The months still open AS OF the session's own actuals (audit 2026-10-06): a version re-run after a later sync
+    closed Sep'26 treated Sep'26 as closed although its frozen inputs have no Sep'26 - the base read 0 instead of the
+    FY26 proxy. A DB session records closed_through when built; an older one uses its inputs' date; an uploaded
+    workbook keeps today's rule (None)."""
+    from engine_v3 import _open_months
+    d = _session_dir(session_id)
+    ct = os.path.join(d, "closed_through")
+    if os.path.exists(ct):
+        with open(ct) as fh:
+            return _open_months(closed_through=fh.read().strip() or None)
+    if os.path.exists(os.path.join(d, ".from_db")):
+        import datetime as _dt
+        return _open_months(as_of=_dt.date.fromtimestamp(os.path.getmtime(_input_path(session_id))))
+    return None
 
 
 def _growth_from_detail(rows):
@@ -318,7 +335,29 @@ def session_from_db():
     finally:
         db_session.close()
     open(os.path.join(_session_dir(session_id), ".from_db"), "w").close()  # marks provenance for persist_forecast_run below
+    # the actuals frozen into this session are closed through this month - a re-run uses it, not today's (audit 2026-10-06)
+    from sync.common import get_closed_through
+    ct = get_closed_through()
+    if ct:
+        with open(os.path.join(_session_dir(session_id), "closed_through"), "w") as fh:
+            fh.write(ct)
     return {"session_id": session_id, "from_db": True, **info}
+
+
+@router.post("/api/session/{session_id}/fork")
+def fork_session(session_id: str):
+    """A copy of a session's inputs under a new id, for a run that will become a NEW saved version (audit 2026-10-06:
+    a major change re-ran the old version's own session, so its results / detail / xlsx were overwritten and two
+    versions shared one session - Lock to Planning on the old one locked the new one)."""
+    src = _session_dir(session_id)
+    if not os.path.exists(_input_path(session_id)):
+        raise HTTPException(404, "Session not found")
+    new_id = str(uuid.uuid4())
+    os.makedirs(_session_dir(new_id), exist_ok=True)
+    for name in ("inputs.xlsx", ".from_db", "closed_through"):
+        if os.path.exists(os.path.join(src, name)):
+            shutil.copy2(os.path.join(src, name), os.path.join(_session_dir(new_id), name))
+    return {"session_id": new_id, "from_db": os.path.exists(os.path.join(src, ".from_db"))}
 
 
 @router.get("/api/config/base-sales-reindexed")

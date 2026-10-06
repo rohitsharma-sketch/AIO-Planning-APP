@@ -26,7 +26,8 @@ scans.reindex_monthwise = lambda **k: {"ok": True, "source": "mw", "keyFields": 
                                        "metric": "SL_V", "rows": [], "actualRows": [], "columns": [],
                                        "actualColumns": [], "rowsRead": rows_read["n"], "rowsMapped": 0}
 scans._save_calendarised_sales_snapshot = lambda r, suffix="": saved.append(r) or None
-payload = {"source": "mw", "months": ["2026-08", "2026-09"], "dayMap": {"C": [["2026-08-01", "2027-08-01"]]}}
+payload = {"source": "mw", "months": ["2026-08", "2026-09"], "dayMap": {"C": [["2026-08-01", "2027-08-01"]]},
+           "persistSnapshot": True}   # as the sync jobs send it
 
 r = scans.run_reindex(payload)
 assert r.get("sourceUnreachable") is True and saved == [], (r, saved)
@@ -35,6 +36,11 @@ rows_read["n"] = 5
 scans._save_calendarised_sales_snapshot = lambda r, suffix="": "OperationalError: boom"
 r = scans.run_reindex(payload)
 assert r.get("snapshotSaveError") == "OperationalError: boom" and "sourceUnreachable" not in r, r
+
+# a what-if run from the page (no persistSnapshot) never replaces the shared snapshot (audit 2026-10-06)
+scans._save_calendarised_sales_snapshot = lambda r, suffix="": saved.append(r) or None
+r = scans.run_reindex({k: v for k, v in payload.items() if k != "persistSnapshot"})
+assert r.get("ok") and saved == [], (r, saved)
 
 # --- calendar_reindex_sync.run(): raises an error sync_run records as 'offline' ---
 _obj = types.SimpleNamespace

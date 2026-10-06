@@ -12,6 +12,7 @@ import pandas as pd
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from apportion import shares_pct, split  # noqa: E402
+from plan_cache import save_json  # noqa: E402 - atomic JSON writes (audit 2026-10-06)
 
 router = APIRouter()
 
@@ -90,8 +91,7 @@ def _load_corrections() -> dict:
 
 
 def _save_corrections(data: dict):
-    with open(CORRECTIONS_PATH, "w") as f:
-        json.dump(data, f, indent=2)
+    save_json(CORRECTIONS_PATH, data, indent=2)
     _cache_invalidate("preview_result", "aggregates")
 
 
@@ -344,8 +344,7 @@ async def save_and_apply(request: Request):
     _cache_invalidate("preview_static")
     try:
         corrected = apply_attr_corrections(plan, body, attr_map)
-        with open(ATTR_PLAN_PATH, "w") as f:
-            json.dump(corrected, f)
+        save_json(ATTR_PLAN_PATH, corrected)
         pre  = compute_attr_aggregates(plan, attr_map)
         post = compute_attr_aggregates(corrected, attr_map)
         months = plan.get("meta", {}).get("ty_months_active", [])
