@@ -43,6 +43,19 @@ KB_JSON = os.path.join(HERE, "..", "Listing Delisting", "app", "kb.json")  # Lis
 # the three ways to revise an existing plan (engine.py); each has its own step-2 file and template
 METHODS = {"listing": "Store listing changes", "dept": "Existing department changes", "newdept": "New or split departments",
            "shift": "Listing / delisting shifted to a target", "growth": "Growth changes"}
+# Every download is named after the method it belongs to (user, 2026-10-06: "rename to the download files according to the
+# method numbers ... if the output is for the Dept Re-aligner then it should say that, if it is listing re-alignment ...")
+METHOD_FILE = {"listing": "Method 1 - Listing Re-alignment", "dept": "Method 2 - Dept Re-alignment",
+               "newdept": "Method 3 - New Dept Re-alignment", "shift": "Method 4 - Listing Shift Re-alignment",
+               "growth": "Method 5 - Growth Re-alignment"}
+
+
+def file_name(method, rest):
+    """'Method 2 - Dept Re-alignment - Realigned Plan.xlsx' - safe for a Content-Disposition header and Windows."""
+    name = f"{METHOD_FILE.get(method, METHOD_FILE['dept'])} - {rest}"
+    return "".join("-" if ch in '/\\:*?"<>|' else ch for ch in name)
+
+
 SALES_JSON = os.path.join(HERE, "..", "Listing Delisting", "app", "sales.json")   # month-wise SL_V, rebuilt by the daily sync
 ATT_MASTER = os.path.join(HERE, "..", "SalesPlan", "Attribute Master", "att master.xlsx")  # DEPARTMENT -> SECTION
 _ref_cache = {}
@@ -574,7 +587,7 @@ def job_export(job, kind, fmt):
         else:
             levels = engine.compare_levels(orig, out, months, (state["rev_info"] or {}).get("div_cap")) if fmt == "xlsx" else None
             data, ctype, ext = engine.export_compare(summ, compare, fmt, job.progress, levels)
-    name = "Realigned Plan" + {"compare": " - Comparison", "plan": " - Plan to Plan"}.get(kind, "") + f".{ext}"
+    name = file_name(res.get("method"), "Realigned Plan" + {"compare": " - Comparison", "plan": " - Plan to Plan"}.get(kind, "") + f".{ext}")
     with lock:
         if state["result"] and state["result"]["id"] == res["id"]:  # a newer run makes this build stale
             state["exports"][f"{kind}-{fmt}"] = {"data": data, "ctype": ctype, "filename": name, "size": len(data),
@@ -677,7 +690,7 @@ class Handler(BaseHTTPRequestHandler):
                 except ValueError as e:
                     return self._send(400, {"error": str(e)})
                 return self._send(200, engine.write_xlsx(importer.listing_check(o, out, months, how), None, "0.00000000"),
-                                  engine.XLSX_CTYPE, {"Content-Disposition": 'attachment; filename="Listing check file.xlsx"'})
+                                  engine.XLSX_CTYPE, {"Content-Disposition": f'attachment; filename="{file_name("listing", "Check file.xlsx")}"'})
             if method in ("listing", "shift"):
                 kb = None
                 if kind == "kb":
@@ -719,7 +732,7 @@ class Handler(BaseHTTPRequestHandler):
                 df = importer.template(o, months, dept)
                 name = f"Revised plan template - {dept}.xlsx" if dept else "Revised plan template.xlsx"
             return self._send(200, engine.write_xlsx(sheets or [("Revised plan", df)]), engine.XLSX_CTYPE,
-                              {"Content-Disposition": f'attachment; filename="{name.replace("/", "-")}"'})
+                              {"Content-Disposition": f'attachment; filename="{file_name(method, name)}"'})
         self._send(404, {"error": "not found"})
 
     def do_POST(self):

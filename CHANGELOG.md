@@ -7,6 +7,15 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-06
 
+### Re-Aligner: every download is named after its method
+- **Asked (user):** "give rename to the download files according to the method numbers or the listing like - if the output is for the Dept Re-aligner then it should say that, if it is listing re-alignment then it should say that".
+- Each file now starts with the method: "Method 1 - Listing Re-alignment", "Method 2 - Dept Re-alignment", "Method 3 - New Dept Re-alignment", "Method 4 - Listing Shift Re-alignment", "Method 5 - Growth Re-alignment". Examples:
+  - "Method 2 - Dept Re-alignment - Realigned Plan - Plan to Plan.xlsx" (outputs take the method of the run);
+  - "Method 1 - Listing Re-alignment - Check file.xlsx";
+  - "Method 2 - Dept Re-alignment - Re-phase from LY - <dept>.xlsx";
+  - templates likewise.
+- One helper (`server.file_name`) also swaps characters Windows can't hold in a filename (e.g. "H/S" → "H-S"). The re-phase download takes the server's name. Re-Aligner restarted.
+
 ### Re-Aligner: final Excel outputs in seconds instead of minutes
 - **Asked (user):** "re-aligner is delaying the final output process check it and try to reduce it".
 - **Cause:** the xlsx exports wrote the ~675k-row plan cell by cell in Python (xlsxwriter). The server's last timings were 650 s for Plan-to-plan and 260 s for the Full realigned plan (93 s / 78 s on an idle machine; slower in the server alongside other work).

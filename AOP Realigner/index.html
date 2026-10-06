@@ -713,7 +713,9 @@ async function rephase(kind = 'rephase') {
     if (!r.ok) return toast((await r.json().catch(() => ({}))).error || 'Could not build the re-phase file.');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(await r.blob());
-    a.download = `${kind === 'rephase' ? 'Re-phase from LY' : 'Re-phase store overrides'} - ${tplDept}.xlsx`.replace(/\//g, '-');
+    // the server names it after the method ("Method 2 - Dept Re-alignment - Re-phase from LY - <dept>.xlsx")
+    a.download = (/filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') || '') || [])[1]
+      || `${kind === 'rephase' ? 'Re-phase from LY' : 'Re-phase store overrides'} - ${tplDept}.xlsx`.replace(/\//g, '-');
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     toast(kind === 'rephase' ? 'Re-phase file built - check the "How it was built" sheet, upload it here, then Run - every store × division × month stays on the original.'
