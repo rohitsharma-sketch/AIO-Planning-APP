@@ -11,7 +11,8 @@ Newest first. Each entry names its commit.
 - **Asked (user):** "check loading times in the other core apps too".
 - Timed every page-load request in-process (cold / warm). Calendar: all < 0.25 s except the Calendarised Sales snapshot summary (0.9 s, 8.4 MB) and the data-source scans `salesdata/link` / `link-daywise` (9-16 s once after a restart, only on a refresh click). AOP: all < 0.35 s except `config/recent-runs` (~10.7 s every call). BIS (5050): every load call < 0.2 s, the three sync jobs ready in < 1 s.
 - Fixed: 8010 now gzips responses over 2 KB (Calendar's 8.4 MB summary -> 0.8 MB, ~50 ms to pack); checked live through Landing (Content-Encoding passes through; clients without gzip get plain bytes) and that CSV / Excel downloads still come through.
-- Found, not changed (database change - awaiting the user's go-ahead): `engine.forecast_results` (10.8 M rows) has no index on `run_id`, so every per-run total scans the whole table - `recent-runs` (Plan Cycles) does it 20 times; `runs/{id}/division-totals` (BIS AOP Review) and `division-aop-summary` (Sales Plan "Load AOP division targets") once each.
+- Commit `08fc468`.
+- `engine.forecast_results` (10.8 M rows) had no index on `run_id`, so every per-run total scanned the whole table - `recent-runs` (Plan Cycles) 20 times, `runs/{id}/division-totals` (BIS AOP Review) and `division-aop-summary` (Sales Plan "Load AOP division targets") once each. User approved the index: migration `a7c4e9b2d1f3` adds `ix_forecast_results_run_metric (run_id, metric_key)`, built CONCURRENTLY on the live DB (24 s, 79 MB, valid; no data change). recent-runs 10.7 s -> 0.28 s; one run's totals 14 ms.
 
 ### Sales Plan: page loading times
 - **Asked (user):** "fix the loading times in the planning engine" (Master Setup stuck on "Loading department master…").
