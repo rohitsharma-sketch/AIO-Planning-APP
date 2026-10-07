@@ -52,7 +52,9 @@ function PlanSnapshot() {
   const [selMonth,  setSelMonth]  = useState(null)
   const [loading,   setLoading]   = useState(false)
 
+  // fetched only once opened - it runs the whole plan, and on every page load it held up the page's own data (2026-10-07)
   useEffect(() => {
+    if (!open || data) return
     setLoading(true)
     fetch('/api/planning/dept-sales/plan-summary')
       .then(r => r.ok ? r.json() : null)
@@ -62,14 +64,9 @@ function PlanSnapshot() {
       })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [open])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (loading) return (
-    <div style={{ padding: '10px 16px', fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>Loading plan…</div>
-  )
-  if (!data) return null
-
-  const months = data.months || []
+  const months = data?.months || []
   const cur    = selMonth || months[0]
 
   return (
@@ -83,7 +80,10 @@ function PlanSnapshot() {
         <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{open ? '▾' : '▸'}</span>
       </div>
 
-      {open && (
+      {open && loading && (
+        <div style={{ padding: '2px 16px 8px', fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>Loading plan…</div>
+      )}
+      {open && data && (
         <>
           {/* Month strip */}
           <div style={{ display: 'flex', gap: 4, padding: '0 12px 8px', flexWrap: 'wrap' }}>

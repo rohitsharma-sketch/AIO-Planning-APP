@@ -786,12 +786,36 @@ def export_plan():
     )
 
 
+_summary_cache = {}
+
+
+def _plan_inputs_key() -> str:
+    """Everything run_dept_plan reads, in one string - cheap (~0.3 s) next to the ~10 s plan run itself."""
+    from actuals_manager import _snapshot
+    from engines.department_plan import _load_state
+    import datetime as _dt
+    return json.dumps([_load_growth_matrix(), _load_dept_config(), _load_state(), locked_ly_months(),
+                       _snapshot("reindexed")[0], _dt.date.today(), list(_load_store_master())],
+                      sort_keys=True, default=str)
+
+
 @router.get("/plan-summary")
 def get_plan_summary():
     """
     Lightweight sidebar snapshot: Division → Month → {ty, ly, growth%}
     Also returns overall total and month list.
+    Kept until one of the plan's inputs changes (user, 2026-10-07: the full plan run took ~10 s on every page load and
+    held up every other request, e.g. Master Setup sat on "Loading department master...").
     """
+    key = _plan_inputs_key()
+    if _summary_cache.get("key") == key:
+        return _summary_cache["data"]
+    out = _plan_summary()
+    _summary_cache.update(key=key, data=out)
+    return out
+
+
+def _plan_summary():
     result = run_dept_plan()
     months = result["meta"]["ty_months_active"]
     divs: dict = {}

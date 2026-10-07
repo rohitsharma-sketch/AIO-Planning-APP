@@ -60,16 +60,32 @@ def _summary(snap):
     }
 
 
+def _snapshot_meta(source_type: str, kind: str):
+    """A snapshot without its rows - all the status needs (user, 2026-10-07: loading six full snapshots' rows took
+    ~4.5 s on every Sales Sync page view)."""
+    from sqlalchemy import select
+    S = SalesSnapshot
+    session = SessionLocal()
+    try:
+        r = session.execute(select(S.grain, S.metric, S.columns, S.rows_mapped, S.computed_at)
+                            .where(S.source_type == source_type, S.kind == kind)).first()
+    finally:
+        session.close()
+    if r is None:
+        return None
+    return {"grain": r[0], "metric": r[1], "columns": r[2], "rowsMapped": r[3], "computedAt": r[4].isoformat()}
+
+
 def _all_summaries():
     out = {
         source: {
-            "actual": _summary(_load_snapshot(source, "actual")),
-            "trendShifted": _summary(_load_snapshot(source, "trend_shifted")),
+            "actual": _summary(_snapshot_meta(source, "actual")),
+            "trendShifted": _summary(_snapshot_meta(source, "trend_shifted")),
         }
         for source in SOURCE_TYPES
     }
-    out["mw_dept"] = {"actual": _summary(_load_snapshot("mw", "actual_dept")),
-                      "trendShifted": _summary(_load_snapshot("mw", "trend_shifted_dept"))}
+    out["mw_dept"] = {"actual": _summary(_snapshot_meta("mw", "actual_dept")),
+                      "trendShifted": _summary(_snapshot_meta("mw", "trend_shifted_dept"))}
     return out
 
 

@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### Sales Plan: page loading times
+- **Asked (user):** "fix the loading times in the planning engine" (Master Setup stuck on "Loading department master…").
+- Cause: the sidebar's Plan Snapshot (collapsed by default) ran the whole department plan (`run_dept_plan`, ~10-13 s of pure Python) on every page load, and while it ran it held up the page's own requests - Master Setup's data takes 25 ms on its own.
+- Sidebar: the snapshot is fetched only when it is opened. Server: `/dept-sales/plan-summary` is kept until one of the plan's inputs changes (growth matrix incl. live BIS, department master/state, Calendar snapshot stamp, LY months, store master, date) - 12.8 s first time, then 0.2 s; same numbers as a fresh run.
+- Sales Sync status no longer loads the six snapshots' full sales rows it never shows: 4.5 s -> 0.02 s, same output.
+- Not changed: MRP Re-apportionment's first open after a server restart still reads the data-lake sales file (~85 s once, then cached).
+
 ### Handover doc updated with 7 Oct
 - **Asked (user):** "update the handover doc with today's changes".
 - `docs/HANDOVER.md`: new §11 (live AOP publish 116 and the BIS -> Sales Plan push; BIS numbers, layout and audit fixes; the three planner factor models with back-test results; the suite declutter commit by commit; the buyer_push right; today's gotchas). Header date updated; the stale "Sales Plan dist untracked" notes (§3.5, §9 item 3) corrected.
