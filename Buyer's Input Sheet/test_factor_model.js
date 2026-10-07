@@ -4,7 +4,7 @@
 const fs = require('fs'), assert = require('assert');
 const html = fs.readFileSync(__dirname + '/otb-plan-app.html', 'utf8');
 const src = html.slice(html.indexOf('const FM_DRIVERS='), html.indexOf('// end weighted factor model'));
-const { _weightedFactor, _fmQuant, _fmCut } = new Function(src + 'return {_weightedFactor,_fmQuant,_fmCut};')();
+const { _weightedFactor, _fmQuant, _fmCut, _contFactor } = new Function(src + 'return {_weightedFactor,_fmQuant,_fmCut,_contFactor};')();
 const near = (a, b, m) => assert.ok(Math.abs(a - b) < 1e-9, `${m}: ${a} vs ${b}`);
 
 const slabs = { st: [{ from: null, label: 'Low', mult: 0.9 }, { from: 0.1, label: 'High', mult: 1.1 }],
@@ -45,4 +45,12 @@ near(cut.drivers[0].slabs[1].from, 0.1, 'pct start resolved to the division medi
 near(_weightedFactor({ st: 0.103, gr: null, fill: null }, cut, 1).f, 1.1, 'above the median -> top slab');
 near(_weightedFactor({ st: 0.08, gr: null, fill: null }, cut, 1).f, 0.9, 'below the median -> bottom slab');
 assert.strictEqual(_fmCut(model({ st: 1 }), {}).drivers[0].slabs, slabs.st, 'value drivers untouched');
+// continuous: each driver against the division median, raised to its strength; growth compared as (1+g)/(1+median)
+const med = { st: 0.1, gr: 0.1, fill: 0.7 }, lim = { drivers: [], rules: [], shrink_k: 0, clamp: [0.5, 2] };
+near(_contFactor({ st: 0.12, gr: 0.32, fill: 0.7 }, med, { st: 0.25, growth: 0.2, fill: 0 }, lim, 1).f,
+  Math.pow(1.2, 0.25) * Math.pow(1.32 / 1.1, 0.2), 'continuous product');
+near(_contFactor({ st: 0.1, gr: 0.1, fill: 0.7 }, med, { st: 1, growth: 1, fill: 1 }, lim, 1).f, 1, 'at the median -> 1.00');
+near(_contFactor({ st: 0.05, gr: null, fill: 0.35 }, med, { st: 0, growth: 1, fill: -0.5 }, lim, 1).f, Math.pow(0.5, -0.5), 'strength 0 off, missing skipped, negative strength protects low fill');
+assert.ok(_contFactor({ st: null, gr: null, fill: null }, med, { st: 1 }, lim, 1).none, 'no data -> neutral');
+near(_contFactor({ st: 0.3, gr: 0.1, fill: 0.7 }, med, { st: 1 }, { ...lim, clamp: [0.8, 1.2] }, 1).f, 1.2, 'shared clamp applies');
 console.log('factor model checks passed');

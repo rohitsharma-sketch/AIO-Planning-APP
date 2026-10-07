@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### BIS factor window: Continuous option with Tune
+- **Asked (user):** "yes add the continuous option with tune button" (after "suggest me 2 - 3 approaches to derive planner's input using the given factors").
+- **Continuous (`_contFactor`):** no slabs - factor = (sell-thru / division median)^s x ((1 + LY growth) / (1 + division median))^s x (fill / division median)^s with a signed strength per driver (0 = off; negative = lower value, higher factor), then the shared rules / small-department damping / limits (`_fmLimit`, also used by the weighted builder), then the re-balance to AOP. "Planner uses" now offers Continuous / Weighted builder / Matrix; saved table still Matrix until a planner switches + saves. Server validates the strengths (`_cont_error`, -2..3, finite).
+- **Back-test now has two windows** for every method: short (Mar-Apr 2026 inputs -> May-Jun 2026) and long (Jul-Oct 2025 -> Mar-Jun 2026, closer to the year-ahead step), with their average vs plain share (`_fmEval`, `_fmBacktest(spec, IN, OUT)`).
+- **Tune** searches ~400 strength settings (0.3 s, cached inputs) with the long test counting double - an equal weighting chased 2-month momentum (growth 0.5) and lost on the long test. Result today: sell-thru 0.375, LY growth 0.375, fill off -> short 11.13% / long 13.54% vs plain 14.83% / 14.35% (better by 2.25 pts on average); the saved matrix is worse than plain (15.04%). Live: every division x month stays on AOP (0.00 L off).
+- **Checks:** `test_factor_model.js` (continuous product, median = 1.00, strength 0 / missing / negative, shared clamp), `test_sync_server_ly.py` (strength validation).
+
 ### BIS factor builder: percentile slabs + back-test
 - **Asked (user):** "yes go ahead with percentile slabs and back-test".
 - **Percentile slabs:** each driver card has "Slabs by: Value | Percentile in division". In percentile mode a slab starts at a percentile (P1-P99) of its division's active departments for the same months (`_fmQuant` / `_fmCut` / `_fmResolve`), so cut-offs move with every data refresh and "High" means high for that division (sell-thru now: MENS 8.4 / 11.2 / 12.9%, LADIES 7.8 / 10.1 / 12.9%, KIDS 9.2 / 11.3 / 12.3%). Departments spread evenly (sell-thru 32 / 30 / 30 / 32 vs 8 / 38 / 65 / 13 on fixed values). Server validates (`by`, rising 1-99).

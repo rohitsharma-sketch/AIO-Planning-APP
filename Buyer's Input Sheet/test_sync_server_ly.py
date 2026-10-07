@@ -38,4 +38,9 @@ for j, sl in enumerate(pm["drivers"][0]["slabs"][1:], 1):
 assert ss._model_error(pm) is None, ss._model_error(pm)
 pm["drivers"][0]["slabs"][-1]["pct"] = 100
 assert ss._model_error(pm)
+# continuous strengths (2026-10-07): the page's default passes; missing key, NaN or out of range refused
+cd = json.loads(re.sub(r"(\w+):", r'"\1":', re.search(r"const FM_CONT_DEFAULT=(\{.*?\});", html).group(1)))
+assert ss._cont_error(cd) is None, ss._cont_error(cd)
+for bad in ({"st": 0.25, "growth": 0.2}, {**cd, "st": float("nan")}, {**cd, "growth": 4}, None):
+    assert ss._cont_error(bad), bad
 print(f"test_sync_server_ly: OK (plan {plan[0]}-{plan[-1]}, LY {ly[0]}-{ly[-1]})")

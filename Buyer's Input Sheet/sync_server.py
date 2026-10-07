@@ -447,6 +447,19 @@ def _model_error(m):
         return f"malformed factor model: {e}"
 
 
+def _cont_error(c):
+    """None if `c` holds the continuous factor's three signed strengths (sell-thru, LY growth, fill rate), each -2..3."""
+    import math
+    try:
+        if set(c) != set(_FM_KEYS):
+            return "continuous needs a strength for sell-thru, LY growth and fill rate"
+        if any(not math.isfinite(float(c[k])) or not -2 <= float(c[k]) <= 3 for k in _FM_KEYS):
+            return "each strength must be between -2 and 3"
+        return None
+    except (TypeError, ValueError) as e:
+        return f"malformed strengths: {e}"
+
+
 @app.route("/api/planner/factor-table", methods=["POST"])
 def planner_factor_table_save():
     me = _planner_editor()
@@ -455,10 +468,12 @@ def planner_factor_table_save():
     ft = request.get_json(silent=True) or {}
     err = _factor_table_error(ft)
     mode = ft.get("mode", "matrix")
-    if not err and mode not in ("matrix", "weighted"):
-        err = "mode must be matrix or weighted"
-    if not err and (mode == "weighted" or ft.get("model") is not None):
+    if not err and mode not in ("matrix", "weighted", "continuous"):
+        err = "mode must be matrix, weighted or continuous"
+    if not err and (mode != "matrix" or ft.get("model") is not None):   # continuous uses the model's rules / limits
         err = _model_error(ft.get("model"))
+    if not err and (mode == "continuous" or ft.get("cont") is not None):
+        err = _cont_error(ft.get("cont"))
     if not err and mode == "weighted" and not any(d["on"] and float(d["weight"]) > 0 for d in ft["model"]["drivers"]):
         err = "turn on at least one driver with a weight above 0"
     if err:

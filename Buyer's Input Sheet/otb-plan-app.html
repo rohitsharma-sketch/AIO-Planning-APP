@@ -5400,6 +5400,11 @@ function _weightedFactor(x,m,lyPerMonth){
   const W=parts.reduce((a,q)=>a+q.w,0);
   if(!W)return {f:1,raw:1,ruled:1,damped:1,parts,rules:[],none:true};
   const raw=parts.reduce((a,q)=>a*Math.pow(q.mult,q.w/W),1);
+  return {..._fmLimit(raw,x,m,lyPerMonth),raw,parts};
+}
+// rules (card order, a later rule never undoes an earlier one) -> small-department damping -> clamp; shared by the
+// weighted builder and the continuous factor
+function _fmLimit(raw,x,m,lyPerMonth){
   let lo=0,hi=Infinity;const rules=[],ord=(m.drivers||[]).map(d=>d.key);
   (m.rules||[]).slice().sort((a,b)=>ord.indexOf(a.driver)-ord.indexOf(b.driver)).forEach(r=>{
     const v=x[FM_DRIVERS[r.driver]?.inp];
@@ -5411,7 +5416,20 @@ function _weightedFactor(x,m,lyPerMonth){
   const k=+m.shrink_k||0;
   const damped=k>0&&lyPerMonth!=null&&lyPerMonth>=0?1+(ruled-1)*lyPerMonth/(lyPerMonth+k):ruled;
   const [cl,ch]=m.clamp||[0,Infinity];
-  return {f:Math.min(Math.max(damped,cl),ch),raw,ruled,damped,parts,rules};
+  return {f:Math.min(Math.max(damped,cl),ch),ruled,damped,rules};
+}
+/* Continuous factor (user, 2026-10-07: "add the continuous option with tune button"): no slabs - each driver is the
+   department's value against its division's median, raised to a signed strength:
+   factor = (ST / median ST)^s_st x ((1 + growth) / (1 + median growth))^s_growth x (fill / median fill)^s_fill,
+   a driver with no data (or strength 0) left out, then the same rules / damping / clamp as the builder. */
+function _contFactor(x,med,c,lim,lyPerMonth){
+  const parts=[];
+  [['st','st'],['growth','gr'],['fill','fill']].forEach(([k,inp])=>{
+    const sv=+(c||{})[k]||0,v=x[inp],md=med[inp];if(!sv||v==null||md==null)return;
+    const ratio=k==='growth'?(1+v)/(1+md):v/md;if(!(ratio>0)||!isFinite(ratio))return;
+    parts.push({key:k,v,md,ratio,s:sv,mult:Math.pow(ratio,sv)});});
+  const raw=parts.reduce((a,q)=>a*q.mult,1);
+  return {..._fmLimit(raw,x,lim||{},lyPerMonth),raw,parts,none:!parts.length};
 }
 // end weighted factor model
 let _fmCutCache=new Map();
@@ -5427,18 +5445,32 @@ function _fmResolve(m,dvId,mis){
    Inputs = Mar-Apr 2026 (sell-thru, LY growth 25V26, current fill rate); prediction = each department's share of its
    division in May-Jun 2026 starting from its May-Jun 2025 share (same 25V26 stores), re-balanced like the planner;
    error = sum |predicted - actual| / sum actual (WAPE) over the departments with sales both years. */
-const FM_BT_IN=[11,0],FM_BT_OUT=[1,2];
-function _fmBacktest(m){ // m = a weighted model, 'matrix' = the saved matrix, null = plain share (factor 1)
+// The long window (Jul-Oct 2025 inputs -> Mar-Jun 2026 shares, 5-8 months ahead) is closer to the planner's
+// year-ahead step than the short one (2 months); momentum that wins the short test can lose the long one.
+const FM_BT_IN=[11,0],FM_BT_OUT=[1,2],FM_BT_LONG_IN=[3,4,5,6],FM_BT_LONG_OUT=[11,0,1,2];
+function _fmInp(sec,mis){const k='inp|'+sec.id+'|'+mis.join(',');if(!_fmCutCache.has(k))_fmCutCache.set(k,_plannerInputs(sec,mis));return _fmCutCache.get(k);}
+function _fmMedians(dvId,mis){
+  const k='med|'+dvId+'|'+mis.join(',');if(_fmCutCache.has(k))return _fmCutCache.get(k);
+  const dv=DVDATA.find(d=>d.id===dvId),xs=dv?dv.secs.filter(s=>!S.hiddenSecs.has(s.id)).map(s=>_fmInp(s,mis)):[];
+  const md=inp=>_fmQuant(xs.map(x=>x[inp]).filter(v=>v!=null).sort((a,b)=>a-b),50);
+  const r={st:md('st'),gr:md('gr'),fill:md('fill')};_fmCutCache.set(k,r);return r;
+}
+// one department's factor under a method: null = plain share, 'matrix' = the saved matrix, or a factor-table draft
+function _fmEval(spec,x,dvId,mis,ly){
+  if(spec==null)return 1;
+  if(spec==='matrix')return _matrixFactor(PLANNER.ft,x).f;
+  if(spec.mode==='continuous')return _contFactor(x,_fmMedians(dvId,mis),spec.cont,spec.model,ly).f;
+  return _weightedFactor(x,_fmResolve(spec.model,dvId,mis),ly).f;
+}
+function _fmBacktest(spec,IN=FM_BT_IN,OUT=FM_BT_OUT){
   let err=0,act=0,n=0;const per=[];
   DVDATA.forEach(dv=>{
     const rs=[];
     dv.secs.forEach(sec=>{if(S.hiddenSecs.has(sec.id))return;
       const raw=SEC_LFL_GROWTH[sec.id]?.raw?.yoy;if(!raw)return;
-      const b=FM_BT_OUT.reduce((a,mi)=>a+(raw[mi]?.[0]||0),0),a=FM_BT_OUT.reduce((t,mi)=>t+(raw[mi]?.[1]||0),0);
+      const b=OUT.reduce((a,mi)=>a+(raw[mi]?.[0]||0),0),a=OUT.reduce((t,mi)=>t+(raw[mi]?.[1]||0),0);
       if(!(b>0))return;
-      const x=_plannerInputs(sec,FM_BT_IN);
-      const f=m==null?1:m==='matrix'?_matrixFactor(PLANNER.ft,x).f:_weightedFactor(x,_fmResolve(m,dv.id,FM_BT_IN),b/FM_BT_OUT.length).f;
-      rs.push({b,a,f});});
+      rs.push({b,a,f:_fmEval(spec,_fmInp(sec,IN),dv.id,IN,b/OUT.length)});});
     const A=rs.reduce((t,r)=>t+r.a,0),BF=rs.reduce((t,r)=>t+r.b*r.f,0);if(!(A>0)||!(BF>0))return;
     const e=rs.reduce((t,r)=>t+Math.abs(A*r.b*r.f/BF-r.a),0);
     per.push({nm:dv.nm,wape:e/A,n:rs.length});err+=e;act+=A;n+=rs.length;
@@ -5454,8 +5486,23 @@ function _fmWhy(r){
   if(Math.abs(r.f-r.damped)>5e-4)t+=` → clamp ${r.f.toFixed(2)}`;
   return t;
 }
+function _contWhy(r){
+  if(r.none)return 'no driver data - neutral 1.00';
+  const pc=v=>(v*100).toFixed(1)+'%',nm={st:'Sell-thru',growth:'LY growth',fill:'Fill rate'};
+  let t=r.parts.map(q=>`${nm[q.key]} ${pc(q.v)} vs division ${pc(q.md)} → ${q.ratio.toFixed(2)}^${q.s} = ×${q.mult.toFixed(3)}`).join(' · ')+` = ${r.raw.toFixed(3)}`;
+  if(Math.abs(r.ruled-r.raw)>5e-4)t+=` → rule ${r.ruled.toFixed(3)}`;
+  if(Math.abs(r.damped-r.ruled)>5e-4)t+=` → small-department damping ${r.damped.toFixed(3)}`;
+  if(Math.abs(r.f-r.damped)>5e-4)t+=` → clamp ${r.f.toFixed(2)}`;
+  return t;
+}
 function _plannerFactor(sec,mis){
   const ft=PLANNER.ft,x=_plannerInputs(sec,mis);
+  if(ft?.mode==='continuous'&&ft.cont){
+    const dv=DVDATA.find(d=>d.secs.includes(sec));
+    const ly=dv?mis.reduce((a,mi)=>a+_secMonLY(sec,dv,mi),0)/mis.length:null;
+    const r=_contFactor(x,dv?_fmMedians(dv.id,mis):{},ft.cont,ft.model,ly),tg=k=>{const q=r.parts.find(p=>p.key===k);return q?q.ratio.toFixed(2)+'× div':null;};
+    return {f:r.f,why:_contWhy(r),tags:{st:tg('st'),growth:tg('growth'),fill:tg('fill')},inp:x};
+  }
   if(ft?.mode==='weighted'&&ft.model){
     const dv=DVDATA.find(d=>d.secs.includes(sec));
     const ly=dv?mis.reduce((a,mi)=>a+_secMonLY(sec,dv,mi),0)/mis.length:null;
@@ -5565,14 +5612,15 @@ const FM_DEFAULT={drivers:[
   {key:'growth',on:true,weight:25,slabs:[{from:null,label:'Low',mult:1.03},{from:0.2,label:'Medium',mult:1},{from:0.5,label:'High',mult:0.95}]},
   {key:'fill',on:true,weight:25,slabs:[{from:null,label:'Low',mult:1.05},{from:0.5,label:'Avg',mult:1},{from:0.7,label:'Good',mult:0.97}]}],
   rules:[{driver:'fill',op:'below',value:0.5,kind:'min',f:0.95}],shrink_k:0.05,clamp:[0.8,1.2]};
+const FM_CONT_DEFAULT={st:0.25,growth:0.2,fill:0}; // from the 7 Oct back-tests: gentle sell-thru, modest momentum, no fill driver
 let _fmFt=null,_fmTab='matrix',_fmPrevCache=null;
 const _clone=o=>JSON.parse(JSON.stringify(o));
 function openFactorTable(){
   fetch('/api/auth/me').then(r=>r.ok?r.json():null).catch(()=>null).then(me=>{
     PLANNER.canEdit=!!(me&&(me.is_admin||me.role==='admin'||me.role==='planner'));
     _fmFt=PLANNER.ft?_clone(PLANNER.ft):null;
-    if(_fmFt){_fmFt.mode=_fmFt.mode||'matrix';_fmFt.model=_fmFt.model||_clone(FM_DEFAULT);}
-    _fmTab=_fmFt?.mode==='weighted'?'builder':'matrix';_fmPrevCache=null;_fmCutCache=new Map();
+    if(_fmFt){_fmFt.mode=_fmFt.mode||'matrix';_fmFt.model=_fmFt.model||_clone(FM_DEFAULT);_fmFt.cont=_fmFt.cont||{...FM_CONT_DEFAULT};}
+    _fmTab=_fmFt?.mode==='weighted'?'builder':_fmFt?.mode==='continuous'?'cont':'matrix';_fmPrevCache=null;_fmCutCache=new Map();
     _renderFactorTable();document.getElementById('factorOv').style.display='flex';
   });
 }
@@ -5583,13 +5631,14 @@ function _renderFactorTable(){
   document.getElementById('factorWho').textContent=ed?'You can change the factors (admin / planner).':'Read-only - only an admin or a planner can change the factors.';
   if(!ft){el.innerHTML='<p style="padding:14px">No factor table on the server yet.</p>';return;}
   const tab=(id,t)=>`<button type="button" class="vt${_fmTab===id?' on':''}" aria-pressed="${_fmTab===id}" onclick="_fmTab='${id}';_renderFactorTable()">${t}</button>`;
-  const uses=ft.mode==='weighted'?'Weighted builder':'Matrix (36 rows)';
-  const use=ed?`<label>Planner uses <select onchange="_fmFt.mode=this.value;_renderFactorTable()"><option value="weighted"${ft.mode==='weighted'?' selected':''}>Weighted builder</option><option value="matrix"${ft.mode!=='weighted'?' selected':''}>Matrix (36 rows)</option></select></label>`
+  const MODES=[['continuous','Continuous'],['weighted','Weighted builder'],['matrix','Matrix (36 rows)']];
+  const uses=(MODES.find(([k])=>k===ft.mode)||MODES[2])[1];
+  const use=ed?`<label>Planner uses <select onchange="_fmFt.mode=this.value;_renderFactorTable()">${MODES.map(([k,t])=>`<option value="${k}"${ft.mode===k?' selected':''}>${t}</option>`).join('')}</select></label>`
     :`Planner uses: <b>${uses}</b>`;
-  el.innerHTML=`<div class="fm-top"><div class="vtog" role="group" aria-label="View">${tab('builder','Weighted builder')}${tab('matrix','Matrix')}</div><span class="fm-use">${use}</span></div>
+  el.innerHTML=`<div class="fm-top"><div class="vtog" role="group" aria-label="View">${tab('cont','Continuous')}${tab('builder','Weighted builder')}${tab('matrix','Matrix')}</div><span class="fm-use">${use}</span></div>
     <div class="fm-fill">${PLANNER.fill?`Fill rates: <b>${Object.keys(PLANNER.fill.departments||{}).length}</b> departments from ${_h(PLANNER.fill.source)} (${_h(PLANNER.fill.column)}) · ${_h(PLANNER.fill.imported_at)}`:'<span style="color:var(--ne)">Fill-rate file not loaded yet.</span>'}
       ${PLANNER.canEdit?`<label class="tbtn" style="margin-left:8px;cursor:pointer">&#x2191; Refresh fill rates<input type="file" accept=".xlsb,.xlsx,.xlsm" style="display:none" onchange="uploadFillRate(this)"></label>`:''}</div>`+
-    (_fmTab==='builder'?_fmBuilderHtml(ft.model,ed):_fmMatrixHtml(ft,ed))+
+    (_fmTab==='builder'?_fmBuilderHtml(ft.model,ed):_fmTab==='cont'?_fmContHtml(ft,ed):_fmMatrixHtml(ft,ed))+
     (ft.updated_by?`<div style="padding:8px 14px;font-size:10px;color:var(--mu)">Last changed by ${_h(ft.updated_by)} · ${_h(ft.updated_at)}</div>`:'');
   if(_fmTab==='builder'&&ed)_fmWire();
 }
@@ -5659,15 +5708,6 @@ function _fmBuilderHtml(m,ed){
       <select${dis} onchange="_fmFt.model.rules[${ri}].kind=this.value;_renderFactorTable()" aria-label="Rule ${ri+1} type">${opt(r.kind,[['min','at least'],['max','at most']])}</select>
       <input class="gi" type="number" step="0.01" min="0.5" max="2" value="${+r.f}"${dis} onchange="_fmFt.model.rules[${ri}].f=Math.min(Math.max(+this.value||1,0.5),2);_renderFactorTable()" aria-label="Rule ${ri+1} factor">
       ${ed?`<button type="button" class="fm-x" onclick="_fmFt.model.rules.splice(${ri},1);_renderFactorTable()" aria-label="Remove rule ${ri+1}">&#x2715;</button>`:''}</div>`).join('')||'<div class="fm-note">No rules.</div>';
-  // preview: every active department scored with this draft vs the saved matrix
-  const res=P.map(q=>({q,r:_weightedFactor(q.x,_fmResolve(m,q.dv.id,AOP_MIS),q.ly)})),fs=res.map(o=>o.r.f).sort((a,b)=>a-b);
-  const bt=[['Plain AOP share (factor 1.00)',_fmBacktest(null)],['Matrix (saved)',_fmBacktest('matrix')],['This builder',_fmBacktest(m)]];
-  const base=bt[0][1].wape,pct=v=>v==null?'-':(v*100).toFixed(2)+'%';
-  const btRows=bt.map(([t,r])=>`<tr><td style="text-align:left">${t}</td><td><b>${pct(r.wape)}</b></td><td class="${r.wape!=null&&base!=null?gCls(base-r.wape):''}">${r.wape==null||base==null||t.startsWith('Plain')?'-':((base-r.wape)>=0?'better by ':'worse by ')+Math.abs((base-r.wape)*100).toFixed(2)+' pts'}</td>
-    ${r.per.map(x=>`<td>${pct(x.wape)}</td>`).join('')}</tr>`).join('');
-  const none=res.filter(o=>o.r.none).length,med=fs.length?fs[Math.floor(fs.length/2)]:1;
-  const lst=arr=>arr.map(o=>`<li>${_h(o.q.sec.nm)} <span class="fm-note">${_h(o.q.dv.nm)}</span> <b>${o.r.f.toFixed(2)}</b> <span class="fm-note">matrix ${o.q.mx.toFixed(2)}</span></li>`).join('');
-  const by=res.slice().sort((a,b)=>b.r.f-a.r.f);
   return `<div class="fm-wrap">
     <div class="fm-note">Drivers combine as a weighted geometric mean of their slab multipliers (one driver = its multiplier), then the rules, then small departments are damped toward 1.00, then the clamp. Each division is then re-balanced to its AOP, so only how departments compare matters. Card order = priority when rules conflict.</div>
     ${cards}
@@ -5676,13 +5716,60 @@ function _fmBuilderHtml(m,ed){
       <input class="gi" type="number" step="0.5" min="0" value="${+(m.shrink_k*100).toFixed(2)}"${dis} onchange="_fmFt.model.shrink_k=Math.max(+this.value||0,0)/100;_renderFactorTable()" aria-label="Damping LY in lakh per month"> L a month (0 = off)
       · Factor stays between <input class="gi" type="number" step="0.01" min="0.5" max="1" value="${m.clamp[0]}"${dis} onchange="_fmSetClamp(0,this.value)" aria-label="Lowest factor">
       and <input class="gi" type="number" step="0.01" min="1" max="2" value="${m.clamp[1]}"${dis} onchange="_fmSetClamp(1,this.value)" aria-label="Highest factor"></div></div>
-    <div class="fm-sec"><h4>Back-test - would it have called May-Jun 2026?</h4>
-      <div class="fm-note">Inputs from Mar-Apr 2026 only (sell-thru, LY growth 25V26) + the current fill rate; each department's share of its division in May-Jun 2026 predicted from its May-Jun 2025 share (same stores), re-balanced like the planner, then compared with what sold. Error = how far off, as a % of sales - lower is better. ${bt[0][1].n} departments.</div>
-      <table class="pl-ft" style="margin-top:6px"><thead><tr><th style="text-align:left">Method</th><th>Error</th><th>vs plain share</th>${bt[0][1].per.map(x=>`<th>${_h(x.nm)}</th>`).join('')}</tr></thead><tbody>${btRows}</tbody></table></div>
-    <div class="fm-sec"><h4>Preview - ${res.length} active departments</h4>
-      <div class="fm-note">Factor low ${fs[0]?.toFixed(2)??'-'} · median ${med.toFixed(2)} · high ${fs[fs.length-1]?.toFixed(2)??'-'}${none?` · ${none} with no driver data stay at 1.00`:''}</div>
-      <div class="fm-prev"><div><b>Highest factors</b><ol>${lst(by.slice(0,5))}</ol></div><div><b>Lowest factors</b><ol>${lst(by.slice(-5).reverse())}</ol></div></div></div>
+    ${_fmEvalHtml({mode:'weighted',model:m})}
   </div>`;
+}
+// back-test (both windows, every method) + a preview of the method on this tab - shared by Continuous and the builder
+function _fmEvalHtml(spec){
+  const P=_fmPrev(),pct=v=>v==null?'-':(v*100).toFixed(2)+'%';
+  const ft=_fmFt,specs=[['Plain AOP share (factor 1.00)',null],['Matrix (saved)','matrix'],['Weighted builder (draft)',{mode:'weighted',model:ft.model}],['Continuous (draft)',{mode:'continuous',model:ft.model,cont:ft.cont}]];
+  const bt=specs.map(([t,sp])=>{const a=_fmBacktest(sp),b=_fmBacktest(sp,FM_BT_LONG_IN,FM_BT_LONG_OUT);
+    return {t,a:a.wape,b:b.wape,avg:a.wape!=null&&b.wape!=null?(a.wape+b.wape)/2:null,n:a.n,cur:sp&&sp!=='matrix'&&sp.mode===spec.mode};});
+  const base=bt[0].avg;
+  const rows=bt.map(r=>`<tr${r.cur?' style="font-weight:700"':''}><td style="text-align:left">${r.t}</td><td>${pct(r.a)}</td><td>${pct(r.b)}</td><td><b>${pct(r.avg)}</b></td>
+    <td class="${r.avg!=null&&base!=null&&r!==bt[0]?gCls(base-r.avg):''}">${r===bt[0]||r.avg==null||base==null?'-':((base-r.avg)>=0?'better by ':'worse by ')+Math.abs((base-r.avg)*100).toFixed(2)+' pts'}</td></tr>`).join('');
+  const res=P.map(q=>({q,f:_fmEval(spec,q.x,q.dv.id,AOP_MIS,q.ly)})),fs=res.map(o=>o.f).sort((a,b)=>a-b),med=fs.length?fs[Math.floor(fs.length/2)]:1;
+  const lst=arr=>arr.map(o=>`<li>${_h(o.q.sec.nm)} <span class="fm-note">${_h(o.q.dv.nm)}</span> <b>${o.f.toFixed(2)}</b> <span class="fm-note">matrix ${o.q.mx.toFixed(2)}</span></li>`).join('');
+  const by=res.slice().sort((a,b)=>b.f-a.f);
+  return `<div class="fm-sec"><h4>Back-test - would it have called the plan?</h4>
+      <div class="fm-note">Each department's share of its division predicted from the same months a year earlier (same stores), re-balanced like the planner, then compared with what sold, using only data from before the months predicted. <b>Short</b>: Mar-Apr 2026 inputs -> May-Jun 2026. <b>Long</b>: Jul-Oct 2025 inputs -> Mar-Jun 2026 (closer to the planner's year-ahead step). Error = how far off, as a % of sales - lower is better. ${bt[0].n} departments.</div>
+      <table class="pl-ft" style="margin-top:6px"><thead><tr><th style="text-align:left">Method</th><th>Short</th><th>Long</th><th>Average</th><th>vs plain share</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="fm-sec"><h4>Preview - ${res.length} active departments</h4>
+      <div class="fm-note">Factor low ${fs[0]?.toFixed(2)??'-'} · median ${med.toFixed(2)} · high ${fs[fs.length-1]?.toFixed(2)??'-'}</div>
+      <div class="fm-prev"><div><b>Highest factors</b><ol>${lst(by.slice(0,5))}</ol></div><div><b>Lowest factors</b><ol>${lst(by.slice(-5).reverse())}</ol></div></div></div>`;
+}
+// Continuous tab: three signed strengths against the division median, Tune, then the shared rules / limits
+const FM_CONT_KEYS=[['st','Avg Weekly Sell-Thru %','st'],['growth','LY Growth % (25V26)','gr'],['fill','Fill Rate %','fill']];
+function _fmContHtml(ft,ed){
+  const c=ft.cont,dis=ed?'':' disabled',m=ft.model,pc=v=>v==null?'-':(v*100).toFixed(1)+'%';
+  const meds=DVDATA.map(dv=>({nm:dv.nm,md:_fmMedians(dv.id,AOP_MIS)}));
+  const cards=FM_CONT_KEYS.map(([k,lbl,inp])=>{const sv=+c[k]||0,ex=Math.pow(1.2,sv);
+    return `<div class="fm-card${sv?'':' off'}"><div class="fm-hd"><b>${lbl}</b>
+      <label class="fm-w">Strength <input type="range" min="-1" max="1.5" step="0.05" value="${sv}"${dis} oninput="this.nextElementSibling.textContent=this.value" onchange="_fmFt.cont.${k}=+this.value;_renderFactorTable()" aria-label="${lbl} strength"><span>${sv}</span></label>
+      <span class="fm-share">${sv?`20% above its division → ×${ex.toFixed(3)} (${ex>=1?'+':''}${((ex-1)*100).toFixed(1)}%)`:'off (strength 0)'}</span></div>
+      <div class="fm-note" style="margin-top:6px">Division median now: ${meds.map(o=>`${_h(o.nm)} ${pc(o.md[inp])}`).join(' · ')}${k==='growth'?' - compared as (1 + growth) / (1 + median)':''}</div></div>`;}).join('');
+  const rl=(m.rules||[]).map(r=>`${FM_DRIVERS[r.driver]?.short||r.driver} ${r.op==='below'?'below':'at least'} ${pc(r.value)} → factor ${r.kind==='min'?'at least':'at most'} ${(+r.f).toFixed(2)}`).join('; ')||'none';
+  return `<div class="fm-wrap">
+    <div class="fm-note">No slabs: factor = (sell-thru / division median)<sup>s</sup> × ((1 + LY growth) / (1 + division median))<sup>s</sup> × (fill rate / division median)<sup>s</sup>. Strength 0 = the driver is off; negative = the lower the value, the higher the factor. Then the rules and limits below, then each division is re-balanced to its AOP.</div>
+    ${ed?`<div class="fm-row"><button type="button" class="tbtn pri" id="fmTuneBtn" onclick="_fmTune()">&#x2699; Tune</button><span class="fm-note">Searches about 400 strength settings for the lowest error, the long back-test counting double (it is closer to the planner's year-ahead step). Review the result before saving.</span></div>`:''}
+    ${cards}
+    <div class="fm-sec"><h4>Rules and limits (shared with the Weighted builder tab - edit them there)</h4><div class="fm-note">Rules: ${_h(rl)} · small-department damping at Rs ${+(m.shrink_k*100).toFixed(2)} L a month · factor between ${m.clamp[0]} and ${m.clamp[1]}</div></div>
+    ${_fmEvalHtml({mode:'continuous',model:m,cont:c})}
+  </div>`;
+}
+function _fmTune(){
+  const b=document.getElementById('fmTuneBtn');if(b){b.disabled=true;b.textContent='Tuning…';}
+  setTimeout(()=>{   // let the button repaint first; ~400 settings x 2 windows, cached inputs
+    const ft=_fmFt,spec={mode:'continuous',model:ft.model,cont:{}};let best=null;
+    for(let st=0;st<=1.0001;st+=0.125)for(let g=-0.25;g<=0.7501;g+=0.125)for(const fl of [-0.5,-0.25,0,0.25,0.5]){
+      spec.cont={st:+st.toFixed(3),growth:+g.toFixed(3),fill:fl};
+      const a=_fmBacktest(spec).wape,l=_fmBacktest(spec,FM_BT_LONG_IN,FM_BT_LONG_OUT).wape;if(a==null||l==null)continue;
+      const sc=(a+2*l)/3;if(!best||sc<best.sc)best={sc,a,l,cont:{...spec.cont}};} // long test counts double: closer to the year-ahead step (an equal weighting chased 2-month momentum, growth 0.5)
+    const plain=(_fmBacktest(null).wape+2*_fmBacktest(null,FM_BT_LONG_IN,FM_BT_LONG_OUT).wape)/3;
+    if(best){ft.cont=best.cont;toast(`Tuned: sell-thru ${best.cont.st}, LY growth ${best.cont.growth}, fill ${best.cont.fill} - short ${(best.a*100).toFixed(2)}% / long ${(best.l*100).toFixed(2)}% (weighted ${(best.sc*100).toFixed(2)}% vs plain ${(plain*100).toFixed(2)}%)`);}
+    else toast('Not enough history to tune');
+    _renderFactorTable();
+  },30);
 }
 function _fmMove(i,dir){const a=_fmFt.model.drivers,j=i+dir;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];_renderFactorTable();
   document.querySelectorAll('#factorBody .fm-card')[j]?.querySelectorAll('.fm-mv')[dir<0?0:1]?.focus();}
