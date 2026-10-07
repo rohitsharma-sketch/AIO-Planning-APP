@@ -174,14 +174,27 @@ td.frozen,th.frozen{color:var(--muted-foreground)}
 .rephase-note{font-size:13px;margin:0}.link-upload{cursor:pointer;text-decoration:underline;color:var(--foreground)}
 
 
-/* downloads */
-.dls{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
-.dl{border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column;gap:10px}
-.dl h4{margin:0;font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:8px}
-.dl p{margin:0;font-size:12.5px;color:var(--muted-foreground)}
-.dl .foot{margin-top:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+/* dropdown menu - the OTB plan app's .tmenu (2026-10-07 declutter) */
+.tmenu{position:relative;display:inline-flex}
+.tmenu-pop{display:none;position:absolute;right:0;top:calc(100% + 6px);min-width:260px;background:var(--card);border:1px solid var(--border);border-radius:10px;
+  box-shadow:0 10px 30px rgba(var(--st-ink-rgb,30,39,35),.15);padding:6px;z-index:30}
+.tmenu.open .tmenu-pop{display:block}
+.tmenu-item{display:flex;flex-direction:column;gap:1px;width:100%;text-align:left;padding:8px 10px;border:none;background:none;border-radius:7px;cursor:pointer;
+  color:var(--foreground);font:inherit;font-size:12.5px;font-weight:600}
+.tmenu-item small{font-size:11px;font-weight:500;color:var(--muted-foreground);line-height:1.35}
+.tmenu-item:hover,.tmenu-item:focus-visible{background:var(--accent)}
+.tmenu-item.dng{color:var(--destructive)}
+.tmenu-item.dng:hover,.tmenu-item.dng:focus-visible{background:color-mix(in srgb,var(--destructive) 8%,transparent)}
+.tmenu-sep{height:1px;background:var(--border);margin:5px 4px}
+.rephase-row{margin:0 0 14px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius)}
+
+/* downloads - compact rows, descriptions in the tooltip */
+.dls{display:grid;gap:6px}
+.dl{border:1px solid var(--border);border-radius:var(--radius);padding:7px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dl h4{margin:0;flex:1;min-width:200px;font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:8px}
+.dl .foot{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .dlgrp{margin-top:14px}.dlgrp:first-of-type{margin-top:0}
-.dlgrp h5{margin:0 0 2px;font-size:12.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.dlgrp h5{margin:0 0 6px;font-size:12.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
 .dlgrp>p{margin:0 0 8px;font-size:12px;color:var(--muted-foreground)}
 .fmt{position:relative;display:inline-flex;padding:2px;border:1px solid var(--border);border-radius:999px;background:var(--muted)}
 .fmt button{position:relative;z-index:1;min-width:52px;padding:4px 12px;border:0;border-radius:999px;background:none;cursor:pointer;
@@ -214,16 +227,17 @@ td.frozen,th.frozen{color:var(--muted-foreground)}
 .empty{color:var(--muted-foreground);font-size:13px;padding:6px 0;margin:0}
 
 /* revision method picker (step 2) */
-.methods{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:14px}
+.methods{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
 .method{text-align:left;font:inherit;color:inherit;cursor:pointer;border:1px solid var(--border);border-radius:var(--radius);background:var(--background);
-  padding:11px 13px;display:flex;flex-direction:column;gap:3px;transition:border-color .15s,background .15s}
+  padding:6px 11px;display:inline-flex;align-items:baseline;gap:7px;white-space:nowrap;transition:border-color .15s,background .15s}
 .method:hover{border-color:var(--input);background:var(--accent)}
 .method[aria-pressed=true]{border-color:var(--primary);background:color-mix(in srgb,var(--btn) 22%,var(--background));box-shadow:0 0 0 1px var(--primary) inset}
 .method .mn{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted-foreground)}
 .method[aria-pressed=true] .mn{color:var(--primary)}
 .method .mt{font-weight:800;font-size:13.5px}
 .method .md{font-size:12px;color:var(--muted-foreground);line-height:1.4}
-.howto{margin:0 0 14px;padding:10px 13px;border-radius:var(--radius);background:color-mix(in srgb,var(--muted) 55%,transparent);font-size:12.5px;line-height:1.55}
+details.howto-d{margin:0 0 12px}
+.howto{margin:0;padding:10px 13px;border-radius:var(--radius);background:color-mix(in srgb,var(--muted) 55%,transparent);font-size:12.5px;line-height:1.55}
 .howto code{font-size:11.5px;background:var(--background);border:1px solid var(--border);border-radius:4px;padding:0 4px}
 
 /* rules dialog (2026-09-26): rules in force + version log from rules.js */
@@ -259,11 +273,10 @@ dialog.rules::backdrop{background:rgba(15,23,42,.45)}
 <header class="topbar">
   <div class="topbar-inner">
     <div class="logo" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg></div>
-    <div class="brand">
+    <div class="brand" title="Revise an existing plan — listing changes, department changes, new or split departments, shifts to a target, growth — while every store × division × attribute stays on the original.">
       <h1>Sales Plan Re-Aligner</h1>
-      <p>Revise an existing plan — listing changes, department changes, new or split departments, shifts to a target, growth — while every store × division × attribute stays on the original.</p>
     </div>
-    <div class="right"><span id="ws-user" class="badge b-muted" style="display:none" title="Your own copy - your plan, locks, overrides and results; nobody else's changes reach it"></span><span id="conn" class="badge b-muted"><span class="dot"></span>Connecting…</span><button class="rules-btn" type="button" onclick="openRules()">Rules</button><a class="home" id="home-link" href="/">&larr; Landing</a></div>
+    <div class="right"><span id="ws-user" class="badge b-muted" style="display:none" title="Your own copy - your plan, locks, overrides and results; nobody else's changes reach it"></span><span id="conn" class="badge b-muted" hidden><span class="dot"></span>Connecting…</span><button class="rules-btn" type="button" onclick="openRules()">Rules</button><a class="home" id="home-link" href="/">&larr; Landing</a></div>
   </div>
 </header>
 
@@ -282,8 +295,7 @@ dialog.rules::backdrop{background:rgba(15,23,42,.45)}
       <div class="card-content">
         <div id="now" aria-live="polite"></div>
         <div class="sep"></div>
-        <div class="row" style="justify-content:space-between;margin-bottom:4px"><strong class="small">Recent</strong><span class="muted small">last 20</span></div>
-        <ol class="hist" id="hist"></ol>
+        <details class="report" style="margin-top:0"><summary>Recent · last 20</summary><div class="body"><ol class="hist" id="hist"></ol></div></details>
       </div>
     </section>
   </aside>
@@ -397,6 +409,7 @@ async function refresh() {
 function setConn(ok) {
   if (ok === online) return;
   online = ok;
+  $('#conn').hidden = ok;   // shown only when offline (2026-10-07 declutter)
   $('#conn').className = `badge ${ok ? 'b-success' : 'b-error'}`;
   $('#conn').innerHTML = `<span class="dot"></span>${ok ? 'Server connected' : 'Server offline — retrying'}`;
 }
@@ -407,7 +420,7 @@ const dataBusy = () => S.jobs.some(j => j.status === 'running' && j.kind !== 'ex
 // ------------------------------------------------------------------ render
 
 function render() {
-  const s = JSON.stringify([S.original, S.original_failed, S.revised, S.result && S.result.id, S.departments.length, S.method, S.listing_app, S.locks]);   // S.locks: a lock toggle redraws the chips
+  const s = JSON.stringify([S.original, S.original_failed, S.revised, S.result && S.result.id, S.departments.length, S.method, S.listing_app, S.locks, (S.rephase_overrides || {}).loaded_at]);   // S.locks: a lock toggle redraws the chips; overrides: the Files menu label
   if (s !== sig) { sig = s; renderOrig(); renderRev(); renderResults(); }
   renderRun(); renderDownloads(); renderActivity(); autoDownload();
   document.querySelectorAll('.drop').forEach(d => d.classList.toggle('disabled', !!dataBusy()));
@@ -436,6 +449,30 @@ function dropzone(slot, title, compact) {
     <input type="file" accept=".xlsx,.xlsm,.xlsb,.xls,.csv" onchange="picked(this,'${slot}')">
   </label>`;
 }
+// a small upload control (same picked() handler as the dropzone): a ghost button, or an item of a .tmenu
+const PICK_KEY = `if(event.key==='Enter'||event.key===' '){event.preventDefault();this.querySelector('input').click()}`;
+const uploadLink = (slot, text, tip, cls = 'btn btn-ghost btn-sm') => `<label class="${cls}" tabindex="0" role="button" title="${esc(tip)}"${cls.includes('tmenu') ? '' : ` aria-label="${esc(tip)}"`} onkeydown="${PICK_KEY}">${
+  cls.includes('tmenu') ? '' : icon('upload')}${esc(text)}<input type="file" hidden accept=".xlsx,.xlsm,.xlsb,.xls,.csv" onchange="closeMenus();picked(this,'${slot}')"></label>`;
+// dropdown menus (the OTB plan app's .tmenu): items stay in the DOM, CSS shows / hides; Esc or a click outside closes
+function toggleMenu(id, ev) {
+  if (ev) ev.stopPropagation();
+  const m = document.getElementById(id), open = !m.classList.contains('open');
+  closeMenus();
+  if (open) { m.classList.add('open'); m.querySelector('[aria-expanded]').setAttribute('aria-expanded', 'true'); }
+}
+function closeMenus() {
+  document.querySelectorAll('.tmenu.open').forEach(m => { m.classList.remove('open'); m.querySelector('[aria-expanded]').setAttribute('aria-expanded', 'false'); });
+}
+document.addEventListener('click', e => { if (!e.target.closest('.tmenu')) closeMenus(); });
+document.addEventListener('keydown', e => {
+  const m = e.key === 'Escape' && document.querySelector('.tmenu.open');
+  if (m) { closeMenus(); m.querySelector('[aria-expanded]').focus(); }
+});
+const menu = (id, label, items) => `<div class="tmenu" id="${id}"><button type="button" class="btn btn-outline btn-sm" aria-haspopup="true" aria-expanded="false" aria-controls="${id}-pop"
+  onclick="toggleMenu('${id}',event)">${label} ▾</button><div class="tmenu-pop" id="${id}-pop">${items.join('')}</div></div>`;
+// a menu item: the moved button's own handler, label and tooltip, unchanged
+const mItem = (onclick, label, tip = '', cls = '') => `<button type="button" class="tmenu-item${cls}" onclick="closeMenus();${onclick}"${tip ? ` title="${esc(tip)}"` : ''}>${label}</button>`;
+const M_SEP = '<div class="tmenu-sep"></div>';
 function dropped(e, el, slot) { e.preventDefault(); el.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) upload(slot, f); }
 function picked(input, slot) { const f = input.files[0]; input.value = ''; if (f) upload(slot, f); }
 
@@ -458,39 +495,45 @@ function renderOrig() {
       <button class="btn btn-ghost btn-sm" onclick="dismissOrig()" aria-label="Dismiss this notice">Dismiss</button></div>${report(f.report, 'rep-of', true)}<div class="sep"></div>`;
   if (o) {
     h += `<div class="file"><span class="fi">${icon('sheet')}</span><div><div class="name">${esc(o.name)}</div>
-      <div class="meta">Loaded ${esc(o.loaded_at || '—')}${o.parse_secs ? ` · read and checked in ${secs(o.parse_secs)}` : ''}${o.sheet ? ` · sheet “${esc(o.sheet)}”, header on row ${o.header_row}` : ''}</div></div>
-      <span class="end">${sheetPicker('original', o.sheets, o.sheet)}</span></div>
-      <div class="stats">
-        <div class="stat"><div class="stat-label">Rows</div><div class="stat-value">${N(o.rows)}</div></div>
-        <div class="stat"><div class="stat-label">Stores</div><div class="stat-value">${N(o.stores)}</div></div>
-        <div class="stat"><div class="stat-label">Departments</div><div class="stat-value">${N(o.departments)}</div></div>
-        <div class="stat"><div class="stat-label">Divisions</div><div class="stat-value">${(o.divisions || []).length}</div><div class="stat-sub">${esc((o.divisions || []).join(' · '))}</div></div>
-      </div>
-      <div class="chips">${(o.months || []).map(m => `<button class="chip lockchip${frozen(m) ? ' on' : ''}" onclick="toggleLock(this.dataset.m)" data-m="${esc(m)}" aria-pressed="${frozen(m)}" title="${frozen(m) ? 'Locked - kept exactly as the original. Click to let it change' : 'Changes with the realignment. Click to lock it'}">${frozen(m) ? icon('lock', 'xs') : ''}${esc(m)}</button>`).join('')}
-        <span class="muted small">${icon('lock', 'xs')} locked = kept exactly as the original · click a month to lock / unlock</span></div>
-      ${report(o.report, 'rep-o')}<div class="sep"></div>${dropzone('original', 'Replace the original plan', true)}`;
+      <div class="meta">Loaded ${esc(o.loaded_at || '—')}${o.parse_secs ? ` · read and checked in ${secs(o.parse_secs)}` : ''}${o.sheet ? ` · sheet “${esc(o.sheet)}”, header on row ${o.header_row}` : ''}</div>
+      <div class="meta">${N(o.rows)} rows · ${N(o.stores)} stores · ${N(o.departments)} departments · <span title="${esc((o.divisions || []).join(' · '))}">${(o.divisions || []).length} divisions</span></div></div>
+      <span class="end">${sheetPicker('original', o.sheets, o.sheet)}${uploadLink('original', 'Replace…', 'Replace the original plan')}</span></div>
+      <div class="chips" title="Locked = kept exactly as the original · click a month to lock / unlock"><span class="muted small">${icon('lock', 'xs')} Months</span>${(o.months || []).map(m => `<button class="chip lockchip${frozen(m) ? ' on' : ''}" onclick="toggleLock(this.dataset.m)" data-m="${esc(m)}" aria-pressed="${frozen(m)}" title="${frozen(m) ? 'Locked - kept exactly as the original. Click to let it change' : 'Changes with the realignment. Click to lock it'}">${frozen(m) ? icon('lock', 'xs') : ''}${esc(m)}</button>`).join('')}</div>
+      ${report(o.report, 'rep-o')}`;
   } else h += dropzone('original', f ? 'Try another file' : 'Upload the original plan', !!f);
   $('#c-orig').innerHTML = h + '</div>';
 }
 
+// Step 2 header (2026-10-07 declutter): the template / file actions sit in one "Files ▾" menu; only Method 1's
+// Listing check file (once a file is loaded) stays a visible button. Handlers, labels and tooltips are unchanged.
 function templateActions() {
-  // the check file, like Method 2's re-phase file: the uploaded listing changes realigned, before Run (user, 2026-10-01)
-  if (S.method === 'listing') return `${S.revised && S.revised.ok && S.revised.method === 'listing'
-    ? `<button class="btn btn-outline btn-sm" onclick="toast('Building the Listing check file - it runs the realignment, about 10 s…'); template('listing','check')" title="Every department of the store × divisions your listing changes touch: original vs new, and how each new listing was sized">${icon('dl')}Listing check file</button>` : ''}<button class="btn btn-outline btn-sm" onclick="template('listing')">${icon('dl')}Blank template</button>${S.listing_app
-    ? `<button class="btn btn-outline btn-sm" onclick="template('listing','kb')" title="Every planned department the Listing / Delisting Analyser now shows as delisted, and every listed one with no plan">${icon('dl')}From Listing / Delisting Analyser</button>` : ''}`;
-  if (S.method === 'shift') return `<button class="btn btn-outline btn-sm" onclick="template('shift')">${icon('dl')}Blank template</button>${S.listing_app
-    ? `<button class="btn btn-outline btn-sm" onclick="template('shift','kb')" title="The Listing / Delisting Analyser's changes vs this plan, with an empty TARGET column to fill">${icon('dl')}From Listing / Delisting Analyser</button>` : ''}`;
-  if (S.method === 'growth') return `<button class="btn btn-outline btn-sm" onclick="template('growth')" title="Every department with its plan, last year's sales and current growth">${icon('dl')}Growth template</button>`;
-  if (S.method === 'newdept') return `<button class="btn btn-outline btn-sm" onclick="template('newdept','split')">${icon('dl')}Split template</button>
-    <button class="btn btn-outline btn-sm" onclick="template('newdept','new')">${icon('dl')}New-department template</button>`;
-  return `<select class="select" id="tpl-dept" aria-label="Department to pre-fill the template with" onchange="tplDept=this.value"><option value="">Blank template</option>${
+  const kb = S.listing_app, it = [];
+  let lead = '';
+  if (S.method === 'listing') {
+    // the check file, like Method 2's re-phase file: the uploaded listing changes realigned, before Run (user, 2026-10-01)
+    if (S.revised && S.revised.ok && S.revised.method === 'listing')
+      lead = `<button class="btn btn-outline btn-sm" onclick="toast('Building the Listing check file - it runs the realignment, about 10 s…'); template('listing','check')" title="Every department of the store × divisions your listing changes touch: original vs new, and how each new listing was sized">${icon('dl')}Listing check file</button>`;
+    it.push(mItem(`template('listing')`, 'Blank template'));
+    if (kb) it.push(mItem(`template('listing','kb')`, 'From Listing / Delisting Analyser', 'Every planned department the Listing / Delisting Analyser now shows as delisted, and every listed one with no plan'));
+  } else if (S.method === 'shift') {
+    it.push(mItem(`template('shift')`, 'Blank template'));
+    if (kb) it.push(mItem(`template('shift','kb')`, 'From Listing / Delisting Analyser', "The Listing / Delisting Analyser's changes vs this plan, with an empty TARGET column to fill"));
+  } else if (S.method === 'growth') it.push(mItem(`template('growth')`, 'Growth template', "Every department with its plan, last year's sales and current growth"));
+  else if (S.method === 'newdept') it.push(mItem(`template('newdept','split')`, 'Split template'), mItem(`template('newdept','new')`, 'New-department template'));
+  else it.push(mItem(`template('dept')`, 'Template', 'Excel file with the right headers, pre-filled with the original values of the chosen department'),
+    mItem(`rephase()`, 'Re-phase file', 'Download the re-phase file to check or edit before uploading it'), M_SEP, ...storeOverrides());
+  return lead + menu('files-menu', `${icon('dl')}Files`, it);
+}
+// Method 2's "Re-phase from LY" row, in the card body: department, LY shape and Re-phase & run
+function rephaseRow() {
+  const v = S.rephase_overrides;
+  return `<div class="row rephase-row"><strong class="small">Re-phase from LY</strong>
+    <select class="select" id="tpl-dept" aria-label="Department to pre-fill the template with" onchange="tplDept=this.value"><option value="">Blank template</option>${
       S.departments.map(d => `<option ${d === tplDept ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select>
-    <button class="btn btn-outline btn-sm" onclick="template('dept')" title="Excel file with the right headers, pre-filled with the original values of the chosen department">${icon('dl')}Template</button>
     <select class="select" id="tpl-mix" aria-label="Whose last-year month shape to use" onchange="tplMix=this.value"><option value="">LY shape: same department</option>${
       (S.ly_departments || []).map(d => `<option value="${esc(d)}" ${d === tplMix ? 'selected' : ''}>LY shape: ${esc(d)}</option>`).join('')}</select>
-    <button class="btn btn-outline btn-sm" onclick="rephase()" title="Download the re-phase file to check or edit before uploading it">${icon('dl')}Re-phase file</button>
     <button class="btn btn-primary btn-sm" onclick="rephaseRun()" ${dataBusy() ? 'disabled' : ''} title="Build the re-phase from last year, load it here and run it to the final plan - the other departments absorb it, so every store × division × month stays on the original">${icon('play')}Re-phase &amp; run</button>
-    ${storeOverrides()}`;
+    ${v ? `<span class="chip" title="${esc(overridesTip())}">Overrides: ${v.stores} stores</span>` : ''}</div>`;
 }
 
 function renderRev() {
@@ -503,8 +546,9 @@ function renderRev() {
     <div class="card-content">`;
   if (!o) h += `<p class="empty">Load the original plan first — the revision is checked against it.</p>`;
   else h += `<div class="methods" role="group" aria-label="How is the plan being revised?">${Object.entries(METHODS).map(([k, m]) =>
-      `<button type="button" class="method" aria-pressed="${k === S.method}" onclick="setMethod('${k}')"><span class="mn">Method ${m.no}</span><span class="mt">${esc(m.title)}</span><span class="md">${esc(m.short)}</span></button>`).join('')}</div>
-    <p class="howto">${M.howto}</p>`;
+      `<button type="button" class="method" aria-pressed="${k === S.method}" onclick="setMethod('${k}')" title="${esc(m.short)}"><span class="mn">Method ${m.no}</span><span class="mt">${esc(m.title)}</span></button>`).join('')}</div>
+    <details class="report howto-d" id="howto-${r ? 'f' : 'n'}" ${!r || opened.has('howto-f') ? 'open' : ''} ontoggle="toggleD(this)"><summary>How to fill the file</summary><div class="body"><p class="howto">${M.howto}</p></div></details>
+    ${M === METHODS.dept ? rephaseRow() : ''}`;
   if (r) {
     const pv = r.preview;
     h += `<div class="file"><span class="fi ${r.ok ? '' : 'err'}">${icon(r.ok ? 'sheet' : 'error')}</span><div><div class="name">${esc(r.name)}</div>
@@ -539,7 +583,7 @@ function renderRun() {
   const other = !job && dataBusy();
   if (other && !reason) reason = 'Waiting for the current step to finish…';
   const h = `<div class="card-header">${stepNo(3, res ? 'done' : ready ? 'current' : '')}<div class="grow"><h2 class="card-title" id="t-run">Realign</h2>
-    <p class="card-desc"><strong>Method ${method().no} · ${esc(method().title)}.</strong> ${esc(method().run)}${RUN_TAIL}</p>
+    <p class="card-desc" title="${esc(method().run + RUN_TAIL)}">Method ${method().no} · ${esc(method().title)}</p>
 </div></div>
     <div class="card-content"><div class="row">
       <button class="btn btn-primary btn-lg" onclick="run()" ${!ready || job || other ? 'disabled' : ''}>${job ? icon('load', 'spin') + 'Realigning…' : icon('play') + (res ? 'Run again' : 'Run realignment')}</button>
@@ -557,21 +601,23 @@ function renderResults() {
   const sc = res.status_counts || {}, fails = res.checks.filter(c => c.status === 'fail').length;
   // compact: problems first and full width, the passing ones two to a row (user, 2026-10-01: "squeeze the layout")
   const rank = {fail: 0, warn: 1, info: 2, ok: 3};
-  const chk = [...res.checks].sort((a, b) => (rank[a.status] ?? 2) - (rank[b.status] ?? 2)).map(c => `<div class="check ${c.status}${c.status === 'fail' || c.status === 'warn' ? ' wide' : ''}">${icon(c.status === 'ok' ? 'ok' : c.status === 'warn' ? 'warn' : c.status === 'info' ? 'info' : 'error', c.status + '-i')}<div><div class="t">${esc(c.name)}</div><div class="d">${esc(c.detail)}</div></div></div>`).join('');
+  const chkHtml = c => `<div class="check ${c.status}${c.status === 'fail' || c.status === 'warn' ? ' wide' : ''}">${icon(c.status === 'ok' ? 'ok' : c.status === 'warn' ? 'warn' : c.status === 'info' ? 'info' : 'error', c.status + '-i')}<div><div class="t">${esc(c.name)}</div><div class="d">${esc(c.detail)}</div></div></div>`;
+  // 2026-10-07 declutter: problems / notes stay in view, the passing checks fold into one closed line
+  const sorted = [...res.checks].sort((a, b) => (rank[a.status] ?? 2) - (rank[b.status] ?? 2));
+  const bad = sorted.filter(c => c.status !== 'ok'), good = sorted.filter(c => c.status === 'ok');
+  const chk = (bad.length ? `<div class="checks" style="margin-top:8px">${bad.map(chkHtml).join('')}</div>` : '') + (good.length
+    ? `<details class="report" id="rep-chk" ${opened.has('rep-chk') ? 'open' : ''} ontoggle="toggleD(this)"><summary>${good.length} check${good.length > 1 ? 's' : ''} passed</summary><div class="body checks">${good.map(chkHtml).join('')}</div></details>` : '');
   el.innerHTML = `<div class="card-header">${stepNo(4, 'done')}<div class="grow"><h2 class="card-title" id="t-res">Results
       <span class="badge ${fails ? 'b-error' : 'b-success'}"><span class="dot"></span>${fails ? `${fails} check${fails > 1 ? 's' : ''} failed` : 'All checks passed'}</span></h2>
     <p class="card-desc">${METHODS[res.method] ? `Method ${METHODS[res.method].no} · ${esc(METHODS[res.method].title)} · ` : ''}Run ${esc(res.finished_at)} in ${secs(res.secs)}${res.rechecks ? ` · <b>rechecked ${res.rechecks}×</b> (repaired and verified again - see the notes)` : ''} · ${esc(res.revised)} against ${esc(res.original)}</p></div></div>
     <div class="card-content">
-      <div class="stats" style="margin-top:0">
-        <div class="stat"><div class="stat-label">Cells changed</div><div class="stat-value">${N(res.changed_rows)}</div><div class="stat-sub">${N((sc.kept || 0) + (sc['kept, moved to fit the cap'] || 0))} kept${sc['kept, moved to fit the cap'] ? ` (${N(sc['kept, moved to fit the cap'])} moved to fit the cap)` : ''} · ${N(sc.absorbed || 0)} absorbed</div></div>
-        <div class="stat"><div class="stat-label">Output rows</div><div class="stat-value">${N(res.rows)}</div><div class="stat-sub">Store × Dept × MRP × Display</div></div>
-        <div class="stat"><div class="stat-label">Revised departments</div><div class="stat-value">${res.dept_table.length}</div><div class="stat-sub" title="${esc(res.dept_table.map(d => d.dept).join(', '))}">${esc(res.dept_table.map(d => d.dept).join(', '))}</div></div>
-        <div class="stat"><div class="stat-label">Run time</div><div class="stat-value">${secs(res.secs)}</div><div class="stat-sub">realign + verify</div></div>
-      </div>
-      <div class="tabs" role="tablist" style="margin-top:14px"><button class="tab" role="tab" aria-selected="${tab === 'depts'}" onclick="setTab('depts')">Revised departments</button>
+      <p class="small" style="margin:0"><b>${N(res.changed_rows)}</b> cells changed <span class="muted">(${N((sc.kept || 0) + (sc['kept, moved to fit the cap'] || 0))} kept${sc['kept, moved to fit the cap'] ? `, ${N(sc['kept, moved to fit the cap'])} moved to fit the cap` : ''} · ${N(sc.absorbed || 0)} absorbed)</span>
+        · <b>${N(res.rows)}</b> output rows <span class="muted">(Store × Dept × MRP × Display)</span>
+        · <b title="${esc(res.dept_table.map(d => d.dept).join(', '))}">${res.dept_table.length}</b> revised department${res.dept_table.length === 1 ? '' : 's'}</p>
+      <div class="tabs" role="tablist" style="margin-top:12px"><button class="tab" role="tab" aria-selected="${tab === 'depts'}" onclick="setTab('depts')">Revised departments</button>
         <button class="tab" role="tab" aria-selected="${tab === 'div'}" onclick="setTab('div')">Division × Month</button></div>
       <div>${tab === 'depts' ? deptTable(res) : divTable(res)}</div>
-      <div class="sep"></div><strong class="small">Checks — recomputed independently from the output</strong><div class="checks" style="margin-top:8px">${chk}</div>
+      <div class="sep"></div><strong class="small">Checks — recomputed independently from the output</strong>${chk}
       ${res.warnings.length ? `<details class="report" id="rep-res" ${opened.has('rep-res') ? 'open' : ''} ontoggle="toggleD(this)"><summary>What the realign had to decide · ${res.warnings.length} note${res.warnings.length > 1 ? 's' : ''}</summary><div class="body">${
         res.warnings.map(w => `<div class="alert alert-info">${icon('info')}<div>${esc(w)}</div></div>`).join('')}</div></details>` : ''}
       <div class="sep"></div><div id="dls"></div>
@@ -627,18 +673,17 @@ function renderDownloads() {
     const key = `${k}-${f}`, e = S.exports[key];
     const job = S.jobs.find(j => j.kind === 'export' && j.status === 'running' && j.label.includes({full: 'full', compare: 'comparison', plan: 'plan-to-plan'}[k]) && j.label.includes(f.toUpperCase()));
     let foot;
-    if (e) foot = `<button class="btn btn-primary btn-sm" onclick="exportFile('${k}','${f}')">${icon('dl')}Download</button><span class="muted small">${bytes(e.size)} · built ${esc(e.built_at.slice(-8))} in ${secs(e.secs)}</span>`;
+    if (e) foot = `<button class="btn btn-primary btn-sm" onclick="exportFile('${k}','${f}')">${icon('dl')}Download</button><span class="muted small" title="built ${esc(e.built_at.slice(-8))} in ${secs(e.secs)}">${bytes(e.size)}</span>`;
     else if (job) { const st = job.steps[job.steps.length - 1] || {}, pct = st.total ? st.done / st.total * 100 : null;
       foot = `<div style="flex:1;min-width:180px"><div class="progress ${pct == null ? 'indet' : ''}" role="progressbar" aria-valuenow="${Math.round(pct || 0)}" aria-valuemin="0" aria-valuemax="100"><div style="width:${pct ?? 0}%"></div></div>
         <div class="muted small" style="margin-top:4px">${st.total ? `${N(st.done)} / ${N(st.total)} rows · ` : ''}${secs(job.secs)} elapsed${st.left != null ? ` · ~${secs(st.left)} left` : ''} · downloads when done</div></div>`; }
     else foot = `<button class="btn btn-outline btn-sm" onclick="exportFile('${k}','${f}')">${icon('dl')}Build &amp; download</button>${S.estimates[key] ? `<span class="muted small">about ${secs(S.estimates[key])}</span>` : ''}`;
-    return `<div class="dl"><h4>${icon('sheet')}${esc(title)} <span class="chip">${f.toUpperCase()}</span></h4><p>${esc(desc[f])}</p><div class="foot">${foot}</div></div>`;
+    return `<div class="dl" title="${esc(desc[f])}"><h4>${icon('sheet')}${esc(title)} <span class="chip">${f.toUpperCase()}</span></h4><div class="foot">${foot}</div></div>`;
   };
-  const h = `<div class="row" style="justify-content:space-between;margin-bottom:10px;gap:10px;flex-wrap:wrap"><strong class="small">Downloads</strong>
-      <div class="row" style="gap:10px;flex-wrap:wrap"><span class="muted small">Built once on the server, then instant — kept until the next run.</span>
-      <div class="fmt ${f}" role="group" aria-label="Download format"><span class="knob" aria-hidden="true"></span>${['xlsx', 'csv'].map(x =>
+  const h = `<div class="row" style="justify-content:space-between;margin-bottom:10px;gap:10px;flex-wrap:wrap"><strong class="small" title="Built once on the server, then instant — kept until the next run.">Downloads</strong>
+      <div class="row" style="gap:10px;flex-wrap:wrap"><div class="fmt ${f}" role="group" aria-label="Download format"><span class="knob" aria-hidden="true"></span>${['xlsx', 'csv'].map(x =>
         `<button type="button" aria-pressed="${x === f}" onclick="setFmt('${x}')">${x.toUpperCase()}</button>`).join('')}</div></div></div>` +
-    DL_GROUPS.map(([g, sub, items]) => `<div class="dlgrp"><h5>${esc(g)}</h5><p>${esc(sub)}</p><div class="dls">${items.map(card).join('')}</div></div>`).join('');
+    DL_GROUPS.map(([g, sub, items]) => `<div class="dlgrp"><h5 title="${esc(sub)}">${esc(g)}</h5><div class="dls">${items.map(card).join('')}</div></div>`).join('');
   setHTML(el, h);
 }
 
@@ -723,13 +768,17 @@ async function rephase(kind = 'rephase') {
   } catch (e) { toast(e.message); }
 }
 // Re-phase store overrides (2026-09-30): REF OLD and/or a fixed month mix per store, kept until cleared
+function overridesTip() {
+  const v = S.rephase_overrides;
+  return v ? `${v.name} (${v.loaded_at}) - ${v.ref_old} REF OLD, ${v.mix} fixed store × department month mix. Used by every re-phase; upload again to replace.`
+    : 'Upload REF OLD per store and/or a fixed month mix per store and department (STORE NAME, REF OLD, DEPARTMENT, <Month> %) - used by every re-phase until cleared';
+}
+// the store-override actions, as items of the Files menu (same handlers, labels and tooltips as the old buttons)
 function storeOverrides() {
   const v = S.rephase_overrides;
-  const tip = v ? `${v.name} (${v.loaded_at}) - ${v.ref_old} REF OLD, ${v.mix} fixed store × department month mix. Used by every re-phase; upload again to replace.`
-    : 'Upload REF OLD per store and/or a fixed month mix per store and department (STORE NAME, REF OLD, DEPARTMENT, <Month> %) - used by every re-phase until cleared';
-  return `<label class="btn btn-outline btn-sm" title="${esc(tip)}">${icon('upload')}${v ? `Overrides: ${v.stores} stores` : 'Store overrides'}<input type="file" hidden accept=".xlsx,.xlsm,.xlsb,.xls,.csv" onchange="picked(this,'rephase-overrides')"></label>
-    ${v ? `<button class="btn btn-ghost btn-sm" onclick="clearOverrides()" title="Stop using the store overrides" aria-label="Clear store overrides">${icon('trash')}</button>` : ''}
-    <button class="btn btn-ghost btn-sm" onclick="rephase('rephase-overrides')" title="The stores of this re-phase - the ones with no own / REF shape first - with REF OLD and month % columns to fill">${icon('dl')}Overrides template</button>`;
+  return [uploadLink('rephase-overrides', v ? `Overrides: ${v.stores} stores` : 'Store overrides', overridesTip(), 'tmenu-item'),
+    mItem(`rephase('rephase-overrides')`, 'Overrides template', 'The stores of this re-phase - the ones with no own / REF shape first - with REF OLD and month % columns to fill'),
+    ...(v ? [M_SEP, mItem(`clearOverrides()`, 'Clear store overrides', 'Stop using the store overrides', ' dng')] : [])];
 }
 async function clearOverrides() {
   if (!confirm('Stop using the store overrides for Re-phase?')) return;

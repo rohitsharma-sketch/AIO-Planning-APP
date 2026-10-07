@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### Re-Aligner: decluttered (suite declutter 1 of 7)
+- **Asked (user):** "revamp core apps and remove extra buttons which can be readjusted. De-cramp the core and additional apps" (reviewed with the ECC dev-team skill: layout only, every action reachable with the same handler / confirm / label).
+- **Moved:** Step 2 header's 8 controls -> a "Re-phase from LY" row (department, LY shape, Re-phase & run) + one "Files ▾" menu per method (M1/M4 Blank template + From Listing / Delisting Analyser; M2 Template, Re-phase file, Store overrides upload, Overrides template, Clear store overrides [red, confirm kept]; M3 Split + New-department templates; M5 Growth template). Listing check file stays visible. Replace the original plan -> "Replace…" beside the file name (drag-drop for a replacement removed).
+- **Quieter:** method cards one line (descriptions as tooltips); "How to fill the file" collapsible (open until a file is loaded); results 4 tiles -> one line (duplicate Run time dropped); passing checks folded; downloads as compact rows with tooltips; Run card one line; Activity "Recent" collapsed; topbar subtitle -> tooltip, connection badge only when offline.
+- **Checks:** scripts parse, all ids exist, confirm prompts 3/3, guarded labels kept ("Re-phase & run", "Run"), test_realign / test_workspaces pass; live on :8070 - each method's Files menu correct, Esc closes and returns focus.
+
 ### PROJECT-CONTEXT.md added
 - **Asked (user):** "yes create the PROJECT-CONTEXT.md" (from the ECC dev-team review).
 - Repo-root summary of the suite: purpose, tech stack, current phase, key constraints and what "done" means - the shared baseline the dev-team / review sessions read (as untrusted declarative data). No code change.
