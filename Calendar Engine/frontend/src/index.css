@@ -950,7 +950,7 @@ input[type=number].year-input { width: 80px; font-size: 15px; font-weight: 600; 
   border: 1px solid var(--border);
   border-top: none;
   border-radius: 0 0 var(--radius) var(--radius);
-  overflow: hidden;
+  overflow: visible; /* was hidden - clipped the Festival tools / Cluster settings menus */
 }
 /* The old markup's inline-styled #clusterTabsRow. */
 .cluster-tabs-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 10px 14px 0; }
@@ -1124,3 +1124,58 @@ details.rx-section > summary.rx-label { cursor: pointer; display: list-item; }
 
 /* ── Calm look (user, 2026-09-28: minimal and clean, from the alternate design) ── overrides only. */
 html .app-header-title, html .lib-title { font-family: var(--st-font-display, Georgia, serif); font-weight: 500; letter-spacing: -0.005em; }
+
+/* ── Declutter (2026-10-07): shared dropdown menu (components/ui.jsx Menu) + compact bits ── */
+.ce-menu { position: relative; display: inline-block; }
+.ce-menu > summary {
+  list-style: none; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;
+  padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--white);
+  color: var(--muted); font-size: 13px; font-weight: 500; white-space: nowrap; box-shadow: var(--shadow-sm);
+}
+.ce-menu > summary::-webkit-details-marker { display: none; }
+.ce-menu > summary:hover, .ce-menu[open] > summary { background: var(--light); color: var(--char); border-color: var(--navy-light); }
+.ce-menu > summary:focus-visible, .ce-menu .ce-menu-pop button:focus-visible { outline: 2px solid var(--navy3); outline-offset: 2px; }
+.ce-menu-caret { font-size: 10px; opacity: .7; }
+.ce-menu .ce-menu-pop {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 50; min-width: 220px; max-width: 480px;
+  display: flex; flex-direction: column; gap: 2px; padding: 6px;
+  background: var(--white); color: var(--char); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-md);
+}
+.ce-menu.ce-menu-right .ce-menu-pop { left: auto; right: 0; }
+.ce-menu .ce-menu-pop > button {
+  display: flex; justify-content: flex-start; width: 100%; text-align: left; margin: 0;
+  padding: 6px 10px; border: none; border-radius: 6px; background: none; box-shadow: none;
+  color: var(--char); font-size: 12.5px; font-weight: 500; cursor: pointer; transform: none;
+}
+.ce-menu .ce-menu-pop > button:hover:not(:disabled) { background: var(--light); color: var(--char); }
+.ce-menu .ce-menu-pop > button.active { background: var(--light); color: var(--navy); font-weight: 600; }
+.ce-menu .ce-menu-pop button.danger { color: var(--red); }
+.ce-menu-sep { height: 1px; background: var(--border); margin: 4px 2px; }
+.ce-menu-section { padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
+.ce-menu-section label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+/* text inputs inside a menu get the app's input look (the global rule above skips type=text) */
+.ce-menu-section input[type=text] { padding: 6px 10px; border: 1.5px solid var(--border); border-radius: 7px; background: var(--white); color: var(--char); font-size: 13px; font-family: inherit; outline: none; }
+.ce-menu-section input[type=text]:focus { border-color: var(--navy3); box-shadow: 0 0 0 3px rgba(var(--st-accent-rgb,79,122,102),0.15); }
+/* Tab-row variant (Calendarised Sales "More views") */
+.tabs .ce-menu > summary { border: none; border-bottom: 2px solid transparent; border-radius: 0; margin-bottom: -2px; background: none; box-shadow: none; padding: 7px 16px; }
+.tabs .ce-menu.active > summary { color: var(--navy); border-bottom-color: var(--navy); font-weight: 600; }
+/* Small helpers */
+.ce-info { cursor: help; color: var(--muted); font-size: 12px; margin-left: 6px; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.ce-summary-line { font-size: 12px; color: var(--muted); margin: 0 0 10px; }
+.ce-summary-line strong { color: var(--char); }
+.ce-count-bad { display: inline-block; margin-left: 6px; min-width: 18px; padding: 0 6px; border-radius: 9px; background: var(--red); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+.ce-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ce-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 10px; border-radius: 12px; background: var(--light); border: 1px solid var(--navy-light); font-size: 11.5px; color: var(--char); }
+.ce-chip button { padding: 0 6px; border: none; background: none; box-shadow: none; color: var(--muted); font-size: 13px; line-height: 1; }
+.ce-chip button:hover { color: var(--red); background: none; }
+.ce-link-btn { padding: 4px 8px; font-size: 12px; box-shadow: none; }
+.ce-strip { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); margin-top: 10px; }
+.ce-strip strong { color: var(--char); }
+.ce-strip .miss, .ce-strip .miss strong { color: var(--warn); }
+.ce-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-left: 6px; cursor: help; vertical-align: middle; }
+.ce-dot.ok { background: var(--green); } .ce-dot.bad { background: var(--red); } .ce-dot.stale { background: #F59E0B; }
+.app-engine select.ce-engine-compact { font-size: 12px; padding: 3px 8px; max-width: 200px; }
+details.ce-how > summary { cursor: pointer; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+details.ce-how[open] > summary { margin-bottom: 12px; }
+.lib-card-head .ce-menu > summary { padding: 1px 8px; font-size: 15px; line-height: 1.2; box-shadow: none; }
+.lib-card-head .ce-menu-caret { display: none; }

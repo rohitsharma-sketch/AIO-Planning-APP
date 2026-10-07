@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { listCalendarLibrary, getCalendar, getStoreClusterMap } from '../../lib/api'
 import { buildFestMap } from '../../lib/engine'
 import { parseDate, fmtDisp, calDiff } from '../../lib/dateUtils'
+import { useStoredFlag } from '../ui'
 
 // Ported from the old app's "Store-Cluster x Date Shift" panel
 // (calendar_engine.html lines ~956-993 markup, ~3245-3423 behaviour): the ten
@@ -37,11 +38,11 @@ const COLUMNS = [
   { key: 'store', label: 'Store' },
   { key: 'cluster', label: 'Cluster' },
   { key: 'ref', label: 'Ref Date' },
-  { key: 'refDay', label: 'Ref Day' },
+  { key: 'refDay', label: 'Ref Day', ctx: true },
   { key: 'festival', label: 'Festival' },
   { key: 'category', label: 'Category' },
   { key: 'fut', label: 'Future Date' },
-  { key: 'futDay', label: 'Fut Day' },
+  { key: 'futDay', label: 'Fut Day', ctx: true },
   { key: 'shift', label: 'Days Moved', title: 'How many days the date moved: Future Date minus Ref Date (day-of-year basis). Not the window length.' },
   { key: 'monthMatch', label: 'Mo', title: 'Same month' },
 ]
@@ -74,6 +75,11 @@ export default function DateShiftPreviewPanel() {
   const [fMonth, setFMonth] = useState('')
   const [fFestival, setFFestival] = useState('')
   const [fCategory, setFCategory] = useState('')
+  // 2026-10-07 declutter: Cluster / Ref Month / Festival / Category behind
+  // "Filters"; Ref Day / Fut Day behind "+ Context columns".
+  const [moreFilters, setMoreFilters] = useState(false)
+  const [ctxCols, setCtxCols] = useStoredFlag('cal.dateShift.contextCols')
+  const hiddenActive = [fCluster, fMonth, fFestival, fCategory].filter(v => v !== '').length
 
   useEffect(() => {
     listCalendarLibrary().then(setCalendars)
@@ -225,10 +231,10 @@ export default function DateShiftPreviewPanel() {
   return (
     <>
       <div className="card" style={{ marginBottom: '12px' }}>
-        <div className="card-label">Store-Cluster x Date Shift</div>
-        <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '10px' }}>
-          Every store inherits the day-by-day date mapping of its calendar cluster. Pick a calendar
-          and a level, then search, sort (click a column) and filter to preview the shift at any depth.
+        <div className="card-label">
+          Store-Cluster x Date Shift
+          <span className="ce-info" tabIndex={0} aria-label="About this preview"
+            title="Every store inherits the day-by-day date mapping of its calendar cluster. Pick a calendar and a level, then search, sort (click a column) and filter to preview the shift at any depth.">ⓘ</span>
         </div>
         <div className="scm-toolbar" style={{ alignItems: 'flex-end' }}>
           <div className="field">
@@ -248,6 +254,21 @@ export default function DateShiftPreviewPanel() {
               <label><input type="radio" checked={level === 'cluster'} onChange={() => setLevel('cluster')} /> Cluster x Day</label>
             </div>
           </div>
+          <div className="field">
+            <label htmlFor="ds-search">Search</label>
+            <input id="ds-search" type="text" style={{ width: '210px' }}
+              placeholder="store, cluster, festival, date"
+              value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <button className="ce-link-btn" onClick={() => setMoreFilters(o => !o)} aria-expanded={moreFilters}>
+            Filters{hiddenActive ? ` (${hiddenActive})` : ''} {moreFilters ? '▴' : '▾'}
+          </button>
+          <button className="ce-link-btn" onClick={() => setCtxCols(!ctxCols)} aria-pressed={ctxCols}
+            title="Ref Day, Fut Day">
+            {ctxCols ? '- Context columns' : '+ Context columns'}
+          </button>
+          {/* Kept in the DOM while hidden - display only. */}
+          <div className="scm-toolbar" style={{ display: moreFilters ? 'flex' : 'none', flexBasis: '100%', order: 1, alignItems: 'flex-end', marginBottom: 0 }}>
           <div className="field">
             <label htmlFor="ds-cluster">Cluster</label>
             <select id="ds-cluster" value={fCluster} onChange={e => setFCluster(e.target.value)}>
@@ -278,11 +299,6 @@ export default function DateShiftPreviewPanel() {
               {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
-          <div className="field">
-            <label htmlFor="ds-search">Search</label>
-            <input id="ds-search" type="text" style={{ width: '210px' }}
-              placeholder="store, cluster, festival, date"
-              value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <button className="btn" onClick={download} disabled={!filtered.length}>
             Download CSV (filtered)
@@ -296,7 +312,7 @@ export default function DateShiftPreviewPanel() {
           <table>
             <thead>
               <tr>
-                {COLUMNS.map(col => (
+                {COLUMNS.filter(col => ctxCols || !col.ctx).map(col => (
                   <th key={col.key} title={col.title}
                     className={'ds-th' + (sortKey === col.key ? (sortDir === 1 ? ' sorted-asc' : ' sorted-desc') : '')}
                     onClick={() => sortBy(col.key)}>{col.label}</th>
@@ -309,11 +325,11 @@ export default function DateShiftPreviewPanel() {
                   <td style={{ fontWeight: 600 }}>{r.store}</td>
                   <td>{r.cluster}</td>
                   <td className="date-mono">{r.refDisp}</td>
-                  <td>{r.refDay}</td>
+                  {ctxCols && <td>{r.refDay}</td>}
                   <td>{r.festival || <span className="cross">-</span>}</td>
                   <td><span className={`badge ${CAT_BADGE[r.category] || 'b-non'}`}>{r.category}</span></td>
                   <td className="date-mono">{r.futDisp}</td>
-                  <td>{r.futDay}</td>
+                  {ctxCols && <td>{r.futDay}</td>}
                   <td style={{ textAlign: 'right', color: Math.abs(r.shift) > 30 ? 'var(--warn)' : 'var(--muted)' }}>
                     {r.shift > 0 ? '+' : ''}{r.shift}
                   </td>

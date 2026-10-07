@@ -50,6 +50,8 @@ export default function App() {
         <div className="app-engine">
           <span>Engine</span>
           <select
+            className="ce-engine-compact"
+            title="V1 - LY Same Month · V2 - Adjacent Month (+/-1)"
             value={engineVersion}
             onChange={e => handleVersionChange(Number(e.target.value))}
             aria-label="Calendar engine version"

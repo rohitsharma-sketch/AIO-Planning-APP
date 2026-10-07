@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { getFestivalChangelog } from '../../lib/api'
 
 // Read-only viewer. The old app auto-recorded a changelog entry (with pre/core/post
@@ -7,18 +7,23 @@ import { getFestivalChangelog } from '../../lib/api'
 // (see sub-project A's Open Risks), so extending it to capture day-count overrides
 // is deferred until that schema gap is closed. This task therefore only reads
 // existing entries - it does not write a new entry when a festival is edited here.
-export default function ChangeLogViewer({ rangeKey }) {
+//
+// Opened from the Festival tools menu ("Change Log", 2026-10-07 declutter) and
+// shown in place under it; stays mounted, loads each time it is opened.
+export default function ChangeLogViewer({ rangeKey, open, onClose }) {
   const [entries, setEntries] = useState([])
-  const [open, setOpen] = useState(false)
   const [error, setError] = useState(null)
 
-  function load() {
-    getFestivalChangelog(rangeKey).then(setEntries).catch(e => setError(e.message))
-  }
+  useEffect(() => {
+    if (open) { setError(null); getFestivalChangelog(rangeKey).then(setEntries).catch(e => setError(e.message)) }
+  }, [open, rangeKey])
 
   return (
-    <div className="card">
-      <h4 onClick={() => { setOpen(!open); if (!open) load() }} style={{ cursor: 'pointer' }}>Change Log</h4>
+    <div className="card" style={{ display: open ? 'block' : 'none', margin: '0 14px 10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h4 style={{ margin: 0 }}>Change Log</h4>
+        <button onClick={onClose}>Close</button>
+      </div>
       {open && (
         <>
           <p style={{ color: 'var(--muted)', fontSize: '12px' }}>

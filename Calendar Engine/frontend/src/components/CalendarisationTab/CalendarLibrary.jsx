@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Menu } from '../ui'
 import { listCalendarLibrary, getCalendar, saveCalendar, deleteCalendar, renameCalendar, getAppState } from '../../lib/api'
 import { generateMappings } from '../../lib/engine'
 import { coreFestivalNamesFor, laganDaysFor, loadFestivalReference } from '../../lib/festivalData'
@@ -262,6 +263,17 @@ export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSaveP
             const chk = integrity[c.id]
             const engineLabel = (c.engine || '').includes('v2') ? 'V2' : (c.engine || '').includes('v1') ? 'V1' : null
             const hasIntegrityIssue = chk && (chk.missingDays > 0 || chk.futCollisions > 0)
+            // 2026-10-07 declutter: the integrity badges collapse into one dot + tooltip.
+            const dotTitle = chk && [
+              hasIntegrityIssue
+                ? (chk.missingDays > 0 ? `${chk.missingDays} day(s) unmapped` : `${chk.futCollisions} future-date collision(s)`)
+                : '365 coverage OK',
+              chk.dupRefDates > 0 && `${chk.dupRefDates} reused ref-date${chk.dupRefDates === 1 ? '' : 's'} (expected when a month's future days outnumber its spare reference days - not necessarily a bug)`,
+              chk.isV2 && (chk.isStale
+                ? 'Out of sync with current V2 (regenerating its stored festival config with today\'s engine gives a different day-map)'
+                : 'In sync with current V2'),
+            ].filter(Boolean).join('\n')
+            const dotClass = hasIntegrityIssue ? 'bad' : chk?.isV2 && chk.isStale ? 'stale' : 'ok'
             return (
               <div
                 key={c.id}
@@ -284,41 +296,23 @@ export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSaveP
                           are immutable, rather than driven by a (non-existent) `locked` field. */}
                       <span className="lib-locked-badge">Locked</span>
                       {engineLabel && <span className="lib-locked-badge lib-engine-badge">{engineLabel}</span>}
+                      {/* Integrity + V1/V2 staleness check (checkIntegrity, top of this file);
+                          no dot while its own getCalendar(id) is still in flight. */}
+                      {chk && <span className={`ce-dot ${dotClass}`} title={dotTitle} role="img" aria-label={dotTitle} />}
                     </div>
                     <div className="lib-pair">{c.refYear} -&gt; {c.futYear}</div>
                   </div>
+                  {isPlanner && (
+                    // Enter/Space/clicks here must not also trigger the card's own load.
+                    <span style={{ marginLeft: 'auto' }} onClick={e => e.stopPropagation()}
+                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation() }}>
+                      <Menu label="⋯" className="ce-menu-right" title={`Actions for "${c.name}"`}>
+                        <button onClick={e => { e.stopPropagation(); handleRename(c) }}>Rename</button>
+                        <button className="danger" onClick={e => { e.stopPropagation(); handleDelete(c.id) }}>Delete</button>
+                      </Menu>
+                    </span>
+                  )}
                 </div>
-
-                {/* Automatic data-integrity + V1/V2 staleness check (checkIntegrity,
-                    top of this file) - no manual DB query needed to answer "is this
-                    locked snapshot still trustworthy". Skipped silently while its
-                    own getCalendar(id) is still in flight rather than showing a
-                    "Checking..." placeholder on every card on every page load. */}
-                {chk && (
-                  <div className="lib-integrity">
-                    {hasIntegrityIssue ? (
-                      <span className="lib-badge lib-badge-error">
-                        {chk.missingDays > 0 ? `${chk.missingDays} day(s) unmapped` : `${chk.futCollisions} future-date collision(s)`}
-                      </span>
-                    ) : (
-                      <span className="lib-badge lib-badge-ok">365 coverage OK</span>
-                    )}
-                    {chk.dupRefDates > 0 && (
-                      <span className="lib-badge lib-badge-muted" title="Reused reference dates - expected when a month's future days outnumber its spare reference days (see sharedRef in CALENDAR_ENGINE_LOGIC.md), not necessarily a bug.">
-                        {chk.dupRefDates} reused ref-date{chk.dupRefDates === 1 ? '' : 's'}
-                      </span>
-                    )}
-                    {chk.isV2 && (
-                      chk.isStale ? (
-                        <span className="lib-badge lib-badge-stale" title="Regenerating this calendar's stored festival config with today's engine.js produces a different day-map - the V2 algorithm has changed since this was locked.">
-                          Out of sync with current V2
-                        </span>
-                      ) : (
-                        <span className="lib-badge lib-badge-synced">In sync with current V2</span>
-                      )
-                    )}
-                  </div>
-                )}
 
                 {/* Chip count is days mapped for that cluster (mappingSummary.totalDays,
                     the only per-cluster number the list endpoint returns). The old app's
@@ -336,8 +330,9 @@ export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSaveP
                   Saved {fmtSavedAt(c.savedAt)} • {chips.length} cluster{chips.length === 1 ? '' : 's'}
                 </div>
 
+                {/* Card click / Enter loads it ("Load & Preview" button removed as a duplicate). */}
+                {isPlanner && chk?.isStale && (
                 <div className="lib-actions">
-                  <button className="btn" onClick={e => { e.stopPropagation(); handleLoad(c.id) }}>Load &amp; Preview</button>
                   {isPlanner && chk?.isStale && (
                     <button
                       className="btn lib-sync-btn"
@@ -347,13 +342,8 @@ export default function CalendarLibrary({ onLoad, onSaved, isPlanner, buildSaveP
                       {syncingId === c.id ? 'Syncing…' : 'Sync Now'}
                     </button>
                   )}
-                  {isPlanner && (
-                    <button className="btn" onClick={e => { e.stopPropagation(); handleRename(c) }}>Rename</button>
-                  )}
-                  {isPlanner && (
-                    <button className="lib-del-btn" onClick={e => { e.stopPropagation(); handleDelete(c.id) }}>Delete</button>
-                  )}
                 </div>
+                )}
               </div>
             )
           })}

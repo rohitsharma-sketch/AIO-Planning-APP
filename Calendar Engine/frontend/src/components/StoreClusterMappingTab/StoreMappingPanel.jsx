@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Menu } from '../ui'
 import {
   getStoreClusterMap, putStoreClusterMap, getStoreClusterLog,
   importStoreCluster, getClusterProfiles,
@@ -229,16 +230,26 @@ export default function StoreMappingPanel({ isPlanner }) {
                   onChange={(e) => { const f = e.target.files[0]; e.target.value = ''; handleFile(f) }} />
               </label>
             )}
-            <button onClick={downloadTemplate}>Download Current Template (CSV)</button>
-            <button onClick={toggleLog}>{showLog ? 'Hide Change Log' : 'Change Log'}</button>
-            <button onClick={downloadLog}>Download Change Log (CSV)</button>
+            {/* 2026-10-07 declutter: secondary actions in one "Data" menu. */}
+            <Menu label="Data" className="ce-menu-right">
+              <button onClick={downloadTemplate}>Download Current Template (CSV)</button>
+              <button onClick={toggleLog}>{showLog ? 'Hide Change Log' : 'Change Log'}</button>
+              <button onClick={downloadLog}>Download Change Log (CSV)</button>
+            </Menu>
+            <span className="ce-info" tabIndex={0} aria-label="How to edit the mapping"
+              title="Edit a single store with the Calendar Cluster dropdown in the table below - it saves immediately and is recorded in the change log. For a bulk change, import a template (columns: Store Name, CALENDAR CLUSTER) and review the differences before it replaces the mapping.">ⓘ</span>
           </span>
         </div>
-        <p style={{ color: 'var(--muted)', fontSize: '12px', margin: 0 }}>
-          Edit a single store with the Calendar Cluster dropdown in the table below - it saves immediately and is
-          recorded in the change log. For a bulk change, import a template (columns: <strong>Store Name</strong>,{' '}
-          <strong>CALENDAR CLUSTER</strong>) and review the differences before it replaces the mapping.
-        </p>
+        {/* Stores per calendar cluster - one compact strip (was a grid of tiles). */}
+        <div className="ce-strip" title="Stores per calendar cluster">
+          {clusterNames.map((c) => (
+            <span key={c}>{c} <strong>{counts[c] || 0}</strong></span>
+          ))}
+          {unassigned > 0 && (
+            <span className="miss" title="Stores whose cluster does not match any calendar cluster">Unassigned <strong>{unassigned}</strong></span>
+          )}
+          {!clusterNames.length && <span>No clusters defined in the calendar engine.</span>}
+        </div>
         {status && (
           <p style={{ color: status.ok ? 'var(--green)' : 'var(--red)', fontSize: '12px', margin: '8px 0 0' }}>
             {status.msg}
@@ -274,26 +285,6 @@ export default function StoreMappingPanel({ isPlanner }) {
         </div>
       )}
 
-      <div className="card">
-        <h4 style={{ marginTop: 0 }}>Stores per calendar cluster</h4>
-        <div className="scm-cluster-grid">
-          {clusterNames.map((c) => (
-            <div className="scm-cl" key={c}>
-              <div className="scm-cl-name" title={c}>{c}</div>
-              <div className="scm-cl-count">{counts[c] || 0}</div>
-            </div>
-          ))}
-          {unassigned > 0 && (
-            <div className="scm-cl scm-cl-miss">
-              <div className="scm-cl-name" title="Stores whose cluster does not match any calendar cluster">Unassigned</div>
-              <div className="scm-cl-count">{unassigned}</div>
-            </div>
-          )}
-          {!clusterNames.length && (
-            <div style={{ color: 'var(--muted)', fontSize: '12px' }}>No clusters defined in the calendar engine.</div>
-          )}
-        </div>
-      </div>
 
       <div className="card">
         <div className="scm-toolbar">

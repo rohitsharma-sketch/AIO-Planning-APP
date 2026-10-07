@@ -148,19 +148,18 @@ export default function VersionSettingTab({ isPlanner, onNavigate }) {
           </div>
         </div>
         <div style={{ marginTop: '12px' }}>
-          <button className="btn" onClick={createCalendar} disabled={!isPlanner || busy}>
+          <button className="btn" onClick={createCalendar} disabled={!isPlanner || busy}
+            title="Re-syncs every cluster's festival dates to the years above using the multi-year festival date table, then opens the Calendarisation tab.">
             {busy ? 'Updating dates...' : 'Create Calendar'}
           </button>
-          <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '6px' }}>
-            Re-syncs every cluster's festival dates to the years above using the multi-year
-            festival date table, then opens the Calendarisation tab.
-          </div>
         </div>
       </div>
 
       <FestivalDatesCard refYear={refYear} futYear={futYear} />
 
-      <div className="card">
+      {/* 2026-10-07 declutter: legend + priority order folded into one collapsed section. */}
+      <details className="card ce-how">
+        <summary>How mapping works</summary>
         <div className="card-label">Festive Category Legend</div>
         <div className="legend">
           {CATEGORY_LEGEND.map(([bg, border, name, desc]) => (
@@ -170,10 +169,8 @@ export default function VersionSettingTab({ isPlanner, onNavigate }) {
             </div>
           ))}
         </div>
-      </div>
 
-      <div className="card">
-        <div className="card-label">Mapping Priority Order</div>
+        <div className="card-label" style={{ marginTop: '16px' }}>Mapping Priority Order</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', fontSize: '11px', color: 'var(--muted)' }}>
           {[1, 2].map(v => (
             <div key={v} style={{ flex: '1 1 320px' }}>
@@ -191,7 +188,7 @@ export default function VersionSettingTab({ isPlanner, onNavigate }) {
             </div>
           ))}
         </div>
-      </div>
+      </details>
 
       {status && <p style={{ color: status.ok ? 'var(--green)' : 'var(--red)' }}>{status.msg}</p>}
     </div>

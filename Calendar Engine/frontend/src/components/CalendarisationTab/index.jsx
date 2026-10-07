@@ -8,6 +8,7 @@ import FestivalImportPanel from './FestivalImportPanel'
 import OutputSection from './OutputSection'
 import CalendarLibrary from './CalendarLibrary'
 import ChangeLogViewer from './ChangeLogViewer'
+import { Menu } from '../ui'
 import { DEFAULT_FESTIVALS, applyYearToProfiles, yearSyncMessage, resolveFestivalDefaults, coreFestivalNamesFor, loadFestivalReference, laganDaysFor } from '../../lib/festivalData'
 
 let _nextFestivalId = 1000
@@ -107,6 +108,8 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
   // cluster it actually found a match in before anything is removed, so a
   // typo just reports "not found" rather than silently doing nothing useful.
   const [redactName, setRedactName] = useState('')
+  const [changeLogOpen, setChangeLogOpen] = useState(false)
+  const importRef = useRef(null)
 
   // Engine run state. refYear/futYear/maxShift/moPri come from Task 4's
   // /app-state endpoint (owned/edited by VersionSettingTab) - read once on
@@ -847,7 +850,7 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
       }
       const lines = changes.map(c => `${c.scope} / ${c.cluster}: ${c.festival} ${c.field === 'ref_date' ? 'ref' : 'fut'} ${c.old} -> ${c.new}`)
       setStatus({ ok: true, msg: `Festival dates synced from Google (${reference_rows} reference dates) · ${changes.length} date${changes.length === 1 ? '' : 's'} changed`
-        + (editingTemplate ? ' - Load & Preview the template again to see its new dates' : '') })
+        + (editingTemplate ? ' - click the template in the Calendar Library again to see its new dates' : '') })
       setDateSyncChanges(lines)
     } catch (e) {
       setStatus({ ok: false, msg: `Festival date sync failed: ${e.message}` })
@@ -880,46 +883,55 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
               <ClusterTabs profiles={profiles} activeIdx={activeIdx} onSwitch={setActiveIdx}
                 onReorder={handleReorder} onAdd={handleAdd} onRename={handleRename}
                 onRegionChange={handleRegionChange} onCopyFrom={handleCopyFrom} isPlanner={isPlanner} />
-              {/* Redact a festival by name from EVERY cluster in one action -
-                  the manual alternative is switching to each of up to 10
-                  cluster tabs and deleting that row individually. Cross-cluster
-                  (not scoped to activeIdx), so it lives here rather than inside
-                  FestivalTable, which only ever edits the active cluster. */}
-              {/* Both cross-cluster actions (redact-by-name and push-to-all-templates)
-                  in one toolbar row so every button here sits in one place instead of
-                  wrapping onto its own line. */}
-              {isPlanner && (
-                <div className="scm-toolbar" style={{ margin: '10px 0', flexWrap: 'wrap' }}>
-                  <div className="field">
-                    <label htmlFor="fest-redact-name">Remove festival from all clusters</label>
-                    <input id="fest-redact-name" type="text" style={{ width: '220px' }}
-                      placeholder="Exact festival name" value={redactName}
-                      onChange={e => setRedactName(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') handleRedactFestival() }} />
-                  </div>
-                  <button className="btn" onClick={handleRedactFestival} disabled={!redactName.trim()}>
-                    Remove from All Clusters
+              {/* 2026-10-07 declutter: every cross-cluster / bulk action sits in
+                  one "Festival tools" menu (same handlers, confirms and labels).
+                  FestivalImportPanel stays mounted here, outside the menu, so its
+                  status and review panel show while the menu is closed. */}
+              <div className="scm-toolbar" style={{ margin: '10px 14px', flexWrap: 'wrap' }}>
+                <Menu label="Festival tools">
+                  {isPlanner && <>
+                  <button onClick={() => importRef.current?.pickFile()}>Import Festivals</button>
+                  <button onClick={() => importRef.current?.downloadTemplate()} title="Download every cluster's current festivals as one long-form CSV - edit rows or add new ones for other clusters, then re-upload with Import Festivals">
+                    Download Festival Template (CSV)
                   </button>
+                  <div className="ce-menu-sep" />
                   {/* Push the CURRENT full festival structure out to every other
                       saved template, each re-dated for its own reference/future
                       year - see handleSyncStructureToAllTemplates for exactly
                       what this does and doesn't touch (festival lists only,
                       never a target's locked day-map). */}
-                  <button className="btn" onClick={handleSyncStructureToAllTemplates} disabled={syncingStructure}
+                  <button onClick={handleSyncStructureToAllTemplates} disabled={syncingStructure}
                     title="Replace every other saved template's festival list per cluster with the current structure, dates resolved for each template's own year">
                     {syncingStructure ? 'Syncing...' : 'Sync Festival Structure to All Templates'}
                   </button>
-                  <button className="btn" onClick={handleSyncFestivalDates} disabled={syncingDates}
+                  <button onClick={handleSyncFestivalDates} disabled={syncingDates}
                     title="Refresh festival dates from Google's Holidays in India calendar, then re-date the Festival Master and every locked calendar's festival list for its own years (dates only)">
                     {syncingDates ? 'Syncing...' : 'Sync festival dates (Google)'}
                   </button>
-                  {/* Bulk festival-to-cluster import, modeled on Store-Cluster
-                      Mapping's own upload+diff-preview flow - see
-                      FestivalImportPanel for why this is an upsert per
-                      (festival, cluster) row, never a full replace. */}
-                  <FestivalImportPanel profiles={profiles} onApply={handleImportFestivals} isPlanner={isPlanner} />
-                </div>
-              )}
+                  <div className="ce-menu-sep" />
+                  <div className="ce-menu-section">
+                    <label htmlFor="fest-redact-name">Remove festival from all clusters</label>
+                    <input id="fest-redact-name" type="text"
+                      placeholder="Exact festival name" value={redactName}
+                      onChange={e => setRedactName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleRedactFestival() }} />
+                    <button className="danger" onClick={handleRedactFestival} disabled={!redactName.trim()}>
+                      Remove from All Clusters
+                    </button>
+                  </div>
+                  <div className="ce-menu-sep" />
+                  </>}
+                  {/* Was an always-visible card in the right-hand aside. */}
+                  <button onClick={() => setChangeLogOpen(o => !o)}>{changeLogOpen ? 'Hide Change Log' : 'Change Log'}</button>
+                </Menu>
+                {/* Bulk festival-to-cluster import, modeled on Store-Cluster
+                    Mapping's own upload+diff-preview flow - see
+                    FestivalImportPanel for why this is an upsert per
+                    (festival, cluster) row, never a full replace. */}
+                <FestivalImportPanel ref={importRef} profiles={profiles} onApply={handleImportFestivals} isPlanner={isPlanner} />
+              </div>
+              <ChangeLogViewer open={changeLogOpen} onClose={() => setChangeLogOpen(false)}
+                rangeKey={refYear && futYear ? `${refYear}-${futYear}` : null} />
               {dateSyncChanges && (
                 <details open style={{ margin: '0 0 10px', fontSize: '12px' }}>
                   <summary>
@@ -965,7 +977,6 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
         <CalendarLibrary onLoad={handleLoadFromLibrary}
           onSaved={(id, name) => { setPreviewCalendarId(id); setPreviewCalendarName(name) }}
           isPlanner={isPlanner} buildSavePayload={buildSavePayload} />
-        <ChangeLogViewer rangeKey={refYear && futYear ? `${refYear}-${futYear}` : null} />
       </aside>
     </div>
   )

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, forwardRef, useImperativeHandle } from 'react'
 import { importFestivals } from '../../lib/api'
 
 // Bulk festival-to-cluster import, modeled on StoreClusterMappingTab's own
@@ -47,9 +47,14 @@ function computeDiff(profiles, rows, clusterNames) {
   return { added, updated, unchanged, invalid }
 }
 
-export default function FestivalImportPanel({ profiles, onApply, isPlanner, busy }) {
+// The triggers (Import Festivals / Download Festival Template) live in the
+// Festival tools menu (index.jsx) and call in through this ref; the file input,
+// status and review panel stay here, outside the menu, so they show while it is closed.
+const FestivalImportPanel = forwardRef(function FestivalImportPanel({ profiles, onApply, isPlanner, busy }, ref) {
   const [preview, setPreview] = useState(null)
   const [status, setStatus] = useState(null)
+  const fileRef = useRef(null)
+  useImperativeHandle(ref, () => ({ pickFile: () => fileRef.current?.click(), downloadTemplate }))
 
   const clusterNames = profiles.map(p => p.name)
 
@@ -121,15 +126,9 @@ export default function FestivalImportPanel({ profiles, onApply, isPlanner, busy
   return (
     <>
       {isPlanner && (
-        <label className="btn" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}>
-          Import Festivals
-          <input type="file" accept=".xlsx,.xlsm,.csv,.txt,.tsv" style={{ display: 'none' }}
-            onChange={e => { const f = e.target.files[0]; e.target.value = ''; handleFile(f) }} />
-        </label>
+        <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.csv,.txt,.tsv" style={{ display: 'none' }}
+          onChange={e => { const f = e.target.files[0]; e.target.value = ''; handleFile(f) }} />
       )}
-      <button onClick={downloadTemplate} title="Download every cluster's current festivals as one long-form CSV - edit rows or add new ones for other clusters, then re-upload with Import Festivals">
-        Download Festival Template (CSV)
-      </button>
       {status && (
         <span style={{ color: status.ok ? 'var(--green)' : 'var(--red)', fontSize: '12px' }}>{status.msg}</span>
       )}
@@ -177,4 +176,6 @@ export default function FestivalImportPanel({ profiles, onApply, isPlanner, busy
       )}
     </>
   )
-}
+})
+
+export default FestivalImportPanel

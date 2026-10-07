@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, Fragment } from 'react'
 import { explainMove } from '../../lib/moveReasons'
 import * as XLSX from 'xlsx'
 import { getStoreClusterMap } from '../../lib/api'
+import { Menu } from '../ui'
 
 // Ported from the old app's reindex output tabs (calendar_engine.html
 // rxWideRows() ~3973-3989, rxRenderTabs() ~3990-4051, rxDownload() ~4059-4083):
@@ -662,10 +663,24 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
             all, so its P1/P2 here is an even half-and-half of the month total
             (isEven, see p1p2Rows) - shown either way for a consistent shape
             across sources, but clearly labeled below when it's the even case. */}
-        {isMwMatrix && <button className={activeSub === 'mwmatrix' ? 'active' : ''} onClick={() => setActiveSub('mwmatrix')}>Month Wise Matrix</button>}
-        {ok && result.actualRows && result.source === 'dw' && !result.isSnapshot && result.columns?.[0]?.length >= 10 && <button className={activeSub === 'daycomp' ? 'active' : ''} onClick={() => setActiveSub('daycomp')}>DW Comparison</button>}
-        {ok && result.actualRows && <button className={activeSub === 'p1p2' ? 'active' : ''} onClick={() => setActiveSub('p1p2')}>P1 / P2 Comparison</button>}
-        <button className={activeSub === 'raw' ? 'active' : ''} onClick={() => setActiveSub('raw')}>Run Details</button>
+        {/* 2026-10-07 declutter: the less-used views sit in "More views"; the
+            picked one still renders in the same area below and names the trigger. */}
+        {(() => {
+          const more = [
+            isMwMatrix && ['mwmatrix', 'Month Wise Matrix'],
+            ok && result.actualRows && result.source === 'dw' && !result.isSnapshot && result.columns?.[0]?.length >= 10 && ['daycomp', 'DW Comparison'],
+            ok && result.actualRows && ['p1p2', 'P1 / P2 Comparison'],
+            ['raw', 'Run Details'],
+          ].filter(Boolean)
+          const cur = more.find(([id]) => id === activeSub)
+          return (
+            <Menu label={cur ? cur[1] : 'More views'} className={cur ? 'active' : ''}>
+              {more.map(([id, label]) => (
+                <button key={id} className={activeSub === id ? 'active' : ''} onClick={() => setActiveSub(id)}>{label}</button>
+              ))}
+            </Menu>
+          )
+        })()}
       </div>
 
       {/* Month filter - shared across every tab below (Reindexed/Summary/
@@ -673,8 +688,12 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
           the CSV export on whichever tab is open, instead of each tab having
           its own separate month picker. */}
       {activeSub !== 'raw' && monthCols.length > 0 && (
-        <div className="rx-section" style={{ borderTop: 'none', marginTop: '4px', paddingTop: 0 }}>
-          <div className="rx-label">
+        <div style={{ marginBottom: '10px' }}>
+          <Menu keepOpen title="Months shown in every tab and its CSV export"
+            label={`Months: ${activeMonths.size === monthCols.length ? 'All' : activeMonths.size === 0 ? 'None'
+              : visibleMonthCols.length <= 3 ? visibleMonthCols.map(m => `${MONTH_ABBR[+m.slice(5, 7) - 1]} ${m.slice(2, 4)}`).join(', ')
+              : `${activeMonths.size} of ${monthCols.length}`}`}>
+          <div className="rx-label" style={{ padding: '2px 6px' }}>
             Months
             <button className="rx-link" onClick={() => setSelectedMonths(new Set(monthCols))}>All</button>
             <button className="rx-link" onClick={() => setSelectedMonths(new Set())}>None</button>
@@ -690,6 +709,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
               ))}
             </div>
           ))}
+          </Menu>
         </div>
       )}
 

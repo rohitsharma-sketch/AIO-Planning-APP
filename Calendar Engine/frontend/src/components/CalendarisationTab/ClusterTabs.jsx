@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Menu } from '../ui'
 
 // The old app's cluster Region dropdown, ported verbatim (all 11 options, same
 // values and labels) from calendar_engine.html lines 775-787. The value is
@@ -92,59 +93,59 @@ export default function ClusterTabs({ profiles, activeIdx, onSwitch, onReorder, 
         {isPlanner && (
           <button type="button" className="cluster-add-btn" onClick={onAdd} title="Add new cluster">+</button>
         )}
-      </div>
+        {/* Rename / Region / Copy-from - ported from calendar_engine.html
+            lines 770-795, collapsed into one menu (2026-10-07 declutter).
+            Planner-only: these all write through persist(). */}
+        {isPlanner && (
+          <Menu label="Cluster settings" keepOpen title={`Rename, region and copy-from for "${active?.name ?? ''}"`}>
+            <div className="ce-menu-section">
+              <label htmlFor="clusterNameInput">Rename:</label>
+              <input
+                id="clusterNameInput"
+                type="text"
+                placeholder="Cluster name"
+                title="Rename the active cluster (saved when you leave the box or press Enter)"
+                value={nameDraft}
+                onChange={e => setNameDraft(e.target.value)}
+                onBlur={commitName}
+                onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setNameDraft(active?.name ?? '') }}
+              />
+            </div>
 
-      {/* Rename / Region / Copy-from rows - ported from calendar_engine.html
-          lines 770-795. Planner-only: these all write through persist(). */}
-      {isPlanner && (
-        <>
-          <div className="cluster-rename-row">
-            <label htmlFor="clusterNameInput">Rename:</label>
-            <input
-              id="clusterNameInput"
-              type="text"
-              placeholder="Cluster name"
-              title="Rename the active cluster (saved when you leave the box or press Enter)"
-              value={nameDraft}
-              onChange={e => setNameDraft(e.target.value)}
-              onBlur={commitName}
-              onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setNameDraft(active?.name ?? '') }}
-            />
-          </div>
-
-          <div className="cluster-rename-row">
-            <label htmlFor="clusterRegionSelect">Region:</label>
-            <select
-              id="clusterRegionSelect"
-              value={active?.region || 'all'}
-              onChange={e => onRegionChange(e.target.value)}
-            >
-              {REGIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-          </div>
-
-          {profiles.length > 1 && (
-            <div className="cluster-rename-row">
-              <label htmlFor="copyFromSelect">Copy from:</label>
-              {/* Always rendered with value="" - picking an option fires the copy
-                  and the select snaps straight back to the placeholder, exactly
-                  as renderCopyFromDropdown()/copyFromCluster() did by assigning
-                  sel.value = '' (calendar_engine.html lines 2098-2121). */}
+            <div className="ce-menu-section">
+              <label htmlFor="clusterRegionSelect">Region:</label>
               <select
-                id="copyFromSelect"
-                value=""
-                title="Replace this cluster's festival list with another cluster's"
-                onChange={e => { if (e.target.value !== '') onCopyFrom(Number(e.target.value)) }}
+                id="clusterRegionSelect"
+                value={active?.region || 'all'}
+                onChange={e => onRegionChange(e.target.value)}
               >
-                <option value="">- copy festivals from... -</option>
-                {profiles.map((cp, i) => i === activeIdx ? null : (
-                  <option key={i} value={i}>{cp.name}</option>
-                ))}
+                {REGIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
             </div>
-          )}
-        </>
-      )}
+
+            {profiles.length > 1 && (
+              <div className="ce-menu-section">
+                <label htmlFor="copyFromSelect">Copy from:</label>
+                {/* Always rendered with value="" - picking an option fires the copy
+                    and the select snaps straight back to the placeholder, exactly
+                    as renderCopyFromDropdown()/copyFromCluster() did by assigning
+                    sel.value = '' (calendar_engine.html lines 2098-2121). */}
+                <select
+                  id="copyFromSelect"
+                  value=""
+                  title="Replace this cluster's festival list with another cluster's"
+                  onChange={e => { if (e.target.value !== '') onCopyFrom(Number(e.target.value)) }}
+                >
+                  <option value="">- copy festivals from... -</option>
+                  {profiles.map((cp, i) => i === activeIdx ? null : (
+                    <option key={i} value={i}>{cp.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </Menu>
+        )}
+      </div>
     </>
   )
 }

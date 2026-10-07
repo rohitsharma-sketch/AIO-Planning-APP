@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### Calendar Engine: decluttered (suite declutter 6 of 7)
+- **Asked (user):** suite declutter.
+- **Moved:** Festival Master toolbar (Import, Download template, Sync dates (Google), Sync structure to all templates [confirm kept], Remove from all clusters + its input [confirm kept]) -> "Festival tools ▾", which also opens the Change Log (was an always-on side card). Cluster rename / region / copy-from [confirm kept] -> "Cluster settings ▾". Calendarised Sales: Month Wise Matrix, DW Comparison, P1/P2 Comparison, Run Details -> "More views ▾" (Monthly Summary stays a tab); month chips -> "Months: … ▾". Store Mapping: Download template, Change Log, Download change log -> "Data ▾", help -> ⓘ, cluster counts in one strip. Library cards: duplicate "Load & Preview" removed (card click / Enter loads), Rename [prompt kept] / Delete [confirm kept] -> "⋯", badges -> one status dot.
+- **Quieter:** Day-by-Day 6 tiles -> one line (validation errors as a red count on its tab); 4 of 6 filters behind "Filters" with removable chips; 17 -> 8 default columns + "+ Context columns" (`cal.dayMap.contextCols`); Date Shift filters / Ref Day / Fut Day likewise (`cal.dateShift.contextCols`); Version Setting legend + priority order in one "How mapping works"; compact engine select. Shared `ui.jsx` (Menu on native details - always in the DOM, Esc returns focus; useStoredFlag).
+- Found in the live check: the festival-name input inside the menu lost its styling (it used to sit in `.field`; the global input rule skips type=text) - menu text inputs now styled.
+- **Checks:** engine.test passes; build OK; built page renders with no errors; "Festival Master", the Calendarised Sales tab, Monthly Summary and the Day-wise / Month-wise select still visible (e2e); menus open / close.
+
 ### Landing: decluttered (suite declutter 5 of 7)
 - **Asked (user):** suite declutter.
 - **Top bar:** brand + status + one "Account ▾" menu holding Theme (theme-btn), Users (admin only, admin-link), Servers start / stop all (launch-all-btn, rights greying kept) and Sign out (signout-btn / signout-label). Items stay in the page (rights script and e2e unaffected).

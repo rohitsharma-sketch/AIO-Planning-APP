@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useStoredFlag } from '../ui'
 
 // NOTE: `validationIssues` are the actual objects returned by `lib/engine.js`'s
 // `validate()` - `{ type: 'error'|'warn'|'info', icon, title, desc }` - not
@@ -90,6 +91,10 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
   const [fMapType, setFMapType] = useState('')
   const [fFest, setFFest] = useState('')
   const [fMoMatch, setFMoMatch] = useState('')   // '' | 'yes' | 'no'
+  // 2026-10-07 declutter: Category / Mapping Type / Festival / Month Match sit
+  // behind a "Filters" toggle; the 9 context columns behind "+ Context columns".
+  const [moreFilters, setMoreFilters] = useState(false)
+  const [ctxCols, setCtxCols] = useStoredFlag('cal.dayMap.contextCols')
 
   // A new allDayMap means a different data set - a regenerated calendar or a
   // snapshot loaded from the library (NOT a ClusterTabs switch - allDayMap is
@@ -174,6 +179,15 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
   }, [clusterScopedDayMap, fMonth, fCat, fMapType, fFest, fMoMatch])
 
   const anyFilterActive = !!fCluster || fMonth !== '' || !!fCat || !!fMapType || !!fFest || !!fMoMatch
+  const hiddenActive = [fCat, fMapType, fFest, fMoMatch].filter(Boolean).length
+  const activeChips = [
+    fCluster && [`Cluster: ${fCluster}`, () => setFCluster('')],
+    fMonth !== '' && [`Month: ${MONTHS[+fMonth]}`, () => setFMonth('')],
+    fCat && [`Category: ${fCat}`, () => setFCat('')],
+    fMapType && [`Mapping: ${fMapType}`, () => setFMapType('')],
+    fFest && [`Festival: ${fFest}`, () => setFFest('')],
+    fMoMatch && [`Month match: ${fMoMatch === 'yes' ? 'Same month' : 'Cross-month'}`, () => setFMoMatch('')],
+  ].filter(Boolean)
 
   // Exports exactly what's currently on screen (every active filter, cluster
   // included) - "download the calendar to understand the gist" reads as "give
@@ -231,19 +245,17 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
       <div className="tabs">
         <button className={activeSub === 'day' ? 'active' : ''} onClick={() => setActiveSub('day')}>Day-by-Day Mapping</button>
         <button className={activeSub === 'monthly' ? 'active' : ''} onClick={() => setActiveSub('monthly')}>Monthly Summary</button>
-        <button className={activeSub === 'validation' ? 'active' : ''} onClick={() => setActiveSub('validation')}>Validation</button>
+        <button className={activeSub === 'validation' ? 'active' : ''} onClick={() => setActiveSub('validation')}>
+          Validation{stats?.errors > 0 && <span className="ce-count-bad" title={`${stats.errors} validation error${stats.errors === 1 ? '' : 's'}`}>{stats.errors}</span>}
+        </button>
       </div>
 
       {activeSub === 'day' && (
         <>
           {stats && (
-            <div className="stats">
-              <div className="stat"><div className="stat-val" style={{ color: 'var(--navy)' }}>{stats.total}</div><div className="stat-lbl">Total Days Mapped</div></div>
-              <div className="stat"><div className="stat-val" style={{ color: 'var(--warn)' }}>{stats.festive}</div><div className="stat-lbl">Festive Days</div></div>
-              <div className="stat"><div className="stat-val" style={{ color: 'var(--char)' }}>{stats.nonFestive}</div><div className="stat-lbl">Non-Festive Days</div></div>
-              <div className="stat"><div className="stat-val" style={{ color: 'var(--green)' }}>{stats.sameMonth}</div><div className="stat-lbl">Same Month Mapped</div></div>
-              <div className="stat"><div className="stat-val" style={{ color: 'var(--green)' }}>{stats.sameWeekday}</div><div className="stat-lbl">Same Weekday Matched</div></div>
-              <div className="stat"><div className="stat-val" style={{ color: stats.errors ? 'var(--red)' : 'var(--green)' }}>{stats.errors}</div><div className="stat-lbl">Validation Errors</div></div>
+            <div className="ce-summary-line">
+              <strong>{stats.total}</strong> days mapped · <strong>{stats.festive}</strong> festive · <strong>{stats.nonFestive}</strong> non-festive
+              · <strong>{stats.sameMonth}</strong> same month · <strong>{stats.sameWeekday}</strong> same weekday
             </div>
           )}
 
@@ -271,6 +283,11 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
                 {monthOptions.map(m => <option key={m} value={m}>{MONTHS[m]}</option>)}
               </select>
             </div>
+            <button className="ce-link-btn" onClick={() => setMoreFilters(o => !o)} aria-expanded={moreFilters}>
+              Filters{hiddenActive ? ` (${hiddenActive})` : ''} {moreFilters ? '▴' : '▾'}
+            </button>
+            {/* Kept in the DOM while hidden - display only. */}
+            <div className="field-row" style={{ display: moreFilters ? 'flex' : 'none', flexBasis: '100%', order: 1 }}>
             <div className="field">
               <label htmlFor="dm-cat">Category</label>
               <select id="dm-cat" value={fCat} onChange={e => setFCat(e.target.value)}>
@@ -300,19 +317,12 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
                 <option value="no">Cross-month</option>
               </select>
             </div>
-            {/* Clear-filters is intentionally unclassed: index.css's bare `button`
-                rule is the ported ghost/secondary look, while .btn is the loud navy
-                primary reserved for "Create Calendar". */}
-            {anyFilterActive && (
-              <button onClick={() => {
-                setFCluster(''); setFMonth(''); setFCat(''); setFMapType(''); setFFest(''); setFMoMatch('')
-              }}>Clear filters</button>
-            )}
+            </div>
             {/* "if the preview pane is open" - this whole block only renders once
                 allDayMap exists (the `if (!allDayMap) return null` guard above),
                 so the button is inherently gated on that already. Exports exactly
                 what's currently filtered/visible, not a separate full-set dump. */}
-            <button className="btn" onClick={downloadCalendar} disabled={!filteredDayMap.length} style={{ marginLeft: anyFilterActive ? '0' : 'auto' }}>
+            <button className="btn" onClick={downloadCalendar} disabled={!filteredDayMap.length} style={{ marginLeft: 'auto' }}>
               Download Calendar
             </button>
           </div>
@@ -323,8 +333,20 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '8px' }}>
             <span style={{ fontSize: '11px', color: 'var(--muted)' }}>
               Showing <strong style={{ color: 'var(--char)' }}>{filteredDayMap.length}</strong> of {clusterScopedDayMap.length} mappings
-              {anyFilterActive && <> · stat tiles above always cover all {clusterScopedDayMap.length} days</>}
+              {anyFilterActive && <> · summary above always covers all {clusterScopedDayMap.length} days</>}
             </span>
+            {/* Active-filter chips (each removable) - replaced "Clear filters". */}
+            {activeChips.length > 0 && (
+              <span className="ce-chips">
+                {activeChips.map(([label, clear]) => (
+                  <span className="ce-chip" key={label}>{label}<button onClick={clear} aria-label={`Remove filter ${label}`} title="Remove filter">×</button></span>
+                ))}
+              </span>
+            )}
+            <button className="ce-link-btn" onClick={() => setCtxCols(!ctxCols)} aria-pressed={ctxCols}
+              title="Ref Day, Ref Wk, Position, Future Day, Future Wk, Fut Festival, Score, Mo, Wd">
+              {ctxCols ? '- Context columns' : '+ Context columns'}
+            </button>
             <div className="legend" style={{ flexDirection: 'row', gap: '12px', marginBottom: 0, marginLeft: 'auto' }}>
               {CATEGORY_LEGEND.map(([bg, border, name]) => (
                 <div className="leg-item" key={name} style={{ gap: '6px', fontSize: '11px' }}>
@@ -339,14 +361,14 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
             <table>
               <thead>
                 <tr>
-                  <th>Cluster</th><th>Ref Date</th><th>Ref Day</th><th>Ref Wk</th><th>Festival</th><th>Category</th>
-                  <th>Position</th><th>-&gt;</th><th>Future Date</th><th>Future Day</th><th>Future Wk</th>
-                  <th>Fut Festival</th><th>Mapping Type</th><th>Score</th><th>Mo</th><th>Wd</th><th>Day Delta</th>
+                  <th>Cluster</th><th>Ref Date</th>{ctxCols && <><th>Ref Day</th><th>Ref Wk</th></>}<th>Festival</th><th>Category</th>
+                  {ctxCols && <th>Position</th>}<th>-&gt;</th><th>Future Date</th>{ctxCols && <><th>Future Day</th><th>Future Wk</th>
+                  <th>Fut Festival</th></>}<th>Mapping Type</th>{ctxCols && <><th>Score</th><th>Mo</th><th>Wd</th></>}<th>Day Delta</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredDayMap.length === 0 && (
-                  <tr><td colSpan={17} style={{ textAlign: 'center', color: 'var(--muted)', padding: '24px 12px' }}>
+                  <tr><td colSpan={ctxCols ? 17 : 8} style={{ textAlign: 'center', color: 'var(--muted)', padding: '24px 12px' }}>
                     {clusterScopedDayMap.length === 0
                       ? 'No mappings to show.'
                       : 'No mappings match the current filters.'}
@@ -356,20 +378,26 @@ export default function OutputSection({ dayMap, allDayMap, validationIssues, mon
                   <tr key={i} className={CAT_ROW[row.category] || ''}>
                     <td style={{ fontWeight: 600 }}>{row.cluster}</td>
                     <td className="date-mono">{row.refDate}</td>
+                    {ctxCols && <>
                     <td>{row.refDay}</td>
                     <td style={{ color: 'var(--muted)' }}>{row.refWeek}</td>
+                    </>}
                     <td>{row.festival || <span style={{ color: 'var(--muted)' }}>-</span>}</td>
                     <td><span className={`badge ${CAT_BADGE[row.category] || 'b-non'}`}>{row.category}</span></td>
-                    <td style={{ color: 'var(--muted)' }}>{row.position}</td>
+                    {ctxCols && <td style={{ color: 'var(--muted)' }}>{row.position}</td>}
                     <td className="arrow-sep">-&gt;</td>
                     <td className="date-mono">{row.futDate}</td>
+                    {ctxCols && <>
                     <td>{row.futDay}</td>
                     <td style={{ color: 'var(--muted)' }}>{row.futWeek}</td>
                     <td style={{ color: 'var(--muted)' }}>{row.futFestival || '-'}</td>
+                    </>}
                     <td><span className="b-map">{row.mappingType}</span></td>
+                    {ctxCols && <>
                     <td style={{ textAlign: 'right', color: 'var(--muted)' }}>{row.score}</td>
                     <td><span className={row.monthDelta === 'Yes' ? 'check' : 'cross'}>{row.monthDelta}</span></td>
                     <td><span className={row.weekdayDelta === 'Yes' ? 'check' : 'cross'}>{row.weekdayDelta}</span></td>
+                    </>}
                     <td style={{ textAlign: 'right', color: Math.abs(row.dayDelta) > 30 ? 'var(--warn)' : 'var(--muted)' }}>
                       {row.dayDelta >= 0 ? '+' : ''}{row.dayDelta}
                     </td>
