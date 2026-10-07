@@ -60,6 +60,13 @@ tr.Division td{font-weight:800}tr.Attribute td{font-weight:600}tr.Grand td{font-
 .up{color:var(--up)}.down{color:var(--down)}
 .chart{width:100%;height:auto;display:block}
 .legend{display:flex;gap:14px;font-size:12.5px;color:var(--muted-foreground)}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+/* declutter 2026-10-07: small ghost button, collapsible chart card */
+.btn.sm{padding:4px 11px;font-size:12px;font-weight:600}
+th.grp[title]{cursor:help}
+details.card>summary{list-style:none;cursor:pointer;padding-bottom:16px}
+details.card>summary::-webkit-details-marker{display:none}
+details.card>summary h2::before{content:'B8';display:inline-block;width:16px;color:var(--muted-foreground)}
+details.card[open]>summary{padding-bottom:0}details.card[open]>summary h2::before{content:'BE'}
 </style>
 </head>
 <body>
@@ -71,9 +78,10 @@ tr.Division td{font-weight:800}tr.Attribute td{font-weight:600}tr.Grand td{font-
 <main class="wrap">
   <section class="card">
     <div class="card-h"><div class="grow"><h2>1 &middot; Final sales plan</h2>
-      <p class="desc">Upload the final plan (Store &times; Department &times; MRP &times; Display Type with &ldquo;&lt;Month&gt; Plan&rdquo; and &ldquo;&lt;Month&gt; Plan Qty&rdquo; columns, e.g. the Re-Aligner&rsquo;s final plan). Last year comes from the data lake&rsquo;s day-wise sales by itself &mdash; the same months a year earlier, P1 = 1st to the middle day (15th; Feb 14th), P2 = the rest.</p></div></div>
+      <p class="desc" id="intro">Upload the final plan (Store &times; Department &times; MRP &times; Display Type with &ldquo;&lt;Month&gt; Plan&rdquo; and &ldquo;&lt;Month&gt; Plan Qty&rdquo; columns, e.g. the Re-Aligner&rsquo;s final plan). Last year comes from the data lake&rsquo;s day-wise sales by itself &mdash; the same months a year earlier, P1 = 1st to the middle day (15th; Feb 14th), P2 = the rest.</p></div>
+      <label class="btn ghost sm" id="replace" hidden tabindex="0" title="Upload a different final sales plan">Replace plan<input type="file" id="file" accept=".xlsx,.xlsb,.xls,.csv" hidden></label></div>
     <div class="card-c">
-      <label class="drop" id="drop"><input type="file" id="file" accept=".xlsx,.xlsb,.xls,.csv" hidden>
+      <label class="drop" id="drop" for="file">
         <b>Drop the final sales plan here or click to browse</b><small>.xlsx, .xlsb, .xls or .csv &middot; up to 400 MB</small></label>
       <div class="meta" id="meta"></div>
       <div class="status" id="status" role="status" aria-live="polite"></div>
@@ -81,19 +89,19 @@ tr.Division td{font-weight:800}tr.Attribute td{font-weight:600}tr.Grand td{font-
   </section>
   <section class="card" id="res" hidden>
     <div class="card-h"><div class="grow"><h2>2 &middot; Growth vs LY</h2>
-      <p class="desc">Value in &#8377; lakhs. Growth = TY &divide; LY &minus; 1 over the same stores. Click a row to see it month by month; Division and Attribute rows open and close.</p></div>
-      <button class="btn ghost" type="button" id="expand">Expand all</button>
+      <p class="desc">&#8377; lakhs &middot; Growth = TY &divide; LY &minus; 1, same stores</p></div>
+      <button class="btn ghost sm" type="button" id="expand">Expand all</button>
       <button class="btn" type="button" id="dl">Download GR % workbook</button></div>
     <div class="card-c">
       <div class="chips" id="tags" aria-label="Stores by SSG TAG"></div>
       <div class="tw" style="margin-top:12px"><table><thead id="th"></thead><tbody id="tb"></tbody></table></div>
     </div>
   </section>
-  <section class="card" id="chartCard" hidden>
-    <div class="card-h"><div class="grow"><h2 id="ctitle">Month by month</h2><p class="desc" id="csub"></p></div>
-      <div class="legend"><span><i style="background:var(--ty)"></i>TY plan</span><span><i style="background:var(--ly)"></i>LY sales</span></div></div>
+  <details class="card" id="chartCard" hidden>
+    <summary class="card-h"><div class="grow"><h2 id="ctitle">Month by month</h2><p class="desc" id="csub"></p></div>
+      <div class="legend"><span><i style="background:var(--ty)"></i>TY plan</span><span><i style="background:var(--ly)"></i>LY sales</span></div></summary>
     <div class="card-c"><svg class="chart" id="chart" role="img" aria-label="TY plan against LY sales by month"></svg></div>
-  </section>
+  </details>
 </main>
 <script>
 const $ = id => document.getElementById(id);
@@ -121,6 +129,7 @@ async function refresh() {
     l ? `<span>LY <b>${esc(l.months[0])} – ${esc(l.months[l.months.length - 1])}</b> · data lake export ${esc(l.exported)}</span>` : '',
     `<span>Built ${esc(p.loaded_at)}</span>`].join('') : '';
   $('res').hidden = !p;
+  $('intro').hidden = $('drop').hidden = !!p; $('replace').hidden = !p;   // plan loaded: meta line + Replace plan only
   if (p) {
     const all = Object.keys(S.tags);
     if (!tags || !tags.every(t => all.includes(t))) tags = all.includes('SSG') ? ['SSG'] : [];
@@ -144,8 +153,8 @@ function draw() {
   P.months.forEach((m, i) => { if (!grp.length || yr(P.months[grp[grp.length - 1][0]]) !== yr(m)) grp.push([]); grp[grp.length - 1].push(i); });
   grp.push(P.months.map((_, i) => i));
   const span = (a, ix) => { const f = a[ix[0]].replace(/ P\d$/, ''), l = a[ix[ix.length - 1]].replace(/ P\d$/, ''); return f === l ? f : `${f}–${l}`; };
-  $('th').innerHTML = `<tr><th class="l" rowspan="2">Division › Attribute › Department</th>${B.map((b, k) =>
-    `<th class="grp" colspan="3">${b} <span class="desc" style="font-weight:500">· TY ${esc(span(P.months, grp[k]))} plan vs LY ${esc(span(P.ly_months, grp[k]))} sales</span></th>`).join('')}</tr>
+  $('th').innerHTML = `<tr><th class="l" rowspan="2" title="Click a row to see it month by month; Division and Attribute rows open and close">Division › Attribute › Department</th>${B.map((b, k) =>
+    `<th class="grp" colspan="3" title="TY ${esc(span(P.months, grp[k]))} plan vs LY ${esc(span(P.ly_months, grp[k]))} sales">${b}</th>`).join('')}</tr>
     <tr>${B.map(() => '<th class="grp">TY</th><th>LY</th><th>Growth</th>').join('')}</tr>`;
   $('tb').innerHTML = P.rows.map((r, i) => {
     const show = r.level === 'Division' || r.level === 'Grand Total' || (r.level === 'Attribute' && open.has(r.div))
@@ -185,8 +194,10 @@ function chart(r) {
 $('tb').addEventListener('click', e => {
   const tr = e.target.closest('tr.r'); if (!tr) return;
   const k = tr.dataset.k, i = +tr.dataset.i;
-  if (k && e.target.closest('td.l')) { if (open.has(k)) open.delete(k); else open.add(k); }
+  const toggle = k && e.target.closest('td.l');
+  if (toggle) { if (open.has(k)) open.delete(k); else open.add(k); }
   sel = i; draw(); chart(P.rows[i]);
+  if (!toggle) $('chartCard').open = true;
 });
 $('tags').addEventListener('click', e => {
   const b = e.target.closest('.chip'); if (!b) return;
@@ -210,6 +221,7 @@ async function upload(f) {
   sel = null; refresh();
 }
 $('file').onchange = e => upload(e.target.files[0]);
+$('replace').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } };   // a label is not keyboard-activatable by itself
 const d = $('drop');
 ['dragenter', 'dragover'].forEach(ev => d.addEventListener(ev, e => { e.preventDefault(); d.classList.add('over'); }));
 ['dragleave', 'drop'].forEach(ev => d.addEventListener(ev, e => { e.preventDefault(); d.classList.remove('over'); }));

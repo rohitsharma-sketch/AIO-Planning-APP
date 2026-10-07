@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### Growth vs LY: decluttered (suite declutter 2 of 7)
+- **Asked (user):** suite declutter ("remove extra buttons which can be readjusted. De-cramp the core and additional apps").
+- Once a plan is loaded, card 1 is just the plan line + "Replace plan" (same #file input; keyboard opens it); description and drop zone only before a plan is loaded. Group-header "TY … plan vs LY … sales" and "Click a row…" -> tooltips; shorter card-2 text; Expand all a small ghost button, Download stays primary. Chart card collapsed by default - a row click opens it (checked live: KIDS row opens the chart).
+- **Checks:** script parses, ids exist, test_gr passes, live on :8075.
+
 ### Re-Aligner: decluttered (suite declutter 1 of 7)
 - **Asked (user):** "revamp core apps and remove extra buttons which can be readjusted. De-cramp the core and additional apps" (reviewed with the ECC dev-team skill: layout only, every action reachable with the same handler / confirm / label).
 - **Moved:** Step 2 header's 8 controls -> a "Re-phase from LY" row (department, LY shape, Re-phase & run) + one "Files ▾" menu per method (M1/M4 Blank template + From Listing / Delisting Analyser; M2 Template, Re-phase file, Store overrides upload, Overrides template, Clear store overrides [red, confirm kept]; M3 Split + New-department templates; M5 Growth template). Listing check file stays visible. Replace the original plan -> "Replace…" beside the file name (drag-drop for a replacement removed).
