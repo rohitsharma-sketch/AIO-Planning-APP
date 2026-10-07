@@ -9,7 +9,7 @@ Newest first. Each entry names its commit.
 
 ### Post-declutter audit: HTML apps
 - HTML-apps review (Landing, NSO, Re-Aligner, Growth vs LY, Listing): no critical / high issue; rights ids, menus, handlers and confirms verified. Fixes:
-  - Growth vs LY and Listing: collapsible headings showed a literal "B8" / "BE" instead of ▸ / ▾ - the CSS escapes `B8` / `BE` had been written as a control byte (0x15) + "B8"; restored (checked live: ▸ renders). Listing cache-buster -> v=20261007b.
+  - Growth vs LY and Listing: collapsible headings showed a literal "B8" / "BE" instead of ▸ / ▾ - the CSS escapes `\25B8` / `\25BE` had been written as a control byte (0x15) + "B8"; restored (checked live: ▸ renders). Listing cache-buster -> v=20261007b.
   - Landing: a Drik Panchang sync started from the "Export / Sync ▾" menu now shows "Syncing N years…" on the menu button itself (the item's own label was hidden by the closed menu).
 
 ### Post-declutter audit: Calendar minor fixes
