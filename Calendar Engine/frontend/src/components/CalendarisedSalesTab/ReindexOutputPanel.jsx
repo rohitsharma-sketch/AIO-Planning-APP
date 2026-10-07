@@ -670,7 +670,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
             isMwMatrix && ['mwmatrix', 'Month Wise Matrix'],
             ok && result.actualRows && result.source === 'dw' && !result.isSnapshot && result.columns?.[0]?.length >= 10 && ['daycomp', 'DW Comparison'],
             ok && result.actualRows && ['p1p2', 'P1 / P2 Comparison'],
-            ['raw', 'Run Details'],
+            // Run Details view removed (user, 2026-10-07: "remove run detail in the calendar app")
           ].filter(Boolean)
           const cur = more.find(([id]) => id === activeSub)
           return (
@@ -687,7 +687,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
           Cluster/P1-P2), so picking "just April" once narrows the table AND
           the CSV export on whichever tab is open, instead of each tab having
           its own separate month picker. */}
-      {activeSub !== 'raw' && monthCols.length > 0 && (
+      {monthCols.length > 0 && (
         <div style={{ marginBottom: '10px' }}>
           <Menu keepOpen title="Months shown in every tab and its CSV export"
             label={`Months: ${activeMonths.size === monthCols.length ? 'All' : activeMonths.size === 0 ? 'None'
@@ -717,10 +717,10 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
           months fall outside the chosen calendar's reference year maps nothing,
           and three silently-empty tables look like a rendering bug rather than a
           mismatched calendar. */}
-      {result.rows.length === 0 && activeSub !== 'raw' && (
+      {result.rows.length === 0 && (
         <p style={{ color: 'var(--warn)', fontWeight: 600, fontSize: '12px' }}>
           No rows mapped for this run - the synced period likely falls outside the chosen
-          calendar's reference year, so the tables below are empty. See Run Details.
+          calendar's reference year, so the tables below are empty.
         </p>
       )}
 
@@ -1232,43 +1232,6 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
         </>
       )}
 
-      {activeSub === 'raw' && (
-        <div>
-          <p>Source: {result.source} ({result.grain}, metric {result.metric})</p>
-          <p>Rows read: {result.rowsRead}, rows mapped: {result.rowsMapped}</p>
-          {(result.cachedMonths?.length > 0 || result.computedMonths?.length > 0) && (
-            <p>
-              {result.cachedMonths?.length > 0 && (
-                <><span className="scm-pill scm-pill-ok">{result.cachedMonths.length} month(s) reused from cache</span>{' '}
-                ({result.cachedMonths.join(', ')}){' '}</>
-              )}
-              {result.computedMonths?.length > 0 && (
-                <><span className="scm-pill scm-pill-warn">{result.computedMonths.length} month(s) freshly computed</span>{' '}
-                ({result.computedMonths.join(', ')})</>
-              )}
-            </p>
-          )}
-          <p>Used frozen sync: <span className={`scm-pill ${result.usedFrozenSync ? 'scm-pill-ok' : 'scm-pill-warn'}`}>{result.usedFrozenSync ? 'Yes' : 'No'}</span></p>
-          <p>
-            Unmapped stores: <span className={`scm-pill ${result.unmappedStores?.length ? 'scm-pill-warn' : 'scm-pill-ok'}`}>{result.unmappedStores?.length || 0}</span>
-            {result.unmappedStores?.length > 0 && <> (stores: {result.unmappedStores.join(', ')})</>}
-          </p>
-          <p>
-            Unmapped dates: <span className={`scm-pill ${result.unmappedDateCount ? 'scm-pill-warn' : 'scm-pill-ok'}`}>{result.unmappedDateCount || 0}</span>
-            {' '}(sample: {(result.unmappedDateSample || []).join(', ')})
-          </p>
-          {/* Distinct from "unmapped dates": these stores' calendar cluster has no entry
-              at all in the selected calendar's day map (usually a cluster-name mismatch
-              between the store/cluster map and the calendar), so EVERY one of their rows
-              is dropped - not just a few dates. */}
-          {result.unmappedClusters?.length > 0 && (
-            <p style={{ color: 'var(--red)' }}>
-              Clusters missing from this calendar: {result.unmappedClusters.join(', ')}
-              {' '}({result.unmappedClusterStores?.length || 0} store(s) fully excluded)
-            </p>
-          )}
-        </div>
-      )}
     </div>
   )
 }

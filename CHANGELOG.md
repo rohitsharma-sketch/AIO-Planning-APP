@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### Calendar: Run Details removed
+- **Asked (user):** "remove run detail in the calendar app".
+- The Calendarised Sales "Run Details" view (source / rows read / cached vs computed months / frozen sync / unmapped stores, dates and clusters) is gone from "More views"; the empty-result warning no longer points to it. The run itself is unchanged. dist rebuilt.
+- **Checks:** engine.test passes; Calendarised Sales renders with no errors and keeps its Day-wise / Month-wise select (e2e).
+
 ### Landing: big "Planning Suite" title back
 - **Asked (user):** "i liked this better earlier" (about the intro after the declutter).
 - Restored the original intro: the "FY 2027–28 · Planning suite" eyebrow, the big "Planning Suite" title and both its styles. The rest of the Landing declutter (Account menu, sync strip, Lagan Export / Sync menu) stays.
