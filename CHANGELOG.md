@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### BIS: Division and Department Summary use the same lean layout
+- **Asked (user):** "apply the same layout to division and department summary".
+- **Division Summary:** Avg ST% | 25 V 26 | LY Actual Sales | Plan Total | vs LY%. **Department Summary:** Avg ST% | 25 V 26 | LY Actual Sales | Plan Total | Growth%; a department's name opens the same details drawer.
+- Month-by-month columns (and Contrib% in Department Summary) come back with "+ Context columns" or the header's "Show months" - one switch for every report (`_monCols` / `_togMonCols`), remembered per browser. Column names match the Buyer's Plan ("LY Actual Sales", "Plan Total").
+
 ### BIS: calmer layout - lean grid, department drawer, live AOP check, one Data menu
 - **Asked (user):** "is there anyway we can keep the app less cramped, more informative and true to the rules set and still easy to function? BIS"; chose all four options; then "keep avg st% and 25 v 26 in the main grid".
 - **Lean grid (default):** Avg ST% | 25 V 26 | LY Actual Sales | Planner Gr% (+Use) | Block Growth% | Plan Total | vs LY%. "+ Context columns" brings back monthly ST%, 19 V 26, Contrib%, Factor and Planner Value (remembered per browser). Phase 2 keeps its planner / buyer month columns.

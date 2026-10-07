@@ -643,7 +643,7 @@ tr:hover .blk-lock,.blk-lock:focus-visible{opacity:1}
           <button class="vt" id="lfl-all" onclick="setStoreLfl(false)">All</button>
           <button class="vt on" id="lfl-only" onclick="setStoreLfl(true)">LFL Only</button>
         </div>
-        <button class="fpbtn" id="ctxbtn" onclick="toggleContext()" aria-pressed="false" title="Sell-thru, history, contribution, factor and planner value columns - also in each department's details (click its name)">+ Context columns</button>
+        <button class="fpbtn" id="ctxbtn" onclick="toggleContext()" aria-pressed="false" title="More columns: month-by-month figures, monthly sell-thru, 19 V 26, contribution, factor, planner value. Each department's details (click its name) have them too.">+ Context columns</button>
       </div>
     </div>
 
@@ -2442,9 +2442,13 @@ function toggleContext(){
   try{localStorage.setItem('bis_ctx',S.showContext?'1':'0')}catch(_){}
   refresh();
 }
+// Division / Department Summary follow the same lean layout (user, 2026-10-07): their month columns are the context
+const _LEAN_RPT=['buyers','attr','summary','division','dept'];
+function _monCols(){return _LEAN_RPT.includes(S.report)?S.showContext:S.showMonthCols;}
+function _togMonCols(){if(_LEAN_RPT.includes(S.report))toggleContext();else{S.showMonthCols=!S.showMonthCols;refresh();}}
 function _syncCtxBtn(){
   const b=document.getElementById('ctxbtn');if(!b)return;
-  b.style.display=S.report==='buyers'||S.report==='attr'?'':'none';
+  b.style.display=_LEAN_RPT.includes(S.report)?'':'none';
   b.classList.toggle('on',S.showContext);b.setAttribute('aria-pressed',S.showContext);
   b.textContent=(S.showContext?'− ':'+ ')+'Context columns';
 }
@@ -2552,18 +2556,21 @@ function buildColDefs(){
 
   } else if(S.report==='summary'){
     // ── Summary: division-level LY | Plan | vs LY% [| AOP | vs AOP%] per month
-    if(S.showMonthCols) c.forEach(mi=>{
+    // Avg ST% and 25 V 26 stay in the lean grid, as in the Buyer's Plan (user, 2026-10-07)
+    defs.push({block:'st',group:'Period',id:'avg_st',sub:'Avg ST%',type:'avg_st',sum:true});
+    {const hy=_lflHdr('yoy',c);defs.push({block:'hist',group:'Period',id:'p_yoy',sub:hy.sub,title:hy.title,type:'period_lfl_yoy',sum:true});}
+    if(_monCols()) c.forEach(mi=>{
       const hasAop=S.aopLocked&&['mens','ladies','kids'].some(id=>(S.aop[id]?.[mi]||0)>0);
       defs.push({block:'hist',group:MO[mi],id:'sly_'+mi,sub:'LY',mi,type:'sum_ly'});
       defs.push({block:'plan',group:MO[mi],id:'sty_'+mi,sub:'Plan',mi,type:'sum_ty',hasAop});
       defs.push({block:'plan',group:MO[mi],id:'sgr_'+mi,sub:'vs LY%',mi,type:'sum_gr',hasAop});
     });
-    defs.push({block:'hist',group:'Period',id:'s_ply',sub:'Period LY',type:'tot_ly',sum:true});
-    defs.push({block:'plan',group:'Period',id:'s_pty',sub:'Period Plan',type:'tot_ty',sum:true});
+    defs.push({block:'hist',group:'Period',id:'s_ply',sub:'LY Actual Sales',type:'tot_ly',sum:true});
+    defs.push({block:'plan',group:'Period',id:'s_pty',sub:'Plan Total',type:'tot_ty',sum:true});
     defs.push({block:'plan',group:'Period',id:'s_pgr',sub:'vs LY%',type:'growth',sum:true});
   } else if(S.report==='division'){
     // ── Division Summary: per-month LY + TY Plan + Growth, period totals, vs AOP
-    if(S.showMonthCols) c.forEach(mi=>{
+    if(_monCols()) c.forEach(mi=>{
       const hasAop=S.aopLocked&&['mens','ladies','kids'].some(id=>(S.aop[id]?.[mi]||0)>0);
       defs.push({block:'hist',group:MO[mi],id:'dly_'+mi,sub:'LY Cr',mi,type:'ly',hasAop});
       defs.push({block:'plan',group:MO[mi],id:'dty_'+mi,sub:'Plan Cr',mi,type:'ty',hasAop});
@@ -2578,7 +2585,12 @@ function buildColDefs(){
     defs.push({block:'hist',group:'Period',id:'tot_ly',sub:'LY Actual Sales',type:'tot_ly',sum:true});
   } else {
     // dept / store — existing logic
-    if(S.viewMode==='detail'&&S.showMonthCols){
+    if(S.report==='dept'){
+      // Avg ST% and 25 V 26 stay in the lean grid, as in the Buyer's Plan (user, 2026-10-07)
+      defs.push({block:'st',group:'Period',id:'avg_st',sub:'Avg ST%',type:'avg_st',sum:true});
+      {const hy=_lflHdr('yoy',c);defs.push({block:'hist',group:'Period',id:'p_yoy',sub:hy.sub,title:hy.title,type:'period_lfl_yoy',sum:true});}
+    }
+    if(S.viewMode==='detail'&&_monCols()){
       if(S.report==='dept'){
         c.forEach(mi=>{
           defs.push({block:'hist',group:MO[mi],id:'ly_'+mi,sub:'LY Cr',mi,type:'ly'});
@@ -2590,9 +2602,9 @@ function buildColDefs(){
         c.forEach(mi=>defs.push({block:'hist',group:MO[mi],id:'ly_'+mi,sub:`${FY_LY} Rs.Cr`,mi,type:'ly'}));
       }
     }
-    defs.push({block:'hist',group:'Period',id:'tot_ly',sub:`${FY_LY} Total`,type:'tot_ly',sum:true});
-    defs.push({block:'hist',group:'Period',id:'contrib',sub:'Contrib%',type:'contrib',sum:true});
-    if(S.viewMode==='detail'&&S.report!=='dept'&&S.showMonthCols)
+    defs.push({block:'hist',group:'Period',id:'tot_ly',sub:S.report==='dept'?'LY Actual Sales':`${FY_LY} Total`,type:'tot_ly',sum:true});
+    if(S.report!=='dept'||S.showContext)defs.push({block:'hist',group:'Period',id:'contrib',sub:'Contrib%',type:'contrib',sum:true});
+    if(S.viewMode==='detail'&&S.report!=='dept'&&_monCols())
       c.forEach(mi=>defs.push({block:'plan',group:MO[mi],id:'gr_'+mi,sub:'Gr%',mi,type:'gr'}));
     if(S.report==='store'){
       defs.push({block:'plan',group:'Period',id:'tot_ty',sub:'FY27 Plan',type:'tot_ty',sum:true});
@@ -2685,7 +2697,7 @@ function buildHeader(defs,noC1=false){
     // Same header + toggle as ② Historical Growth
     const stToggle=S.showSTDetail?'&#x25B2; Collapse Monthly':'&#x25BC; Show Monthly';
     // lean grid: Avg ST% only, no monthly toggle (the months come back with "+ Context columns")
-    hr0+=!S.showContext&&(S.report==='buyers'||S.report==='attr')?`<th colspan="${stDefs.length}" class="hblk hblk-st">Sell Thru</th>`
+    hr0+=!S.showContext||!(S.report==='buyers'||S.report==='attr')?`<th colspan="${stDefs.length}" class="hblk hblk-st">Sell Thru</th>`
       :`<th colspan="${stDefs.length}" class="hblk hblk-st">&#x2460; Avg Weekly Sell Thru | All Stores <button class="htoggle" onclick="S.showSTDetail=!S.showSTDetail;refresh()">${stToggle}</button></th>`;
   }
   if(S.report==='buyers'||S.report==='attr'){
@@ -2694,14 +2706,14 @@ function buildHeader(defs,noC1=false){
     const planToggleLbl=S.showPlanDetail?'&#x25B2; Collapse Monthly':'&#x25BC; Show Monthly';
     hr0+=`<th colspan="${planDefs.length}" class="hblk hblk-plan">&#x2462; AOP Plan | ${FY_PLAN} <button class="htoggle" onclick="S.showPlanDetail=!S.showPlanDetail;refresh()">${planToggleLbl}</button></th>`;
   } else if(mixed){
-    hr0+=`<th colspan="${hpDefs.length}" class="hblk hblk-mix">LY Actual vs ${S.report==='dept'?'Plan':'Buyer Plan'} | ${FY_PLAN}${S.aopLocked&&S.report!=='dept'?' &nbsp;&#x1F512; vs AOP':''} <button class="htoggle" onclick="S.showMonthCols=!S.showMonthCols;refresh()">&#x25B2; Block Only</button></th>`;
+    hr0+=`<th colspan="${hpDefs.length}" class="hblk hblk-mix">LY Actual vs ${S.report==='dept'?'Plan':'Buyer Plan'} | ${FY_PLAN}${S.aopLocked&&S.report!=='dept'?' &nbsp;&#x1F512; vs AOP':''} <button class="htoggle" onclick="_togMonCols()">&#x25B2; Block Only</button></th>`;
   } else if(S.report==='summary'||S.report==='division'){
-    const monLbl=S.showMonthCols?'&#x25B2; Block Only':'&#x25BC; Show Months';
-    hr0+=`<th colspan="${histDefs.length}" class="hblk hblk-hist">LY Actual Sales <button class="htoggle" onclick="S.showMonthCols=!S.showMonthCols;refresh()">${monLbl}</button></th>`;
+    const monLbl=_monCols()?'&#x25B2; Block Only':'&#x25BC; Show Months';
+    hr0+=`<th colspan="${histDefs.length}" class="hblk hblk-hist">LY Actual Sales <button class="htoggle" onclick="_togMonCols()">${monLbl}</button></th>`;
     hr0+=`<th colspan="${planDefs.length}" class="hblk hblk-plan">Buyer Plan | ${FY_PLAN}${S.aopLocked?' &nbsp;&#x1F512; vs AOP':''}</th>`;
   } else {
-    const monLbl2=S.showMonthCols?'&#x25B2; Block Only':'&#x25BC; Show Months';
-    hr0+=`<th colspan="${histDefs.length}" class="hblk hblk-hist">LY Actual Sales <button class="htoggle" onclick="S.showMonthCols=!S.showMonthCols;refresh()">${monLbl2}</button></th>`;
+    const monLbl2=_monCols()?'&#x25B2; Block Only':'&#x25BC; Show Months';
+    hr0+=`<th colspan="${histDefs.length}" class="hblk hblk-hist">LY Actual Sales <button class="htoggle" onclick="_togMonCols()">${monLbl2}</button></th>`;
     hr0+=`<th colspan="${planDefs.length}" class="hblk hblk-plan">Plan | ${FY_PLAN}</th>`;
   }
   hr0+='</tr>';
@@ -3960,8 +3972,8 @@ function renderTable(){
       const isInact=(r._inactive||r._inactiveRow||r._inactiveBuyer)&&r._key;
       const phase=r._phase||null; // 'p1'=auto no-data, 'p2'=manually deactivated
       const canMag=(S.report==='buyers'||S.report==='dept')&&r._key&&!inactive;
-      // Buyer's Plan: the name opens the department's details (month view is one click from there)
-      const canDrw=canMag&&S.report==='buyers'&&r._divId&&!_parseAttrKey(r._key);
+      // Buyer's Plan / Department Summary: the name opens the department's details (month view is one click from there)
+      const canDrw=canMag&&r._divId&&!_parseAttrKey(r._key);
       const magBtn=canMag&&!canDrw?`<button class="mag-trig" title="Open magnified view" onclick="event.stopPropagation();openMag('${r._key}','${r._divId||''}')">⤢</button>`:'';
       const nmHtml=canDrw?`<button type="button" class="rn-btn" onclick="openDrawer('${r._key}','${r._divId}')" title="Details: month by month, sell-thru, history, factor">${r._name}</button>`:r._name;
       const togLbl=isInact?(phase==='p2'?'Inactive':'No Data'):'Active';
