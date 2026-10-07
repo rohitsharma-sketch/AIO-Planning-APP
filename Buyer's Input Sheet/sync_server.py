@@ -7,7 +7,6 @@ Start: python sync_server.py
 """
 
 from flask import Flask, jsonify, request
-from flask_cors import CORS
 import json
 import pandas as pd
 import os
@@ -20,7 +19,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from rs_common.lake_files import latest_path  # noqa: E402 - the one "which file" rule (29 Sep 2026)
 
 app = Flask(__name__)
-CORS(app)
+# audit 2026-10-07: CORS(app) let any page open in a browser on this machine POST here (no cookie needed on :5050);
+# BIS is same-origin through Landing (/buyer) or :5050 itself. Bodies capped (fill-rate upload, growth push).
+app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
 
 @app.after_request
 def strip_cache_headers(resp):
@@ -190,6 +191,11 @@ def _data_version() -> str:
 
 import threading as _threading
 _copy_lock = _threading.Lock()
+_job_lock = _threading.Lock()   # check-and-start of a sync job (threaded=True: two requests could both see idle)
+
+
+def _job_fresh(job: dict, sig: str) -> bool:
+    return job["status"] == "done" and (job.get("data") or {}).get("data_version") == sig
 
 
 def _local_copy(src: str) -> str:
@@ -452,7 +458,7 @@ def buyer_department_growth():
         return jsonify({"ok": False, "note": f"AOP Forecaster unreachable: {e}"}), 502
 
 
-def _run_sales_job(src: str):
+def _run_sales_job(src: str, sig: str = ""):
     """Background worker: aggregate FY26 AOP-month actuals and store in _sales_job."""
     global _sales_job, _last_sync
     try:
@@ -465,7 +471,7 @@ def _run_sales_job(src: str):
                 "data": {"ok": True, "dept_actual_ly": PINNED_LY_ACTUALS,
                          "source_file": "PINNED (Aug-10 LFL actuals)",
                          "rows_processed": 0, "synced_at": ts,
-                         "data_version": _data_version()},
+                         "data_version": sig or _data_version()},
                 "error": None,
             }
             return
@@ -546,7 +552,7 @@ def _run_sales_job(src: str):
             "status": "done",
             "data": {"ok": True, "dept_actual_ly": result, "sec_actual_ly": sec_ly, "source_file": os.path.basename(src),
                      "rows_processed": int(mask.sum()), "synced_at": ts,
-                     "data_version": _data_version()},
+                     "data_version": sig or _data_version()},
             "error": None,
         }
     except Exception as exc:
@@ -560,13 +566,14 @@ def api_sync_sales():
     src = _get_sales_src()
     if not src:
         return jsonify({"ok": False, "error": "No parquet file found in SALES_DIR"}), 404
-    if _sales_job["status"] == "running":
-        return jsonify({"ok": True, "status": "running"})
-    if _sales_job["status"] == "done":
-        return jsonify({"ok": True, "status": "done"})
-    _sales_job = {"status": "running", "progress": 0, "data": None, "error": None}
-    import threading
-    threading.Thread(target=_run_sales_job, args=(src,), daemon=True).start()
+    sig = _data_version()
+    with _job_lock:
+        if _sales_job["status"] == "running":
+            return jsonify({"ok": True, "status": "running"})
+        if _job_fresh(_sales_job, sig):
+            return jsonify({"ok": True, "status": "done"})
+        _sales_job = {"status": "running", "progress": 0, "data": None, "error": None}
+    _threading.Thread(target=_run_sales_job, args=(src, sig), daemon=True).start()
     return jsonify({"ok": True, "status": "running"})
 
 
@@ -580,7 +587,7 @@ def api_sync_sales_poll():
     return jsonify({"ok": True, "status": job["status"], "progress": job.get("progress", 0)})
 
 
-def _run_st_job(src: str):
+def _run_st_job(src: str, sig: str = ""):
     """Background worker: copy + compute ST% by section from weekly sell-through parquet."""
     global _st_job, _last_sync
     try:
@@ -730,7 +737,7 @@ def _run_st_job(src: str):
                      "monthly_st": monthly_st, "monthly_st_dept": monthly_st_dept,
                      "source_file": os.path.basename(src), "section_count": len(result),
                      "dept_count": len(result_dept), "has_dept_col": has_dept_col,
-                     "week": week_label, "synced_at": ts, "data_version": _data_version()},
+                     "week": week_label, "synced_at": ts, "data_version": sig or _data_version()},
             "error": None,
         }
     except Exception as exc:
@@ -744,13 +751,14 @@ def api_sync_sellthru():
           get_latest_file(SELLTHRU_DIR, ("*.xlsx", "*.xls", "*.csv"))
     if not src:
         return jsonify({"ok": False, "error": "No sell-through file found."}), 404
-    if _st_job["status"] == "running":
-        return jsonify({"ok": True, "status": "running"})
-    if _st_job["status"] == "done":
-        return jsonify({"ok": True, "status": "done"})
-    _st_job = {"status": "running", "data": None, "error": None}
-    import threading
-    threading.Thread(target=_run_st_job, args=(src,), daemon=True).start()
+    sig = _data_version()
+    with _job_lock:
+        if _st_job["status"] == "running":
+            return jsonify({"ok": True, "status": "running"})
+        if _job_fresh(_st_job, sig):
+            return jsonify({"ok": True, "status": "done"})
+        _st_job = {"status": "running", "data": None, "error": None}
+    _threading.Thread(target=_run_st_job, args=(src, sig), daemon=True).start()
     return jsonify({"ok": True, "status": "running"})
 
 
@@ -764,7 +772,7 @@ def api_sync_sellthru_poll():
     return jsonify({"ok": True, "status": job["status"]})
 
 
-def _run_history_job(src: str):
+def _run_history_job(src: str, sig: str = ""):
     """Background worker: aggregate FY19 + FY26 from the parquet and store in _hist_job."""
     global _hist_job, _last_sync
     try:
@@ -875,7 +883,7 @@ def _run_history_job(src: str):
                      "lfl_25v26_stores": _counts(lfl_25v26),
                      "detected_dept_col": dept_col,
                      "dept_count": len(fy26_dept),
-                     "data_version": _data_version()},
+                     "data_version": sig or _data_version()},
             "error": None,
         }
     except Exception as exc:
@@ -890,16 +898,16 @@ def api_sync_history():
     if not src:
         return jsonify({"ok": False, "error": "No parquet file found in SALES_DIR"}), 404
 
-    if _hist_job["status"] == "running":
-        return jsonify({"ok": True, "status": "running"})
-    if _hist_job["status"] == "done":
-        # Already computed — client should poll to receive the data
-        return jsonify({"ok": True, "status": "done"})
-
-    # idle or error: start a new background job
-    _hist_job = {"status": "running", "data": None, "error": None}
-    import threading
-    threading.Thread(target=_run_history_job, args=(src,), daemon=True).start()
+    sig = _data_version()
+    with _job_lock:
+        if _hist_job["status"] == "running":
+            return jsonify({"ok": True, "status": "running"})
+        if _job_fresh(_hist_job, sig):
+            # Already computed on the current data — client should poll to receive it
+            return jsonify({"ok": True, "status": "done"})
+        # idle, error or built on an older export: start a new background job
+        _hist_job = {"status": "running", "data": None, "error": None}
+    _threading.Thread(target=_run_history_job, args=(src, sig), daemon=True).start()
     return jsonify({"ok": True, "status": "running"})
 
 

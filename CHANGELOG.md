@@ -7,6 +7,19 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### BIS audit: plan rules, data refresh and the Sales Plan push
+- **Asked (user):** "audit the app once done", then "fix whatever the audit finds and commit". Three read-only reviewers (planning rules, today's UI + security, server + sync); every finding re-checked in code or live before fixing.
+- **Plan rules (otb-plan-app.html):**
+  1. Revert (attribute / division) and "Reset" put the start values back without re-balancing - an attribute revert left MENS ~6% under AOP, and hide-then-reset left a division off AOP. They now re-balance (`_divReapp` / `_divRescale`) and clear the buyer's own entries they undo.
+  2. A locked division was overwritten by Re-apportion by LY Cont%, Reset, Re-seed, Revert and Clear all inputs. It is now left exactly as it is (Revert says "unlock it first").
+  3. A big entry (e.g. 2000% on ML_JEANS, or a typo) drove the other departments below -100% - negative sales, sent to Sales Plan. Re-balancing now stops at -100% (`_divReapp`, `_divRescale`); the AOP check line shows the overshoot in red.
+  4. Clear all inputs left locks (frozen at 0%) and old buyer entries (kept at the next re-seed). It now clears them too (`clearAllInputs`), locked divisions kept.
+  5. Lock All stuck on "Unlock All" while a division was locked. Label fixed: "Reset to Planner's input" -> "Reset to AOP share" (it restores the plain AOP share).
+- **Data refresh (sync_server.py):** a sync job, once done, was reused until 5050 restarted, so Refresh data never picked up a new lake export (LY, history, sell-thru went stale silently). A finished job is now reused only while the data version it STARTED from is current; the check-and-start is locked. `test_sync_server_ly.py` covers it.
+- **Sales Plan push:** one POST replaces every division's buyer growth and any signed-in person could send it. New right "Send the Buyer's plan to Sales Plan" (`buyer_push`, Landing GUARDED; Users & access can switch it off per person, e.g. reviewers / approvers). 5050 no longer allows cross-origin calls (CORS removed) and caps request bodies at 25 MB. The page now checks how many rows the server stored and says so if it is short, and shows the reason for a 403.
+- **Factor matrix button (user: "i want matrix table also can i have a button similar to context button to view the table"):** "▦ Factor matrix" beside "+ Context columns" on the Buyer's Plan and Attribute Summary opens the sell-thru x LY growth x fill rate table that sets the planner's factor (moved out of Plan tools).
+- **UI:** the grid is inert behind the department drawer; the drawer's factor label reads the number directly; the totals line is no longer a live region read out on every keystroke.
+
 ### BIS: Avg ST% hover shows the months behind the block figure
 - **Asked (user):** "avg sell thru on months should be according to the months and probably a hover can make things easier in the block panel so that the block sell thru can be justified".
 - Avg ST% (Buyer's Plan, Attribute, Division and Department Summary, and the drawer) is the selected months' ST%, simple average over the months with data; hovering lists each month, e.g. M_IN_BRIEF Mar 10.1 / Apr 9.4 / May 10.6 / Jun 11.1 -> 10.3%. Picking other months re-averages (Apr+May -> 10.0%). Attributes note that each month weights its departments by LY.

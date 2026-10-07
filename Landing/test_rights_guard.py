@@ -16,4 +16,6 @@ assert need("POST", "/api/calendar/salesdata/reindex/cache-status") is None     
 assert need("POST", "/realigner/api/run") == need("POST", "/realigner/api/rephase") == "realigner_run"
 assert need("POST", "/realigner/api/rephase-overrides") is None and need("POST", "/realigner/api/locks") is None
 assert need("POST", "/api/suite-theme") == "suite_theme" and need("GET", "/api/suite-theme.js") is None
+assert need("POST", "/api/config/buyer-department-growth") == need("POST", "/buyer/api/config/buyer-department-growth") == "buyer_push"
+assert need("GET", "/api/config/buyer-department-growth") is None              # Sales Plan's read stays open
 print("all rights-guard checks passed")

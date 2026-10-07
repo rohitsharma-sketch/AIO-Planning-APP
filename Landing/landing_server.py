@@ -428,6 +428,9 @@ class Handler(SimpleHTTPRequestHandler):
         ("POST", re.compile(r"^/api/calendar/salesdata/reindex(/start)?$"), "calendar_reindex"),
         ("POST", re.compile(r"^/realigner/api/(run|rephase)$"), "realigner_run"),
         ("POST", re.compile(r"^/api/suite-theme$"), "suite_theme"),
+        # BIS Save -> Sales Plan: one POST replaces every division's buyer growth (audit 2026-10-07: any signed-in
+        # person could send it; now an admin can switch it off per person, e.g. reviewers / approvers)
+        ("POST", re.compile(r"/config/buyer-department-growth$"), "buyer_push"),
     ]
 
     def _right_refusal(self):

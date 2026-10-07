@@ -599,13 +599,11 @@ tr:hover .blk-lock,.blk-lock:focus-visible{opacity:1}
         <div class="tmenu" id="planMenu">
           <div class="tbtn" onclick="toggleMenu('planMenu',event)">Plan tools <span class="caret">&#x25BE;</span></div>
           <div class="tmenu-pop">
-            <button class="tmenu-item" onclick="closeMenus();openFactorTable()">Factor table<small>The factors behind the Planner's input</small></button>
-            <div class="tmenu-sep"></div>
-            <button class="tmenu-item" onclick="closeMenus();resetPlanToAop()">Reset to Planner's input<small>Re-seed every cell from the planner's Gr % (AOP &times; LY cont % &times; factor)</small></button>
+            <button class="tmenu-item" onclick="closeMenus();resetPlanToAop()">Reset to AOP share<small>Every unlocked division back to the plain AOP share; its locks and buyer entries cleared</small></button>
             <button class="tmenu-item" onclick="closeMenus();revertToLyCont()">Re-apportion by LY Cont%<small>Split each division's AOP by LY contribution</small></button>
             <button class="tmenu-item" onclick="closeMenus();toggleLockAllMAMJ()"><span id="lockallbtn">&#x1F512; Lock All</span><small>Lock / unlock every buyer input in the MAMJ block</small></button>
             <div class="tmenu-sep"></div>
-            <button class="tmenu-item dng" onclick="closeMenus();if(confirm('Clear all plan inputs?')){S.inputs={};refresh();toast('Plan cleared')}">Clear all inputs<small>Remove every growth % entered</small></button>
+            <button class="tmenu-item dng" onclick="closeMenus();if(confirm('Clear all plan inputs?'))clearAllInputs()">Clear all inputs<small>Remove every growth % and lock (locked divisions are kept)</small></button>
           </div>
         </div>
         <div class="tbar-sep"></div>
@@ -643,6 +641,8 @@ tr:hover .blk-lock,.blk-lock:focus-visible{opacity:1}
           <button class="vt" id="lfl-all" onclick="setStoreLfl(false)">All</button>
           <button class="vt on" id="lfl-only" onclick="setStoreLfl(true)">LFL Only</button>
         </div>
+        <!-- the factor matrix behind the Planner's input, one click away (user, 2026-10-07) -->
+        <button class="fpbtn" id="fmxbtn" onclick="openFactorTable()" title="Sell-thru x LY growth x fill rate -> the factor behind the Planner's input">&#x25A6; Factor matrix</button>
         <button class="fpbtn" id="ctxbtn" onclick="toggleContext()" aria-pressed="false" title="More columns: month-by-month figures, monthly sell-thru, 19 V 26, contribution, factor, planner value. Each department's details (click its name) have them too.">+ Context columns</button>
       </div>
     </div>
@@ -670,7 +670,7 @@ tr:hover .blk-lock,.blk-lock:focus-visible{opacity:1}
           <button class="dtab" data-div="kids" onclick="setDivTab('kids')">KIDS<span class="dtab-cnt" id="dtab-cnt-kids"></span></button>
         </div>
         <!-- TOTALS + AOP RULES CHECK -->
-        <div class="kstrip" id="kstrip" role="status" aria-live="polite"></div>
+        <div class="kstrip" id="kstrip"></div>
         </div>
 
         <!-- INLINE ACTION BAR (inactive report etc.) -->
@@ -2000,7 +2000,7 @@ function _divRescale(dv,mi){
     if(S.locked.has(k))lockedTY+=ty;else if(ly>0){freeTY+=ty;free.push({k,ly,ty});}
   });
   if(!freeTY)return;
-  const f=(aopMon-lockedTY)/freeTY;
+  const f=Math.max(aopMon-lockedTY,0)/freeTY; // never below -100% (audit 2026-10-07)
   free.forEach(({k,ly,ty})=>{S.inputs[k]=(ty*f/ly-1)*100;});
 }
 function _deptAvgST(deptId){
@@ -2449,6 +2449,7 @@ function _togMonCols(){if(_LEAN_RPT.includes(S.report))toggleContext();else{S.sh
 function _syncCtxBtn(){
   const b=document.getElementById('ctxbtn');if(!b)return;
   b.style.display=_LEAN_RPT.includes(S.report)?'':'none';
+  const f=document.getElementById('fmxbtn');if(f)f.style.display=S.report==='buyers'||S.report==='attr'?'':'none';
   b.classList.toggle('on',S.showContext);b.setAttribute('aria-pressed',S.showContext);
   b.textContent=(S.showContext?'− ':'+ ')+'Context columns';
 }
@@ -3983,8 +3984,8 @@ function renderTable(){
 // sell-thru, history, contribution, the factor and the month-by-month build-up live here. Read-only - edits stay in
 // the grid and the month-by-month window, so every rule (AOP, locks, Phase 2) still runs through the same code.
 let _drw=null;
-function openDrawer(secId,dvId){_drw={secId,dvId,from:document.activeElement};_renderDrawer();document.getElementById('drwOv').classList.add('vis');document.getElementById('drwX')?.focus();}
-function closeDrawer(){document.getElementById('drwOv').classList.remove('vis');const f=_drw?.from;_drw=null;if(f?.isConnected)f.focus();}
+function openDrawer(secId,dvId){_drw={secId,dvId,from:document.activeElement};_renderDrawer();document.getElementById('drwOv').classList.add('vis');document.querySelector('.app')?.setAttribute('inert','');document.getElementById('drwX')?.focus();}
+function closeDrawer(){document.getElementById('drwOv').classList.remove('vis');document.querySelector('.app')?.removeAttribute('inert');const f=_drw?.from;_drw=null;if(f?.isConnected)f.focus();}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&_drw)closeDrawer();});
 function _renderDrawer(){
   if(!_drw)return;
@@ -4008,7 +4009,7 @@ function _renderDrawer(){
     <div class="drw-bd">
       <div class="drw-sec"><h4>Plan · ${_attr(MO[AOP_MIS[0]]+'-'+MO[AOP_MIS[AOP_MIS.length-1]])}</h4><div class="drw-kv">
         <div><span>LY sales</span><b>${f2(L)} Cr</b></div><div><span>Plan</span><b>${f2(T)} Cr</b></div>
-        <div><span>Buyer Gr%</span><b class="${gCls(bg)}">${fP(bg)}</b></div><div><span>Planner Gr% · factor ${v('pl_fac').replace(/<[^>]+>/g,'')}</span><b class="${gCls(pl?.gr)}">${fP(pl?.gr)}</b></div>
+        <div><span>Buyer Gr%</span><b class="${gCls(bg)}">${fP(bg)}</b></div><div><span>Planner Gr% · factor ${_plannerFactorAgg(row,AOP_MIS)?.toFixed(2)??'-'}</span><b class="${gCls(pl?.gr)}">${fP(pl?.gr)}</b></div>
       </div></div>
       <div class="drw-sec"><h4>Month by month</h4><table class="drw-tb"><thead><tr><th>Month</th><th>LY Cr</th><th>Buyer Gr%</th><th>Plan Cr</th><th>Planner Gr%</th></tr></thead>
         <tbody>${mons}</tbody><tfoot><tr><td>Block</td><td>${f2(L)}</td><td>${fP(L>0?(T/L-1)*100:null)}</td><td>${f2(T)}</td><td>${fP(pl?.gr)}</td></tr></tfoot></table></div>
@@ -4110,8 +4111,19 @@ function setBlockGrowth(secKey,val){
   _flashLiveBadges();
 }
 
+// audit 2026-10-07: cleared only S.inputs - locks stayed (frozen at 0%) and old buyer entries were "kept" at the next
+// re-seed, so the rest absorbed the whole AOP; a locked division was wiped too
+function clearAllInputs(){
+  DVDATA.forEach(dv=>{
+    if(S.divLocked.has(dv.id))return;
+    dv.secs.forEach(sec=>{S.buyerSet.delete(sec.id);for(let mi=0;mi<12;mi++){delete S.inputs[sec.id+'__'+mi];S.locked.delete(sec.id+'__'+mi);}});
+  });
+  refresh();toast('Plan cleared'+(S.divLocked.size?' - locked divisions kept':''));
+}
+// locked divisions left out: unlockAllMAMJ skips them, so the button stuck on Unlock All (audit 2026-10-07)
+function _anyCellLocked(){return DVDATA.some(dv=>!S.divLocked.has(dv.id)&&dv.secs.some(sec=>AOP_MIS.some(mi=>S.locked.has(sec.id+'__'+mi))));}
 function toggleLockAllMAMJ(){
-  const anyLocked=DVDATA.some(dv=>dv.secs.some(sec=>AOP_MIS.some(mi=>S.locked.has(sec.id+'__'+mi))));
+  const anyLocked=_anyCellLocked();
   anyLocked?unlockAllMAMJ():lockAllMAMJ();
 }
 function lockAllMAMJ(){
@@ -4141,7 +4153,7 @@ function unlockAllMAMJ(){
   refresh();
 }
 function _syncLockAllBtns(){
-  const anyLocked=DVDATA.some(dv=>dv.secs.some(sec=>AOP_MIS.some(mi=>S.locked.has(sec.id+'__'+mi))));
+  const anyLocked=_anyCellLocked();
   const btn=document.getElementById('lockallbtn');
   if(!btn)return;
   btn.classList.toggle('on',anyLocked);
@@ -4389,7 +4401,7 @@ function _divReapp(dv,mi,tempLock=null){
     // weight = LY: the buyer's side is the plain AOP share (2026-10-05); the factor lives in the Planner's columns
     else{unlocked.push({sec,ly,w:ly});}
   });
-  const remaining=aopMon-lockedTY;
+  const remaining=Math.max(aopMon-lockedTY,0); // audit 2026-10-07: locked cells over AOP drove the rest below -100% (negative sales)
   const totalUnlockedLY=unlocked.reduce((a,{w})=>a+w,0);
   if(!totalUnlockedLY)return;
   unlocked.forEach(({sec,ly,w})=>{
@@ -4558,6 +4570,8 @@ function revertToLyCont(){
   if(!S.aopLocked){toast('Lock AOP first to use this');return;}
   const aopMonths=[11,0,1,2];
   DVDATA.forEach(dv=>{
+    if(S.divLocked.has(dv.id))return; // a locked division keeps its inputs (audit 2026-10-07)
+    dv.secs.forEach(sec=>S.buyerSet.delete(sec.id));
     aopMonths.forEach(mi=>{
       const aopMon=S.aop[dv.id]?.[mi];
       if(!aopMon)return;
@@ -4615,16 +4629,22 @@ async function syncData(){
 function revertToAop(dvId,attr){
   const dv=DVDATA.find(d=>d.id===dvId);
   if(!dv)return;
+  if(S.divLocked.has(dv.id)){toast(dv.nm+' is locked - unlock it first');return;}
   const c=cols();
   // Only revert active (non-hidden) sections
   const secs=(attr?dv.secs.filter(s=>s.attr===attr):dv.secs).filter(s=>!S.hiddenSecs.has(s.id));
   secs.forEach(sec=>{
+    S.buyerSet.delete(sec.id);
     c.forEach(mi=>{
       const k=sec.id+'__'+mi;
       S.locked.delete(k);
       if(S.aopSeeds[k]!=null)S.inputs[k]=S.aopSeeds[k];else delete S.inputs[k];
     });
   });
+  // audit 2026-10-07: the seeds only add up to AOP when the whole division is on them - the other departments
+  // absorb the difference (an attribute revert left MENS 6% under AOP), then the level is put back on AOP
+  const ids=new Set(secs.map(s=>s.id));
+  AOP_MIS.forEach(mi=>{_divReapp(dv,mi,ids);_divRescale(dv,mi);});
   refresh();
   toast((attr||dv.nm)+' reverted to AOP ✓');
 }
@@ -4648,16 +4668,20 @@ function resetPlanToAop(){
     return;
   }
   DVDATA.forEach(dv=>{
+    if(S.divLocked.has(dv.id))return; // a locked division keeps its inputs (audit 2026-10-07)
     dv.secs.filter(s=>!S.hiddenSecs.has(s.id)).forEach(sec=>{
+      S.buyerSet.delete(sec.id);
       for(let mi=0;mi<12;mi++){
         const k=sec.id+'__'+mi;
         S.locked.delete(k);
         if(S.aopSeeds[k]!=null)S.inputs[k]=S.aopSeeds[k];else delete S.inputs[k];
       }
     });
+    // seeds were set on the departments active THEN - a department hidden / shown since moved the total off AOP
+    AOP_MIS.forEach(mi=>_divRescale(dv,mi));
   });
   refresh();
-  toast('Plan reset to selected AOP ✓');
+  toast('Plan reset to the AOP share ✓');
 }
 
 
@@ -4706,7 +4730,13 @@ async function pushBuyerGrowthLive(explicit=false){
     await fetch('/api/config/buyer-department-growth',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({rows,aop_publish_id:S.aopSeededFrom??null}),
-    }).then(r=>{if(!r.ok||r.redirected)toast('Growth NOT sent to Sales Plan ('+r.status+(r.status===401||r.redirected?' - sign in again':'')+')');
+    }).then(async r=>{
+      if(!r.ok||r.redirected){
+        const why=r.status===403?(await r.json().catch(()=>({}))).detail||'no access':r.status===401||r.redirected?'sign in again':r.status;
+        toast('Growth NOT sent to Sales Plan ('+why+')');return;}
+      // audit 2026-10-07: success was shown on r.ok alone - the server stores only valid rows (none -> nothing changes)
+      const got=(await r.json().catch(()=>({}))).updated;
+      if(got!=null&&got!==rows.length)toast('Growth NOT fully sent to Sales Plan (stored '+got+' of '+rows.length+')');
       else note('Saved ✓ — '+rows.length+' growth rows sent to Sales Plan');});
   }catch(e){toast('Growth NOT sent to Sales Plan (AOP unreachable)');} // never block the buyer's own save on this
 }
@@ -5788,7 +5818,7 @@ function seedPlanFromAop(keepLocked=false){
   if(!S.aopLocked){toast('Lock AOP first');return;}
   let seeded=0;
   S.aopSeeds={};
-  if(!keepLocked)S.buyerSet.clear(); // a full reset hands every department back to the plain AOP share
+  if(!keepLocked)DVDATA.forEach(dv=>{if(!S.divLocked.has(dv.id))dv.secs.forEach(sec=>S.buyerSet.delete(sec.id));}); // a full reset hands every department back to the plain AOP share - a locked division keeps its own
   DVDATA.forEach(dv=>{
     for(let mi=0;mi<12;mi++){
       const aopCr=S.aop[dv.id]?.[mi]; // Rs. Crore
@@ -5823,6 +5853,7 @@ function seedPlanFromAop(keepLocked=false){
         const k=sec.id+'__'+mi;
         const g=gr;
         S.aopSeeds[k]=g;
+        if(S.divLocked.has(dv.id))return; // locked division: seeds recorded, inputs untouched (audit 2026-10-07)
         if(keepLocked&&(S.locked.has(k)||kept.has(sec.id)))return;
         S.inputs[k]=g;
         S.locked.delete(k);
