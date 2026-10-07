@@ -170,6 +170,8 @@ export default function DepartmentGrowthMatrix() {
   }
 
   const handleReset = async () => {
+    // danger action (user, 2026-10-07: "add confirm to both")
+    if (!window.confirm(`Reset every ${activeDiv} department's growth to 100 (LY)? Your edits in this division will be lost.`)) return
     setSaving(true)
     await fetch('/api/planning/department-plan/growth-matrix/reset', {
       method: 'POST',

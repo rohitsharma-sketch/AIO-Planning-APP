@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### Sales Plan: confirm before Reset to 100 and Revert to Original
+- **Asked (user):** "add confirm to both and keep the titles removed".
+- Growth Matrix "Reset to 100" asks "Reset every <division> department's growth to 100 (LY)? …" and Attribute Correction "Revert to Original" asks before discarding the division's edits; Cancel does nothing (checked: no request sent). The 13 duplicate page titles stay removed. dist rebuilt.
+
 ### Sales Plan: decluttered (suite declutter 8 of 8)
 - **Asked (user):** suite declutter ("check sales plan too in this process").
 - **Moved (handlers / labels unchanged; menus are native details, always in the DOM, Esc returns focus):** Growth Matrix - ↑ Buyer Input, Sync from Buyer's Input Sheet, ↺ Reset to 100 [danger] -> "Matrix tools ▾", legend -> ⓘ, ▶ Generate Base Plan primary; Department Master - Load AOP division targets + ↓ Export -> "Data ▾", AOP tiles one line, attribute chips folded; New Depts - Clear [danger, confirm kept] moved away from Save & Apply into "⋯"; Attribute Correction - Compare AOP + Revert to Original [danger] -> "More ▾"; PW/W - Refresh -> "Data ▾", only the next-step run button shows (others in "⋯"); SOR - Refresh -> "Data ▾"; MRP Output - Deviations + Export CSV -> "More ▾"; Division Plan - Refresh -> "Data ▾", charts folded.

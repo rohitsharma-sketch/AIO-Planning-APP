@@ -409,6 +409,8 @@ export default function AttributeCorrection() {
   // ── Revert active division to original loaded values ────────────────────────
   const handleRevert = useCallback(() => {
     if (!originalCorrections[activeDiv]) return
+    // danger action (user, 2026-10-07: "add confirm to both")
+    if (!window.confirm(`Revert ${activeDiv} to the original attribute corrections? Unsaved changes in this division will be lost.`)) return
     setCorrections(prev => ({
       ...prev,
       [activeDiv]: originalCorrections[activeDiv],
