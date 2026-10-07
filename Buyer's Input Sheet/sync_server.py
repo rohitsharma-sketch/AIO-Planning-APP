@@ -416,12 +416,17 @@ def _model_error(m):
             sl = d["slabs"]
             if not 1 <= len(sl) <= 12:
                 return f"{d['key']}: 1-12 slabs"
-            starts = [s.get("from") for s in sl[1:]]
+            by = d.get("by", "value")   # 'pct': starts are percentiles of the division's departments (0-100)
+            if by not in ("value", "pct"):
+                return f"{d['key']}: slabs by value or percentile"
+            starts = [s.get("pct" if by == "pct" else "from") for s in sl[1:]]
             if any(v is None or num(v) is False for v in starts):
                 return f"{d['key']}: every slab after the first needs a start"
             fl = [float(v) for v in starts]
             if fl != sorted(fl) or len(set(fl)) != len(fl):
                 return f"{d['key']}: slab starts must rise"
+            if by == "pct" and fl and not (0 < fl[0] and fl[-1] < 100):
+                return f"{d['key']}: percentiles must be between 1 and 99"
             for s in sl:
                 if num(s["mult"]) is False or not 0 < float(s["mult"]) <= 3:
                     return f"{d['key']}: multiplier out of range"

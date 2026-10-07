@@ -5384,6 +5384,12 @@ const FM_DRIVERS={st:{label:'Avg Weekly Sell-Thru %',short:'Sell-thru',inp:'st',
   growth:{label:'LY Growth % (25V26, MAMJ)',short:'LY growth',inp:'gr',dom:[-0.5,1.5]},
   fill:{label:'Fill Rate %',short:'Fill rate',inp:'fill',dom:[0,1]}};
 function _fmSlab(slabs,v){let hit=null;(slabs||[]).forEach(s=>{if(s.from==null||v>=s.from)hit=s;});return hit;}
+// Percentile slabs (2026-10-07): a driver with by:'pct' keeps each slab's start as a percentile (s.pct, 0-100) of its
+// division's active departments, so "High sell-thru" is high FOR THAT DIVISION and moves with every data refresh.
+function _fmQuant(sorted,p){if(!sorted.length)return null;const i=(sorted.length-1)*p/100,lo=Math.floor(i),hi=Math.ceil(i);return sorted[lo]+(sorted[hi]-sorted[lo])*(i-lo);}
+function _fmCut(m,vals){ // vals: {driverKey: sorted values}; returns the model with value starts for every pct driver
+  return {...m,drivers:(m.drivers||[]).map(d=>d.by!=='pct'?d:{...d,slabs:d.slabs.map((sl,j)=>({...sl,from:j?_fmQuant(vals[d.key]||[],sl.pct):null}))})};
+}
 function _weightedFactor(x,m,lyPerMonth){
   const parts=[];
   (m.drivers||[]).forEach(d=>{
@@ -5408,6 +5414,37 @@ function _weightedFactor(x,m,lyPerMonth){
   return {f:Math.min(Math.max(damped,cl),ch),raw,ruled,damped,parts,rules};
 }
 // end weighted factor model
+let _fmCutCache=new Map();
+function _fmResolve(m,dvId,mis){
+  if(!(m.drivers||[]).some(d=>d.by==='pct'))return m;
+  const key=dvId+'|'+mis.join(',')+'|'+JSON.stringify(m);
+  if(_fmCutCache.has(key))return _fmCutCache.get(key);
+  const dv=DVDATA.find(d=>d.id===dvId),xs=dv?dv.secs.filter(s=>!S.hiddenSecs.has(s.id)).map(s=>_plannerInputs(s,mis)):[],vals={};
+  m.drivers.forEach(d=>{if(d.by==='pct'){const k=FM_DRIVERS[d.key].inp;vals[d.key]=xs.map(x=>x[k]).filter(v=>v!=null).sort((a,b)=>a-b);}});
+  const r=_fmCut(m,vals);_fmCutCache.set(key,r);return r;
+}
+/* Back-test (user, 2026-10-07): the planner step one year earlier, with nothing taken from the months it predicts.
+   Inputs = Mar-Apr 2026 (sell-thru, LY growth 25V26, current fill rate); prediction = each department's share of its
+   division in May-Jun 2026 starting from its May-Jun 2025 share (same 25V26 stores), re-balanced like the planner;
+   error = sum |predicted - actual| / sum actual (WAPE) over the departments with sales both years. */
+const FM_BT_IN=[11,0],FM_BT_OUT=[1,2];
+function _fmBacktest(m){ // m = a weighted model, 'matrix' = the saved matrix, null = plain share (factor 1)
+  let err=0,act=0,n=0;const per=[];
+  DVDATA.forEach(dv=>{
+    const rs=[];
+    dv.secs.forEach(sec=>{if(S.hiddenSecs.has(sec.id))return;
+      const raw=SEC_LFL_GROWTH[sec.id]?.raw?.yoy;if(!raw)return;
+      const b=FM_BT_OUT.reduce((a,mi)=>a+(raw[mi]?.[0]||0),0),a=FM_BT_OUT.reduce((t,mi)=>t+(raw[mi]?.[1]||0),0);
+      if(!(b>0))return;
+      const x=_plannerInputs(sec,FM_BT_IN);
+      const f=m==null?1:m==='matrix'?_matrixFactor(PLANNER.ft,x).f:_weightedFactor(x,_fmResolve(m,dv.id,FM_BT_IN),b/FM_BT_OUT.length).f;
+      rs.push({b,a,f});});
+    const A=rs.reduce((t,r)=>t+r.a,0),BF=rs.reduce((t,r)=>t+r.b*r.f,0);if(!(A>0)||!(BF>0))return;
+    const e=rs.reduce((t,r)=>t+Math.abs(A*r.b*r.f/BF-r.a),0);
+    per.push({nm:dv.nm,wape:e/A,n:rs.length});err+=e;act+=A;n+=rs.length;
+  });
+  return {wape:act>0?err/act:null,n,per};
+}
 function _fmWhy(r){
   if(r.none)return 'no driver data - neutral 1.00';
   const pc=v=>(v*100).toFixed(1)+'%',W=r.parts.reduce((a,q)=>a+q.w,0);
@@ -5422,7 +5459,7 @@ function _plannerFactor(sec,mis){
   if(ft?.mode==='weighted'&&ft.model){
     const dv=DVDATA.find(d=>d.secs.includes(sec));
     const ly=dv?mis.reduce((a,mi)=>a+_secMonLY(sec,dv,mi),0)/mis.length:null;
-    const r=_weightedFactor(x,ft.model,ly),sl=k=>r.parts.find(q=>q.key===k)?.slab.label||null;
+    const r=_weightedFactor(x,dv?_fmResolve(ft.model,dv.id,mis):ft.model,ly),sl=k=>r.parts.find(q=>q.key===k)?.slab.label||null;
     return {f:r.f,why:_fmWhy(r),tags:{st:sl('st'),growth:sl('growth'),fill:sl('fill')},inp:x};
   }
   return {..._matrixFactor(ft,x),inp:x};
@@ -5433,6 +5470,7 @@ function _plannerCalc(){
   const k=JSON.stringify([S.aop,[...S.hiddenSecs].sort(),mode,PLANNER.ft?.version??null,!!PLANNER.ft,PLANNER.fill?.imported_at??null,
     Object.keys(PLANNER.refs).length,_lyHash(),Object.keys(window._SELLTHRU_LIVE_DEPT||{}).length,Object.keys(SEC_LFL_GROWTH).length]);
   if(_plMemo.k===k)return _plMemo.v;
+  _fmCutCache=new Map();
   const out={};
   DVDATA.forEach(dv=>{
     out[dv.id]={};
@@ -5534,7 +5572,7 @@ function openFactorTable(){
     PLANNER.canEdit=!!(me&&(me.is_admin||me.role==='admin'||me.role==='planner'));
     _fmFt=PLANNER.ft?_clone(PLANNER.ft):null;
     if(_fmFt){_fmFt.mode=_fmFt.mode||'matrix';_fmFt.model=_fmFt.model||_clone(FM_DEFAULT);}
-    _fmTab=_fmFt?.mode==='weighted'?'builder':'matrix';_fmPrevCache=null;
+    _fmTab=_fmFt?.mode==='weighted'?'builder':'matrix';_fmPrevCache=null;_fmCutCache=new Map();
     _renderFactorTable();document.getElementById('factorOv').style.display='flex';
   });
 }
@@ -5574,17 +5612,29 @@ function _fmPrev(){
     out.push({sec,dv,x,ly,mx:_matrixFactor(PLANNER.ft,x).f});}));
   return _fmPrevCache=out;
 }
-function _fmPos(d,v){const [a,b]=FM_DRIVERS[d.key].dom;return Math.min(Math.max((v-a)/(b-a),0),1)*100;}
+const _fmPctMode=d=>d.by==='pct';
+function _fmDom(d){return _fmPctMode(d)?[0,100]:FM_DRIVERS[d.key].dom;}
+function _fmStart(d,sl){return _fmPctMode(d)?sl.pct:sl.from;}
+function _fmPos(d,v){const [a,b]=_fmDom(d);return Math.min(Math.max((v-a)/(b-a),0),1)*100;}
+function _fmSetBy(i,by){
+  const d=_fmFt.model.drivers[i],n=d.slabs.length;d.by=by;
+  if(by==='pct')d.slabs.forEach((sl,j)=>{if(j&&!(sl.pct>0&&sl.pct<100))sl.pct=Math.round(100*j/n);});
+  _fmCutCache=new Map();_renderFactorTable();
+}
 function _fmBuilderHtml(m,ed){
   const dis=ed?'':' disabled',P=_fmPrev(),pc=v=>+(v*100).toFixed(2);
   const on=m.drivers.filter(d=>d.on&&+d.weight>0),W=on.reduce((a,d)=>a+ +d.weight,0);
   const cards=m.drivers.map((d,i)=>{
-    const D=FM_DRIVERS[d.key],n=d.slabs.length,cnt=d.slabs.map(()=>0);let miss=0;
-    P.forEach(q=>{const v=q.x[D.inp];if(v==null){miss++;return;}const sl=_fmSlab(d.slabs,v);if(sl)cnt[d.slabs.indexOf(sl)]++;});
-    const bar=d.slabs.map((sl,j)=>{const a=j?_fmPos(d,sl.from):0,b=j<n-1?_fmPos(d,d.slabs[j+1].from):100,mu=+sl.mult;
+    const D=FM_DRIVERS[d.key],n=d.slabs.length,cnt=d.slabs.map(()=>0),pm=_fmPctMode(d);let miss=0;
+    // counts by each department's own division cut-offs when the slabs are percentiles
+    P.forEach(q=>{const v=q.x[D.inp];if(v==null){miss++;return;}const ds=pm?_fmResolve(m,q.dv.id,AOP_MIS).drivers[i].slabs:d.slabs;
+      const sl=_fmSlab(ds,v);if(sl)cnt[ds.indexOf(sl)]++;});
+    const cuts=pm?DVDATA.map(dv=>`${_h(dv.nm)} ${_fmResolve(m,dv.id,AOP_MIS).drivers[i].slabs.slice(1).map(sl=>sl.from==null?'-':pc(sl.from)+'%').join(' / ')}`).join(' · '):'';
+    const bar=d.slabs.map((sl,j)=>{const a=j?_fmPos(d,_fmStart(d,sl)):0,b=j<n-1?_fmPos(d,_fmStart(d,d.slabs[j+1])):100,mu=+sl.mult;
       return `<div class="fm-seg ${mu>1.0001?'up':mu<0.9999?'dn':'eq'}" data-j="${j}" style="left:${a}%;width:${Math.max(b-a,0)}%" title="${_h(sl.label)} ×${mu.toFixed(2)} · ${cnt[j]} departments">${_h(sl.label)} ×${mu.toFixed(2)} · ${cnt[j]}</div>`+
-        (j&&ed?`<span class="fm-hdl" data-j="${j}" data-v="${pc(sl.from)}%" style="left:${a}%" title="Drag to move where ${_h(sl.label)} starts" aria-hidden="true"></span>`:'');}).join('');
-    const rows=d.slabs.map((sl,j)=>`<tr><td>${j?`<input class="gi" type="number" step="0.5" value="${pc(sl.from)}"${dis} onchange="_fmSetFrom(${i},${j},this.value)" aria-label="${D.short}: ${_h(sl.label)} starts at %"> %`:'lowest'}</td>
+        (j&&ed?`<span class="fm-hdl" data-j="${j}" data-v="${pm?'P'+sl.pct:pc(sl.from)+'%'}" style="left:${a}%" title="Drag to move where ${_h(sl.label)} starts" aria-hidden="true"></span>`:'');}).join('');
+    const rows=d.slabs.map((sl,j)=>`<tr><td>${!j?'lowest':pm?`P <input class="gi" type="number" step="1" min="1" max="99" value="${sl.pct}"${dis} onchange="_fmSetFrom(${i},${j},this.value)" aria-label="${D.short}: ${_h(sl.label)} starts at percentile">`
+      :`<input class="gi" type="number" step="0.5" value="${pc(sl.from)}"${dis} onchange="_fmSetFrom(${i},${j},this.value)" aria-label="${D.short}: ${_h(sl.label)} starts at %"> %`}</td>
       <td><input type="text" maxlength="20" value="${_h(sl.label)}"${dis} onchange="_fmFt.model.drivers[${i}].slabs[${j}].label=this.value.trim()||'Slab';_renderFactorTable()" aria-label="${D.short} slab ${j+1} name"></td>
       <td><input class="gi" type="number" step="0.01" min="0.5" max="2" value="${+sl.mult}"${dis} onchange="_fmSetMult(${i},${j},this.value)" aria-label="${D.short}: ${_h(sl.label)} multiplier"></td>
       <td>${cnt[j]}</td><td>${ed&&n>1?`<button type="button" class="fm-x" onclick="_fmDelSlab(${i},${j})" aria-label="Remove slab ${_h(sl.label)}">&#x2715;</button>`:''}</td></tr>`).join('');
@@ -5594,8 +5644,12 @@ function _fmBuilderHtml(m,ed){
         <label class="fm-on"><input type="checkbox"${d.on?' checked':''}${dis} onchange="_fmFt.model.drivers[${i}].on=this.checked;_renderFactorTable()"> Use</label>
         <label class="fm-w">Weight <input type="range" min="0" max="100" step="5" value="${+d.weight}"${dis} oninput="this.nextElementSibling.textContent=this.value" onchange="_fmFt.model.drivers[${i}].weight=+this.value;_renderFactorTable()" aria-label="${D.short} weight"><span>${+d.weight}</span></label>
         <span class="fm-share">${d.on&&+d.weight>0&&W?Math.round(d.weight/W*100)+'% of the factor':'not used'}</span></div>
+      <div class="fm-row">Slabs by <div class="vtog" role="group" aria-label="${D.short} slabs by">
+        <button type="button" class="vt${pm?'':' on'}" aria-pressed="${!pm}"${dis} onclick="_fmSetBy(${i},'value')">Value</button>
+        <button type="button" class="vt${pm?' on':''}" aria-pressed="${pm}"${dis} onclick="_fmSetBy(${i},'pct')">Percentile in division</button></div>
+        ${pm?`<span class="fm-note">cut-offs now: ${cuts}</span>`:''}</div>
       <div class="fm-bar" data-i="${i}">${bar}</div>
-      <table class="fm-sl"><thead><tr><th>Starts at</th><th>Slab</th><th>Multiplier</th><th>Departments</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      <table class="fm-sl"><thead><tr><th>Starts at${pm?' (percentile)':''}</th><th>Slab</th><th>Multiplier</th><th>Departments</th><th></th></tr></thead><tbody>${rows}</tbody></table>
       <div class="fm-row">${ed&&n<8?`<button type="button" class="fpbtn" onclick="_fmAddSlab(${i})">+ Add slab</button>`:''}${miss?`<span class="fm-note">${miss} departments have no ${D.short.toLowerCase()} - left out for them, the other drivers re-weighted</span>`:''}</div>
     </div>`;}).join('');
   const opt=(v,list)=>list.map(([k,t])=>`<option value="${k}"${v===k?' selected':''}>${t}</option>`).join('');
@@ -5606,7 +5660,11 @@ function _fmBuilderHtml(m,ed){
       <input class="gi" type="number" step="0.01" min="0.5" max="2" value="${+r.f}"${dis} onchange="_fmFt.model.rules[${ri}].f=Math.min(Math.max(+this.value||1,0.5),2);_renderFactorTable()" aria-label="Rule ${ri+1} factor">
       ${ed?`<button type="button" class="fm-x" onclick="_fmFt.model.rules.splice(${ri},1);_renderFactorTable()" aria-label="Remove rule ${ri+1}">&#x2715;</button>`:''}</div>`).join('')||'<div class="fm-note">No rules.</div>';
   // preview: every active department scored with this draft vs the saved matrix
-  const res=P.map(q=>({q,r:_weightedFactor(q.x,m,q.ly)})),fs=res.map(o=>o.r.f).sort((a,b)=>a-b);
+  const res=P.map(q=>({q,r:_weightedFactor(q.x,_fmResolve(m,q.dv.id,AOP_MIS),q.ly)})),fs=res.map(o=>o.r.f).sort((a,b)=>a-b);
+  const bt=[['Plain AOP share (factor 1.00)',_fmBacktest(null)],['Matrix (saved)',_fmBacktest('matrix')],['This builder',_fmBacktest(m)]];
+  const base=bt[0][1].wape,pct=v=>v==null?'-':(v*100).toFixed(2)+'%';
+  const btRows=bt.map(([t,r])=>`<tr><td style="text-align:left">${t}</td><td><b>${pct(r.wape)}</b></td><td class="${r.wape!=null&&base!=null?gCls(base-r.wape):''}">${r.wape==null||base==null||t.startsWith('Plain')?'-':((base-r.wape)>=0?'better by ':'worse by ')+Math.abs((base-r.wape)*100).toFixed(2)+' pts'}</td>
+    ${r.per.map(x=>`<td>${pct(x.wape)}</td>`).join('')}</tr>`).join('');
   const none=res.filter(o=>o.r.none).length,med=fs.length?fs[Math.floor(fs.length/2)]:1;
   const lst=arr=>arr.map(o=>`<li>${_h(o.q.sec.nm)} <span class="fm-note">${_h(o.q.dv.nm)}</span> <b>${o.r.f.toFixed(2)}</b> <span class="fm-note">matrix ${o.q.mx.toFixed(2)}</span></li>`).join('');
   const by=res.slice().sort((a,b)=>b.r.f-a.r.f);
@@ -5618,6 +5676,9 @@ function _fmBuilderHtml(m,ed){
       <input class="gi" type="number" step="0.5" min="0" value="${+(m.shrink_k*100).toFixed(2)}"${dis} onchange="_fmFt.model.shrink_k=Math.max(+this.value||0,0)/100;_renderFactorTable()" aria-label="Damping LY in lakh per month"> L a month (0 = off)
       · Factor stays between <input class="gi" type="number" step="0.01" min="0.5" max="1" value="${m.clamp[0]}"${dis} onchange="_fmSetClamp(0,this.value)" aria-label="Lowest factor">
       and <input class="gi" type="number" step="0.01" min="1" max="2" value="${m.clamp[1]}"${dis} onchange="_fmSetClamp(1,this.value)" aria-label="Highest factor"></div></div>
+    <div class="fm-sec"><h4>Back-test - would it have called May-Jun 2026?</h4>
+      <div class="fm-note">Inputs from Mar-Apr 2026 only (sell-thru, LY growth 25V26) + the current fill rate; each department's share of its division in May-Jun 2026 predicted from its May-Jun 2025 share (same stores), re-balanced like the planner, then compared with what sold. Error = how far off, as a % of sales - lower is better. ${bt[0][1].n} departments.</div>
+      <table class="pl-ft" style="margin-top:6px"><thead><tr><th style="text-align:left">Method</th><th>Error</th><th>vs plain share</th>${bt[0][1].per.map(x=>`<th>${_h(x.nm)}</th>`).join('')}</tr></thead><tbody>${btRows}</tbody></table></div>
     <div class="fm-sec"><h4>Preview - ${res.length} active departments</h4>
       <div class="fm-note">Factor low ${fs[0]?.toFixed(2)??'-'} · median ${med.toFixed(2)} · high ${fs[fs.length-1]?.toFixed(2)??'-'}${none?` · ${none} with no driver data stay at 1.00`:''}</div>
       <div class="fm-prev"><div><b>Highest factors</b><ol>${lst(by.slice(0,5))}</ol></div><div><b>Lowest factors</b><ol>${lst(by.slice(-5).reverse())}</ol></div></div></div>
@@ -5626,7 +5687,11 @@ function _fmBuilderHtml(m,ed){
 function _fmMove(i,dir){const a=_fmFt.model.drivers,j=i+dir;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];_renderFactorTable();
   document.querySelectorAll('#factorBody .fm-card')[j]?.querySelectorAll('.fm-mv')[dir<0?0:1]?.focus();}
 function _fmSetFrom(i,j,val){
-  const d=_fmFt.model.drivers[i],v=Math.round(parseFloat(val)*100)/10000;
+  const d=_fmFt.model.drivers[i];
+  if(_fmPctMode(d)){const v=Math.round(parseFloat(val)),lo=j>1?d.slabs[j-1].pct:0,hi=d.slabs[j+1]?.pct??100;
+    if(isNaN(v)||v<=lo||v>=hi){toast('Percentiles must rise between 1 and 99');_renderFactorTable();return;}
+    d.slabs[j].pct=v;_fmCutCache=new Map();_renderFactorTable();return;}
+  const v=Math.round(parseFloat(val)*100)/10000;
   const lo=d.slabs[j-1].from,hi=d.slabs[j+1]?.from;
   if(isNaN(v)||(lo!=null&&v<=lo)||(hi!=null&&v>=hi)){toast('Each slab must start above the one before it and below the next');_renderFactorTable();return;}
   d.slabs[j].from=v;_renderFactorTable();
@@ -5634,12 +5699,16 @@ function _fmSetFrom(i,j,val){
 function _fmSetMult(i,j,val){const v=parseFloat(val);_fmFt.model.drivers[i].slabs[j].mult=isNaN(v)?1:Math.min(Math.max(v,0.5),2);_renderFactorTable();}
 function _fmSetClamp(k,val){const v=parseFloat(val),c=_fmFt.model.clamp;c[k]=isNaN(v)?(k?1.2:0.8):k?Math.min(Math.max(v,1),2):Math.min(Math.max(v,0.5),1);_renderFactorTable();}
 function _fmAddSlab(i){
-  const d=_fmFt.model.drivers[i],last=d.slabs[d.slabs.length-1],[a,b]=FM_DRIVERS[d.key].dom;
+  const d=_fmFt.model.drivers[i],last=d.slabs[d.slabs.length-1];
+  if(_fmPctMode(d)){const st=d.slabs.length>1?last.pct:0,v=Math.round((st+100)/2);
+    if(v<=st||v>=100){toast('No room for another slab at the top');return;}
+    d.slabs.push({from:null,pct:v,label:'New',mult:1});_renderFactorTable();return;}
+  const [a,b]=FM_DRIVERS[d.key].dom;
   const st=last.from??a,v=Math.round(((st+b)/2)*200)/200;
   if(v<=st){toast('No room for another slab at the top');return;}
   d.slabs.push({from:v,label:'New',mult:1});_renderFactorTable();
 }
-function _fmDelSlab(i,j){const sl=_fmFt.model.drivers[i].slabs;sl.splice(j,1);if(j===0&&sl.length)sl[0].from=null;_renderFactorTable();}
+function _fmDelSlab(i,j){const sl=_fmFt.model.drivers[i].slabs;sl.splice(j,1);if(j===0&&sl.length){sl[0].from=null;delete sl[0].pct;}_renderFactorTable();}
 // drag a card's grip to change priority; drag a slab boundary along its bar (the keyboard way to do both: the
 // up / down buttons and the "Starts at" inputs)
 function _fmWire(){
@@ -5654,16 +5723,17 @@ function _fmWire(){
   });
   body.querySelectorAll('.fm-hdl').forEach(h=>h.addEventListener('pointerdown',e=>{
     e.preventDefault();h.setPointerCapture(e.pointerId);
-    const bar=h.parentElement,d=_fmFt.model.drivers[+bar.dataset.i],j=+h.dataset.j,[d0,d1]=FM_DRIVERS[d.key].dom;
-    const lo=(d.slabs[j-1].from??d0)+0.005,hi=(d.slabs[j+1]?.from??d1)-0.005;
+    const bar=h.parentElement,d=_fmFt.model.drivers[+bar.dataset.i],j=+h.dataset.j,[d0,d1]=_fmDom(d),pm=_fmPctMode(d);
+    const step=pm?1:0.005,prev=j>1?_fmStart(d,d.slabs[j-1]):null,next=d.slabs[j+1]?_fmStart(d,d.slabs[j+1]):null;
+    const lo=(prev??d0)+step,hi=(next??d1)-step;
     const mv=ev=>{const r=bar.getBoundingClientRect();
-      const v=Math.round((d0+(ev.clientX-r.left)/r.width*(d1-d0))*200)/200;
-      d.slabs[j].from=+Math.min(Math.max(v,lo),hi).toFixed(4);
-      const a=_fmPos(d,d.slabs[j].from);h.style.left=a+'%';h.dataset.v=+(d.slabs[j].from*100).toFixed(2)+'%';
+      const v=Math.round((d0+(ev.clientX-r.left)/r.width*(d1-d0))/step)*step,c=+Math.min(Math.max(v,lo),hi).toFixed(4);
+      if(pm)d.slabs[j].pct=c;else d.slabs[j].from=c;
+      const a=_fmPos(d,c);h.style.left=a+'%';h.dataset.v=pm?'P'+c:+(c*100).toFixed(2)+'%';
       const s0=bar.querySelector(`.fm-seg[data-j="${j-1}"]`),s1=bar.querySelector(`.fm-seg[data-j="${j}"]`);
       if(s0)s0.style.width=Math.max(a-parseFloat(s0.style.left),0)+'%';
       if(s1){const e1=parseFloat(s1.style.left)+parseFloat(s1.style.width);s1.style.left=a+'%';s1.style.width=Math.max(e1-a,0)+'%';}};
-    const up=()=>{h.removeEventListener('pointermove',mv);h.removeEventListener('pointerup',up);_renderFactorTable();};
+    const up=()=>{h.removeEventListener('pointermove',mv);h.removeEventListener('pointerup',up);_fmCutCache=new Map();_renderFactorTable();};
     h.addEventListener('pointermove',mv);h.addEventListener('pointerup',up);
   }));
 }

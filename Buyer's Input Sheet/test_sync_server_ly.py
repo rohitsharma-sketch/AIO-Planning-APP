@@ -31,4 +31,11 @@ for path, val in ((["drivers", 0, "weight"], 101), (["drivers", 0, "slabs", 2, "
         tgt = tgt[k]
     tgt[path[-1]] = val
     assert ss._model_error(m), (path, val)
+pm = copy.deepcopy(good)                       # percentile slabs: rising 1-99 accepted, 100 refused
+pm["drivers"][0].update(by="pct")
+for j, sl in enumerate(pm["drivers"][0]["slabs"][1:], 1):
+    sl["pct"] = 25 * j
+assert ss._model_error(pm) is None, ss._model_error(pm)
+pm["drivers"][0]["slabs"][-1]["pct"] = 100
+assert ss._model_error(pm)
 print(f"test_sync_server_ly: OK (plan {plan[0]}-{plan[-1]}, LY {ly[0]}-{ly[-1]})")

@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### BIS factor builder: percentile slabs + back-test
+- **Asked (user):** "yes go ahead with percentile slabs and back-test".
+- **Percentile slabs:** each driver card has "Slabs by: Value | Percentile in division". In percentile mode a slab starts at a percentile (P1-P99) of its division's active departments for the same months (`_fmQuant` / `_fmCut` / `_fmResolve`), so cut-offs move with every data refresh and "High" means high for that division (sell-thru now: MENS 8.4 / 11.2 / 12.9%, LADIES 7.8 / 10.1 / 12.9%, KIDS 9.2 / 11.3 / 12.3%). Departments spread evenly (sell-thru 32 / 30 / 30 / 32 vs 8 / 38 / 65 / 13 on fixed values). Server validates (`by`, rising 1-99).
+- **Back-test (`_fmBacktest`):** the planner step one year earlier with no look-ahead - inputs Mar-Apr 2026 (sell-thru, LY growth 25V26) + current fill rate; each department's May-Jun 2026 share of its division predicted from its May-Jun 2025 share (same stores), re-balanced like the planner; error = WAPE, per division too. Shown live in the builder for plain share, the saved matrix and the draft.
+- **First results (151 departments):** plain share 14.83%; saved matrix 15.72% (worse by 0.90 pts); builder default 14.44% (better 0.38), with percentile slabs 14.08% (better 0.74); sell-thru alone 13.72% (better 1.11); LY growth alone 15.75% (worse 0.92) - high-growth departments kept growing, so cutting them lost accuracy.
+- **Checks:** `test_factor_model.js` (percentiles, resolved starts), `test_sync_server_ly.py` (percentile validation).
+
 ### BIS: weighted factor builder (step 1 + builder) beside the 36-row matrix
 - **Asked (user):** dynamic factor table instead of the hand-set one; drag-and-drop slabs and weightage for a single or multi-factor system; a definitive coefficient. Then: "yes start with step 1 and the builder".
 - **Formula (`_weightedFactor`):** each driver that is on puts the department in one of its slabs (a multiplier); drivers combine as a weighted geometric mean (one driver = its multiplier; 1.10 and 0.91 cancel; a driver with no data is left out and the rest re-weighted) -> floor / cap rules in card (priority) order, a later rule never undoing an earlier one -> small departments damped toward 1.00 (f' = 1 + (f-1) x LY / (LY + k), LY per month) -> clamp. The re-balance to each division's AOP is unchanged.
