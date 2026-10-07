@@ -151,12 +151,9 @@ button{font-family:inherit}
 .fpbtn.on{background:var(--ac-l);border-color:var(--ac-b);color:var(--ac)}
 .fpbtn.sync:disabled{opacity:.6;cursor:wait}
 .fpbtn.ico{width:30px;padding:0;justify-content:center;font-size:14px}
-/* data-sync status popover */
-.sync-wrap{position:relative;display:inline-flex}
-.sync-tip{display:none;position:absolute;right:0;top:calc(100% + 6px);background:var(--sf);border:1px solid var(--bd);border-radius:10px;min-width:260px;z-index:999;box-shadow:var(--shadow-lg);flex-direction:column;overflow:hidden}
-.sync-wrap:hover .sync-tip{display:flex}
-.sync-tip::before{content:"";position:absolute;left:0;right:0;top:-8px;height:8px}
-.sync-tip-hd{display:flex;align-items:center;gap:7px;padding:9px 12px;border-bottom:1px solid var(--bd);background:var(--s2)}
+/* data-sync status (inside the Data menu) */
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--bd);display:inline-block;margin-right:7px;vertical-align:middle;transition:background .3s}
+.sync-tip-hd{display:flex;align-items:center;gap:7px;padding:7px 10px;margin-top:4px;border-radius:7px;background:var(--s2)}
 .sync-tip-hd-dot{width:7px;height:7px;border-radius:50%;background:var(--bd);flex-shrink:0}
 .sync-tip-status{font-size:11px;font-weight:700;color:var(--t2);flex:1}
 .sync-tip-body{display:flex;flex-direction:column;padding:4px 0}
@@ -204,18 +201,16 @@ button{font-family:inherit}
 .dtab-cnt{display:inline-block;font-size:10px;font-weight:700;background:var(--s3);color:var(--t3);padding:1px 7px;border-radius:10px;margin-left:8px;min-width:20px;text-align:center;letter-spacing:0}
 .dtab.on .dtab-cnt{background:rgba(31,77,58,.12);color:var(--st-btn-text,#1F4D3A)}
 
-/* ── KPI STRIP ──────────────────────────────────────────────────────── */
-.kstrip{flex-shrink:0;padding:4px 18px 14px;display:flex;gap:12px;background:var(--bg);overflow-x:auto}
-.ktile{position:relative;background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:12px 16px 11px 18px;display:flex;flex-direction:column;gap:3px;min-width:150px;flex:1;box-shadow:var(--shadow);overflow:hidden}
-.ktile::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--bm)}
-.ktile.a::before{background:var(--st-btn,#A8CBB7)}
-.ktile.p::before{background:var(--po)}
-.ktile.n::before{background:var(--ne)}
-.kl{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.11em;color:var(--mu)}
-.kv{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--tx);line-height:1.2;letter-spacing:-.02em}
-.ktile.p .kv{color:var(--po)}
-.ktile.n .kv{color:var(--ne)}
-.ks{font-size:10.5px;color:var(--t3)}
+/* ── SUMMARY + RULES LINE (one slim line beside the division tabs, 2026-10-07) ── */
+.rhead{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:10px 18px;flex-shrink:0;background:var(--bg)}
+.rhead .divtabs{padding:0}
+.kstrip{display:flex;align-items:center;gap:6px 14px;flex-wrap:wrap;font-size:12px;color:var(--t3);margin-left:auto}
+.kstrip:empty{display:none}
+.kstrip b{color:var(--tx);font-weight:700;font-variant-numeric:tabular-nums}
+.ks-sep{width:1px;height:16px;background:var(--bd)}
+.rule{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid var(--po-br);background:var(--po-b);color:var(--po);cursor:help}
+.rule.off{border-color:var(--ne-br);background:var(--ne-b);color:var(--ne)}
+.ks-meta{font-size:11px;color:var(--t3)}
 
 /* ── TABLE ──────────────────────────────────────────────────────────── */
 .twrap{flex:1;overflow:auto;position:relative;margin:0 18px;background:var(--sf);border:1px solid var(--bd);border-radius:10px 10px 0 0;box-shadow:var(--shadow)}
@@ -373,12 +368,38 @@ td.aop-col-bg input.gi{background:var(--sf)}
 .cfd-empty{padding:16px;text-align:center;color:var(--mu);font-size:11.5px}
 .cfd-count{margin-left:auto;font-size:10px;font-weight:600;color:var(--mu);white-space:nowrap}
 
-/* ── GRAND-TOTAL BAR ────────────────────────────────────────────────── */
-.gtbar{flex-shrink:0;margin:0 18px 14px;background:var(--sf);border:1px solid var(--bd);border-top:2px solid var(--ac);border-radius:0 0 10px 10px;padding:10px 18px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;box-shadow:var(--shadow)}
-.gti{display:flex;flex-direction:column;gap:2px}
-.gtl{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--mu)}
-.gtv{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--tx);letter-spacing:-.01em}
-.gtsep{width:1px;height:34px;background:var(--bd)}
+/* ── FILTER CHIPS (active filters while the panel is closed) ────────── */
+.fchips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.fchip{display:inline-flex;align-items:center;gap:4px;padding:3px 4px 3px 10px;border-radius:999px;border:1px solid var(--ac-b);background:var(--ac-l);color:var(--ac-h);font-size:11px;font-weight:600}
+.fchip button{all:unset;cursor:pointer;width:18px;height:18px;border-radius:50%;text-align:center;line-height:18px;font-size:12px}
+.fchip button:hover,.fchip button:focus-visible{background:color-mix(in srgb,var(--ac) 18%,transparent)}
+
+/* ── DEPARTMENT DRAWER (everything about one department, 2026-10-07) ── */
+.rn-btn{all:unset;cursor:pointer;border-radius:3px}
+.rn-btn:hover{text-decoration:underline;text-underline-offset:3px;color:var(--ac)}
+.rn-btn:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.drw-ov{position:fixed;inset:0;z-index:900;display:none;justify-content:flex-end;background:rgba(var(--st-ink-rgb,30,39,35),.18)}
+.drw-ov.vis{display:flex}
+.drw{width:420px;max-width:100vw;background:var(--sf);border-left:1px solid var(--bd);display:flex;flex-direction:column;box-shadow:var(--shadow-lg);animation:vlog-slide .18s ease}
+.drw-hd{padding:14px 18px;border-bottom:1px solid var(--bd);display:flex;align-items:flex-start;gap:10px}
+.drw-tt{flex:1;min-width:0}
+.drw-nm{font-size:16px;font-weight:700;color:var(--tx)}
+.drw-sub{font-size:11.5px;color:var(--t3);margin-top:3px}
+.drw-x{all:unset;cursor:pointer;padding:4px 9px;border-radius:7px;color:var(--t3);font-size:16px;line-height:1}
+.drw-x:hover,.drw-x:focus-visible{background:var(--s3);color:var(--tx)}
+.drw-bd{flex:1;overflow-y:auto;padding:14px 18px;display:flex;flex-direction:column;gap:16px}
+.drw-sec h4{margin:0 0 8px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--mu)}
+.drw-kv{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.drw-kv div{border:1px solid var(--bd);border-radius:8px;padding:8px 10px}
+.drw-kv span{display:block;font-size:10.5px;color:var(--t3)}
+.drw-kv b{font-size:14px;font-variant-numeric:tabular-nums;color:var(--tx)}
+.drw-why{font-size:11.5px;line-height:1.55;color:var(--t2);white-space:pre-line;background:var(--s2);border-radius:8px;padding:9px 11px}
+.drw-tb{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+.drw-tb th{font-size:10px;font-weight:700;color:var(--t3);text-align:right;padding:4px 6px;border-bottom:1px solid var(--bd)}
+.drw-tb td{text-align:right;padding:6px;border-bottom:1px solid var(--bd);color:var(--t2)}
+.drw-tb th:first-child,.drw-tb td:first-child{text-align:left}
+.drw-tb tfoot td{font-weight:700;color:var(--tx);border-bottom:none}
+.drw-ft{padding:12px 18px;border-top:1px solid var(--bd);display:flex;gap:8px;background:var(--s2)}
 
 /* ── MODALS (AOP sync, add dept) ────────────────────────────────────── */
 .pl-use{cursor:pointer;margin-left:6px;min-height:24px;min-width:40px;padding:3px 9px;border:1px solid var(--st-line-2,var(--bd));border-radius:6px;background:var(--st-btn,var(--sf));color:var(--st-btn-text,var(--tx));font:inherit;font-size:11px;font-weight:700;line-height:1;vertical-align:middle}
@@ -497,13 +518,22 @@ tr:hover .mag-trig{display:inline}
 /* ── Calm look (user, 2026-09-28: minimal and clean, from the alternate design) ── overrides only; logic untouched ── */
 .tbar{box-shadow:none}
 .tbar-wm-app{font-family:var(--st-font-display,Georgia,serif);font-weight:500;font-size:16px;letter-spacing:-.005em}
-.ktile{box-shadow:none}
-.ktile::before{display:none}
 .dtbl .hr-sg .hblk-st,.dtbl .hr-sg .hblk-hist,.dtbl .hr-sg .hblk-plan{color:var(--st-ink-2,var(--tx2));background:var(--sf);border-top-color:var(--st-line-2,var(--bm))}
 /* the per-row "Active" switch becomes a quiet dot (still a button; the word stays for screen readers) */
 .row-act-btn.on{position:relative;font-size:0;width:18px;height:18px;padding:0;border:0;background:transparent;margin-right:6px;vertical-align:middle}
 .row-act-btn.on::before{content:'';position:absolute;left:5px;top:5px;width:8px;height:8px;border-radius:50%;background:var(--po)}
 .row-act-btn.on:hover::before{box-shadow:0 0 0 3px var(--po-b)}
+/* ── Quieter rows (user, 2026-10-07: "less cramped, more informative ... still easy to function") ── */
+.twrap{margin:0 18px 14px;border-radius:10px}
+.dtbl tbody td{padding:6px 10px}
+/* padlocks only on the row in use, or once locked - still reachable by keyboard */
+.blk-lock:not(.locked){opacity:0;transition:opacity .12s}
+tr:hover .blk-lock,.blk-lock:focus-visible{opacity:1}
+@media (hover:none){.blk-lock:not(.locked){opacity:1}}
+/* red / green only for growth: sell-thru reads as plain figures */
+.st-hi,.st-mid,.st-lo{color:var(--t2);font-weight:500}
+.pl-use{border-radius:999px;background:transparent;border-color:var(--ac-b);color:var(--ac-h);font-weight:600;padding:3px 10px}
+.pl-use:hover{background:var(--ac-l)}
 </style>
 
 <!-- ─── APP ─────────────────────────────────────── -->
@@ -569,6 +599,8 @@ tr:hover .mag-trig{display:inline}
         <div class="tmenu" id="planMenu">
           <div class="tbtn" onclick="toggleMenu('planMenu',event)">Plan tools <span class="caret">&#x25BE;</span></div>
           <div class="tmenu-pop">
+            <button class="tmenu-item" onclick="closeMenus();openFactorTable()">Factor table<small>The factors behind the Planner's input</small></button>
+            <div class="tmenu-sep"></div>
             <button class="tmenu-item" onclick="closeMenus();resetPlanToAop()">Reset to Planner's input<small>Re-seed every cell from the planner's Gr % (AOP &times; LY cont % &times; factor)</small></button>
             <button class="tmenu-item" onclick="closeMenus();revertToLyCont()">Re-apportion by LY Cont%<small>Split each division's AOP by LY contribution</small></button>
             <button class="tmenu-item" onclick="closeMenus();toggleLockAllMAMJ()"><span id="lockallbtn">&#x1F512; Lock All</span><small>Lock / unlock every buyer input in the MAMJ block</small></button>
@@ -578,25 +610,11 @@ tr:hover .mag-trig{display:inline}
         </div>
         <div class="tbar-sep"></div>
         <div class="tbtn" id="mode-btn" onclick="togglePlanPhase()" title="Phase 1 = one growth % per department for the whole block; Phase 2 = month by month, holding Phase 1's block totals and each month's AOP. Click to switch.">Phase 1 · Block</div>
-        <div class="tbtn" onclick="openFactorTable()" title="The factor table behind the Planner's input">Factors</div>
-        <div class="tbtn" onclick="openVersionLog()" id="history-btn">History</div>
-        <div class="tbtn" onclick="exportCSV()">Export</div>
-        <div class="tbtn pri" onclick="saveState(true)">Save</div>
-      </div>
-    </div>
-
-    <!-- CONTROL STRIP -->
-    <div class="cstrip">
-      <button class="fpbtn ico on" id="fpbtn" onclick="toggleFP()" title="Hide filters">&#x2630;</button>
-      <div class="range-badge" id="rangeBadge"></div>
-      <div class="cs-right">
-        <div class="vtog" id="lfl-tog" style="display:none">
-          <button class="vt" id="lfl-all" onclick="setStoreLfl(false)">All</button>
-          <button class="vt on" id="lfl-only" onclick="setStoreLfl(true)">LFL Only</button>
-        </div>
-        <div class="sync-wrap">
-          <button class="fpbtn sync" id="syncbtn" onclick="syncAll()"><span id="sync-dot" style="width:7px;height:7px;border-radius:50%;background:var(--bd);display:inline-block;vertical-align:middle;transition:background .3s;flex-shrink:0"></span>Refresh data</button>
-          <div class="sync-tip" id="sync-tip">
+        <!-- 2026-10-07: Refresh data + its status, History and Export -> one Data menu -->
+        <div class="tmenu" id="dataMenu">
+          <div class="tbtn" onclick="toggleMenu('dataMenu',event)" title="Refresh data, plan history, export"><span id="sync-dot" class="sdot"></span>Data <span class="caret">&#x25BE;</span></div>
+          <div class="tmenu-pop">
+            <button class="tmenu-item" id="syncbtn" onclick="syncAll()">&#x21BB; Refresh data</button>
             <div class="sync-tip-hd">
               <span class="sync-tip-hd-dot" id="sync-tip-dot"></span>
               <span class="sync-tip-status" id="sync-status-lbl">Not synced</span>
@@ -606,8 +624,26 @@ tr:hover .mag-trig{display:inline}
               <div class="strow"><span id="sync-hist-icon" class="sti">○</span><span class="stlbl">FY19 History</span><span id="sync-hist-bdg" class="stbdg idle">Pending</span><span id="sync-hist-time" class="stt">—</span></div>
               <div class="strow"><span id="sync-st-icon" class="sti">○</span><span class="stlbl">Sell-Through</span><span id="sync-st-bdg" class="stbdg idle">Pending</span><span id="sync-st-time" class="stt">—</span></div>
             </div>
+            <div class="tmenu-sep"></div>
+            <button class="tmenu-item" onclick="closeMenus();openVersionLog()" id="history-btn">Plan history<small>Saved versions - load an earlier one</small></button>
+            <button class="tmenu-item" onclick="closeMenus();exportCSV()">Export<small>The current view as a spreadsheet (CSV)</small></button>
           </div>
         </div>
+        <div class="tbtn pri" onclick="saveState(true)">Save</div>
+      </div>
+    </div>
+
+    <!-- CONTROL STRIP -->
+    <div class="cstrip">
+      <button class="fpbtn" id="fpbtn" onclick="toggleFP()" title="Show filters" aria-expanded="false">&#x2630; Filters</button>
+      <div class="range-badge" id="rangeBadge"></div>
+      <div class="fchips" id="fchips"></div>
+      <div class="cs-right">
+        <div class="vtog" id="lfl-tog" style="display:none">
+          <button class="vt" id="lfl-all" onclick="setStoreLfl(false)">All</button>
+          <button class="vt on" id="lfl-only" onclick="setStoreLfl(true)">LFL Only</button>
+        </div>
+        <button class="fpbtn" id="ctxbtn" onclick="toggleContext()" aria-pressed="false" title="Sell-thru, history, contribution, factor and planner value columns - also in each department's details (click its name)">+ Context columns</button>
       </div>
     </div>
 
@@ -615,7 +651,7 @@ tr:hover .mag-trig{display:inline}
     <div class="content">
 
       <!-- FILTER PANEL -->
-      <div class="fpanel on" id="fpanel">
+      <div class="fpanel hide" id="fpanel">
         <div class="fp-head">
           <span class="fp-hl">Filters</span>
           <span class="fp-clr" onclick="clearFilters()">Clear all</span>
@@ -625,6 +661,7 @@ tr:hover .mag-trig{display:inline}
 
       <!-- REPORT AREA -->
       <div class="rarea">
+        <div class="rhead">
         <!-- DIVISION TABS (buyers/summary only) -->
         <div class="divtabs" id="divtabs">
           <button class="dtab on" data-div="all" onclick="setDivTab('all')">ALL<span class="dtab-cnt" id="dtab-cnt-all"></span></button>
@@ -632,8 +669,9 @@ tr:hover .mag-trig{display:inline}
           <button class="dtab" data-div="ladies" onclick="setDivTab('ladies')">LADIES<span class="dtab-cnt" id="dtab-cnt-ladies"></span></button>
           <button class="dtab" data-div="kids" onclick="setDivTab('kids')">KIDS<span class="dtab-cnt" id="dtab-cnt-kids"></span></button>
         </div>
-        <!-- KPI STRIP -->
-        <div class="kstrip" id="kstrip"></div>
+        <!-- TOTALS + AOP RULES CHECK -->
+        <div class="kstrip" id="kstrip" role="status" aria-live="polite"></div>
+        </div>
 
         <!-- INLINE ACTION BAR (inactive report etc.) -->
         <div id="inact-bar" style="display:none;padding:7px 12px;background:color-mix(in srgb,var(--wa) 10%,var(--s1));border-bottom:1px solid color-mix(in srgb,var(--wa) 35%,transparent);align-items:center;gap:10px">
@@ -648,13 +686,15 @@ tr:hover .mag-trig{display:inline}
         <div class="twrap" id="twrap">
           <table class="dtbl" id="dtbl"></table>
         </div>
-
-        <!-- GRAND TOTAL -->
-        <div class="gtbar" id="gtbar"></div>
       </div>
 
     </div>
   </div>
+</div>
+
+<!-- DEPARTMENT DRAWER: click a department's name in the Buyer's Plan -->
+<div class="drw-ov" id="drwOv" onclick="if(event.target===this)closeDrawer()">
+  <aside class="drw" role="dialog" aria-modal="true" aria-labelledby="drwNm" id="drw"></aside>
 </div>
 
 <!-- VERSION LOG PANEL -->
@@ -1644,7 +1684,8 @@ let S = {
   showHistDetail: false, // toggle month-wise Historical growth columns in buyers view
   showPlanDetail: false, // toggle month-wise auto-plan columns in buyers view
   showMonthCols:  true,  // toggle month columns in summary / division / dept views
-  showFP: true,
+  showFP: false,  // filters start closed; active ones show as chips (2026-10-07)
+  showContext: (()=>{try{return localStorage.getItem('bis_ctx')==='1'}catch(_){return false}})(), // lean grid by default
   inputs: {},     // buyers plan: div__sec__mi = growth%
   aop: {mens:{},ladies:{},kids:{}}, // Division AOP: {divId:{mi:Rs.Cr}}
   aopBase: {}, // AOP's OWN LFL base per divId/mi (Rs.Cr) - see syncFromAop(), 2026-09-22
@@ -1911,9 +1952,9 @@ function toggleFilter(grp,val){
   buildFP();refresh();
 }
 function clearFilters(){
-  Object.keys(S.filters).forEach(k=>S.filters[k]=new Set());
-  S.hiddenSecs=new Set();
-  S.manualInactive=new Set();
+  // audit 2026-10-07: this used to set the department filter to an empty Set (= show none) and switch every
+  // inactive department back on, which moves the plan; inactive is a planning decision, not a filter.
+  Object.keys(S.filters).forEach(k=>S.filters[k]=k==='dept'?null:new Set());
   buildFP();refresh();
   // Also clear the dept filter badge on the column header button
   const dd=document.getElementById('col-flt-dd');
@@ -2392,6 +2433,35 @@ function toggleFP(){
   const btn=document.getElementById('fpbtn');
   btn.classList.toggle('on',S.showFP);
   btn.title=S.showFP?'Hide filters':'Show filters';
+  btn.setAttribute('aria-expanded',S.showFP);
+}
+// Lean grid (2026-10-07): sell-thru, history, contrib %, factor and planner value are context, not decisions -
+// off by default (one click brings them back; each department's drawer always has them). Remembered per browser.
+function toggleContext(){
+  S.showContext=!S.showContext;
+  try{localStorage.setItem('bis_ctx',S.showContext?'1':'0')}catch(_){}
+  refresh();
+}
+function _syncCtxBtn(){
+  const b=document.getElementById('ctxbtn');if(!b)return;
+  b.style.display=S.report==='buyers'||S.report==='attr'?'':'none';
+  b.classList.toggle('on',S.showContext);b.setAttribute('aria-pressed',S.showContext);
+  b.textContent=(S.showContext?'− ':'+ ')+'Context columns';
+}
+// Active filters as chips while the panel is closed - each one removable in a click
+function _syncChips(){
+  const el=document.getElementById('fchips');if(!el)return;
+  const nm={div:id=>DVDATA.find(d=>d.id===id)?.nm||id,attr:id=>id,sec:id=>id.replace(/_/g,' ')};
+  let h='';
+  ['div','attr','sec'].forEach(g=>(S.filters[g]||[]).forEach(v=>{
+    const t=_attr(nm[g](v));
+    h+=`<span class="fchip">${t}<button type="button" onclick="toggleFilter('${g}','${String(v).replace(/'/g,"\\'")}')" aria-label="Remove filter ${t}">&#x2715;</button></span>`;
+  }));
+  if(S.filters.dept!==null){
+    const n=S.filters.dept.size;
+    h+=`<span class="fchip">${n} department${n===1?'':'s'}<button type="button" onclick="S.filters.dept=null;refresh()" aria-label="Show every department">&#x2715;</button></span>`;
+  }
+  el.innerHTML=h;
 }
 
 /* ── REPORT SWITCHING ──────────────────────────── */
@@ -2422,25 +2492,32 @@ function buildColDefs(){
   const defs=[];
 
   if(S.report==='buyers'||S.report==='attr'){
+    // lean grid: Avg ST% | 25 V 26 | LY | planner | buyer | plan total (user, 2026-10-07: "keep avg st% and 25 v 26 in
+    // the main grid"); the rest is in the drawer / "+ Context columns"
+    const ctx=S.showContext;
     // ① Avg Weekly Sell Thru
-    if(S.showSTDetail)
+    if(ctx&&S.showSTDetail)
       c.forEach(mi=>defs.push({block:'st',group:MO[mi],id:'st_'+mi,sub:'ST%',mi,type:'dept_st'}));
     defs.push({block:'st',group:'Period',id:'avg_st',sub:'Avg ST%',type:'avg_st',sum:true});
-
-    // ② Historical Growth% (YOY: 25 V 26 | Base: 19 V 26 when synced)
-    if(S.showHistDetail){
-      c.forEach(mi=>{
-        const hb=_lflHdr('base',[mi]),hy=_lflHdr('yoy',[mi]);
-        defs.push({block:'hist',group:MO[mi],id:'base_'+mi,sub:hb.sub,title:hb.title,mi,type:'lfl_base'});
-        defs.push({block:'hist',group:MO[mi],id:'yoy_'+mi,sub:hy.sub,title:hy.title,mi,type:'lfl_yoy'});
-      });
-    } else {
-      const hb=_lflHdr('base',c),hy=_lflHdr('yoy',c);
-      defs.push({block:'hist',group:'Period',id:'p_base',sub:hb.sub,title:hb.title,type:'period_lfl_base',sum:true});
+    if(!ctx){
+      const hy=_lflHdr('yoy',c);
       defs.push({block:'hist',group:'Period',id:'p_yoy',sub:hy.sub,title:hy.title,type:'period_lfl_yoy',sum:true});
+    } else {
+      // ② Historical Growth% (YOY: 25 V 26 | Base: 19 V 26 when synced)
+      if(S.showHistDetail){
+        c.forEach(mi=>{
+          const hb=_lflHdr('base',[mi]),hy=_lflHdr('yoy',[mi]);
+          defs.push({block:'hist',group:MO[mi],id:'base_'+mi,sub:hb.sub,title:hb.title,mi,type:'lfl_base'});
+          defs.push({block:'hist',group:MO[mi],id:'yoy_'+mi,sub:hy.sub,title:hy.title,mi,type:'lfl_yoy'});
+        });
+      } else {
+        const hb=_lflHdr('base',c),hy=_lflHdr('yoy',c);
+        defs.push({block:'hist',group:'Period',id:'p_base',sub:hb.sub,title:hb.title,type:'period_lfl_base',sum:true});
+        defs.push({block:'hist',group:'Period',id:'p_yoy',sub:hy.sub,title:hy.title,type:'period_lfl_yoy',sum:true});
+      }
     }
     defs.push({block:'hist',group:'Period',id:'tot_ly',sub:'LY Actual Sales',type:'tot_ly',sum:true});
-    defs.push({block:'hist',group:'Period',id:'contrib',sub:'Contrib%',type:'contrib',sum:true});
+    if(ctx)defs.push({block:'hist',group:'Period',id:'contrib',sub:'Contrib%',type:'contrib',sum:true});
 
     // ③ AOP Plan — MAMJ block input: one growth% per section, auto-distributed to months
     const hasAopBlk=S.aopLocked&&AOP_MIS.some(mi=>['mens','ladies','kids'].some(id=>(S.aop[id]?.[mi]||0)>0));
@@ -2454,11 +2531,11 @@ function buildColDefs(){
         defs.push({block:'plan',group:MO[mi],id:'plg_'+mi,sub:'Planner Gr%',mi,type:'pl_gr_m',hasAop:hasAopBlk});
         defs.push({block:'plan',group:MO[mi],id:'big_'+mi,sub:'Buyer Gr%',mi,type:'buyer_gr_m',hasAop:hasAopBlk});
       });
-      defs.push({block:'plan',group:"Planner's input",id:'pl_val',sub:'Planner Value',type:'pl_val',sum:true});
+      if(ctx)defs.push({block:'plan',group:"Planner's input",id:'pl_val',sub:'Planner Value',type:'pl_val',sum:true});
     } else {
-      defs.push({block:'plan',group:"Planner's input",id:'pl_fac',sub:'Factor',type:'pl_fac'});
+      if(ctx)defs.push({block:'plan',group:"Planner's input",id:'pl_fac',sub:'Factor',type:'pl_fac'});
       defs.push({block:'plan',group:"Planner's input",id:'pl_gr',sub:'Planner Gr%',type:'pl_gr',hasAop:hasAopBlk});
-      defs.push({block:'plan',group:"Planner's input",id:'pl_val',sub:'Planner Value',type:'pl_val',sum:true});
+      if(ctx)defs.push({block:'plan',group:"Planner's input",id:'pl_val',sub:'Planner Value',type:'pl_val',sum:true});
       defs.push({block:'plan',group:"Buyer's input",id:'block_input',sub:'Block Growth%',type:'block_input',hasAop:hasAopBlk});
     }
     // Optional monthly plan breakdown (read-only auto-apportioned)
@@ -2541,24 +2618,43 @@ function grpConsec(defs){
   return g;
 }
 
-/* ── KPI STRIP ─────────────────────────────────── */
+/* ── TOTALS + AOP RULES LINE ───────────────────── */
+// The plan's own rule, checked live (user, 2026-10-07: "true to the rules set"): every division x AOP month = its
+// AOP target, over its active departments. Off by more than 0.01 L shows red with the months and the gap.
+function _aopCheck(){
+  if(!S.aopLocked)return [];
+  return DVDATA.map(dv=>{
+    const off=[];
+    AOP_MIS.forEach(mi=>{
+      const tgt=S.aop[dv.id]?.[mi];if(!tgt)return;
+      let ty=0;dv.secs.forEach(sec=>{if(!S.hiddenSecs.has(sec.id))ty+=_secMonLY(sec,dv,mi)*(1+(S.inputs[sec.id+'__'+mi]??0)/100);});
+      const d=(ty-tgt)*100;if(Math.abs(d)>0.01)off.push(`${MO[mi]} ${d>0?'+':''}${d.toFixed(2)} L`);
+    });
+    return {id:dv.id,nm:dv.nm,off,locked:S.divLocked.has(dv.id)};
+  }).filter(x=>AOP_MIS.some(mi=>S.aop[x.id]?.[mi]));
+}
 function renderKPI(rows){
-  const c=cols();
-  let tLY=0,tTY=0,anyTY=false,filled=0,tot=0;
+  const el=document.getElementById('kstrip');
+  if(!rows.length||S.report==='inactive'){el.innerHTML='';return;}
+  let tLY=0,tTY=0,anyTY=false;
   rows.forEach(r=>{
     if(r._isGrpHd||r._isTot||r._isGrand)return;
     tLY+=r._ly||0;
     if(r._ty!=null){anyTY=true;tTY+=r._ty;}
-    if(r._filled!=null){filled+=r._filled;tot+=r._tot;}
   });
   const gr=anyTY&&tLY>0?((tTY-tLY)/tLY*100):null;
-  const html=`
-    <div class="ktile a"><div class="kl">LY Actuals</div><div class="kv" id="kLY">${fCr(tLY)} Cr</div><div class="ks">${c.length?MO[c[0]]+'->'+MO[c[c.length-1]]:'-'} | ${c.length}mo</div></div>
-    <div class="ktile${gr!=null?gr>=0?' p':' n':''}"><div class="kl">TY Plan</div><div class="kv">${anyTY?fCr(tTY)+' Cr':'-'}</div><div class="ks">Planned period total</div></div>
-    <div class="ktile${gr!=null?gr>=0?' p':' n':''}"><div class="kl">Growth vs LY</div><div class="kv">${gr!=null?fP(gr):'-'}</div><div class="ks">Selected period</div></div>
-    <div class="ktile"><div class="kl">Avg ST%</div><div class="kv" style="color:var(--ac)">8.4%</div><div class="ks">WK-15->27 | All Stores</div></div>
-  `;
-  document.getElementById('kstrip').innerHTML=html;
+  let h=`<span>LY <b>${fCr(tLY)} Cr</b></span><span>Plan <b>${anyTY?fCr(tTY)+' Cr':'-'}</b></span>`+
+    (gr!=null?`<b class="${gCls(gr)}">${fP(gr)}</b>`:'');
+  const chk=_aopCheck();
+  if(chk.length){
+    h+='<span class="ks-sep"></span>'+chk.map(x=>x.off.length
+      ?`<span class="rule off" title="${_attr(x.nm+' is off its AOP: '+x.off.join(', ')+'. Unlock a department or re-balance (Plan tools).')}">&#x2717; ${x.nm} off AOP</span>`
+      :`<span class="rule" title="${_attr(x.nm+': every AOP month equals its AOP target'+(x.locked?' - division locked':''))}">&#x2713; ${x.nm} = AOP${x.locked?' &#x1F512;':''}</span>`).join('');
+    const lk=new Set([...S.locked].filter(k=>AOP_MIS.some(mi=>k.endsWith('__'+mi))).map(k=>k.slice(0,k.lastIndexOf('__')))).size;
+    const own=S.buyerSet.size;
+    h+=`<span class="ks-meta">${lk} locked · ${own} buyer-set</span>`;
+  }
+  el.innerHTML=h;
 }
 
 /* ── TABLE RENDERING ───────────────────────────── */
@@ -2588,10 +2684,13 @@ function buildHeader(defs,noC1=false){
   if(stDefs.length){
     // Same header + toggle as ② Historical Growth
     const stToggle=S.showSTDetail?'&#x25B2; Collapse Monthly':'&#x25BC; Show Monthly';
-    hr0+=`<th colspan="${stDefs.length}" class="hblk hblk-st">&#x2460; Avg Weekly Sell Thru | All Stores <button class="htoggle" onclick="S.showSTDetail=!S.showSTDetail;refresh()">${stToggle}</button></th>`;
+    // lean grid: Avg ST% only, no monthly toggle (the months come back with "+ Context columns")
+    hr0+=!S.showContext&&(S.report==='buyers'||S.report==='attr')?`<th colspan="${stDefs.length}" class="hblk hblk-st">Sell Thru</th>`
+      :`<th colspan="${stDefs.length}" class="hblk hblk-st">&#x2460; Avg Weekly Sell Thru | All Stores <button class="htoggle" onclick="S.showSTDetail=!S.showSTDetail;refresh()">${stToggle}</button></th>`;
   }
   if(S.report==='buyers'||S.report==='attr'){
-    hr0+=`<th colspan="${histDefs.length}" class="hblk hblk-hist">&#x2461; Historical Growth% | LY Actual Sales <button class="htoggle" onclick="S.showHistDetail=!S.showHistDetail;refresh()">${toggleLbl}</button></th>`;
+    hr0+=S.showContext?`<th colspan="${histDefs.length}" class="hblk hblk-hist">&#x2461; Historical Growth% | LY Actual Sales <button class="htoggle" onclick="S.showHistDetail=!S.showHistDetail;refresh()">${toggleLbl}</button></th>`
+      :`<th colspan="${histDefs.length}" class="hblk hblk-hist">Growth | LY</th>`;
     const planToggleLbl=S.showPlanDetail?'&#x25B2; Collapse Monthly':'&#x25BC; Show Monthly';
     hr0+=`<th colspan="${planDefs.length}" class="hblk hblk-plan">&#x2462; AOP Plan | ${FY_PLAN} <button class="htoggle" onclick="S.showPlanDetail=!S.showPlanDetail;refresh()">${planToggleLbl}</button></th>`;
   } else if(mixed){
@@ -2739,7 +2838,7 @@ function cellVal(row,def){
       const bg=isDept||ai?_effGrowth(row,AOP_MIS):null;
       const useAttr=ai&&bg!=null&&Math.abs(bg-a.gr)>0.005&&!S.divLocked.has(ai.dvId)?` <button type="button" class="pl-use" onclick="event.stopPropagation();useAttrPlannerGr('${ai.dvId}','${ai.attr.replace(/'/g,"\\'")}')" title="Set every ${ai.attr} department to the planner's Gr % ${fP(a.gr)} (now ${fP(bg)})" aria-label="Use the planner's Gr % ${fP(a.gr)} for ${ai.attr}, buyer now ${fP(bg)}">Use</button>`:'';
       const use=useAttr||isDept&&bg!=null&&Math.abs(bg-a.gr)>0.005?useAttr||` <button type="button" class="pl-use" onclick="event.stopPropagation();usePlannerGr('${row._key}')" title="Set this department's buyer Gr % to the planner's ${fP(a.gr)} (now ${fP(bg)})" aria-label="Use the planner's Gr % ${fP(a.gr)} for ${DVDATA.find(d=>d.id===row._divId)?.secs.find(x=>x.id===row._key)?.nm||row._key}, buyer now ${fP(bg)}">Use</button>`:'';
-      return `<span class="${gCls(a.gr)}" style="cursor:help" title="${_attr(_plannerWhy(row,AOP_MIS)+'\nLocked - it moves only with the factor table or its inputs')}">&#x1F512; ${fP(a.gr)}</span>${use}`;
+      return `<span class="${gCls(a.gr)}" style="cursor:help" title="${_attr(_plannerWhy(row,AOP_MIS)+'\nLocked - it moves only with the factor table or its inputs')}">${fP(a.gr)}</span>${use}`;
     }
     case 'pl_val': {
       const a=_plannerRowAgg(row,c.filter(mi=>AOP_MIS.includes(mi)));
@@ -3797,7 +3896,7 @@ function renderTable(){
   if(S.report==='inactive'&&!rows.length){
     const tbl=document.getElementById('dtbl');
     tbl.innerHTML=`<tbody><tr><td colspan="20" style="text-align:center;padding:60px 20px;color:var(--mu)"><div style="font-size:28px;margin-bottom:10px">✓</div><div style="font-weight:700;font-size:14px;margin-bottom:5px">No inactive departments</div><div style="font-size:12px">Use the <strong>Inactive</strong> toggle on any department row in the Buyer's Plan to deactivate it</div></td></tr></tbody>`;
-    renderKPI([]);renderGT([]);return;
+    renderKPI([]);return;
   }
   const noC1=S.report==='buyers'||S.report==='dept'||S.report==='division'||S.report==='attr'||S.report==='summary';
   const thead=buildHeader(defs,noC1);
@@ -3861,11 +3960,14 @@ function renderTable(){
       const isInact=(r._inactive||r._inactiveRow||r._inactiveBuyer)&&r._key;
       const phase=r._phase||null; // 'p1'=auto no-data, 'p2'=manually deactivated
       const canMag=(S.report==='buyers'||S.report==='dept')&&r._key&&!inactive;
-      const magBtn=canMag?`<button class="mag-trig" title="Open magnified view" onclick="event.stopPropagation();openMag('${r._key}','${r._divId||''}')">⤢</button>`:'';
+      // Buyer's Plan: the name opens the department's details (month view is one click from there)
+      const canDrw=canMag&&S.report==='buyers'&&r._divId&&!_parseAttrKey(r._key);
+      const magBtn=canMag&&!canDrw?`<button class="mag-trig" title="Open magnified view" onclick="event.stopPropagation();openMag('${r._key}','${r._divId||''}')">⤢</button>`:'';
+      const nmHtml=canDrw?`<button type="button" class="rn-btn" onclick="openDrawer('${r._key}','${r._divId}')" title="Details: month by month, sell-thru, history, factor">${r._name}</button>`:r._name;
       const togLbl=isInact?(phase==='p2'?'Inactive':'No Data'):'Active';
       const togCls=isInact?(phase==='p2'?' p2':' p1'):' on';
       const togBtn=(r._key&&!_parseAttrKey(r._key))?`<button class="row-act-btn${togCls}" onclick="event.stopPropagation();toggleSecVis('${r._key}')" title="${phase==='p1'?'Auto-inactive: no LY data found':phase==='p2'?'Manually deactivated — click to re-activate':''}">${togLbl}</button>`:'';
-      tbody+=`<tr class="${inactive&&S.report!=='inactive'?'row-inactive':''}"${r._key?` data-rk="${r._key}"`:''}><td class="c0 l">${togBtn}${r._name}${magBtn}</td>${noC1?'':'<td class="c1 d2">'+(r._d2||'')+'</td>'}`;
+      tbody+=`<tr class="${inactive&&S.report!=='inactive'?'row-inactive':''}"${r._key?` data-rk="${r._key}"`:''}><td class="c0 l">${togBtn}${nmHtml}${magBtn}</td>${noC1?'':'<td class="c1 d2">'+(r._d2||'')+'</td>'}`;
       defs.forEach((d,di)=>{tbody+=`<td class="${d.sum?'sc':''}${sep(di)}${d.hasAop?' aop-col-bg':''}">${cellVal(r,d)}</td>`;});
       tbody+='</tr>';
     }
@@ -3881,23 +3983,50 @@ function renderTable(){
   _initColResize(tbl);
   _initRowResize(tbl);
   renderKPI(rows);
-  renderGT(rows);
+  _renderDrawer(); // an open drawer follows every edit
 }
 
-function renderGT(rows){
-  const grand=rows.find(r=>r._isGrand);
-  if(!grand){document.getElementById('gtbar').innerHTML='';return;}
-  const gr=grand._ty!=null&&grand._ly>0?((grand._ty-grand._ly)/grand._ly*100):null;
-  const c=cols();
-  document.getElementById('gtbar').innerHTML=`
-    <div class="gti"><div class="gtl">Grand Total | LY</div><div class="gtv">${fCr(grand._ly)} Cr</div></div>
-    <div class="gtsep"></div>
-    <div class="gti"><div class="gtl">Grand Total | TY Plan</div><div class="gtv" style="color:${grand._ty!=null?'var(--ac)':'var(--mu)'}">${grand._ty!=null?fCr(grand._ty)+' Cr':'-'}</div></div>
-    <div class="gtsep"></div>
-    <div class="gti"><div class="gtl">Growth%</div><div class="gtv" style="font-size:15px;color:${gr!=null?gr>=0?'var(--po)':'var(--ne)':'var(--mu)'}">${gr!=null?fP(gr):'-'}</div></div>
-    <div style="margin-left:auto;font-size:10px;color:var(--mu)">
-      ${c.length} months | ${MO[c[0]||0]}${c.length>1?' -> '+MO[c[c.length-1]]:''}
-    </div>`;
+/* ── DEPARTMENT DRAWER ─────────────────────────── */
+// Everything about one department in one place (user, 2026-10-07): the lean grid keeps only the decision columns;
+// sell-thru, history, contribution, the factor and the month-by-month build-up live here. Read-only - edits stay in
+// the grid and the month-by-month window, so every rule (AOP, locks, Phase 2) still runs through the same code.
+let _drw=null;
+function openDrawer(secId,dvId){_drw={secId,dvId,from:document.activeElement};_renderDrawer();document.getElementById('drwOv').classList.add('vis');document.getElementById('drwX')?.focus();}
+function closeDrawer(){document.getElementById('drwOv').classList.remove('vis');const f=_drw?.from;_drw=null;if(f?.isConnected)f.focus();}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&_drw)closeDrawer();});
+function _renderDrawer(){
+  if(!_drw)return;
+  const dv=DVDATA.find(d=>d.id===_drw.dvId),sec=dv?.secs.find(s=>s.id===_drw.secId);
+  if(!sec){closeDrawer();return;}
+  const row=getRows().find(r=>r._key===sec.id&&r._divId===dv.id)||{_key:sec.id,_divId:dv.id,_name:sec.nm};
+  const v=t=>cellVal(row,{type:t,id:t}),c=cols(),f2=x=>x==null?'-':'Rs.'+x.toFixed(2); // 2 dp: small departments
+  const pl=_plannerRowAgg(row,AOP_MIS),bg=_effGrowth(row,AOP_MIS);
+  const st=c.map(mi=>`<td>${cellVal(row,{type:'dept_st',id:'st_'+mi,mi})}</td>`).join('');
+  let L=0,T=0;
+  const mons=AOP_MIS.map(mi=>{
+    const ly=_secMonLY(sec,dv,mi),g=S.inputs[sec.id+'__'+mi],ty=ly*(1+(g??0)/100),p=_plannerRowAgg(row,[mi]);L+=ly;T+=ty;
+    return `<tr><td>${MO[mi]}${S.locked.has(sec.id+'__'+mi)?' &#x1F512;':''}</td><td>${f2(ly)}</td><td class="${gCls(g)}">${fP(g)}</td><td>${f2(ty)}</td><td>${fP(p?.gr)}</td></tr>`;
+  }).join('');
+  const hb=_lflHdr('base',c).sub,hy=_lflHdr('yoy',c).sub;
+  const status=S.divLocked.has(dv.id)?'Division locked':S.buyerSet.has(sec.id)?"Buyer's own growth":'Plain AOP share';
+  document.getElementById('drw').innerHTML=`
+    <div class="drw-hd"><div class="drw-tt"><div class="drw-nm" id="drwNm">${_attr(sec.nm)}</div>
+      <div class="drw-sub">${_attr(dv.nm)} · ${_attr(sec.attr||'-')} · ${status}</div></div>
+      <button type="button" class="drw-x" id="drwX" onclick="closeDrawer()" aria-label="Close details">&#x2715;</button></div>
+    <div class="drw-bd">
+      <div class="drw-sec"><h4>Plan · ${_attr(MO[AOP_MIS[0]]+'-'+MO[AOP_MIS[AOP_MIS.length-1]])}</h4><div class="drw-kv">
+        <div><span>LY sales</span><b>${f2(L)} Cr</b></div><div><span>Plan</span><b>${f2(T)} Cr</b></div>
+        <div><span>Buyer Gr%</span><b class="${gCls(bg)}">${fP(bg)}</b></div><div><span>Planner Gr% · factor ${v('pl_fac').replace(/<[^>]+>/g,'')}</span><b class="${gCls(pl?.gr)}">${fP(pl?.gr)}</b></div>
+      </div></div>
+      <div class="drw-sec"><h4>Month by month</h4><table class="drw-tb"><thead><tr><th>Month</th><th>LY Cr</th><th>Buyer Gr%</th><th>Plan Cr</th><th>Planner Gr%</th></tr></thead>
+        <tbody>${mons}</tbody><tfoot><tr><td>Block</td><td>${f2(L)}</td><td>${fP(L>0?(T/L-1)*100:null)}</td><td>${f2(T)}</td><td>${fP(pl?.gr)}</td></tr></tfoot></table></div>
+      <div class="drw-sec"><h4>How the planner's growth is built</h4><div class="drw-why">${_attr(_plannerWhy(row,AOP_MIS))}</div></div>
+      <div class="drw-sec"><h4>Context · selected months</h4><div class="drw-kv">
+        <div><span>Avg sell-thru</span><b>${v('avg_st')}</b></div><div><span>Contrib %</span><b>${v('contrib')}</b></div>
+        <div><span>${_attr(hb)}</span><b>${v('period_lfl_base')}</b></div><div><span>${_attr(hy)}</span><b>${v('period_lfl_yoy')}</b></div>
+      </div>${c.length?`<table class="drw-tb" style="margin-top:8px"><thead><tr><th>Sell-thru</th>${c.map(mi=>`<th>${MO[mi]}</th>`).join('')}</tr></thead><tbody><tr><td>ST%</td>${st}</tr></tbody></table>`:''}</div>
+    </div>
+    <div class="drw-ft"><button type="button" class="fpbtn" onclick="const d=_drw;closeDrawer();openMag(d.secId,d.dvId)">Edit month by month &#x2922;</button></div>`;
 }
 
 /* ── BUYERS PLAN INPUT ─────────────────────────── */
@@ -3926,7 +4055,7 @@ function setGrowth(key,mi,val){
     if(isNaN(v))return; // a cleared cell keeps its value (blur redraws it)
     const res=_phase2Edit(key,mi,v);
     _flashLiveBadges();
-    const rows=getRows();renderKPI(rows);renderGT(rows);
+    const rows=getRows();renderKPI(rows);
     if(res&&res.stuck)toast(`${res.name}: no other unlocked month - its block total moved ${fCr(res.moved)} Cr`);
     return;
   }
@@ -3939,7 +4068,7 @@ function setGrowth(key,mi,val){
   if(!isNaN(v))reapportion(key,mi);
   // recompute KPI + GT without full redraw
   const rows=getRows();
-  renderKPI(rows);renderGT(rows);
+  renderKPI(rows);
 }
 
 // Returns effective MAMJ block growth% for a section (TY-vs-LY weighted by monthly LY)
@@ -3985,7 +4114,7 @@ function setBlockGrowth(secKey,val){
     }
   });
   const rows=getRows();
-  renderKPI(rows);renderGT(rows);
+  renderKPI(rows);
   _flashLiveBadges();
 }
 
@@ -4222,7 +4351,7 @@ function setAttrBlockGrowth(dvId,attr,val){
     inp.className='gi'+(bg2==null?'':bg2<0?' neg':' has');
   });
   const rows=getRows();
-  renderKPI(rows);renderGT(rows);
+  renderKPI(rows);
   _flashLiveBadges();
 }
 
@@ -4329,7 +4458,7 @@ function setAttrMonGrowth(dvId,attr,mi,val){
     if(g!=null){inp.value=+g.toFixed(2);inp.className='gi'+(g<0?' neg':' has');}
   });
   _flashLiveBadges();
-  const rows=getRows();renderKPI(rows);renderGT(rows);
+  const rows=getRows();renderKPI(rows);
   if(res&&res.stuck)toast(`${res.name}: no other unlocked month - its block total moved ${fCr(res.moved)} Cr`);
 }
 function toggleAttrMonLock(dvId,attr,mi,rowKey){
@@ -4735,18 +4864,6 @@ const _syncState={sales:{s:'idle',t:null},hist:{s:'idle',t:null},st:{s:'idle',t:
 // Through Landing (any PC on the LAN) BIS lives under /buyer; on its own port it is its own origin (2026-09-26)
 const SYNC_BASE=location.pathname.startsWith('/buyer')?'/buyer':(location.port==='5050'?'':'http://localhost:5050');
 
-// Tooltip is position:fixed so it is not clipped by .cstrip{overflow-x:auto}; place it under the button on hover
-function _placeSyncTip(){
-  const btn=document.getElementById('syncbtn'),tip=document.getElementById('sync-tip');
-  if(!btn||!tip)return;
-  const r=btn.getBoundingClientRect();
-  tip.style.top=(r.bottom+7)+'px';
-  tip.style.right=Math.max(8,window.innerWidth-r.right)+'px';
-}
-document.addEventListener('DOMContentLoaded',()=>{
-  const w=document.querySelector('.sync-wrap');
-  if(w){w.addEventListener('mouseenter',_placeSyncTip);window.addEventListener('resize',_placeSyncTip);}
-});
 function _syncUI(key,status,timeStr){
   _syncState[key]={s:status,t:timeStr};
   const icons={ok:'<span style="color:var(--po)">✓</span>',err:'<span style="color:var(--ne)">✗</span>',syncing:'<span style="color:var(--wa)">⟳</span>',idle:'<span style="color:var(--mu)">○</span>'};
@@ -4993,6 +5110,8 @@ function refresh(){
   _syncInactiveBadge();
   _syncLockAllBtns();
   _syncAttrBar();
+  _syncCtxBtn();
+  _syncChips();
   buildFP(); // keep sidebar counts in sync with divTab + filters
   renderTable();
 }
@@ -5354,16 +5473,6 @@ setTimeout(syncAopLockUI, 0); // fill any un-saved slots with division LFL YoY g
 buildPills();
 buildFP();
 refresh();
-function buildAopKpiTile(planTotal){
-  if(!S.aopLocked)return '';
-  const mc=cols();
-  let aopTotal=0;
-  AOP_DIVS.forEach(d=>mc.forEach(mi=>aopTotal+=(S.aop[d.id]?.[mi]||0)));
-  if(!aopTotal)return '';
-  const v=(planTotal-aopTotal)/aopTotal*100;
-  const cls=Math.abs(v)<2?'':v>0?' n':' p';
-  return `<div class="ktile${cls}"><div class="kl">vs AOP Target</div><div class="kv">${fP(v)}</div><div class="ks">Plan ${fCr(planTotal)} Cr vs AOP ${fCr(aopTotal)} Cr</div></div>`;
-}
 /* ── AOP LIVE SYNC ──────────────────────────────────────────────────────── */
 // {targets:{MENS:{202703:lkh,…},…}, published_at:iso, note:str|null}
 let _aopCache=null;

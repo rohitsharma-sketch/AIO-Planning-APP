@@ -7,6 +7,15 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### BIS: calmer layout - lean grid, department drawer, live AOP check, one Data menu
+- **Asked (user):** "is there anyway we can keep the app less cramped, more informative and true to the rules set and still easy to function? BIS"; chose all four options; then "keep avg st% and 25 v 26 in the main grid".
+- **Lean grid (default):** Avg ST% | 25 V 26 | LY Actual Sales | Planner Gr% (+Use) | Block Growth% | Plan Total | vs LY%. "+ Context columns" brings back monthly ST%, 19 V 26, Contrib%, Factor and Planner Value (remembered per browser). Phase 2 keeps its planner / buyer month columns.
+- **Department drawer:** click a department's name: LY, plan, buyer vs planner growth, month by month (LY, buyer Gr%, plan, planner Gr%, locks), how the planner's growth is built, sell-thru by month, 19 V 26 / 25 V 26, Contrib %; "Edit month by month" opens the existing month window. Read-only, so every edit still goes through the same rules. Esc closes, focus returns to the name.
+- **Live AOP check:** the four KPI tiles (one was a hard-coded "Avg ST 8.4%") and the bottom grand-total bar became one line beside the division tabs: LY, Plan, growth, then "MENS = AOP / LADIES = AOP / KIDS = AOP" - red with the month and gap in lakhs if any division x AOP month is off - and how many departments are locked / buyer-set.
+- **Top bar:** Factors moved into Plan tools; Refresh data (with its status), Plan history and Export into one Data menu. Filters start closed; active filters show as removable chips.
+- **Quieter rows:** padlocks show on hover or once locked (keyboard focus still shows them), sell-thru in plain figures (red / green only for growth), Use as a light pill, no padlock emoji on every planner cell.
+- **Bug fixed:** the filter panel's "Clear all" set the department filter to "show none" (empty grid) and switched all 38 inactive departments back on. It now clears filters only.
+
 ### BIS: division growth matches AOP to the decimal (KIDS 12.8% -> 12.9%)
 - **Asked (user):** "kids growth is 12.9% in aop forecaster but it shows 12.8% in the bis".
 - **Cause:** BIS took LY from the departments' own synced actuals, which add up ~1 L higher for Jun'26 than the base AOP's growth is on (MENS +1.02 L, LADIES +1.04 L, KIDS +0.84 L). Same plan money (136.41 Cr), different LY: 12.847% vs 12.854%, either side of the rounding line.
