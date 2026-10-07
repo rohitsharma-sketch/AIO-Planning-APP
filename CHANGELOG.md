@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### BIS: weighted factor builder (step 1 + builder) beside the 36-row matrix
+- **Asked (user):** dynamic factor table instead of the hand-set one; drag-and-drop slabs and weightage for a single or multi-factor system; a definitive coefficient. Then: "yes start with step 1 and the builder".
+- **Formula (`_weightedFactor`):** each driver that is on puts the department in one of its slabs (a multiplier); drivers combine as a weighted geometric mean (one driver = its multiplier; 1.10 and 0.91 cancel; a driver with no data is left out and the rest re-weighted) -> floor / cap rules in card (priority) order, a later rule never undoing an earlier one -> small departments damped toward 1.00 (f' = 1 + (f-1) x LY / (LY + k), LY per month) -> clamp. The re-balance to each division's AOP is unchanged.
+- **Builder (Factor matrix window, "Weighted builder" tab):** driver cards dragged by the grip (or ↑ / ↓) to set priority; Use switch and weight slider per driver ("% of the factor"); slab bar with draggable boundaries and department counts per slab, plus a slab table (start %, name, multiplier, add / remove); rules; damping and factor limits; live preview (low / median / high factor, top and bottom 5 vs the matrix).
+- **Safe switch:** "Planner uses: Weighted builder / Matrix (36 rows)" - saved factor table stays on Matrix (today's numbers unchanged) until a planner switches and saves. Admin / planner only; the server validates the model (`_model_error`: each driver once, weights 0-100, rising slab starts, multipliers in (0, 3], NaN refused, clamp lo <= 1 <= hi).
+- **Checks:** `test_factor_model.js` (single / weighted / re-weighting / rule priority / damping / clamp), `test_sync_server_ly.py` (model validation); live: weighted mode keeps every division x month on AOP (0.00 L off), matrix mode unchanged (M_IN_BRIEF 1.08).
+
 ### BIS audit: plan rules, data refresh and the Sales Plan push
 - **Asked (user):** "audit the app once done", then "fix whatever the audit finds and commit". Three read-only reviewers (planning rules, today's UI + security, server + sync); every finding re-checked in code or live before fixing.
 - **Plan rules (otb-plan-app.html):**

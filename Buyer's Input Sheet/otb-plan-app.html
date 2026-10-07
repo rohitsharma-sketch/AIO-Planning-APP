@@ -413,6 +413,43 @@ td.aop-col-bg input.gi{background:var(--sf)}
 .pl-tag{display:inline-block;padding:0 7px;border:1px solid var(--bd);border-radius:999px;margin:0 2px;font-size:10px}
 .pl-ft{width:100%;border-collapse:collapse;font-size:11px}.pl-ft th,.pl-ft td{padding:4px 8px;border-bottom:1px solid var(--bd);text-align:center}
 .pl-ft th{position:sticky;top:0;background:var(--sf);font-weight:700}
+/* factor builder (2026-10-07) */
+.fm-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--bd)}
+.fm-use{margin-left:auto;font-size:12px}
+.fm-fill{padding:8px 14px;font-size:11px;color:var(--t2)}
+.fm-wrap{padding:6px 14px 12px;display:flex;flex-direction:column;gap:12px}
+.fm-wrap select,.fm-wrap input[type=text],.fm-use select{border:1px solid var(--bm);border-radius:6px;padding:3px 6px;background:var(--sf);color:var(--tx);font:inherit;font-size:11.5px}
+.fm-card{border:1px solid var(--bd);border-radius:10px;padding:10px 12px;background:var(--sf)}
+.fm-card.off{opacity:.6}
+.fm-card.over{outline:2px dashed var(--ac);outline-offset:2px}
+.fm-card.drag{opacity:.4}
+.fm-hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px}
+.fm-grip{cursor:grab;color:var(--mu);font-size:15px;user-select:none;padding:0 2px}
+.fm-mv,.fm-x{all:unset;cursor:pointer;min-width:22px;height:22px;text-align:center;border:1px solid var(--bd);border-radius:5px;line-height:22px;font-size:11px}
+.fm-mv:disabled{opacity:.35;cursor:default}
+.fm-mv:focus-visible,.fm-x:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
+.fm-x:hover{border-color:var(--ne-br);color:var(--ne)}
+.fm-w{display:inline-flex;align-items:center;gap:6px}
+.fm-w input[type=range]{width:120px;accent-color:var(--ac)}
+.fm-w span{min-width:22px;font-variant-numeric:tabular-nums}
+.fm-share{margin-left:auto;color:var(--t3);font-size:11px}
+.fm-bar{position:relative;height:30px;margin:20px 0 8px;border-radius:6px;background:var(--s2)}
+.fm-seg{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:600;white-space:nowrap;overflow:hidden;border-right:1px solid var(--sf);padding:0 4px;box-sizing:border-box}
+.fm-seg.up{background:color-mix(in srgb,var(--po) 18%,var(--sf));color:var(--po)}
+.fm-seg.dn{background:color-mix(in srgb,var(--ne) 16%,var(--sf));color:var(--ne)}
+.fm-seg.eq{background:var(--s3);color:var(--t2)}
+.fm-hdl{position:absolute;top:-4px;bottom:-4px;width:10px;margin-left:-5px;border-radius:4px;background:var(--ac);cursor:ew-resize;touch-action:none;z-index:2}
+.fm-hdl::after{content:attr(data-v);position:absolute;top:-17px;left:50%;transform:translateX(-50%);font-size:9.5px;color:var(--t2);white-space:nowrap}
+.fm-sl{width:100%;border-collapse:collapse;font-size:11.5px}
+.fm-sl th{font-size:10px;color:var(--t3);text-align:left;padding:3px 6px;border-bottom:1px solid var(--bd);font-weight:600}
+.fm-sl td{padding:3px 6px;border-bottom:1px solid var(--bd)}
+.fm-row{display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap}
+.fm-note{font-size:10.5px;color:var(--t3)}
+.fm-sec{border:1px solid var(--bd);border-radius:10px;padding:10px 12px}
+.fm-sec h4{margin:0 0 8px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mu)}
+.fm-rule{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11.5px;margin:4px 0}
+.fm-prev{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:11.5px}
+.fm-prev ol{margin:4px 0 0;padding-left:18px}
 .aop-ov{position:fixed;inset:0;background:rgba(var(--st-ink-rgb,30,39,35),.45);z-index:800;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
 .aop-modal{background:var(--sf);border:1px solid var(--bd);border-radius:14px;width:880px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow-lg)}
 .aop-mhd{padding:16px 20px 14px;border-bottom:1px solid var(--bd);display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-shrink:0}
@@ -5323,8 +5360,9 @@ function _plannerInputs(sec,mis){
   }
   return r;
 }
-function _plannerFactor(sec,mis){
-  const ft=PLANNER.ft,x=_plannerInputs(sec,mis),b=ft?.bands||{};
+// The 36-row matrix (sell-thru tag x LY-growth tag x fill-rate tag -> factor), as set by hand
+function _matrixFactor(ft,x){
+  const b=ft?.bands||{};
   const tags={st:_band(b.st,x.st)?.tag||null,growth:_band(b.growth,x.gr)?.tag||null,fill:_band(b.fill,x.fill)?.tag||null};
   let f=1,why;
   if(!ft)why='no factor table';
@@ -5332,7 +5370,62 @@ function _plannerFactor(sec,mis){
   else if(!tags.st||!tags.growth)why='no '+(!tags.st?'sell-thru':'LY growth')+' history - neutral 1.00';
   else{const row=(ft.factors||[]).find(r=>r.st===tags.st&&r.growth===tags.growth&&r.fill===tags.fill);
     if(row){f=+row.factor;why=row.reason;}else why='no matching row - neutral 1.00';}
-  return {f,why,tags,inp:x};
+  return {f,why,tags};
+}
+/* Weighted factor model (user, 2026-10-07: "a dynamic factor table ... a drag and drop structure on which the slabs
+   can be changed and their weightage too" / "a definitive derivative co-efficient in case of single and multi factor
+   system"). Each driver that is on, with a weight, puts the department in one of its slabs (a multiplier). The drivers
+   combine as a weighted geometric mean - one driver alone = its slab's multiplier, and 1.10 / 0.91 cancel. A driver
+   with no data for the department is left out and the others re-weighted. Then the floor / cap rules, in driver
+   priority order (card order; a later rule never undoes an earlier one), then small departments are damped toward
+   1.00 (f' = 1 + (f - 1) x LY / (LY + k), LY per month in Rs Cr), then the clamp. The re-balance to the division AOP
+   after it is unchanged, so only how departments compare matters. */
+const FM_DRIVERS={st:{label:'Avg Weekly Sell-Thru %',short:'Sell-thru',inp:'st',dom:[0,0.3]},
+  growth:{label:'LY Growth % (25V26, MAMJ)',short:'LY growth',inp:'gr',dom:[-0.5,1.5]},
+  fill:{label:'Fill Rate %',short:'Fill rate',inp:'fill',dom:[0,1]}};
+function _fmSlab(slabs,v){let hit=null;(slabs||[]).forEach(s=>{if(s.from==null||v>=s.from)hit=s;});return hit;}
+function _weightedFactor(x,m,lyPerMonth){
+  const parts=[];
+  (m.drivers||[]).forEach(d=>{
+    if(!d.on||!(+d.weight>0)||!FM_DRIVERS[d.key])return;
+    const v=x[FM_DRIVERS[d.key].inp],sl=v==null?null:_fmSlab(d.slabs,v);
+    if(sl)parts.push({key:d.key,v,slab:sl,mult:+sl.mult,w:+d.weight});
+  });
+  const W=parts.reduce((a,q)=>a+q.w,0);
+  if(!W)return {f:1,raw:1,ruled:1,damped:1,parts,rules:[],none:true};
+  const raw=parts.reduce((a,q)=>a*Math.pow(q.mult,q.w/W),1);
+  let lo=0,hi=Infinity;const rules=[],ord=(m.drivers||[]).map(d=>d.key);
+  (m.rules||[]).slice().sort((a,b)=>ord.indexOf(a.driver)-ord.indexOf(b.driver)).forEach(r=>{
+    const v=x[FM_DRIVERS[r.driver]?.inp];
+    if(v==null||(r.op==='below'?!(v<r.value):!(v>=r.value)))return;
+    if(r.kind==='min'&&r.f<=hi){lo=Math.max(lo,r.f);rules.push(r);}
+    else if(r.kind==='max'&&r.f>=lo){hi=Math.min(hi,r.f);rules.push(r);}
+  });
+  const ruled=Math.min(Math.max(raw,lo),hi);
+  const k=+m.shrink_k||0;
+  const damped=k>0&&lyPerMonth!=null&&lyPerMonth>=0?1+(ruled-1)*lyPerMonth/(lyPerMonth+k):ruled;
+  const [cl,ch]=m.clamp||[0,Infinity];
+  return {f:Math.min(Math.max(damped,cl),ch),raw,ruled,damped,parts,rules};
+}
+// end weighted factor model
+function _fmWhy(r){
+  if(r.none)return 'no driver data - neutral 1.00';
+  const pc=v=>(v*100).toFixed(1)+'%',W=r.parts.reduce((a,q)=>a+q.w,0);
+  let t=r.parts.map(q=>`${FM_DRIVERS[q.key].short} ${pc(q.v)} → ${q.slab.label} ×${(+q.mult).toFixed(2)} (${Math.round(q.w/W*100)}%)`).join(' · ')+` = ${r.raw.toFixed(3)}`;
+  if(Math.abs(r.ruled-r.raw)>5e-4)t+=` → rule (${r.rules.map(x=>FM_DRIVERS[x.driver].short+(x.op==='below'?' < ':' ≥ ')+pc(x.value)).join(', ')}) ${r.ruled.toFixed(3)}`;
+  if(Math.abs(r.damped-r.ruled)>5e-4)t+=` → small-department damping ${r.damped.toFixed(3)}`;
+  if(Math.abs(r.f-r.damped)>5e-4)t+=` → clamp ${r.f.toFixed(2)}`;
+  return t;
+}
+function _plannerFactor(sec,mis){
+  const ft=PLANNER.ft,x=_plannerInputs(sec,mis);
+  if(ft?.mode==='weighted'&&ft.model){
+    const dv=DVDATA.find(d=>d.secs.includes(sec));
+    const ly=dv?mis.reduce((a,mi)=>a+_secMonLY(sec,dv,mi),0)/mis.length:null;
+    const r=_weightedFactor(x,ft.model,ly),sl=k=>r.parts.find(q=>q.key===k)?.slab.label||null;
+    return {f:r.f,why:_fmWhy(r),tags:{st:sl('st'),growth:sl('growth'),fill:sl('fill')},inp:x};
+  }
+  return {..._matrixFactor(ft,x),inp:x};
 }
 // {divId:{mi:{secId:{ly,fc,val,gr}}}} over the AOP months - recomputed only when one of its inputs changes
 function _plannerCalc(){
@@ -5427,30 +5520,152 @@ function setPlanMode(m){
 }
 function togglePlanPhase(){setPlanMode(_planMode()==='month'?'block':'month');toast(_planMode()==='month'?'Phase 2 - month by month':'Phase 1 - block');}
 function _syncModeBtn(){const b=document.getElementById('mode-btn');if(b){const p2=_planMode()==='month';b.textContent=p2?'Phase 2 · Month':'Phase 1 · Block';b.classList.toggle('on',p2);}}
-/* Factor table - everyone can see it; only an admin or a planner can change it (the server checks again) */
+/* Factor table - everyone can see it; only an admin or a planner can change it (the server checks again).
+   Edits go to a draft (_fmFt) and are saved as a whole; "Planner uses" picks the weighted builder or the matrix. */
+const FM_DEFAULT={drivers:[
+  {key:'st',on:true,weight:50,slabs:[{from:null,label:'Low',mult:0.9},{from:0.05,label:'Average',mult:1},{from:0.1,label:'High',mult:1.1},{from:0.15,label:'Excellent',mult:1.15}]},
+  {key:'growth',on:true,weight:25,slabs:[{from:null,label:'Low',mult:1.03},{from:0.2,label:'Medium',mult:1},{from:0.5,label:'High',mult:0.95}]},
+  {key:'fill',on:true,weight:25,slabs:[{from:null,label:'Low',mult:1.05},{from:0.5,label:'Avg',mult:1},{from:0.7,label:'Good',mult:0.97}]}],
+  rules:[{driver:'fill',op:'below',value:0.5,kind:'min',f:0.95}],shrink_k:0.05,clamp:[0.8,1.2]};
+let _fmFt=null,_fmTab='matrix',_fmPrevCache=null;
+const _clone=o=>JSON.parse(JSON.stringify(o));
 function openFactorTable(){
   fetch('/api/auth/me').then(r=>r.ok?r.json():null).catch(()=>null).then(me=>{
     PLANNER.canEdit=!!(me&&(me.is_admin||me.role==='admin'||me.role==='planner'));
+    _fmFt=PLANNER.ft?_clone(PLANNER.ft):null;
+    if(_fmFt){_fmFt.mode=_fmFt.mode||'matrix';_fmFt.model=_fmFt.model||_clone(FM_DEFAULT);}
+    _fmTab=_fmFt?.mode==='weighted'?'builder':'matrix';_fmPrevCache=null;
     _renderFactorTable();document.getElementById('factorOv').style.display='flex';
   });
 }
 const _h=t=>String(t??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 function _renderFactorTable(){
-  const ft=PLANNER.ft,el=document.getElementById('factorBody'),ed=PLANNER.canEdit&&!!ft;
+  const ft=_fmFt,el=document.getElementById('factorBody'),ed=PLANNER.canEdit&&!!ft;
   document.getElementById('factorSave').style.display=ed?'':'none';
   document.getElementById('factorWho').textContent=ed?'You can change the factors (admin / planner).':'Read-only - only an admin or a planner can change the factors.';
   if(!ft){el.innerHTML='<p style="padding:14px">No factor table on the server yet.</p>';return;}
+  const tab=(id,t)=>`<button type="button" class="vt${_fmTab===id?' on':''}" aria-pressed="${_fmTab===id}" onclick="_fmTab='${id}';_renderFactorTable()">${t}</button>`;
+  const uses=ft.mode==='weighted'?'Weighted builder':'Matrix (36 rows)';
+  const use=ed?`<label>Planner uses <select onchange="_fmFt.mode=this.value;_renderFactorTable()"><option value="weighted"${ft.mode==='weighted'?' selected':''}>Weighted builder</option><option value="matrix"${ft.mode!=='weighted'?' selected':''}>Matrix (36 rows)</option></select></label>`
+    :`Planner uses: <b>${uses}</b>`;
+  el.innerHTML=`<div class="fm-top"><div class="vtog" role="group" aria-label="View">${tab('builder','Weighted builder')}${tab('matrix','Matrix')}</div><span class="fm-use">${use}</span></div>
+    <div class="fm-fill">${PLANNER.fill?`Fill rates: <b>${Object.keys(PLANNER.fill.departments||{}).length}</b> departments from ${_h(PLANNER.fill.source)} (${_h(PLANNER.fill.column)}) · ${_h(PLANNER.fill.imported_at)}`:'<span style="color:var(--ne)">Fill-rate file not loaded yet.</span>'}
+      ${PLANNER.canEdit?`<label class="tbtn" style="margin-left:8px;cursor:pointer">&#x2191; Refresh fill rates<input type="file" accept=".xlsb,.xlsx,.xlsm" style="display:none" onchange="uploadFillRate(this)"></label>`:''}</div>`+
+    (_fmTab==='builder'?_fmBuilderHtml(ft.model,ed):_fmMatrixHtml(ft,ed))+
+    (ft.updated_by?`<div style="padding:8px 14px;font-size:10px;color:var(--mu)">Last changed by ${_h(ft.updated_by)} · ${_h(ft.updated_at)}</div>`:'');
+  if(_fmTab==='builder'&&ed)_fmWire();
+}
+function _fmMatrixHtml(ft,ed){
   const lbl=(k,t)=>_h((ft.bands[k].find(b=>b.tag===t)||{}).label||t);
   const bands=k=>ft.bands[k].map(b=>`<span class="pl-tag">${_h(b.tag)} ${_h(b.label)}</span>`).join(' ');
-  el.innerHTML=`<div style="padding:10px 14px;font-size:11px;line-height:2">
-      <b>Avg Weekly Sell-Thru %</b> ${bands('st')}<br><b>LY Growth</b> (25V26, MAMJ'26 vs MAMJ'25, value) ${bands('growth')}<br><b>Fill Rate</b> ${bands('fill')}
-      <br>${PLANNER.fill?`Fill rates: <b>${Object.keys(PLANNER.fill.departments||{}).length}</b> departments from ${_h(PLANNER.fill.source)} (${_h(PLANNER.fill.column)}) · ${_h(PLANNER.fill.imported_at)}`:'<span style="color:var(--ne)">Fill-rate file not loaded yet - every factor is a neutral 1.00 until it is.</span>'}
-      ${PLANNER.canEdit?`<label class="tbtn" style="margin-left:8px;cursor:pointer">&#x2191; Refresh fill rates<input type="file" accept=".xlsb,.xlsx,.xlsm" style="display:none" onchange="uploadFillRate(this)"></label>`:''}</div>
+  return `<div style="padding:10px 14px;font-size:11px;line-height:2">
+      <b>Avg Weekly Sell-Thru %</b> ${bands('st')}<br><b>LY Growth</b> (25V26, MAMJ'26 vs MAMJ'25, value) ${bands('growth')}<br><b>Fill Rate</b> ${bands('fill')}</div>
     <table class="pl-ft"><thead><tr><th>Sell-Thru</th><th>LY Growth</th><th>Fill Rate</th><th>Factor</th><th style="text-align:left">Reason</th></tr></thead><tbody>${
       ft.factors.map((r,i)=>`<tr><td>${_h(r.st)} ${lbl('st',r.st)}</td><td>${_h(r.growth)} ${lbl('growth',r.growth)}</td><td>${_h(r.fill)} ${lbl('fill',r.fill)}</td>
-        <td>${ed?`<input class="gi has" type="number" step="0.01" min="0.01" max="3" value="${+r.factor}" data-fi="${i}" style="width:64px">`:(+r.factor).toFixed(2)}</td>
-        <td style="text-align:left">${_h(r.reason)}</td></tr>`).join('')}</tbody></table>
-    ${ft.updated_by?`<div style="padding:8px 14px;font-size:10px;color:var(--mu)">Last changed by ${_h(ft.updated_by)} · ${_h(ft.updated_at)}</div>`:''}`;
+        <td>${ed?`<input class="gi has" type="number" step="0.01" min="0.01" max="3" value="${+r.factor}" onchange="_fmFt.factors[${i}].factor=+this.value" style="width:64px" aria-label="Factor row ${i+1}">`:(+r.factor).toFixed(2)}</td>
+        <td style="text-align:left">${_h(r.reason)}</td></tr>`).join('')}</tbody></table>`;
+}
+// every active department's inputs + block LY per month, once per opening (the preview re-scores them on each edit)
+function _fmPrev(){
+  if(_fmPrevCache)return _fmPrevCache;
+  const out=[];
+  DVDATA.forEach(dv=>dv.secs.forEach(sec=>{if(S.hiddenSecs.has(sec.id))return;
+    const x=_plannerInputs(sec,AOP_MIS),ly=AOP_MIS.reduce((a,mi)=>a+_secMonLY(sec,dv,mi),0)/AOP_MIS.length;
+    out.push({sec,dv,x,ly,mx:_matrixFactor(PLANNER.ft,x).f});}));
+  return _fmPrevCache=out;
+}
+function _fmPos(d,v){const [a,b]=FM_DRIVERS[d.key].dom;return Math.min(Math.max((v-a)/(b-a),0),1)*100;}
+function _fmBuilderHtml(m,ed){
+  const dis=ed?'':' disabled',P=_fmPrev(),pc=v=>+(v*100).toFixed(2);
+  const on=m.drivers.filter(d=>d.on&&+d.weight>0),W=on.reduce((a,d)=>a+ +d.weight,0);
+  const cards=m.drivers.map((d,i)=>{
+    const D=FM_DRIVERS[d.key],n=d.slabs.length,cnt=d.slabs.map(()=>0);let miss=0;
+    P.forEach(q=>{const v=q.x[D.inp];if(v==null){miss++;return;}const sl=_fmSlab(d.slabs,v);if(sl)cnt[d.slabs.indexOf(sl)]++;});
+    const bar=d.slabs.map((sl,j)=>{const a=j?_fmPos(d,sl.from):0,b=j<n-1?_fmPos(d,d.slabs[j+1].from):100,mu=+sl.mult;
+      return `<div class="fm-seg ${mu>1.0001?'up':mu<0.9999?'dn':'eq'}" data-j="${j}" style="left:${a}%;width:${Math.max(b-a,0)}%" title="${_h(sl.label)} ×${mu.toFixed(2)} · ${cnt[j]} departments">${_h(sl.label)} ×${mu.toFixed(2)} · ${cnt[j]}</div>`+
+        (j&&ed?`<span class="fm-hdl" data-j="${j}" data-v="${pc(sl.from)}%" style="left:${a}%" title="Drag to move where ${_h(sl.label)} starts" aria-hidden="true"></span>`:'');}).join('');
+    const rows=d.slabs.map((sl,j)=>`<tr><td>${j?`<input class="gi" type="number" step="0.5" value="${pc(sl.from)}"${dis} onchange="_fmSetFrom(${i},${j},this.value)" aria-label="${D.short}: ${_h(sl.label)} starts at %"> %`:'lowest'}</td>
+      <td><input type="text" maxlength="20" value="${_h(sl.label)}"${dis} onchange="_fmFt.model.drivers[${i}].slabs[${j}].label=this.value.trim()||'Slab';_renderFactorTable()" aria-label="${D.short} slab ${j+1} name"></td>
+      <td><input class="gi" type="number" step="0.01" min="0.5" max="2" value="${+sl.mult}"${dis} onchange="_fmSetMult(${i},${j},this.value)" aria-label="${D.short}: ${_h(sl.label)} multiplier"></td>
+      <td>${cnt[j]}</td><td>${ed&&n>1?`<button type="button" class="fm-x" onclick="_fmDelSlab(${i},${j})" aria-label="Remove slab ${_h(sl.label)}">&#x2715;</button>`:''}</td></tr>`).join('');
+    return `<div class="fm-card${d.on?'':' off'}" data-i="${i}">
+      <div class="fm-hd">${ed?`<span class="fm-grip" title="Drag to change priority" onmousedown="this.closest('.fm-card').draggable=true">&#x2817;</span>`:''}<b>${i+1}. ${D.label}</b>
+        ${ed?`<button type="button" class="fm-mv" onclick="_fmMove(${i},-1)" aria-label="Move ${D.short} up"${i?'':' disabled'}>&#x2191;</button><button type="button" class="fm-mv" onclick="_fmMove(${i},1)" aria-label="Move ${D.short} down"${i<m.drivers.length-1?'':' disabled'}>&#x2193;</button>`:''}
+        <label class="fm-on"><input type="checkbox"${d.on?' checked':''}${dis} onchange="_fmFt.model.drivers[${i}].on=this.checked;_renderFactorTable()"> Use</label>
+        <label class="fm-w">Weight <input type="range" min="0" max="100" step="5" value="${+d.weight}"${dis} oninput="this.nextElementSibling.textContent=this.value" onchange="_fmFt.model.drivers[${i}].weight=+this.value;_renderFactorTable()" aria-label="${D.short} weight"><span>${+d.weight}</span></label>
+        <span class="fm-share">${d.on&&+d.weight>0&&W?Math.round(d.weight/W*100)+'% of the factor':'not used'}</span></div>
+      <div class="fm-bar" data-i="${i}">${bar}</div>
+      <table class="fm-sl"><thead><tr><th>Starts at</th><th>Slab</th><th>Multiplier</th><th>Departments</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="fm-row">${ed&&n<8?`<button type="button" class="fpbtn" onclick="_fmAddSlab(${i})">+ Add slab</button>`:''}${miss?`<span class="fm-note">${miss} departments have no ${D.short.toLowerCase()} - left out for them, the other drivers re-weighted</span>`:''}</div>
+    </div>`;}).join('');
+  const opt=(v,list)=>list.map(([k,t])=>`<option value="${k}"${v===k?' selected':''}>${t}</option>`).join('');
+  const rules=(m.rules||[]).map((r,ri)=>`<div class="fm-rule">When <select${dis} onchange="_fmFt.model.rules[${ri}].driver=this.value;_renderFactorTable()" aria-label="Rule ${ri+1} driver">${opt(r.driver,Object.entries(FM_DRIVERS).map(([k,v])=>[k,v.short]))}</select>
+      <select${dis} onchange="_fmFt.model.rules[${ri}].op=this.value;_renderFactorTable()" aria-label="Rule ${ri+1} condition">${opt(r.op,[['below','is below'],['atleast','is at least']])}</select>
+      <input class="gi" type="number" step="0.5" value="${pc(r.value)}"${dis} onchange="_fmFt.model.rules[${ri}].value=(+this.value||0)/100;_renderFactorTable()" aria-label="Rule ${ri+1} threshold %"> % → factor
+      <select${dis} onchange="_fmFt.model.rules[${ri}].kind=this.value;_renderFactorTable()" aria-label="Rule ${ri+1} type">${opt(r.kind,[['min','at least'],['max','at most']])}</select>
+      <input class="gi" type="number" step="0.01" min="0.5" max="2" value="${+r.f}"${dis} onchange="_fmFt.model.rules[${ri}].f=Math.min(Math.max(+this.value||1,0.5),2);_renderFactorTable()" aria-label="Rule ${ri+1} factor">
+      ${ed?`<button type="button" class="fm-x" onclick="_fmFt.model.rules.splice(${ri},1);_renderFactorTable()" aria-label="Remove rule ${ri+1}">&#x2715;</button>`:''}</div>`).join('')||'<div class="fm-note">No rules.</div>';
+  // preview: every active department scored with this draft vs the saved matrix
+  const res=P.map(q=>({q,r:_weightedFactor(q.x,m,q.ly)})),fs=res.map(o=>o.r.f).sort((a,b)=>a-b);
+  const none=res.filter(o=>o.r.none).length,med=fs.length?fs[Math.floor(fs.length/2)]:1;
+  const lst=arr=>arr.map(o=>`<li>${_h(o.q.sec.nm)} <span class="fm-note">${_h(o.q.dv.nm)}</span> <b>${o.r.f.toFixed(2)}</b> <span class="fm-note">matrix ${o.q.mx.toFixed(2)}</span></li>`).join('');
+  const by=res.slice().sort((a,b)=>b.r.f-a.r.f);
+  return `<div class="fm-wrap">
+    <div class="fm-note">Drivers combine as a weighted geometric mean of their slab multipliers (one driver = its multiplier), then the rules, then small departments are damped toward 1.00, then the clamp. Each division is then re-balanced to its AOP, so only how departments compare matters. Card order = priority when rules conflict.</div>
+    ${cards}
+    <div class="fm-sec"><h4>Rules - checked in card order; a later rule never undoes an earlier one</h4>${rules}${ed?`<button type="button" class="fpbtn" style="margin-top:6px" onclick="_fmFt.model.rules.push({driver:'fill',op:'below',value:0.5,kind:'min',f:0.95});_renderFactorTable()">+ Add rule</button>`:''}</div>
+    <div class="fm-sec"><h4>Limits</h4><div class="fm-rule">Small-department damping: half strength at LY of Rs
+      <input class="gi" type="number" step="0.5" min="0" value="${+(m.shrink_k*100).toFixed(2)}"${dis} onchange="_fmFt.model.shrink_k=Math.max(+this.value||0,0)/100;_renderFactorTable()" aria-label="Damping LY in lakh per month"> L a month (0 = off)
+      · Factor stays between <input class="gi" type="number" step="0.01" min="0.5" max="1" value="${m.clamp[0]}"${dis} onchange="_fmSetClamp(0,this.value)" aria-label="Lowest factor">
+      and <input class="gi" type="number" step="0.01" min="1" max="2" value="${m.clamp[1]}"${dis} onchange="_fmSetClamp(1,this.value)" aria-label="Highest factor"></div></div>
+    <div class="fm-sec"><h4>Preview - ${res.length} active departments</h4>
+      <div class="fm-note">Factor low ${fs[0]?.toFixed(2)??'-'} · median ${med.toFixed(2)} · high ${fs[fs.length-1]?.toFixed(2)??'-'}${none?` · ${none} with no driver data stay at 1.00`:''}</div>
+      <div class="fm-prev"><div><b>Highest factors</b><ol>${lst(by.slice(0,5))}</ol></div><div><b>Lowest factors</b><ol>${lst(by.slice(-5).reverse())}</ol></div></div></div>
+  </div>`;
+}
+function _fmMove(i,dir){const a=_fmFt.model.drivers,j=i+dir;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];_renderFactorTable();
+  document.querySelectorAll('#factorBody .fm-card')[j]?.querySelectorAll('.fm-mv')[dir<0?0:1]?.focus();}
+function _fmSetFrom(i,j,val){
+  const d=_fmFt.model.drivers[i],v=Math.round(parseFloat(val)*100)/10000;
+  const lo=d.slabs[j-1].from,hi=d.slabs[j+1]?.from;
+  if(isNaN(v)||(lo!=null&&v<=lo)||(hi!=null&&v>=hi)){toast('Each slab must start above the one before it and below the next');_renderFactorTable();return;}
+  d.slabs[j].from=v;_renderFactorTable();
+}
+function _fmSetMult(i,j,val){const v=parseFloat(val);_fmFt.model.drivers[i].slabs[j].mult=isNaN(v)?1:Math.min(Math.max(v,0.5),2);_renderFactorTable();}
+function _fmSetClamp(k,val){const v=parseFloat(val),c=_fmFt.model.clamp;c[k]=isNaN(v)?(k?1.2:0.8):k?Math.min(Math.max(v,1),2):Math.min(Math.max(v,0.5),1);_renderFactorTable();}
+function _fmAddSlab(i){
+  const d=_fmFt.model.drivers[i],last=d.slabs[d.slabs.length-1],[a,b]=FM_DRIVERS[d.key].dom;
+  const st=last.from??a,v=Math.round(((st+b)/2)*200)/200;
+  if(v<=st){toast('No room for another slab at the top');return;}
+  d.slabs.push({from:v,label:'New',mult:1});_renderFactorTable();
+}
+function _fmDelSlab(i,j){const sl=_fmFt.model.drivers[i].slabs;sl.splice(j,1);if(j===0&&sl.length)sl[0].from=null;_renderFactorTable();}
+// drag a card's grip to change priority; drag a slab boundary along its bar (the keyboard way to do both: the
+// up / down buttons and the "Starts at" inputs)
+function _fmWire(){
+  const body=document.getElementById('factorBody');
+  body.querySelectorAll('.fm-card').forEach(c=>{
+    c.addEventListener('dragstart',e=>{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',c.dataset.i);c.classList.add('drag');});
+    c.addEventListener('dragend',()=>{c.draggable=false;c.classList.remove('drag');});
+    c.addEventListener('dragover',e=>{e.preventDefault();c.classList.add('over');});
+    c.addEventListener('dragleave',()=>c.classList.remove('over'));
+    c.addEventListener('drop',e=>{e.preventDefault();const f=+e.dataTransfer.getData('text/plain'),t=+c.dataset.i,a=_fmFt.model.drivers;
+      if(!isNaN(f)&&f!==t)a.splice(t,0,a.splice(f,1)[0]);_renderFactorTable();});
+  });
+  body.querySelectorAll('.fm-hdl').forEach(h=>h.addEventListener('pointerdown',e=>{
+    e.preventDefault();h.setPointerCapture(e.pointerId);
+    const bar=h.parentElement,d=_fmFt.model.drivers[+bar.dataset.i],j=+h.dataset.j,[d0,d1]=FM_DRIVERS[d.key].dom;
+    const lo=(d.slabs[j-1].from??d0)+0.005,hi=(d.slabs[j+1]?.from??d1)-0.005;
+    const mv=ev=>{const r=bar.getBoundingClientRect();
+      const v=Math.round((d0+(ev.clientX-r.left)/r.width*(d1-d0))*200)/200;
+      d.slabs[j].from=+Math.min(Math.max(v,lo),hi).toFixed(4);
+      const a=_fmPos(d,d.slabs[j].from);h.style.left=a+'%';h.dataset.v=+(d.slabs[j].from*100).toFixed(2)+'%';
+      const s0=bar.querySelector(`.fm-seg[data-j="${j-1}"]`),s1=bar.querySelector(`.fm-seg[data-j="${j}"]`);
+      if(s0)s0.style.width=Math.max(a-parseFloat(s0.style.left),0)+'%';
+      if(s1){const e1=parseFloat(s1.style.left)+parseFloat(s1.style.width);s1.style.left=a+'%';s1.style.width=Math.max(e1-a,0)+'%';}};
+    const up=()=>{h.removeEventListener('pointermove',mv);h.removeEventListener('pointerup',up);_renderFactorTable();};
+    h.addEventListener('pointermove',mv);h.addEventListener('pointerup',up);
+  }));
 }
 // refresh the fill rates from the PLAN vs FILL RATE workbook (its DIV - SUMMARY pivot) - admin / planner only
 function uploadFillRate(inp){
@@ -5467,8 +5682,8 @@ function uploadFillRate(inp){
     .finally(()=>{inp.value='';});
 }
 function saveFactorTable(){
-  const ft=JSON.parse(JSON.stringify(PLANNER.ft));
-  document.querySelectorAll('#factorBody input[data-fi]').forEach(inp=>{const v=parseFloat(inp.value);if(!isNaN(v))ft.factors[+inp.dataset.fi].factor=v;});
+  const ft=_fmFt;if(!ft)return;
+  if(ft.mode==='weighted'&&!ft.model.drivers.some(d=>d.on&&+d.weight>0)){toast('Turn on at least one driver with a weight above 0');return;}
   fetch(SYNC_BASE+'/api/planner/factor-table',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(ft)})
     .then(r=>r.json().then(j=>({ok:r.ok,j}))).then(({ok,j})=>{
       if(!ok){toast('Factor table NOT saved - '+(j.error||'error'));return;}

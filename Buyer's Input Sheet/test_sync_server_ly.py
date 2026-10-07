@@ -17,4 +17,18 @@ assert ss.LY_DEF in ss._data_version() or ss._data_version() == "unknown"
 done = {"status": "done", "data": {"data_version": "v1"}}
 assert ss._job_fresh(done, "v1") and not ss._job_fresh(done, "v2")
 assert not ss._job_fresh({"status": "running", "data": None}, "v1")
+# weighted factor model (factor builder, 2026-10-07): the page's default passes, broken ones are refused
+import copy, json, re
+html = open(os.path.join(here, "otb-plan-app.html"), encoding="utf-8").read()
+js = re.search(r"const FM_DEFAULT=(\{.*?\});\n", html, re.S).group(1)
+good = json.loads(re.sub(r"([{,]\s*)(\w+):", r'\1"\2":', js).replace("'", '"'))   # JS object literal -> JSON
+assert ss._model_error(good) is None, ss._model_error(good)
+for path, val in ((["drivers", 0, "weight"], 101), (["drivers", 0, "slabs", 2, "from"], 0.01), (["clamp", 0], 1.3),
+                  (["rules", 0, "f"], float("nan")), (["drivers", 1, "slabs", 0, "mult"], 0)):
+    m = copy.deepcopy(good)
+    tgt = m
+    for k in path[:-1]:
+        tgt = tgt[k]
+    tgt[path[-1]] = val
+    assert ss._model_error(m), (path, val)
 print(f"test_sync_server_ly: OK (plan {plan[0]}-{plan[-1]}, LY {ly[0]}-{ly[-1]})")

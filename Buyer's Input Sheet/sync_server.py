@@ -397,6 +397,51 @@ def _factor_table_error(ft):
         return f"malformed factor table: {e}"
 
 
+_FM_KEYS = ("st", "growth", "fill")
+
+
+def _model_error(m):
+    """None if `m` is a usable weighted factor model (BIS factor builder, 2026-10-07): each driver once with a weight
+    0-100 and 1-12 slabs whose starts rise (the first starts at the bottom), multipliers and rule factors in (0, 3],
+    rules on a known driver, damping k 0-100 (Rs Cr a month) and a clamp lo <= 1 <= hi."""
+    import math
+    num = lambda v: math.isfinite(float(v)) and float(v)   # noqa: E731 - NaN / inf refused
+    try:
+        drivers = m["drivers"]
+        if sorted(d["key"] for d in drivers) != sorted(_FM_KEYS):
+            return "the model needs each driver (sell-thru, LY growth, fill rate) exactly once"
+        for d in drivers:
+            if not isinstance(d.get("on"), bool) or num(d["weight"]) is False or not 0 <= float(d["weight"]) <= 100:
+                return f"{d['key']}: weight must be 0-100"
+            sl = d["slabs"]
+            if not 1 <= len(sl) <= 12:
+                return f"{d['key']}: 1-12 slabs"
+            starts = [s.get("from") for s in sl[1:]]
+            if any(v is None or num(v) is False for v in starts):
+                return f"{d['key']}: every slab after the first needs a start"
+            fl = [float(v) for v in starts]
+            if fl != sorted(fl) or len(set(fl)) != len(fl):
+                return f"{d['key']}: slab starts must rise"
+            for s in sl:
+                if num(s["mult"]) is False or not 0 < float(s["mult"]) <= 3:
+                    return f"{d['key']}: multiplier out of range"
+                if not str(s.get("label", "")).strip() or len(str(s["label"])) > 40:
+                    return f"{d['key']}: every slab needs a short name"
+        for r in m.get("rules", []):
+            if r["driver"] not in _FM_KEYS or r["op"] not in ("below", "atleast") or r["kind"] not in ("min", "max"):
+                return "a rule is malformed"
+            if num(r["value"]) is False or num(r["f"]) is False or not 0 < float(r["f"]) <= 3:
+                return "a rule's value or factor is out of range"
+        k, (lo, hi) = m.get("shrink_k", 0), m["clamp"]
+        if num(k) is False or not 0 <= float(k) <= 100:
+            return "damping must be 0-100"
+        if num(lo) is False or num(hi) is False or not 0 < float(lo) <= 1 <= float(hi) <= 3:
+            return "the factor limits must be like 0.80 - 1.20"
+        return None
+    except (KeyError, TypeError, ValueError) as e:
+        return f"malformed factor model: {e}"
+
+
 @app.route("/api/planner/factor-table", methods=["POST"])
 def planner_factor_table_save():
     me = _planner_editor()
@@ -404,6 +449,13 @@ def planner_factor_table_save():
         return jsonify({"ok": False, "error": "Only an admin or a planner can change the factor table."}), 403
     ft = request.get_json(silent=True) or {}
     err = _factor_table_error(ft)
+    mode = ft.get("mode", "matrix")
+    if not err and mode not in ("matrix", "weighted"):
+        err = "mode must be matrix or weighted"
+    if not err and (mode == "weighted" or ft.get("model") is not None):
+        err = _model_error(ft.get("model"))
+    if not err and mode == "weighted" and not any(d["on"] and float(d["weight"]) > 0 for d in ft["model"]["drivers"]):
+        err = "turn on at least one driver with a weight above 0"
     if err:
         return jsonify({"ok": False, "error": err}), 400
     ft.update(version=int((_read_json(FACTOR_TABLE_JSON, {}) or {}).get("version", 0)) + 1,
