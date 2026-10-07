@@ -281,8 +281,8 @@ svg .bar-in { fill: var(--w-in); opacity: .8; } svg .bar-off { fill: #94A3B8; } 
 .ov-kpis.strip .val small { font-size: 11.5px; margin-left: 4px; }
 details.ov-card > summary { list-style: none; cursor: pointer; }
 details.ov-card > summary::-webkit-details-marker { display: none; }
-details.ov-card > summary h3::before { content: 'B8'; color: var(--color-muted-foreground); }
-details.ov-card[open] > summary h3::before { content: 'BE'; }
+details.ov-card > summary h3::before { content: '\25B8'; color: var(--color-muted-foreground); }
+details.ov-card[open] > summary h3::before { content: '\25BE'; }
 details.ov-card:not([open]) > summary h3 { margin: 0; }
 .tmenu-btn:focus-visible, .fchip:focus-visible, .ov-kpi.link:focus-visible, details.ov-card > summary:focus-visible, .linkish:focus-visible {
   outline: 2px solid var(--color-primary); outline-offset: 2px; }
