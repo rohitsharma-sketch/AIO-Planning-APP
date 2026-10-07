@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### PROJECT-CONTEXT.md added
+- **Asked (user):** "yes create the PROJECT-CONTEXT.md" (from the ECC dev-team review).
+- Repo-root summary of the suite: purpose, tech stack, current phase, key constraints and what "done" means - the shared baseline the dev-team / review sessions read (as untrusted declarative data). No code change.
+
 ### BIS Continuous factor: 19V26 comparable beside 25V26 + agreement check
 - **Asked (user):** "the continuous should add another layer - except for 1 year comparable we want 19 V 26 and 25 V 26 comparable to make sure this factor works".
 - **Built:** a fourth driver, Base growth 19V26 (31 stores), compared as (1 + growth) / (1 + division median) with its own strength (department's own, else its reference department's - `_plannerInputs` `gb`), and an optional switch "Trust growth only when 25V26 and 19V26 agree" - when the two sit on opposite sides of their division medians, neither moves that department's factor (one comparable only -> kept). The tab shows how many departments disagree (45 of 144 today). Tune searches the 19V26 strength and the switch too (~3,000 settings, 0.8 s). Hover explains "not used (the two comparables disagree)". Server validates `base` (-2..3) and `agree` (bool).
