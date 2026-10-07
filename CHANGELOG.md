@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### Landing: decluttered (suite declutter 5 of 7)
+- **Asked (user):** suite declutter.
+- **Top bar:** brand + status + one "Account ▾" menu holding Theme (theme-btn), Users (admin only, admin-link), Servers start / stop all (launch-all-btn, rights greying kept) and Sign out (signout-btn / signout-label). Items stay in the page (rights script and e2e unaffected).
+- Intro to one line (duplicate "Planning Suite" heading and "opens in a new tab" sentence removed), footer's repeated Servers line removed, sync strip one line (detail as tooltip, "View details" span removed), Lagan card meta "Look up". Lagan modal: Monthly Summary / All Dates / Sync with Drik Panchang -> "Export / Sync ▾" (same ids), method note -> ⓘ, year chips capped at 5 + "+N more", shorter subtitle.
+- **Checks:** scripts parse; every rights / admin id present; 8 per-card status labels visible (e2e needs 3); test_rights_guard and test_lagan_drik pass; static preview on :5179.
+
 ### NSO Distributor: decluttered (suite declutter 4 of 7)
 - **Asked (user):** suite declutter.
 - File status shown once: tiles -> one summary line ("Required n/n · Optional n/n") that expands the tile grid (opens by itself when a required file is missing); duplicate Generate summary removed; folder message only for warnings. Duplicate h2 title dropped; one "Reset" next to Scan (resetAll, confirm kept) instead of two; AOP table wider with borderless inputs until hover / focus; current stage name next to the bar, stage pills in a collapsed details; Download XLSX as a text link (same handler). Removed unused SheetJS CDN script, clean(), MONTH_MAP, MONTHS, clearFolder(), updateSummary().

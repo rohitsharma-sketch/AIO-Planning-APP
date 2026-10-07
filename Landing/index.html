@@ -75,8 +75,26 @@
   .breaker-knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .25s; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
   .breaker.on .breaker-knob { transform: translateX(16px); }
   .breaker-label { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+  /* Account menu (2026-10-07 declutter): Theme / Users / Servers / Sign out behind one button.
+     Same dropdown pattern as Buyer's Input (otb-plan-app .tmenu). Items stay in the DOM when closed. */
+  .tmenu { position: relative; display: inline-flex; }
+  .tmenu-pop { display: none; position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; min-width: 250px;
+    background: var(--white); color: var(--char); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow); padding: 6px; }
+  .tmenu.open .tmenu-pop { display: block; }
+  .tmenu-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; border: none; background: none;
+    border-radius: 7px; cursor: pointer; color: var(--char); font: inherit; font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+  .tmenu-item small { font-size: 11px; font-weight: 500; color: var(--faint); margin-left: auto; }
+  .tmenu-item:hover:not(:disabled) { background: var(--st-surface-3,#F3F2EC); }
+  .tmenu-item:disabled { cursor: default; opacity: .55; }
+  .tmenu-sep { height: 1px; background: var(--border); margin: 5px 4px; }
+  .tmenu-sep:has(+ #signout-btn[style*="none"]) { display: none; }
+  .tmenu-item .breaker-track { margin-left: auto; background: var(--border2); }
+  #launch-all-btn.on .breaker-track { background: #22A45D; }
+  #launch-all-btn.on .breaker-knob { transform: translateX(16px); }
+  .acct-btn { padding: 6px 13px; }
+  .acct-btn .caret { font-size: 9px; opacity: .7; }
+  .acct-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
   /* Suite theme picker - one choice recolours every app (suite-theme.js) */
-  .theme-wrap { position: relative; }
   .theme-panel {
     position: absolute; top: calc(100% + 10px); right: 0; z-index: 50; width: 300px;
     background: var(--white); color: var(--char); border: 1px solid var(--border); border-radius: 12px;
@@ -108,7 +126,6 @@
     display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
     color: var(--accent); background: var(--accent-bg); border: 1px solid var(--accent-bd); border-radius: 999px; padding: 4px 12px;
   }
-  h1 { margin: 14px 0 8px; font-size: 32px; font-weight: 800; color: var(--navy); letter-spacing: -.025em; line-height: 1.15; }
   .lede { margin: 0; max-width: 640px; font-size: 15px; color: var(--muted); line-height: 1.6; }
 
   .sec-hd { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin: 40px 0 14px; }
@@ -119,8 +136,7 @@
   .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
   .grid.tools { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   @media (max-width: 1040px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .grid.tools { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  #signout-btn { padding-left: 13px; }
-  @media (max-width: 620px)  { .grid, .grid.tools { grid-template-columns: minmax(0, 1fr); } .brand-sub, .sys-pill, .brand-name, .so-name, #theme-btn .breaker-label { display: none; } .topbar { padding: 0 16px; gap: 8px; } }
+  @media (max-width: 620px)  { .grid, .grid.tools { grid-template-columns: minmax(0, 1fr); } .brand-sub, .sys-pill, .brand-name { display: none; } .topbar { padding: 0 16px; gap: 8px; } }
 
   .card {
     position: relative; display: flex; flex-direction: column;
@@ -145,7 +161,6 @@
   }
   .open-link { font-weight: 700; color: var(--accent); white-space: nowrap; }
   .card:hover .open-link { color: var(--accent-h); }
-  .port { color: var(--faint); font-weight: 600; font-size: 11.5px; }
 
   /* Core modules a touch larger, additional tools compact (user, 2026-09-26) */
   .grid:not(.tools) .card { padding: 22px 22px 16px; min-height: 214px; }
@@ -184,13 +199,7 @@
   .sync-strip:hover { border-color: var(--accent-bd); box-shadow: var(--shadow); }
   .sync-strip .card-icon { width: 36px; height: 36px; }
   .sync-strip-title { font-size: 14.5px; font-weight: 800; color: var(--navy); }
-  .sync-strip-sub { font-size: 12.5px; color: var(--muted); }
   .sync-strip .gap { flex: 1; }
-  .btn-ghost {
-    font-size: 12.5px; font-weight: 700; color: var(--accent); background: var(--accent-bg);
-    border: 1px solid var(--accent-bd); border-radius: 8px; padding: 6px 12px; cursor: pointer;
-  }
-  .btn-ghost:hover { background: var(--st-tint-c,#DCEBE2); }
 
   footer { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--faint); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 
@@ -279,7 +288,9 @@
   .lm-res-count { margin-left: auto; font-size: 12px; color: var(--muted); }
   .lm-res-count strong { color: var(--navy); font-weight: 800; }
   .lm-content { flex: 1; overflow-y: auto; padding: 20px; background: var(--bg); }
-  .lm-method-note { margin-bottom: 18px; padding: 9px 14px; background: var(--white); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; font-size: 12px; color: var(--muted); line-height: 1.6; }
+  .lm-info { margin-left: 5px; cursor: help; color: var(--faint); font-size: 13px; border-radius: 50%; }
+  .lm-chip-more { cursor: pointer; padding-right: 10px; font-family: inherit; }
+  .lm-chip-more:hover { background: rgba(255,255,255,.2); }
   .lm-yr-sec { margin-bottom: 32px; }
   .lm-yr-hdr { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
   .lm-yr-num { font-size: 28px; font-weight: 800; color: var(--navy); line-height: 1; letter-spacing: -.02em; }
@@ -342,13 +353,13 @@
   .lm-ctrl { background: var(--white); padding: 12px 22px; }
   .lm-content { padding: 22px; }
   .lm-yr-num { font-size: 24px; }
-  .lm-mo-card, .lm-tbl-wrap, .lm-method-note { box-shadow: var(--shadow-sm); }
+  .lm-mo-card, .lm-tbl-wrap { box-shadow: var(--shadow-sm); }
   .lm-mo-card, .lm-tbl-wrap { border-radius: 12px; }
   @media (max-width: 620px) { .lm-sub { display: none; } .lm-hdr, .lm-ctrl, .lm-content { padding-left: 16px; padding-right: 16px; } }
   /* ── Calm look (user, 2026-09-28: "minimal and clean", from the alternate design) ── overrides only;
      markup, links and how each app opens are unchanged. */
   .eyebrow { background: none; border: 0; padding: 0; color: var(--muted); letter-spacing: .1em; }
-  h1 { font-family: var(--st-font-display, Georgia, serif); font-weight: 500; font-size: 40px; letter-spacing: -.015em; color: var(--char); margin: 6px 0 6px; }
+  h1.eyebrow { display: block; margin: 0 0 6px; }   /* the page's one h1 (big duplicate title dropped 2026-10-07) */
   .lede { font-size: 15px; }
   .card, .sync-strip { box-shadow: none; }
   .card:hover { transform: none; box-shadow: none; border-color: var(--accent); }
@@ -366,7 +377,6 @@
   }
   @media (max-width: 1040px) { .grid:not(.tools) { gap: 16px; } .grid:not(.tools) .card::after { display: none; } }
   .grid.tools .card p.desc { -webkit-line-clamp: 1; }
-  .btn-ghost { background: none; }
   .meta { border-top-color: var(--st-surface-3, #F0ECE2); }
 </style>
 </head>
@@ -393,36 +403,42 @@
     </a>
     <span class="topbar-gap"></span>
     <span class="sys-pill" id="sys-pill"><span class="dot" id="sys-dot"></span><span id="sys-label">Checking services…</span></span>
-    <a class="breaker" id="admin-link" href="/auth/users" style="display:none;text-decoration:none" title="Users & access - who can sign in and what they can do (admins)"><span class="breaker-label">Users</span></a>
-    <button class="breaker" id="signout-btn" type="button" style="display:none" title="Sign out - then sign in as someone else"><span class="breaker-label"><span class="so-name" id="signout-label"></span>Sign out</span></button>
-    <!-- Suite theme picker: one colour theme for every app -->
-    <div class="theme-wrap">
-      <button id="theme-btn" class="breaker" type="button" aria-haspopup="true" aria-expanded="false" title="Colour theme for every RS Planning app">
-        <span class="theme-sw" id="theme-btn-sw" style="width:28px;height:20px;border-radius:999px"></span>
-        <span class="breaker-label">Theme</span>
+    <!-- Account menu (2026-10-07): Theme, Users (admins), Servers master switch, Sign out.
+         Ids kept for the rights / admin scripts below; items stay in the DOM when the menu is closed. -->
+    <div class="tmenu" id="acct-menu">
+      <button class="breaker acct-btn" id="acct-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="acct-pop" onclick="toggleMenu('acct-menu',event)">
+        <span class="breaker-label acct-name" id="acct-name">Account</span><span class="caret" aria-hidden="true">&#x25BC;</span>
       </button>
+      <div class="tmenu-pop" id="acct-pop">
+        <!-- Suite theme picker: one colour theme for every app -->
+        <button id="theme-btn" class="tmenu-item" type="button" aria-haspopup="true" aria-expanded="false" title="Colour theme for every RS Planning app" onclick="closeMenus()">
+          <span class="theme-sw" id="theme-btn-sw" style="width:28px;height:20px;border-radius:999px"></span>
+          <span>Theme</span>
+        </button>
+        <a class="tmenu-item" id="admin-link" href="/auth/users" style="display:none" title="Users & access - who can sign in and what they can do (admins)"><span>Users</span><small>&amp; access</small></a>
+        <!-- Master Switch -->
+        <button id="launch-all-btn" class="tmenu-item" type="button" title="Start or stop all planning servers">
+          <span>Servers</span><small>start all / stop all</small>
+          <span class="breaker-track" style="margin-left:0"><span class="breaker-knob"></span></span>
+        </button>
+        <div class="tmenu-sep"></div>
+        <button class="tmenu-item" id="signout-btn" type="button" style="display:none" title="Sign out - then sign in as someone else"><span>Sign out</span><small id="signout-label"></small></button>
+      </div>
       <div id="theme-panel" class="theme-panel" role="menu" hidden>
         <div class="theme-hd">Colour theme · all apps</div>
         <div id="theme-list" role="radiogroup" aria-label="Colour theme"></div>
         <div class="theme-note" id="theme-note">Applies to Landing, AOP, BIS, Sales Plan, Calendar and the sign-in pages. Open apps update when you switch back to them.</div>
       </div>
     </div>
-    <!-- Master Switch -->
-    <button id="launch-all-btn" class="breaker" type="button" title="Start or stop all planning servers">
-      <span class="breaker-track"><span class="breaker-knob"></span></span>
-      <span class="breaker-label">Servers</span>
-    </button>
   </header>
   <div id="launch-all-msg" class="corner-msg" role="status" aria-live="polite"></div>
 
   <main>
-    <span class="eyebrow">FY 2027–28 · Planning suite</span>
-    <h1>Planning Suite</h1>
+    <h1 class="eyebrow">FY 2027–28 · Planning suite</h1>
     <p class="lede">One connected chain from the festival calendar to the sales plan.</p>
 
     <div class="sec-hd">
       <span class="sec-title">Core workflow</span>
-      <span class="sec-note">Each module opens in a new tab</span>
     </div>
     <div class="grid">
       <a class="card" href="/calendar/" target="_blank" data-check="/api/port-status/8010">
@@ -451,15 +467,11 @@
       </a>
     </div>
 
-    <div class="sync-strip" id="sync-card" role="button" tabindex="0" aria-haspopup="dialog">
+    <div class="sync-strip" id="sync-card" role="button" tabindex="0" aria-haspopup="dialog" title="Data lake → Postgres extraction and the AOP → Planning Engine hand-off - click for details">
       <span class="card-icon"><svg class="i"><use href="#i-sync"/></svg></span>
-      <div>
-        <div class="sync-strip-title">Data sync &amp; flow</div>
-        <div class="sync-strip-sub">Data lake → Postgres extraction and the AOP → Planning Engine hand-off</div>
-      </div>
+      <div class="sync-strip-title">Data sync &amp; flow</div>
       <span class="gap"></span>
       <span class="status"><span class="dot" id="sync-summary-dot"></span><span class="status-label checking" id="sync-summary-label">checking…</span></span>
-      <span class="btn-ghost">View details</span>
     </div>
 
     <div class="sec-hd">
@@ -471,7 +483,7 @@
         <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-lagan"/></svg></span></div>
         <h2>Lagan Calendar</h2>
         <p class="desc">Wedding and ceremony dates, 2000–2030.</p>
-        <div class="meta"><span class="port">2000 – 2030</span><span class="open-link">Look up</span></div>
+        <div class="meta"><span class="open-link" style="margin-left:auto">Look up</span></div>
       </div>
       <!-- one address (2026-09-26): every app is a path on this Landing origin -->
       <a class="card" href="/nso/" target="_blank" data-check="/api/port-status/8060" id="nso-card">
@@ -504,7 +516,6 @@
 
     <footer>
       <span>RS Planning suite · CityKart</span>
-      <span>Core modules share one server. Use <strong>Servers</strong> to start or stop everything.</span>
     </footer>
   </main>
 
@@ -538,7 +549,7 @@
             <span class="lm-mark" aria-hidden="true">LC</span>
             <div>
               <h2 class="lm-logo">Lagan Calendar</h2>
-              <p class="lm-sub">Marriage muhurat dates 2000&#x2013;2030 &#xB7; Drik Panchang (New Delhi) &#xB7; RS Planning &#xB7; CityKart</p>
+              <p class="lm-sub">Marriage muhurat dates 2000&#x2013;2030 &#xB7; Drik Panchang</p>
             </div>
           </div>
           <button class="lm-close" id="lagan-modal-close" type="button" aria-label="Close">&#x2715;</button>
@@ -565,10 +576,17 @@
           <button class="lm-vtb active" data-v="cal" type="button">Calendar</button>
           <button class="lm-vtb" data-v="tbl" type="button">Comparison Table</button>
         </div>
-        <button class="lm-btn lm-btn-sec" id="lm-btn-summary" type="button">&#x2193; Monthly Summary</button>
-        <button class="lm-btn lm-btn-pri" id="lm-btn-dates" type="button">&#x2193; All Dates</button>
-        <button class="lm-btn lm-btn-sec" id="lm-btn-sync" type="button" title="Re-fetch the selected years' marriage muhurat dates from drikpanchang.com">&#x21BB; Sync with Drik Panchang</button>
         <div class="lm-res-count" id="lm-res-count"></div>
+        <!-- 2026-10-07: the three export/sync buttons -> one menu (ids + handlers unchanged) -->
+        <div class="tmenu" id="lm-export-menu">
+          <button class="lm-btn lm-btn-sec" id="lm-export-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="lm-export-pop" onclick="toggleMenu('lm-export-menu',event)">Export / Sync &#x25BE;</button>
+          <div class="tmenu-pop" id="lm-export-pop">
+            <button class="tmenu-item" id="lm-btn-summary" type="button">&#x2193; Monthly Summary</button>
+            <button class="tmenu-item" id="lm-btn-dates" type="button">&#x2193; All Dates</button>
+            <div class="tmenu-sep"></div>
+            <button class="tmenu-item" id="lm-btn-sync" type="button" title="Re-fetch the selected years' marriage muhurat dates from drikpanchang.com">&#x21BB; Sync with Drik Panchang</button>
+          </div>
+        </div>
       </div>
       <div class="lm-content" id="lm-content"></div>
     </div>
@@ -576,6 +594,26 @@
 
 <script>
   var H = window.location.hostname || 'localhost';
+
+  // ── Dropdown menus (account menu, Lagan Export / Sync) - pattern from otb-plan-app ──
+  function toggleMenu(id) {   // the click still bubbles, so the theme panel / year list close too
+    var m = document.getElementById(id), open = !m.classList.contains('open');
+    closeMenus();
+    if (open) { m.classList.add('open'); m.querySelector('[aria-expanded]').setAttribute('aria-expanded', 'true'); }
+  }
+  function closeMenus() {
+    document.querySelectorAll('.tmenu.open').forEach(function (m) {
+      m.classList.remove('open'); m.querySelector('[aria-expanded]').setAttribute('aria-expanded', 'false');
+    });
+  }
+  document.addEventListener('click', function (e) {   // outside click or picking an item closes the menu
+    if (e.target.closest('.tmenu > [aria-haspopup]')) return;   // the trigger itself (toggleMenu handled it)
+    if (!e.target.closest('.tmenu-pop') || e.target.closest('.tmenu-item')) closeMenus();
+  });
+  window.addEventListener('keydown', function (e) {   // Esc closes an open menu first (not the Lagan modal behind it)
+    var m = document.querySelector('.tmenu.open');
+    if (e.key === 'Escape' && m) { e.stopPropagation(); closeMenus(); m.querySelector('[aria-expanded]').focus(); }
+  }, true);
 
   function setDot(dot, label, state, text) {
     dot.classList.remove('up', 'down');
@@ -843,10 +881,13 @@
     // nakshatra, Kharmas, Guru-Shukra asta or Adhik maas - so it over-counts; it's the fallback for an unsynced year.
     var DRIK=null;
     function drikMonths(y){ var o=DRIK&&DRIK.years&&DRIK.years[y]; if(!o) return null; var r=[]; for(var m=1;m<=12;m++) r.push((o[m]||[]).slice()); return r; }
+    // Method note (was an always-visible box above the results) -> an (i) tooltip next to the source label
+    var METHOD_NOTE='Dates from Drik Panchang’s marriage muhurat list (New Delhi). If they ever differ from drikpanchang.com, use Export / Sync ▸ ↻ Sync with Drik Panchang to re-fetch the selected years. A year never synced falls back to an approximate computed list.';
+    var INFO='<span class="lm-info" tabindex="0" role="img" title="'+METHOD_NOTE+'" aria-label="'+METHOD_NOTE+'">&#x24D8;</span>';
     function srcHtml(y){
       var t=DRIK&&DRIK.synced&&DRIK.synced[y];
-      return t ? '<span class="lm-src">Drik Panchang &#xB7; synced '+new Date(t).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})+'</span>'
-               : '<span class="lm-src approx">Approximate (computed) &#x2014; not synced with Drik yet</span>';
+      return t ? '<span class="lm-src">Drik Panchang &#xB7; synced '+new Date(t).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})+INFO+'</span>'
+               : '<span class="lm-src approx">Approximate (computed) &#x2014; not synced with Drik yet'+INFO+'</span>';
     }
     function loadDrik(){
       return fetch('/lagan-drik.json?t='+Date.now()).then(function(r){return r.ok?r.json():null;}).then(function(d){ if(d){DRIK=d;ldCache={};} }).catch(function(){});
@@ -910,14 +951,21 @@
       else if(selYears.length===1) selLabel.textContent=String(selYears[0]);
       else selLabel.textContent=selYears.length+' years';
     }
+    var CHIP_CAP=5;   // show at most 5 year chips, then "+N more" (opens the year list)
     function renderChips(){
       chipsEl.innerHTML='';
-      selYears.forEach(function(y){
+      selYears.slice(0,CHIP_CAP).forEach(function(y){
         var c=document.createElement('div'); c.className='lm-chip';
         c.innerHTML=y+'<button class="lm-chip-x" type="button" aria-label="Remove '+y+'">&#xD7;</button>';
         c.querySelector('.lm-chip-x').addEventListener('click',function(e){ e.stopPropagation(); toggleY(y); });
         chipsEl.appendChild(c);
       });
+      if(selYears.length>CHIP_CAP){
+        var more=document.createElement('button'); more.type='button'; more.className='lm-chip lm-chip-more';
+        more.textContent='+'+(selYears.length-CHIP_CAP)+' more'; more.title=selYears.slice(CHIP_CAP).join(', ');
+        more.addEventListener('click',function(e){ e.stopPropagation(); selDd.classList.add('open'); selBtn.classList.add('open'); });
+        chipsEl.appendChild(more);
+      }
     }
     selBtn.addEventListener('click',function(){
       var o=selDd.classList.toggle('open'); selBtn.classList.toggle('open',o);
@@ -998,8 +1046,7 @@
 
     function renderContent(){
       if(!selYears.length){content.innerHTML=emptyHtml();resCount.innerHTML='';return;}
-      var note='<div class="lm-method-note">Dates from Drik Panchang&#x2019;s marriage muhurat list (New Delhi). If they ever differ from drikpanchang.com, press <b>&#x21BB; Sync with Drik Panchang</b> to re-fetch the selected years. A year never synced falls back to an approximate computed list.</div>';
-      content.innerHTML=note+(lmView==='cal'?calHtml():tblHtml());
+      content.innerHTML=(lmView==='cal'?calHtml():tblHtml());
       var total=selYears.reduce(function(s,y){return s+ld(y).reduce(function(a,m){return a+m.length;},0);},0);
       resCount.innerHTML='<strong>'+total+'</strong> dates across <strong>'+selYears.length+'</strong> year'+(selYears.length===1?'':'s');
     }
@@ -1096,7 +1143,7 @@
     function toggle(open){ panel.hidden=!open; btn.setAttribute('aria-expanded',String(open)); if(open) render(); }
     btn.addEventListener('click',function(e){ e.stopPropagation(); toggle(panel.hidden); });
     document.addEventListener('click',function(e){ if(!panel.hidden&&!panel.contains(e.target)) toggle(false); });
-    document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&!panel.hidden){ toggle(false); btn.focus(); } });
+    document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&!panel.hidden){ toggle(false); document.getElementById('acct-btn').focus(); } });
     list.addEventListener('click',function(e){
       var o=e.target.closest('.theme-opt'); if(!o) return;
       var prev=ST.current;
@@ -1114,7 +1161,8 @@ fetch('/api/auth/me', {credentials: 'include', cache: 'no-store'}).then(r => r.o
     if (!u) return;
     if (u.is_admin) document.getElementById('admin-link').style.display = 'inline-flex';
     const b = document.getElementById('signout-btn');   /* sign out / switch user (2026-09-30) */
-    document.getElementById('signout-label').textContent = u.username + ' · ';
+    document.getElementById('signout-label').textContent = u.username;
+    document.getElementById('acct-name').textContent = u.username;   /* account-menu button (2026-10-07) */
     b.title = 'Signed in as ' + u.username + ' - sign out, then sign in as someone else';
     b.style.display = 'inline-flex';
     b.onclick = () => { b.disabled = true;
