@@ -244,6 +244,8 @@ export default function PwwDeviation() {
             </details>
           )}
         </div>
+        {/* a re-run started from the ⋯ menu closes the menu, so say what is running here (audit 2026-10-07) */}
+        {(running || runningP2 || runningReapp) && <div role="status" style={{ width: '100%', fontSize: 12, color: theme.textMuted, fontWeight: 600 }}>{running ? 'Running Phase 1…' : runningP2 ? 'Running Phase 2…' : 'Reapportioning…'}</div>}
         {msg && <div style={{ width: '100%', fontSize: 12, color: theme.accent, fontWeight: 600 }}>{msg}</div>}
       </div>
 

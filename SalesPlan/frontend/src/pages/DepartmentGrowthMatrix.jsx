@@ -371,6 +371,8 @@ export default function DepartmentGrowthMatrix() {
             )}
           </span>
 
+          {/* the menu closes on click, so its own "Syncing…" label isn't seen (audit 2026-10-07) */}
+          {buyerSyncing && <span role="status" style={{ fontSize: 11, color: theme.textMuted }}>Syncing from Buyer's Input Sheet…</span>}
           {saving && <span style={{ fontSize: 11, color: theme.textMuted }}>Saving…</span>}
           {!saving && lastSaved && <span style={{ fontSize: 11, color: theme.accent }}>✓ Saved {lastSaved}</span>}
           {buyerSyncResult && (
