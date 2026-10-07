@@ -86,6 +86,16 @@ app.include_router(display_type_router,    prefix="/api/planning/display-type", 
 app.include_router(sync_router,            prefix="/api/planning/sync",            dependencies=_dep)
 # MRP Re-apportionment page (/mrp-plan/reapportionment) - its router was never mounted, so the page 404ed (2026-09-29)
 app.include_router(mrp_reapp_router,       prefix="/api/planning/mrp-reapportionment", dependencies=_dep)
+
+
+@app.on_event("startup")
+def _warm_mrp_sales():
+    """MRP Re-apportionment's sales file (~85 s to read) loads in the background at start, not on the first open
+    (user, 2026-10-07)."""
+    import threading
+    from engines.mrp_reapportionment_engine import warm_sales
+    threading.Thread(target=warm_sales, name="warm-mrp-sales", daemon=True).start()
+
 # every apportioned total vs its parts, to 8 decimals (2026-09-30)
 app.include_router(reconciliation_router,  prefix="/api/planning/reconciliation",  dependencies=_dep)
 

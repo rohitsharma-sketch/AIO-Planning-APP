@@ -32,6 +32,7 @@ import glob
 import json
 import warnings
 import datetime
+import threading
 from typing import Optional, Dict, List
 
 import sys
@@ -82,6 +83,7 @@ def _norm_cols(df: pd.DataFrame) -> pd.DataFrame:
 # LY months = the plan's LY (Mar-Jun 2026, as BIS / AOP); labels as the old sales template ("Mar 2026").
 LY_MONTHS = ["2026-03", "2026-04", "2026-05", "2026-06"]
 _SALES_CACHE: dict = {}   # {"key": (path, mtime), "df", "month_cols", "check"}
+_SALES_LOCK = threading.Lock()   # one read at a time: a page opened during the startup warm-up waits for it
 
 
 def _calendar_scans():
@@ -129,26 +131,40 @@ def _engine_sales() -> tuple:
     if not path:
         raise ValueError(f"Sales engine file not reachable: {scans.PARQUET_DIR}")
     key = (path, os.path.getmtime(path))
-    if _SALES_CACHE.get("key") != key:
-        lo, hi = scans._month_bounds(LY_MONTHS)
-        raw = scans._read_file_filtered(path, ["BILLMONTH", "DIVISION", "STORE_NAME", "SL_V", "DEPARTMENT", "MRP",
-                                               "DISPLAY_TYPE", "ATTRIBUTE1"], "BILLMONTH", lo, hi)
-        raw["ym"] = raw["BILLMONTH"].dt.strftime("%Y-%m")
-        raw = raw[raw["ym"].isin(LY_MONTHS)].rename(
-            columns={"STORE_NAME": "STORE", "DISPLAY_TYPE": "DISPLAY", "ATTRIBUTE1": "ATTRIBUTE"})
-        for c in ("STORE", "DIVISION", "DEPARTMENT", "DISPLAY", "ATTRIBUTE"):
-            raw[c] = raw[c].astype(str).str.strip().str.upper()
-        raw["MRP"] = pd.to_numeric(raw["MRP"], errors="coerce").fillna(0).round().astype(int)
-        raw["SL_V"] = pd.to_numeric(raw["SL_V"], errors="coerce").fillna(0.0)
-        check = _engine_check(raw)
-        label = {m: datetime.date(int(m[:4]), int(m[5:]), 1).strftime("%b %Y") for m in LY_MONTHS}
-        wide = raw.pivot_table(index=["STORE", "DIVISION", "DEPARTMENT", "MRP", "DISPLAY", "ATTRIBUTE"],
-                               columns="ym", values="SL_V", aggfunc="sum", fill_value=0.0).reset_index()
-        wide.columns.name = None
-        wide = wide.rename(columns=label)
-        month_cols = [label[m] for m in LY_MONTHS if label[m] in wide.columns]
-        _SALES_CACHE.update(key=key, df=wide, month_cols=month_cols, check=check)
+    with _SALES_LOCK:
+        if _SALES_CACHE.get("key") != key:
+            _read_engine_sales(scans, path, key)
     return _SALES_CACHE["df"].copy(), list(_SALES_CACHE["month_cols"]), _SALES_CACHE["check"]
+
+
+def _read_engine_sales(scans, path, key):
+    lo, hi = scans._month_bounds(LY_MONTHS)
+    raw = scans._read_file_filtered(path, ["BILLMONTH", "DIVISION", "STORE_NAME", "SL_V", "DEPARTMENT", "MRP",
+                                           "DISPLAY_TYPE", "ATTRIBUTE1"], "BILLMONTH", lo, hi)
+    raw["ym"] = raw["BILLMONTH"].dt.strftime("%Y-%m")
+    raw = raw[raw["ym"].isin(LY_MONTHS)].rename(
+        columns={"STORE_NAME": "STORE", "DISPLAY_TYPE": "DISPLAY", "ATTRIBUTE1": "ATTRIBUTE"})
+    for c in ("STORE", "DIVISION", "DEPARTMENT", "DISPLAY", "ATTRIBUTE"):
+        raw[c] = raw[c].astype(str).str.strip().str.upper()
+    raw["MRP"] = pd.to_numeric(raw["MRP"], errors="coerce").fillna(0).round().astype(int)
+    raw["SL_V"] = pd.to_numeric(raw["SL_V"], errors="coerce").fillna(0.0)
+    check = _engine_check(raw)
+    label = {m: datetime.date(int(m[:4]), int(m[5:]), 1).strftime("%b %Y") for m in LY_MONTHS}
+    wide = raw.pivot_table(index=["STORE", "DIVISION", "DEPARTMENT", "MRP", "DISPLAY", "ATTRIBUTE"],
+                           columns="ym", values="SL_V", aggfunc="sum", fill_value=0.0).reset_index()
+    wide.columns.name = None
+    wide = wide.rename(columns=label)
+    month_cols = [label[m] for m in LY_MONTHS if label[m] in wide.columns]
+    _SALES_CACHE.update(key=key, df=wide, month_cols=month_cols, check=check)
+
+
+def warm_sales():
+    """Read the sales engine file once at server start (user, 2026-10-07: the first MRP Re-apportionment open after a
+    restart took ~85 s). Never raises - the page shows the reason itself if the file isn't reachable."""
+    try:
+        _engine_sales()
+    except Exception as e:  # noqa: BLE001
+        print(f"MRP re-apportionment warm-up skipped: {e}", flush=True)
 
 
 def _mapped_sales(mapping_df: pd.DataFrame) -> tuple:

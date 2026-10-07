@@ -12,7 +12,8 @@ Newest first. Each entry names its commit.
 - Cause: the sidebar's Plan Snapshot (collapsed by default) ran the whole department plan (`run_dept_plan`, ~10-13 s of pure Python) on every page load, and while it ran it held up the page's own requests - Master Setup's data takes 25 ms on its own.
 - Sidebar: the snapshot is fetched only when it is opened. Server: `/dept-sales/plan-summary` is kept until one of the plan's inputs changes (growth matrix incl. live BIS, department master/state, Calendar snapshot stamp, LY months, store master, date) - 12.8 s first time, then 0.2 s; same numbers as a fresh run.
 - Sales Sync status no longer loads the six snapshots' full sales rows it never shows: 4.5 s -> 0.02 s, same output.
-- Not changed: MRP Re-apportionment's first open after a server restart still reads the data-lake sales file (~85 s once, then cached).
+- Commit `513336b`.
+- MRP Re-apportionment warm-up (user: "yes warm the mrp re-apportionment at startup"): 8010 reads the sales engine file in a background thread at start (`warm_sales`, ~35-85 s) instead of on the first page open; a lock makes an open during the warm-up wait for it rather than read the file a second time. Tested: Master Setup stayed < 0.2 s during the warm-up; sales-status 65 ms afterwards, Calendar tie-out still passes.
 
 ### Handover doc updated with 7 Oct
 - **Asked (user):** "update the handover doc with today's changes".
