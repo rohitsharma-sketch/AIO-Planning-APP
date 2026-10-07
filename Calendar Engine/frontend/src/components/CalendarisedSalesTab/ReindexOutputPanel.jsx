@@ -673,6 +673,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
             // Run Details view removed (user, 2026-10-07: "remove run detail in the calendar app")
           ].filter(Boolean)
           const cur = more.find(([id]) => id === activeSub)
+          if (!more.length) return null   // e.g. a day-wise run with no actuals - no empty menu (audit 2026-10-07)
           return (
             <Menu label={cur ? cur[1] : 'More views'} className={cur ? 'active' : ''}>
               {more.map(([id, label]) => (

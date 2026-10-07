@@ -7,6 +7,9 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### Post-declutter audit: Calendar minor fixes
+- Calendar review: no critical / high issue. Two minor fixes: the Calendarised Sales "More views" menu no longer shows empty (a day-wise run with no actuals has no extra views since Run Details went); Date Shift falls back to sorting by Store when the context columns are hidden while sorted by Ref Day / Fut Day. dist rebuilt; engine tests pass; both tabs render with no errors.
+
 ### Post-declutter audit: Sales Plan running-status line
 - **Asked (user):** "audit the suite once again after the declutter" / "fix whatever the audit finds and commit". Four read-only reviewers (Calendar, AOP, Sales Plan, the five HTML apps) on the declutter diffs; AOP and Sales Plan: no critical / high issue.
 - Fix (minor finding): actions started from a menu close the menu, so their "Syncing…" / "Running…" labels were never seen. Growth Matrix now shows "Syncing from Buyer's Input Sheet…" beside Saving / Saved, and PW/W shows "Running Phase 1… / Running Phase 2… / Reapportioning…" while a run from the ⋯ menu is going (role=status). dist rebuilt; pages render with no errors.

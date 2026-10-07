@@ -263,7 +263,11 @@ export default function DateShiftPreviewPanel() {
           <button className="ce-link-btn" onClick={() => setMoreFilters(o => !o)} aria-expanded={moreFilters}>
             Filters{hiddenActive ? ` (${hiddenActive})` : ''} {moreFilters ? '▴' : '▾'}
           </button>
-          <button className="ce-link-btn" onClick={() => setCtxCols(!ctxCols)} aria-pressed={ctxCols}
+          <button className="ce-link-btn" onClick={() => {
+            // hiding the context columns while sorted by one of them falls back to Store (audit 2026-10-07)
+            if (ctxCols && COLUMNS.find(c => c.key === sortKey)?.ctx) { setSortKey('store'); setSortDir(1) }
+            setCtxCols(!ctxCols)
+          }} aria-pressed={ctxCols}
             title="Ref Day, Fut Day">
             {ctxCols ? '- Context columns' : '+ Context columns'}
           </button>
