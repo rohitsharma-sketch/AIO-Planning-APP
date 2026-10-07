@@ -5353,7 +5353,9 @@ function _plannerInputs(sec,mis){
   const st=id=>{const o=(window._SELLTHRU_LIVE_DEPT||{})[id];if(!o)return null;
     const v=mis.map(mi=>o[mi]).filter(x=>x!=null);return v.length?v.reduce((a,b)=>a+b,0)/v.length/100:null;};
   const gr=id=>{const g=_lflTot([SEC_LFL_GROWTH[id]],'yoy',mis);return g==null?null:g/100;};
-  const r={st:st(sec.id),gr:gr(sec.id),fill:_plannerFill(sec.nm,mis),ref:null};
+  const gb=id=>{const g=_lflTot([SEC_LFL_GROWTH[id]],'base',mis);return g==null?null:g/100;};   // 19V26 (31 stores)
+  const r={st:st(sec.id),gr:gr(sec.id),gb:gb(sec.id),fill:_plannerFill(sec.nm,mis),ref:null};
+  if(r.gb==null){const ref=_secByName(PLANNER.refs[sec.nm]);if(ref)r.gb=gb(ref.id);}
   if(r.st==null||r.gr==null||r.fill==null){
     const ref=_secByName(PLANNER.refs[sec.nm]);
     if(ref){r.ref=ref.nm;r.st=r.st??st(ref.id);r.gr=r.gr??gr(ref.id);r.fill=r.fill??_plannerFill(ref.nm,mis);}
@@ -5422,14 +5424,21 @@ function _fmLimit(raw,x,m,lyPerMonth){
    department's value against its division's median, raised to a signed strength:
    factor = (ST / median ST)^s_st x ((1 + growth) / (1 + median growth))^s_growth x (fill / median fill)^s_fill,
    a driver with no data (or strength 0) left out, then the same rules / damping / clamp as the builder. */
+// Two growth comparables (user, 2026-10-07: "except for 1 year comparable we want 19 V 26 and 25 V 26 comparable to
+// make sure this factor works"): 'growth' = 25V26 (1 year, 120 stores), 'base' = 19V26 (31 stores). With c.agree on,
+// growth is trusted only when both sit on the same side of their division median - if they disagree, both growth
+// effects are switched off for that department (a department with one comparable keeps it).
 function _contFactor(x,med,c,lim,lyPerMonth){
-  const parts=[];
-  [['st','st'],['growth','gr'],['fill','fill']].forEach(([k,inp])=>{
-    const sv=+(c||{})[k]||0,v=x[inp],md=med[inp];if(!sv||v==null||md==null)return;
-    const ratio=k==='growth'?(1+v)/(1+md):v/md;if(!(ratio>0)||!isFinite(ratio))return;
-    parts.push({key:k,v,md,ratio,s:sv,mult:Math.pow(ratio,sv)});});
+  c=c||{};const parts=[];
+  const rat=(k,inp)=>{const v=x[inp],md=med[inp];if(v==null||md==null)return null;
+    const r=k==='st'||k==='fill'?v/md:(1+v)/(1+md);return r>0&&isFinite(r)?{v,md,r}:null;};
+  const R={st:rat('st','st'),growth:rat('growth','gr'),base:rat('base','gb'),fill:rat('fill','fill')};
+  const split=!!(c.agree&&R.growth&&R.base&&(R.growth.r-1)*(R.base.r-1)<0);
+  ['st','growth','base','fill'].forEach(k=>{const sv=+c[k]||0,q=R[k];if(!sv||!q)return;
+    const off=split&&(k==='growth'||k==='base');
+    parts.push({key:k,v:q.v,md:q.md,ratio:q.r,s:sv,mult:off?1:Math.pow(q.r,sv),off});});
   const raw=parts.reduce((a,q)=>a*q.mult,1);
-  return {..._fmLimit(raw,x,lim||{},lyPerMonth),raw,parts,none:!parts.length};
+  return {..._fmLimit(raw,x,lim||{},lyPerMonth),raw,parts,split,none:!parts.length};
 }
 // end weighted factor model
 let _fmCutCache=new Map();
@@ -5453,7 +5462,7 @@ function _fmMedians(dvId,mis){
   const k='med|'+dvId+'|'+mis.join(',');if(_fmCutCache.has(k))return _fmCutCache.get(k);
   const dv=DVDATA.find(d=>d.id===dvId),xs=dv?dv.secs.filter(s=>!S.hiddenSecs.has(s.id)).map(s=>_fmInp(s,mis)):[];
   const md=inp=>_fmQuant(xs.map(x=>x[inp]).filter(v=>v!=null).sort((a,b)=>a-b),50);
-  const r={st:md('st'),gr:md('gr'),fill:md('fill')};_fmCutCache.set(k,r);return r;
+  const r={st:md('st'),gr:md('gr'),gb:md('gb'),fill:md('fill')};_fmCutCache.set(k,r);return r;
 }
 // one department's factor under a method: null = plain share, 'matrix' = the saved matrix, or a factor-table draft
 function _fmEval(spec,x,dvId,mis,ly){
@@ -5488,8 +5497,8 @@ function _fmWhy(r){
 }
 function _contWhy(r){
   if(r.none)return 'no driver data - neutral 1.00';
-  const pc=v=>(v*100).toFixed(1)+'%',nm={st:'Sell-thru',growth:'LY growth',fill:'Fill rate'};
-  let t=r.parts.map(q=>`${nm[q.key]} ${pc(q.v)} vs division ${pc(q.md)} → ${q.ratio.toFixed(2)}^${q.s} = ×${q.mult.toFixed(3)}`).join(' · ')+` = ${r.raw.toFixed(3)}`;
+  const pc=v=>(v*100).toFixed(1)+'%',nm={st:'Sell-thru',growth:'25V26 growth',base:'19V26 growth',fill:'Fill rate'};
+  let t=r.parts.map(q=>`${nm[q.key]} ${pc(q.v)} vs division ${pc(q.md)} → ${q.off?'not used (the two comparables disagree)':`${q.ratio.toFixed(2)}^${q.s} = ×${q.mult.toFixed(3)}`}`).join(' · ')+` = ${r.raw.toFixed(3)}`;
   if(Math.abs(r.ruled-r.raw)>5e-4)t+=` → rule ${r.ruled.toFixed(3)}`;
   if(Math.abs(r.damped-r.ruled)>5e-4)t+=` → small-department damping ${r.damped.toFixed(3)}`;
   if(Math.abs(r.f-r.damped)>5e-4)t+=` → clamp ${r.f.toFixed(2)}`;
@@ -5612,7 +5621,7 @@ const FM_DEFAULT={drivers:[
   {key:'growth',on:true,weight:25,slabs:[{from:null,label:'Low',mult:1.03},{from:0.2,label:'Medium',mult:1},{from:0.5,label:'High',mult:0.95}]},
   {key:'fill',on:true,weight:25,slabs:[{from:null,label:'Low',mult:1.05},{from:0.5,label:'Avg',mult:1},{from:0.7,label:'Good',mult:0.97}]}],
   rules:[{driver:'fill',op:'below',value:0.5,kind:'min',f:0.95}],shrink_k:0.05,clamp:[0.8,1.2]};
-const FM_CONT_DEFAULT={st:0.25,growth:0.2,fill:0}; // from the 7 Oct back-tests: gentle sell-thru, modest momentum, no fill driver
+const FM_CONT_DEFAULT={st:0.25,growth:0.2,base:0,fill:0,agree:false}; // from the 7 Oct back-tests: gentle sell-thru, modest momentum, no fill driver
 let _fmFt=null,_fmTab='matrix',_fmPrevCache=null;
 const _clone=o=>JSON.parse(JSON.stringify(o));
 function openFactorTable(){
@@ -5739,7 +5748,7 @@ function _fmEvalHtml(spec){
       <div class="fm-prev"><div><b>Highest factors</b><ol>${lst(by.slice(0,5))}</ol></div><div><b>Lowest factors</b><ol>${lst(by.slice(-5).reverse())}</ol></div></div></div>`;
 }
 // Continuous tab: three signed strengths against the division median, Tune, then the shared rules / limits
-const FM_CONT_KEYS=[['st','Avg Weekly Sell-Thru %','st'],['growth','LY Growth % (25V26)','gr'],['fill','Fill Rate %','fill']];
+const FM_CONT_KEYS=[['st','Avg Weekly Sell-Thru %','st'],['growth','LY Growth % (25V26, 1 year, 120 stores)','gr'],['base','Base Growth % (19V26, 31 stores)','gb'],['fill','Fill Rate %','fill']];
 function _fmContHtml(ft,ed){
   const c=ft.cont,dis=ed?'':' disabled',m=ft.model,pc=v=>v==null?'-':(v*100).toFixed(1)+'%';
   const meds=DVDATA.map(dv=>({nm:dv.nm,md:_fmMedians(dv.id,AOP_MIS)}));
@@ -5747,26 +5756,33 @@ function _fmContHtml(ft,ed){
     return `<div class="fm-card${sv?'':' off'}"><div class="fm-hd"><b>${lbl}</b>
       <label class="fm-w">Strength <input type="range" min="-1" max="1.5" step="0.05" value="${sv}"${dis} oninput="this.nextElementSibling.textContent=this.value" onchange="_fmFt.cont.${k}=+this.value;_renderFactorTable()" aria-label="${lbl} strength"><span>${sv}</span></label>
       <span class="fm-share">${sv?`20% above its division → ×${ex.toFixed(3)} (${ex>=1?'+':''}${((ex-1)*100).toFixed(1)}%)`:'off (strength 0)'}</span></div>
-      <div class="fm-note" style="margin-top:6px">Division median now: ${meds.map(o=>`${_h(o.nm)} ${pc(o.md[inp])}`).join(' · ')}${k==='growth'?' - compared as (1 + growth) / (1 + median)':''}</div></div>`;}).join('');
+      <div class="fm-note" style="margin-top:6px">Division median now: ${meds.map(o=>`${_h(o.nm)} ${pc(o.md[inp])}`).join(' · ')}${k==='growth'||k==='base'?' - compared as (1 + growth) / (1 + median)':''}</div></div>`;}).join('');
+  // how often the two growth comparables disagree today (departments with both)
+  let nBoth=0,nDis=0;_fmPrev().forEach(q=>{const md=_fmMedians(q.dv.id,AOP_MIS);if(q.x.gr==null||q.x.gb==null||md.gr==null||md.gb==null)return;nBoth++;
+    if(((1+q.x.gr)/(1+md.gr)-1)*((1+q.x.gb)/(1+md.gb)-1)<0)nDis++;});
+  const agree=`<div class="fm-sec"><label class="fm-rule"><input type="checkbox"${c.agree?' checked':''}${dis} onchange="_fmFt.cont.agree=this.checked;_renderFactorTable()">
+      <b>Trust growth only when 25V26 and 19V26 agree</b></label><div class="fm-note">Both above, or both below, their division median - otherwise neither growth comparable moves that department's factor. Today ${nDis} of ${nBoth} departments with both comparables disagree.</div></div>`;
   const rl=(m.rules||[]).map(r=>`${FM_DRIVERS[r.driver]?.short||r.driver} ${r.op==='below'?'below':'at least'} ${pc(r.value)} → factor ${r.kind==='min'?'at least':'at most'} ${(+r.f).toFixed(2)}`).join('; ')||'none';
   return `<div class="fm-wrap">
-    <div class="fm-note">No slabs: factor = (sell-thru / division median)<sup>s</sup> × ((1 + LY growth) / (1 + division median))<sup>s</sup> × (fill rate / division median)<sup>s</sup>. Strength 0 = the driver is off; negative = the lower the value, the higher the factor. Then the rules and limits below, then each division is re-balanced to its AOP.</div>
-    ${ed?`<div class="fm-row"><button type="button" class="tbtn pri" id="fmTuneBtn" onclick="_fmTune()">&#x2699; Tune</button><span class="fm-note">Searches about 400 strength settings for the lowest error, the long back-test counting double (it is closer to the planner's year-ahead step). Review the result before saving.</span></div>`:''}
+    <div class="fm-note">No slabs: factor = (sell-thru / division median)<sup>s</sup> × ((1 + 25V26 growth) / (1 + division median))<sup>s</sup> × ((1 + 19V26 growth) / (1 + division median))<sup>s</sup> × (fill rate / division median)<sup>s</sup>. Strength 0 = the driver is off; negative = the lower the value, the higher the factor. Then the rules and limits below, then each division is re-balanced to its AOP.</div>
+    ${ed?`<div class="fm-row"><button type="button" class="tbtn pri" id="fmTuneBtn" onclick="_fmTune()">&#x2699; Tune</button><span class="fm-note">Searches about 3,000 settings (four strengths + the agreement switch) for the lowest error, the long back-test counting double (it is closer to the planner's year-ahead step). Review the result before saving.</span></div>`:''}
     ${cards}
+    ${agree}
     <div class="fm-sec"><h4>Rules and limits (shared with the Weighted builder tab - edit them there)</h4><div class="fm-note">Rules: ${_h(rl)} · small-department damping at Rs ${+(m.shrink_k*100).toFixed(2)} L a month · factor between ${m.clamp[0]} and ${m.clamp[1]}</div></div>
     ${_fmEvalHtml({mode:'continuous',model:m,cont:c})}
   </div>`;
 }
 function _fmTune(){
   const b=document.getElementById('fmTuneBtn');if(b){b.disabled=true;b.textContent='Tuning…';}
-  setTimeout(()=>{   // let the button repaint first; ~400 settings x 2 windows, cached inputs
+  setTimeout(()=>{   // let the button repaint first; ~3,000 settings x 2 windows, cached inputs
     const ft=_fmFt,spec={mode:'continuous',model:ft.model,cont:{}};let best=null;
-    for(let st=0;st<=1.0001;st+=0.125)for(let g=-0.25;g<=0.7501;g+=0.125)for(const fl of [-0.5,-0.25,0,0.25,0.5]){
-      spec.cont={st:+st.toFixed(3),growth:+g.toFixed(3),fill:fl};
+    for(let st=0;st<=1.0001;st+=0.125)for(let g=-0.25;g<=0.7501;g+=0.125)for(let gb=-0.25;gb<=0.5001;gb+=0.125)for(const fl of [-0.25,0,0.25])for(const ag of [false,true]){
+      if(ag&&(!g||!gb))continue;   // the agreement switch only matters with both growth comparables on
+      spec.cont={st:+st.toFixed(3),growth:+g.toFixed(3),base:+gb.toFixed(3),fill:fl,agree:ag};
       const a=_fmBacktest(spec).wape,l=_fmBacktest(spec,FM_BT_LONG_IN,FM_BT_LONG_OUT).wape;if(a==null||l==null)continue;
       const sc=(a+2*l)/3;if(!best||sc<best.sc)best={sc,a,l,cont:{...spec.cont}};} // long test counts double: closer to the year-ahead step (an equal weighting chased 2-month momentum, growth 0.5)
     const plain=(_fmBacktest(null).wape+2*_fmBacktest(null,FM_BT_LONG_IN,FM_BT_LONG_OUT).wape)/3;
-    if(best){ft.cont=best.cont;toast(`Tuned: sell-thru ${best.cont.st}, LY growth ${best.cont.growth}, fill ${best.cont.fill} - short ${(best.a*100).toFixed(2)}% / long ${(best.l*100).toFixed(2)}% (weighted ${(best.sc*100).toFixed(2)}% vs plain ${(plain*100).toFixed(2)}%)`);}
+    if(best){ft.cont=best.cont;toast(`Tuned: sell-thru ${best.cont.st}, 25V26 ${best.cont.growth}, 19V26 ${best.cont.base}${best.cont.agree?' (must agree)':''}, fill ${best.cont.fill} - short ${(best.a*100).toFixed(2)}% / long ${(best.l*100).toFixed(2)}% (weighted ${(best.sc*100).toFixed(2)}% vs plain ${(plain*100).toFixed(2)}%)`);}
     else toast('Not enough history to tune');
     _renderFactorTable();
   },30);

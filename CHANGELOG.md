@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### BIS Continuous factor: 19V26 comparable beside 25V26 + agreement check
+- **Asked (user):** "the continuous should add another layer - except for 1 year comparable we want 19 V 26 and 25 V 26 comparable to make sure this factor works".
+- **Built:** a fourth driver, Base growth 19V26 (31 stores), compared as (1 + growth) / (1 + division median) with its own strength (department's own, else its reference department's - `_plannerInputs` `gb`), and an optional switch "Trust growth only when 25V26 and 19V26 agree" - when the two sit on opposite sides of their division medians, neither moves that department's factor (one comparable only -> kept). The tab shows how many departments disagree (45 of 144 today). Tune searches the 19V26 strength and the switch too (~3,000 settings, 0.8 s). Hover explains "not used (the two comparables disagree)". Server validates `base` (-2..3) and `agree` (bool).
+- **What the back-test says (error, short / long / weighted; plain share 14.83 / 14.35 / 14.51):** 25V26 + sell-thru (tuned) 11.13 / 13.54 / 12.74; adding 19V26 at 0.25 12.06 / 15.69 / 14.48; with the agreement check 11.71 / 14.56 / 13.61; agreement on 25V26 alone 11.66 / 13.76 / 13.06; 19V26 alone at best 13.74 / 14.71 / 14.39. So the 19V26 comparable did not improve the prediction - Tune leaves it at 0 with the switch off. Defaults unchanged (base 0, agree off).
+- **Checks:** `test_factor_model.js` (both comparables, agree kept / ignored, one comparable, agreement checked at strength 0), `test_sync_server_ly.py` (base / agree validation).
+
 ### BIS factor window: Continuous option with Tune
 - **Asked (user):** "yes add the continuous option with tune button" (after "suggest me 2 - 3 approaches to derive planner's input using the given factors").
 - **Continuous (`_contFactor`):** no slabs - factor = (sell-thru / division median)^s x ((1 + LY growth) / (1 + division median))^s x (fill / division median)^s with a signed strength per driver (0 = off; negative = lower value, higher factor), then the shared rules / small-department damping / limits (`_fmLimit`, also used by the weighted builder), then the re-balance to AOP. "Planner uses" now offers Continuous / Weighted builder / Matrix; saved table still Matrix until a planner switches + saves. Server validates the strengths (`_cont_error`, -2..3, finite).

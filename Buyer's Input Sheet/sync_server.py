@@ -448,13 +448,17 @@ def _model_error(m):
 
 
 def _cont_error(c):
-    """None if `c` holds the continuous factor's three signed strengths (sell-thru, LY growth, fill rate), each -2..3."""
+    """None if `c` holds the continuous factor's signed strengths (sell-thru, 25V26 growth, fill rate; 19V26 'base'
+    optional), each -2..3, plus an optional 'agree' switch (growth counts only when 25V26 and 19V26 agree)."""
     import math
     try:
-        if set(c) != set(_FM_KEYS):
-            return "continuous needs a strength for sell-thru, LY growth and fill rate"
-        if any(not math.isfinite(float(c[k])) or not -2 <= float(c[k]) <= 3 for k in _FM_KEYS):
+        keys = set(c)
+        if not set(_FM_KEYS) <= keys or not keys <= set(_FM_KEYS) | {"base", "agree"}:
+            return "continuous needs a strength for sell-thru, LY growth and fill rate (19V26 and agree optional)"
+        if any(not math.isfinite(float(c[k])) or not -2 <= float(c[k]) <= 3 for k in keys - {"agree"}):
             return "each strength must be between -2 and 3"
+        if "agree" in c and not isinstance(c["agree"], bool):
+            return "agree must be true or false"
         return None
     except (TypeError, ValueError) as e:
         return f"malformed strengths: {e}"

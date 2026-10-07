@@ -53,4 +53,13 @@ near(_contFactor({ st: 0.1, gr: 0.1, fill: 0.7 }, med, { st: 1, growth: 1, fill:
 near(_contFactor({ st: 0.05, gr: null, fill: 0.35 }, med, { st: 0, growth: 1, fill: -0.5 }, lim, 1).f, Math.pow(0.5, -0.5), 'strength 0 off, missing skipped, negative strength protects low fill');
 assert.ok(_contFactor({ st: null, gr: null, fill: null }, med, { st: 1 }, lim, 1).none, 'no data -> neutral');
 near(_contFactor({ st: 0.3, gr: 0.1, fill: 0.7 }, med, { st: 1 }, { ...lim, clamp: [0.8, 1.2] }, 1).f, 1.2, 'shared clamp applies');
+// 19V26 beside 25V26; with agree on, growth only counts when both sit on the same side of their division median
+const med2 = { ...med, gb: -0.2 };
+near(_contFactor({ gr: 0.32, gb: 0.0 }, med2, { growth: 0.5, base: 0.5 }, lim, 1).f, Math.pow(1.32 / 1.1, 0.5) * Math.pow(1 / 0.8, 0.5), 'both comparables count');
+near(_contFactor({ gr: 0.32, gb: 0.0 }, med2, { growth: 0.5, base: 0.5, agree: true }, lim, 1).f, Math.pow(1.32 / 1.1, 0.5) * Math.pow(1 / 0.8, 0.5), 'agree: both above -> kept');
+const split = _contFactor({ st: 0.12, gr: 0.32, gb: -0.4 }, med2, { st: 0.25, growth: 0.5, base: 0.5, agree: true }, lim, 1);
+assert.ok(split.split, 'disagreement detected');
+near(split.f, Math.pow(1.2, 0.25), 'agree: they disagree -> growth ignored, sell-thru kept');
+near(_contFactor({ gr: 0.32, gb: null }, med2, { growth: 0.5, base: 0.5, agree: true }, lim, 1).f, Math.pow(1.32 / 1.1, 0.5), 'one comparable only -> kept');
+near(_contFactor({ gr: 0.32, gb: -0.4 }, med2, { growth: 0.5, base: 0, agree: true }, lim, 1).f, 1, 'agreement still checked with the 19V26 strength at 0');
 console.log('factor model checks passed');
