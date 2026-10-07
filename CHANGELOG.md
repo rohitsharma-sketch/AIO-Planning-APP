@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### Core apps: loading-time check + gzip on 8010
+- **Asked (user):** "check loading times in the other core apps too".
+- Timed every page-load request in-process (cold / warm). Calendar: all < 0.25 s except the Calendarised Sales snapshot summary (0.9 s, 8.4 MB) and the data-source scans `salesdata/link` / `link-daywise` (9-16 s once after a restart, only on a refresh click). AOP: all < 0.35 s except `config/recent-runs` (~10.7 s every call). BIS (5050): every load call < 0.2 s, the three sync jobs ready in < 1 s.
+- Fixed: 8010 now gzips responses over 2 KB (Calendar's 8.4 MB summary -> 0.8 MB, ~50 ms to pack); checked live through Landing (Content-Encoding passes through; clients without gzip get plain bytes) and that CSV / Excel downloads still come through.
+- Found, not changed (database change - awaiting the user's go-ahead): `engine.forecast_results` (10.8 M rows) has no index on `run_id`, so every per-run total scans the whole table - `recent-runs` (Plan Cycles) does it 20 times; `runs/{id}/division-totals` (BIS AOP Review) and `division-aop-summary` (Sales Plan "Load AOP division targets") once each.
+
 ### Sales Plan: page loading times
 - **Asked (user):** "fix the loading times in the planning engine" (Master Setup stuck on "Loading department master…").
 - Cause: the sidebar's Plan Snapshot (collapsed by default) ran the whole department plan (`run_dept_plan`, ~10-13 s of pure Python) on every page load, and while it ran it held up the page's own requests - Master Setup's data takes 25 ms on its own.

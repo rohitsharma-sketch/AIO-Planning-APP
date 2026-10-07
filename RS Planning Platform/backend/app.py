@@ -13,6 +13,7 @@ sys.path.insert(0, _SALESPLAN_DIR)
 
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
@@ -31,6 +32,9 @@ app = FastAPI(title="RS Planning Platform")
 # not the default for every login.
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, max_age=None)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+# compressed when the browser accepts it (user, 2026-10-07: Calendar's snapshot summary is 8.4 MB of JSON -> 0.8 MB);
+# Landing's proxy passes Content-Encoding through untouched
+app.add_middleware(GZipMiddleware, minimum_size=2000)
 
 app.include_router(auth_router, prefix="/api/auth")
 app.include_router(workflow_router, prefix="/api/aop/plan-cycles")
