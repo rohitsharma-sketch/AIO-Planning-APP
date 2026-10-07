@@ -2694,7 +2694,7 @@ function cellVal(row,def){
       const attrInfo=_parseAttrKey(row._key);
       if(attrInfo&&!_attrEdit){ // summary: the departments' block growth added up, read-only
         const g=_effGrowth(row,AOP_MIS);
-        return g==null?'<span style="color:var(--mu)">—</span>':`<span class="${gCls(g)}">${fP(g)}</span>`;
+        return g==null?'<span style="color:var(--mu)">—</span>':`<span class="${gCls(g)}" style="cursor:help" title="${_attr(_blockWhy(row))}">${fP(g)}</span>`;
       }
       if(attrInfo){
         const dv=DVDATA.find(d=>d.id===attrInfo.dvId);
@@ -2709,7 +2709,7 @@ function cellVal(row,def){
         const attrArg=attrInfo.attr.replace(/'/g,"\\'");
         const lockBtn=isLkDiv?'':_lkBtn(isLkAttr,anim,`toggleAttrLock('${attrInfo.dvId}','${attrArg}','${row._key}')`,
           isLkAttr?'Unlock attribute — allow reapportion':'Lock attribute — freeze vs reapportion');
-        return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="${cls}" data-abk="${row._key}" type="number" step="0.01" placeholder="%" value="${bg!=null?bg:''}" ${isLkDiv?'disabled title="Division locked"':''} oninput="setAttrBlockGrowth('${attrInfo.dvId}','${attrArg}',this.value)" onblur="refresh()"></span>`;
+        return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="${cls}" data-abk="${row._key}" type="number" step="0.01" placeholder="%" value="${bg!=null?bg:''}" ${isLkDiv?'disabled title="Division locked"':`title="${_attr(_blockWhy(row))}"`} oninput="setAttrBlockGrowth('${attrInfo.dvId}','${attrArg}',this.value)" onblur="refresh()"></span>`;
       }
       // Section row — editable block growth% input with per-section lock
       const dv=DVDATA.find(d=>d.secs.some(s=>s.id===row._key));
@@ -2723,7 +2723,7 @@ function cellVal(row,def){
       const cls='gi'+(bg==null?'':bg<0?' neg':' has')+(isLkSec?' lkd':'')+anim;
       const lockBtn=isLkDiv?'':_lkBtn(isLkSec,anim,`toggleSecLock('${sec.id}')`,
         isLkSec?'Unlock section — allow reapportion':'Lock section — freeze vs reapportion',` data-sbk="${sec.id}"`);
-      return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="${cls}" data-bk="${sec.id}" type="number" step="0.01" placeholder="%" value="${bg!=null?bg:''}" ${isLkDiv?'disabled title="Division locked"':''} oninput="setBlockGrowth('${sec.id}',this.value)" onblur="refresh()"></span>`;
+      return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="${cls}" data-bk="${sec.id}" type="number" step="0.01" placeholder="%" value="${bg!=null?bg:''}" ${isLkDiv?'disabled title="Division locked"':`title="${_attr(_blockWhy(row))}"`} oninput="setBlockGrowth('${sec.id}',this.value)" onblur="refresh()"></span>`;
     }
     case 'pl_fac': {
       if(row._key==null||row._isGrand||_parseAttrKey(row._key)){ // a group: its departments' factors weighted by AOP share
@@ -2757,7 +2757,7 @@ function cellVal(row,def){
     }
     case 'p1_gr': {
       const g=_effGrowth(row,AOP_MIS);
-      return g==null?'<span style="color:var(--mu)">-</span>':`<span class="${gCls(g)}" title="Phase 1 block growth - Phase 2 keeps it">${fP(g)}</span>`;
+      return g==null?'<span style="color:var(--mu)">-</span>':`<span class="${gCls(g)}" title="${_attr('Phase 1 block growth - Phase 2 keeps it\n'+_blockWhy(row))}">${fP(g)}</span>`;
     }
     case 'buyer_gr_m': {
       const isDept=row._key&&!row._isGrand&&!_parseAttrKey(row._key)&&row._divId;
@@ -4345,6 +4345,17 @@ function _effGrowth(row,mis){
     ids.forEach(id=>{const sec=dv.secs.find(x=>x.id===id);if(!sec)return;
       mis.forEach(mi=>{const ly=_secMonLY(sec,dv,mi);l+=ly;t+=ly*(1+(S.inputs[id+'__'+mi]??0)/100);});});});
   return l>0?(t/l-1)*100:null;
+}
+// Block Growth% hover (user, 2026-10-07: "show the month wise growth in the hover"): the months it is built from,
+// each with its share of the block's LY - the block is their LY-weighted average, not a plain average.
+function _blockWhy(row){
+  const m=AOP_MIS.map(mi=>{let l=0,t=0;
+    _plannerScope(row).forEach(({dvId,ids})=>{const dv=DVDATA.find(d=>d.id===dvId);if(!dv)return;
+      ids.forEach(id=>{const sec=dv.secs.find(x=>x.id===id);if(!sec)return;const ly=_secMonLY(sec,dv,mi);l+=ly;t+=ly*(1+(S.inputs[id+'__'+mi]??0)/100);});});
+    return {mi,l,t};});
+  const L=m.reduce((a,x)=>a+x.l,0);if(!L)return '';
+  return 'Month-wise growth\n'+m.map(x=>`${MO[x.mi]}: ${fP(x.l>0?(x.t/x.l-1)*100:null)}  (${(x.l/L*100).toFixed(0)}% of block LY)`).join('\n')+
+    '\nBlock = these months weighted by LY share';
 }
 // Phase 2 lock: one department x month, frozen against re-balancing (Phase 1's lock freezes all its months)
 function toggleMonLock(secKey,mi){

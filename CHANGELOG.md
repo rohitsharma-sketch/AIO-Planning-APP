@@ -5,6 +5,12 @@ Newest first. Each entry names its commit.
 
 ---
 
+## 2026-10-07
+
+### BIS: Block Growth% hover shows the month-wise growth
+- **Asked (user):** "show the month wise growth in the hover".
+- Hovering a department's or attribute's Block Growth% (and Phase 2's Phase 1 column) lists Mar/Apr/May/Jun growth with each month's share of the block's LY, e.g. Mar +7.5% (29%), Apr-Jun +10.0% -> block +9.3%. The block is the LY-weighted average of the months, which is why departments differ under the same division AOP (`_blockWhy`).
+
 ## 2026-10-06
 
 ### Suite audit: 26 high-severity issues fixed across core and additional apps
