@@ -162,6 +162,7 @@ export default function PwwDeviation() {
   const depts     = Object.entries(divData?.depts || {})
   const divTotal  = divData?.ly_div_block_total ?? 0
   const divNames  = Object.keys(result?.divisions || {})
+  const nextStep  = !result ? 'p1' : !p2Result ? 'p2' : 'reapp'
 
   // Phase 2 derived
   const p2MonthData   = p2Result?.result?.[activeMonth] || {}
@@ -173,13 +174,8 @@ export default function PwwDeviation() {
     <div style={{ padding: '32px 36px', maxWidth: 1800 }}>
 
       {/* Header */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 22, fontWeight: 700, color: theme.textPrimary, letterSpacing: -0.3 }}>
-          PW/W Deviation Engine
-        </div>
-        <div style={{ fontSize: 13, color: theme.textSecondary, marginTop: 4 }}>
-          Phase 1: Dept-level deviation · Phase 2: Cluster × Dept × MRP × Month adjusted contribution %
-        </div>
+      <div className="sp-sub">
+        Phase 1: Dept-level deviation · Phase 2: Cluster × Dept × MRP × Month adjusted contribution %
       </div>
 
       {/* ── Sync + Run panel ─────────────────────────────────────────────────── */}
@@ -203,7 +199,12 @@ export default function PwwDeviation() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button onClick={fetchSyncStatus} style={btnStyle('ghost')}>Refresh</button>
+          <details className="sp-menu">
+            <summary>Data ▾</summary>
+            <div className="sp-menu-pop">
+              <button onClick={fetchSyncStatus}>Refresh</button>
+            </div>
+          </details>
           <button onClick={handleSync} disabled={syncing || !syncStatus?.file_found} style={btnStyle('secondary', syncing || !syncStatus?.file_found)}>
             {syncing ? 'Syncing…' : 'Sync File'}
           </button>
@@ -211,18 +212,36 @@ export default function PwwDeviation() {
             <span style={{ fontSize: 11, color: theme.textMuted, fontWeight: 600, whiteSpace: 'nowrap' }}>BLOCK</span>
             <BlockChip block={status?.block} months={status?.ty_months} note="Detected from the PPO file's month columns" />
           </div>
-          <button onClick={handleRun} disabled={running || !status?.ppo_loaded} style={btnStyle('primary', running || !status?.ppo_loaded)}>
-            {running ? 'Running…' : 'Run Phase 1'}
-          </button>
-          {result && (
+          {/* Only the next step is shown (Phase 1 -> Phase 2 -> Reapportion); earlier steps stay in ⋯ */}
+          {nextStep === 'p1' && (
+            <button onClick={handleRun} disabled={running || !status?.ppo_loaded} style={btnStyle('primary', running || !status?.ppo_loaded)}>
+              {running ? 'Running…' : 'Run Phase 1'}
+            </button>
+          )}
+          {nextStep === 'p2' && (
             <button onClick={handleRunP2} disabled={runningP2} style={btnStyle('accent', runningP2)}>
               {runningP2 ? 'Running Phase 2…' : 'Run Phase 2'}
             </button>
           )}
-          {p2Result && (
+          {nextStep === 'reapp' && (
             <button onClick={handleReapportion} disabled={runningReapp} style={btnStyle('teal', runningReapp)}>
               {runningReapp ? 'Reapportioning…' : 'Reapportion'}
             </button>
+          )}
+          {nextStep !== 'p1' && (
+            <details className="sp-menu">
+              <summary aria-label="Re-run an earlier step">⋯</summary>
+              <div className="sp-menu-pop">
+                <button onClick={handleRun} disabled={running || !status?.ppo_loaded}>
+                  {running ? 'Running…' : 'Run Phase 1'}
+                </button>
+                {nextStep === 'reapp' && (
+                  <button onClick={handleRunP2} disabled={runningP2}>
+                    {runningP2 ? 'Running Phase 2…' : 'Run Phase 2'}
+                  </button>
+                )}
+              </div>
+            </details>
           )}
         </div>
         {msg && <div style={{ width: '100%', fontSize: 12, color: theme.accent, fontWeight: 600 }}>{msg}</div>}
@@ -237,7 +256,6 @@ export default function PwwDeviation() {
         }}>
           <Stat label="PPO Depts" value={status.ppo_depts || '—'} />
           {result && <>
-            <Stat label="Block"       value={result.block} />
             <Stat label="SSG Stores"  value={result.ssg_stores?.length} />
             <Stat label="Months"      value={result.ly_months_used?.length} />
             <Stat label="Threshold"   value={`< ${result.threshold_pct}%`} />

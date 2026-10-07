@@ -298,14 +298,69 @@ export default function MrpReapportionment() {
     <div style={{ padding: '28px 32px', minHeight: '100vh', background: theme.surfaceAlt }}>
 
       {/* Heading */}
-      <div style={{ marginBottom: 22 }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: theme.textPrimary }}>
-          MRP Re-apportionment
-        </h1>
-        <p style={{ margin: '5px 0 0', fontSize: 13, color: theme.textMuted }}>
-          Redistribute sales from discontinued MRP slabs to valid listed MRPs. Configure split % per group.
-        </p>
+      <div className="sp-sub" style={{ marginBottom: 8 }}>
+        Redistribute sales from discontinued MRP slabs to valid listed MRPs. Configure split % per group.
       </div>
+
+      {/* Info panel (was a right-hand column) - collapsed by default so the main panel gets the full width */}
+      <details className="sp-fold" style={{ marginBottom: 16 }}>
+        <summary>ⓘ How it works · where the file goes · constraints</summary>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 14, marginTop: 8, alignItems: 'start' }}>
+
+          <div style={{ background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`, padding: '18px 20px' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.5, marginBottom: 12 }}>
+              DROP THE MRP STRUCTURE HERE
+            </div>
+            {[
+              { label: 'MRP Mapping Master (.xlsx)',   path: 'Sales Reapportionment\\MRP Mapping\\' },
+            ].map(({ label, path }) => (
+              <div key={label} style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: theme.textPrimary, marginBottom: 2 }}>{label}</div>
+                <div style={{ fontSize: 10, color: theme.textMuted, ...mono }}>…{path}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`, padding: '18px 20px' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.5, marginBottom: 12 }}>
+              HOW IT WORKS
+            </div>
+            {[
+              { icon: '📂', t: '1. Load groups',  b: 'Mapping master shows which MRPs are valid vs. discontinued per group (Dept · Display · Attribute).' },
+              { icon: '⚙',  t: '2. Set splits',   b: 'For each group with discontinued MRPs, assign % of sales to each valid MRP. Default = equal split.' },
+              { icon: '▶',  t: '3. Run',           b: 'Valid MRP rows pass through. Discontinued MRP sales are redistributed per your %s.' },
+              { icon: '✓',  t: '4. Validate',      b: 'Totals per Store × Dept verified before and after — diff must be < ₹0.01.' },
+            ].map(({ icon, t, b }) => (
+              <div key={t} style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'flex-start' }}>
+                <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{icon}</span>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: theme.textPrimary, marginBottom: 2 }}>{t}</div>
+                  <div style={{ fontSize: 11, color: theme.textMuted, lineHeight: 1.6 }}>{b}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`, padding: '18px 20px' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.5, marginBottom: 10 }}>
+              CONSTRAINTS
+            </div>
+            {[
+              'Sales never cross Stores',
+              'Sales never cross Departments',
+              'Sales never cross Display types',
+              'Sales never cross Attributes',
+              'All month totals preserved exactly',
+              'No valid group → Listed MRP 0',
+            ].map(c => (
+              <div key={c} style={{ display: 'flex', gap: 7, marginBottom: 6, fontSize: 11, color: theme.textMuted }}>
+                <span style={{ color: theme.accent, flexShrink: 0 }}>✓</span>
+                <span>{c}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </details>
 
       {/* Last-run banner */}
       {lastRun && !result && (
@@ -335,7 +390,7 @@ export default function MrpReapportionment() {
       )}
 
       {/* Two-column layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 18, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 18, alignItems: 'start' }}>
 
         {/* ── Left ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -566,62 +621,6 @@ export default function MrpReapportionment() {
           </div>
         </div>
 
-        {/* ── Right: info panel ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
-          <div style={{ background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`, padding: '18px 20px' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.5, marginBottom: 12 }}>
-              DROP THE MRP STRUCTURE HERE
-            </div>
-            {[
-              { label: 'MRP Mapping Master (.xlsx)',   path: 'Sales Reapportionment\\MRP Mapping\\' },
-            ].map(({ label, path }) => (
-              <div key={label} style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: theme.textPrimary, marginBottom: 2 }}>{label}</div>
-                <div style={{ fontSize: 10, color: theme.textMuted, ...mono }}>…{path}</div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`, padding: '18px 20px' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.5, marginBottom: 12 }}>
-              HOW IT WORKS
-            </div>
-            {[
-              { icon: '📂', t: '1. Load groups',  b: 'Mapping master shows which MRPs are valid vs. discontinued per group (Dept · Display · Attribute).' },
-              { icon: '⚙',  t: '2. Set splits',   b: 'For each group with discontinued MRPs, assign % of sales to each valid MRP. Default = equal split.' },
-              { icon: '▶',  t: '3. Run',           b: 'Valid MRP rows pass through. Discontinued MRP sales are redistributed per your %s.' },
-              { icon: '✓',  t: '4. Validate',      b: 'Totals per Store × Dept verified before and after — diff must be < ₹0.01.' },
-            ].map(({ icon, t, b }) => (
-              <div key={t} style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'flex-start' }}>
-                <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{icon}</span>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: theme.textPrimary, marginBottom: 2 }}>{t}</div>
-                  <div style={{ fontSize: 11, color: theme.textMuted, lineHeight: 1.6 }}>{b}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`, padding: '18px 20px' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.5, marginBottom: 10 }}>
-              CONSTRAINTS
-            </div>
-            {[
-              'Sales never cross Stores',
-              'Sales never cross Departments',
-              'Sales never cross Display types',
-              'Sales never cross Attributes',
-              'All month totals preserved exactly',
-              'No valid group → Listed MRP 0',
-            ].map(c => (
-              <div key={c} style={{ display: 'flex', gap: 7, marginBottom: 6, fontSize: 11, color: theme.textMuted }}>
-                <span style={{ color: theme.accent, flexShrink: 0 }}>✓</span>
-                <span>{c}</span>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   )

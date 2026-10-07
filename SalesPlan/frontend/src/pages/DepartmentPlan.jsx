@@ -32,22 +32,6 @@ function AttrBadge({ attr }) {
   )
 }
 
-function ContribBar({ value, max = 100 }) {
-  const pct = Math.min((value / max) * 100, 100)
-  const color = value > 100.05 ? '#D94F3D' : value >= 99.9 ? '#00A86B' : '#B45309'
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ flex: 1, height: 4, background: '#E5E7EB', borderRadius: 2, overflow: 'hidden' }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 2, transition: 'width 0.2s' }} />
-      </div>
-      <span style={{
-        fontSize: 12, fontWeight: 700, minWidth: 46, textAlign: 'right',
-        color, fontVariantNumeric: 'tabular-nums',
-      }}>{value.toFixed(2)}%</span>
-    </div>
-  )
-}
-
 export default function DepartmentPlan() {
   const [config, setConfig] = useState(null)
   const [activeDiv, setActiveDiv] = useState('KIDS')
@@ -183,13 +167,11 @@ export default function DepartmentPlan() {
       {/* Header */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-          <div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: theme.textPrimary }}>Department Master Setup</div>
-            <div style={{ fontSize: 13, color: theme.textSecondary, marginTop: 4 }}>
-              Department hierarchy, active/inactive status &amp; contribution % per division
-            </div>
+          <div className="sp-sub" style={{ margin: 0 }}>
+            Department hierarchy, active/inactive status &amp; contribution % per division
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {/* Sync from Buyer's Input — active / inactive departments from the live BIS */}
             <button
               onClick={syncFromBuyer}
@@ -205,15 +187,20 @@ export default function DepartmentPlan() {
               <span style={buyerSyncing ? { animation: 'spin 0.9s linear infinite', display: 'inline-block' } : {}}>↺</span>
               {buyerSyncing ? 'Syncing…' : "Sync from Buyer's Input"}
             </button>
-            <button
-              onClick={syncFromAop}
-              disabled={aopSyncing}
-              title="Load the AOP division targets used by Calculate Department Plan"
-              style={{ padding: 0, border: 'none', background: 'none', color: theme.textSecondary, fontSize: 11,
-                       textDecoration: 'underline', cursor: aopSyncing ? 'default' : 'pointer' }}
-            >
-              {aopSyncing ? 'Loading AOP targets…' : 'Load AOP division targets'}
-            </button>
+            <details className="sp-menu">
+              <summary>Data ▾</summary>
+              <div className="sp-menu-pop">
+                <button
+                  onClick={syncFromAop}
+                  disabled={aopSyncing}
+                  title="Load the AOP division targets used by Calculate Department Plan"
+                >
+                  {aopSyncing ? 'Loading AOP targets…' : 'Load AOP division targets'}
+                </button>
+                <a href="/api/planning/department-plan/export">↓ Export</a>
+              </div>
+            </details>
+           </div>
             {aopSyncResult && (
               <div style={{
                 fontSize: 11, padding: '4px 10px', borderRadius: 5,
@@ -231,30 +218,26 @@ export default function DepartmentPlan() {
         {/* AOP-synced division targets → Calculate Department Plan */}
         {aopDivisionAops && (
           <div style={{
-            marginTop: 14, padding: '14px 18px', borderRadius: 10,
+            marginTop: 12, padding: '8px 14px', borderRadius: 8,
             background: '#1488cc0A', border: '1px solid #1488cc33',
-            display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16,
+            display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12,
           }}>
-            <div style={{ fontSize: 12, color: theme.textSecondary, minWidth: 180 }}>
-              <strong style={{ color: theme.textPrimary }}>AOP Forecaster</strong> run {aopRunMeta?.run_id?.slice(0, 8)}…
-              <br />computed {aopRunMeta?.computed_at ? new Date(aopRunMeta.computed_at).toLocaleString('en-IN') : '—'}
-            </div>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <div className="sp-slim" style={{ flex: 1 }}>
+              <span title={`computed ${aopRunMeta?.computed_at ? new Date(aopRunMeta.computed_at).toLocaleString('en-IN') : '—'}`}>
+                <b>AOP Forecaster</b> run {aopRunMeta?.run_id?.slice(0, 8)}…
+              </span>
               {aopDivisionAops.map(d => (
-                <div key={d.division} style={{
-                  padding: '6px 12px', borderRadius: 7, background: theme.surface,
-                  border: `1px solid ${alpha(DIV_COLOR[d.division] || theme.border,'44')}`,
-                }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: DIV_COLOR[d.division] || theme.textSecondary }}>{d.division}</div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: theme.textPrimary }}>₹{d.annual_target.toLocaleString('en-IN', { maximumFractionDigits: 1 })} L</div>
-                </div>
+                <span key={d.division}>
+                  <span style={{ fontWeight: 700, color: DIV_COLOR[d.division] || theme.textSecondary }}>{d.division}</span>{' '}
+                  <b>₹{d.annual_target.toLocaleString('en-IN', { maximumFractionDigits: 1 })} L</b>
+                </span>
               ))}
             </div>
             <button
               onClick={calculateFromAop}
               disabled={calcRunning}
               style={{
-                marginLeft: 'auto', padding: '9px 20px', borderRadius: 8, border: 'none',
+                marginLeft: 'auto', padding: '6px 16px', borderRadius: 7, border: 'none',
                 background: calcRunning ? theme.surfaceAlt : '#1488cc',
                 color: '#fff', fontWeight: 700, fontSize: 13, cursor: calcRunning ? 'default' : 'pointer',
               }}
@@ -370,21 +353,22 @@ export default function DepartmentPlan() {
               color: theme.textPrimary, background: theme.surfaceAlt, width: 180,
             }}
           />
-
-          {/* Export */}
-          <a href="/api/planning/department-plan/export" style={{
-            padding: '6px 14px', borderRadius: 6, fontSize: 12,
-            background: theme.surfaceAlt, border: `1px solid ${theme.border}`,
-            color: theme.textSecondary, textDecoration: 'none', fontWeight: 500,
-          }}>↓ Export</a>
         </div>
 
-        {/* Attribute filter chips */}
+        {/* Attribute filter chips - folded by default; the active filter stays visible as a removable chip */}
         <div style={{
-          padding: '10px 20px', borderBottom: `1px solid ${theme.border}`,
-          display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
+          padding: '6px 20px', borderBottom: `1px solid ${theme.border}`,
+          display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap',
         }}>
-          <span style={{ fontSize: 11, color: theme.textMuted, fontWeight: 600, letterSpacing: 0.4, marginRight: 4 }}>FILTER</span>
+        {attrFilter && (
+          <span className="sp-chip" style={{ marginTop: 3 }}>
+            {attrFilter}
+            <button onClick={() => setAttrFilter(null)} aria-label={`Clear ${attrFilter} filter`}>×</button>
+          </span>
+        )}
+        <details className="sp-fold">
+          <summary>Filter by attribute</summary>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '4px 0' }}>
           {/* All chip */}
           <button onClick={() => setAttrFilter(null)} style={{
             padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
@@ -412,8 +396,10 @@ export default function DepartmentPlan() {
               </button>
             )
           })}
+        </div>
+        </details>
           {attrFilter && (
-            <span style={{ fontSize: 11, color: theme.textMuted, marginLeft: 4 }}>
+            <span style={{ fontSize: 11, color: theme.textMuted, marginTop: 5 }}>
               showing {filteredRows.length} of {rows.length}
             </span>
           )}

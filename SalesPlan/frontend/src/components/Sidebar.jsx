@@ -1,4 +1,4 @@
-import { NavLink, useLocation, Link } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { theme } from '../theme'
 import Icon from './Icon'
@@ -42,7 +42,13 @@ const DIV_DOT = {
 
 function PlanSnapshot() {
   const [data,      setData]      = useState(null)
-  const [open,      setOpen]      = useState(true)
+  // collapsed by default, remembered per browser (shares the 8010 origin with Calendar / AOP, hence 'sp.')
+  const [open,      setOpenRaw]   = useState(() => { try { return localStorage.getItem('sp.snapshotOpen') === '1' } catch { return false } })
+  const setOpen = f => setOpenRaw(o => {
+    const n = typeof f === 'function' ? f(o) : f
+    try { localStorage.setItem('sp.snapshotOpen', n ? '1' : '0') } catch { /* storage blocked */ }
+    return n
+  })
   const [selMonth,  setSelMonth]  = useState(null)
   const [loading,   setLoading]   = useState(false)
 
@@ -128,16 +134,6 @@ function PlanSnapshot() {
             })}
           </div>
 
-          {/* Link to full results */}
-          <Link to="/department-plan/final-results" style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-            margin: '10px 12px 4px', padding: '7px', borderRadius: 6,
-            background: 'rgba(var(--st-rail-rgb,191,224,205),0.14)', border: '1px solid rgba(var(--st-rail-rgb,191,224,205),0.25)',
-            color: 'rgba(var(--st-rail-rgb,191,224,205),0.9)', fontSize: 11, fontWeight: 700,
-            textDecoration: 'none', letterSpacing: 0.3,
-          }}>
-            View Full Results →
-          </Link>
         </>
       )}
     </div>

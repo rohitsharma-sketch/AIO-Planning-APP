@@ -572,30 +572,28 @@ export default function NewDeptPlan() {
     <div style={{ padding: '32px 36px', maxWidth: 1700 }}>
       {inPipeline && <PipelineBanner currentKey="new-depts" />}
       {/* Header */}
-      <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 22, fontWeight: 700, color: theme.textPrimary, letterSpacing: -0.3 }}>
-          New Department Plan
-        </div>
-        <div style={{ fontSize: 13, color: theme.textSecondary, marginTop: 4 }}>
-          Define new depts (MCs) introduced in TY, link each to a reference dept, and set the reallocation percentages independently. Results flow into Post New MCs AOP.
-        </div>
+      <div className="sp-sub">
+        Define new depts (MCs) introduced in TY, link each to a reference dept, and set the reallocation percentages independently. Results flow into Post New MCs AOP.
       </div>
 
       {/* New departments template panel (replaces Sync from Folder, 2026-10-01) */}
       <div style={{
         background: theme.surface, border: `1px solid ${theme.border}`,
-        borderRadius: 10, padding: '16px 20px', marginBottom: 20,
+        borderRadius: 10, padding: '10px 20px', marginBottom: 16,
         display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
       }}>
-        <div style={{ flex: 1, minWidth: 240 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: theme.textPrimary, marginBottom: 4 }}>
+        <div style={{ flex: 1, minWidth: 240, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: theme.textPrimary }}>
             New departments template
           </div>
-          <div style={{ fontSize: 11.5, color: theme.textSecondary }}>
-            Download it (pre-filled with today's list, plus every department to pick a reference from), fill one row per
-            new department - REF DEPT, NEW DEPT %, REF REDUCTION % - and upload it. The upload replaces the whole list and
-            regenerates the plan; any problem refuses the file and nothing changes.
-          </div>
+          <details className="sp-info sp-left">
+            <summary aria-label="About the template">ⓘ</summary>
+            <div className="sp-menu-pop">
+              Download it (pre-filled with today's list, plus every department to pick a reference from), fill one row per
+              new department - REF DEPT, NEW DEPT %, REF REDUCTION % - and upload it. The upload replaces the whole list and
+              regenerates the plan; any problem refuses the file and nothing changes.
+            </div>
+          </details>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <a href="/api/planning/dept-sales/new-depts/template"
@@ -662,14 +660,6 @@ export default function NewDeptPlan() {
         })}
         <div style={{ flex: 1 }} />
         <button
-          onClick={handleClear}
-          style={{
-            padding: '7px 16px', borderRadius: 8,
-            background: 'none', color: theme.textMuted,
-            border: `1px solid ${theme.border}`, fontWeight: 500, fontSize: 13, cursor: 'pointer',
-          }}
-        >Clear</button>
-        <button
           onClick={handleSave} disabled={saving}
           style={{
             padding: '7px 20px', borderRadius: 8,
@@ -683,6 +673,13 @@ export default function NewDeptPlan() {
             {saveMsg}
           </span>
         )}
+        {/* Clear deletes the saved list + generated plan - kept away from Save & Apply */}
+        <details className="sp-menu" style={{ alignSelf: 'center' }}>
+          <summary aria-label="More actions">⋯</summary>
+          <div className="sp-menu-pop">
+            <button className="sp-danger" onClick={handleClear}>Clear</button>
+          </div>
+        </details>
       </div>
 
       {/* Filter bar — above table, pivot-style multi-select by ref dept */}
@@ -711,19 +708,14 @@ export default function NewDeptPlan() {
         </div>
       )}
 
-      {/* Info note */}
-      <div style={{
-        background: theme.surface, border: `1px solid ${theme.border}`,
-        borderRadius: 10, padding: '12px 18px', marginBottom: 20,
-        display: 'flex', gap: 12, alignItems: 'flex-start',
-      }}>
-        <span style={{ fontSize: 16, marginTop: 1 }}>ℹ️</span>
-        <div style={{ fontSize: 12.5, color: theme.textSecondary, lineHeight: 1.6 }}>
-          <strong style={{ color: theme.textPrimary }}>How it works:</strong>{' '}
+      {/* Info note - collapsed by default */}
+      <details className="sp-fold" style={{ marginBottom: 14 }}>
+        <summary>How it works</summary>
+        <div style={{ fontSize: 12.5, color: theme.textSecondary, lineHeight: 1.6, padding: '6px 0 0 14px' }}>
           <strong style={{ color: theme.accent }}>New Dept %</strong> — share of the reference dept's TY that goes to the new dept (e.g. 20% of ref TY).{' '}
           <strong style={{ color: theme.danger }}>Ref Dept %</strong> — how much the reference dept's AOP independently reduces (e.g. ref loses 7% of its own value). These two are <em>independent</em> — values above 100% are allowed. Final output is the <strong style={{ color: theme.accent }}>Post New MCs AOP</strong>.
         </div>
-      </div>
+      </details>
 
       {/* Table */}
       <div style={{

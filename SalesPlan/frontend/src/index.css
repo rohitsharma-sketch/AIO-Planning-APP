@@ -34,3 +34,50 @@ a { color: var(--st-accent,#4F7A66); }
    Page titles in the suite's display serif (the !important beats the pages' inline weights), flat cards. */
 h1 { font-family: var(--st-font-display, Georgia, serif) !important; font-weight: 500 !important; letter-spacing: -0.01em; }
 .sp-card:hover { box-shadow: none !important; transform: none; border-color: var(--st-accent,#4F7A66) !important; }
+
+/* ── Declutter (2026-10-07): secondary actions live in native <details> menus ──
+   <details class="sp-menu"><summary>Label ▾</summary><div class="sp-menu-pop">…buttons…</div></details>
+   Outside click / Escape close them (App.jsx). .sp-info = the same popover holding help text (ⓘ);
+   .sp-fold = an inline collapsible section; .sp-slim = one line of stats instead of a row of tiles. */
+.sp-menu, .sp-info { position: relative; display: inline-block; }
+.sp-menu > summary, .sp-info > summary, .sp-fold > summary { list-style: none; cursor: pointer; user-select: none; }
+.sp-menu > summary::-webkit-details-marker, .sp-info > summary::-webkit-details-marker, .sp-fold > summary::-webkit-details-marker { display: none; }
+.sp-menu > summary {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 6px;
+  font-size: 12px; font-weight: 600; color: var(--st-muted,#5F6B64);
+  background: var(--st-page,#F7F6F2); border: 1px solid var(--st-line,#E5E3DA); white-space: nowrap;
+}
+.sp-menu > summary:hover, .sp-menu[open] > summary { border-color: var(--st-accent,#4F7A66); color: var(--st-ink,#1E2723); }
+.sp-menu-pop {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 60; min-width: 220px;
+  display: flex; flex-direction: column; gap: 2px; padding: 4px;
+  background: #fff; border: 1px solid var(--st-line-2,#D3D0C4); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(var(--st-ink-rgb,30,39,35),.12);
+}
+.sp-menu.sp-left .sp-menu-pop, .sp-info.sp-left .sp-menu-pop { right: auto; left: 0; }
+.sp-menu-pop > button, .sp-menu-pop > label {
+  display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 7px 10px; border-radius: 5px;
+  font-size: 12.5px; font-weight: 500; color: var(--st-ink,#1E2723); background: none; border: none; cursor: pointer; white-space: nowrap;
+}
+.sp-menu-pop > button:hover:not(:disabled), .sp-menu-pop > label:hover { background: var(--st-tint,#EAF3EE); }
+.sp-menu-pop > button:disabled { opacity: .5; cursor: default; }
+.sp-menu-pop > button.sp-danger { color: #B42318; }
+.sp-menu-pop > button.sp-danger:hover:not(:disabled) { background: #FEF3F2; }
+.sp-menu-pop > hr { border: none; border-top: 1px solid var(--st-line,#E5E3DA); margin: 3px 0; }
+.sp-info > summary {
+  display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%;
+  font-size: 12px; font-weight: 700; color: var(--st-muted,#5F6B64); border: 1px solid var(--st-line-2,#D3D0C4); background: #fff;
+}
+.sp-info > summary:hover, .sp-info[open] > summary { color: var(--st-accent,#4F7A66); border-color: var(--st-accent,#4F7A66); }
+.sp-info > .sp-menu-pop { width: 380px; max-width: 80vw; padding: 12px 14px; font-size: 12px; line-height: 1.6; color: var(--st-muted,#5F6B64); white-space: normal; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.sp-fold > summary { font-size: 12px; font-weight: 600; color: var(--st-muted,#5F6B64); padding: 4px 0; }
+.sp-fold > summary::before { content: '▸ '; }
+.sp-fold[open] > summary::before { content: '▾ '; }
+.sp-fold > summary:hover { color: var(--st-ink,#1E2723); }
+.sp-slim { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; font-size: 12.5px; color: var(--st-muted,#5F6B64); }
+.sp-slim b { color: var(--st-ink,#1E2723); font-weight: 700; }
+.sp-sub { font-size: 13px; color: var(--st-muted,#5F6B64); margin: 0 0 16px; }
+.sp-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; background: var(--st-tint,#EAF3EE); color: var(--st-accent-dark,#3F6453); }
+.sp-chip > button { border: none; background: none; cursor: pointer; color: inherit; font-size: 13px; line-height: 1; padding: 0 4px; }
+.sp-menu-pop > a { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 5px; font-size: 12.5px; font-weight: 500; color: var(--st-ink,#1E2723); text-decoration: none; white-space: nowrap; }
+.sp-menu-pop > a:hover { background: var(--st-tint,#EAF3EE); }

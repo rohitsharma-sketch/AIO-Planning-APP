@@ -446,28 +446,12 @@ export default function AttributeCorrection() {
       />
 
       {/* Page header */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: theme.textPrimary }}>Attribute Correction</h1>
-            <p style={{ margin: '6px 0 0', fontSize: 13, color: theme.textMuted }}>
-              Adjust ATTRIBUTE1 contribution % per division per month. SSG stores only. Changes reapportion AOP post New Depts.
-            </p>
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div className="sp-sub" style={{ margin: 0 }}>
+            Adjust ATTRIBUTE1 contribution % per division per month. SSG stores only. Changes reapportion AOP post New Depts.
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <button
-              onClick={handleCompare}
-              style={{ background: 'none', border: `1px solid ${theme.border}`, color: theme.textMuted, borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}
-            >
-              Compare AOP
-            </button>
-            <button
-              onClick={handleRevert}
-              title="Reset all Cont % for this division back to the original loaded values"
-              style={{ background: 'none', border: `1px solid ${theme.border}`, color: theme.textMuted, borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 13 }}
-            >
-              ↺ Revert to Original
-            </button>
             <button
               onClick={handleAutoBalance}
               title="Redistribute unlocked attributes proportionally to sum to 100%"
@@ -482,20 +466,35 @@ export default function AttributeCorrection() {
             >
               {saving ? 'Saving…' : 'Save & Apply'}
             </button>
+            <details className="sp-menu">
+              <summary>More ▾</summary>
+              <div className="sp-menu-pop">
+                <button onClick={handleCompare}>
+                  Compare AOP
+                </button>
+                <button
+                  className="sp-danger"
+                  onClick={handleRevert}
+                  title="Reset all Cont % for this division back to the original loaded values"
+                >
+                  ↺ Revert to Original
+                </button>
+              </div>
+            </details>
             {saveMsg && (
               <span style={{ fontSize: 12, color: theme.success, alignSelf: 'center', marginLeft: 4 }}>{saveMsg}</span>
             )}
           </div>
         </div>
 
-        {/* Notice */}
-        <div style={{ marginTop: 14, padding: '10px 16px', background: theme.surface, borderRadius: 8, border: `1px solid ${theme.border}`, fontSize: 12, color: theme.textMuted, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-          <span style={{ color: theme.accent, fontWeight: 700, flexShrink: 0 }}>ℹ</span>
-          <span>
+        {/* Notice - collapsed by default */}
+        <details className="sp-fold" style={{ marginTop: 8 }}>
+          <summary>How editing works</summary>
+          <div style={{ padding: '4px 0 0 14px', fontSize: 12, color: theme.textMuted }}>
             Edit any Cont% freely — no other values change until you press <strong>Auto Balance</strong>. Locked attributes are always excluded from rebalancing.
             AOP is sourced from Post New MCs working (SSG stores). Correction is <strong>optional</strong> — skip to proceed directly to Base Correction.
-          </span>
-        </div>
+          </div>
+        </details>
       </div>
 
       {/* Division tabs */}

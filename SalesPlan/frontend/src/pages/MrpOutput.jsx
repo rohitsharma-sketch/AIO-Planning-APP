@@ -264,12 +264,9 @@ export default function MrpOutput() {
       {pipeline && <StepBar pipeline={pipeline} />}
 
       {/* Header */}
-      <div style={{ marginBottom: 20, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: theme.textPrimary }}>MRP Plan Output</h1>
-          <p style={{ margin: '6px 0 0', fontSize: 13, color: theme.textMuted }}>
-            Department TY plan split by MRP price point × buyer contribution % — P1 &amp; P2 per month.
-          </p>
+      <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <div className="sp-sub" style={{ margin: 0 }}>
+          Department TY plan split by MRP price point × buyer contribution % — P1 &amp; P2 per month.
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           {!data.has_plan && (
@@ -277,29 +274,29 @@ export default function MrpOutput() {
               No dept plan — TY values will show 0
             </span>
           )}
-          <button onClick={() => setShowPrompt(true)}
-            style={{ padding: '7px 16px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'none', border: `1px solid ${theme.border}`, color: theme.textMuted }}>
-            📐 Deviations
-          </button>
-          <button onClick={() => window.open('/api/planning/mrp-plan/export', '_blank')}
-            style={{ padding: '7px 16px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: 'none', border: `1px solid ${theme.border}`, color: theme.textMuted }}>
-            Export CSV ↓
-          </button>
+          <details className="sp-menu">
+            <summary>More ▾</summary>
+            <div className="sp-menu-pop">
+              <button onClick={() => setShowPrompt(true)}>
+                📐 Deviations
+              </button>
+              <button onClick={() => window.open('/api/planning/mrp-plan/export', '_blank')}>
+                Export CSV ↓
+              </button>
+            </div>
+          </details>
         </div>
       </div>
 
       {/* Summary cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
+      <div className="sp-slim" style={{ marginBottom: 16, padding: '0 4px' }}>
         {[
           { label: 'Divisions',   value: data.divisions.length, color: theme.primary },
           { label: 'Departments', value: data.total_depts,       color: theme.textPrimary },
           { label: 'MRP Bands',   value: data.total_bands,        color: theme.accent },
           { label: 'Periods',     value: periods.length,          color: theme.success },
         ].map(c => (
-          <div key={c.label} style={{ background: theme.surface, borderRadius: 10, padding: '14px 18px', border: `1px solid ${theme.border}` }}>
-            <div style={{ fontSize: 11, color: theme.textMuted, marginBottom: 4 }}>{c.label}</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: c.color, fontFamily: theme.fontMono }}>{c.value}</div>
-          </div>
+          <span key={c.label}>{c.label} <b style={{ color: c.color, fontFamily: theme.fontMono }}>{c.value}</b></span>
         ))}
       </div>
 

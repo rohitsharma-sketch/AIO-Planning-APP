@@ -332,48 +332,8 @@ export default function DepartmentGrowthMatrix() {
 
       <style>{`@keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
 
-      {/* Header */}
-      <div style={{ marginBottom: 22, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: theme.textPrimary }}>Department Growth Matrix</div>
-          <div style={{ fontSize: 13, color: theme.textSecondary, marginTop: 4 }}>
-            P1 / P2 growth index per department per month — baseline 100. Buyer inputs can be uploaded below.
-          </div>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-          <button
-            onClick={async () => {
-              setBuyerSyncing(true); setBuyerSyncResult(null)
-              try {
-                const r = await fetch('/api/planning/department-plan/sync-from-buyer', { method: 'POST' })
-                const d = await r.json()
-                setBuyerSyncResult({ ok: r.ok, msg: r.ok ? d.message : (d.detail || 'Error') })
-                if (r.ok) { await fetchMatrix(activeDiv); await fetchBuyerMeta() }
-              } catch (e) { setBuyerSyncResult({ ok: false, msg: String(e) }) }
-              finally { setBuyerSyncing(false) }
-            }}
-            disabled={buyerSyncing}
-            style={{
-              padding: '8px 18px', borderRadius: 8, border: `1.5px solid ${theme.success}`,
-              background: buyerSyncing ? 'transparent' : `${alpha(theme.success,'12')}`,
-              color: theme.success, fontWeight: 700, fontSize: 12, cursor: buyerSyncing ? 'default' : 'pointer',
-              display: 'flex', alignItems: 'center', gap: 7,
-            }}
-          >
-            <span style={buyerSyncing ? { animation: 'spin 0.9s linear infinite', display: 'inline-block' } : {}}>↺</span>
-            {buyerSyncing ? 'Syncing…' : 'Sync from Buyer\'s Input Sheet'}
-          </button>
-          {buyerSyncResult && (
-            <div style={{
-              fontSize: 11, padding: '4px 10px', borderRadius: 5,
-              background: buyerSyncResult.ok ? `${alpha(theme.success,'14')}` : '#FEE2E2',
-              color: buyerSyncResult.ok ? theme.success : '#991B1B',
-              border: `1px solid ${buyerSyncResult.ok ? theme.success + '44' : '#F7C1BC'}`,
-            }}>
-              {buyerSyncResult.msg}
-            </div>
-          )}
-        </div>
+      <div className="sp-sub">
+        P1 / P2 growth index per department per month — baseline 100. Buyer inputs can be uploaded from Matrix tools ▾.
       </div>
 
       {/* Division tabs */}
@@ -409,19 +369,32 @@ export default function DepartmentGrowthMatrix() {
             )}
           </span>
 
-          <div style={{
-            padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-            background: '#EFF6FF', color: '#1D4ED8',
-          }}>
-            Baseline 100
-          </div>
-
           {saving && <span style={{ fontSize: 11, color: theme.textMuted }}>Saving…</span>}
           {!saving && lastSaved && <span style={{ fontSize: 11, color: theme.accent }}>✓ Saved {lastSaved}</span>}
+          {buyerSyncResult && (
+            <span style={{
+              fontSize: 11, padding: '3px 10px', borderRadius: 5,
+              background: buyerSyncResult.ok ? `${alpha(theme.success,'14')}` : '#FEE2E2',
+              color: buyerSyncResult.ok ? theme.success : '#991B1B',
+              border: `1px solid ${buyerSyncResult.ok ? theme.success + '44' : '#F7C1BC'}`,
+            }}>
+              {buyerSyncResult.msg}
+            </span>
+          )}
 
           <div style={{ flex: 1 }} />
 
           {genMsg && <span style={{ fontSize: 12, color: theme.success, fontWeight: 600 }}>{genMsg}</span>}
+
+          <SearchSlicer
+            items={deptNames}
+            selected={deptFilters}
+            onChange={setDeptFilters}
+            label="All Departments"
+            placeholder="Search department…"
+            width={170}
+          />
+
           <button
             onClick={handleGenerateBase}
             disabled={generating}
@@ -434,37 +407,73 @@ export default function DepartmentGrowthMatrix() {
             {generating ? 'Generating…' : '▶ Generate Base Plan & continue'}
           </button>
 
-          <SearchSlicer
-            items={deptNames}
-            selected={deptFilters}
-            onChange={setDeptFilters}
-            label="All Departments"
-            placeholder="Search department…"
-            width={170}
-          />
-
-          {/* Buyer upload toggle */}
-          <button onClick={() => { setShowUpload(v => !v); setUploadResult(null) }} style={{
-            padding: '6px 14px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
-            background: showUpload ? DIV_COLOR[activeDiv] : theme.surfaceAlt,
-            border: `1px solid ${showUpload ? DIV_COLOR[activeDiv] : theme.border}`,
-            color: showUpload ? '#fff' : theme.textSecondary, fontWeight: 600,
-            display: 'flex', alignItems: 'center', gap: 6,
-          }}>
-            ↑ Buyer Input
-            {divMeta && !showUpload && (
-              <span style={{
-                fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 10,
-                background: '#00A86B', color: '#fff', marginLeft: 2,
-              }}>linked</span>
-            )}
+          <details className="sp-menu">
+            <summary>Matrix tools ▾</summary>
+            <div className="sp-menu-pop">
+              {/* Buyer upload toggle */}
+              <button onClick={() => { setShowUpload(v => !v); setUploadResult(null) }}>
+                ↑ Buyer Input
+                {showUpload && <span style={{ fontSize: 10, color: theme.textMuted }}>(open)</span>}
+                {divMeta && !showUpload && (
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 10,
+                    background: '#00A86B', color: '#fff', marginLeft: 2,
+                  }}>linked</span>
+                )}
+              </button>
+          <button
+            onClick={async () => {
+              setBuyerSyncing(true); setBuyerSyncResult(null)
+              try {
+                const r = await fetch('/api/planning/department-plan/sync-from-buyer', { method: 'POST' })
+                const d = await r.json()
+                setBuyerSyncResult({ ok: r.ok, msg: r.ok ? d.message : (d.detail || 'Error') })
+                if (r.ok) { await fetchMatrix(activeDiv); await fetchBuyerMeta() }
+              } catch (e) { setBuyerSyncResult({ ok: false, msg: String(e) }) }
+              finally { setBuyerSyncing(false) }
+            }}
+            disabled={buyerSyncing}
+          >
+            <span style={buyerSyncing ? { animation: 'spin 0.9s linear infinite', display: 'inline-block' } : {}}>↺</span>
+            {buyerSyncing ? 'Syncing…' : 'Sync from Buyer\'s Input Sheet'}
           </button>
+              <hr />
+              <button className="sp-danger" onClick={handleReset}>↺ Reset to 100</button>
+            </div>
+          </details>
 
-          <button onClick={handleReset} style={{
-            padding: '6px 14px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
-            background: theme.surfaceAlt, border: `1px solid ${theme.border}`,
-            color: theme.textSecondary, fontWeight: 500,
-          }}>↺ Reset to 100</button>
+          {/* Legend (was its own row) */}
+          <details className="sp-info">
+            <summary aria-label="Legend">ⓘ</summary>
+            <div className="sp-menu-pop" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <span style={{ fontWeight: 700, letterSpacing: 0.4 }}>LEGEND</span>
+              <span>
+                <span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(0,168,107,0.18)', borderRadius: 2, marginRight: 4 }} />
+                Above 100 (growth)
+              </span>
+              <span>
+                <span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(217,79,61,0.18)', borderRadius: 2, marginRight: 4 }} />
+                Below 100 (decline)
+              </span>
+              <span>
+                <span style={{ display: 'inline-block', width: 10, height: 10, background: 'transparent', border: '1px solid #D6E0EF', borderRadius: 2, marginRight: 4 }} />
+                100 = baseline
+              </span>
+              <span>
+                🔗 <span style={{ color: '#1D4ED8' }}>Live from Buyer's Input</span> — read-only here, edit there
+              </span>
+              {/* User, 2026-09-26: GM / RETAIL stay editable with every month - BIS doesn't cover them, so the
+                  "hide months BIS hasn't recorded" rule applies to KIDS / LADIES / MENS only. */}
+              {data?.division && !['KIDS', 'LADIES', 'MENS'].includes(String(data.division).toUpperCase()) && (
+                <span>
+                  Buyer's Input covers KIDS, LADIES and MENS only — every {String(data.division).toUpperCase()} month is entered here
+                </span>
+              )}
+              <span style={{ fontStyle: 'italic' }}>
+                Click a P1/P2 header to fill entire column
+              </span>
+            </div>
+          </details>
         </div>
 
         {/* Buyer Upload Panel */}
@@ -617,39 +626,6 @@ export default function DepartmentGrowthMatrix() {
               showing {filtered.length} of {depts.length}
             </span>
           )}
-        </div>
-
-        {/* Legend */}
-        <div style={{
-          padding: '8px 20px', borderBottom: `1px solid ${theme.border}`,
-          display: 'flex', gap: 18, alignItems: 'center', fontSize: 11,
-        }}>
-          <span style={{ color: theme.textMuted, fontWeight: 600, letterSpacing: 0.4 }}>LEGEND</span>
-          <span style={{ color: theme.textMuted }}>
-            <span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(0,168,107,0.18)', borderRadius: 2, marginRight: 4 }} />
-            Above 100 (growth)
-          </span>
-          <span style={{ color: theme.textMuted }}>
-            <span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(217,79,61,0.18)', borderRadius: 2, marginRight: 4 }} />
-            Below 100 (decline)
-          </span>
-          <span style={{ color: theme.textMuted }}>
-            <span style={{ display: 'inline-block', width: 10, height: 10, background: 'transparent', border: '1px solid #D6E0EF', borderRadius: 2, marginRight: 4 }} />
-            100 = baseline
-          </span>
-          <span style={{ color: theme.textMuted }}>
-            🔗 <span style={{ color: '#1D4ED8' }}>Live from Buyer's Input</span> — read-only here, edit there
-          </span>
-          {/* User, 2026-09-26: GM / RETAIL stay editable with every month - BIS doesn't cover them, so the
-              "hide months BIS hasn't recorded" rule applies to KIDS / LADIES / MENS only. */}
-          {data?.division && !['KIDS', 'LADIES', 'MENS'].includes(String(data.division).toUpperCase()) && (
-            <span style={{ color: theme.textMuted }}>
-              Buyer's Input covers KIDS, LADIES and MENS only — every {String(data.division).toUpperCase()} month is entered here
-            </span>
-          )}
-          <span style={{ marginLeft: 'auto', color: theme.textMuted, fontStyle: 'italic' }}>
-            Click a P1/P2 header to fill entire column
-          </span>
         </div>
 
         {loading ? (

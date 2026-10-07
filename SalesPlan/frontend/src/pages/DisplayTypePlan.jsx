@@ -172,11 +172,8 @@ export default function DisplayTypePlan() {
   return (
     <div style={{ padding: '28px 32px', minHeight: '100vh', background: theme.bg }}>
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: theme.textPrimary, margin: 0 }}>Display Type Plan</h1>
-        <p style={{ fontSize: 13, color: theme.textMuted, margin: '6px 0 0 0' }}>
-          Store × Dept × MRP × <strong>Table / Non-Table</strong> → ₹L plan and unit quantity
-        </p>
+      <div className="sp-sub">
+        Store × Dept × MRP × <strong>Table / Non-Table</strong> → ₹L plan and unit quantity
       </div>
 
       {/* System status strip */}

@@ -153,11 +153,8 @@ export default function SorDeviation() {
   return (
     <div style={{ padding: '28px 32px', minHeight: '100vh', background: theme.bg }}>
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: theme.textPrimary, margin: 0 }}>SOR Deviation</h1>
-        <p style={{ fontSize: 13, color: theme.textMuted, margin: '6px 0 0 0' }}>
-          Summer · Occasional · Regular — Sales Plan × Stock PPO averaging &amp; reapportionment
-        </p>
+      <div className="sp-sub">
+        Summer · Occasional · Regular — Sales Plan × Stock PPO averaging &amp; reapportionment
       </div>
 
       {/* Sync panel - same layout as PW/W: both files synced from the folder, block read from their month columns */}
@@ -178,15 +175,20 @@ export default function SorDeviation() {
               </div>
             )
           })}
-          <div style={{ fontSize: 11, color: theme.textMuted }}>
-            Columns: ATTRIBUTE-1 | DEPARTMENT | ARTICLE NAME | FINAL MRP | one column per TY month (cont %) — both files, same months
-          </div>
+          <details className="sp-fold">
+            <summary style={{ fontSize: 11 }}>File columns</summary>
+            <div style={{ fontSize: 11, color: theme.textMuted, paddingLeft: 14 }}>
+              Columns: ATTRIBUTE-1 | DEPARTMENT | ARTICLE NAME | FINAL MRP | one column per TY month (cont %) — both files, same months
+            </div>
+          </details>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button onClick={loadFiles} style={{
-            padding: '7px 16px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-            background: 'transparent', border: `1px solid ${theme.border}`, color: theme.textSecondary,
-          }}>Refresh</button>
+          <details className="sp-menu">
+            <summary>Data ▾</summary>
+            <div className="sp-menu-pop">
+              <button onClick={loadFiles}>Refresh</button>
+            </div>
+          </details>
           <button onClick={syncFiles} disabled={syncing || !(files?.plan?.file_found && files?.ppo?.file_found)} style={{
             padding: '7px 16px', borderRadius: 7, fontSize: 12, fontWeight: 700, border: 'none',
             cursor: syncing || !(files?.plan?.file_found && files?.ppo?.file_found) ? 'not-allowed' : 'pointer',

@@ -51,7 +51,6 @@ export default function MrpImport() {
 
       <div style={{ marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: theme.textPrimary }}>Integrated Buyer's Input</h1>
           <span style={{
             fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 4, letterSpacing: 0.6,
             background: `${alpha('var(--st-btn,#A8CBB7)','18')}`, color: theme.primary, border: `1px solid ${alpha('var(--st-btn-hover,#95BFA7)','33')}`,

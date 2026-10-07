@@ -185,10 +185,9 @@ export default function SyncEngine() {
       <style>{`@keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
 
       {/* ── Header ── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 20 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: theme.textPrimary }}>Sales Sync</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: theme.textMuted }}>
+          <p style={{ margin: 0, fontSize: 13, color: theme.textMuted }}>
             Pushed automatically: the nightly data-lake sync (05:00) re-runs the Calendarisation app's reindex and
             saves these tables — nothing to import or sync here. Sales Plan's actuals are the department-wise tables below.
           </p>

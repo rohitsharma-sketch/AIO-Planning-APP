@@ -40,6 +40,36 @@ export default function App() {
     document.body.style.color = theme.textPrimary
   }, [])
 
+  // <details class="sp-menu|sp-info"> popovers (index.css): an outside click, a click on a menu item, or Escape
+  // closes them; Escape hands focus back to the summary.
+  useEffect(() => {
+    const SEL = 'details.sp-menu[open], details.sp-info[open]'
+    const onDown = e => {
+      const keep = e.target.closest?.('details.sp-menu, details.sp-info')
+      document.querySelectorAll(SEL).forEach(d => { if (d !== keep) d.open = false })
+    }
+    const onClick = e => {
+      const item = e.target.closest?.('details.sp-menu > .sp-menu-pop > button, details.sp-menu > .sp-menu-pop > a')
+      if (item) item.closest('details').open = false
+    }
+    const onKey = e => {
+      if (e.key !== 'Escape') return
+      const open = [...document.querySelectorAll(SEL)]
+      if (!open.length) return
+      const back = open.find(d => d.contains(document.activeElement)) || open[open.length - 1]
+      open.forEach(d => { d.open = false })
+      back.querySelector('summary')?.focus()
+    }
+    document.addEventListener('pointerdown', onDown)
+    document.addEventListener('click', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onDown)
+      document.removeEventListener('click', onClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [])
+
   return (
     <BrowserRouter basename={basename}>
       <TopBar />

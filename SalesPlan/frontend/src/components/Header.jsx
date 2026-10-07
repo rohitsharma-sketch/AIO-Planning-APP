@@ -19,6 +19,7 @@ const TITLES = [
   ['/deviation/sor', 'MRP Plan · SOR Deviation'],
   ['/display-type', 'Display Type Plan'],
   ['/sync', 'Sales Sync'],
+  ['/reconciliation', 'Reconciliation'],
 ]
 
 // Page header - same navy as the sidebar, so the chrome reads as one frame

@@ -82,21 +82,19 @@ export default function DivisionPlan() {
                 </select>
               </label>
             )}
-            <button style={btnStyle(theme.surfaceAlt, theme.primary)} onClick={load}>↺ Refresh</button>
             <button style={btnStyle(theme.accent)} onClick={exportCSV}>⬇ Export CSV</button>
+            <details className="sp-menu">
+              <summary>Data ▾</summary>
+              <div className="sp-menu-pop">
+                <button onClick={load}>↺ Refresh</button>
+              </div>
+            </details>
           </div>
 
-          <div style={{ display: 'flex', gap: 16, marginBottom: 22 }}>
-            {[
-              { label: 'LY Base MAMJ', value: `₹ ${Cr(cfg.total_ly)} Cr`, title: `₹ ${L(cfg.total_ly)} L`, color: theme.textPrimary },
-              { label: 'Plan MAMJ', value: `₹ ${Cr(cfg.total_plan)} Cr`, title: `₹ ${L(cfg.total_plan)} L`, color: theme.primary },
-              { label: 'Plan Growth', value: pct(totalGrowth), color: theme.accent },
-            ].map(c => (
-              <div key={c.label} title={c.title} style={{ ...card, flex: 1, padding: '18px 22px' }}>
-                <div style={{ fontSize: 12, color: theme.textMuted, fontWeight: 600, letterSpacing: 0.5, marginBottom: 6 }}>{c.label.toUpperCase()}</div>
-                <div style={{ fontSize: 26, fontWeight: 700, color: c.color }}>{c.value}</div>
-              </div>
-            ))}
+          <div className="sp-slim" style={{ marginBottom: 18 }}>
+            <span title={`₹ ${L(cfg.total_ly)} L`}>LY Base MAMJ <b>₹ {Cr(cfg.total_ly)} Cr</b></span>
+            <span title={`₹ ${L(cfg.total_plan)} L`}>Plan MAMJ <b style={{ color: theme.primary }}>₹ {Cr(cfg.total_plan)} Cr</b></span>
+            <span>Plan Growth <b style={{ color: theme.accent }}>{pct(totalGrowth)}</b></span>
           </div>
 
           <div style={{ ...card, marginBottom: 24, overflow: 'hidden' }}>
@@ -195,9 +193,8 @@ export default function DivisionPlan() {
               </div>
             )
           })()}
-          <div style={{ fontSize: 13, fontWeight: 600, color: theme.textMuted, letterSpacing: 0.7, textTransform: 'uppercase', marginBottom: 14 }}>
-            Monthly Plan by Division
-          </div>
+          <details className="sp-fold">
+          <summary style={{ textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 10 }}>Monthly Plan by Division (charts)</summary>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 18 }}>
             {cfg.divisions.map(d => (
               <div key={d.division_name} style={{ ...card, padding: '16px 18px' }}>
@@ -220,6 +217,7 @@ export default function DivisionPlan() {
               </div>
             ))}
           </div>
+          </details>
         </>)}
       </div>
     </div>

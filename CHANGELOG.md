@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### Sales Plan: decluttered (suite declutter 8 of 8)
+- **Asked (user):** suite declutter ("check sales plan too in this process").
+- **Moved (handlers / labels unchanged; menus are native details, always in the DOM, Esc returns focus):** Growth Matrix - ↑ Buyer Input, Sync from Buyer's Input Sheet, ↺ Reset to 100 [danger] -> "Matrix tools ▾", legend -> ⓘ, ▶ Generate Base Plan primary; Department Master - Load AOP division targets + ↓ Export -> "Data ▾", AOP tiles one line, attribute chips folded; New Depts - Clear [danger, confirm kept] moved away from Save & Apply into "⋯"; Attribute Correction - Compare AOP + Revert to Original [danger] -> "More ▾"; PW/W - Refresh -> "Data ▾", only the next-step run button shows (others in "⋯"); SOR - Refresh -> "Data ▾"; MRP Output - Deviations + Export CSV -> "More ▾"; Division Plan - Refresh -> "Data ▾", charts folded.
+- **Quieter:** 13 duplicate in-page titles removed (the header already titles every page; subtitles kept), Reconciliation got its missing header title; Final Results pipeline card -> breadcrumb, tiles -> one line, Department View filters -> "Filters" with chips, Cluster KPI row keeps TY / LY / Growth / Depts; Base Correction 12 -> 7 default columns + "+ Context columns" (`sp.baseCorr.ctxCols`); MRP help column -> ⓘ; sidebar Plan Snapshot collapsed by default (`sp.snapshotOpen`). Dead code removed (grep-proven): ContribBar, PipelineNode / Arrow, unused Link import.
+- Note: "Reset to 100" and "Revert to Original" had no confirm before and still have none (re-parenting only).
+- **Checks:** build OK; built page walked through all 16 sidebar pages - every page renders, no script errors (only empty-API responses without a backend), menus present as planned.
+
 ### AOP Forecaster: decluttered (suite declutter 7 of 8)
 - **Asked (user):** suite declutter.
 - **Moved:** Results - store-type / division / month chips -> "Filters ▾" with removable chips on one line; Base source + Data labels -> "View ▾"; Unlock [confirm kept] + Download Excel -> "Plan ▾" (Promote / Locked to Planning stay visible). Review - "Include flat detail sheet" -> "Run options ▾"; month chips -> "Months · N of 13 ▾"; per-month AOP override paragraphs -> one expandable line; store tiles -> one line; help texts -> tooltips. Store Master / AOP Overrides - Template + Import -> "File ▾"; Tag / Cluster / Region / Grade filters behind "Filters" with chips; read-only columns behind "+ Context columns" (`aop.storeMaster.contextCols`); Ref Store Mapping Change Log -> "⋯". Landing rows: Rename / ✕ on hover or keyboard focus (Continue latest kept). Configure: one "Continue from database" + "Edit Growth % / NSO / AOP" link.

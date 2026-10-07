@@ -8,6 +8,8 @@ import { currentEngineKey, advancePipeline } from '../pipelineState'
 const CELL = { fontFamily: theme.fontMono, fontSize: 12, textAlign: 'right', padding: '5px 10px', whiteSpace: 'nowrap' }
 const HDR  = { ...CELL, fontSize: 11, color: theme.textMuted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }
 
+const CTX_COLS = ['Zone', 'Grade', 'LY Month', 'Benchmark', 'Method']
+
 const DIV_COLOR = {
   KIDS: '#C85A12', LADIES: '#7420B8', MENS: '#077A4A', GM: '#1E54C0', RETAIL: '#B22620',
 }
@@ -23,6 +25,9 @@ export default function BaseCorrection() {
   const [filterSsg, setFilterSsg] = useState(new Set())    // empty = ALL
   const [searchDept, setSearchDept] = useState('')
   const [msg, setMsg]             = useState('')
+  // Zone / Grade / LY Month / Benchmark / Method are context - hidden by default, remembered per browser
+  const [showCtx, setShowCtxRaw]  = useState(() => { try { return localStorage.getItem('sp.baseCorr.ctxCols') === '1' } catch { return false } })
+  const setShowCtx = v => { setShowCtxRaw(v); try { localStorage.setItem('sp.baseCorr.ctxCols', v ? '1' : '0') } catch { /* storage blocked */ } }
 
   const flash = (text) => { setMsg(text); setTimeout(() => setMsg(''), 5000) }
 
@@ -95,13 +100,17 @@ export default function BaseCorrection() {
     <div style={{ padding: '28px 32px', minHeight: '100vh', background: theme.surfaceAlt }}>
       {inPipeline && <PipelineBanner currentKey="base-correction" />}
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: theme.textPrimary }}>Base Correction</h1>
-            <p style={{ margin: '6px 0 0', fontSize: 13, color: theme.textMuted }}>
-              Finds active departments with TY plan = 0. Fills using zone × grade peer benchmark: Corrected TY = (LY + (MAX+AVG)/2) ÷ 2.
-            </p>
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div className="sp-sub" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+            Finds active departments with TY plan = 0 and fills them from the zone × grade peer benchmark.
+            <details className="sp-info sp-left">
+              <summary aria-label="Source and formula">ⓘ</summary>
+              <div className="sp-menu-pop">
+                Source: attr_corrected_plan.json if available, else final_dept_plan.json (post New Depts).
+                Only active-plan months are scanned. Fix formula: <strong>col3 = (MAX + AVG of zone×grade SSG peers) ÷ 2 &nbsp;→&nbsp; Corrected TY = (LY + col3) ÷ 2</strong>.
+              </div>
+            </details>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             {msg && <span style={{ fontSize: 12, color: theme.accent }}>{msg}</span>}
@@ -146,14 +155,6 @@ export default function BaseCorrection() {
             </button>
           </div>
         </div>
-
-        <div style={{ marginTop: 14, padding: '10px 16px', background: theme.surface, borderRadius: 8, border: `1px solid ${theme.border}`, fontSize: 12, color: theme.textMuted, display: 'flex', gap: 8 }}>
-          <span style={{ color: theme.accent, fontWeight: 700 }}>ℹ</span>
-          <span>
-            Source: attr_corrected_plan.json if available, else final_dept_plan.json (post New Depts).
-            Only active-plan months are scanned. Fix formula: <strong>col3 = (MAX + AVG of zone×grade SSG peers) ÷ 2 &nbsp;→&nbsp; Corrected TY = (LY + col3) ÷ 2</strong>.
-          </span>
-        </div>
       </div>
 
       {/* No data yet */}
@@ -174,7 +175,8 @@ export default function BaseCorrection() {
       {/* Summary cards */}
       {checkData && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 12, marginBottom: 20 }}>
+          {/* Summary + division breakdown - one slim line */}
+          <div className="sp-slim" style={{ marginBottom: 16, padding: '0 4px' }}>
             {[
               { label: 'Total Gaps', value: checkData.gap_count, color: checkData.gap_count > 0 ? theme.danger : theme.success },
               { label: 'SSG Gaps', value: (checkData.gaps || []).filter(g => g.is_ssg).length, color: theme.success },
@@ -182,28 +184,16 @@ export default function BaseCorrection() {
               { label: 'LY at Risk (₹L)', value: checkData.total_ly_at_risk?.toFixed(2), color: theme.danger },
               { label: 'Corrected TY (₹L)', value: checkData.total_corrected_ty?.toFixed(2), color: theme.success },
             ].map(c => (
-              <div key={c.label} style={{ background: theme.surface, borderRadius: 10, padding: '14px 16px', border: `1px solid ${theme.border}` }}>
-                <div style={{ fontSize: 11, color: theme.textMuted, marginBottom: 4 }}>{c.label}</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: c.color, fontFamily: theme.fontMono }}>{c.value}</div>
-              </div>
+              <span key={c.label}>{c.label} <b style={{ color: c.color, fontFamily: theme.fontMono }}>{c.value}</b></span>
             ))}
+            {Object.keys(checkData.by_division || {}).length > 0 && (
+              <span>
+                {Object.entries(checkData.by_division).sort((a, b) => b[1] - a[1]).map(([div, cnt], i) => (
+                  <span key={div} style={{ color: DIV_COLOR[div] || theme.textMuted, fontWeight: 600 }}>{i ? ' · ' : ''}{div}: {cnt}</span>
+                ))}
+              </span>
+            )}
           </div>
-
-          {/* Division breakdown pills */}
-          {Object.keys(checkData.by_division || {}).length > 0 && (
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-              {Object.entries(checkData.by_division).sort((a, b) => b[1] - a[1]).map(([div, cnt]) => (
-                <div key={div} style={{
-                  padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-                  background: `${alpha(DIV_COLOR[div] || theme.border,'22')}`,
-                  color: DIV_COLOR[div] || theme.textMuted,
-                  border: `1px solid ${DIV_COLOR[div] || theme.border}`,
-                }}>
-                  {div}: {cnt}
-                </div>
-              ))}
-            </div>
-          )}
 
           {checkData.gap_count === 0 ? (
             <div style={{ padding: 32, background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`, textAlign: 'center' }}>
@@ -247,6 +237,10 @@ export default function BaseCorrection() {
                   width={150}
                 />
                 <span style={{ fontSize: 11, color: theme.textMuted }}>Showing {filteredGaps.length} of {allGaps.length}</span>
+                <button onClick={() => setShowCtx(!showCtx)} aria-pressed={showCtx}
+                  style={{ marginLeft: 'auto', background: 'none', border: `1px solid ${theme.border}`, color: theme.textSecondary, borderRadius: 7, padding: '5px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                  {showCtx ? '− Context columns' : '+ Context columns'}
+                </button>
               </div>
 
               {/* Review table */}
@@ -255,7 +249,8 @@ export default function BaseCorrection() {
                   <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
                     <thead>
                       <tr style={{ background: theme.surfaceAlt, borderBottom: `2px solid ${theme.border}` }}>
-                        {['Store','Type','Zone','Grade','Division','Department','TY Month','LY Month','LY Actuals','Benchmark','Corrected TY','Method'].map(h => (
+                        {['Store','Type','Zone','Grade','Division','Department','TY Month','LY Month','LY Actuals','Benchmark','Corrected TY','Method']
+                          .filter(h => showCtx || !CTX_COLS.includes(h)).map(h => (
                           <th key={h} style={{ ...HDR, padding: '10px 12px', textAlign: ['Store','Zone','Division','Department','Method'].includes(h) ? 'left' : 'right' }}>{h}</th>
                         ))}
                       </tr>
@@ -273,24 +268,24 @@ export default function BaseCorrection() {
                                 color: g.is_ssg ? theme.success : theme.accent,
                               }}>{g.is_ssg ? (g.store === 'ANG' ? 'SSG - ANG' : 'SSG') : 'NSO'}</span>
                             </td>
-                            <td style={{ ...CELL, textAlign: 'left', color: theme.textMuted, fontSize: 11 }}>{g.zone || '—'}</td>
-                            <td style={{ ...CELL, color: theme.textMuted, fontSize: 11 }}>{g.grade || '—'}</td>
+                            {showCtx && <td style={{ ...CELL, textAlign: 'left', color: theme.textMuted, fontSize: 11 }}>{g.zone || '—'}</td>}
+                            {showCtx && <td style={{ ...CELL, color: theme.textMuted, fontSize: 11 }}>{g.grade || '—'}</td>}
                             <td style={{ ...CELL, textAlign: 'left' }}>
                               <span style={{ color: divColor, fontWeight: 600 }}>{g.division}</span>
                             </td>
                             <td style={{ ...CELL, textAlign: 'left', color: theme.textPrimary }}>{g.department}</td>
                             <td style={{ ...CELL, color: theme.accent }}>{g.ty_month}</td>
-                            <td style={{ ...CELL, color: theme.textMuted }}>{g.ly_month}</td>
+                            {showCtx && <td style={{ ...CELL, color: theme.textMuted }}>{g.ly_month}</td>}
                             <td style={{ ...CELL, color: theme.danger }}>{g.ly.toFixed(2)}</td>
-                            <td style={{ ...CELL, color: theme.textMuted }}>{g.col3_benchmark?.toFixed(2) ?? '—'}</td>
+                            {showCtx && <td style={{ ...CELL, color: theme.textMuted }}>{g.col3_benchmark?.toFixed(2) ?? '—'}</td>}
                             <td style={{ ...CELL, color: theme.success, fontWeight: 600 }}>{g.corrected_ty.toFixed(2)}</td>
-                            <td style={{ ...CELL, textAlign: 'left', color: theme.textMuted, fontSize: 11 }}>{g.method}</td>
+                            {showCtx && <td style={{ ...CELL, textAlign: 'left', color: theme.textMuted, fontSize: 11 }}>{g.method}</td>}
                           </tr>
                         )
                       })}
                       {filteredGaps.length > 500 && (
                         <tr>
-                          <td colSpan={12} style={{ padding: '10px 16px', textAlign: 'center', color: theme.textMuted, fontSize: 12 }}>
+                          <td colSpan={showCtx ? 12 : 7} style={{ padding: '10px 16px', textAlign: 'center', color: theme.textMuted, fontSize: 12 }}>
                             Showing first 500 rows. Export for full data.
                           </td>
                         </tr>

@@ -14,43 +14,6 @@ const DIV_COLOR = {
   KIDS: '#C85A12', LADIES: '#7420B8', MENS: '#077A4A', GM: '#1E54C0', RETAIL: '#B22620',
 }
 
-// ── Pipeline node ──────────────────────────────────────────────────────────────
-function PipelineNode({ label, done, active, optional }) {
-  const bg    = done   ? (active ? theme.accent : `${alpha(theme.success,'22')}`) : theme.surfaceAlt
-  const border = done  ? (active ? theme.accent : theme.success)         : theme.border
-  const color  = done  ? (active ? '#fff'       : theme.success)         : theme.textMuted
-  return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 130,
-    }}>
-      <div style={{
-        padding: '8px 16px', borderRadius: 8, border: `1px solid ${border}`,
-        background: bg, color, fontSize: 12, fontWeight: 600, textAlign: 'center',
-        position: 'relative',
-      }}>
-        {done ? '✓ ' : ''}{label}
-        {optional && (
-          <span style={{
-            position: 'absolute', top: -8, right: -6,
-            fontSize: 9, background: theme.surfaceUp, color: theme.textMuted,
-            border: `1px solid ${theme.border}`, borderRadius: 4, padding: '1px 4px',
-          }}>opt</span>
-        )}
-      </div>
-      {!done && <div style={{ fontSize: 10, color: theme.textMuted }}>not run</div>}
-    </div>
-  )
-}
-
-function Arrow({ active }) {
-  return (
-    <div style={{
-      fontSize: 18, color: active ? theme.success : theme.textMuted,
-      alignSelf: 'center', marginBottom: 16,
-    }}>→</div>
-  )
-}
-
 export default function FinalResults() {
   const [data, setData]     = useState(null)
   const [loading, setLoading] = useState(true)
@@ -170,75 +133,43 @@ export default function FinalResults() {
   return (
     <div style={{ padding: '28px 32px', minHeight: '100vh', background: theme.surfaceAlt }}>
 
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: theme.textPrimary }}>Final Results</h1>
-        <p style={{ margin: '6px 0 0', fontSize: 13, color: theme.textMuted }}>
-          Live view of the most advanced dept plan available. Reflects all engines that have run.
-        </p>
+      <div className="sp-sub">
+        Live view of the most advanced dept plan available. Reflects all engines that have run.
       </div>
 
-      {/* Pipeline pathway */}
-      <div style={{
-        background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`,
-        padding: '20px 24px', marginBottom: 20,
+      {/* Pipeline pathway - one breadcrumb line */}
+      <div className="sp-slim" style={{
+        background: theme.surface, borderRadius: 10, border: `1px solid ${theme.border}`,
+        padding: '9px 16px', marginBottom: 10, gap: '4px 10px',
       }}>
-        <div style={{ fontSize: 11, color: theme.textMuted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 16 }}>
-          Pipeline Pathway
-        </div>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-          {/* Master Setup — always the starting node, synced from Integrated Buyer's Input */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 140 }}>
-            <div style={{
-              padding: '8px 14px', borderRadius: 8,
-              border: `1px solid ${buyerSynced ? theme.success : theme.border}`,
-              background: buyerSynced ? `${alpha(theme.success,'18')}` : theme.surfaceAlt,
-              color: buyerSynced ? theme.success : theme.textMuted,
-              fontSize: 12, fontWeight: 600, textAlign: 'center',
-            }}>
-              ✓ Master Setup
-            </div>
-            <div style={{ fontSize: 10, color: buyerSynced ? theme.success : theme.textMuted, textAlign: 'center' }}>
-              {buyerSynced ? 'Buyer\'s Input ↑' : 'No MRP sync'}
-            </div>
-          </div>
-          <Arrow active />
-          <PipelineNode label="New Depts"        done={pipeline.new_depts}      active={active_source === 'final_dept_plan.json'} optional />
-          <Arrow active={pipeline.new_depts} />
-          <PipelineNode label="Attr Correction"  done={pipeline.attr_correction} active={active_source === 'attr_corrected_plan.json'} optional />
-          <Arrow active={pipeline.attr_correction} />
-          <PipelineNode label="Base Correction"  done={pipeline.base_correction} active={active_source === 'base_corrected_plan.json'} optional />
-          <div style={{ marginLeft: 16, alignSelf: 'center', marginBottom: 16 }}>
-            <div style={{
-              padding: '8px 14px', borderRadius: 8, background: `${alpha(theme.accent,'18')}`,
-              border: `1px solid ${theme.accent}`, fontSize: 11, color: theme.accent, fontWeight: 600,
-            }}>
-              Active source:<br />
-              <span style={{ fontFamily: theme.fontMono, fontSize: 10, color: theme.textPrimary }}>{active_source}</span>
-            </div>
-          </div>
-        </div>
-        <div style={{
-          marginTop: 4, fontSize: 12, color: theme.textMuted,
-          borderTop: `1px solid ${theme.border}`, paddingTop: 12,
-        }}>
-          <span style={{ color: theme.accent, fontWeight: 600 }}>Engines run: </span>{remark}
-        </div>
+        <span style={{ color: theme.textMuted, fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6 }}>Pipeline</span>
+        {/* Master Setup — always the starting node, synced from Integrated Buyer's Input */}
+        <span style={{ color: buyerSynced ? theme.success : theme.textMuted, fontWeight: 600 }}>
+          ✓ Master Setup <span style={{ fontWeight: 400, fontSize: 11 }}>({buyerSynced ? 'Buyer\'s Input ↑' : 'No MRP sync'})</span>
+        </span>
+        {[
+          ['New Depts',       pipeline.new_depts,       'final_dept_plan.json'],
+          ['Attr Correction', pipeline.attr_correction, 'attr_corrected_plan.json'],
+          ['Base Correction', pipeline.base_correction, 'base_corrected_plan.json'],
+        ].map(([label, done, src]) => (
+          <span key={label}>
+            <span style={{ color: done ? theme.success : theme.textMuted }}>→ </span>
+            <span style={{ fontWeight: active_source === src ? 700 : 600, color: done ? (active_source === src ? theme.accent : theme.success) : theme.textMuted }}>
+              {done ? '✓ ' : ''}{label}
+            </span>
+            {!done && <span style={{ fontSize: 11 }}> (not run)</span>}
+          </span>
+        ))}
+        <span style={{ marginLeft: 'auto' }}>Active source: <b style={{ fontFamily: theme.fontMono, fontSize: 11 }}>{active_source}</b></span>
+        <span style={{ flexBasis: '100%', fontSize: 12 }}><span style={{ color: theme.accent, fontWeight: 600 }}>Engines run: </span>{remark}</span>
       </div>
 
-      {/* Summary cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
-        {[
-          { label: 'Total Stores',   value: total_stores, color: theme.textPrimary },
-          { label: 'SSG Stores',     value: ssg_stores,   color: theme.success },
-          { label: 'NSO Stores',     value: nso_stores,   color: theme.accent },
-          { label: 'Total TY (₹L)',  value: total_ty?.toFixed(2), color: theme.primary },
-        ].map(c => (
-          <div key={c.label} style={{ background: theme.surface, borderRadius: 10, padding: '14px 16px', border: `1px solid ${theme.border}` }}>
-            <div style={{ fontSize: 11, color: theme.textMuted, marginBottom: 4 }}>{c.label}</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: c.color, fontFamily: theme.fontMono }}>{c.value}</div>
-          </div>
-        ))}
+      {/* Summary - one slim line */}
+      <div className="sp-slim" style={{ marginBottom: 16, padding: '0 4px' }}>
+        <span>Total Stores <b>{total_stores}</b></span>
+        <span>SSG Stores <b style={{ color: theme.success }}>{ssg_stores}</b></span>
+        <span>NSO Stores <b style={{ color: theme.accent }}>{nso_stores}</b></span>
+        <span>Total TY (₹L) <b style={{ color: theme.primary, fontFamily: theme.fontMono }}>{total_ty?.toFixed(2)}</b></span>
       </div>
 
       {/* View mode toggle */}
@@ -346,7 +277,7 @@ export default function FinalResults() {
       {viewMode === 'dept' && (
         <>
           {/* Dept view filters */}
-          <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
             {/* Division pills */}
             <div style={{ display: 'flex', gap: 6 }}>
               {allDivs.map(d => (
@@ -361,6 +292,9 @@ export default function FinalResults() {
 
             <div style={{ width: 1, height: 22, background: theme.border }} />
 
+            <details className="sp-fold" style={{ paddingTop: 2 }}>
+              <summary>Filters</summary>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '6px 0' }}>
             {/* Dept slicer */}
             {!NODEPT.includes(deptDiv) && (
               <SearchSlicer
@@ -402,8 +336,36 @@ export default function FinalResults() {
                 <span style={{ fontSize: 10, background: theme.danger, color: '#fff', borderRadius: 10, padding: '1px 6px', fontWeight: 700 }}>{degrowthCount}</span>
               )}
             </button>
+            </div>
+            </details>
 
-            <span style={{ fontSize: 11, color: theme.textMuted, marginLeft: 4 }}>
+            {/* Active filters stay visible as removable chips */}
+            {!NODEPT.includes(deptDiv) && deptFilters.size > 0 && (
+              <span className="sp-chip" style={{ marginTop: 3 }}>
+                {deptFilters.size <= 2 ? [...deptFilters].join(', ') : `${deptFilters.size} departments`}
+                <button onClick={() => setDeptFilters(new Set())} aria-label="Clear department filter">×</button>
+              </span>
+            )}
+            {deptStoreType !== 'ALL' && (
+              <span className="sp-chip" style={{ marginTop: 3 }}>
+                {deptStoreType} only
+                <button onClick={() => setDeptStoreType('ALL')} aria-label="Clear store type filter">×</button>
+              </span>
+            )}
+            {deptStoreFilters.size > 0 && (
+              <span className="sp-chip" style={{ marginTop: 3 }}>
+                {deptStoreFilters.size <= 2 ? [...deptStoreFilters].join(', ') : `${deptStoreFilters.size} stores`}
+                <button onClick={() => setDeptStoreFilters(new Set())} aria-label="Clear store filter">×</button>
+              </span>
+            )}
+            {showDegrowthOnly && (
+              <span className="sp-chip" style={{ marginTop: 3, background: '#FEF3F2', color: theme.danger }}>
+                Degrowth only
+                <button onClick={() => setShowDegrowthOnly(false)} aria-label="Clear degrowth filter">×</button>
+              </span>
+            )}
+
+            <span style={{ fontSize: 11, color: theme.textMuted, marginLeft: 4, marginTop: 5 }}>
               {deptRows.length} rows
             </span>
           </div>
@@ -569,9 +531,6 @@ export default function FinalResults() {
                 {/* KPI row */}
                 <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
                   {[
-                    { label: 'Cluster', value: activeCluster },
-                    { label: 'Division', value: clusterDiv, color: DIV_COLOR[clusterDiv] },
-                    { label: 'Month', value: clusterMonth },
                     { label: 'TY Total (₹L)', value: totalTY.toFixed(2), color: theme.primary },
                     { label: 'LY Total (₹L)', value: totalLY.toFixed(2), color: theme.textMuted },
                     { label: 'Growth', value: growthPct != null ? `${growthPct > 0 ? '+' : ''}${growthPct}%` : '—', color: growthPct < 0 ? theme.danger : theme.success },
@@ -579,7 +538,7 @@ export default function FinalResults() {
                   ].map(k => (
                     <div key={k.label} style={{
                       background: theme.surface, borderRadius: 8, padding: '10px 16px',
-                      border: `1px solid ${theme.border}`, flex: k.label === 'Cluster' ? 2 : 1,
+                      border: `1px solid ${theme.border}`, flex: 1,
                     }}>
                       <div style={{ fontSize: 10, color: theme.textMuted, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 3 }}>{k.label}</div>
                       <div style={{ fontSize: 15, fontWeight: 700, color: k.color || theme.textPrimary, fontFamily: theme.fontMono }}>{k.value ?? '—'}</div>
