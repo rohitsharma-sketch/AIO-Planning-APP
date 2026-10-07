@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### NSO Distributor: decluttered (suite declutter 4 of 7)
+- **Asked (user):** suite declutter.
+- File status shown once: tiles -> one summary line ("Required n/n · Optional n/n") that expands the tile grid (opens by itself when a required file is missing); duplicate Generate summary removed; folder message only for warnings. Duplicate h2 title dropped; one "Reset" next to Scan (resetAll, confirm kept) instead of two; AOP table wider with borderless inputs until hover / focus; current stage name next to the bar, stage pills in a collapsed details; Download XLSX as a text link (same handler). Removed unused SheetJS CDN script, clean(), MONTH_MAP, MONTHS, clearFolder(), updateSummary().
+- Fix found in the live check: a global `[hidden]{display:none!important}` - the summary button showed as an empty pill before any scan because its display rule beat the hidden attribute.
+- **Checks:** scripts parse, ids exist, confirm prompts kept; live on :8060.
+
 ### Listing / Delisting Analyser: decluttered (suite declutter 3 of 7)
 - **Asked (user):** suite declutter.
 - **Moved:** Change Events / Seasonality / Data & checks / Rules tabs -> "More ▾" (shows the open view's name; same tab-btn / data-mode). Suggestions: Division / Season category / Cluster / Severity -> Filters panel with removable chips; rule paragraph -> one line + "Full rules →"; row sub-lines removed (same facts are in the Why panel); funnel text -> tooltip. Change Events: Window + zero-sales flip -> Filters. By Department / By Store: Order + Cells -> "View ▾", one-line legend. Overview: 5 tiles -> clickable strip, top tables first, "Season windows now" and "By division" collapsed.

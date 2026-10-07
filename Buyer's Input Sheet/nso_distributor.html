@@ -7,7 +7,6 @@
 <title>NSO Plan Distributor</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* RS Planning suite look (2026-09-26): chrome + sand page + pastel buttons,
    colours from the suite theme picked on Landing (var(--st-*), sage fallback). */
@@ -38,14 +37,14 @@ body{font-family:var(--st-font-body,'Plus Jakarta Sans'),system-ui,sans-serif;ba
 @media(max-width:620px){.topbar .brand-sub{display:none}}
 
 /* layout */
-.wrap{max-width:1000px;margin:0 auto;padding:28px 0 64px}
-.page-hd{margin:0 0 18px}.page-hd h2{font-size:24px;font-weight:800;color:var(--top);letter-spacing:-.02em}
-.page-hd p{font-size:13.5px;color:var(--mu);margin-top:4px;line-height:1.55;max-width:640px}
+.wrap{max-width:1200px;margin:0 auto;padding:22px 0 64px}
+.page-hd{margin:0 0 14px}
+.page-hd p{font-size:12.5px;color:var(--mu);line-height:1.5}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 .section{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);box-shadow:0 1px 2px rgba(var(--st-ink-rgb,30,39,35),.04);margin-bottom:16px;overflow:hidden}
 .sec-head{padding:16px 20px 14px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:10px}
 .sec-num{width:26px;height:26px;border-radius:50%;background:var(--btn);color:var(--btn-t);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .sec-title{font-size:14.5px;font-weight:800;color:var(--txt)}
-.sec-sub{font-size:12px;color:var(--mu);margin-left:auto}
 .sec-body{padding:20px}
 
 /* folder row */
@@ -61,9 +60,22 @@ body{font-family:var(--st-font-body,'Plus Jakarta Sans'),system-ui,sans-serif;ba
 .btn-outline{background:var(--card);border:1px solid var(--bdr2);color:var(--sub)}
 .btn-outline:hover{border-color:var(--ac);color:var(--ac)}
 .btn-lg{height:44px;padding:0 28px;font-size:14px;font-weight:700}
+.btn-quiet{background:none;color:var(--mu);padding:0 10px;font-weight:600}
+.btn-quiet:hover{color:var(--ac);text-decoration:underline}
+.link-btn{background:none;border:none;padding:0;font:inherit;font-size:12.5px;font-weight:700;color:var(--ac);cursor:pointer;text-decoration:underline}
+.link-btn:hover{color:var(--ac-h)}
+
+/* the hidden attribute always wins - several rules here set display (e.g. .files-sum showed as an empty pill) */
+[hidden]{display:none!important}
+/* one-line file status - click to expand the tile grid (2026-10-07) */
+.files-sum{margin-top:12px;display:inline-flex;align-items:center;gap:8px;background:none;border:1px solid var(--bdr);border-radius:99px;padding:5px 12px;font:inherit;font-size:12.5px;font-weight:600;color:var(--sub);cursor:pointer}
+.files-sum:hover{border-color:var(--ac);color:var(--ac)}
+.files-sum .ok{color:var(--ok)} .files-sum .bad{color:var(--err)}
+.files-sum .caret{font-size:10px;color:var(--mu);transition:transform .15s}
+.files-sum[aria-expanded="true"] .caret{transform:rotate(180deg)}
 
 /* file grid — 3 cols */
-.file-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px}
+.file-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
 @media(max-width:640px){.file-grid{grid-template-columns:1fr 1fr}}
 
 /* file tile */
@@ -104,14 +116,19 @@ body{font-family:var(--st-font-body,'Plus Jakarta Sans'),system-ui,sans-serif;ba
 .aop-table tr:last-child td{border-bottom:none}
 .aop-table tr:hover td{background:var(--al)}
 .aop-table td.num{text-align:right}
-.aop-input{width:80px;border:1.5px solid var(--bdr2);border-radius:4px;padding:3px 6px;font-size:12px;font-family:inherit;text-align:right;background:var(--card);color:var(--txt);outline:none}
-.aop-input:focus{border-color:var(--ac);box-shadow:0 0 0 2px rgba(var(--st-accent-rgb,79,122,102),.15)}
+.aop-input{width:80px;border:1.5px solid transparent;border-radius:4px;padding:3px 6px;font-size:12px;font-family:inherit;text-align:right;background:transparent;color:var(--txt);outline:none}
+.aop-input:hover{border-color:var(--bdr2);background:var(--card)}
+.aop-input:focus{border-color:var(--ac);background:var(--card);box-shadow:0 0 0 2px rgba(var(--st-accent-rgb,79,122,102),.25)}
 .aop-total td{font-weight:700;background:var(--al)!important}
 .grade-badge{display:inline-block;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:700;background:var(--al);border:1px solid var(--am);color:var(--btn-t)}
 
 /* progress */
 .progress-wrap{display:none;margin-top:20px}
-.progress-track{height:10px;background:var(--bdr);border-radius:99px;overflow:hidden;margin-bottom:8px}
+.prog-bar-row{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.progress-track{flex:1;height:10px;background:var(--bdr);border-radius:99px;overflow:hidden}
+.prog-stage{font-size:12px;font-weight:700;color:var(--sub);white-space:nowrap;min-width:110px;text-align:right}
+.stage-details{margin-top:10px;font-size:12px;color:var(--mu)}
+.stage-details summary{cursor:pointer;width:max-content}
 .progress-fill{height:100%;width:0%;background:var(--ac);border-radius:99px;transition:width .4s ease;position:relative}
 .progress-fill.shim::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.3),transparent);background-size:200% 100%;animation:shim 1.5s infinite}
 @keyframes shim{0%{background-position:200% 0}100%{background-position:-200% 0}}
@@ -130,11 +147,6 @@ body{font-family:var(--st-font-body,'Plus Jakarta Sans'),system-ui,sans-serif;ba
 .error-box h3{font-size:13px;font-weight:700;color:var(--err);margin-bottom:6px}
 .error-box pre{font-size:11px;color:var(--err);white-space:pre-wrap;word-break:break-word;max-height:120px;overflow-y:auto}
 
-/* summary */
-.gen-summary{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:20px;font-size:12px}
-.gen-item{display:flex;align-items:center;gap:6px}
-.gen-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.gen-dot.ok{background:var(--ok)} .gen-dot.no{background:var(--bdr2)}
 .gen-actions{display:flex;gap:10px;align-items:center}
 .sep{height:1px;background:var(--bdr);margin:16px 0}
 .alert{font-size:12px;padding:10px 14px;border-radius:var(--r2);border:1px solid var(--am);background:var(--al);color:var(--btn-t);display:flex;align-items:flex-start;gap:8px}
@@ -153,14 +165,13 @@ code{background:rgba(var(--st-accent-rgb,79,122,102),.12);padding:1px 5px;border
 <script>document.getElementById('home-link').href='//'+location.hostname+':7800/';</script>
 
 <div class="wrap">
-<div class="page-hd"><h2>NSO Plan Distributor</h2><p>Scan a folder of NSO inputs, adjust the monthly AOP targets, then generate the store-level plan workbook.</p></div>
+<div class="page-hd"><p>Scan a folder of NSO inputs, adjust the monthly AOP targets, then generate the store-level plan workbook.</p></div>
 
 <!-- ── 1. Import Source ── -->
 <div class="section">
   <div class="sec-head">
     <div class="sec-num">1</div>
-    <div><div class="sec-title">Import Source</div></div>
-    <div class="sec-sub">Point to a folder — engine detects all files automatically</div>
+    <div><div class="sec-title" title="Point to a folder — engine detects all files automatically">Import Source</div></div>
   </div>
   <div class="sec-body">
     <div class="folder-row">
@@ -168,10 +179,11 @@ code{background:rgba(var(--st-accent-rgb,79,122,102),.12);padding:1px 5px;border
         placeholder="e.g. C:\Users\A9820\Downloads\NSO Distr" autocomplete="off"
         onkeydown="if(event.key==='Enter')scanFolder()">
       <button class="btn btn-ac" id="btn-scan" onclick="scanFolder()">Scan Folder</button>
-      <button class="btn btn-outline" id="btn-clr" onclick="clearFolder()" style="display:none">Reset</button>
+      <button class="btn btn-quiet" id="btn-clr" type="button" onclick="resetAll()" style="display:none">Reset</button>
     </div>
 
-    <!-- File status tiles — hidden until scan -->
+    <!-- One-line file status after a scan; click to show the tiles -->
+    <button type="button" class="files-sum" id="files-sum" aria-expanded="false" aria-controls="file-tiles" onclick="toggleTiles()" hidden></button>
     <div class="file-grid" id="file-tiles" style="display:none"></div>
 
     <div id="folder-msg"></div>
@@ -182,8 +194,7 @@ code{background:rgba(var(--st-accent-rgb,79,122,102),.12);padding:1px 5px;border
 <div class="section" id="sec-aop" style="display:none">
   <div class="sec-head">
     <div class="sec-num">2</div>
-    <div><div class="sec-title">NSO AOP Targets</div></div>
-    <div class="sec-sub">Edit monthly targets before generating</div>
+    <div><div class="sec-title" title="Edit monthly targets before generating">NSO AOP Targets</div></div>
   </div>
   <div class="sec-body">
     <div class="alert" id="aop-loading" style="display:none">⏳ Parsing NSO Details…</div>
@@ -198,16 +209,17 @@ code{background:rgba(var(--st-accent-rgb,79,122,102),.12);padding:1px 5px;border
     <div><div class="sec-title">Generate Plan</div></div>
   </div>
   <div class="sec-body">
-    <div class="gen-summary" id="gen-summary"></div>
     <div class="gen-actions">
       <button class="btn btn-ac btn-lg" id="btn-gen" onclick="generate()">Generate Plan ↗</button>
-      <button class="btn btn-outline" onclick="resetAll()">Reset All</button>
     </div>
 
     <div class="progress-wrap" id="prog-wrap">
       <div class="sep"></div>
-      <div class="progress-track">
-        <div class="progress-fill shim" id="prog-fill"></div>
+      <div class="prog-bar-row">
+        <div class="progress-track">
+          <div class="progress-fill shim" id="prog-fill"></div>
+        </div>
+        <span class="prog-stage" id="prog-stage"></span>
       </div>
       <div class="prog-row">
         <span id="prog-msg">Initialising…</span>
@@ -216,19 +228,22 @@ code{background:rgba(var(--st-accent-rgb,79,122,102),.12);padding:1px 5px;border
           <span id="prog-pct">0%</span>
         </span>
       </div>
-      <div class="stage-pills" id="stage-pills">
-        <div class="stage-pill" data-s="0">Parse files</div>
-        <div class="stage-pill" data-s="1">Exclusion rules</div>
-        <div class="stage-pill" data-s="2">Sales Plan</div>
-        <div class="stage-pill" data-s="3">Algorithm</div>
-        <div class="stage-pill" data-s="4">Build XLSX</div>
-      </div>
+      <details class="stage-details">
+        <summary>All stages</summary>
+        <div class="stage-pills" id="stage-pills">
+          <div class="stage-pill" data-s="0">Parse files</div>
+          <div class="stage-pill" data-s="1">Exclusion rules</div>
+          <div class="stage-pill" data-s="2">Sales Plan</div>
+          <div class="stage-pill" data-s="3">Algorithm</div>
+          <div class="stage-pill" data-s="4">Build XLSX</div>
+        </div>
+      </details>
     </div>
 
     <div class="result-box" id="result-box">
       <h3>✅ Plan generated successfully</h3>
       <p id="result-msg">Ready to download.</p>
-      <button class="btn btn-ac" onclick="downloadResult()">⬇ Download XLSX</button>
+      <button type="button" class="link-btn" onclick="downloadResult()">⬇ Download XLSX</button>
     </div>
     <div class="error-box" id="error-box">
       <h3>❌ Generation failed</h3>
@@ -260,9 +275,6 @@ const FILES = [
   {key:'apps_exclusion',label:'APPS Exclusion',      sub:'Store × Ref exclusion for APPS departments',   req:false, icon:'🚫'},
 ];
 
-const MONTH_MAP = {'2026-11':'NOV','2026-12':'DEC',
-  '2027-1':'JAN','2027-01':'JAN','2027-2':'FEB','2027-02':'FEB'};
-const MONTHS = ['NOV','DEC','JAN','FEB'];
 const STAGES = [20, 30, 72, 92, 100];
 
 // ── Folder scan ────────────────────────────────────────────────────
@@ -285,14 +297,12 @@ async function scanFolder() {
     document.getElementById('btn-clr').style.display = '';
     // Auto-parse NSO Details if found
     if (d.found.nso_details) loadNSOFromFolder(path, d.found.nso_details);
-    updateSummary();
   } catch(e) { showMsg('Network error: ' + e.message, 'err'); }
   finally { btn.disabled = false; btn.textContent = 'Scan Folder'; }
 }
 
 function renderTiles() {
   const g = document.getElementById('file-tiles');
-  g.style.display = 'grid';
   g.innerHTML = '';
 
   const req = FILES.filter(f => f.req);
@@ -315,17 +325,23 @@ function renderTiles() {
 
   opt.forEach(f => g.appendChild(makeTile(f)));
 
-  // Status message
-  if (missing.length) {
-    showMsg(`⚠️ Missing required: ${missing.map(f=>f.label).join(', ')}`, 'warn');
-  } else {
-    const optMissing = opt.filter(f => !S.found[f.key]);
-    if (optMissing.length) {
-      showMsg(`✓ All required files found. Optional not detected: ${optMissing.map(f=>f.label).join(', ')}`, 'ok');
-    } else {
-      showMsg('✓ All files detected — ready to generate.', 'ok');
-    }
-  }
+  // One summary line replaces the ok-messages; folder-msg is kept for warnings/errors only
+  const reqOk = req.length - missing.length, optOk = opt.filter(f => S.found[f.key]).length;
+  const sum = document.getElementById('files-sum');
+  sum.innerHTML = `<span class="${missing.length ? 'bad' : 'ok'}">Required ${reqOk}/${req.length} ${missing.length ? '✕' : '✓'}</span>`
+    + `<span>· Optional ${optOk}/${opt.length}</span><span class="caret" aria-hidden="true">&#x25BC;</span>`;
+  sum.title = 'Show / hide the file list';
+  sum.hidden = false;
+  toggleTiles(missing.length > 0);   // open the list when something required is missing
+  if (missing.length) showMsg(`⚠️ Missing required: ${missing.map(f=>f.label).join(', ')}`, 'warn');
+  else clearMsg();
+}
+
+function toggleTiles(open) {
+  const sum = document.getElementById('files-sum');
+  if (open === undefined) open = sum.getAttribute('aria-expanded') !== 'true';
+  sum.setAttribute('aria-expanded', String(open));
+  document.getElementById('file-tiles').style.display = open ? 'grid' : 'none';
 }
 
 function makeTile(f) {
@@ -351,16 +367,6 @@ function showMsg(msg, type) {
 }
 function clearMsg() { document.getElementById('folder-msg').innerHTML = ''; }
 
-function clearFolder() {
-  S.folder = ''; S.found = {}; S.nsoRows = [];
-  document.getElementById('folder-path').value = '';
-  document.getElementById('file-tiles').style.display = 'none';
-  document.getElementById('btn-clr').style.display = 'none';
-  clearMsg();
-  hideAOP();
-  updateSummary();
-}
-
 // ── NSO parse — backend API (avoids xlsx.js date off-by-one) ─────────────────
 async function loadNSOFromFolder(folder, fname) {
   document.getElementById('sec-aop').style.display = '';
@@ -381,17 +387,11 @@ async function loadNSOFromFolder(folder, fname) {
     }));
     document.getElementById('aop-loading').style.display = 'none';
     buildAOPTable();
-    updateSummary();
   } catch(e) {
     document.getElementById('aop-loading').style.display = 'none';
     document.getElementById('aop-table-wrap').innerHTML =
       `<div class="alert" style="color:var(--err)">⚠️ ${e.message}</div>`;
   }
-}
-
-function clean(v) {
-  if (v == null) return '';
-  return String(v).replace(/ /g, '').trim();
 }
 
 function buildAOPTable() {
@@ -452,22 +452,6 @@ function updZone(inp) {
 
 function fmt(v) { return v.toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2}); }
 function hideAOP() { S.nsoRows = []; document.getElementById('sec-aop').style.display = 'none'; document.getElementById('aop-table-wrap').innerHTML = ''; }
-
-// ── Summary ────────────────────────────────────────────────────────
-function updateSummary() {
-  const req = FILES.filter(f => f.req);
-  const allReq = req.every(f => !!S.found[f.key]);
-  const items = [
-    {ok: allReq,              label: allReq ? 'Required files ready' : 'Required files missing'},
-    {ok: !!S.found.attr_grid, label: S.found.attr_grid ? 'Attribute Grid' : 'No Attribute Grid'},
-    {ok: S.nsoRows.length > 0,label: S.nsoRows.length > 0 ? `${S.nsoRows.length} NSO store(s)` : 'No stores parsed'},
-    {ok: true,                     label: 'GM Master (bundled)'},
-    {ok: !!S.found.apps_exclusion, label: S.found.apps_exclusion ? 'APPS Excl loaded' : 'No APPS Excl'},
-  ];
-  document.getElementById('gen-summary').innerHTML = items.map(it =>
-    `<div class="gen-item"><div class="gen-dot ${it.ok?'ok':'no'}"></div><span style="color:${it.ok?'var(--ok)':'var(--mu)'}">${it.label}</span></div>`
-  ).join('');
-}
 
 // ── Generate ───────────────────────────────────────────────────────
 async function generate() {
@@ -589,8 +573,10 @@ function updStages(pct) {
     el.className = 'stage-pill' +
       (pct >= STAGES[i] ? ' done-s' : pct >= (STAGES[i-1] || 0) ? ' active' : '');
   });
+  const cur = document.querySelector('.stage-pill.active');
+  document.getElementById('prog-stage').textContent = pct >= 100 ? 'Done' : cur ? cur.textContent : '';
 }
-function resetStages() { document.querySelectorAll('.stage-pill').forEach(el => el.className = 'stage-pill'); }
+function resetStages() { document.querySelectorAll('.stage-pill').forEach(el => el.className = 'stage-pill'); document.getElementById('prog-stage').textContent = ''; }
 
 // ── Reset all ──────────────────────────────────────────────────────
 function resetAll() {
@@ -598,15 +584,13 @@ function resetAll() {
   S.folder = ''; S.found = {}; S.nsoRows = []; S.jobId = null;
   document.getElementById('folder-path').value = '';
   document.getElementById('file-tiles').style.display = 'none';
+  document.getElementById('files-sum').hidden = true;
   document.getElementById('btn-clr').style.display = 'none';
   document.getElementById('prog-wrap').style.display = 'none';
   document.getElementById('result-box').style.display = 'none';
   document.getElementById('error-box').style.display = 'none';
-  clearMsg(); hideAOP(); updateSummary();
+  clearMsg(); hideAOP();
 }
-
-// ── Init ───────────────────────────────────────────────────────────
-updateSummary();
 </script>
 </body>
 </html>
