@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### Listing / Delisting Analyser: decluttered (suite declutter 3 of 7)
+- **Asked (user):** suite declutter.
+- **Moved:** Change Events / Seasonality / Data & checks / Rules tabs -> "More ▾" (shows the open view's name; same tab-btn / data-mode). Suggestions: Division / Season category / Cluster / Severity -> Filters panel with removable chips; rule paragraph -> one line + "Full rules →"; row sub-lines removed (same facts are in the Why panel); funnel text -> tooltip. Change Events: Window + zero-sales flip -> Filters. By Department / By Store: Order + Cells -> "View ▾", one-line legend. Overview: 5 tiles -> clickable strip, top tables first, "Season windows now" and "By division" collapsed.
+- Removed dead `ACTIONS['open-dept']` (no data-act="open-dept" anywhere). Cache-buster -> v=20261007a.
+- **Checks:** app.js passes node --check; live on :8123 - tabs, More menu, Filters chips, Export, Full rules.
+
 ### Growth vs LY: decluttered (suite declutter 2 of 7)
 - **Asked (user):** suite declutter ("remove extra buttons which can be readjusted. De-cramp the core and additional apps").
 - Once a plan is loaded, card 1 is just the plan line + "Replace plan" (same #file input; keyboard opens it); description and drop zone only before a plan is loaded. Group-header "TY … plan vs LY … sales" and "Click a row…" -> tooltips; shorter card-2 text; Expand all a small ghost button, Download stays primary. Chart card collapsed by default - a row click opens it (checked live: KIDS row opens the chart).

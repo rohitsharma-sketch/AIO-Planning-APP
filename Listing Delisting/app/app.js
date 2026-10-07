@@ -103,9 +103,42 @@ Promise.all(['kb.json', 'sales.json', 'windows.json', 'suggestions.json', 'store
 
 document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => show(b.dataset.mode)));
 
+// dropdown menus (More / Filters / View, 2026-10-07): real buttons with aria-expanded; the items stay in the DOM,
+// a click outside or Esc closes them
+function closeMenus() {
+  document.querySelectorAll('.tmenu.open').forEach(m => { m.classList.remove('open'); m.querySelector('.tmenu-btn').setAttribute('aria-expanded', 'false'); });
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('.tmenu-btn');
+  if (b) {
+    const m = b.parentElement, was = m.classList.contains('open');
+    closeMenus();
+    if (!was) { m.classList.add('open'); b.setAttribute('aria-expanded', 'true'); }
+    return;
+  }
+  if (!e.target.closest('.tmenu-pop') || e.target.closest('.tab-btn')) closeMenus();
+});
+document.addEventListener('keydown', e => {
+  const m = e.key === 'Escape' && document.querySelector('.tmenu.open');
+  if (m) { closeMenus(); m.querySelector('.tmenu-btn').focus(); }
+});
+// "Filters" panel (closed by default) + a removable chip per active filter; defs = [field, chip text for its value]
+const filtersMenu = inner => `<div class="tmenu"><button type="button" class="tmenu-btn fbtn" aria-haspopup="true" aria-expanded="false">Filters &#9662;</button>
+  <div class="tmenu-pop">${inner}</div></div><div class="fchips" id="fchips"></div>`;
+function fchips(k, defs) {
+  const on = defs.filter(([f]) => ST[k][f]), b = $('.fbtn');
+  b.innerHTML = `Filters${on.length ? ` · ${on.length}` : ''} &#9662;`;
+  b.classList.toggle('on', on.length > 0);
+  $('#fchips').innerHTML = on.map(([f, txt]) => { const t = esc(txt(ST[k][f]));
+    return `<button type="button" class="fchip" data-act="clear-f" data-clear="${k}.${f}" aria-label="Remove filter: ${t}">${t} <span aria-hidden="true">✕</span></button>`; }).join('');
+}
+
 function show(m) {
   mode = m;
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+  const inMore = document.querySelector('.tmenu-pop .tab-btn.active');   // a view under "More": the button shows it
+  $('#tab-more').classList.toggle('active', !!inMore);
+  $('#tab-more').innerHTML = `${inMore ? esc(inMore.textContent) : 'More'} &#9662;`;
   if (!kb) return;
   VIEWS[m].controls();
   VIEWS[m].results();
@@ -152,7 +185,7 @@ const ACTIONS = {
   kind: el => { ST.sug.kind = el.dataset.kind; ST.sug.sort = makeSort(); VIEWS.suggestions.controls(); VIEWS.suggestions.results(); },
   'sug-csv': () => exportSuggestions(),
   'ev-csv': () => exportEvents(),
-  'open-dept': el => { ST.grid.dept = el.dataset.dept; show('by-dept'); },
+  'clear-f': el => { const [k, f] = el.dataset.clear.split('.'); ST[k][f] = typeof ST[k][f] === 'boolean' ? false : ''; VIEWS[mode].controls(); VIEWS[mode].results(); },
 };
 const CAP = 300;
 
@@ -211,7 +244,8 @@ const VIEWS = {
       for (const r of sug.relist) { const v = byDiv[divisionOf(r.dept)]; v.sr++; v.exp += r.expected_sales; }
       const stake = sug.delist.reduce((a, r) => a + r.shortfall_month, 0), exp = sug.relist.reduce((a, r) => a + r.expected_sales, 0);
       const delta = listedNow - listedPrev;
-      const kpi = (lbl, val, sub, go) => `<div class="ov-kpi${go ? ' link' : ''}"${go ? ` data-go="${go}"` : ''}><div class="lbl">${lbl}</div><div class="val">${val}</div><div class="sub">${sub}</div></div>`;
+      // slim strip: the caption is the tile's tooltip (it is already escaped HTML - strip tags, keep entities)
+      const kpi = (lbl, val, sub, go) => `<div class="ov-kpi${go ? ' link' : ''}"${go ? ` data-go="${go}"` : ''} title="${sub.replace(/<[^>]+>/g, '').replace(/"/g, '&quot;')}"><span class="lbl">${lbl}</span><span class="val">${val}</span></div>`;
       const nd = r => `<tr class="drillable" tabindex="0" data-store="${esc(r.store)}" data-dept="${esc(r.dept)}">`;
       const wn = Object.entries(win.windows_now).sort(([a], [b]) => a.localeCompare(b)).map(([c, w]) => {
         const n = Object.values(win.departments).filter(d => d.category === c).length;
@@ -228,22 +262,22 @@ const VIEWS = {
       $('#res').innerHTML = `
         <p class="ov-month">Latest complete listing month <strong>${esc(L)}</strong> · day-wise sales through <strong>${dmy(sug.anchor)}</strong> ·
           suggestions built ${esc(sug.generated_at.replace('T', ' '))} · <button class="linkish" data-go="data">sources &amp; checks →</button></p>
-        <div class="ov-kpis">
-          ${kpi('Listed combos', fmtN(listedNow), `<span class="${delta >= 0 ? 'up' : 'dn'}">${delta >= 0 ? '+' : ''}${fmtN(delta)}</span> vs ${esc(kb.months[li - 1])} · ${fmtN(stores.size)} stores · ${fmtN(depts.size)} depts`, 'by-dept')}
+        <div class="ov-kpis strip">
+          ${kpi('Listed combos', `${fmtN(listedNow)}<small class="${delta >= 0 ? 'up' : 'dn'}">${delta >= 0 ? '+' : ''}${fmtN(delta)}</small>`, `<span class="${delta >= 0 ? 'up' : 'dn'}">${delta >= 0 ? '+' : ''}${fmtN(delta)}</span> vs ${esc(kb.months[li - 1])} · ${fmtN(stores.size)} stores · ${fmtN(depts.size)} depts`, 'by-dept')}
           ${kpi(`Changes in ${esc(L)}`, `${fmtN(monthEv.filter(e => e.toStatus === 'N').length)} / ${fmtN(monthEv.filter(e => e.toStatus === 'Y').length)}`, 'delisted / relisted, excl. zero-sales flag flips', 'events')}
           ${kpi('Delist suggestions', fmtN(sug.counts.delist), `${fmtN(sug.counts.delist_by_tier.High)} high · ${fmtR(stake)}/month below own same-window benchmark`, 'suggestions')}
           ${kpi('Relist opportunities', fmtN(sug.counts.relist), `${fmtR(exp)} expected in their coming season window`, 'suggestions')}
           ${kpi('Held — off-season read', fmtN(sug.counts.held), 'weak now, but the season starts soon: review then, not now', 'suggestions')}
         </div>
         <div class="ov-grid">
-          <div class="ov-card wide"><h3>Season windows now <span class="hint">each category judged only against its own window in earlier years; festival days removed (Calendar app)</span></h3>
-            <table><thead><tr><th>Season category</th><th class="num">Departments</th><th>Today</th><th>Suggestions judged on</th><th>Next window</th></tr></thead><tbody>${wn}</tbody></table></div>
-          <div class="ov-card wide"><h3>By division <span class="hint">listing in ${esc(L)} · suggestions as of ${dmy(sug.anchor)}</span></h3>
-            <table><thead><tr><th>Division</th><th class="num">Listed</th><th class="num">Delisted</th><th class="num">Relisted</th><th class="num">Delist sugg.</th><th class="num">Shortfall / month</th><th class="num">Relist sugg.</th><th class="num">Relist expected</th></tr></thead><tbody>${divRows}</tbody></table></div>
           <div class="ov-card"><h3>Top delist suggestions <button class="more" data-go="suggestions">See all →</button></h3>
             ${topD ? `<table><thead><tr><th>Store</th><th>Department</th><th>Window</th><th class="num">Before → now</th><th class="num">Shortfall / mo</th><th>Severity</th></tr></thead><tbody>${topD}</tbody></table>` : '<p class="ov-empty">None.</p>'}</div>
           <div class="ov-card"><h3>Top relist opportunities <button class="more" data-go="suggestions" data-kind="relist">See all →</button></h3>
             ${topR ? `<table><thead><tr><th>Store</th><th>Department</th><th>Coming window</th><th class="num">vs peers</th><th class="num">Expected</th></tr></thead><tbody>${topR}</tbody></table>` : '<p class="ov-empty">None.</p>'}</div>
+          <details class="ov-card wide"><summary><h3>Season windows now <span class="hint">each category judged only against its own window in earlier years; festival days removed (Calendar app)</span></h3></summary>
+            <table><thead><tr><th>Season category</th><th class="num">Departments</th><th>Today</th><th>Suggestions judged on</th><th>Next window</th></tr></thead><tbody>${wn}</tbody></table></details>
+          <details class="ov-card wide"><summary><h3>By division <span class="hint">listing in ${esc(L)} · suggestions as of ${dmy(sug.anchor)}</span></h3></summary>
+            <table><thead><tr><th>Division</th><th class="num">Listed</th><th class="num">Delisted</th><th class="num">Relisted</th><th class="num">Delist sugg.</th><th class="num">Shortfall / month</th><th class="num">Relist sugg.</th><th class="num">Relist expected</th></tr></thead><tbody>${divRows}</tbody></table></details>
           <div class="ov-card wide"><h3>Listing over time <span class="hint">listed combos per month, with delists and relists (excl. zero-sales flag flips)</span></h3>${listingSvg(listedByMonth, del, rel, li)}
             <div class="ov-legend"><span><i style="background:var(--color-primary)"></i>Listed combos</span><span><i style="background:var(--n)"></i>Delisted</span><span><i style="background:var(--y)"></i>Relisted</span></div></div>
         </div>`;
@@ -258,24 +292,26 @@ const VIEWS = {
       const seg = k => `<button class="seg-btn${s.kind === k ? ' on' : ''}" data-act="kind" data-kind="${k}">${KIND[k]} <b>${fmtN(sug.counts[k])}</b></button>`;
       const p = sug.params;
       const rule = {
-        delist: `Listed today and through its latest window, yet selling at ≤ ${pct(p.delist_ratio)} of its <b>own</b> rate on the <b>same dates</b> in the years it was on the floor (in a store open 12+ months) — and at ≤ ${pct(p.delist_relative)} of how its cluster's other stores moved over those dates. Festival days are removed on both sides; rates are per festival-free trading day.`,
-        held: `Would qualify as delist, but only on an <b>off-season</b> read, and the department's in-season starts within ${p.relist_lookahead_days} days. Not a delist call — review once the season is running.`,
-        relist: `Delisted today, the department's in-season (or normal) window starts within ${p.relist_lookahead_days} days, and the last time this store sold it in that window it sold at ≥ ${pct(p.relist_vs_peers)} of its cluster peers' median. Expected = its own rate then × the window's festival-free days + festival days at the department's festival lift.`,
+        // one line each - the full wording is Rules sections 4-6
+        delist: `Listed, yet selling at ≤ ${pct(p.delist_ratio)} of its <b>own</b> same-dates rate in earlier years and ≤ ${pct(p.delist_relative)} of its cluster peers' move; festival days removed.`,
+        held: `Would be a delist only on an <b>off-season</b> read, and its in-season starts within ${p.relist_lookahead_days} days — review then.`,
+        relist: `Delisted, its season window starts within ${p.relist_lookahead_days} days, and it last sold there at ≥ ${pct(p.relist_vs_peers)} of its cluster peers' median.`,
       }[s.kind];
       view.innerHTML = `<section class="bar">
           <div class="seg" role="tablist">${seg('delist')}${seg('relist')}${seg('held')}</div>
           <input data-f="sug.q" value="${esc(s.q)}" placeholder="Search store or department…" aria-label="Search">
-          <select data-f="sug.div" aria-label="Division">${options(DIVISIONS, s.div, 'All divisions')}</select>
-          <select data-f="sug.cat" aria-label="Season category">${catOptions(s.cat)}</select>
-          <select data-f="sug.cl" aria-label="Calendar cluster">${options(clusters, s.cl, 'All clusters')}</select>
-          ${s.kind !== 'relist' ? `<select data-f="sug.tier" aria-label="Severity">${options(['High', 'Medium', 'Low'], s.tier, 'All severities')}</select>` : ''}
-          <button class="btn" data-act="sug-csv">Export CSV</button>
+          ${filtersMenu(`<label>Division<select data-f="sug.div" aria-label="Division">${options(DIVISIONS, s.div, 'All divisions')}</select></label>
+          <label>Season category<select data-f="sug.cat" aria-label="Season category">${catOptions(s.cat)}</select></label>
+          <label>Cluster<select data-f="sug.cl" aria-label="Calendar cluster">${options(clusters, s.cl, 'All clusters')}</select></label>
+          ${s.kind !== 'relist' ? `<label>Severity<select data-f="sug.tier" aria-label="Severity">${options(['High', 'Medium', 'Low'], s.tier, 'All severities')}</select></label>` : ''}`)}
+          <button class="btn sm" data-act="sug-csv">Export CSV</button>
         </section>
-        <p class="rule">${rule} <span class="muted">Click a row for the exact dates, days and sums behind it.</span> <button class="linkish" data-go="rules">Full rules →</button></p>
+        <p class="rule one">${rule} <span class="muted">Click a row for the dates and sums.</span> <button class="linkish" data-go="rules">Full rules →</button></p>
         <div id="res"></div>`;
     },
     results() {
       const s = ST.sug, q = s.q.trim().toUpperCase();
+      fchips('sug', [['div', v => v], ['cat', v => CAT[v] || v], ['cl', v => `Cluster ${v}`], ['tier', v => `${v} severity`]]);
       let rows = sug[s.kind].filter(r => (!q || r.store.includes(q) || r.dept.toUpperCase().includes(q) || storeLabel(r.store).toUpperCase().includes(q))
         && (!s.div || divisionOf(r.dept) === s.div) && (!s.cat || r.category === s.cat) && (!s.cl || r.cluster === s.cl) && (!s.tier || r.tier === s.tier));
       const key = (r, k) => ({ store: r.store, dept: r.dept, rate: r.window?.rate, bench: r.benchmark?.rate, ratio: r.ratio, peers: r.peers?.ratio,
@@ -291,8 +327,8 @@ const VIEWS = {
           ${th('Cluster peers (median)', 'med', st, 1)}${th('vs peers', 'vs', st, 1)}${th('Expected', 'exp', st, 1, 'Festival-free days at its own rate + festival days at the department festival lift')}${th('Last listed', 'last', st)}`;
         body = rows.slice(0, CAP).map(r => `<tr class="drillable" tabindex="0" data-store="${esc(r.store)}" data-dept="${esc(r.dept)}">${cells(r)}
           <td>${wchip(r.target.type)}<div class="sub">${span(r.target.from, r.target.to)}</div></td>
-          <td class="num">${fmtRate(r.evidence.rate)}<div class="sub">${r.evidence.year}, ${r.evidence.days} days</div></td>
-          <td class="num">${fmtRate(r.peers.median_rate)}<div class="sub">${r.peers.stores} stores · ${esc(r.peers.basis)}</div></td>
+          <td class="num">${fmtRate(r.evidence.rate)}</td>
+          <td class="num">${fmtRate(r.peers.median_rate)}</td>
           <td class="num up">${pct(r.vs_peers)}</td><td class="num up">+${fmtR(r.expected_sales)}</td><td>${esc(r.last_listed)}</td></tr>`).join('');
       } else {
         head = `${th('Store', 'store', st)}${th('Department', 'dept', st)}<th>Window judged</th>${th('Same dates before', 'bench', st, 1, 'Festival-free rate on the same dates in the years it was on the floor')}
@@ -300,14 +336,14 @@ const VIEWS = {
           ${th('Shortfall / month', 'short', st, 1)}${th('Severity', 'tier', st, 1)}${s.kind === 'held' ? th('Season starts', 'next', st) : ''}`;
         body = rows.slice(0, CAP).map(r => `<tr class="drillable" tabindex="0" data-store="${esc(r.store)}" data-dept="${esc(r.dept)}">${cells(r)}
           <td>${wchip(r.window.type)}<div class="sub">${span(r.window.from, r.window.to)}</div></td>
-          <td class="num">${fmtRate(r.benchmark.rate)}<div class="sub">${r.benchmark.years.map(y => y.year).join(', ')}</div></td>
-          <td class="num">${fmtRate(r.window.rate)}<div class="sub">${r.window.days} days</div></td>
-          <td class="num dn">${pct(r.ratio)}</td><td class="num">${pct(r.peers.ratio)}<div class="sub">${r.peers.stores} stores · ${esc(r.peers.basis)}</div></td>
+          <td class="num">${fmtRate(r.benchmark.rate)}</td>
+          <td class="num">${fmtRate(r.window.rate)}</td>
+          <td class="num dn">${pct(r.ratio)}</td><td class="num">${pct(r.peers.ratio)}</td>
           <td class="num dn">−${fmtR(r.shortfall_month)}</td><td>${tierBadge(r.tier)}</td>${s.kind === 'held' ? `<td>${wchip(r.next_window.type)}<div class="sub">${dmy(r.next_window.from)}</div></td>` : ''}</tr>`).join('');
       }
       $('#res').innerHTML = `<p class="count">${fmtN(rows.length)} ${KIND[s.kind].toLowerCase()} row${rows.length === 1 ? '' : 's'}${rows.length > CAP ? ` — showing the first ${CAP}; filter or export for the rest` : ''} ·
           ${s.kind === 'relist' ? `${fmtR(total)} expected` : `${fmtR(total)}/month shortfall`} ·
-          <span class="muted">${fmtN(sug.counts.scored)} listed combos had a clean same-window benchmark (${fmtN(sug.counts.funnel.listed_now)} listed now → ${fmtN(sug.counts.funnel.listed_through_window)} listed through their window → ${fmtN(sug.counts.funnel.store_traded_window)} in a store trading it → ${fmtN(sug.counts.funnel.with_benchmark)} with earlier years in a store already open 12 months)</span></p>
+          <span class="muted hint-i" tabindex="0" title="${fmtN(sug.counts.scored)} listed combos had a clean same-window benchmark (${fmtN(sug.counts.funnel.listed_now)} listed now → ${fmtN(sug.counts.funnel.listed_through_window)} listed through their window → ${fmtN(sug.counts.funnel.store_traded_window)} in a store trading it → ${fmtN(sug.counts.funnel.with_benchmark)} with earlier years in a store already open 12 months)">${fmtN(sug.counts.scored)} scored</span></p>
         ${rows.length ? `<div class="tbl-wrap"><table class="tbl" data-state="sug"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>` : '<p class="ov-empty">Nothing matches these filters.</p>'}`;
     },
   },
@@ -324,14 +360,15 @@ const VIEWS = {
           <input data-f="ev.q" value="${esc(s.q)}" placeholder="Search store or department…" aria-label="Search">
           <select data-f="ev.type" aria-label="Change"><option value="all">Delisted and relisted</option><option value="N" ${s.type === 'N' ? 'selected' : ''}>Delisted only</option><option value="Y" ${s.type === 'Y' ? 'selected' : ''}>Relisted only</option></select>
           <select data-f="ev.div" aria-label="Division">${options(DIVISIONS, s.div, 'All divisions')}</select>
-          <select data-f="ev.win" aria-label="Window at the change"><option value="">Any window</option>${['in', 'normal', 'off'].map(t => `<option value="${t}" ${s.win === t ? 'selected' : ''}>Changed in ${WLABEL[t].toLowerCase()}</option>`).join('')}</select>
-          <label class="check"><input type="checkbox" data-f="ev.zero" ${s.zero ? 'checked' : ''}> include zero-sales flag flips</label>
+          ${filtersMenu(`<label>Window at the change<select data-f="ev.win" aria-label="Window at the change"><option value="">Any window</option>${['in', 'normal', 'off'].map(t => `<option value="${t}" ${s.win === t ? 'selected' : ''}>Changed in ${WLABEL[t].toLowerCase()}</option>`).join('')}</select></label>
+          <label class="check"><input type="checkbox" data-f="ev.zero" ${s.zero ? 'checked' : ''}> include zero-sales flag flips</label>`)}
           <button class="btn" data-act="ev-csv">Export CSV</button>
         </section>
         <p class="rule">Every Y ↔ N flip in the listing history, with the department's sales in the month before and the month of the change (month-wise export). The window is the department's season window in the month of the change.</p>
         <div id="res"></div>`;
     },
     results() {
+      fchips('ev', [['win', v => `Changed in ${WLABEL[v].toLowerCase()}`], ['zero', () => 'incl. zero-sales flips']]);
       const rows = filteredEvents();
       const d = rows.filter(e => e.toStatus === 'N'), r = rows.filter(e => e.toStatus === 'Y');
       const st = ST.ev.sort;
@@ -491,13 +528,14 @@ function gridView(kind) {
           <input data-f="grid.q" value="${esc(s.q)}" placeholder="Filter rows…" aria-label="Filter rows">
           ${kind === 'dept' ? `<select data-f="grid.cl" aria-label="Cluster">${options(clusters, s.cl, 'All clusters')}</select>`
             : `<select data-f="grid.div" aria-label="Division">${options(DIVISIONS, s.div, 'All divisions')}</select><select data-f="grid.cat" aria-label="Season category">${catOptions(s.cat)}</select>`}
-          <select data-f="grid.order" aria-label="Order"><option value="total" ${s.order === 'total' ? 'selected' : ''}>Biggest last 12 months first</option>
-            <option value="latest" ${s.order === 'latest' ? 'selected' : ''}>Biggest latest month first</option><option value="name" ${s.order === 'name' ? 'selected' : ''}>A–Z</option></select>
-          <select data-f="grid.show" aria-label="Cells"><option value="values" ${s.show === 'values' ? 'selected' : ''}>Show ₹ in cells</option><option value="heat" ${s.show === 'heat' ? 'selected' : ''}>Shading only</option></select>
+          <div class="tmenu"><button type="button" class="tmenu-btn" aria-haspopup="true" aria-expanded="false">View &#9662;</button><div class="tmenu-pop">
+          <label>Order<select data-f="grid.order" aria-label="Order"><option value="total" ${s.order === 'total' ? 'selected' : ''}>Biggest last 12 months first</option>
+            <option value="latest" ${s.order === 'latest' ? 'selected' : ''}>Biggest latest month first</option><option value="name" ${s.order === 'name' ? 'selected' : ''}>A–Z</option></select></label>
+          <label>Cells<select data-f="grid.show" aria-label="Cells"><option value="values" ${s.show === 'values' ? 'selected' : ''}>Show ₹ in cells</option><option value="heat" ${s.show === 'heat' ? 'selected' : ''}>Shading only</option></select></label>
+          </div></div>
         </section>
-        <p class="rule">Cell shade = sales relative to that row's best month · bottom border = listing
-          <span class="chip y">&nbsp;</span>listed <span class="chip n">&nbsp;</span>unlisted <span class="chip dot">&nbsp;</span>no record ·
-          top border = season window ${wchip('in')} ${wchip('normal')} ${wchip('off')} · badges show a current suggestion. Click a row for its trend and the reasons.</p>
+        <p class="legend1">Shade = vs the row's best month · bottom border <span class="chip y">&nbsp;</span>listed <span class="chip n">&nbsp;</span>unlisted <span class="chip dot">&nbsp;</span>no record ·
+          top border ${wchip('in')} ${wchip('normal')} ${wchip('off')} · badge = current suggestion · click a row for trend and reasons</p>
         <div id="res"></div>`;
     },
     results() {

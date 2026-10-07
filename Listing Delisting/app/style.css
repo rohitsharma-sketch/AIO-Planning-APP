@@ -230,7 +230,7 @@ svg .bar-in { fill: var(--w-in); opacity: .8; } svg .bar-off { fill: #94A3B8; } 
   outline: 2px solid var(--color-primary); outline-offset: 2px; }
 @media (max-width: 700px) {
   body { padding: 16px; } .appbar { margin: -16px -16px 16px; padding: 16px 16px 0; }
-  .bar input:not([type]), .bar input[list] { width: 100%; } .btn { margin-left: 0; } .tabs { overflow-x: auto; }
+  .bar input:not([type]), .bar input[list] { width: 100%; } .btn { margin-left: 0; } .tabs { flex-wrap: wrap; }  /* wrap, not scroll: a scroll box would clip the More menu */
 }
 
 /* Rules tab (2026-09-26) */
@@ -242,3 +242,48 @@ svg .bar-in { fill: var(--w-in); opacity: .8; } svg .bar-off { fill: #94A3B8; } 
 
 /* calm look 2026-09-28: KPI captions wrap instead of running past the card edge */
 .ov-kpi .sub { white-space: normal; }
+
+/* declutter 2026-10-07: dropdown menus (More / Filters / View), filter chips, slim KPI strip, collapsible cards.
+   Pattern from the OTB plan app's .tmenu; colours from this page's own variables so the suite themes still apply. */
+.tmenu { position: relative; display: inline-flex; }
+.tmenu-pop { display: none; position: absolute; left: 0; top: calc(100% + 6px); min-width: 210px; background: var(--color-card); border: 1px solid var(--line);
+  border-radius: 10px; box-shadow: 0 8px 24px rgba(15, 23, 42, .14); padding: 6px; z-index: 20; }
+.tmenu-pop.r { left: auto; right: 0; }
+.tmenu.open .tmenu-pop { display: block; }
+.tmenu-btn { height: 34px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--color-card); color: var(--ink);
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.bar .tmenu-btn:hover, .bar .tmenu.open .tmenu-btn { border-color: var(--color-secondary); }
+.tmenu-btn.on { border-color: var(--color-primary); color: var(--color-primary); }
+.tmenu-pop label { display: flex; flex-direction: column; gap: 3px; padding: 6px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--color-muted-foreground); }
+.tmenu-pop label.check { flex-direction: row; text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 500; color: var(--ink); }
+.tmenu-pop select { width: 100%; text-transform: none; letter-spacing: 0; }
+/* More menu in the chrome band: the button looks like a tab, its items like menu rows */
+.appbar .tab-more { height: auto; padding: 8px 16px; border: 0; border-bottom: 3px solid transparent; border-radius: 6px 6px 0 0; background: transparent;
+  color: var(--color-chrome-text-muted); font-size: 14px; font-weight: 400; }
+.appbar .tab-more:hover, .appbar .tmenu.open .tab-more { background: var(--color-chrome-tint); color: #fff; }
+.appbar .tab-more.active { color: var(--color-onchrome-accent); border-bottom-color: var(--color-onchrome-accent); }
+.appbar .tmenu-pop .tab-btn { display: block; width: 100%; text-align: left; border: 0; border-radius: 7px; color: var(--ink); font-size: 13px; font-weight: 600; padding: 8px 10px; }
+.appbar .tmenu-pop .tab-btn:hover { background: var(--color-muted); color: var(--ink); }
+.appbar .tmenu-pop .tab-btn.active { background: var(--color-muted); color: var(--color-primary); }
+.fchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fchip { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 6px 0 10px; border-radius: 999px; border: 1px solid var(--color-primary);
+  background: var(--color-card); color: var(--color-primary); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.fchip span { font-size: 11px; opacity: .7; }
+.fchip:hover span { opacity: 1; }
+.btn.sm { height: 30px; padding: 0 11px; font-size: 12px; }
+.rule.one { padding: 7px 12px; }
+.hint-i { cursor: help; border-bottom: 1px dotted currentColor; }
+.legend1 { margin: 0 0 10px; font-size: 12px; color: var(--color-muted-foreground); }
+.ov-kpis.strip { display: flex; flex-wrap: wrap; gap: 8px; }
+.ov-kpis.strip .ov-kpi { display: flex; align-items: baseline; gap: 8px; padding: 7px 12px; border-radius: 10px; }
+.ov-kpis.strip .lbl { font-size: 10.5px; }
+.ov-kpis.strip .val { font-size: 17px; margin: 0; }
+.ov-kpis.strip .val small { font-size: 11.5px; margin-left: 4px; }
+details.ov-card > summary { list-style: none; cursor: pointer; }
+details.ov-card > summary::-webkit-details-marker { display: none; }
+details.ov-card > summary h3::before { content: 'B8'; color: var(--color-muted-foreground); }
+details.ov-card[open] > summary h3::before { content: 'BE'; }
+details.ov-card:not([open]) > summary h3 { margin: 0; }
+.tmenu-btn:focus-visible, .fchip:focus-visible, .ov-kpi.link:focus-visible, details.ov-card > summary:focus-visible, .linkish:focus-visible {
+  outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.appbar .tab-more:focus-visible { outline-color: var(--color-onchrome-accent); }

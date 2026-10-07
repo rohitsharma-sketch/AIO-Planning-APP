@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20260926e">
+<link rel="stylesheet" href="style.css?v=20261007a">
 </head>
 <body>
 <div class="appbar">
@@ -26,10 +26,15 @@
     <button class="tab-btn" data-mode="suggestions">Suggestions</button>
     <button class="tab-btn" data-mode="by-dept">By Department</button>
     <button class="tab-btn" data-mode="by-store">By Store</button>
-    <button class="tab-btn" data-mode="events">Change Events</button>
-    <button class="tab-btn" data-mode="seasonality">Seasonality</button>
-    <button class="tab-btn" data-mode="data">Data &amp; checks</button>
-    <button class="tab-btn" data-mode="rules">Rules</button>
+    <div class="tmenu">
+      <button type="button" class="tmenu-btn tab-more" id="tab-more" aria-haspopup="true" aria-expanded="false">More &#9662;</button>
+      <div class="tmenu-pop r">
+        <button class="tab-btn" data-mode="events">Change Events</button>
+        <button class="tab-btn" data-mode="seasonality">Seasonality</button>
+        <button class="tab-btn" data-mode="data">Data &amp; checks</button>
+        <button class="tab-btn" data-mode="rules">Rules</button>
+      </div>
+    </div>
   </nav>
 </div>
 
@@ -46,7 +51,7 @@
   </div>
 </div>
 
-<script src="rules.js?v=20260926e"></script>
-<script src="app.js?v=20260926e"></script>
+<script src="rules.js?v=20261007a"></script>
+<script src="app.js?v=20261007a"></script>
 </body>
 </html>
