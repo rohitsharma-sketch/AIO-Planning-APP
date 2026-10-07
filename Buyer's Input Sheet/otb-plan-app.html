@@ -2973,39 +2973,19 @@ function cellVal(row,def){
       return `<span class="${gCls(g)}"${_lflTip(SEC_LFL_GROWTH[row._key],'base',[def.mi])}>${fP(g)}</span>`;
     }
     case 'avg_st': {
+      // Block sell-thru = the selected months' ST%, simple average over the months with data; the hover lists them
+      // (user, 2026-10-07: "a hover can make things easier ... so that the block sell thru can be justified")
       if(!row._divId)return '<span style="color:var(--mu)">-</span>';
       const mc=cols();
       if(!mc.length)return '-';
-      if(row._key==null){
-        const vals=mc.map(mi=>DEPT_MONTHLY_ST[row._divId]?.[mi]).filter(v=>v!=null);
-        if(!vals.length)return '<span style="color:var(--mu)">-</span>';
-        const avg=vals.reduce((a,v)=>a+v,0)/vals.length;
-        const sc=avg>=12?'st-hi':avg>=7?'st-mid':'st-lo';
-        return `<span class="${sc}">${avg.toFixed(1)}%</span>`;
-      }
-      {
-        const attrInfo=_parseAttrKey(row._key);
-        if(attrInfo){
-          const dv=DVDATA.find(d=>d.id===attrInfo.dvId);
-          const avg=dv?_attrPeriodAvg(dv,attrInfo.attr,mc,(sec,mi)=>{
-            const so=(window._SELLTHRU_LIVE_DEPT||{})[sec.id];
-            const v=typeof so==='object'&&so!==null?so[mi]:so;
-            return v!=null&&v>0?v:null;
-          }):null;
-          if(avg==null)return '<span style="color:var(--mu)">-</span>';
-          const sc=avg>=12?'st-hi':avg>=7?'st-mid':'st-lo';
-          return `<span class="${sc}">${avg.toFixed(1)}%</span>`;
-        }
-      }
-      const stObj2=(window._SELLTHRU_LIVE_DEPT||{})[row._key];
-      let st2;
-      if(typeof stObj2==='object'&&stObj2!==null){
-        const mVals=mc.map(mi=>stObj2[mi]).filter(v=>v!=null&&v>0);
-        st2=mVals.length?mVals.reduce((a,v)=>a+v,0)/mVals.length:null;
-      }else{st2=stObj2;}
-      if(st2==null)return '<span style="color:var(--mu)">-</span>';
-      const sc2=st2>=12?'st-hi':st2>=7?'st-mid':'st-lo';
-      return `<span class="${sc2}">${Number(st2).toFixed(1)}%</span>`;
+      const m=mc.map(mi=>({mi,v:_stMon(row,mi)})),ok=m.filter(x=>x.v!=null);
+      if(!ok.length)return '<span style="color:var(--mu)">-</span>';
+      const avg=ok.reduce((a,x)=>a+x.v,0)/ok.length;
+      const sc=avg>=12?'st-hi':avg>=7?'st-mid':'st-lo';
+      const tip='Avg weekly sell-thru, all stores\n'+m.map(x=>`${MO[x.mi]}: ${x.v==null?'no data':x.v.toFixed(1)+'%'}`).join('\n')+
+        `\nBlock = simple average of ${ok.length} month${ok.length>1?'s':''}`+(_parseAttrKey(row._key)?' (each month: its departments weighted by LY)':'')+
+        (ok.length<m.length?' - months without data left out':'');
+      return `<span class="${sc}" style="cursor:help" title="${_attr(tip)}">${avg.toFixed(1)}%</span>`;
     }
     case 'period_lfl_yoy': {
       if(!row._divId)return '<span style="color:var(--mu)">-</span>';
@@ -4317,6 +4297,15 @@ function _attrBlockGrowth(dv,attr){
 
 // LY-weighted average of a per-dept metric (ST%, LFL growth%) across a div+attr
 // group for one month. getter(sec,mi) returns a number or null/undefined (skipped).
+// One month's sell-thru for any row - division, attribute (departments weighted by LY) or department; a department
+// with no sell-thru that month (missing or 0) has none. Feeds Avg ST% and its hover.
+function _stMon(row,mi){
+  if(row._key==null)return DEPT_MONTHLY_ST[row._divId]?.[mi]??null;
+  const one=id=>{const so=(window._SELLTHRU_LIVE_DEPT||{})[id];const v=typeof so==='object'&&so!==null?so[mi]:so;return v!=null&&v>0?v:null;};
+  const ai=_parseAttrKey(row._key);
+  if(ai){const dv=DVDATA.find(d=>d.id===ai.dvId);return dv?_attrWeightedAvg(dv,ai.attr,mi,sec=>one(sec.id)):null;}
+  return one(row._key);
+}
 function _attrWeightedAvg(dv,attr,mi,getter){
   let wsum=0,lysum=0;
   _attrActiveSecs(dv,attr).forEach(sec=>{
@@ -4326,12 +4315,6 @@ function _attrWeightedAvg(dv,attr,mi,getter){
     wsum+=v*ly;lysum+=ly;
   });
   return lysum>0?wsum/lysum:null;
-}
-// Period (multi-month) version: LY-weighted per month, then simple mean across months —
-// matches how the existing per-department period_lfl_*/avg_st cells already average.
-function _attrPeriodAvg(dv,attr,mc,getter){
-  const vals=mc.map(mi=>_attrWeightedAvg(dv,attr,mi,getter)).filter(v=>v!=null);
-  return vals.length?vals.reduce((a,v)=>a+v,0)/vals.length:null;
 }
 
 // Sets one Block Growth% for every department in a div+attr group (Uniform cascade),

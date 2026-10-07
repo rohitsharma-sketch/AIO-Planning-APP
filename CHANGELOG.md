@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### BIS: Avg ST% hover shows the months behind the block figure
+- **Asked (user):** "avg sell thru on months should be according to the months and probably a hover can make things easier in the block panel so that the block sell thru can be justified".
+- Avg ST% (Buyer's Plan, Attribute, Division and Department Summary, and the drawer) is the selected months' ST%, simple average over the months with data; hovering lists each month, e.g. M_IN_BRIEF Mar 10.1 / Apr 9.4 / May 10.6 / Jun 11.1 -> 10.3%. Picking other months re-averages (Apr+May -> 10.0%). Attributes note that each month weights its departments by LY.
+- Division, attribute and department now share one month source (`_stMon`); the unused `_attrPeriodAvg` is gone.
+
 ### BIS: Division and Department Summary use the same lean layout
 - **Asked (user):** "apply the same layout to division and department summary".
 - **Division Summary:** Avg ST% | 25 V 26 | LY Actual Sales | Plan Total | vs LY%. **Department Summary:** Avg ST% | 25 V 26 | LY Actual Sales | Plan Total | Growth%; a department's name opens the same details drawer.
