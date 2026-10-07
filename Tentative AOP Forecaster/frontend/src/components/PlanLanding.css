@@ -186,3 +186,11 @@
 .pl-save-dialog-btns button:hover:not(.pl-btn-save) { background: var(--surface2); }
 .pl-save-dialog-btns .pl-btn-save { background: var(--st-btn,#A8CBB7); color: var(--st-btn-text,#1F4D3A); border-color: var(--st-btn-hover,#95BFA7); }
 .pl-save-dialog-btns .pl-btn-save:hover { background: var(--st-btn-hover,#95BFA7); color: var(--st-btn-text,#1F4D3A); }
+
+/* UI declutter (2026-10-07): Rename / delete show on row hover or keyboard focus (opacity only, so they
+   stay in the tab order and reveal on focus-within); always shown on touch screens without hover. */
+@media (hover: hover) {
+  .pl-log-row .pl-rename-btn, .pl-log-row .pl-del-btn { opacity: 0; transition: opacity .12s; }
+  .pl-log-row:hover .pl-rename-btn, .pl-log-row:hover .pl-del-btn,
+  .pl-log-row:focus-within .pl-rename-btn, .pl-log-row:focus-within .pl-del-btn { opacity: 1; }
+}

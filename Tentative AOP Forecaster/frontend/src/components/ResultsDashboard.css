@@ -2,7 +2,6 @@
 
 .dash-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .dash-title  { font-size: 24px; font-weight: 800; color: var(--navy); letter-spacing: -0.02em; }
-.dash-sub    { color: var(--muted); margin-top: 4px; font-size: 14px; }
 .dash-actions{ display: flex; gap: 8px; min-width: 0; align-items: center; flex-wrap: wrap; }
 .dash-actions [data-state="error"] { background: var(--red-bg); color: var(--red); border-color: var(--red-bd); }
 .dash-status {

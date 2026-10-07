@@ -4,7 +4,6 @@ import * as XLSX from 'xlsx'
 import './PlanningInputsEditor.css'
 
 const DIVS = ['GM', 'KIDS', 'LADIES', 'MENS', 'RETAIL']
-const ROW_KEYS = ['OVERALL', ...DIVS]
 const MONTHS = ["Apr'27", "May'27", "Jun'27", "Jul'27", "Aug'27", "Sep'27",
                 "Oct'27", "Nov'27", "Dec'27", "Jan'28", "Feb'28", "Mar'28"]
 const AOP_MONTHS = ["Mar'27", ...MONTHS]
@@ -216,6 +215,7 @@ function downloadStoreMasterTemplate() {
 }
 
 const SM_CACHE_KEY = 'aop-store-master-cache'
+const SM_CONTEXT_KEY = 'aop.storeMaster.contextCols'
 
 /* ── Store Master Tab ────────────────────────────────────────────── */
 function StoreMasterTab({ stores, setStores, loadErr, reload }) {
@@ -227,6 +227,17 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
   const [status, setStatus] = useState(null)
   const [busy, setBusy]     = useState(false)
   const [importing, setImporting] = useState(false)
+  // UI declutter (2026-10-07): filter dropdowns sit behind a "Filters" toggle; the read-only
+  // context columns (Region / Grade / ERP Cluster / Festival Group) behind "+ Context columns",
+  // remembered in this browser.
+  const [showFilters, setShowFilters] = useState(false)
+  const [showContext, setShowContext] = useState(() => {
+    try { return localStorage.getItem(SM_CONTEXT_KEY) === '1' } catch { return false }
+  })
+  useEffect(() => {
+    try { localStorage.setItem(SM_CONTEXT_KEY, showContext ? '1' : '0') } catch {}
+  }, [showContext])
+  const fileRef = useRef(null)
   // Use empty array when DB load failed so import tools still render
   const safeStores = stores || []
 
@@ -402,6 +413,8 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
   }
 
   const unsavedCount = Object.keys(edits).length
+  const FILTER_KEYS = [['tag', 'Tag'], ['cluster', 'Cluster'], ['region', 'Region'], ['grade', 'Grade']]
+  const activeFilterCount = FILTER_KEYS.filter(([k]) => filters[k].length).length
 
   if (!stores && !loadErr) return <div className="card pie-card pie-loading">Loading store master…</div>
 
@@ -451,20 +464,44 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        <MultiSelect label="Tag"     options={opts.tag}     selected={filters.tag}     onChange={v => setFilters(f => ({ ...f, tag: v }))} />
-        <MultiSelect label="Cluster" options={opts.cluster} selected={filters.cluster} onChange={v => setFilters(f => ({ ...f, cluster: v }))} />
-        <MultiSelect label="Region"  options={opts.region}  selected={filters.region}  onChange={v => setFilters(f => ({ ...f, region: v }))} />
-        <MultiSelect label="Grade"   options={opts.grade}   selected={filters.grade}   onChange={v => setFilters(f => ({ ...f, grade: v }))} />
+        <button className={`btn-outline${showFilters ? ' pie-toggle-on' : ''}`} aria-expanded={showFilters} onClick={() => setShowFilters(o => !o)}>
+          Filters{activeFilterCount ? ` · ${activeFilterCount}` : ''}
+        </button>
+        <button className={`btn-outline${showContext ? ' pie-toggle-on' : ''}`} aria-pressed={showContext} onClick={() => setShowContext(o => !o)}
+                title="Region, Grade, ERP Cluster and Festival Group (read-only)">
+          {showContext ? '− Context columns' : '+ Context columns'}
+        </button>
         <span className="pie-count-label">{filtered.length} stores{unsavedCount > 0 ? ` · ${unsavedCount} unsaved` : ''}</span>
-        <button className="btn-outline" onClick={downloadStoreMasterTemplate}>Template</button>
-        <label className="btn-outline pie-import-btn">
-          {importing ? 'Importing…' : 'Import'}
-          <input type="file" accept=".xlsx,.xls,.csv" onChange={importFile} disabled={importing} style={{ display: 'none' }} />
-        </label>
+        <details className="aop-menu aop-menu--right">
+          <summary>{importing ? 'Importing…' : 'File ▾'}</summary>
+          <div className="aop-menu-pop">
+            <button onClick={downloadStoreMasterTemplate}>Template</button>
+            <button onClick={() => fileRef.current?.click()} disabled={importing}>{importing ? 'Importing…' : 'Import'}</button>
+          </div>
+        </details>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={importFile} disabled={importing} style={{ display: 'none' }} />
         <button className="btn-primary pie-save" onClick={save} disabled={busy || !unsavedCount}>
           {busy ? 'Saving…' : 'Save changes'}
         </button>
       </div>
+      {showFilters && (
+        <div className="pie-toolbar pie-filter-row">
+          <MultiSelect label="Tag"     options={opts.tag}     selected={filters.tag}     onChange={v => setFilters(f => ({ ...f, tag: v }))} />
+          <MultiSelect label="Cluster" options={opts.cluster} selected={filters.cluster} onChange={v => setFilters(f => ({ ...f, cluster: v }))} />
+          <MultiSelect label="Region"  options={opts.region}  selected={filters.region}  onChange={v => setFilters(f => ({ ...f, region: v }))} />
+          <MultiSelect label="Grade"   options={opts.grade}   selected={filters.grade}   onChange={v => setFilters(f => ({ ...f, grade: v }))} />
+        </div>
+      )}
+      {activeFilterCount > 0 && (
+        <div className="pie-chip-row">
+          {FILTER_KEYS.filter(([k]) => filters[k].length).map(([k, label]) => (
+            <span key={k} className="aop-chip">
+              {label}: {filters[k].length === 1 ? filters[k][0] : `${filters[k].length} selected`}
+              <button onClick={() => setFilters(f => ({ ...f, [k]: [] }))} aria-label={`Clear ${label} filter`}>×</button>
+            </span>
+          ))}
+        </div>
+      )}
 
       {status && <p className={`pie-status ${status.err ? 'err' : ''}`}>{status.msg}</p>}
 
@@ -478,10 +515,12 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
               <th>Tag</th>
               <th>Cluster</th>
               <th>Ref Store</th>
-              <th>Region</th>
-              <th>Grade</th>
-              <th>ERP Cluster</th>
-              <th>Festival Group</th>
+              {showContext && <>
+                <th>Region</th>
+                <th>Grade</th>
+                <th>ERP Cluster</th>
+                <th>Festival Group</th>
+              </>}
             </tr>
           </thead>
           <tbody>
@@ -517,19 +556,21 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
                       onChange={e => setField(s.store_id, 'ref_store', e.target.value)}
                     />
                   </td>
-                  <td>{s.region_type || <span className="sm-null">—</span>}</td>
-                  <td>
-                    <span className={`sm-grade sm-grade-${(s.store_grade || '').toLowerCase()}`}>
-                      {s.store_grade || '—'}
-                    </span>
-                  </td>
-                  <td className="sm-muted">{s.erp_cluster_type || '—'}</td>
-                  <td className="sm-muted">{s.festival_grouping || '—'}</td>
+                  {showContext && <>
+                    <td>{s.region_type || <span className="sm-null">—</span>}</td>
+                    <td>
+                      <span className={`sm-grade sm-grade-${(s.store_grade || '').toLowerCase()}`}>
+                        {s.store_grade || '—'}
+                      </span>
+                    </td>
+                    <td className="sm-muted">{s.erp_cluster_type || '—'}</td>
+                    <td className="sm-muted">{s.festival_grouping || '—'}</td>
+                  </>}
                 </tr>
               )
             })}
             {!filtered.length && (
-              <tr><td colSpan={9} className="sm-empty-row">No stores match the current filters.</td></tr>
+              <tr><td colSpan={showContext ? 9 : 5} className="sm-empty-row">No stores match the current filters.</td></tr>
             )}
           </tbody>
         </table>
@@ -732,7 +773,12 @@ function RefStoreMapTab({ stores, loadErr, reload }) {
           onChange={e => setSearch(e.target.value)}
         />
         <span className="pie-count-label">{filtered.length} stores{unsavedCount > 0 ? ` · ${unsavedCount} unsaved` : ''}</span>
-        <button className="btn-secondary" onClick={toggleLog}>{showLog ? 'Hide Change Log' : 'Change Log'}</button>
+        <details className="aop-menu aop-menu--right">
+          <summary aria-label="More actions" title="More actions">⋯</summary>
+          <div className="aop-menu-pop">
+            <button onClick={toggleLog}>{showLog ? 'Hide Change Log' : 'Change Log'}</button>
+          </div>
+        </details>
         <button className="btn-primary pie-save" onClick={save} disabled={busy || !unsavedCount}>
           {busy ? 'Saving…' : 'Save changes'}
         </button>
@@ -860,70 +906,6 @@ function DivisionMixPopover({ store, priorEntry, currentRef, mix, onClose }) {
   )
 }
 
-/* ── Growth % Tab ───────────────────────────────────────────────── */
-function GrowthTab() {
-  const [rows, setRows]     = useState(null)
-  const [status, setStatus] = useState(null)
-  const [busy, setBusy]     = useState(false)
-
-  const load = () => fetchJson('/api/config/growth').then(d => setRows(d.rows)).catch(e => setStatus({ err: true, msg: e.message }))
-  useEffect(() => { load() }, [])
-
-  function setCell(rowKey, month, val) {
-    setRows(rs => rs.map(r => r.row_key === rowKey ? { ...r, values: { ...r.values, [month]: val } } : r))
-  }
-
-  async function save() {
-    setBusy(true); setStatus(null)
-    try {
-      const payload = rows.map(r => ({
-        row_key: r.row_key,
-        values: Object.fromEntries(MONTHS.map(m => [m, r.values[m] === '' || r.values[m] == null ? null : Number(r.values[m])])),
-      }))
-      await fetchJson('/api/config/growth', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows: payload }) })
-      setStatus({ err: false, msg: 'Saved.' })
-      load()
-    } catch (e) { setStatus({ err: true, msg: e.message }) }
-    finally { setBusy(false) }
-  }
-
-  if (!rows) return <div className="card pie-card pie-loading">Loading…</div>
-
-  return (
-    <div className="card pie-card">
-      <div className="pie-toolbar">
-        <span className="pie-hint">OVERALL is the fallback for any division cell left blank.</span>
-        <button className="btn-primary pie-save" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save growth rates'}</button>
-      </div>
-      {status && <p className={`pie-status ${status.err ? 'err' : ''}`}>{status.msg}</p>}
-      <div className="pie-scroll">
-        <table className="pie-grid-table">
-          <thead>
-            <tr><th>Division</th>{MONTHS.map(m => <th key={m}>{m}</th>)}</tr>
-          </thead>
-          <tbody>
-            {ROW_KEYS.map(rk => {
-              const row = rows.find(r => r.row_key === rk) || { row_key: rk, values: {} }
-              return (
-                <tr key={rk} className={rk === 'OVERALL' ? 'pie-row-overall' : ''}>
-                  <td className="pie-row-label">{rk}</td>
-                  {MONTHS.map(m => (
-                    <td key={m}>
-                      <input type="number" step="0.1" placeholder={rk === 'OVERALL' ? '' : '—'}
-                        value={row.values[m] ?? ''}
-                        onChange={e => setCell(rk, m, e.target.value)} />
-                    </td>
-                  ))}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
-
 /* ── NSO Opening Months Tab ──────────────────────────────────────── */
 function NsoTab() {
   const [rows, setRows]     = useState(null)
@@ -1001,6 +983,7 @@ function AopTab() {
   const [busy, setBusy]           = useState(false)
   const [draft, setDraft]         = useState({ store_id: '', division: DIVS[0], month: AOP_MONTHS[0], value: '' })
   const [importing, setImporting] = useState(false)
+  const aopFileRef = useRef(null)
   const [importSkipped, setImportSkipped] = useState(null)
   const [storeTagMap, setStoreTagMap] = useState(null)
 
@@ -1109,11 +1092,14 @@ function AopTab() {
       <div className="pie-toolbar">
         <input className="pie-search" placeholder="Search by store code…" value={search} onChange={e => setSearch(e.target.value)} />
         <span className="pie-count-label">{rows.length} overrides · {Object.keys(edits).length} unsaved change(s)</span>
-        <button className="btn-outline" onClick={downloadAopTemplate}>Download Template</button>
-        <label className="btn-outline pie-import-btn">
-          {importing ? 'Importing…' : 'Import'}
-          <input type="file" accept=".csv,.xlsx,.xlsm" onChange={importFile} disabled={importing} style={{ display: 'none' }} />
-        </label>
+        <details className="aop-menu aop-menu--right">
+          <summary>{importing ? 'Importing…' : 'File ▾'}</summary>
+          <div className="aop-menu-pop">
+            <button onClick={downloadAopTemplate}>Download Template</button>
+            <button onClick={() => aopFileRef.current?.click()} disabled={importing}>{importing ? 'Importing…' : 'Import'}</button>
+          </div>
+        </details>
+        <input ref={aopFileRef} type="file" accept=".csv,.xlsx,.xlsm" onChange={importFile} disabled={importing} style={{ display: 'none' }} />
         <button className="btn-primary pie-save" onClick={save} disabled={busy || !Object.keys(edits).length}>
           {busy ? 'Saving…' : 'Save changes'}
         </button>

@@ -10,79 +10,8 @@
 }
 
 .us-head { display: flex; flex-direction: column; gap: 6px; padding: 4px 2px 2px; }
-.us-step {
-  font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-  color: var(--navy3);
-}
 .us-title { font-size: 24px; font-weight: 800; color: var(--navy); letter-spacing: -0.02em; }
 .us-sub { font-size: 13.5px; color: var(--muted); line-height: 1.55; max-width: 640px; }
-
-/* ── Action cards ─────────────────────────────────────────────── */
-.us-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 14px;
-}
-
-.us-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 20px 22px;
-  border-radius: 12px;
-  text-align: left;
-  font-family: inherit;
-}
-.us-card:hover:not(:disabled) { transform: translateY(-2px); }
-.us-card:disabled { opacity: 0.55; cursor: progress; transform: none; }
-
-.us-card-primary {
-  background: linear-gradient(135deg, var(--navy) 0%, #13405F 100%);
-  color: #fff;
-  box-shadow: 0 4px 18px rgba(var(--st-chrome-rgb,52,69,63),.25);
-}
-.us-card-primary:hover:not(:disabled) { box-shadow: 0 10px 26px rgba(var(--st-chrome-rgb,52,69,63),.32); }
-
-.us-card-secondary {
-  background: var(--white);
-  color: var(--char);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow);
-}
-.us-card-secondary:hover:not(:disabled) { border-color: var(--navy3); box-shadow: 0 6px 20px rgba(var(--st-accent-rgb,79,122,102),.12); }
-
-.us-card-header { display: flex; align-items: center; }
-.us-card-chip {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  padding: 2px 9px;
-  border-radius: 999px;
-  background: var(--st-btn,#A8CBB7);
-  color: var(--st-btn-text,#1F4D3A);
-}
-.us-chip-outline { background: var(--surface3); color: var(--muted); border: 1px solid var(--border); }
-
-.us-card-icon {
-  width: 44px; height: 44px; border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-}
-.us-card-primary .us-card-icon   { background: rgba(255,255,255,.1); color: #fff; }
-.us-card-secondary .us-card-icon { background: var(--light); color: var(--navy3); }
-
-.us-card-body { display: flex; flex-direction: column; gap: 5px; }
-.us-card-title { font-size: 15.5px; font-weight: 700; line-height: 1.3; }
-.us-card-secondary .us-card-title { color: var(--navy); }
-.us-card-desc { font-size: 12.5px; line-height: 1.55; }
-.us-card-primary .us-card-desc   { color: rgba(255,255,255,.7); }
-.us-card-secondary .us-card-desc { color: var(--muted); }
-
-.us-card-footer { margin-top: 2px; }
-.us-card-cta { font-size: 12.5px; font-weight: 700; transition: transform .15s; display: inline-block; }
-.us-card-primary .us-card-cta   { color: #7DD3E8; }
-.us-card-secondary .us-card-cta { color: var(--navy3); }
-.us-card:hover:not(:disabled) .us-card-cta { transform: translateX(3px); }
 
 /* ── Error ────────────────────────────────────────────────────── */
 .us-err {
@@ -104,3 +33,8 @@
   color: var(--muted);
   padding-left: 2px;
 }
+
+/* UI declutter (2026-10-07): one primary button + a link instead of the two cards */
+.us-actions { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.us-link { background: none; padding: 0; color: var(--navy3); font-size: 13px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.us-link:hover { color: var(--navy); }

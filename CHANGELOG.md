@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### AOP Forecaster: decluttered (suite declutter 7 of 8)
+- **Asked (user):** suite declutter.
+- **Moved:** Results - store-type / division / month chips -> "Filters ▾" with removable chips on one line; Base source + Data labels -> "View ▾"; Unlock [confirm kept] + Download Excel -> "Plan ▾" (Promote / Locked to Planning stay visible). Review - "Include flat detail sheet" -> "Run options ▾"; month chips -> "Months · N of 13 ▾"; per-month AOP override paragraphs -> one expandable line; store tiles -> one line; help texts -> tooltips. Store Master / AOP Overrides - Template + Import -> "File ▾"; Tag / Cluster / Region / Grade filters behind "Filters" with chips; read-only columns behind "+ Context columns" (`aop.storeMaster.contextCols`); Ref Store Mapping Change Log -> "⋯". Landing rows: Rename / ✕ on hover or keyboard focus (Continue latest kept). Configure: one "Continue from database" + "Edit Growth % / NSO / AOP" link.
+- **Removed:** duplicate "← Review inputs", dash-sub line, top and bottom Review navs (the header stepper does the same), duplicate reset link, "Step 1 of 3"; dead code (each proven by grep): GrowthTab + ROW_KEYS, ExcelPalettePicker.jsx/.css, lib/gridsort.jsx, an empty effect, unused isMajor.
+- **Checks:** build OK; live on :8000 - landing, Open Version 2 (read-only), Results menus, no page errors, totals unchanged.
+
 ### Calendar: Run Details removed
 - **Asked (user):** "remove run detail in the calendar app".
 - The Calendarised Sales "Run Details" view (source / rows read / cached vs computed months / frozen sync / unmapped stores, dates and clusters) is gone from "More views"; the empty-result warning no longer points to it. The run itself is unchanged. dist rebuilt.
@@ -16,37 +22,37 @@ Newest first. Each entry names its commit.
 - **Asked (user):** "i liked this better earlier" (about the intro after the declutter).
 - Restored the original intro: the "FY 2027–28 · Planning suite" eyebrow, the big "Planning Suite" title and both its styles. The rest of the Landing declutter (Account menu, sync strip, Lagan Export / Sync menu) stays.
 
-### Calendar Engine: decluttered (suite declutter 6 of 7)
+### Calendar Engine: decluttered (suite declutter 6 of 8)
 - **Asked (user):** suite declutter.
 - **Moved:** Festival Master toolbar (Import, Download template, Sync dates (Google), Sync structure to all templates [confirm kept], Remove from all clusters + its input [confirm kept]) -> "Festival tools ▾", which also opens the Change Log (was an always-on side card). Cluster rename / region / copy-from [confirm kept] -> "Cluster settings ▾". Calendarised Sales: Month Wise Matrix, DW Comparison, P1/P2 Comparison, Run Details -> "More views ▾" (Monthly Summary stays a tab); month chips -> "Months: … ▾". Store Mapping: Download template, Change Log, Download change log -> "Data ▾", help -> ⓘ, cluster counts in one strip. Library cards: duplicate "Load & Preview" removed (card click / Enter loads), Rename [prompt kept] / Delete [confirm kept] -> "⋯", badges -> one status dot.
 - **Quieter:** Day-by-Day 6 tiles -> one line (validation errors as a red count on its tab); 4 of 6 filters behind "Filters" with removable chips; 17 -> 8 default columns + "+ Context columns" (`cal.dayMap.contextCols`); Date Shift filters / Ref Day / Fut Day likewise (`cal.dateShift.contextCols`); Version Setting legend + priority order in one "How mapping works"; compact engine select. Shared `ui.jsx` (Menu on native details - always in the DOM, Esc returns focus; useStoredFlag).
 - Found in the live check: the festival-name input inside the menu lost its styling (it used to sit in `.field`; the global input rule skips type=text) - menu text inputs now styled.
 - **Checks:** engine.test passes; build OK; built page renders with no errors; "Festival Master", the Calendarised Sales tab, Monthly Summary and the Day-wise / Month-wise select still visible (e2e); menus open / close.
 
-### Landing: decluttered (suite declutter 5 of 7)
+### Landing: decluttered (suite declutter 5 of 8)
 - **Asked (user):** suite declutter.
 - **Top bar:** brand + status + one "Account ▾" menu holding Theme (theme-btn), Users (admin only, admin-link), Servers start / stop all (launch-all-btn, rights greying kept) and Sign out (signout-btn / signout-label). Items stay in the page (rights script and e2e unaffected).
 - Intro to one line (duplicate "Planning Suite" heading and "opens in a new tab" sentence removed), footer's repeated Servers line removed, sync strip one line (detail as tooltip, "View details" span removed), Lagan card meta "Look up". Lagan modal: Monthly Summary / All Dates / Sync with Drik Panchang -> "Export / Sync ▾" (same ids), method note -> ⓘ, year chips capped at 5 + "+N more", shorter subtitle.
 - **Checks:** scripts parse; every rights / admin id present; 8 per-card status labels visible (e2e needs 3); test_rights_guard and test_lagan_drik pass; static preview on :5179.
 
-### NSO Distributor: decluttered (suite declutter 4 of 7)
+### NSO Distributor: decluttered (suite declutter 4 of 8)
 - **Asked (user):** suite declutter.
 - File status shown once: tiles -> one summary line ("Required n/n · Optional n/n") that expands the tile grid (opens by itself when a required file is missing); duplicate Generate summary removed; folder message only for warnings. Duplicate h2 title dropped; one "Reset" next to Scan (resetAll, confirm kept) instead of two; AOP table wider with borderless inputs until hover / focus; current stage name next to the bar, stage pills in a collapsed details; Download XLSX as a text link (same handler). Removed unused SheetJS CDN script, clean(), MONTH_MAP, MONTHS, clearFolder(), updateSummary().
 - Fix found in the live check: a global `[hidden]{display:none!important}` - the summary button showed as an empty pill before any scan because its display rule beat the hidden attribute.
 - **Checks:** scripts parse, ids exist, confirm prompts kept; live on :8060.
 
-### Listing / Delisting Analyser: decluttered (suite declutter 3 of 7)
+### Listing / Delisting Analyser: decluttered (suite declutter 3 of 8)
 - **Asked (user):** suite declutter.
 - **Moved:** Change Events / Seasonality / Data & checks / Rules tabs -> "More ▾" (shows the open view's name; same tab-btn / data-mode). Suggestions: Division / Season category / Cluster / Severity -> Filters panel with removable chips; rule paragraph -> one line + "Full rules →"; row sub-lines removed (same facts are in the Why panel); funnel text -> tooltip. Change Events: Window + zero-sales flip -> Filters. By Department / By Store: Order + Cells -> "View ▾", one-line legend. Overview: 5 tiles -> clickable strip, top tables first, "Season windows now" and "By division" collapsed.
 - Removed dead `ACTIONS['open-dept']` (no data-act="open-dept" anywhere). Cache-buster -> v=20261007a.
 - **Checks:** app.js passes node --check; live on :8123 - tabs, More menu, Filters chips, Export, Full rules.
 
-### Growth vs LY: decluttered (suite declutter 2 of 7)
+### Growth vs LY: decluttered (suite declutter 2 of 8)
 - **Asked (user):** suite declutter ("remove extra buttons which can be readjusted. De-cramp the core and additional apps").
 - Once a plan is loaded, card 1 is just the plan line + "Replace plan" (same #file input; keyboard opens it); description and drop zone only before a plan is loaded. Group-header "TY … plan vs LY … sales" and "Click a row…" -> tooltips; shorter card-2 text; Expand all a small ghost button, Download stays primary. Chart card collapsed by default - a row click opens it (checked live: KIDS row opens the chart).
 - **Checks:** script parses, ids exist, test_gr passes, live on :8075.
 
-### Re-Aligner: decluttered (suite declutter 1 of 7)
+### Re-Aligner: decluttered (suite declutter 1 of 8)
 - **Asked (user):** "revamp core apps and remove extra buttons which can be readjusted. De-cramp the core and additional apps" (reviewed with the ECC dev-team skill: layout only, every action reachable with the same handler / confirm / label).
 - **Moved:** Step 2 header's 8 controls -> a "Re-phase from LY" row (department, LY shape, Re-phase & run) + one "Files ▾" menu per method (M1/M4 Blank template + From Listing / Delisting Analyser; M2 Template, Re-phase file, Store overrides upload, Overrides template, Clear store overrides [red, confirm kept]; M3 Split + New-department templates; M5 Growth template). Listing check file stays visible. Replace the original plan -> "Replace…" beside the file name (drag-drop for a replacement removed).
 - **Quieter:** method cards one line (descriptions as tooltips); "How to fill the file" collapsible (open until a file is loaded); results 4 tiles -> one line (duplicate Run time dropped); passing checks folded; downloads as compact rows with tooltips; Run card one line; Activity "Recent" collapsed; topbar subtitle -> tooltip, connection badge only when offline.

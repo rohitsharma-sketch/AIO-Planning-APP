@@ -102,13 +102,32 @@ export default function App() {
       .catch(() => {})
   }, [])
 
-  // Resume the last active session across a plain reload (no ?session_id= needed).
-  // Skipped when the URL already names a session — that takes priority.
-  // Shows the landing page rather than silently auto-resuming so the user can
-  // choose whether to continue or start fresh.
+  // Compact menus (<details class="aop-menu">, UI declutter 2026-10-07): close on an outside click or Esc
+  // (focus returns to the menu's summary); a plain menu also closes once one of its buttons is picked,
+  // an .aop-menu--panel (filters / toggles) stays open while you work in it.
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('session_id')) return
-    // Leave showLanding = true; the landing "Continue" tile will offer to load it.
+    const openMenus = () => document.querySelectorAll('details.aop-menu[open]')
+    const onDown = e => openMenus().forEach(d => { if (!d.contains(e.target)) d.open = false })
+    const onKey = e => {
+      if (e.key !== 'Escape') return
+      openMenus().forEach(d => {
+        const hadFocus = d.contains(document.activeElement)
+        d.open = false
+        if (hadFocus) d.querySelector('summary')?.focus()
+      })
+    }
+    const onClick = e => {
+      const d = e.target.closest?.('details.aop-menu:not(.aop-menu--panel)')
+      if (d && e.target.closest('.aop-menu-pop button')) d.open = false
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    document.addEventListener('click', onClick)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('click', onClick)
+    }
   }, [])
 
   // Remember which session/step is active so a reload can resume it (see effect above).
@@ -213,7 +232,7 @@ export default function App() {
     let savedLabel = null
     if (rates) {
       try {
-        const isMajor = await savePlanVersion(session.session_id, rates, session.from_db ? 'db' : 'upload')
+        await savePlanVersion(session.session_id, rates, session.from_db ? 'db' : 'upload')
         const versions = await loadPlanVersions()
         savedLabel = versions[0]?.label || 'Plan saved'
         setSaveMsg({ text: `✓ ${savedLabel}`, ok: true })
@@ -421,8 +440,6 @@ export default function App() {
             setRates={setRates}
             cellLocks={cellLocks}
             setCellLocks={setCellLocks}
-            onBack={results ? () => setStep(2) : null}
-            onGoToConfig={() => setStep(0)}
           />
         )}
 
@@ -435,7 +452,6 @@ export default function App() {
               session={session}
               runKey={runKey}
               onDownload={handleDownload}
-              onRunAgain={() => setStep(1)}
             />
           </div>
         )}

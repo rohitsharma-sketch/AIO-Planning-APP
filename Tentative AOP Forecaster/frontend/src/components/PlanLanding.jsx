@@ -154,9 +154,8 @@ export default function PlanLanding({ onNewPlan, onResume }) {
   return (
     <div className="pl-root">
       <div className="pl-header">
-        <span className="pl-eyebrow">Annual Operating Plan</span>
         <h1 className="pl-title">FY 2027–28 AOP Forecaster</h1>
-        <p className="pl-sub">Forecast store × division sales for Mar'27 – Mar'28, review growth, and publish the Mar–Jun targets to the Buyer's Input Sheet.</p>
+        <p className="pl-sub">Store × division forecast for Mar'27 – Mar'28.</p>
       </div>
 
       <div className="pl-tiles">

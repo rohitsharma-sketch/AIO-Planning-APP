@@ -133,3 +133,45 @@
   .step-sep { display: none; }
   .hdr-btn { padding: 6px 10px; font-size: 12px; }
 }
+
+/* ── Compact menus: native <details class="aop-menu"> (UI declutter 2026-10-07) ──
+   App.jsx closes them on outside click / Esc; a plain menu also closes once an item is picked,
+   an .aop-menu--panel (filters, toggles) stays open while you work in it. */
+.aop-menu { position: relative; display: inline-block; }
+.aop-menu > summary {
+  list-style: none; cursor: pointer; user-select: none; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px; font-weight: 600; padding: 6px 12px;
+  border: 1px solid var(--border2); border-radius: var(--radius);
+  background: var(--white); color: var(--navy);
+}
+.aop-menu > summary::-webkit-details-marker { display: none; }
+.aop-menu > summary:hover, .aop-menu[open] > summary { border-color: var(--navy3); background: var(--light); }
+.aop-menu > summary:focus-visible { outline: 2px solid var(--navy3); outline-offset: 2px; }
+.aop-menu-pop {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 60;
+  min-width: 190px; max-width: min(560px, calc(100vw - 32px)); padding: 6px;
+  background: var(--white); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.aop-menu--right .aop-menu-pop { left: auto; right: 0; }
+.aop-menu-pop > button, .aop-menu-pop > label {
+  text-align: left; background: none; color: var(--char); padding: 7px 10px; font-size: 13px; border-radius: 6px;
+}
+.aop-menu-pop > button:hover:not(:disabled) { background: var(--light); color: var(--navy); }
+.aop-menu-pop > label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.aop-menu-pop > label:hover { background: var(--light); }
+.aop-menu-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; }
+.aop-menu-group + .aop-menu-group { border-top: 1px solid var(--border); }
+.aop-menu-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); width: 100%; }
+.aop-menu-note { font-size: 12px; color: var(--muted); padding: 2px 8px 6px; }
+
+/* removable "active filter" chips shown on the slim line beside a closed menu */
+.aop-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; padding: 3px 6px 3px 10px; border-radius: 999px;
+  background: var(--light); color: var(--navy); border: 1px solid var(--accent-b);
+}
+.aop-chip > button { background: none; color: inherit; padding: 0 4px; font-size: 14px; line-height: 1; border-radius: 999px; }
+.aop-chip > button:hover { background: var(--accent-b); }

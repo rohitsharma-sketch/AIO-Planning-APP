@@ -52,7 +52,7 @@ const CustomTooltip = ({ active, payload, label }) => {
   )
 }
 
-export default function ResultsDashboard({ results, session, runKey, onDownload, onRunAgain }) {
+export default function ResultsDashboard({ results, session, runKey, onDownload }) {
   const { summary } = results
   const [activeTab, setActiveTab] = useState('summary')
   const [leaves, setLeaves]       = useState(null)
@@ -248,29 +248,15 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
 
       {/* ── Action bar ── */}
       <div className="dash-header">
-        <div>
-          <h2 className="dash-title">Forecast results</h2>
-          <p className="dash-sub">FY28 Annual Operating Plan — Mar'27 to Mar'28</p>
-        </div>
+        <h2 className="dash-title">Forecast results</h2>
         <div className="dash-actions">
-          <button className="btn-secondary" onClick={onRunAgain} title="Back to the growth inputs">← Review inputs</button>
           {isLocked ? (
-            <>
-              <span
-                className="dash-status dash-status--locked"
-                title={lockStatus.locked_at ? `Locked ${new Date(lockStatus.locked_at).toLocaleString('en-IN')}` : 'Locked for the Planning Engine'}
-              >
-                Locked to Planning
-              </span>
-              {canPublish && <button
-                className="btn-secondary"
-                onClick={handleUnlock}
-                disabled={promoteState === 'loading'}
-                title="Undo the lock — Planning Engine falls back to live staging targets"
-              >
-                {promoteState === 'loading' ? 'Unlocking…' : 'Unlock'}
-              </button>}
-            </>
+            <span
+              className="dash-status dash-status--locked"
+              title={lockStatus.locked_at ? `Locked ${new Date(lockStatus.locked_at).toLocaleString('en-IN')}` : 'Locked for the Planning Engine'}
+            >
+              Locked to Planning
+            </span>
           ) : canPublish && (
             <button
               className="btn-secondary"
@@ -284,7 +270,19 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
                 : 'Promote to Planning'}
             </button>
           )}
-          <button className="btn-primary"   onClick={onDownload}>Download Excel</button>
+          <details className="aop-menu aop-menu--right">
+            <summary>Plan ▾</summary>
+            <div className="aop-menu-pop">
+              <button onClick={onDownload}>Download Excel</button>
+              {isLocked && canPublish && <button
+                onClick={handleUnlock}
+                disabled={promoteState === 'loading'}
+                title="Undo the lock — Planning Engine falls back to live staging targets"
+              >
+                {promoteState === 'loading' ? 'Unlocking…' : 'Unlock'}
+              </button>}
+            </div>
+          </details>
         </div>
       </div>
 
@@ -324,54 +322,100 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
         ))}
       </div>
 
-      {/* ── Chart controls: store-type filter + data labels ── */}
+      {/* ── Chart controls (UI declutter 2026-10-07): store type / division / month chips sit in one
+          "Filters" panel, base source + data labels in "View"; the active filters show as removable
+          chips on this one slim line. Same state and toggles as before, only re-parented. ── */}
       <div className="chart-filter-bar">
-        <span className="sdt-tb-label">Store type</span>
-        {TYPES.map(t => (
-          <button key={t} className={`sdt-chip${typeOn(t) ? ' on' : ''}`} onClick={() => toggleType(t)} disabled={!leaves && !dataErr}
-                  title={`${typeOn(t) ? 'Hide' : 'Show'} ${t} stores`}>
-            <span className="chip-dot" style={{ background: typeOn(t) ? '#fff' : TYPE_COLORS[t] }} />{t} · {typeCount(t)}
-          </button>
-        ))}
-        {typeFilter.length > 0 && <button className="sdt-reset" onClick={() => setTypeFilter([])}>All types</button>}
-        <label className="sdt-chip sdt-toggle" style={{ marginLeft: 12 }}>
-          <input type="checkbox" checked={showLabels} onChange={e => setShowLabels(e.target.checked)} /> Data labels
-        </label>
-        <span className="chart-filter-note">
-          {dataErr ? `Detail unavailable — ${dataErr}` : !leaves ? 'Loading store detail…' : `Charts: ${filterLabel} · ${monthLabel}`}
-        </span>
-      </div>
+        <details className="aop-menu aop-menu--panel">
+          <summary>Filters ▾</summary>
+          <div className="aop-menu-pop">
+            <div className="aop-menu-group">
+              <span className="aop-menu-lbl">Store type</span>
+              {TYPES.map(t => (
+                <button key={t} className={`sdt-chip${typeOn(t) ? ' on' : ''}`} onClick={() => toggleType(t)} disabled={!leaves && !dataErr}
+                        title={`${typeOn(t) ? 'Hide' : 'Show'} ${t} stores`}>
+                  <span className="chip-dot" style={{ background: typeOn(t) ? '#fff' : TYPE_COLORS[t] }} />{t} · {typeCount(t)}
+                </button>
+              ))}
+              {typeFilter.length > 0 && <button className="sdt-reset" onClick={() => setTypeFilter([])}>All types</button>}
+            </div>
+            <div className="aop-menu-group">
+              <span className="aop-menu-lbl">Division</span>
+              {DIVS.map(d => (
+                <button key={d} className={`sdt-chip${divOn(d) ? ' on' : ''}`} onClick={() => toggleDiv(d)} disabled={!leaves && !dataErr}
+                        title={`${divOn(d) ? 'Hide' : 'Show'} ${d}`}>
+                  {d}
+                </button>
+              ))}
+              {divFilter.length > 0 && <button className="sdt-reset" onClick={() => setDivFilter([])}>All divisions</button>}
+            </div>
+            <div className="aop-menu-group">
+              <span className="aop-menu-lbl">Month</span>
+              {quarters.map(q => {
+                const on = q.months.every(m => monthOn(m)) && monthFilter.length > 0 && monthFilter.length <= q.months.length
+                return (
+                  <button key={q.label} className={`sdt-chip${on ? ' on' : ''}`} onClick={() => setQuarter(q.months)}
+                          disabled={!leaves && !dataErr} title={`${q.months[0]} – ${q.months[q.months.length - 1]}`}>
+                    {q.label}
+                  </button>
+                )
+              })}
+              <span className="month-chip-sep" />
+              {VIS.map(m => (
+                <button key={m} className={`sdt-chip month-chip${monthOn(m) ? ' on' : ''}`} onClick={() => toggleMonth(m)}
+                        disabled={!leaves && !dataErr} title={`${monthOn(m) ? 'Hide' : 'Show'} ${m}`}>
+                  {m}
+                </button>
+              ))}
+              {monthFilter.length > 0 && <button className="sdt-reset" onClick={() => setMonthFilter([])}>All shown months</button>}
+            </div>
+            {VIS.length < MONTHS.length && (
+              <div className="aop-menu-note" title="A forecast month is shown once its base month (the same month last year) has closed in the synced actuals. Later months appear automatically as each month closes.">
+                {monthsPicked ? `${VIS.length} of ${MONTHS.length} months, as picked in Review` : `${MONTHS[VIS.length]} onwards appear once ${toLY(MONTHS[VIS.length])} closes`}
+              </div>
+            )}
+          </div>
+        </details>
 
-      {/* ── Division filter ── */}
-      <div className="chart-filter-bar">
-        <span className="sdt-tb-label">Division</span>
-        {DIVS.map(d => (
-          <button key={d} className={`sdt-chip${divOn(d) ? ' on' : ''}`} onClick={() => toggleDiv(d)} disabled={!leaves && !dataErr}
-                  title={`${divOn(d) ? 'Hide' : 'Show'} ${d}`}>
-            {d}
-          </button>
-        ))}
-        {divFilter.length > 0 && <button className="sdt-reset" onClick={() => setDivFilter([])}>All divisions</button>}
-        {divFilter.length > 0 && (
-          <span className="chart-filter-note">Showing: {divFilter.join(' + ')}</span>
+        {/* Base source: Actual vs Calendar Engine's reindexed sales. Reindexed data only covers LfL
+            stores (aggregate, div x month) — see db/reindexed_base_sales.py — so Ramp/NSO base is unchanged. */}
+        <details className="aop-menu aop-menu--panel">
+          <summary>View ▾</summary>
+          <div className="aop-menu-pop">
+            <div className="aop-menu-group">
+              <span className="aop-menu-lbl">Base source (LfL)</span>
+              <div className="actuals-source-btns">
+                <button
+                  className={`actuals-source-btn ${baseSource === 'actual' ? 'active' : ''}`}
+                  onClick={() => setBaseSource('actual')}
+                >Actual Sales</button>
+                <button
+                  className={`actuals-source-btn ${baseSource === 'reindexed' ? 'active' : ''}`}
+                  onClick={() => setBaseSource('reindexed')}
+                >Re-indexed Sales</button>
+              </div>
+              {baseSource === 'reindexed' && reindexed?.base_sales && (
+                <span className="actuals-source-status">Ramp/NSO base unaffected — reindexed data covers LfL stores only.</span>
+              )}
+            </div>
+            <label>
+              <input type="checkbox" checked={showLabels} onChange={e => setShowLabels(e.target.checked)} /> Data labels
+            </label>
+          </div>
+        </details>
+
+        {typeFilter.length > 0 && (
+          <span className="aop-chip">{typeFilter.join(' + ')}<button onClick={() => setTypeFilter([])} aria-label="Clear store type filter" title="All types">×</button></span>
         )}
-      </div>
-
-      {/* ── Base source toggle: Actual vs Calendar Engine's reindexed sales.
-          Reindexed data only covers LfL stores (aggregate, div x month) — see
-          db/reindexed_base_sales.py — so Ramp/NSO base is unchanged either way. ── */}
-      <div className="actuals-source-toggle" style={{ padding: '0 2px' }}>
-        <span className="actuals-source-label">Base source (LfL):</span>
-        <div className="actuals-source-btns">
-          <button
-            className={`actuals-source-btn ${baseSource === 'actual' ? 'active' : ''}`}
-            onClick={() => setBaseSource('actual')}
-          >Actual Sales</button>
-          <button
-            className={`actuals-source-btn ${baseSource === 'reindexed' ? 'active' : ''}`}
-            onClick={() => setBaseSource('reindexed')}
-          >Re-indexed Sales</button>
-        </div>
+        {divFilter.length > 0 && (
+          <span className="aop-chip">{divFilter.join(' + ')}<button onClick={() => setDivFilter([])} aria-label="Clear division filter" title="All divisions">×</button></span>
+        )}
+        {monthFilter.length > 0 && (
+          <span className="aop-chip">{monthLabel}<button onClick={() => setMonthFilter([])} aria-label="Clear month filter" title="All shown months">×</button></span>
+        )}
+        {baseSource === 'reindexed' && (
+          <span className="aop-chip">Base: Re-indexed<button onClick={() => setBaseSource('actual')} aria-label="Back to actual sales base" title="Actual Sales">×</button></span>
+        )}
         {baseSource === 'reindexed' && reindexedLoading && (
           <span className="actuals-source-status">Loading Calendar Engine's reindexed sales…</span>
         )}
@@ -381,36 +425,9 @@ export default function ResultsDashboard({ results, session, runKey, onDownload,
         {baseSource === 'reindexed' && reindexed?.note && (
           <span className="actuals-source-status actuals-source-status--warn">{reindexed.note}</span>
         )}
-        {baseSource === 'reindexed' && reindexed?.base_sales && (
-          <span className="actuals-source-status">Ramp/NSO base unaffected — reindexed data covers LfL stores only.</span>
-        )}
-      </div>
-
-      {/* ── Month filter: quarter shortcuts + individual month chips ── */}
-      <div className="chart-filter-bar">
-        <span className="sdt-tb-label">Month</span>
-        {quarters.map(q => {
-          const on = q.months.every(m => monthOn(m)) && monthFilter.length > 0 && monthFilter.length <= q.months.length
-          return (
-            <button key={q.label} className={`sdt-chip${on ? ' on' : ''}`} onClick={() => setQuarter(q.months)}
-                    disabled={!leaves && !dataErr} title={`${q.months[0]} – ${q.months[q.months.length - 1]}`}>
-              {q.label}
-            </button>
-          )
-        })}
-        <span className="month-chip-sep" />
-        {VIS.map(m => (
-          <button key={m} className={`sdt-chip month-chip${monthOn(m) ? ' on' : ''}`} onClick={() => toggleMonth(m)}
-                  disabled={!leaves && !dataErr} title={`${monthOn(m) ? 'Hide' : 'Show'} ${m}`}>
-            {m}
-          </button>
-        ))}
-        {monthFilter.length > 0 && <button className="sdt-reset" onClick={() => setMonthFilter([])}>All shown months</button>}
-        {VIS.length < MONTHS.length && (
-          <span className="chart-filter-note" title="A forecast month is shown once its base month (the same month last year) has closed in the synced actuals. Later months appear automatically as each month closes.">
-            {monthsPicked ? `${VIS.length} of ${MONTHS.length} months, as picked in Review` : `${MONTHS[VIS.length]} onwards appear once ${toLY(MONTHS[VIS.length])} closes`}
-          </span>
-        )}
+        <span className="chart-filter-note">
+          {dataErr ? `Detail unavailable — ${dataErr}` : !leaves ? 'Loading store detail…' : `Charts: ${filterLabel} · ${monthLabel}`}
+        </span>
       </div>
 
       {/* ── Monthly chart ── */}

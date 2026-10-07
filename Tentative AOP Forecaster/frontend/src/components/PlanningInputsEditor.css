@@ -644,3 +644,8 @@
 .rss-item-code { font-weight: 600; }
 .rss-item-name { margin-left: 6px; font-size: 11.5px; color: var(--muted); }
 .rss-item-sel { background: var(--light); }
+
+/* UI declutter (2026-10-07): Filters / Context-columns toggles and the active-filter chip line */
+.pie-toggle-on { border-color: var(--navy3); background: var(--light); color: var(--navy); }
+.pie-filter-row { margin-top: -6px; }
+.pie-chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin: -6px 0 12px; }

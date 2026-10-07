@@ -1,52 +1,15 @@
 .review-wrap  { display: flex; flex-direction: column; gap: 20px; }
 
-.review-topnav { display: flex; align-items: center; gap: 8px; }
-
 .review-header {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap;
 }
 .review-title { font-size: 22px; font-weight: 700; color: var(--navy); }
 .review-sub   { color: var(--muted); margin-top: 4px; font-size: 14px; }
 
-.store-counts {
-  display: flex;
-  align-items: center;
-  background: var(--white);
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
-  padding: 16px 28px;
-}
-.count-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-}
-.count-divider {
-  width: 1px;
-  height: 36px;
-  background: var(--border);
-  flex-shrink: 0;
-  margin: 0 8px;
-}
-.count-num {
-  font-size: 30px;
-  font-weight: 700;
-  color: var(--navy);
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
 .count-num--lfl  { color: var(--navy3); }
 .count-num--ramp { color: var(--amber); }
 .count-num--nso  { color: var(--green); }
-.count-lbl {
-  font-size: 11px;
-  color: var(--muted);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
+
 
 .growth-card { padding: 20px 24px; }
 .section-title {
@@ -210,8 +173,6 @@
 .quickset-btn:disabled { color: var(--faint); cursor: default; }
 
 /* Month selector above the grid */
-.rv-month-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; }
-.rv-month-picker-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-right: 4px; }
 .rv-month-chip {
   padding: 3px 10px; border: 1px solid var(--border); border-radius: 999px;
   background: transparent; color: var(--muted); font-size: 12px; cursor: pointer;
@@ -222,7 +183,6 @@
 .rv-month-chip--on:hover { color: #fff; }
 .rv-month-chip--future { border-style: dashed; }
 .rv-month-chip:focus-visible { outline: 2px solid var(--navy3); outline-offset: 1px; }
-.rv-month-picker-reset { font-size: 12px; margin-left: 6px; }
 .quickset-input::-webkit-outer-spin-button,
 .quickset-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .quickset-input[type=number] { -moz-appearance: textfield; }
@@ -499,3 +459,13 @@
   padding: 3px 9px;
   white-space: nowrap;
 }
+
+/* UI declutter (2026-10-07): store counts as one slim line, AOP-override notes folded into one line */
+.review-counts { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+.review-counts b { color: var(--navy); font-variant-numeric: tabular-nums; }
+.review-counts b.count-num--lfl  { color: var(--navy3); }
+.review-counts b.count-num--ramp { color: var(--amber); }
+.review-counts b.count-num--nso  { color: var(--green); }
+.rv-aop-ov > summary { cursor: pointer; color: var(--char); font-weight: 600; width: fit-content; }
+.rv-aop-ov > summary:focus-visible { outline: 2px solid var(--navy3); outline-offset: 2px; border-radius: 4px; }
+.growth-card-header .aop-menu-pop { width: 340px; }

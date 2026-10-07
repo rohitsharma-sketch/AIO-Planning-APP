@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import './ReviewStep.css'
 import { apiUrl } from '../lib/apiBase'
 import { useShownMonths } from '../lib/horizon'
@@ -9,7 +9,7 @@ const ALL_ROWS = [...DIVS, 'Overall']
 
 function initQuick() { return Object.fromEntries(ALL_ROWS.map(r => [r, ''])) }
 
-export default function ReviewStep({ session, running, onRun, rates, setRates, cellLocks, setCellLocks, onBack, onGoToConfig }) {
+export default function ReviewStep({ session, running, onRun, rates, setRates, cellLocks, setCellLocks }) {
   const { n_stores, n_lfl, n_ramp, n_nso, growth_rates, base_sales } = session
   // Rule 1 (2026-09-25): columns/preview show only months whose base month has
   // closed. Rates for the hidden months stay in the plan ("All months" fills
@@ -299,25 +299,16 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
 
   return (
     <div className="review-wrap">
-      {/* Always-visible top nav — NOT inside App.jsx's header, which is hidden
-          when this runs embedded under the unified backend (port 8010), so
-          this is the one back/forward control guaranteed to render everywhere.
-          Manual navigation only: no side effects, no re-run. */}
-      {(onGoToConfig || onBack) && (
-        <div className="review-topnav">
-          {onGoToConfig && (
-            <button className="btn-sm-outline" onClick={onGoToConfig}>← Configure</button>
-          )}
-          {onBack && (
-            <button className="btn-sm-outline" onClick={onBack}>Results →</button>
-          )}
-        </div>
-      )}
-
+      {/* Back/forward is the header stepper (App.jsx) - shown on 8000 and 8010 alike since 2026-09-25,
+          Configure always reachable, Results once results exist - so the duplicate top/bottom nav
+          buttons here were dropped in the UI declutter (2026-10-07). */}
       <div className="review-header">
         <div>
           <h2 className="review-title">Review inputs</h2>
           <p className="review-sub">Edit growth rates per division and month. Lock individual cells to protect them.</p>
+          <p className="review-counts">
+            <b>{n_stores ?? '—'}</b> stores · <b className="count-num--lfl">{n_lfl ?? '—'}</b> LfL · <b className="count-num--ramp">{n_ramp ?? '—'}</b> Ramp · <b className="count-num--nso">{n_nso ?? '—'}</b> NSO
+          </p>
         </div>
         <div style={{display:'flex', alignItems:'center', gap:10, alignSelf:'flex-start', marginTop:4}}>
           {(anyChanged || !allLocked) && <span className="autosave-badge" title="Saved to this browser — restores automatically if you reload">Autosaved locally</span>}
@@ -325,26 +316,30 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
         </div>
       </div>
 
-      <div className="store-counts">
-        {[
-          { label: 'Total stores', val: n_stores, mod: '' },
-          { label: 'LfL',  val: n_lfl,  mod: 'lfl' },
-          { label: 'Ramp', val: n_ramp, mod: 'ramp' },
-          { label: 'NSO',  val: n_nso,  mod: 'nso' },
-        ].map(({ label, val, mod }, i) => (
-          <React.Fragment key={label}>
-            {i > 0 && <div className="count-divider" />}
-            <div className="count-item">
-              <span className={`count-num ${mod ? `count-num--${mod}` : ''}`}>{val ?? '—'}</span>
-              <span className="count-lbl">{label}</span>
-            </div>
-          </React.Fragment>
-        ))}
-      </div>
-
       <div className="card growth-card">
         <div className="growth-card-header">
-          <h3 className="section-title" style={{marginBottom: 0}}>Growth % — division × month</h3>
+          <h3 className="section-title" style={{marginBottom: 0, cursor: 'help'}}
+              title={'Hover any cell to reveal its lock control. Locked cells are skipped by "All months", which also fills months not shown. Divisions and Overall are independent.'}>
+            Growth % — division × month
+          </h3>
+          <details className="aop-menu aop-menu--panel aop-menu--right" style={{marginLeft: 'auto'}}>
+            <summary>Months · {VIS.length} of {MONTHS.length} ▾</summary>
+            <div className="aop-menu-pop">
+              <div className="aop-menu-group" role="group" aria-label="Months shown">
+                {MONTHS.map(m => (
+                  <button key={m} type="button"
+                    className={`rv-month-chip ${VIS.includes(m) ? 'rv-month-chip--on' : ''} ${CLOSED.includes(m) ? '' : 'rv-month-chip--future'}`}
+                    aria-pressed={VIS.includes(m)}
+                    title={CLOSED.includes(m) ? m : `${m} - its base month has not closed yet (future forecast)`}
+                    onClick={() => togglePick(m)}>{m}</button>
+                ))}
+              </div>
+              <div className="aop-menu-group">
+                <button type="button" className="link-btn" onClick={() => pickMonths(MONTHS)}>All</button>
+                {picked && <button type="button" className="link-btn" onClick={() => pickMonths(null)}>Closed months only</button>}
+              </div>
+            </div>
+          </details>
           <button
             className={`lock-all-btn ${allLocked ? 'lock-all-btn--locked' : ''}`}
             onClick={toggleAllLocks}
@@ -352,18 +347,6 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
           >
             <span className="lock-all-label">{allLocked ? 'Unlock all' : 'Lock all'}</span>
           </button>
-        </div>
-        <div className="rv-month-picker" role="group" aria-label="Months shown">
-          <span className="rv-month-picker-lbl">Months</span>
-          {MONTHS.map(m => (
-            <button key={m} type="button"
-              className={`rv-month-chip ${VIS.includes(m) ? 'rv-month-chip--on' : ''} ${CLOSED.includes(m) ? '' : 'rv-month-chip--future'}`}
-              aria-pressed={VIS.includes(m)}
-              title={CLOSED.includes(m) ? m : `${m} - its base month has not closed yet (future forecast)`}
-              onClick={() => togglePick(m)}>{m}</button>
-          ))}
-          <button type="button" className="link-btn rv-month-picker-reset" onClick={() => pickMonths(MONTHS)}>All</button>
-          {picked && <button type="button" className="link-btn rv-month-picker-reset" onClick={() => pickMonths(null)}>Closed months only</button>}
         </div>
         <div className="table-scroll">
           <table className="growth-table">
@@ -381,22 +364,23 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
           </table>
         </div>
 
-        {anyChanged
-          ? <p className="growth-note" style={{color:'var(--navy3)'}}>
-              Growth rates edited — changes apply on next run.{' '}
-              <button className="link-btn" onClick={resetRates}>Reset to uploaded values</button>
-            </p>
-          : <p className="growth-note">
-              Hover any cell to reveal its lock control. Locked cells are skipped by "All months", which also fills months not shown. Divisions and Overall are independent.
-            </p>
-        }
-        {Object.entries(aopOv).map(([m, o]) => (
-          <p key={m} className="growth-note growth-note--aop">
-            <b>{m}:</b> {o.cells.toLocaleString('en-IN')} store × division cells use your AOP Overrides
-            ({(o.lakhs / 100).toLocaleString('en-IN', { maximumFractionDigits: 1 })} Cr, all store types) instead of base × growth.
-            Change or clear them in Configure → Edit Growth % / NSO / AOP → AOP Overrides.
+        {anyChanged && (
+          <p className="growth-note" style={{color:'var(--navy3)'}}>
+            Growth rates edited — changes apply on next run.
           </p>
-        ))}
+        )}
+        {Object.keys(aopOv).length > 0 && (
+          <details className="growth-note rv-aop-ov">
+            <summary>AOP overrides in {Object.keys(aopOv).length} month{Object.keys(aopOv).length === 1 ? '' : 's'}</summary>
+            {Object.entries(aopOv).map(([m, o]) => (
+              <p key={m} className="growth-note growth-note--aop">
+                <b>{m}:</b> {o.cells.toLocaleString('en-IN')} store × division cells use your AOP Overrides
+                ({(o.lakhs / 100).toLocaleString('en-IN', { maximumFractionDigits: 1 })} Cr, all store types) instead of base × growth.
+                Change or clear them in Configure → Edit Growth % / NSO / AOP → AOP Overrides.
+              </p>
+            ))}
+          </details>
+        )}
       </div>
 
       <div className="actuals-source-toggle">
@@ -426,8 +410,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
         <div className="preview-row-wrap">
           {/* ── Values table ── */}
           <div className="card preview-card">
-            <h3 className="section-title">LFL Forecast — Quarterly (Rs. Lakhs)</h3>
-            <p className="growth-note" style={{marginBottom:8}}>Live LFL estimate, updates as you edit growth rates.</p>
+            <h3 className="section-title" style={{cursor: 'help'}} title="Live LFL estimate, updates as you edit growth rates.">LFL Forecast — Quarterly (Rs. Lakhs)</h3>
             <div className="table-scroll">
               <table className="growth-table preview-table">
                 <colgroup>
@@ -462,8 +445,7 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
 
           {/* ── Effective growth % table ── */}
           <div className="card preview-card">
-            <h3 className="section-title">Effective Growth % — LFL</h3>
-            <p className="growth-note" style={{marginBottom:8}}>Weighted average growth % per division per quarter.</p>
+            <h3 className="section-title" style={{cursor: 'help'}} title="Weighted average growth % per division per quarter.">Effective Growth % — LFL</h3>
             <div className="table-scroll">
               <table className="growth-table preview-table">
                 <colgroup>
@@ -504,24 +486,17 @@ export default function ReviewStep({ session, running, onRun, rates, setRates, c
         </div>
       )}
 
-      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:16, flexWrap:'wrap'}}>
+      <div style={{display:'flex', alignItems:'center', justifyContent:'flex-end', gap:16, flexWrap:'wrap'}}>
         <div style={{display:'flex', alignItems:'center', gap:12}}>
-          {onGoToConfig && (
-            <button className="btn-sm-outline" onClick={onGoToConfig} style={{fontSize:13}}>
-              ← Configure
-            </button>
-          )}
-          {onBack && (
-            <button className="btn-sm-outline" onClick={onBack} style={{fontSize:13}}>
-              View last results
-            </button>
-          )}
-        </div>
-        <div style={{display:'flex', alignItems:'center', gap:16}}>
-          <label className="debug-toggle">
-            <input type="checkbox" checked={includeDebug} onChange={e => setIncludeDebug(e.target.checked)} />
-            <span>Include flat detail sheet in Excel</span>
-          </label>
+          <details className="aop-menu aop-menu--panel aop-menu--right">
+            <summary>Run options{includeDebug ? ' · 1 on' : ''} ▾</summary>
+            <div className="aop-menu-pop">
+              <label className="debug-toggle">
+                <input type="checkbox" checked={includeDebug} onChange={e => setIncludeDebug(e.target.checked)} />
+                <span>Include flat detail sheet in Excel</span>
+              </label>
+            </div>
+          </details>
           <button className="btn-primary" onClick={handleRun} disabled={running} style={{minWidth:180}}>
             {running ? <span className="run-spinner">Running…</span> : 'Run forecast'}
           </button>
