@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### Landing: big "Planning Suite" title back
+- **Asked (user):** "i liked this better earlier" (about the intro after the declutter).
+- Restored the original intro: the "FY 2027–28 · Planning suite" eyebrow, the big "Planning Suite" title and both its styles. The rest of the Landing declutter (Account menu, sync strip, Lagan Export / Sync menu) stays.
+
 ### Calendar Engine: decluttered (suite declutter 6 of 7)
 - **Asked (user):** suite declutter.
 - **Moved:** Festival Master toolbar (Import, Download template, Sync dates (Google), Sync structure to all templates [confirm kept], Remove from all clusters + its input [confirm kept]) -> "Festival tools ▾", which also opens the Change Log (was an always-on side card). Cluster rename / region / copy-from [confirm kept] -> "Cluster settings ▾". Calendarised Sales: Month Wise Matrix, DW Comparison, P1/P2 Comparison, Run Details -> "More views ▾" (Monthly Summary stays a tab); month chips -> "Months: … ▾". Store Mapping: Download template, Change Log, Download change log -> "Data ▾", help -> ⓘ, cluster counts in one strip. Library cards: duplicate "Load & Preview" removed (card click / Enter loads), Rename [prompt kept] / Delete [confirm kept] -> "⋯", badges -> one status dot.
