@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### BIS: division growth matches AOP to the decimal (KIDS 12.8% -> 12.9%)
+- **Asked (user):** "kids growth is 12.9% in aop forecaster but it shows 12.8% in the bis".
+- **Cause:** BIS took LY from the departments' own synced actuals, which add up ~1 L higher for Jun'26 than the base AOP's growth is on (MENS +1.02 L, LADIES +1.04 L, KIDS +0.84 L). Same plan money (136.41 Cr), different LY: 12.847% vs 12.854%, either side of the rounding line.
+- **Fix:** each department's actual is scaled so the division adds up to AOP's base for that month (`_secActScale`); the mix between departments is still their own actual. Every screen now reads LY from `_secMonLY` (the row builder and magnifier had their own copies). Seed tag z3 re-balances each browser once; buyers' own entries and locks stay.
+- **Checked live:** MENS +9.3%, LADIES +11.6%, KIDS +12.9% = AOP; plan total = AOP to 0.0001 Cr in every division; BIS tests pass.
+
 ### BIS: Block Growth% hover shows the month-wise growth
 - **Asked (user):** "show the month wise growth in the hover".
 - Hovering a department's or attribute's Block Growth% (and Phase 2's Phase 1 column) lists Mar/Apr/May/Jun growth with each month's share of the block's LY, e.g. Mar +7.5% (29%), Apr-Jun +10.0% -> block +9.3%. The block is the LY-weighted average of the months, which is why departments differ under the same division AOP (`_blockWhy`).

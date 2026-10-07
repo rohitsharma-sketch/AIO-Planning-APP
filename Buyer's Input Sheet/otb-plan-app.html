@@ -2179,12 +2179,7 @@ function openMag(secId,dvId){
   _magLyMo={...(_magSec.lyMo||{})};
   if(_magDv){
     const divAnnual=_magDv.secs.reduce((a,s)=>a+s.ly,0);
-    AOP_MIS.forEach(mi=>{
-      const act=_secActual(_magSec.id,mi);
-      if(act!=null){_magLyMo[mi]=act;return;}
-      const divAct=S.aopBase?.[_magDv.id]?.[mi]??DEPT_ACTUAL_LY[_magDv.id]?.[mi]; // fresh AOP LFL base first - 2026-09-23
-      if(divAct&&divAnnual>0)_magLyMo[mi]=divAct*(_magSec.ly/divAnnual);
-    });
+    AOP_MIS.forEach(mi=>{_magLyMo[mi]=_secMonLY(_magSec,_magDv,mi,divAnnual);}); // one LY rule for every screen
   }
   if(!_magSec)return;
   document.getElementById('mag-secname').textContent=_magSec.nm;
@@ -3059,7 +3054,7 @@ function buildRows_dept(){
       // this is the OTHER half of that fix, since dept-level LY Actual Sales
       // and the TY-money-basis both redistribute from this SAME anchor).
       const slyMo={...(sec.lyMo||{})};
-      [11,0,1,2].forEach(mi=>{const act=_secActual(sec.id,mi);if(act!=null){slyMo[mi]=act;return;}const da=S.aopBase?.[dv.id]?.[mi]??DEPT_ACTUAL_LY?.[dv.id]?.[mi];if(da!=null&&divAnnual>0)slyMo[mi]=sec.ly/divAnnual*da;});
+      AOP_MIS.forEach(mi=>{slyMo[mi]=_secMonLY(sec,dv,mi,divAnnual);}); // one LY rule for every screen (_secMonLY)
       const secLY=c.reduce((a,mi)=>a+monLY(sec.ly,mi,slyMo),0);
       const tyByMon={};
       let secTY=0;
@@ -4124,12 +4119,24 @@ function toggleDivLock(dvId){
 var SEC_ACTUAL_LY={}, _SEC_ACT_MI=new Set();   // months the sync delivered: a department missing there sold nothing
 function _setSecActual(src){
   Object.keys(SEC_ACTUAL_LY).forEach(k=>delete SEC_ACTUAL_LY[k]);_SEC_ACT_MI.clear();
+  Object.keys(_actScale).forEach(k=>delete _actScale[k]);
   Object.entries(src||{}).forEach(([id,m])=>{SEC_ACTUAL_LY[id]={};Object.entries(m).forEach(([mi,v])=>{SEC_ACTUAL_LY[id][Number(mi)]=v;_SEC_ACT_MI.add(Number(mi));});});
 }
 function _secActual(id,mi){return _SEC_ACT_MI.has(mi)?(SEC_ACTUAL_LY[id]?.[mi]??0):null;}
+// The departments' own actuals are scaled to add up to AOP's division base for that month (user, 2026-10-07: "kids
+// growth is 12.9% in aop forecaster but it shows 12.8% in the bis" - BIS's later sales sync read Jun'26 ~1 L higher
+// than the base AOP's growth is on, in every division). The mix between departments stays their own actual.
+const _actScale={};
+function _secActScale(dv,mi){
+  const b=S.aopBase?.[dv.id]?.[mi],c=_actScale[dv.id+'__'+mi];
+  if(b==null)return 1;
+  if(c&&c.b===b)return c.f;
+  const s=dv.secs.reduce((a,x)=>a+(_secActual(x.id,mi)??0),0);
+  return (_actScale[dv.id+'__'+mi]={b,f:s>0?b/s:1}).f;
+}
 function _secMonLY(sec,dv,mi,activeDivAnnual){
   const act=_secActual(sec.id,mi);
-  if(act!=null)return act;
+  if(act!=null)return act*_secActScale(dv,mi);
   const divAnnual=activeDivAnnual??dv.secs.reduce((a,s)=>a+s.ly,0);
   const da=S.aopBase?.[dv.id]?.[mi]??DEPT_ACTUAL_LY?.[dv.id]?.[mi]; // fresh AOP LFL base first - see buildRows_dept()'s slyMo, 2026-09-23
   return da!=null&&divAnnual>0?sec.ly/divAnnual*da:monLY(sec.ly,mi,sec.lyMo);
@@ -5669,7 +5676,7 @@ function _lyHash(){
 // 'z1': 28 Sep fix - a department missing from a delivered month is 0, not the old share estimate (seeds set before it
 // counted winter lines in April and planned MENS Apr at -0.35%); the tag makes every browser re-seed once.
 // + the planner's factors once any of them is not 1.00 (2026-10-05) - so browsers re-seed only when factors bite
-function _aopSeedFp(){return JSON.stringify([S.aop,S.aopBase,_lyHash(),'z2']);} // z2: buyer seed = plain AOP share (2026-10-05)
+function _aopSeedFp(){return JSON.stringify([S.aop,S.aopBase,_lyHash(),'z3']);} // z2: buyer seed = plain AOP share (2026-10-05); z3: dept LY scaled to AOP's base (2026-10-07)
 // keepLocked (page open with a changed AOP, Sync AOP): the buyer's locked cells stay and the other departments
 // are re-balanced so each division x month still equals AOP. Without it (the "Re-seed plan" button) every cell
 // is reset to AOP and its lock cleared (it used to keep the lock flag on a value it had overwritten).
