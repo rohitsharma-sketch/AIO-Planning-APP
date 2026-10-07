@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-07
 
+### Handover doc updated with 7 Oct
+- **Asked (user):** "update the handover doc with today's changes".
+- `docs/HANDOVER.md`: new §11 (live AOP publish 116 and the BIS -> Sales Plan push; BIS numbers, layout and audit fixes; the three planner factor models with back-test results; the suite declutter commit by commit; the buyer_push right; today's gotchas). Header date updated; the stale "Sales Plan dist untracked" notes (§3.5, §9 item 3) corrected.
+
 ### Post-declutter audit: HTML apps
 - HTML-apps review (Landing, NSO, Re-Aligner, Growth vs LY, Listing): no critical / high issue; rights ids, menus, handlers and confirms verified. Fixes:
   - Growth vs LY and Listing: collapsible headings showed a literal "B8" / "BE" instead of ▸ / ▾ - the CSS escapes `\25B8` / `\25BE` had been written as a control byte (0x15) + "B8"; restored (checked live: ▸ renders). Listing cache-buster -> v=20261007b.

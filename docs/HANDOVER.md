@@ -1,6 +1,6 @@
 # RS_planning — Handover Document
 
-**Written:** 2026-09-02, by the outgoing Claude session, for a fresh Claude session/account picking up this project. **Last significantly updated:** 2026-09-21 (§7.2/§7.5/§7.13, §9 — a full Calendar Engine festival-date and engine audit; see §7.13 for the complete story).
+**Written:** 2026-09-02, by the outgoing Claude session, for a fresh Claude session/account picking up this project. **Last significantly updated:** 2026-10-07 — see **§11** for everything done that day (BIS audit + layout, planner factor models with back-test, suite-wide declutter of all 8 apps, live AOP Version 2 re-publish and the BIS → Sales Plan push). Before that: 2026-09-21 (§7.2/§7.5/§7.13, §9 — a full Calendar Engine festival-date and engine audit). Per-commit detail for every change lives in the repo-root `CHANGELOG.md`; `PROJECT-CONTEXT.md` (repo root) is the short baseline for review sessions.
 
 This is a single, self-contained brain-dump of everything a new Claude instance needs to work on this repo competently from message one. The previous session used Claude Code's persistent memory system, which does **not** transfer to a different account/ID — so treat this document as the full replacement for that memory. Read it once before touching anything.
 
@@ -91,7 +91,7 @@ Frontend served under `/planning/` on 8010; backend code lives at `SalesPlan/bac
 
 - **Known open bug (found, not yet fixed)**: a broken `STORE_MASTER_PATH` reference somewhere in SalesPlan's backend — flagged by a survey agent during the previous session but never chased down or fixed. Worth grepping for and confirming before it causes a real failure.
 - **Known open item**: an orphaned `mrp_reapportionment_engine.py` router — appears unmounted/unused. Confirm whether it's dead code or just not wired up yet before deleting.
-- Its `dist/` folder is **still gitignored and untracked** as of the last session (unlike Calendar Engine and AOP Forecaster, whose `dist/` are force-tracked in git — see §6.2). Confirm with the user whether SalesPlan should get the same "commit the build" treatment before assuming it's needed.
+- Its `dist/` folder is now **force-tracked in git like Calendar Engine's and AOP's** (user's standing rule: commit the dists with `git add -A -f`; `dist/` is in `.gitignore`, so a plain `git add` silently skips the new bundle and `dist/index.html` ends up pointing at a missing file).
 
 ### 3.6 Buyer's Input Sheet (`Buyer's Input Sheet/`)
 Always standalone, port **5050** — never unified onto 8010. Linked from Landing's card grid.
@@ -312,7 +312,7 @@ A Windows Scheduled Task **"RS Planning - Actuals Auto Sync"** runs daily at 05:
 
 1. **SalesPlan**: a broken `STORE_MASTER_PATH` reference somewhere in the backend — flagged by survey, never chased down.
 2. **SalesPlan**: an orphaned `mrp_reapportionment_engine.py` router that appears unmounted — confirm dead vs. not-yet-wired before touching.
-3. **SalesPlan**: `dist/` is still gitignored/untracked, unlike Calendar Engine and AOP Forecaster — confirm with the user whether it needs the same "commit the build" treatment.
+3. ~~**SalesPlan**: `dist/` untracked~~ — resolved: all three React dists (Calendar, AOP, Sales Plan) are force-tracked; always `git add -A -f` the rebuilt `dist/`.
 4. **AOP Forecaster**: `.claude/launch.json` has a stale `cwd`.
 5. **AOP Forecaster**: `db/base.py` has a stale "not wired in yet" docstring comment on some auth pieces that no longer reflects reality — don't trust it, verify actual behavior.
 6. **AOP Forecaster**: override-cell highlighting in results tables requested but not built.
@@ -329,3 +329,44 @@ A Windows Scheduled Task **"RS Planning - Actuals Auto Sync"** runs daily at 05:
 The previous Claude session used Claude Code's file-based persistent memory system (`~/.claude/projects/.../memory/`), building up exactly the kind of business-rule/gotcha knowledge captured in this document over many turns, and treated writing new rules to memory as part of finishing a task, not an optional extra step. That memory does not carry over to a new account/ID — this document is the one-time transfer of everything in it that was relevant across the whole repo. If the new session also has persistent memory available, it's worth re-establishing the same habit (§5.2) going forward rather than relying on a document like this staying manually up to date.
 
 The user prefers thorough, verified-before-reporting work — multiple times in the last session, "check thoroughly," "verify from every angle," and "check it 5 times before you show it to me" were explicit instructions, and every fix above was verified live (DB queries, fresh backend script tests, or real browser interaction with actual Blob-content interception for downloads) before being reported as done, not just assumed correct from reading the code.
+
+---
+
+## 11. Changes on 2026-10-07 (one long session — about 28 commits, all on `main`, pushed to both `origin` and `aio`)
+
+Every item below has a full entry (with the user's exact ask) in `CHANGELOG.md`. Commits named here are the main ones.
+
+### 11.1 Live data state at the end of the day
+- **Live AOP = Version 2, publish 116** (re-published by the user at 15:17): MAMJ **43,186.79 L**, +11.1% (publish 112 was 43,184.66 L). Version 2 stays the locked live version.
+- **BIS → Sales Plan push on publish 116** (16:06): 944 department × month rows stamped `aop:116`, 41 departments switched off (−100%), growth = plain AOP share (no buyer edits existed). Sales Plan's Division Plan (`division_plan._bis_aop()`) now reads publish 116. Backup of the previous `aop:112` rows: Claude's scratchpad `sp_buyer_growth_backup_aop112.json`.
+- **BIS plan state is per browser** (localStorage: edits, locks, inactive departments). Before pushing from any browser other than the user's, diff its inactive set and edits against the rows Sales Plan holds now (`GET :8000/api/config/buyer-department-growth`) — three departments (L_EW_BLOUSE, MSE_MIX, MU_SHACKET) were off only in the user's browser and had to be mirrored first.
+- The saved planner factor table (`Buyer's Input Sheet/factor_table.json`) is still on **Matrix** — the new models (§11.3) are built but no planner has switched and saved yet.
+
+### 11.2 Buyer's Input Sheet (`Buyer's Input Sheet/otb-plan-app.html`, `sync_server.py`)
+- **Numbers:** department LY is its own actual scaled so each division adds up to AOP's base for the month (`_secActScale` inside `_secMonLY`) — BIS's later sales sync read Jun'26 ~1 L higher than AOP's base, which put KIDS at 12.8% vs AOP 12.9%. All LY reads go through `_secMonLY`. Seed tag `z3`. Block Growth% = LY-weighted average of the MAMJ months (hover lists them, `_blockWhy`). Avg ST% = simple mean of the selected months' ST% (hover lists them, one source `_stMon`).
+- **Layout (lean by default):** Avg ST% · 25 V 26 · LY · Planner Gr% (+Use) · Block Growth% · Plan Total · vs LY; "+ Context columns" (localStorage `bis_ctx`) adds monthly ST, 19 V 26, Contrib %, Factor, Planner Value. Division and Department Summary follow the same pattern (`_monCols`). Department name → read-only details drawer. KPI tiles + bottom total bar → one line with a live **AOP check** (`_aopCheck`: every division × AOP month = AOP within 0.01 L, red with the gap otherwise). Data ▾ menu (Refresh data + status, History, Export); Factors in the "▦ Factor matrix" button; filters closed by default with chips.
+- **Audit fixes:** a locked division is never touched by Re-apportion / Reset to AOP share / Re-seed / Revert / Clear all; Revert and Reset re-balance to AOP; re-balancing never goes below −100% (overshoot shows red in the AOP check); Clear all inputs = `clearAllInputs` (inputs + locks + buyer-set); Lock All label fixed; the filter panel's "Clear all" no longer empties the grid.
+- **Server:** a finished sync job (sales / sell-thru / history) is reused only while the data-lake version it started from is current (`_job_fresh`), so "Refresh data" picks up a new export without restarting 5050. CORS removed, request bodies capped at 25 MB. The page checks how many rows Sales Plan stored after a push.
+
+### 11.3 Planner's input — three factor models (Factor matrix window)
+"Planner uses" picks one; only admins / planners can save (server validates: `_model_error`, `_cont_error`). Each division is always re-balanced to its AOP afterwards, so only relative factors matter.
+1. **Matrix (36 rows)** — today's hand-set table (sell-thru × LY growth × fill-rate tags).
+2. **Weighted builder** — driver cards (drag to set priority), weights, slabs with draggable boundaries (by value or **percentile within the division**), floor/cap rules in card order, small-department damping `f' = 1 + (f − 1) × LY / (LY + k)`, clamp. Factor = weighted geometric mean of slab multipliers.
+3. **Continuous** — no slabs: each driver vs its division median, raised to a signed strength (sell-thru, 25 V 26 growth, optional 19 V 26 growth, fill rate; optional "growth must agree on both comparables" switch), then the same rules / damping / clamp. **Tune** searches ~3,000 settings.
+- **Back-test** (`_fmBacktest`, no look-ahead): short = Mar–Apr 2026 inputs → May–Jun 2026 department share; long = Jul–Oct 2025 → Mar–Jun 2026. Tune weights the long test double. Results on 151 departments (error as % of sales): plain share 14.83 / 14.35; saved matrix 15.72 / 14.35 (worse than plain); **Continuous tuned (sell-thru 0.375, 25 V 26 0.375, fill off) 11.13 / 13.54**. Evidence: LY growth is momentum (a positive strength; the matrix's "cut high growers" rows lose), fill rate hurt as a driver, and 19 V 26 did not help (Tune leaves it at 0).
+- Tests: `Buyer's Input Sheet/test_factor_model.js`, `test_sync_server_ly.py`.
+
+### 11.4 Suite-wide declutter (layout only — no number or API changes)
+One commit per app: Re-Aligner `878c2a0`, Growth vs LY `61e99bf`, Listing `8af836d`, NSO `7163dca`, Landing `81c5c15` (+ big "Planning Suite" title restored at the user's request `405f143`), Calendar `3ba1964` (+ Run Details view removed `695793e`), AOP `e20431d`, Sales Plan `0a0576e` (+ confirms on Reset to 100 / Revert to Original `fa76170`).
+- **Pattern:** rarely used actions moved into menus (React apps: native `<details>` — Calendar `src/components/ui.jsx` Menu, AOP `.aop-menu`, Sales Plan `.sp-menu`; HTML apps: the BIS `.tmenu` pattern). Menu items always stay in the DOM so id-based rights greying and e2e texts keep working; every moved action kept its handler, confirm and label. Lean default tables with "+ Context columns", filters closed with removable chips, duplicate tiles / titles / buttons removed, proven-dead code deleted. New localStorage keys are prefixed per app (`cal.`, `aop.`, `sp.`) because Calendar, AOP and Sales Plan share the 8010 origin.
+- **Landing:** one **Account ▾** menu holds Theme, Users (admin only), Servers start / stop all, Sign out — ids `theme-btn`, `admin-link`, `launch-all-btn`, `signout-btn`, `signout-label` unchanged.
+- **Post-declutter audit** (four reviewers): no critical / high issue; small fixes `c5f39f2`, `6b3b196`, `156b510`, `42ebd1a`, `9321772`.
+- **User preference recorded:** keep page hero titles when decluttering; trim buttons and tiles instead.
+
+### 11.5 Access and security
+- New right **`buyer_push`** ("Send the Buyer's plan to Sales Plan", `RS Planning Platform/backend/auth/rights.py` + Landing `GUARDED` on `/config/buyer-department-growth`) — everyone has it unless an admin switches it off per person in Users & access.
+
+### 11.6 Gotchas learned today
+- **Backslashes in Bash heredocs:** the Bash tool collapses a doubled backslash inside heredoc Python, so a CSS escape like `\25B8` became a control byte + "B8" (broke the ▸/▾ arrows in two apps and a CHANGELOG line). Build backslashes with `chr(92)` or write the patch script with a file tool, and scan edited files for control bytes before committing.
+- **Viewing React builds without signing in:** run `vite preview` on the dist (`.claude/launch.json` has "Calendar preview" / "SalesPlan preview"), open a dist `.css` URL to get a same-origin blank page, then `document.write` an HTML that stubs `window.fetch` with the right empty shapes and loads the dist module. Never type passwords.
+- **Restarting 7800 / 5050 / 8010:** stop the PIDs shown by `netstat -ano` (not `Get-NetTCPConnection`), then `Start-ScheduledTask "RS Planning - Landing Server 7800"`; Landing relaunches the apps. Killing only 5050 or 8010 lets Landing's watchdog bring it back within ~45 s.
