@@ -292,6 +292,15 @@ def create_calendar(body: dict = Body(...), actor: dict = Depends(require_role("
         calendar_id = int(body["id"])
         if session.get(Calendar, calendar_id) is not None:
             raise HTTPException(409, f"Calendar id {calendar_id} already exists")
+        # year alignment - a calendar that wraps the year end or drifts a week is refused, from any screen (user,
+        # 2026-10-08: "make a check for this issue in the system ... for all calendars - saved or unsaved")
+        from db.calendar_shift import alignment_issues
+        bad = alignment_issues({cl: [(datetime.date.fromisoformat(p[0]), datetime.date.fromisoformat(p[1])) for p in pairs]
+                                for cl, pairs in body.get("dayMap", {}).items()})
+        if bad:
+            raise HTTPException(422, "Calendar not saved - it is out of line with the year in "
+                                     + "; ".join(f"{cl}: {v}" for cl, v in bad.items())
+                                     + ". Re-generate it with the current engine.")
 
         c = Calendar(calendar_id=calendar_id, name=body["name"], ref_year=body["refYear"], fut_year=body["futYear"],
                      saved_at=datetime.datetime.fromisoformat(body["savedAt"]), engine=body.get("engine"))

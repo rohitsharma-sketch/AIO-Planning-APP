@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { syncFestivalWindow, getClusterProfiles, putClusterProfiles, getAppState, updateCalendarFestivals, listCalendarLibrary, getCalendar, saveCalendar, deleteCalendar, syncFestivalReference } from '../../lib/api'
-import { generateMappings, validate, computeMonthly, buildFestMap } from '../../lib/engine'
+import { generateMappings, validate, computeMonthly, buildFestMap, alignmentIssues } from '../../lib/engine'
 import { parseDate, fmtISO, fmtDisp, calDiff, weekNum } from '../../lib/dateUtils'
 import ClusterTabs from './ClusterTabs'
 import FestivalTable from './FestivalTable'
@@ -248,7 +248,12 @@ export default function CalendarisationTab({ isPlanner, engineVersion = 1 }) {
       setDayMap(activeMappings.map(m => toRow(m, perCluster[activeIdx].name)))
       setValidationIssues(validate(activeMappings, ry, fy, ms, workingProfiles[activeIdx].festivals, coreFestivalNamesFor(workingProfiles[activeIdx].name), engineVersion))
       setMonthlySummary(computeMonthly(activeMappings))
-      setEngineStatus({ ok: true, msg: `${syncMsg}Calendar generated: ${activeMappings.length} days mapped for "${workingProfiles[activeIdx].name}".` })
+      // year alignment over EVERY cluster, not only the one on screen (user, 2026-10-08: "for all calendars - saved or
+      // unsaved") - a failing calendar is also refused by the save
+      const misaligned = perCluster.filter(cm => alignmentIssues(cm.mappings).length).map(cm => cm.name)
+      setEngineStatus(misaligned.length
+        ? { ok: false, msg: `${syncMsg}Calendar generated but OUT OF LINE with the year (year-end wrap or a weekly drift) in: ${misaligned.join(', ')}. It can't be saved - see Validation on each cluster.` }
+        : { ok: true, msg: `${syncMsg}Calendar generated: ${activeMappings.length} days mapped for "${workingProfiles[activeIdx].name}". Year alignment checked for all ${perCluster.length} clusters.` })
       // workingProfiles alongside perCluster for the same reason: a year-sync
       // just above (applyYearToProfiles) may have changed festival dates and
       // called persist(workingProfiles), but that setProfiles() is equally

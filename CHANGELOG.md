@@ -7,6 +7,17 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### Calendar engine: year-end wrap fixed + a year-alignment check for every calendar (saved or unsaved)
+- **Asked (user):** "check if the rule mentioned in this matrix is right or is it reversed"; "why is it the holi shift needs apr days ?"; "yes fix the calendar and show me before/after"; "make a check for this issue in the system"; "for all calendars - saved or unsaved".
+- Finding: the matrix direction is right (LY day -> TY day). Holi is right too (ref 1-10 Mar 2025 -> TY 19-28 Feb 2026, offset 355, as the user's reference calendar). The real fault was in the **2025 -> 2026 calendar**: TY 1-5 Jan 2026 were filled from ref 26-31 Dec 2025, so almost every day ran a week late (+371 instead of +364, 1,287 vs 747 days) and each month's last week spilled into the next (e.g. ref 17-26 Mar -> TY 1-8 Apr). The 2024 -> 25 and 2026 -> 27 calendars were fine.
+- Cause (engine V2): the one-to-one assignment measured month and day distance with a wrap (December counted as the month before January, 26 Dec as 7 days from 2 Jan). In 2025 -> 26 the big festivals move ~19 days later, the September shortage was borrowed month by month back to January, and January took the reference year's December. Fix: distances inside the year, no wrap (`engine.js` _v2Remap cost).
+- Before / after, 2025 -> 2026, all 10 clusters (3,650 days): same date as the user's reference 1,055 -> 2,210; same month 2,404 -> 2,779 (66% -> 76%); same weekday 2,834 -> 2,854; reused LY days 0 -> 0; most common shift +371 -> +364. LAD (UP + NCR): Jan, May-Aug and Dec 2025 now stay whole in their own TY month; only Holi and the Sep-Nov festival season move. The 2024 and 2026 calendars rebuild identically.
+- **Check, everywhere:** two rules - no day moved 3+ months (year-end wrap) and "same weekday last year" (364 days per year) is the most common shift (no weekly drift).
+  - Unsaved: the engine's Validation shows them as errors, and Generate checks all clusters at once ("OUT OF LINE with the year in: ...").
+  - Save: POST /calendar-library refuses a failing calendar (422 with the clusters and reasons) from any screen - tested with the saved 2025 calendar (refused, nothing written).
+  - Saved: nightly calendar_check check 7 scans every saved calendar - today it flags only "2025 -> 2026 Calendar - All" (9 clusters) until it is replaced with the fixed version.
+- Tests: engine.test.mjs test11 (real 2025 -> 26 festivals clean; planted wrap and week drift caught), calendar_check_sync --test (alignment cases). The saved 2025 -> 2026 calendar itself is NOT replaced yet - waiting for the user's go-ahead.
+
 ### Calendar: Month Wise Matrix totals row
 - **Asked (user):** "need a total of months in the bottom row". Bottom Total row per store: Ref Actual Sales, every TY month, Split Total (tick when it equals Ref Actual Sales); a Total row per store in the XLSX download too. Display only.
 

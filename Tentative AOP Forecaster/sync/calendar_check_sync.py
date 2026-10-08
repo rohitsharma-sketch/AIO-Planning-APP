@@ -14,6 +14,9 @@ Checks (month-wise snapshots, the ones the nightly sync rebuilds):
   5. day maps            = each cluster of the calendar used covers every plan-year day once, no LY day reused
   6. clusters            = every TRADING store (SAME / NEW STORE) with sales has a calendar cluster; sales of the
                            rest (closed stores, HO, warehouses, sites - 316 L on 28 Sep 2026) are reported, not shifted
+  7. calendar alignment  = EVERY saved calendar (not only the one used): no day moved 3+ months (year-end wrap) and
+                           "same weekday last year" is the most common shift (no weekly drift) - db.calendar_shift.
+                           alignment_issues; the engine checks unsaved calendars and the save refuses a failing one
   plus a self-test: a planted 0.02 L error must fail checks 1 and 2, or the check itself is broken.
 
 Not covered: that the data lake equals the finance / MIS books (needs an external report), festival dates
@@ -91,6 +94,19 @@ def day_map_issues(pairs, fut_year):
     return bad
 
 
+def alignment_check(session):
+    """Check 7 over every saved calendar (user, 2026-10-08: "for all calendars - saved or unsaved")."""
+    from db.calendar_shift import alignment_issues
+    by_cal = {}
+    for name, cl, r, f in session.execute(text(
+            "SELECT c.name, p.cluster_name, p.ref_date, p.fut_date FROM calendar.calendar_day_pairs p "
+            "JOIN calendar.calendars c ON c.calendar_id = p.calendar_id")):
+        by_cal.setdefault(name, {}).setdefault(cl, []).append((r, f))
+    bad = {name: issues for name, maps in by_cal.items() if (issues := alignment_issues(maps))}
+    return {"name": "7 every saved calendar in line with the year (no year-end wrap, no weekly drift)",
+            "ok": not bad, "calendars": len(by_cal), "bad": bad}
+
+
 def raw_monthwise(session, months):
     """store x division x month SL_V from the newest month-wise export (same file the reindex reads)."""
     import pyarrow.parquet as pq
@@ -142,6 +158,7 @@ def run_checks(session):
     trading = [st for st in unmapped_names if str(status.get(st) or "").upper() in ("SAME STORE", "NEW STORE")]
     checks.append({"name": "6 every trading store with sales has a calendar cluster", "ok": not trading, "trading_without_cluster": trading,
                    "others": {st: status.get(st) for st in unmapped_names if st not in trading}})
+    checks.append(alignment_check(session))
     selftest = not compare("", planted(actual), raw)["ok"] and not compare("", planted(shifted), recomputed)["ok"]
     checks.append({"name": "self-test: a planted 0.02 L error is caught", "ok": selftest})
     return {"calendar_id": cal_id, "calendar_name": rx.get("calendar_name"), "raw_file": raw_file, "months": months,
@@ -183,6 +200,13 @@ def demo():
     s, un = shift(a.assign(store=["S1", "S2"]), {"S1": "C"}, cm)
     assert s["col"].tolist() == ["2027-03"] and un["store"].tolist() == ["S2"]
     assert day_map_issues(pairs, 2027)["C"]["plan_days"] == 4
+    from db.calendar_shift import alignment_issues
+    good = [(d(2025, 1, 10) + datetime.timedelta(i), d(2025, 1, 10) + datetime.timedelta(i + 364)) for i in range(60)]
+    late = [(r, f + datetime.timedelta(7)) for r, f in good]                    # a week late all along
+    wrap = good[:-1] + [(d(2025, 12, 27), d(2026, 1, 3))]                       # ref December on TY January
+    assert alignment_issues({"C": good}) == {}
+    assert alignment_issues({"C": late})["C"]["most_common_shift"] == 371
+    assert alignment_issues({"C": wrap})["C"]["far_moves"] == 1
     print("calendar_check demo OK")
 
 

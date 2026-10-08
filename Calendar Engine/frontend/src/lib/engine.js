@@ -9,7 +9,7 @@
 // reads have been converted to explicit function parameters (refYr, futYr,
 // maxShift, moPri, fests) threaded through the call chain. The scoring/
 // assignment/repair/validation algorithm itself is unchanged.
-import { parseDate, fmtISO, fmtDisp, addDays, calDiff, yearDays } from './dateUtils.js';
+import { parseDate, fmtISO, fmtDisp, addDays, calDiff, yearDays, dayOfYear } from './dateUtils.js';
 
 // Ported from the source file's lines 1336-1337 (defined alongside MON3,
 // just above the Date Utilities section there) since `validate` depends on
@@ -380,12 +380,17 @@ function _v2Remap(v1, fests, refYr, futYr, maxShift, moPri, coreNames, lagan) {
   // Festive TY days (full map) effectively never leave their own month.
   const tyDays = toReassign.map(m => m.futureDate);
   const lyFree = rDays.filter(d => !committed.has(fmtISO(d)));
-  const prefDm = moPri === 'next' ? 1 : 11; // (ref month - fut month) mod 12 of the preferred neighbour
+  // Month and day distance are measured INSIDE the year - no wrap from December round to January (user, 2026-10-08:
+  // the 2025->26 calendar filled TY 1-5 Jan 2026 from ref 26-31 Dec 2025, so every month after ran a week late, +371
+  // instead of +364). The reference year's December is 11 months from its January, not the month before it: with the
+  // wrap, a shortage festivals caused in Sep (Diwali / Dussehra moving 19 days later) was borrowed month by month
+  // all the way back to January, which then took the wrong year's December.
+  const prefDm = moPri === 'next' ? 1 : -1; // ref month - fut month of the preferred neighbour
   const cost = (rd, fd) => {
-    const dm = ((rd.getMonth() - fd.getMonth()) % 12 + 12) % 12, md = Math.min(dm, 12 - dm);
+    const dm = rd.getMonth() - fd.getMonth(), md = Math.abs(dm);
     const monthCost = md === 0 ? 0 : fMapFull[fmtISO(fd)] ? 1e7 : md === 1 ? (dm === prefDm ? 10000 : 10500) : 1e5 * md;
     return monthCost + (laganMatch(W, rd, fd) ? 0 : W.lagan) + (rd.getDay() !== fd.getDay() ? 100 : 0) + (isWeekend(rd) !== isWeekend(fd) ? 50 : 0)
-         + Math.abs(calDiff(rd, fd));
+         + Math.abs(dayOfYear(fd) - dayOfYear(rd));
   };
   const n = Math.max(tyDays.length, lyFree.length);
   const C = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) =>
@@ -515,6 +520,35 @@ export function repairExcessiveShifts(assignments, rMap, fMap, W, maxShift, moPr
   }
 }
 
+// --- Year alignment check (2026-10-08) ---
+// Two rules, the same as the nightly check in sync/calendar_check_sync.py (alignment_issues):
+//  1. no day moves 3+ calendar months (a reference December day on a TY January day is 11 months - the year-end wrap);
+//  2. "same weekday last year" (+364 days) is the most common shift - otherwise the calendar has drifted a week.
+// Festival blocks legitimately move days 1-2 months; neither rule fires on them.
+export function alignmentIssues(mappings) {
+  const issues = [], far = [], shifts = new Map(), years = new Map();
+  for (const m of mappings) {
+    const days = Math.round((m.futureDate - m.refDate) / 864e5);
+    shifts.set(days, (shifts.get(days) || 0) + 1);
+    const y = m.futureDate.getFullYear() - m.refDate.getFullYear();
+    years.set(y, (years.get(y) || 0) + 1);
+    if (Math.abs(m.futureDate.getMonth() - m.refDate.getMonth()) >= 3) far.push(m);
+  }
+  const expected = 364 * ([...years.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 1);   // same weekday
+  if (far.length) {
+    issues.push({ type: 'error', icon: 'ERR', title: 'Year-End Wrap / Far Move',
+      desc: `${far.length} day(s) moved 3+ months, e.g. ${far.slice(0, 3).map(m => `${fmtDisp(m.refDate)} -> ${fmtDisp(m.futureDate)}`).join(', ')}. `
+        + 'A reference December day on a TY January day (or the reverse) makes every later month run late. Re-generate.' });
+  }
+  const [topShift, topCount] = [...shifts.entries()].sort((a, b) => b[1] - a[1])[0] || [expected, 0];
+  if (mappings.length && topShift !== expected) {
+    issues.push({ type: 'error', icon: 'ERR', title: 'Weekly Drift',
+      desc: `The most common shift is ${topShift} days (${topCount} days), not ${expected} (same weekday last year: ${shifts.get(expected) || 0} days). `
+        + `Most days sit ${Math.round((topShift - expected) / 7)} week(s) off, so each month's edge spills into the next. Re-generate.` });
+  }
+  return issues;
+}
+
 // --- Validation ---
 // coreNames: same per-cluster core-festival list generateMappings takes -
 // check C below only makes sense for festivals that are actually allowed to
@@ -580,6 +614,10 @@ export function validate(mappings, refYr, futYr, maxShift, fests, coreNames, ver
       issues.push({ type:'warn', icon:'WARN', title:'Excessive Date Shift', desc:`${fmtDisp(m.refDate)} -> ${fmtDisp(m.futureDate)}: calendar shift of ${m.dateDiff > 0 ? '+' : ''}${m.dateDiff} days exceeds max (${maxShift}).` });
     }
   }
+
+  // G: year alignment (user, 2026-10-08: "make a check for this issue in the system ... for all calendars - saved or
+  // unsaved") - the 2025->26 calendar filled TY 1-5 Jan from ref 26-31 Dec and so ran a week late all year
+  issues.push(...alignmentIssues(mappings));
 
   // E: Month leakage - adjacent-month matching in V2 is intentional, not leakage
   if (version === 2) return issues;

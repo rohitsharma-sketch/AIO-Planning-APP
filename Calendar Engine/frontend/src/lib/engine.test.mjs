@@ -5,7 +5,7 @@
 //   node src/lib/engine.test.mjs
 // No framework/fixtures - one file, one process exit code.
 import assert from 'node:assert/strict';
-import { generateMappings, validate } from './engine.js';
+import { generateMappings, validate, alignmentIssues } from './engine.js';
 import { fmtISO } from './dateUtils.js';
 // engine.js's own dates are local-time Date objects, formatted via fmtISO()
 // (local getFullYear/getMonth/getDate) - never .toISOString() (UTC), which
@@ -212,6 +212,30 @@ function test10_laganMatched() {
     console.log(`PASS test10_laganMatched V${version} (lagan mismatches ${miss(off)} -> ${miss(on)})`);
   }
 }
+
+// UP + NCR's 2025 -> 2026 festivals (calendar 1790655106264, 2026-10-08): Diwali / Dussehra / Shraad / Rakhi move ~19
+// days later, which made V2 borrow month by month back to January and fill TY 1-5 Jan 2026 from ref 26-31 Dec 2025 -
+// every month then ran a week late (+371). The fix: month / day distance no longer wrap Dec <-> Jan.
+function test11_yearAlignment() {
+  const F = [
+    { name: 'Shraad', refDate: '2025-09-07', futDate: '2026-09-26', pre: 0, core: 15, post: 0 },
+    { name: 'Eid al-Fitr', refDate: '2025-03-31', futDate: '2026-03-21', pre: 4, core: 3, post: 0 },
+    { name: 'Raksha Bandhan', refDate: '2025-08-09', futDate: '2026-08-28', pre: 2, core: 1, post: 0 },
+    { name: 'Dussehra', refDate: '2025-10-02', futDate: '2026-10-20', pre: 9, core: 1, post: 0 },
+    { name: 'Diwali', refDate: '2025-10-20', futDate: '2026-11-08', pre: 5, core: 3, post: 8 },
+    { name: 'Holi', refDate: '2025-03-14', futDate: '2026-03-04', pre: 14, core: 3, post: 0 },
+  ];
+  const ms = generateMappings(F, 2025, 2026, 45, 'prev', null, 2);
+  assert.deepEqual(alignmentIssues(ms), [], 'the 2025 -> 2026 calendar must be in line with the year');
+  assert.ok(ms.filter(m => m.futureDate.getMonth() === 0).every(m => m.refDate.getMonth() <= 1), 'TY January took a reference December day');
+  const bad = ms.map(m => ({ ...m }));
+  bad[0] = { ...bad[0], refDate: new Date(2025, 11, 27) };   // planted: ref 27 Dec 2025 on TY 1 Jan 2026
+  assert.ok(alignmentIssues(bad).some(i => i.title.startsWith('Year-End Wrap')), 'a planted year-end wrap must be caught');
+  const late = ms.map(m => ({ ...m, futureDate: new Date(m.futureDate.getTime() + 7 * 864e5) }));
+  assert.ok(alignmentIssues(late).some(i => i.title === 'Weekly Drift'), 'a week-late calendar must be caught');
+  console.log('PASS test11_yearAlignment (no wrap, no drift; planted wrap and drift caught)');
+}
+test11_yearAlignment();
 test10_laganMatched();
 test1_noMonthAdjacencyViolations();
 test1b_reportedRowsRejected();

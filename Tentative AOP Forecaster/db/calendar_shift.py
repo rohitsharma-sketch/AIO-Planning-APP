@@ -44,6 +44,35 @@ def month_shares(pairs, weights=None):
     return dict(out)
 
 
+def alignment_issues(pairs_by_cluster):
+    """{cluster: what's wrong} for clusters whose day map is out of line with the year (user, 2026-10-08: "make a check
+    for this issue in the system ... for all calendars - saved or unsaved"; the 2025->26 calendar filled TY 1-5 Jan
+    2026 from ref 26-31 Dec 2025 and so ran a week late all year). Same two rules as the engine's alignmentIssues():
+      1. no day moves 3+ calendar months (ref December -> TY January is 11 - the year-end wrap);
+      2. the most common shift is "same weekday last year" (364 days per year between them) - else a weekly drift.
+    pairs_by_cluster: {cluster: [(ref_date, fut_date), ...]} with datetime.date values. {} = all clusters fine."""
+    bad = {}
+    for cl, pairs in pairs_by_cluster.items():
+        if not pairs:
+            continue
+        shifts = Counter((f - r).days for r, f in pairs)
+        years = Counter(f.year - r.year for r, f in pairs).most_common(1)[0][0]
+        expected = 364 * years
+        far = [(r, f) for r, f in pairs if abs(f.month - r.month) >= 3]
+        top, top_n = shifts.most_common(1)[0]
+        problems = {}
+        if far:
+            problems["far_moves"] = len(far)
+            problems["examples"] = [f"{r.isoformat()} -> {f.isoformat()}" for r, f in sorted(far)[:3]]
+        if top != expected:
+            problems["most_common_shift"] = top
+            problems["most_common_days"] = top_n
+            problems["same_weekday_days"] = shifts.get(expected, 0)
+        if problems:
+            bad[cl] = problems
+    return bad
+
+
 def load_day_weights(session):
     """{cluster: {date: day sales}} from calendar.cluster_day_sales, {} when
     the table doesn't exist yet (day-count fallback everywhere)."""
