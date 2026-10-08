@@ -65,6 +65,8 @@ def _norm_div(d):
         return d
     if d in GM_DEPTS:
         return "GM"
+    if d == "DND":   # user, 2026-10-08: DND belongs to RETAIL
+        return "RETAIL"
     return None
 
 

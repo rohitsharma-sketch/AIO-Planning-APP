@@ -2041,9 +2041,7 @@
     "LS_W_MIX": {
       "active": false,
       "contrib_pct": null
-    }
-  },
-  "RETAIL": {
+    },
     "NF_B_SHOWER GEL": {
       "active": false,
       "contrib_pct": null
@@ -2144,6 +2142,16 @@
       "active": false,
       "contrib_pct": null
     },
+    "NF_B_SCRUB": {
+      "active": false,
+      "contrib_pct": null
+    },
+    "NF_B_FACIAL KIT": {
+      "active": false,
+      "contrib_pct": null
+    }
+  },
+  "RETAIL": {
     "MIX_ITEM": {
       "active": false,
       "contrib_pct": null
@@ -2157,14 +2165,6 @@
       "contrib_pct": null
     },
     "RT_CO_STAFF UNIFORM": {
-      "active": false,
-      "contrib_pct": null
-    },
-    "NF_B_SCRUB": {
-      "active": false,
-      "contrib_pct": null
-    },
-    "NF_B_FACIAL KIT": {
       "active": false,
       "contrib_pct": null
     }

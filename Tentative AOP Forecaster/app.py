@@ -405,9 +405,10 @@ def dept_mix(sale_type: str = "reindexed"):
             return _DEPT_MIX_CACHE[sale_type][1]
         rows = s.execute(text("SELECT rows FROM calendar.sales_snapshots WHERE source_type = 'mw' AND kind = :k"),
                          {"k": kind}).scalar() or []
-    plan_div = {"KIDS": "KIDS", "LADIES": "LADIES", "MENS": "MENS", "RETAIL": "RETAIL", "NON FOOD": "RETAIL",
-                "FOOTWEAR": "GM", "HOME FURNISHING": "GM", "HOUSEHOLD": "GM", "LIFESTYLE": "GM", "SPORTS & TOYS": "GM",
-                "STATIONERY": "GM", "TRAVEL ACCESSORIES": "GM"}
+    # same roll-up as the AOP base (sync/store_actuals_sync._norm_div): NON FOOD is GM, DND is RETAIL (user, 2026-10-08)
+    plan_div = {"KIDS": "KIDS", "LADIES": "LADIES", "MENS": "MENS", "RETAIL": "RETAIL", "DND": "RETAIL",
+                "NON FOOD": "GM", "FOOTWEAR": "GM", "HOME FURNISHING": "GM", "HOUSEHOLD": "GM", "LIFESTYLE": "GM",
+                "SPORTS & TOYS": "GM", "STATIONERY": "GM", "TRAVEL ACCESSORIES": "GM"}
     # AOP month i = Mar'27 + i; its LY column: reindexed = that TY month, actual = the same month a year earlier
     months = [(2027 + (2 + i) // 12, (2 + i) % 12 + 1) for i in range(13)]
     shift = 0 if sale_type == "reindexed" else 1

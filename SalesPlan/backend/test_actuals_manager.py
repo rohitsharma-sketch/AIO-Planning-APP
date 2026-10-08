@@ -11,7 +11,8 @@ import actuals_manager as am  # noqa: E402
 assert am._ly_label("2027-04", "reindexed") == ("Apr'26", (2026, 4))
 assert am._ly_label("2026-04", "actual") == ("Apr'26", (2026, 4))
 # Raw divisions roll up to the plan divisions (the export has a double space in SPORTS  & TOYS).
-assert am._plan_div("SPORTS  & TOYS") == "GM" and am._plan_div("KIDS") == "KIDS" and am._plan_div("DND") is None
+assert am._plan_div("SPORTS  & TOYS") == "GM" and am._plan_div("KIDS") == "KIDS" and am._plan_div("DND") == "RETAIL"
+assert am._plan_div("NON FOOD") == "GM" and am._plan_div("NON-TRADING") is None   # 2026-10-08: DND -> RETAIL, NON FOOD -> GM
 # A month is usable only once it has fully elapsed.
 today = datetime.date(2026, 9, 28)
 assert am._closed(2026, 8, today) and not am._closed(2026, 9, today)

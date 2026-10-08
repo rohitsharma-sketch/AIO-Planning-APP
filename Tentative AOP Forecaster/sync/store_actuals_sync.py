@@ -80,12 +80,17 @@ def _fut_to_label(fut):
     return f"{MON_NAMES[m]}'{(y - 1) % 100:02d}"
 
 
+RETAIL_DEPTS = {"DND"}   # user, 2026-10-08: "add DND to the retail division" (NON FOOD stays GM - user's choice)
+
+
 def _norm_div(d):
     d = " ".join(str(d or "").upper().split())
     if d in DIVS:
         return d
     if d in GM_DEPTS:
         return "GM"
+    if d in RETAIL_DEPTS:
+        return "RETAIL"
     return None
 
 

@@ -178,9 +178,9 @@ const KEY_LABELS = { store: 'Store', division: 'Division' }
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 // The five planning divisions as the data lake names them (AOP / BIS / Sales Plan map these to MENS, LADIES, KIDS,
-// GM and RETAIL - see AOP app.py dept_mix and Sales Plan actuals_manager). Anything else (DND, NON-TRADING,
-// FIXED ASSETS, CONSIGNMENT, CDIT ...) is not planned.
-const PLAN_DIVISIONS = new Set(['KIDS', 'LADIES', 'MENS', 'RETAIL', 'NON FOOD', 'FOOTWEAR', 'HOME FURNISHING', 'HOUSEHOLD',
+// GM (incl. NON FOOD) and RETAIL (incl. DND, user 2026-10-08) - see AOP store_actuals_sync / app.py dept_mix and Sales
+// Plan actuals_manager). Anything else (NON-TRADING, FIXED ASSETS, CONSIGNMENT, CDIT ...) is not planned.
+const PLAN_DIVISIONS = new Set(['KIDS', 'LADIES', 'MENS', 'RETAIL', 'DND', 'NON FOOD', 'FOOTWEAR', 'HOME FURNISHING', 'HOUSEHOLD',
   'LIFESTYLE', 'SPORTS & TOYS', 'STATIONERY', 'TRAVEL ACCESSORIES'])
 const isPlanDivision = d => PLAN_DIVISIONS.has(String(d ?? '').toUpperCase().split(/\s+/).filter(Boolean).join(' '))
 
@@ -1125,7 +1125,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
               </button>
               {/* user, 2026-10-08: "add the planning divisions only toggle" - the figures AOP / BIS / Sales Plan use */}
               <label className="mx-plan-toggle" title={mxHasDivision
-                ? 'Only the five planning divisions (MENS, LADIES, KIDS, GM incl. Footwear / Household / Lifestyle / Home Furnishing / Sports & Toys / Stationery / Travel Accessories, RETAIL incl. Non Food) - leaves out DND, non-trading, fixed assets etc. These are the figures AOP, BIS and Sales Plan use (AOP Output\'s Eff Sales).'
+                ? 'Only the five planning divisions (MENS, LADIES, KIDS, GM incl. Non Food / Footwear / Household / Lifestyle / Home Furnishing / Sports & Toys / Stationery / Travel Accessories, RETAIL incl. DND) - leaves out non-trading, fixed assets, consignment, CDIT. These are the figures AOP, BIS and Sales Plan use (AOP Output\'s Eff Sales).'
                 : 'This result has no division field, so it cannot be limited to the planning divisions'}>
                 <input type="checkbox" checked={mxPlanOnly} disabled={!mxHasDivision} onChange={e => setMxPlanOnly(e.target.checked)} />
                 Planning divisions only
@@ -1158,7 +1158,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                   return (
                     <div key={store} style={{ marginBottom: '18px' }}>
                       <h4 style={{ margin: '0 0 6px' }}>{store} <span style={{ fontWeight: 400, color: 'var(--muted)' }}>({sel.cluster})</span>
-                        {mxPlanOnly && mxHasDivision && <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: '12px' }}> · planning divisions only (DND / non-trading left out)</span>}</h4>
+                        {mxPlanOnly && mxHasDivision && <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: '12px' }}> · planning divisions only (non-trading / fixed assets left out)</span>}</h4>
                       <table>
                         <thead>
                           <tr>

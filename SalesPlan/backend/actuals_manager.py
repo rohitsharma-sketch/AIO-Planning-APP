@@ -41,7 +41,8 @@ DIVISION_COL_TO_PLAN = {
     "LADIES":            "LADIES",
     "MENS":              "MENS",
     "RETAIL":            "RETAIL",
-    "NON FOOD":          "RETAIL",
+    "NON FOOD":          "GM",       # was RETAIL; GM like the AOP base (user, 2026-10-08)
+    "DND":               "RETAIL",   # user, 2026-10-08: "add DND to the retail division"
     "FOOTWEAR":          "GM",
     "HOME FURNISHING":   "GM",
     "HOUSEHOLD":         "GM",
@@ -50,7 +51,7 @@ DIVISION_COL_TO_PLAN = {
     "SPORTS & TOYS":     "GM",
     "STATIONERY":        "GM",
     "TRAVEL ACCESSORIES":"GM",
-    # DIVISION values to exclude: DND, NON-TRADING, FIXED ASSETS, CONSIGNMENT, CDIT
+    # DIVISION values to exclude: NON-TRADING, FIXED ASSETS, CONSIGNMENT, CDIT
 }
 
 

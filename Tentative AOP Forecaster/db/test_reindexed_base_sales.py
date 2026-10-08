@@ -51,9 +51,9 @@ mw = [(d, "2027-04", v) for d, v in [("GM", 2.0), ("KIDS", 3.0), ("LADIES", 3.0)
 out = get_reindexed_lfl_base_sales(_Session(mw))["base_sales"]
 assert {d: out[d]["Apr'27"] for d in out} == {"GM": 2.0, "KIDS": 3.0, "LADIES": 3.0, "MENS": 2.0, "RETAIL": 0.0}, out
 
-# DND is in the day-wise total, so it stays out of the divisions; NON-TRADING isn't, so it isn't in the denominator.
+# DND is RETAIL (user, 2026-10-08); NON-TRADING isn't in the day-wise total, so it isn't in the denominator.
 out = get_reindexed_lfl_base_sales(_Session(mw + [("DND", "2027-04", 10.0), ("NON-TRADING", "2027-04", 5.0)]))["base_sales"]
-assert {d: out[d]["Apr'27"] for d in out} == {"GM": 1.0, "KIDS": 1.5, "LADIES": 1.5, "MENS": 1.0, "RETAIL": 0.0}, out
+assert {d: out[d]["Apr'27"] for d in out} == {"GM": 1.0, "KIDS": 1.5, "LADIES": 1.5, "MENS": 1.0, "RETAIL": 5.0}, out
 
 # No KIDS/LADIES/MENS rows -> no fake split, empty data + note.
 res = get_reindexed_lfl_base_sales(_Session([("GM", "2027-04", 9.0), ("RETAIL", "2027-04", 1.0)]))

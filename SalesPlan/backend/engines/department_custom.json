@@ -885,127 +885,127 @@
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_B_SHOWER GEL",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_F_DEO",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_B_LOTION",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_B_CREME",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_F_ROOM FRESHENER",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_CC_NAILS",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_B_SHAMPOO",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_C_DISHWASHER",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_CC_FACE",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_C_DETERGENT",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_B_HANDWASH",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_C_FLOOR CLEANER",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_B_FACEWASH",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_C_TOILET CLEANER",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_C_GLASS CLEANER",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_CC_EYE",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_F_PERFUME",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_B_SUNSCREEN",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_CC_LIPS",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_C_BATHROOM CLEANER",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_CC_ACCESSORIES",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_B_SOAP",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_F_TALCUM",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_CC_SANITARY PAD",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_C_FABRIC CONDITIONER",
     "attribute": "REGULAR"
   },
@@ -1070,7 +1070,7 @@
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_B_SCRUB",
     "attribute": "REGULAR"
   },
@@ -1440,7 +1440,7 @@
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_B_FACIAL KIT",
     "attribute": "REGULAR"
   },
@@ -1515,12 +1515,12 @@
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_CC_WET WIPES",
     "attribute": "REGULAR"
   },
   {
-    "division": "RETAIL",
+    "division": "GM",
     "name": "NF_CC_SHEET MASK",
     "attribute": "REGULAR"
   },
