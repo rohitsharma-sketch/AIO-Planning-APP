@@ -162,6 +162,9 @@ def suite_theme_js():
     themes = _suite_themes()
     with open(os.path.join(_HERE, "static", "suite-theme.js"), encoding="utf-8") as f:
         runtime = f.read()
+    # suite-wide undo / redo rides along: every app page already loads this script
+    with open(os.path.join(_HERE, "static", "suite-undo.js"), encoding="utf-8") as f:
+        runtime += "\n" + f.read()
     body = (f"window.__SUITE_THEMES__={json.dumps(themes)};"
             f"window.__SUITE_THEME__={json.dumps(_suite_theme_choice(themes))};\n{runtime}")
     return Response(body, media_type="application/javascript", headers=_NO_CACHE_HEADERS)

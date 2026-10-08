@@ -414,11 +414,9 @@ td.aop-col-bg input.gi{background:var(--sf)}
 .pl-ft{width:100%;border-collapse:collapse;font-size:11px}.pl-ft th,.pl-ft td{padding:4px 8px;border-bottom:1px solid var(--bd);text-align:center}
 .pl-ft th{position:sticky;top:0;background:var(--sf);font-weight:700}
 /* factor builder (2026-10-07) */
-.fm-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--bd)}
-.fm-use{margin-left:auto;font-size:12px}
 .fm-fill{padding:8px 14px;font-size:11px;color:var(--t2)}
 .fm-wrap{padding:6px 14px 12px;display:flex;flex-direction:column;gap:12px}
-.fm-wrap select,.fm-wrap input[type=text],.fm-use select{border:1px solid var(--bm);border-radius:6px;padding:3px 6px;background:var(--sf);color:var(--tx);font:inherit;font-size:11.5px}
+.fm-wrap select,.fm-wrap input[type=text]{border:1px solid var(--bm);border-radius:6px;padding:3px 6px;background:var(--sf);color:var(--tx);font:inherit;font-size:11.5px}
 .fm-card{border:1px solid var(--bd);border-radius:10px;padding:10px 12px;background:var(--sf)}
 .fm-card.off{opacity:.6}
 .fm-card.over{outline:2px dashed var(--ac);outline-offset:2px}
@@ -448,6 +446,22 @@ td.aop-col-bg input.gi{background:var(--sf)}
 .fm-sec{border:1px solid var(--bd);border-radius:10px;padding:10px 12px}
 .fm-sec h4{margin:0 0 8px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mu)}
 .fm-rule{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11.5px;margin:4px 0}
+.fm-pick{padding:12px 14px;border-bottom:1px solid var(--bd);display:flex;flex-direction:column;gap:10px}
+.fm-pick-hd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px;font-weight:600}
+.fm-pick-hd select{margin-left:6px;border:1px solid var(--bm);border-radius:6px;padding:5px 8px;background:var(--sf);color:var(--tx);font:inherit;font-size:12.5px;max-width:260px}
+.fm-pick-hd .fm-note{font-weight:400}
+.fm-cmp{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.fm-mc{border:1px solid var(--bd);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;background:var(--sf);min-width:0}
+.fm-mc.use{border-color:var(--ac);box-shadow:inset 0 0 0 1px var(--ac)}
+.fm-mc.edit{background:var(--s2)}
+.fm-mc-hd{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12.5px;min-height:26px}
+.fm-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--ac);color:var(--sf)}
+.fm-mc-f{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.fm-mc-v{font-size:12px;font-variant-numeric:tabular-nums}
+.fm-mc-why{font-size:10.5px;color:var(--t2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.fm-mc-set{all:unset;cursor:pointer;margin-top:4px;font-size:11px;font-weight:600;color:var(--ac)}
+.fm-mc-set:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+@media (max-width:700px){.fm-cmp{grid-template-columns:1fr}}
 .fm-prev{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:11.5px}
 .fm-prev ol{margin:4px 0 0;padding-left:18px}
 .aop-ov{position:fixed;inset:0;background:rgba(var(--st-ink-rgb,30,39,35),.45);z-index:800;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
@@ -5639,17 +5653,60 @@ function _renderFactorTable(){
   document.getElementById('factorSave').style.display=ed?'':'none';
   document.getElementById('factorWho').textContent=ed?'You can change the factors (admin / planner).':'Read-only - only an admin or a planner can change the factors.';
   if(!ft){el.innerHTML='<p style="padding:14px">No factor table on the server yet.</p>';return;}
-  const tab=(id,t)=>`<button type="button" class="vt${_fmTab===id?' on':''}" aria-pressed="${_fmTab===id}" onclick="_fmTab='${id}';_renderFactorTable()">${t}</button>`;
-  const MODES=[['continuous','Continuous'],['weighted','Weighted builder'],['matrix','Matrix (36 rows)']];
-  const uses=(MODES.find(([k])=>k===ft.mode)||MODES[2])[1];
-  const use=ed?`<label>Planner uses <select onchange="_fmFt.mode=this.value;_renderFactorTable()">${MODES.map(([k,t])=>`<option value="${k}"${ft.mode===k?' selected':''}>${t}</option>`).join('')}</select></label>`
-    :`Planner uses: <b>${uses}</b>`;
-  el.innerHTML=`<div class="fm-top"><div class="vtog" role="group" aria-label="View">${tab('cont','Continuous')}${tab('builder','Weighted builder')}${tab('matrix','Matrix')}</div><span class="fm-use">${use}</span></div>
+  el.innerHTML=_fmPickHtml(ft,ed)+`
     <div class="fm-fill">${PLANNER.fill?`Fill rates: <b>${Object.keys(PLANNER.fill.departments||{}).length}</b> departments from ${_h(PLANNER.fill.source)} (${_h(PLANNER.fill.column)}) · ${_h(PLANNER.fill.imported_at)}`:'<span style="color:var(--ne)">Fill-rate file not loaded yet.</span>'}
       ${PLANNER.canEdit?`<label class="tbtn" style="margin-left:8px;cursor:pointer">&#x2191; Refresh fill rates<input type="file" accept=".xlsb,.xlsx,.xlsm" style="display:none" onchange="uploadFillRate(this)"></label>`:''}</div>`+
     (_fmTab==='builder'?_fmBuilderHtml(ft.model,ed):_fmTab==='cont'?_fmContHtml(ft,ed):_fmMatrixHtml(ft,ed))+
     (ft.updated_by?`<div style="padding:8px 14px;font-size:10px;color:var(--mu)">Last changed by ${_h(ft.updated_by)} · ${_h(ft.updated_at)}</div>`:'');
   if(_fmTab==='builder'&&ed)_fmWire();
+}
+/* One picker (user, 2026-10-08: "i want a preview pane to see if i choose matrix, weight builder or Continuous what
+   will be my result before selecting the default factor matrix, simplify the picker as possible"). Pick a department;
+   each method card shows its factor, the department's Phase 1 plan for the AOP months (every active department of
+   its division scored the same way, then re-balanced to each month's AOP - as the planner does) and the back-test.
+   "Use this" sets the method (Save applies it); "Settings" opens that method's editor below. Drafts count. */
+const FM_METHODS=[['matrix','Matrix','matrix'],['weighted','Weighted builder','builder'],['continuous','Continuous','cont']];
+let _fmDept=null;
+function _fmSpec(k,ft){return k==='plain'?null:k==='matrix'?'matrix':{mode:k,model:ft.model,cont:ft.cont};}
+function _fmDeptCalc(sec,dv,k,ft){
+  const P=_fmPrev().filter(q=>q.dv===dv),spec=_fmSpec(k,ft);
+  const fOf=q=>k==='matrix'?_matrixFactor(ft,q.x).f:_fmEval(spec,q.x,dv.id,AOP_MIS,q.ly);
+  const F=new Map(P.map(q=>[q.sec.id,fOf(q)])),divAnn=dv.secs.reduce((a,s)=>a+s.ly,0);
+  let val=0,ly=0;
+  AOP_MIS.forEach(mi=>{const aop=S.aop[dv.id]?.[mi];if(!aop||aop<=0)return;
+    let lyTot=0,raw=0,mine=0;const lyM={};
+    P.forEach(q=>{lyM[q.sec.id]=_secMonLY(q.sec,dv,mi,divAnn);lyTot+=lyM[q.sec.id];});if(!lyTot)return;
+    P.forEach(q=>{const v=aop*lyM[q.sec.id]/lyTot*F.get(q.sec.id);raw+=v;if(q.sec===sec)mine=v;});
+    if(raw>0){val+=mine*aop/raw;ly+=lyM[sec.id]||0;}});
+  const q=P.find(o=>o.sec===sec),x=q?.x;let why='';
+  if(x&&k==='matrix')why=_matrixFactor(ft,x).why;
+  else if(x&&k==='weighted')why=_fmWhy(_weightedFactor(x,_fmResolve(ft.model,dv.id,AOP_MIS),q.ly));
+  else if(x&&k==='continuous')why=_contWhy(_contFactor(x,_fmMedians(dv.id,AOP_MIS),ft.cont,ft.model,q.ly));
+  return {f:F.get(sec.id)??1,val,ly,gr:ly>0?(val/ly-1)*100:null,why};
+}
+function _fmPickHtml(ft,ed){
+  const P=_fmPrev();if(!P.length)return '';
+  if(!P.some(q=>q.sec.id===_fmDept)){const pool=P.filter(q=>!S.divTab||q.dv.id===S.divTab);_fmDept=(pool.length?pool:P).reduce((a,q)=>q.ly>a.ly?q:a).sec.id;}
+  const cur=P.find(q=>q.sec.id===_fmDept),sec=cur.sec,dv=cur.dv,x=cur.x,pc=v=>v==null?'n/a':(v*100).toFixed(1)+'%';
+  const opts=DVDATA.map(d=>{const o=P.filter(q=>q.dv===d).sort((a,b)=>a.sec.nm.localeCompare(b.sec.nm));
+    return o.length?`<optgroup label="${_h(d.nm)}">${o.map(q=>`<option value="${_h(q.sec.id)}"${q.sec.id===_fmDept?' selected':''}>${_h(q.sec.nm)}</option>`).join('')}</optgroup>`:'';}).join('');
+  const bt=k=>{const sp=_fmSpec(k,ft),a=_fmBacktest(sp).wape,b=_fmBacktest(sp,FM_BT_LONG_IN,FM_BT_LONG_OUT).wape;return a!=null&&b!=null?(a+b)/2:null;};
+  const plain=_fmDeptCalc(sec,dv,'plain',ft),btPlain=bt('plain'),cr=v=>'Rs '+v.toFixed(2)+' Cr';
+  const saved=PLANNER.ft?.mode||'matrix',mons=MO[AOP_MIS[0]]+'-'+MO[AOP_MIS[AOP_MIS.length-1]];
+  const card=([k,nm,tab])=>{const r=_fmDeptCalc(sec,dv,k,ft),b=bt(k),inUse=ft.mode===k,d=r.val-plain.val;
+    return `<div class="fm-mc${inUse?' use':''}${_fmTab===tab?' edit':''}">
+      <div class="fm-mc-hd"><b>${nm}</b>${inUse?`<span class="fm-badge">${saved===k?'In use':'Chosen - Save to apply'}</span>`:ed?`<button type="button" class="tbtn" onclick="_fmFt.mode='${k}';_fmTab='${tab}';_renderFactorTable()">Use this</button>`:''}</div>
+      <div class="fm-mc-f">×${r.f.toFixed(2)}</div>
+      <div class="fm-mc-v">${cr(r.val)} <span class="${gCls(r.gr??0)}">${fP(r.gr)}</span> vs LY</div>
+      <div class="fm-note">${d>=0?'+':''}${(d*100).toFixed(1)} L vs plain share · back-test error ${b==null?'-':(b*100).toFixed(2)+'%'}${b!=null&&btPlain!=null?` (${b<=btPlain?'better':'worse'} than plain)`:''}</div>
+      <div class="fm-mc-why" title="${_attr(r.why)}">${_h(r.why)}</div>
+      <button type="button" class="fm-mc-set" onclick="_fmTab='${tab}';_renderFactorTable()" aria-pressed="${_fmTab===tab}">${_fmTab===tab?'Settings shown below':'Settings ›'}</button>
+    </div>`;};
+  return `<div class="fm-pick">
+    <div class="fm-pick-hd"><label>Preview a department <select onchange="_fmDept=this.value;_renderFactorTable()" aria-label="Department to preview">${opts}</select></label>
+      <span class="fm-note">${_h(dv.nm)} · Sell-thru ${pc(x.st)} · LY growth ${pc(x.gr)} · Fill rate ${pc(x.fill)} · Phase 1, ${mons} · plain AOP share ${cr(plain.val)} (${fP(plain.gr)} vs LY)</span></div>
+    <div class="fm-cmp">${FM_METHODS.map(card).join('')}</div>
+  </div>`;
 }
 function _fmMatrixHtml(ft,ed){
   const lbl=(k,t)=>_h((ft.bands[k].find(b=>b.tag===t)||{}).label||t);
