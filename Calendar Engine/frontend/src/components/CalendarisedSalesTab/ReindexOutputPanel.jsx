@@ -228,21 +228,31 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
     }
     const stores = [...byStoreRefMonth.keys()].sort()
     const byStore = new Map()
+    // columns = every TY month a split lands in, not only the run's output months (user, 2026-10-08: "the split shows
+    // waywardness - check how the total is not tallying up": a share landing in 2026-02, a month the run didn't
+    // output, was worked out but had no column, so the row came up short)
+    const colSet = new Set(monthCols)
     for (const store of stores) {
       const cluster = clusterOf(store)
       const refTotals = byStoreRefMonth.get(store)
       const rows = Object.keys(refTotals).sort().map(rm => {
-        const total = refTotals[rm]
         const split = fwdSplitByCluster?.[cluster]?.[rm] || {}
-        const totalDays = Object.values(split).reduce((a, b) => a + b, 0)
-        const cells = {}
-        for (const fm of monthCols) cells[fm] = totalDays ? total * (split[fm] || 0) / totalDays : null
-        return { refMonth: rm, total, cells }
+        for (const [fm, d] of Object.entries(split)) if (d > 0) colSet.add(fm)
+        return { refMonth: rm, total: refTotals[rm], split, totalDays: Object.values(split).reduce((a, b) => a + b, 0) }
       })
       byStore.set(store, { cluster, rows })
     }
-    return { stores, byStore }
+    const cols = [...colSet].sort()
+    for (const { rows } of byStore.values()) {
+      for (const r of rows) {
+        r.cells = {}
+        for (const fm of cols) r.cells[fm] = r.totalDays ? r.total * (r.split[fm] || 0) / r.totalDays : null
+        r.splitTotal = r.totalDays ? cols.reduce((a, fm) => a + r.cells[fm], 0) : null
+      }
+    }
+    return { stores, byStore, cols }
   }, [isMwMatrix, result, fwdSplitByCluster, monthCols, storeCluster])
+  const mxCols = mwMatrixData.cols || []
 
   useEffect(() => {
     if (isMwMatrix && mwMatrixStores === null && mwMatrixData.stores.length) setMwMatrixStores(new Set([mwMatrixData.stores[0]]))
@@ -264,16 +274,17 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
 
   function downloadMwMatrixXlsx() {
     if (!mwMatrixData.stores.length) return
-    const aoa = [['Store', 'Cluster', 'Ref Month', 'Ref Actual Sales', ...monthCols]]
+    const aoa = [['Store', 'Cluster', 'Ref Month', 'Ref Actual Sales', ...mxCols, 'Split Total']]
     for (const store of mwMatrixData.stores) {
       const { cluster, rows } = mwMatrixData.byStore.get(store)
       for (const r of rows) {
         aoa.push([store, cluster, r.refMonth, +r.total.toFixed(2),
-          ...monthCols.map(fm => r.cells[fm] == null ? '' : +r.cells[fm].toFixed(2))])
+          ...mxCols.map(fm => r.cells[fm] == null ? '' : +r.cells[fm].toFixed(2)),
+          r.splitTotal == null ? '' : +r.splitTotal.toFixed(2)])
       }
     }
     const ws = XLSX.utils.aoa_to_sheet(aoa)
-    ws['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, ...monthCols.map(() => ({ wch: 12 }))]
+    ws['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, ...mxCols.map(() => ({ wch: 12 })), { wch: 16 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Month Wise Matrix')
     XLSX.writeFile(wb, `${fileStem}_month_wise_matrix.xlsx`)
@@ -1000,10 +1011,11 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                           <tr>
                             <th rowSpan={2}>Ref Month</th>
                             <th rowSpan={2} style={num}>Ref Actual Sales</th>
-                            <th colSpan={monthCols.length} style={{ textAlign: 'center' }}>TY Months</th>
+                            <th colSpan={mxCols.length} style={{ textAlign: 'center' }}>TY Months</th>
+                            <th rowSpan={2} style={num} title="Sum of the TY months - equals Ref Actual Sales (✓)">Split Total</th>
                           </tr>
                           <tr>
-                            {monthCols.map(m => <th key={m} style={num}>{m}</th>)}
+                            {mxCols.map(m => <th key={m} style={num}>{m}</th>)}
                           </tr>
                         </thead>
                         <tbody>
@@ -1011,7 +1023,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                             <tr key={r.refMonth}>
                               <td style={{ fontWeight: 600 }}>{r.refMonth}</td>
                               <td style={num}>{money(r.total)}</td>
-                              {monthCols.map(m => {
+                              {mxCols.map(m => {
                                 // A share of this ref month that landed in a DIFFERENT month: tint it and
                                 // say why on hover (festival moved / ordinary days re-placed) - 2026-09-25.
                                 const moved = r.cells[m] > 0 && m.slice(5) !== r.refMonth.slice(5)
@@ -1021,6 +1033,15 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                                 })
                                 return <td key={m} style={num} className={why ? 'mx-moved' : undefined} title={why || undefined}>{money(r.cells[m])}</td>
                               })}
+                              {(() => {
+                                const ties = r.splitTotal != null && Math.abs(r.splitTotal - r.total) < 0.5
+                                return (
+                                  <td style={{ ...num, fontWeight: 700, color: r.splitTotal == null ? 'var(--muted)' : ties ? 'var(--ok, #15803D)' : 'var(--danger, #B42318)' }}
+                                    title={r.splitTotal == null ? 'No split map for this month' : ties ? 'Ties to Ref Actual Sales' : `Off by ${money(r.splitTotal - r.total)}`}>
+                                    {money(r.splitTotal)} {r.splitTotal == null ? '' : ties ? '✓' : '✗'}
+                                  </td>
+                                )
+                              })()}
                             </tr>
                           ))}
                         </tbody>
