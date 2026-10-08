@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### Calendar: multi-year calendar sales table (Phase 0 of "flow all sales ... from calendarised app")
+- **Asked (user):** "flow all sales for actual and reindexed in all other apps from calendarised app"; "go ahead and plan the multi-year calendar sales switch"; "go ahead with phase 0".
+- New table `calendar.sales_fact` (+ `calendar.sales_fact_load`, migration `b5d1e8f2a9c4`): every closed month as plain rows - **actual** Jan 2019 - Aug 2026 (91 months; Apr 2020 had no sales) and **reindexed** per saved calendar (2021 -> 22, 2024 -> 25, 2025 -> 26 all 12 months, 2026 -> 27 Jan-Aug) by the Calendar's own proportional split - at store x division x department x ATTRIBUTE1, value and quantity, plus the planning division. 2,825,818 actual cells, 518,515.77 L.
+- Filled by `sync/calendar_sales_fact_sync.py`, now in the nightly sync before the check (first fill 8 min; past months frozen, only new / open months rewritten). Shared helpers `rs_common/divisions.py` (the one division roll-up) and `rs_common/calendar_sales.py` (the one reader apps will use).
+- Nightly check 8 (all pass, exact): 8a every stored actual month = the export (109,536 store x division x month cells, 518,515.77 L both sides); 8b every calendar's reindexed months add back to their actuals (64,379 cells); 8c the live calendar's months = the Calendar's saved reindexed sales (15,721 cells, 85,301.74 L both). A restated old month now fails 8a instead of changing silently. No app reads the table yet (Phase 1 = AOP base).
+
 ### Divisions: DND -> RETAIL and NON FOOD -> GM everywhere; Version 2 fixed in place (DND + GM 10%)
 - **Asked (user):** "Fix this issue of GM at 6% instead of 10% input"; "if you can add DND to the retail division and make the plan adjustments". Choices: NON FOOD = **GM** everywhere; **fix Version 2 in place**.
 - One roll-up now in every app: DND (DND FASHION ITEM / DND GM ITEM) -> RETAIL; NON FOOD -> GM (was RETAIL in Sales Plan, the Calendar toggle and the AOP Eff columns; GM in the AOP base). Changed: AOP `sync/store_actuals_sync._norm_div` (+ store actuals re-synced), AOP `db/reindexed_base_sales`, AOP `dept-mix` (Eff Sales), Sales Plan `actuals_manager`, Sales Plan department master (29 NF_ departments RETAIL -> GM in `department_custom.json` / `department_state.json`, settings kept), Calendar "Planning divisions only" (now includes DND). Still not planned: NON-TRADING, FIXED ASSETS, CONSIGNMENT, CDIT. BIS (MENS / LADIES / KIDS only) unaffected.

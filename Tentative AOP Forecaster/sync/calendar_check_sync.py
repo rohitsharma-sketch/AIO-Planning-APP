@@ -18,6 +18,10 @@ Checks (month-wise snapshots, the ones the nightly sync rebuilds):
   7. calendar alignment  = EVERY saved calendar (not only the one used): no day moved 3+ months (year-end wrap) and
                            "same weekday last year" is the most common shift (no weekly drift) - db.calendar_shift.
                            alignment_issues; the engine checks unsaved calendars and the save refuses a failing one
+  8. multi-year sales    = calendar.sales_fact (2026-10-08): 8a every stored actual month (2019+) = the export,
+                           store x division x month (pyarrow group_by - independent of the loader); 8b every calendar's
+                           reindexed months add back to their actuals; 8c the live calendar's months = the saved
+                           reindexed snapshot. A restated old month fails 8a (stored months are frozen).
   plus a self-test: a planted 0.02 L error must fail checks 1 and 2, or the check itself is broken.
 
 Not covered: that the data lake equals the finance / MIS books (needs an external report), festival dates
@@ -137,6 +141,70 @@ def raw_monthwise(session, months):
     return t.rename(columns={"STORE_NAME": "store", "DIVISION": "division", "SL_V": "v"})[KEYS + ["v"]], os.path.basename(src)
 
 
+def raw_monthwise_all(session, lo, hi):
+    """store x division x month SL_V for lo..hi from the newest month-wise export, summed with pyarrow's own group_by -
+    a different code path from the loader (calendar_sales_fact_sync.read_monthwise, pandas), so check 8a is
+    independent of it."""
+    import pyarrow as pa
+    import pyarrow.compute as pc
+    import pyarrow.parquet as pq
+    folder = session.execute(text("SELECT config->>'path' FROM sync.sources WHERE source_key = 'data_lake_sales'")).scalar()
+    from sync.common import latest_file
+    src = latest_file(folder)
+    parts = []
+    with open(src, "rb") as fh:
+        for b in pq.ParquetFile(fh).iter_batches(columns=["BILLMONTH", "STORE_NAME", "DIVISION", "SL_V"], batch_size=4_000_000):
+            t = pa.table({"col": pc.strftime(b.column("BILLMONTH"), format="%Y-%m"), "store": b.column("STORE_NAME"),
+                          "division": pc.fill_null(b.column("DIVISION"), "(none)"), "v": b.column("SL_V")})
+            t = t.filter(pc.and_(pc.and_(pc.greater_equal(t["col"], lo), pc.less_equal(t["col"], hi)), pc.is_valid(t["store"])))
+            parts.append(t.group_by(["store", "division", "col"]).aggregate([("v", "sum")]).to_pandas())
+    df = pd.concat(parts).rename(columns={"v_sum": "v"})
+    df.loc[df["division"].astype(str).str.strip() == "", "division"] = "(none)"
+    return df.groupby(KEYS, as_index=False)["v"].sum(), os.path.basename(src)
+
+
+def fact_checks(session, rx_calendar_id, shifted_snapshot):
+    """Check 8 - the multi-year calendar sales (calendar.sales_fact, Phase 0, 2026-10-08)."""
+    if not session.execute(text("SELECT to_regclass('calendar.sales_fact')")).scalar():
+        return [{"name": "8 multi-year calendar sales", "ok": True, "note": "table not created yet"}], None
+    q = lambda sql, **p: pd.DataFrame(session.execute(text(sql), p).mappings().all())
+    act = q("SELECT store, division, to_char(month, 'YYYY-MM') AS col, sum(sl_v) AS v FROM calendar.sales_fact "
+            "WHERE kind = 'actual' GROUP BY 1, 2, 3")
+    if act.empty:
+        return [{"name": "8 multi-year calendar sales", "ok": False, "note": "calendar.sales_fact holds no actual months"}], None
+    raw, _ = raw_monthwise_all(session, act["col"].min(), act["col"].max())
+    out = [compare(f"8a multi-year actuals = raw export ({act['col'].min()}..{act['col'].max()}, store x division x month)", act, raw)]
+    # 8b conservation per calendar: each reindexed reference month adds back to its actuals (mapped stores)
+    rx = q("SELECT calendar_id, store, division, to_char(ref_month, 'YYYY-MM') AS col, sum(sl_v) AS v FROM calendar.sales_fact "
+           "WHERE kind = 'reindexed' GROUP BY 1, 2, 3, 4")
+    act_ref = q("SELECT store, division, to_char(ref_month, 'YYYY-MM') AS col, sum(sl_v) AS v FROM calendar.sales_fact "
+                "WHERE kind = 'actual' GROUP BY 1, 2, 3")
+    store_cluster = dict(session.execute(text("SELECT store_id, cluster_name FROM calendar.store_calendar_clusters")).all())
+    worst = {"name": "8b multi-year reindexed adds back to actuals (every calendar, store x division x reference month)",
+             "ok": True, "calendars": 0, "cells": 0, "max_diff_L": 0.0, "fails": 0}
+    for cal_id, g in (rx.groupby("calendar_id") if len(rx) else []):
+        clusters = {c for (c,) in session.execute(text("SELECT DISTINCT cluster_name FROM calendar.calendar_day_pairs WHERE calendar_id = :c"),
+                                                   {"c": int(cal_id)})}
+        a = act_ref[act_ref["col"].isin(set(g["col"])) & act_ref["store"].map(store_cluster).isin(clusters)]
+        c = compare("", g[KEYS + ["v"]], a)
+        worst["calendars"] += 1; worst["cells"] += c["cells"]; worst["fails"] += c["fails"]
+        worst["max_diff_L"] = max(worst["max_diff_L"], c["max_diff_L"]); worst["ok"] = worst["ok"] and c["ok"]
+    out.append(worst)
+    # 8c the live calendar's TY months = the Calendar's saved reindexed sales (TY months the next, still-open reference
+    # month cannot feed yet)
+    live = q("SELECT store, division, to_char(month, 'YYYY-MM') AS col, sum(sl_v) AS v FROM calendar.sales_fact "
+             "WHERE kind = 'reindexed' AND calendar_id = :c GROUP BY 1, 2, 3", c=int(rx_calendar_id))
+    if len(live):
+        last_ref = q("SELECT to_char(max(ref_month), 'YYYY-MM') AS m FROM calendar.sales_fact WHERE kind = 'reindexed' AND calendar_id = :c",
+                     c=int(rx_calendar_id))["m"][0]
+        y, mth = int(last_ref[:4]) + 1, int(last_ref[5:])
+        upto = f"{y if mth > 1 else y - 1}-{(mth - 1) or 12:02d}"
+        cols = sorted(c for c in set(live["col"]) & set(shifted_snapshot["col"]) if c <= upto)
+        out.append(compare(f"8c multi-year reindexed = Calendar's saved reindexed ({cols[0] if cols else '-'}..{upto})",
+                           live[live["col"].isin(cols)], shifted_snapshot[shifted_snapshot["col"].isin(cols)]))
+    return out, (act, raw)
+
+
 def planted(df):
     out = df.copy()
     out.iloc[0, out.columns.get_loc("v")] += 0.02 * LAKH
@@ -182,7 +250,11 @@ def run_checks(session):
     checks.append({"name": "6 every trading store with sales has a calendar cluster", "ok": not trading, "trading_without_cluster": trading,
                    "others": {st: status.get(st) for st in unmapped_names if st not in trading}})
     checks.append(alignment_check(session))
+    fchecks, fact_pair = fact_checks(session, cal_id, shifted)
+    checks.extend(fchecks)
     selftest = not compare("", planted(actual), raw)["ok"] and not compare("", planted(shifted), recomputed)["ok"]
+    if fact_pair:
+        selftest = selftest and not compare("", planted(fact_pair[0]), fact_pair[1])["ok"]
     checks.append({"name": "self-test: a planted 0.02 L error is caught", "ok": selftest})
     return {"calendar_id": cal_id, "calendar_name": rx.get("calendar_name"), "raw_file": raw_file, "months": months,
             "tolerance_L": TOL_L, "unmapped_store_cells": int(len(unmapped)),

@@ -39,6 +39,9 @@ DB_SYNC_JOBS = [
     # shift by real day sales (db/calendar_shift.py, option b 2026-09-25).
     ("day_weights", "data_lake_day_weights"),
     ("calendar_reindex", "calendar_reindex"),
+    # Multi-year calendar sales (2026-10-08, Phase 0): every closed month 2019+ actual + every saved calendar's
+    # reindexed months into calendar.sales_fact - before the check, which verifies it (check 8).
+    ("calendar_sales_fact", "calendar_sales_fact"),
     # Read-only accuracy check of what calendar_reindex just saved (user, 2026-09-28): raw vs saved, independent
     # recompute, conservation, department tables, day maps, trading stores without a cluster. Fails loudly.
     ("calendar_check", "calendar_check"),

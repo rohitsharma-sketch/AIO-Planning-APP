@@ -142,6 +142,39 @@ def _complete_months(ref_months, closed_through, include_partial=False):
     return keep, skipped
 
 
+def from_fact(session, calendar_id, ref_months):
+    """Phase 1 of the multi-year switch (user 2026-10-08): the AOP base from the Calendar's own sales table
+    (calendar.sales_fact, sync/calendar_sales_fact_sync.py) instead of re-reading the parquet and re-doing the reindex.
+    -> (agg {(store, div, attribute, FY27 label): Lakhs} for the reindexed ref_months,
+        fy26 {(store, div, FY26 label): Lakhs} raw Mar'25..Feb'26, info)."""
+    from sqlalchemy import text
+    agg, fy26, excluded = {}, {}, {}
+    for st, raw_div, attr, fut, v in session.execute(text(
+            "SELECT store, division, attribute1, to_char(month, 'YYYY-MM'), sum(sl_v) FROM calendar.sales_fact "
+            "WHERE kind = 'reindexed' AND calendar_id = :c AND to_char(ref_month, 'YYYY-MM') = ANY(:rm) GROUP BY 1, 2, 3, 4"),
+            {"c": int(calendar_id), "rm": list(ref_months)}):
+        div = _norm_div(raw_div)
+        if div is None:
+            excluded[raw_div] = excluded.get(raw_div, 0.0) + float(v) / LAKH
+            continue
+        label = _fut_to_label(fut)
+        if label in FY27_M:
+            key = (st.strip(), div, str(attr).strip(), label)
+            agg[key] = agg.get(key, 0.0) + float(v) / LAKH
+    for st, raw_div, ym, v in session.execute(text(
+            "SELECT store, division, to_char(month, 'YYYY-MM'), sum(sl_v) FROM calendar.sales_fact "
+            "WHERE kind = 'actual' AND to_char(month, 'YYYY-MM') = ANY(:m) GROUP BY 1, 2, 3"), {"m": FY26_YM}):
+        div = _norm_div(raw_div)
+        if div is not None:
+            key = (st.strip(), div, f"{MON_NAMES[int(ym[5:])]}'{ym[2:4]}")
+            fy26[key] = fy26.get(key, 0.0) + float(v) / LAKH
+    loaded = {m for (m,) in session.execute(text(
+        "SELECT to_char(ref_month, 'YYYY-MM') FROM calendar.sales_fact_load WHERE kind = 'reindexed' AND calendar_id = :c"),
+        {"c": int(calendar_id)})}
+    return agg, fy26, {"missing_ref_months": sorted(set(ref_months) - loaded),
+                       "excluded_lakhs": {k: round(v, 1) for k, v in excluded.items()}}
+
+
 def run(include_partial=False):
     with sync_run(SOURCE_KEY) as (session, result):
         # 1. resolve the active calendar (latest saved, matching REF_YEAR) and its
