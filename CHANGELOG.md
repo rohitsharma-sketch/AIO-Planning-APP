@@ -16,7 +16,7 @@ Newest first. Each entry names its commit.
   - Unsaved: the engine's Validation shows them as errors, and Generate checks all clusters at once ("OUT OF LINE with the year in: ...").
   - Save: POST /calendar-library refuses a failing calendar (422 with the clusters and reasons) from any screen - tested with the saved 2025 calendar (refused, nothing written).
   - Saved: nightly calendar_check check 7 scans every saved calendar - today it flags only "2025 -> 2026 Calendar - All" (9 clusters) until it is replaced with the fixed version.
-- Tests: engine.test.mjs test11 (real 2025 -> 26 festivals clean; planted wrap and week drift caught), calendar_check_sync --test (alignment cases). The saved 2025 -> 2026 calendar itself is NOT replaced yet - waiting for the user's go-ahead.
+- Tests: engine.test.mjs test11 (real 2025 -> 26 festivals clean; planted wrap and week drift caught), calendar_check_sync --test (alignment cases). **Replaced (user: "Replace it"):** the old calendar (3,650 pairs, 10 clusters, 62 festivals) is backed up to Documents/CLaude - New Projects/Backups/calendar_2025_2026_before_fix_20261008_120838.json; the fixed rebuild was saved through the normal save path (passes the check) as calendar 1791441518950, same name, and the old one deleted. Verified: check 7 PASS for all 4 saved calendars; the saved 2025 -> 26 calendar = 2,210 days equal to the reference, 76.1% same month, +364 most common; LAD TY 1-3 Jan <- ref 2, 3, 1 Jan 2025.
 
 ### Calendar: Month Wise Matrix totals row
 - **Asked (user):** "need a total of months in the bottom row". Bottom Total row per store: Ref Actual Sales, every TY month, Split Total (tick when it equals Ref Actual Sales); a Total row per store in the XLSX download too. Display only.
