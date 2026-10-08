@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### Calendar: 2025 -> 2026 calendar approved and backed up
+- **Asked (user):** "make sure the calendar version is saved now. This calendar is perfect."
+- Confirmed saved: "2025 -> 2026 Calendar - All" (id 1791441518950, saved 8 Oct 12:08) is the only 2025 calendar, so it is what the Calendar, AOP and Sales Plan read. 10 clusters x 365 days, no LY day used twice, year-alignment check PASS, day-map fingerprint `f4dafc4c1aaf36cc`. Dated copy: `Backups\calendar_2025_2026_APPROVED_20261008_141544.json`.
+
 ### Calendar: every pop-up is a whole month, day 1 to the last day
 - **Asked (user):** "pop up okay i want the whole month from 1 - 30 days of the month , 1- 28/29 day detail for frb"; "make it for all months wherever shift is there and colored cells are there".
 - Clicking any cell (every tinted / shifted cell, any month) now opens its **whole TY month**, every day from the 1st to the last, with the clicked cell's days outlined and a "clicked cell" line (its days, rupees, share). Two buttons flip to the cell's **whole LY month**. Ref Month labels open the whole LY month; TY headers / totals open the whole TY month.
