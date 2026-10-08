@@ -97,6 +97,33 @@ function GroupRow({ group }) {
 
 // ── Preview table ──────────────────────────────────────────────────────────────
 
+// ── Checks (2026-10-08): green ok · amber worth a look · red stops Run - each not-ok one says what to fix, then Run again ──
+
+const CHECK_LOOK = { ok: ['✓', 'accent'], warn: ['!', 'warn'], fail: ['✗', 'danger'] }
+
+function ChecksList({ checks, title }) {
+  if (!checks) return <div style={{ fontSize: 11, color: theme.textMuted, marginBottom: 10 }}>⟳ Checking…</div>
+  return (
+    <div style={{ marginBottom: 12 }}>
+      {title && <div style={{ fontSize: 10, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.4, marginBottom: 6 }}>{title}</div>}
+      {checks.map(c => {
+        const [icon, tone] = CHECK_LOOK[c.status] || CHECK_LOOK.warn
+        const color = tone === 'warn' ? '#B45309' : theme[tone]
+        return (
+          <div key={c.key} style={{ display: 'flex', gap: 8, padding: '5px 0', borderBottom: `1px solid ${alpha(theme.border, '22')}`, fontSize: 11 }}>
+            <span style={{ color, fontWeight: 700, width: 12, flexShrink: 0 }}>{icon}</span>
+            <div style={{ minWidth: 0 }}>
+              <span style={{ fontWeight: 600, color: theme.textPrimary }}>{c.label}</span>
+              <span style={{ color: theme.textMuted }}> · {c.detail}</span>
+              {c.fix && <div style={{ color, marginTop: 2 }}>→ {c.fix}</div>}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function PreviewTable({ rows, monthCols }) {
   if (!rows || rows.length === 0) return null
   const allCols = Object.keys(rows[0])
@@ -222,7 +249,13 @@ export default function MrpReapportionment() {
     finally { setImporting(false) }
   }
 
+  const [checks, setChecks] = useState(null)
   const reload = useCallback(() => {
+    setChecks(null)
+    fetch('/api/planning/mrp-reapportionment/checks')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setChecks(d ? d.checks : [{ key: 'x', label: 'Checks', status: 'fail', detail: "couldn't be read", fix: 'Press Refresh.' }]))
+      .catch(() => setChecks([{ key: 'x', label: 'Checks', status: 'fail', detail: "couldn't be read", fix: 'Press Refresh.' }]))
     fetch('/api/planning/mrp-reapportionment/status')
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setStatus(d) })
@@ -274,7 +307,8 @@ export default function MrpReapportionment() {
   }, [groups, filter])
 
   const salesOk = !!(salesInfo?.file_found && salesInfo.check?.pass)
-  const canRun = salesOk && status?.mapping_file_found && !running
+  const checksFail = !checks || checks.some(c => c.status === 'fail')   // a red pre-run check stops Run
+  const canRun = salesOk && status?.mapping_file_found && !checksFail && !running
   const lastRun = status?.last_run
 
   return (
@@ -349,19 +383,19 @@ export default function MrpReapportionment() {
       {lastRun && !result && (
         <div style={{
           marginBottom: 18, padding: '10px 18px', borderRadius: 10,
-          background: lastRun.val_pass ? `${alpha(theme.accent,'10')}` : `${alpha(theme.danger,'10')}`,
-          border: `1px solid ${alpha(lastRun.val_pass ? theme.accent : theme.danger,'33')}`,
+          background: (lastRun.checks_pass ?? lastRun.val_pass) ? `${alpha(theme.accent,'10')}` : `${alpha(theme.danger,'10')}`,
+          border: `1px solid ${alpha((lastRun.checks_pass ?? lastRun.val_pass) ? theme.accent : theme.danger,'33')}`,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
         }}>
           <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: lastRun.val_pass ? theme.accent : theme.danger }}>
-              {lastRun.val_pass ? '✓' : '⚠'} Last run: {new Date(lastRun.run_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+            <div style={{ fontSize: 12, fontWeight: 700, color: (lastRun.checks_pass ?? lastRun.val_pass) ? theme.accent : theme.danger }}>
+              {(lastRun.checks_pass ?? lastRun.val_pass) ? '✓' : '⚠'} Last run: {new Date(lastRun.run_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
             </div>
             <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>
               {lastRun.input_rows?.toLocaleString()} in → {lastRun.output_rows?.toLocaleString()} out
               &ensp;·&ensp;{lastRun.stores} stores, {lastRun.departments} depts
-              &ensp;·&ensp;Validation: <strong style={{ color: lastRun.val_pass ? theme.accent : theme.danger }}>
-                {lastRun.val_pass ? 'PASSED' : 'FAILED'}
+              &ensp;·&ensp;Validation: <strong style={{ color: (lastRun.checks_pass ?? lastRun.val_pass) ? theme.accent : theme.danger }}>
+                {(lastRun.checks_pass ?? lastRun.val_pass) ? 'PASSED' : 'FAILED'}
               </strong>
             </div>
           </div>
@@ -545,8 +579,12 @@ export default function MrpReapportionment() {
                       sub={result.total_before.toLocaleString('en-IN', { maximumFractionDigits: 0 })} />
                     <StatCard label="TOTAL AFTER" value={'₹' + (result.total_after/100000).toFixed(1) + 'L'}
                       sub={`diff: ${result.diff?.toFixed(6)}`} color={result.diff < 0.01 ? theme.accent : theme.danger} />
-                    <StatCard label="VALIDATION" value={result.val_pass ? 'PASSED' : 'FAILED'}
-                      color={result.val_pass ? theme.accent : theme.danger} />
+                    <StatCard label="CHECKS" value={result.checks_pass ? 'PASSED' : 'FAILED'}
+                      sub={result.checks_pass ? undefined : 'not for use'}
+                      color={result.checks_pass ? theme.accent : theme.danger} />
+                  </div>
+                  <div style={{ marginTop: 12 }}>
+                    <ChecksList checks={result.post_checks || []} title="AFTER THE RUN" />
                   </div>
                 </div>
                 <div style={{ padding: '0 22px', borderBottom: `1px solid ${theme.border}`, display: 'flex' }}>
@@ -592,6 +630,7 @@ export default function MrpReapportionment() {
           <div style={{
             background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`, padding: '18px 22px',
           }}>
+            <ChecksList checks={checks} title="BEFORE YOU RUN · fix any red item, press ↺ Refresh, then Run" />
             <div style={{ marginBottom: 10, fontSize: 12, color: theme.textMuted }}>
               Discontinued MRPs → nearest listed MRP below / above · 40 / 60 (Summer 60 / 40) · one side → 100%
             </div>

@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### MRP Re-apportionment: checks built in (red stops Run, each says how to fix and re-run)
+- **Asked (user):** "how can checks be embedded in this - and how can we rerun if the checks are not passed ?" -> chose the checks strip + blocking.
+- Before a run (`GET /checks`, shown above Run): MRP master readable (red if not), LY sales tie to the Calendar department sales (red if not), share of LY sales on MRPs in the master (amber), Dept x Display with nothing listed (amber). Red disables Run (the endpoints refuse it too); every non-green item says what to fix, then Refresh -> Run again.
+- After a run: store x dept totals and month totals (before = after + Unmapped, to 8 decimals in lakh), each old MRP's shares add to 100%, every new MRP is a listed MRP of its Dept x Display. Any red = run marked FAILED - not for use (CHECKS card, last-run banner, Engine Log sheet).
+- Today's data: master ok, tie ok (212,813 cells, 0.0 L); amber - 45.43 L on old MRPs not in the master, 149 of 284 groups with nothing listed (192.47 L) -> Unmapped. Run: all four post-run checks green. Planted faults turn each post-run check red; no master -> red with the fix. The first live run caught a false alarm (Rs 0.00000024 float noise on a ~Rs 1,000 Cr month compared in rupees) - month totals now compared in lakh like the suite's other ties.
+
 ### MRP Re-apportionment: Groups list showed empty strips
 - Reported (user, screenshot): 284 blank lines in MRP Groups. The cards sat in a fixed-height (520 px) flex column and were shrunk to their borders; `flexShrink: 0` on each card. Checked in the built page with 284 stub groups: every card 113-171 px with its content, list scrolls.
 

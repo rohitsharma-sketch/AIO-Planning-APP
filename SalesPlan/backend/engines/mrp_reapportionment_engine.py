@@ -23,6 +23,7 @@ Sources:
 Endpoints:
   GET  /status           → file presence, last-run metadata
   GET  /sales-status     → sales engine file, LY months, tie to Calendar dept sales
+  GET  /checks           → pre-run checks (red = Run disabled), each with how to fix it
   GET  /mrp-groups       → groups (Dept, Display): listed MRPs and where each discontinued one goes
   POST /run              → redistribution by the nearest-listed-MRP rule
   GET  /download         → latest output Excel
@@ -417,6 +418,86 @@ def _build_excel(output_df, unmapped_df, val_rows, val_pass, log_lines, sales_df
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
+# ── Checks (user, 2026-10-08: "how can checks be embedded in this - and how can we rerun if the checks are not passed ?")
+# Each check: ok / warn / fail, what it found, and - when not ok - what to fix before pressing Run again. A failed
+# pre-run check stops the run (the endpoints refuse it too); a failed post-run check marks the run FAILED.
+
+FIX_ENGINE = "An engine fault, not your data - this run is marked FAILED; report it, and Run again once it is fixed."
+
+
+def _check(key, label, status, detail, fix=""):
+    return {"key": key, "label": label, "status": status, "detail": detail, "fix": fix if status != "ok" else ""}
+
+
+def _pre_checks() -> list:
+    out, mp, sales = [], None, None
+    try:
+        mp = _load_mapping()
+        t = _targets(mp)
+        top = t.groupby(["DEPARTMENT", "DISPLAY"])["MRP_LISTED"].max()
+        out.append(_check("master", "MRP master", "ok",
+                          f"{os.path.basename(_find_mapping_file())}: {len(mp):,} old MRPs in {len(top)} Dept x Display"))
+    except Exception as e:
+        out.append(_check("master", "MRP master", "fail", str(e),
+                          "Import a usable MRP master (MRP Mapping Master card), then Run again."))
+    try:
+        sales, months, check = _mapped_sales(mp) if mp is not None else _engine_sales()
+        ok = bool(check["pass"])
+        out.append(_check("sales_tie", "LY sales tie to the Calendar department sales", "ok" if ok else "fail",
+                          f"{check['cells']:,} store x dept x month cells, max diff {check['max_diff_lakh']} L",
+                          "The sales engine file and the Calendar sales differ - wait for the nightly sales sync (or "
+                          "Sync now on Landing), press Refresh, then Run again."))
+    except Exception as e:
+        out.append(_check("sales_tie", "LY sales tie to the Calendar department sales", "fail", str(e),
+                          "The sales engine file isn't reachable - check the data-lake share, press Refresh, then Run again."))
+        sales = None
+    if mp is not None and sales is not None:
+        x = sales.rename(columns={"MRP": "MRP_CURRENT"}).merge(t, on=KEYS, how="left")
+        v = x[months].sum(axis=1)
+        total, miss = float(v.sum()), float(v[x["MRP_LISTED"].isna()].sum())
+        nowhere = float(v[(x["MRP_LISTED"] == 0) & (x["BELOW"] == 0) & (x["ABOVE"] == 0)].sum())
+        pct = 100 * (total - miss) / total if total else 100.0
+        out.append(_check("coverage", "LY sales on MRPs in the master", "ok" if miss == 0 else "warn",
+                          f"{(total - miss) / 1e5:,.2f} L of {total / 1e5:,.2f} L ({pct:.2f}%) of the master's departments; "
+                          f"{miss / 1e5:,.2f} L on old MRPs not in the master go to Unmapped",
+                          "Add the missing old MRPs to the master (Export current, edit, Import new version), then Run again."))
+        n = int(top.eq(0).sum())
+        out.append(_check("nothing_listed", "Dept x Display with nothing listed", "ok" if n == 0 else "warn",
+                          f"{n} of {len(top)}; {nowhere / 1e5:,.2f} L of LY sales go to Unmapped",
+                          "List at least one MRP in those groups in the master, Import it, then Run again."))
+    return out
+
+
+def _post_checks(sales_df, output_df, unmapped_df, month_cols, mapping_df, val_pass) -> list:
+    out = [_check("store_dept", "Store x Dept totals: before = after + Unmapped", "ok" if val_pass else "fail",
+                  "every store x department to 8 decimals" if val_pass else "some store x department totals differ "
+                  "(see the Validation sheet)", FIX_ENGINE)]
+    after = output_df[month_cols].sum() + (unmapped_df[month_cols].sum() if not unmapped_df.empty else 0)
+    # in lakh, as the suite's other ties: a ~Rs 1,000 Cr month summed over 140k rows carries ~Rs 1e-7 of float noise
+    worst = float((sales_df[month_cols].sum() - after).abs().max()) / 1e5
+    out.append(_check("months", "Month totals: before = after + Unmapped", "ok" if worst <= SHOWN else "fail",
+                      f"{len(month_cols)} months, largest difference {worst:.8f} L", FIX_ENGINE))
+    k = ["STORE", "DIVISION", "DEPARTMENT", "DISPLAY", "ATTRIBUTE", "MRP_CURRENT"]
+    shares = output_df.groupby(k, dropna=False)["SHARE_PCT"].sum()
+    bad = int(((shares - 100).abs() > 1e-9).sum())
+    out.append(_check("shares", "Each old MRP's shares add to 100%", "ok" if bad == 0 else "fail",
+                      f"{len(shares):,} store x old MRP rows" + (f", {bad:,} not at 100%" if bad else ""), FIX_ENGINE))
+    listed = mapping_df[mapping_df["MRP_LISTED"] > 0][["DEPARTMENT", "DISPLAY", "MRP_LISTED"]].drop_duplicates()
+    hit = output_df[["DEPARTMENT", "DISPLAY", "LISTED_MRP"]].drop_duplicates().merge(
+        listed.rename(columns={"MRP_LISTED": "LISTED_MRP"}), how="left", indicator=True)
+    stray = int((hit["_merge"] == "left_only").sum())
+    out.append(_check("targets", "Every new MRP is a listed MRP of its Dept x Display", "ok" if stray == 0 else "fail",
+                      f"{len(hit):,} Dept x Display x new MRP" + (f", {stray} not listed in the master" if stray else ""),
+                      FIX_ENGINE))
+    return out
+
+
+@router.get("/checks")
+def get_checks():
+    """The pre-run checks the page shows above Run (a red one disables it)."""
+    return {"checks": _pre_checks()}
+
+
 @router.get("/status")
 def get_status():
     sales_file   = _find_sales_file()
@@ -520,6 +601,8 @@ def run_engine(body: RunRequest):
         raise HTTPException(500, detail=f"Redistribution error: {e}")
 
     val_rows, val_pass = _validate(sales_df, output_df, month_cols, unmapped_df)
+    post_checks = _post_checks(sales_df, output_df, unmapped_df, month_cols, mapping_df, val_pass)
+    checks_pass = all(c["status"] == "ok" for c in post_checks)
 
     total_before = round(float(sales_df[month_cols].sum().sum()), 8)
     total_after  = round(float(output_df[month_cols].sum().sum()), 8) if not output_df.empty else 0.0
@@ -536,6 +619,8 @@ def run_engine(body: RunRequest):
         f"Total after : {total_after:,.2f}",
         f"Diff        : {abs(total_after + total_unmapped - total_before):.6f} (after + unmapped vs before)",
         f"Validation  : {'PASSED' if val_pass else 'FAILED'}",
+        f"Checks      : {'PASSED' if checks_pass else 'FAILED - not for use'}",
+        *[f"  {'PASS' if c['status'] == 'ok' else 'FAIL'}  {c['label']}: {c['detail']}" for c in post_checks],
         "---",
         *eng_log,
     ]
@@ -564,6 +649,7 @@ def run_engine(body: RunRequest):
         "total_before": total_before,
         "total_after":  total_after,
         "val_pass":     val_pass,
+        "checks_pass":  checks_pass,
         "output_file":  out_filename,
         "stores":       int(sales_df["STORE"].nunique()),
         "departments":  int(sales_df["DEPARTMENT"].nunique()),
@@ -581,6 +667,8 @@ def run_engine(body: RunRequest):
         "total_unmapped": total_unmapped,
         "diff":         round(abs(total_after + total_unmapped - total_before), 8),
         "val_pass":     val_pass,
+        "checks_pass":  checks_pass,
+        "post_checks":  post_checks,
         "val_rows":     val_rows,
         "output_file":  out_filename,
         "log":          full_log,

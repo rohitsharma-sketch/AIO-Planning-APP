@@ -25,6 +25,10 @@ assert got == {("REGULAR", 199, 250): 10, ("REGULAR", 249, 250): 10, ("REGULAR",
                ("SUMMER", 299, 250): 6, ("SUMMER", 299, 399): 4}, got
 assert sorted(u["REASON"]) == ["MRP combination not in mapping master", "No listed MRP in this Department x Display"]
 assert m._validate(sl, o, M, u)[1]
+# post-run checks: all green on a good run, a planted half share turns "shares" red
+st = lambda out: {x["key"]: x["status"] for x in m._post_checks(sl, out, u, M, mp, True)}  # noqa: E731
+assert set(st(o).values()) == {"ok"}, st(o)
+assert st(o.assign(SHARE_PCT=o["SHARE_PCT"].where(o.index != 0, 50.0)))["shares"] == "fail"
 
 # importing a new master version: a bad file changes nothing; a good one goes live, the old one moves to Archive
 import io, tempfile  # noqa: E402
