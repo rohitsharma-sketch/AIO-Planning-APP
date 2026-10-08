@@ -3,13 +3,15 @@ MRP Re-apportionment Engine — FastAPI Router v2
 ================================================
 Redistributes historical sales from discontinued MRP slabs to valid (listed) MRP slabs.
 
-Logic:
-  - MRP master defines per (Dept, Display, Attribute): which MRP slabs are valid (MRP_LISTED != 0)
-    and which are discontinued (MRP_LISTED = 0).
-  - Sales at a discontinued MRP slab are split across the valid MRP slabs for that group,
-    using contribution %s defined by the user.
-  - Sales at a valid MRP slab pass through unchanged.
-  - Totals are preserved exactly per Store × Dept × Display × Attribute × Month.
+Logic (the planners' MRP master, user 2026-10-08 - "MRP MASTER - 27-04-2026 - New(Shubham).xlsx", sheet "MRP Adj"):
+  - The master lists, per Department x Display, every old MRP (MRP_CURRENT) and its new MRP (MRP_LISTED; 0 =
+    discontinued).
+  - Sales at a listed MRP move to its MRP_LISTED.
+  - Sales at a discontinued MRP split between the nearest listed MRP below and the nearest above (old MRPs in value
+    order, same Department x Display): Summer 60% down / 40% up, every other attribute 40% down / 60% up (Regular and
+    Occasional per the master's assumptions; PreWinter / Winter the same, user 2026-10-08). Only one side listed ->
+    100% there. Nothing listed in the Department x Display -> Unmapped.
+  - Totals are preserved exactly per Store x Dept x Display x Attribute x Month (Unmapped rows reported apart).
 
 Sources:
   Sales:       the suite's sales engine (user, 2026-09-29: "LY actual sales will be taken from the sales engine
@@ -21,8 +23,8 @@ Sources:
 Endpoints:
   GET  /status           → file presence, last-run metadata
   GET  /sales-status     → sales engine file, LY months, tie to Calendar dept sales
-  GET  /mrp-groups       → groups (Dept, Display, Attr) with valid + discontinued MRPs
-  POST /run              → redistribution with user-provided cont_pcts
+  GET  /mrp-groups       → groups (Dept, Display): listed MRPs and where each discontinued one goes
+  POST /run              → redistribution by the nearest-listed-MRP rule
   GET  /download         → latest output Excel
 """
 
@@ -39,7 +41,7 @@ import sys
 import pandas as pd
 import openpyxl
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from apportion import SHOWN, shares_pct, split  # noqa: E402
+from apportion import SHOWN  # noqa: E402
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from fastapi import APIRouter, HTTPException
@@ -63,14 +65,8 @@ os.makedirs(MAPPING_DIR, exist_ok=True)
 
 # ── Pydantic models ────────────────────────────────────────────────────────────
 
-class MrpSplit(BaseModel):
-    mrp: int
-    pct: float
-
 class RunRequest(BaseModel):
-    # cont_pcts: group_key → list of {mrp, pct}
-    # group_key = "DEPARTMENT|DISPLAY|ATTRIBUTE"
-    cont_pcts: Optional[Dict[str, List[MrpSplit]]] = None
+    pass   # the split is fixed by the master's rule (typed %s per group until 2026-10-08)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -180,211 +176,130 @@ def _find_mapping_file() -> Optional[str]:
     return max(files, key=os.path.getmtime) if files else None
 
 
+def _wide_master(path: str) -> Optional[pd.DataFrame]:
+    """The master as the planners keep it: one column per Department x Display x old MRP, rows labelled DEPARTMENT /
+    DISPLAY / MRP_CURRENT / MRP_LISTED in column A (sheet "MRP Adj"). None if no sheet is laid out that way."""
+    need = ("DEPARTMENT", "DISPLAY", "MRP_CURRENT", "MRP_LISTED")
+    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    try:
+        for ws in wb.worksheets:
+            rows = {str(r[0]).strip().upper(): r for r in ws.iter_rows(max_row=30, values_only=True)
+                    if r and r[0] is not None}
+            if all(k in rows for k in need):
+                n = min(len(rows[k]) for k in need)
+                df = pd.DataFrame({k: list(rows[k][1:n]) for k in need})
+                return df[df["DEPARTMENT"].notna() & pd.to_numeric(df["MRP_CURRENT"], errors="coerce").notna()]
+    finally:
+        wb.close()
+    return None
+
+
 def _load_mapping() -> pd.DataFrame:
-    """Load MRP Mapping Master. Returns DataFrame with cols:
-    DEPARTMENT, DISPLAY, MRP_CURRENT, MRP_LISTED, ATTRIBUTE_1
-    """
+    """Load the MRP master -> DEPARTMENT, DISPLAY, MRP_CURRENT, MRP_LISTED (one row per Department x Display x old
+    MRP). Reads the planners' wide "MRP Adj" layout, or a plain list with those columns."""
     path = _find_mapping_file()
     if not path:
         raise ValueError(f"No mapping file found in: {MAPPING_DIR}")
 
-    df = pd.read_excel(path)
-    df = _norm_cols(df)
+    df = _wide_master(path)
+    if df is None:
+        df = _norm_cols(pd.read_excel(path))
+        rename = {}
+        for c in df.columns:
+            cu = c.upper()
+            if cu in ("DEPARTMENT", "DEPT"):               rename[c] = "DEPARTMENT"
+            elif cu in ("DISPLAY", "DISPLAY_TYPE"):        rename[c] = "DISPLAY"
+            elif cu in ("MRP_CURRENT", "CURRENT_MRP",
+                        "MRP", "RAW_MRP", "OLD_MRP"):      rename[c] = "MRP_CURRENT"
+            elif cu in ("MRP_LISTED", "LISTED_MRP",
+                        "NEW_MRP", "FINAL_MRP"):            rename[c] = "MRP_LISTED"
+        df.rename(columns=rename, inplace=True)
+        missing = [c for c in ("DEPARTMENT", "DISPLAY", "MRP_CURRENT", "MRP_LISTED") if c not in df.columns]
+        if missing:
+            raise ValueError(f"MRP Mapping Master missing columns: {missing}")
 
-    # Flexible column detection
-    rename = {}
-    for c in df.columns:
-        cu = c.upper()
-        if cu in ("DEPARTMENT", "DEPT"):               rename[c] = "DEPARTMENT"
-        elif cu in ("DISPLAY", "DISPLAY_TYPE"):        rename[c] = "DISPLAY"
-        elif cu in ("MRP_CURRENT", "CURRENT_MRP",
-                    "MRP", "RAW_MRP", "OLD_MRP"):      rename[c] = "MRP_CURRENT"
-        elif cu in ("MRP_LISTED", "LISTED_MRP",
-                    "NEW_MRP", "FINAL_MRP"):            rename[c] = "MRP_LISTED"
-        elif cu in ("ATTRIBUTE_1", "ATTRIBUTE1",
-                    "ATTRIBUTE", "ATTR"):               rename[c] = "ATTRIBUTE"
-    df.rename(columns=rename, inplace=True)
-
-    required = ["DEPARTMENT", "DISPLAY", "MRP_CURRENT", "MRP_LISTED"]
-    missing = [c for c in required if c not in df.columns]
-    if missing:
-        raise ValueError(f"MRP Mapping Master missing columns: {missing}")
-
+    df = df.dropna(subset=["DEPARTMENT"])[["DEPARTMENT", "DISPLAY", "MRP_CURRENT", "MRP_LISTED"]].copy()
     for c in ["DEPARTMENT", "DISPLAY"]:
         df[c] = df[c].astype(str).str.strip().str.upper()
-    if "ATTRIBUTE" in df.columns:
-        df["ATTRIBUTE"] = df["ATTRIBUTE"].astype(str).str.strip().str.upper()
-    else:
-        df["ATTRIBUTE"] = "ALL"
-
-    df["MRP_CURRENT"] = pd.to_numeric(df["MRP_CURRENT"], errors="coerce").fillna(0).astype(int)
-    df["MRP_LISTED"]  = pd.to_numeric(df["MRP_LISTED"],  errors="coerce").fillna(0).astype(int)
-    return df.dropna(subset=["DEPARTMENT"])
-
-
-def _build_groups(mapping_df: pd.DataFrame) -> dict:
-    """Build group structure: {(dept, display, attr): {valid: [...], disc: [...]}}"""
-    groups = {}
-    for _, row in mapping_df.iterrows():
-        key = (row["DEPARTMENT"], row["DISPLAY"], row["ATTRIBUTE"])
-        if key not in groups:
-            groups[key] = {"valid": [], "discontinued": []}
-        if row["MRP_LISTED"] != 0:
-            groups[key]["valid"].append(int(row["MRP_LISTED"]))
-        else:
-            groups[key]["discontinued"].append(int(row["MRP_CURRENT"]))
-    return groups
+    df["MRP_CURRENT"] = pd.to_numeric(df["MRP_CURRENT"], errors="coerce").fillna(0).round().astype(int)
+    df["MRP_LISTED"]  = pd.to_numeric(df["MRP_LISTED"],  errors="coerce").fillna(0).round().astype(int)
+    df = df.drop_duplicates()
+    clash = df[df.duplicated(["DEPARTMENT", "DISPLAY", "MRP_CURRENT"], keep=False)]
+    if not clash.empty:
+        raise ValueError(f"MRP master gives {len(clash)} old MRPs two different new MRPs, "
+                         f"e.g. {clash.head(3).to_dict('records')}")
+    return df.reset_index(drop=True)
 
 
-def _default_cont_pcts(valid_mrps: list) -> list:
-    """Equal split across valid MRPs."""
-    eq = shares_pct({i: 1.0 for i in range(len(valid_mrps))})   # adds to exactly 100
-    return [eq[i] for i in range(len(valid_mrps))]
+# Share of a discontinued MRP's sales that goes to the nearest listed MRP BELOW it; the rest goes to the nearest above.
+LOWER_PCT = {"SUMMER": 60.0}
+LOWER_PCT_DEFAULT = 40.0   # Regular / Occasional (master's assumptions); PreWinter / Winter too (user, 2026-10-08)
+KEYS = ["DEPARTMENT", "DISPLAY", "MRP_CURRENT"]
 
 
-def _redistribute(sales_df: pd.DataFrame, mapping_df: pd.DataFrame,
-                  month_cols: list, cont_pcts_input: Optional[dict]) -> tuple:
-    """
-    Main redistribution.
-    cont_pcts_input: dict of "DEPT|DISPLAY|ATTR" → [{mrp, pct}, ...]
-                     if None, use equal split for all groups.
-    Returns (output_df, unmapped_df, log_lines)
-    """
-    log = []
-    groups = _build_groups(mapping_df)
+def _targets(mapping_df: pd.DataFrame) -> pd.DataFrame:
+    """Each master row plus BELOW / ABOVE: the new MRP of the nearest listed old MRP below / above it in the same
+    Department x Display (0 = none on that side) - what the master's Initial1 / Initial2 rows work out."""
+    out = []
+    for _, g in mapping_df.sort_values("MRP_CURRENT").groupby(["DEPARTMENT", "DISPLAY"], sort=False):
+        lst = g["MRP_LISTED"].tolist()
+        below, run = [], 0
+        for v in lst:
+            below.append(run)
+            run = v or run
+        above, run = [], 0
+        for v in reversed(lst):
+            above.append(run)
+            run = v or run
+        out.append(g.assign(BELOW=below, ABOVE=above[::-1]))
+    cols = ["DEPARTMENT", "DISPLAY", "MRP_CURRENT", "MRP_LISTED", "BELOW", "ABOVE"]
+    return pd.concat(out, ignore_index=True)[cols] if out else pd.DataFrame(columns=cols)
 
-    # Build fast lookup: (dept, display, attr, mrp) → mrp_listed (0 if discontinued)
-    master_map: dict = {}
-    for _, row in mapping_df.iterrows():
-        master_map[(row["DEPARTMENT"], row["DISPLAY"], row["ATTRIBUTE"], int(row["MRP_CURRENT"]))] = int(row["MRP_LISTED"])
 
-    # Parse user cont_pcts into dict: (dept, display, attr) → [(mrp, pct), ...]
-    user_splits: dict = {}
-    if cont_pcts_input:
-        for group_key, splits in cont_pcts_input.items():
-            parts = group_key.split("|")
-            if len(parts) == 3:
-                k = (parts[0].upper(), parts[1].upper(), parts[2].upper())
-                user_splits[k] = [(int(s.mrp), float(s.pct)) for s in splits]
+def _redistribute(sales_df: pd.DataFrame, mapping_df: pd.DataFrame, month_cols: list) -> tuple:
+    """Listed MRPs move to their new MRP; a discontinued MRP splits between the nearest listed MRPs below / above
+    (LOWER_PCT by attribute, 100% to the only side). Returns (output_df, unmapped_df, log_lines)."""
+    s = sales_df[(sales_df[month_cols] != 0).any(axis=1)].rename(columns={"MRP": "MRP_CURRENT"})
+    s = s.assign(MRP_CURRENT=s["MRP_CURRENT"].astype(int)).merge(_targets(mapping_df), on=KEYS, how="left")
+    not_in = s["MRP_LISTED"].isna()
+    listed = ~not_in & (s["MRP_LISTED"] > 0)
+    nowhere = ~not_in & ~listed & (s["BELOW"] == 0) & (s["ABOVE"] == 0)
+    d = s[~not_in & ~listed & ~nowhere]
 
-    out_rows = []
-    unmapped_rows = []
-    warn_counts: dict = {}
+    lo_pct = d["ATTRIBUTE"].map(LOWER_PCT).fillna(LOWER_PCT_DEFAULT)
+    lo_pct = lo_pct.where(d["ABOVE"] > 0, 100.0).where(d["BELOW"] > 0, 0.0)
+    lo = d.assign(LISTED_MRP=d["BELOW"], SHARE_PCT=lo_pct)
+    lo[month_cols] = d[month_cols].mul(lo_pct / 100.0, axis=0)
+    hi = d.assign(LISTED_MRP=d["ABOVE"], SHARE_PCT=100.0 - lo_pct)
+    hi[month_cols] = d[month_cols] - lo[month_cols]   # the rest, so the two parts add back to the month exactly
 
-    for _, row in sales_df.iterrows():
-        store = row["STORE"]
-        dept  = row["DEPARTMENT"]
-        disp  = row["DISPLAY"]
-        attr  = row["ATTRIBUTE"]
-        mrp   = int(row["MRP"])
-        div   = row.get("DIVISION", "")
-        month_vals = {mc: row[mc] for mc in month_cols}
+    key_cols = ["STORE", "DIVISION", "DEPARTMENT", "DISPLAY", "ATTRIBUTE", "MRP_CURRENT", "LISTED_MRP"]
+    parts = [s[listed].assign(LISTED_MRP=s["MRP_LISTED"], SHARE_PCT=100.0), lo[lo_pct > 0], hi[lo_pct < 100]]
+    output_df = pd.concat(parts, ignore_index=True)[key_cols + ["SHARE_PCT"] + month_cols]
+    output_df["LISTED_MRP"] = output_df["LISTED_MRP"].astype(int)
+    # one row per store x ... x old MRP x new MRP (both neighbours can carry the same new MRP: their shares add)
+    output_df = output_df.groupby(key_cols, dropna=False)[["SHARE_PCT"] + month_cols].sum().reset_index()
 
-        # Skip fully zero rows
-        if all(v == 0 for v in month_vals.values()):
-            continue
+    unmapped_df = pd.concat([s[not_in].assign(REASON="MRP combination not in mapping master"),
+                             s[nowhere].assign(REASON="No listed MRP in this Department x Display")],
+                            ignore_index=True)
+    unmapped_df = unmapped_df.assign(LISTED_MRP=0)[key_cols[:-1] + ["LISTED_MRP"] + month_cols + ["REASON"]]
 
-        # Check master
-        lookup_key = (dept, disp, attr, mrp)
-        mrp_listed = master_map.get(lookup_key)
-
-        if mrp_listed is None:
-            # Not in master at all
-            reason = "MRP combination not in mapping master"
-            unmapped_rows.append({
-                "STORE": store, "DEPARTMENT": dept, "DISPLAY": disp,
-                "ATTRIBUTE": attr, "MRP_CURRENT": mrp, "LISTED_MRP": 0,
-                **month_vals, "REASON": reason
-            })
-            wk = (dept, disp, attr)
-            warn_counts[wk] = warn_counts.get(wk, 0) + 1
-            continue
-
-        if mrp_listed != 0:
-            # Valid MRP → pass through
-            out_rows.append({
-                "STORE": store, "DIVISION": div, "DEPARTMENT": dept,
-                "DISPLAY": disp, "ATTRIBUTE": attr,
-                "MRP_CURRENT": mrp, "LISTED_MRP": mrp_listed,
-                **month_vals
-            })
-            continue
-
-        # Discontinued MRP → redistribute across valid MRPs in this group
-        group_key = (dept, disp, attr)
-        group = groups.get(group_key, {"valid": [], "discontinued": []})
-        valid_mrps = sorted(set(group["valid"]))
-
-        if not valid_mrps:
-            # No valid MRPs in this group
-            unmapped_rows.append({
-                "STORE": store, "DEPARTMENT": dept, "DISPLAY": disp,
-                "ATTRIBUTE": attr, "MRP_CURRENT": mrp, "LISTED_MRP": 0,
-                **month_vals, "REASON": "No valid MRPs in group"
-            })
-            continue
-
-        # Get contribution %s
-        if group_key in user_splits:
-            splits = [(m, p) for m, p in user_splits[group_key] if m in valid_mrps]
-            if not splits:
-                splits = list(zip(valid_mrps, _default_cont_pcts(valid_mrps)))
-        else:
-            splits = list(zip(valid_mrps, _default_cont_pcts(valid_mrps)))
-
-        total_pct = sum(p for _, p in splits)
-        if total_pct == 0:
-            total_pct = 100
-            splits = list(zip(valid_mrps, _default_cont_pcts(valid_mrps)))
-
-        # Redistribute each month independently, last row absorbs rounding residual
-        for mc in month_cols:
-            total = month_vals[mc]
-            if total == 0:
-                for mrp_valid, _ in splits:
-                    out_rows.append({
-                        "STORE": store, "DIVISION": div, "DEPARTMENT": dept,
-                        "DISPLAY": disp, "ATTRIBUTE": attr,
-                        "MRP_CURRENT": mrp, "LISTED_MRP": mrp_valid,
-                        **{m: (0 if m != mc else 0) for m in month_cols}
-                    })
-                # Actually don't emit zero-sales rows — skip
-                continue
-
-            # the month's total split by the shares at full precision; the remainder lands on the largest part, so
-            # the valid MRPs add back to it exactly (was rounded to 6 dp, last row plugged)
-            parts = split(total, {i: pct for i, (_, pct) in enumerate(splits)})
-            for i, (mrp_valid, pct) in enumerate(splits):
-                alloc = parts[i]
-                # Build month dict for this row (all months 0 except the current one)
-                mc_vals = {m: 0.0 for m in month_cols}
-                mc_vals[mc] = alloc
-                out_rows.append({
-                    "STORE": store, "DIVISION": div, "DEPARTMENT": dept,
-                    "DISPLAY": disp, "ATTRIBUTE": attr,
-                    "MRP_CURRENT": mrp, "LISTED_MRP": mrp_valid,
-                    **mc_vals
-                })
-
-    for (dept, disp, attr), cnt in warn_counts.items():
-        log.append(f"WARN: {cnt} rows unmapped in [{dept} | {disp} | {attr}]")
-
-    output_df   = pd.DataFrame(out_rows) if out_rows else pd.DataFrame()
-    unmapped_df = pd.DataFrame(unmapped_rows) if unmapped_rows else pd.DataFrame()
-
-    # Consolidate: group by key columns and sum month cols
-    if not output_df.empty:
-        key_cols = ["STORE", "DIVISION", "DEPARTMENT", "DISPLAY", "ATTRIBUTE", "MRP_CURRENT", "LISTED_MRP"]
-        output_df = output_df.groupby(key_cols, dropna=False)[month_cols].sum().reset_index()
-
+    log = [f"Rule: discontinued MRP -> nearest listed MRP below / above; Summer {LOWER_PCT['SUMMER']:g}/"
+           f"{100 - LOWER_PCT['SUMMER']:g}, others {LOWER_PCT_DEFAULT:g}/{100 - LOWER_PCT_DEFAULT:g}; one side -> 100%",
+           f"Listed rows: {int(listed.sum()):,} | split rows: {len(d):,} | unmapped rows: {len(unmapped_df):,}"]
+    for (dept, disp), n in unmapped_df.groupby(["DEPARTMENT", "DISPLAY"]).size().items():
+        log.append(f"WARN: {n} rows unmapped in [{dept} | {disp}]")
     log.append(f"Output rows: {len(output_df)}")
-    log.append(f"Unmapped rows: {len(unmapped_df)}")
-
     return output_df, unmapped_df, log
 
 
 def _validate(sales_df: pd.DataFrame, output_df: pd.DataFrame,
-              month_cols: list) -> tuple[list[dict], bool]:
+              month_cols: list, unmapped_df: Optional[pd.DataFrame] = None) -> tuple[list[dict], bool]:
+    """Store x Department totals before vs after. Unmapped rows count on the 'after' side - they are reported on their
+    own sheet, not lost (user, 2026-10-08: departments with no listed MRP go to Unmapped)."""
+    if unmapped_df is not None and not unmapped_df.empty:
+        output_df = pd.concat([output_df, unmapped_df[["STORE", "DEPARTMENT"] + month_cols]], ignore_index=True)
     tol = SHOWN   # any difference that shows at 8 decimals (was 0.01)
     val_rows = []
     val_pass = True
@@ -453,7 +368,7 @@ def _build_excel(output_df, unmapped_df, val_rows, val_pass, log_lines, sales_df
                 if c in num_cols and isinstance(v, (int, float)):
                     # full precision to 8 dp (was round(v, 2) - it undid the exact split in the file)
                     cell.value = round(float(v), 8) + 0.0
-                    if c in ("MRP_CURRENT", "LISTED_MRP"):
+                    if c in ("MRP_CURRENT", "LISTED_MRP", "SHARE_PCT"):
                         cell.number_format = "#,##0"
                     else:
                         cell.number_format = "#,##0.00000000"
@@ -554,61 +469,39 @@ def get_sales_status():
 
 @router.get("/mrp-groups")
 def get_mrp_groups():
-    """
-    Load the MRP Mapping Master and optionally overlay sales impact from the sales file.
-    Returns groups: [{dept, display, attr, valid_mrps, discontinued_mrps, disc_sales_count}]
-    """
+    """Per Department x Display: the listed MRPs (old -> new) and, for each discontinued old MRP, the nearest listed
+    new MRP below / above it (0 = none) plus how many sales rows sit on discontinued MRPs."""
     try:
-        mapping_df = _load_mapping()
+        t = _targets(_load_mapping())
     except Exception as e:
         raise HTTPException(400, detail=str(e))
 
-    groups = _build_groups(mapping_df)
-
-    # Try to overlay sales counts
-    sales_counts: dict = {}
+    disc_rows: dict = {}
     if _find_sales_file():
         try:
-            sales_df, month_cols, _ = _mapped_sales(mapping_df)
-            disc_lookup = set()
-            for _, row in mapping_df[mapping_df["MRP_LISTED"] == 0].iterrows():
-                disc_lookup.add((row["DEPARTMENT"], row["DISPLAY"], row["ATTRIBUTE"], int(row["MRP_CURRENT"])))
-
-            for _, row in sales_df.iterrows():
-                key = (row["DEPARTMENT"], row["DISPLAY"], row["ATTRIBUTE"], int(row["MRP"]))
-                if key in disc_lookup:
-                    gk = (row["DEPARTMENT"], row["DISPLAY"], row["ATTRIBUTE"])
-                    sales_counts[gk] = sales_counts.get(gk, 0) + 1
+            sales_df, _, _ = _mapped_sales(t)
+            hit = sales_df.rename(columns={"MRP": "MRP_CURRENT"}).merge(t[t["MRP_LISTED"] == 0][KEYS], on=KEYS)
+            disc_rows = hit.groupby(["DEPARTMENT", "DISPLAY"]).size().to_dict()
         except Exception:
             pass
 
     result = []
-    for (dept, display, attr), grp in sorted(groups.items()):
-        valid_mrps = sorted(set(grp["valid"]))
-        disc_mrps  = sorted(set(grp["discontinued"]))
-        if not disc_mrps and not valid_mrps:
-            continue
-        default_pcts = _default_cont_pcts(valid_mrps)
+    for (dept, display), g in t.groupby(["DEPARTMENT", "DISPLAY"]):
+        on = g[g["MRP_LISTED"] > 0]
+        off = g[g["MRP_LISTED"] == 0]
         result.append({
-            "dept":           dept,
-            "display":        display,
-            "attr":           attr,
-            "group_key":      f"{dept}|{display}|{attr}",
-            "valid_mrps":     valid_mrps,
-            "disc_mrps":      disc_mrps,
-            "disc_rows_in_sales": sales_counts.get((dept, display, attr), 0),
-            "default_pcts":   default_pcts,
+            "dept": dept, "display": display, "group_key": f"{dept}|{display}",
+            "listed": [{"mrp": int(r.MRP_CURRENT), "listed": int(r.MRP_LISTED)} for r in on.itertuples()],
+            "disc": [{"mrp": int(r.MRP_CURRENT), "below": int(r.BELOW), "above": int(r.ABOVE)} for r in off.itertuples()],
+            "disc_rows_in_sales": int(disc_rows.get((dept, display), 0)),
         })
-
-    return {"groups": result, "total_groups": len(result)}
+    return {"groups": result, "total_groups": len(result),
+            "rule": {"lower_pct": LOWER_PCT, "lower_pct_default": LOWER_PCT_DEFAULT}}
 
 
 @router.post("/run")
 def run_engine(body: RunRequest):
-    """
-    Run re-apportionment. body.cont_pcts = {group_key: [{mrp, pct}, ...]}
-    If cont_pcts is None or empty, equal split is used for all groups.
-    """
+    """Run re-apportionment by the master's nearest-listed-MRP rule (see module docstring)."""
     sales_path = _find_sales_file()
     if not sales_path:
         raise HTTPException(400, detail="Sales engine file not reachable")
@@ -626,16 +519,15 @@ def run_engine(body: RunRequest):
         raise HTTPException(409, detail=f"Sales do not tie to the Calendar department sales (max diff {check['max_diff_lakh']} L)")
 
     try:
-        output_df, unmapped_df, eng_log = _redistribute(
-            sales_df, mapping_df, month_cols, body.cont_pcts
-        )
+        output_df, unmapped_df, eng_log = _redistribute(sales_df, mapping_df, month_cols)
     except Exception as e:
         raise HTTPException(500, detail=f"Redistribution error: {e}")
 
-    val_rows, val_pass = _validate(sales_df, output_df, month_cols)
+    val_rows, val_pass = _validate(sales_df, output_df, month_cols, unmapped_df)
 
     total_before = round(float(sales_df[month_cols].sum().sum()), 8)
     total_after  = round(float(output_df[month_cols].sum().sum()), 8) if not output_df.empty else 0.0
+    total_unmapped = round(float(unmapped_df[month_cols].sum().sum()), 8) if not unmapped_df.empty else 0.0
 
     full_log = [
         f"Sales       : sales engine {os.path.basename(sales_path)} (tie to Calendar dept sales: max {check['max_diff_lakh']} L)",
@@ -643,10 +535,10 @@ def run_engine(body: RunRequest):
         f"Month cols  : {', '.join(month_cols)}",
         f"Input rows  : {len(sales_df):,}",
         f"Output rows : {len(output_df):,}",
-        f"Unmapped    : {len(unmapped_df)}",
+        f"Unmapped    : {len(unmapped_df)} rows, {total_unmapped:,.2f}",
         f"Total before: {total_before:,.2f}",
         f"Total after : {total_after:,.2f}",
-        f"Diff        : {abs(total_after - total_before):.6f}",
+        f"Diff        : {abs(total_after + total_unmapped - total_before):.6f} (after + unmapped vs before)",
         f"Validation  : {'PASSED' if val_pass else 'FAILED'}",
         "---",
         *eng_log,
@@ -690,7 +582,8 @@ def run_engine(body: RunRequest):
         "unmapped":     len(unmapped_df),
         "total_before": total_before,
         "total_after":  total_after,
-        "diff":         round(abs(total_after - total_before), 8),
+        "total_unmapped": total_unmapped,
+        "diff":         round(abs(total_after + total_unmapped - total_before), 8),
         "val_pass":     val_pass,
         "val_rows":     val_rows,
         "output_file":  out_filename,

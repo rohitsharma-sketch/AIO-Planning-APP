@@ -9,22 +9,39 @@ import pandas as pd
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from engines import mrp_reapportionment_engine as m  # noqa: E402
 
+# the master's rule on a hand-made group (no data lake): old MRPs 199 / 249 / 299 / 349 / 399 / 449, listed 249 -> 250
+# and 399 -> 399; 199 has nothing listed below (100% up), 299 / 349 split 40/60 (60/40 Summer), 449 nothing above
+M = ["Mar 2026"]
+mp = pd.DataFrame({"DEPARTMENT": "D", "DISPLAY": "T", "MRP_CURRENT": [199, 249, 299, 349, 399, 449],
+                   "MRP_LISTED": [0, 250, 0, 0, 399, 0]})
+mp = pd.concat([mp, pd.DataFrame({"DEPARTMENT": ["D"], "DISPLAY": ["NONE"], "MRP_CURRENT": [99], "MRP_LISTED": [0]})])
+sl = pd.DataFrame({"STORE": "S", "DIVISION": "X", "DEPARTMENT": "D", "DISPLAY": ["T"] * 7 + ["NONE", "T"],
+                   "ATTRIBUTE": ["REGULAR"] * 6 + ["SUMMER", "REGULAR", "REGULAR"],
+                   "MRP": [199, 249, 299, 349, 399, 449, 299, 99, 999], "Mar 2026": [10.0] * 9})
+o, u, _ = m._redistribute(sl, mp, M)
+got = {(a, c, lst): round(v, 6) for a, c, lst, v in zip(o["ATTRIBUTE"], o["MRP_CURRENT"], o["LISTED_MRP"], o["Mar 2026"])}
+assert got == {("REGULAR", 199, 250): 10, ("REGULAR", 249, 250): 10, ("REGULAR", 299, 250): 4, ("REGULAR", 299, 399): 6,
+               ("REGULAR", 349, 250): 4, ("REGULAR", 349, 399): 6, ("REGULAR", 399, 399): 10, ("REGULAR", 449, 399): 10,
+               ("SUMMER", 299, 250): 6, ("SUMMER", 299, 399): 4}, got
+assert sorted(u["REASON"]) == ["MRP combination not in mapping master", "No listed MRP in this Department x Display"]
+assert m._validate(sl, o, M, u)[1]
+
 sales, months, check = m._engine_sales()
 assert check["pass"] and check["max_diff_lakh"] <= 0.01, check
 
 # synthetic MRP structure for one department: its two lowest MRPs are discontinued, the rest stay listed
 dept = sales.groupby("DEPARTMENT")[months].sum().sum(axis=1).idxmax()
-keys = sales[sales["DEPARTMENT"] == dept][["DEPARTMENT", "DISPLAY", "ATTRIBUTE", "MRP"]].drop_duplicates()
+keys = sales[sales["DEPARTMENT"] == dept][["DEPARTMENT", "DISPLAY", "MRP"]].drop_duplicates()
 rows = []
-for (d, disp, attr), g in keys.groupby(["DEPARTMENT", "DISPLAY", "ATTRIBUTE"]):
+for (d, disp), g in keys.groupby(["DEPARTMENT", "DISPLAY"]):
     mrps = sorted(g["MRP"])
     for i, mrp in enumerate(mrps):
-        rows.append({"DEPARTMENT": d, "DISPLAY": disp, "ATTRIBUTE": attr, "MRP_CURRENT": mrp,
+        rows.append({"DEPARTMENT": d, "DISPLAY": disp, "MRP_CURRENT": mrp,
                      "MRP_LISTED": 0 if i < 2 and len(mrps) > 2 else mrp})
 mapping = pd.DataFrame(rows)
 sub = sales[sales["DEPARTMENT"] == dept].reset_index(drop=True)
-out, unmapped, _ = m._redistribute(sub, mapping, months, None)
-val, ok = m._validate(sub, out, months)
+out, unmapped, _ = m._redistribute(sub, mapping, months)
+val, ok = m._validate(sub, out, months, unmapped)
 assert ok and unmapped.empty, (len(unmapped), [v for v in val if v["STATUS"] != "PASS"][:3])
 assert abs(out[months].sum().sum() - sub[months].sum().sum()) < 5e-9 * len(out)   # exact: nothing lost to rounding
 assert max(v["DIFF"] for v in val) < 5e-9, max(v["DIFF"] for v in val)            # every store x dept to 8 decimals

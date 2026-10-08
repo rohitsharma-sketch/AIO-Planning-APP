@@ -5,6 +5,15 @@ Newest first. Each entry names its commit.
 
 ---
 
+## 2026-10-08
+
+### Sales Plan › MRP Re-apportionment: the planners' MRP master rule
+- **Asked (user):** the MRP master design ("MRP MASTER - 27-04-2026 - New(Shubham).xlsx") that suggests the new MRP by Department x old MRP x Display, built into the existing Sales Plan module (not a new app). Decisions: replace the old method; PreWinter / Winter split like Regular; a Department x Display with nothing listed -> Unmapped; LY Mar-Jun 2026 sales from the sales engine.
+- Rule: a listed old MRP moves to its new MRP; a discontinued one splits to the nearest listed MRP below / above (old MRPs in value order within Department x Display): 40/60 (Regular, Occasional, all Winter), 60/40 (Summer); one side only -> 100%. Was: spread over every listed MRP of Department x Display x Attribute, equal or typed %s (the %-editor is gone; the Groups tab shows where each discontinued MRP goes).
+- Loader reads the workbook's wide "MRP Adj" grid as is (or a plain DEPARTMENT / DISPLAY / MRP_CURRENT / MRP_LISTED list); placed in `MRP Merging Engine\Sales Reapportionment\MRP Mapping\` (was empty). Output gains SHARE_PCT. Validation: store x dept before = after + Unmapped.
+- Checked: the engine's below / above targets equal the workbook's Final1 / Final2 for all 5,233 discontinued MRPs; full run on LY Mar-Jun 2026: Rs 41,062.26 L in -> 40,824.36 L re-apportioned + 237.90 L Unmapped (7,070 rows no listed MRP, 2,469 MRP not in master), diff Rs 0.000001, validation passed; split step 0.4 s (was a per-row loop). Test `engines/test_mrp_reapportionment.py` adds a hand-made rule case.
+- Workbook notes for the planners: FABRIC-SUITING / NON_TABLE is out of MRP order in the grid (the app sorts); the Working sheet's after-split total is half the before total.
+
 ## 2026-10-07
 
 ### Core apps: loading-time check + gzip on 8010

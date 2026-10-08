@@ -22,34 +22,18 @@ function StatCard({ label, value, sub, color }) {
   )
 }
 
-// ── Contribution % editor row ─────────────────────────────────────────────────
+// ── Group row: where each discontinued MRP goes (the master's rule, read-only since 2026-10-08) ────────────
 
-function GroupRow({ group, overrides, onChange }) {
-  const { dept, display, attr, valid_mrps, disc_mrps, disc_rows_in_sales, default_pcts, group_key } = group
+function Target({ below, above }) {
+  if (!below && !above) return <span style={{ color: '#B45309' }}>unmapped</span>
+  if (!below || !above) return <span>₹{below || above} <span style={{ color: theme.textMuted }}>100%</span></span>
+  return <span>₹{below} <span style={{ color: theme.textMuted }}>↓</span> · ₹{above} <span style={{ color: theme.textMuted }}>↑</span></span>
+}
 
-  const initPcts = overrides
-    ? overrides.map(s => s.pct)
-    : (default_pcts.length ? default_pcts : valid_mrps.map(() => parseFloat((100 / valid_mrps.length).toFixed(4))))
+function GroupRow({ group }) {
+  const { dept, display, listed, disc, disc_rows_in_sales } = group
 
-  const [pcts, setPcts] = useState(initPcts)
-
-  const total = pcts.reduce((a, b) => a + (parseFloat(b) || 0), 0)
-  const balanced = Math.abs(total - 100) < 0.05
-
-  const update = (idx, val) => {
-    const next = [...pcts]
-    next[idx] = val
-    setPcts(next)
-    onChange(group_key, valid_mrps.map((mrp, i) => ({ mrp, pct: parseFloat(next[i]) || 0 })))
-  }
-
-  const autoBalance = () => {
-    const eq = default_pcts.length ? default_pcts : valid_mrps.map(() => parseFloat((100 / valid_mrps.length).toFixed(4)))
-    setPcts(eq)
-    onChange(group_key, valid_mrps.map((mrp, i) => ({ mrp, pct: eq[i] })))
-  }
-
-  if (!disc_mrps.length) return null
+  if (!disc.length) return null
 
   return (
     <div style={{
@@ -66,71 +50,46 @@ function GroupRow({ group, overrides, onChange }) {
             {dept}
             <span style={{ color: theme.textMuted, margin: '0 6px' }}>·</span>
             <span style={{ color: theme.textMuted }}>{display}</span>
-            <span style={{ color: theme.textMuted, margin: '0 6px' }}>·</span>
-            <span style={{ color: theme.primary }}>{attr}</span>
           </div>
           <div style={{ fontSize: 10, color: theme.textMuted, marginTop: 2 }}>
-            {disc_mrps.length} discontinued → {valid_mrps.length} valid MRP{valid_mrps.length !== 1 ? 's' : ''}
+            {disc.length} discontinued · {listed.length} listed MRP{listed.length !== 1 ? 's' : ''}
             {disc_rows_in_sales > 0 && ` · ${disc_rows_in_sales} rows in sales`}
+            {!listed.length && <span style={{ color: '#B45309' }}> · nothing listed - sales go to Unmapped</span>}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          {!balanced && (
-            <span style={{ fontSize: 10, color: '#B45309' }}>Sum={total.toFixed(1)}%</span>
-          )}
-          <button onClick={autoBalance} style={{
-            padding: '3px 10px', fontSize: 10, borderRadius: 5,
-            background: 'transparent', border: `1px solid ${theme.border}`,
-            color: theme.textMuted, cursor: 'pointer',
-          }}>= Equal</button>
-        </div>
       </div>
 
-      {/* Discontinued MRPs */}
+      {/* Discontinued MRPs -> nearest listed below / above */}
       <div style={{ padding: '8px 16px 6px', borderBottom: `1px solid ${alpha(theme.border,'22')}` }}>
         <div style={{ fontSize: 10, color: theme.textMuted, marginBottom: 4, fontWeight: 600, letterSpacing: 0.3 }}>
-          DISCONTINUED (redistributed away)
+          DISCONTINUED → NEAREST LISTED
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {disc_mrps.map(m => (
-            <span key={m} style={{
+          {disc.map(d => (
+            <span key={d.mrp} style={{
               padding: '2px 8px', borderRadius: 4, fontSize: 11, ...mono,
-              background: `${alpha(theme.danger,'15')}`, color: theme.danger, border: `1px solid ${alpha(theme.danger,'30')}`,
-            }}>₹{m}</span>
+              background: `${alpha(theme.danger,'0d')}`, border: `1px solid ${alpha(theme.danger,'30')}`,
+            }}><span style={{ color: theme.danger }}>₹{d.mrp}</span> → <Target below={d.below} above={d.above} /></span>
           ))}
         </div>
       </div>
 
-      {/* Valid MRPs with % inputs */}
-      <div style={{ padding: '10px 16px' }}>
-        <div style={{ fontSize: 10, color: theme.textMuted, marginBottom: 8, fontWeight: 600, letterSpacing: 0.3 }}>
-          SPLIT ACROSS VALID MRPs
+      {/* Listed MRPs (old -> new) */}
+      {listed.length > 0 && (
+        <div style={{ padding: '8px 16px 10px' }}>
+          <div style={{ fontSize: 10, color: theme.textMuted, marginBottom: 4, fontWeight: 600, letterSpacing: 0.3 }}>
+            LISTED
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {listed.map(l => (
+              <span key={l.mrp} style={{
+                padding: '2px 8px', borderRadius: 4, fontSize: 11, ...mono, color: theme.accent,
+                background: `${alpha(theme.accent,'0d')}`, border: `1px solid ${alpha(theme.accent,'30')}`,
+              }}>₹{l.mrp}{l.listed !== l.mrp && ` → ₹${l.listed}`}</span>
+            ))}
+          </div>
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {valid_mrps.map((mrp, idx) => (
-            <div key={mrp} style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px',
-              borderRadius: 7, background: `${alpha(theme.accent,'0d')}`, border: `1px solid ${alpha(theme.accent,'30')}`,
-            }}>
-              <span style={{ fontSize: 11, color: theme.accent, ...mono, minWidth: 36 }}>₹{mrp}</span>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                value={pcts[idx] ?? ''}
-                onChange={e => update(idx, e.target.value)}
-                style={{
-                  width: 54, padding: '3px 6px', borderRadius: 5,
-                  background: theme.surfaceAlt, border: `1px solid ${balanced ? theme.border : '#B4530944'}`,
-                  color: theme.textPrimary, fontSize: 11, textAlign: 'right', ...mono, outline: 'none',
-                }}
-              />
-              <span style={{ fontSize: 10, color: theme.textMuted }}>%</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -225,7 +184,6 @@ export default function MrpReapportionment() {
   const [salesInfo, setSalesInfo] = useState(null)
   const [groups, setGroups]       = useState(null)
   const [groupsErr, setGroupsErr] = useState('')
-  const [overrides, setOverrides] = useState({})
   const [activeTab, setActiveTab] = useState('groups')
   const [filter, setFilter]       = useState('')
 
@@ -256,14 +214,10 @@ export default function MrpReapportionment() {
 
   useEffect(() => { reload() }, [reload])
 
-  const handleGroupChange = useCallback((group_key, splits) => {
-    setOverrides(prev => ({ ...prev, [group_key]: splits }))
-  }, [])
-
   const handleRun = async () => {
     setRunning(true); setError(''); setResult(null)
     try {
-      const body = { cont_pcts: Object.keys(overrides).length ? overrides : null }
+      const body = {}   // the split comes from the master's rule
       const r = await fetch('/api/planning/mrp-reapportionment/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -285,11 +239,10 @@ export default function MrpReapportionment() {
     if (!filter.trim()) return groups.groups
     const q = filter.trim().toUpperCase()
     return groups.groups.filter(g =>
-      g.dept.includes(q) || g.display.includes(q) || g.attr.includes(q)
+      g.dept.includes(q) || g.display.includes(q)
     )
   }, [groups, filter])
 
-  const overrideCount = Object.keys(overrides).length
   const salesOk = !!(salesInfo?.file_found && salesInfo.check?.pass)
   const canRun = salesOk && status?.mapping_file_found && !running
   const lastRun = status?.last_run
@@ -299,7 +252,7 @@ export default function MrpReapportionment() {
 
       {/* Heading */}
       <div className="sp-sub" style={{ marginBottom: 8 }}>
-        Redistribute sales from discontinued MRP slabs to valid listed MRPs. Configure split % per group.
+        Moves LY sales onto the new MRP structure: a discontinued MRP goes to the nearest listed MRP below and above (40/60, Summer 60/40).
       </div>
 
       {/* Info panel (was a right-hand column) - collapsed by default so the main panel gets the full width */}
@@ -326,10 +279,10 @@ export default function MrpReapportionment() {
               HOW IT WORKS
             </div>
             {[
-              { icon: '📂', t: '1. Load groups',  b: 'Mapping master shows which MRPs are valid vs. discontinued per group (Dept · Display · Attribute).' },
-              { icon: '⚙',  t: '2. Set splits',   b: 'For each group with discontinued MRPs, assign % of sales to each valid MRP. Default = equal split.' },
-              { icon: '▶',  t: '3. Run',           b: 'Valid MRP rows pass through. Discontinued MRP sales are redistributed per your %s.' },
-              { icon: '✓',  t: '4. Validate',      b: 'Totals per Store × Dept verified before and after — diff must be < ₹0.01.' },
+              { icon: '📂', t: '1. Load groups',  b: 'The MRP master (sheet "MRP Adj") lists every old MRP per Department · Display and its new MRP (0 = discontinued).' },
+              { icon: '⚙',  t: '2. Rule',          b: 'Listed MRPs move to their new MRP. A discontinued MRP splits to the nearest listed MRP below / above: 40% / 60% (Regular, Occasional, Winter), 60% / 40% (Summer); only one side listed → 100% there.' },
+              { icon: '▶',  t: '3. Run',           b: 'Applied to LY Mar–Jun 2026 sales from the sales engine, store by store, month by month.' },
+              { icon: '✓',  t: '4. Validate',      b: 'Store × Dept totals before = after + Unmapped, to 8 decimals. A Department · Display with nothing listed goes to Unmapped.' },
             ].map(({ icon, t, b }) => (
               <div key={t} style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'flex-start' }}>
                 <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>{icon}</span>
@@ -351,7 +304,7 @@ export default function MrpReapportionment() {
               'Sales never cross Display types',
               'Sales never cross Attributes',
               'All month totals preserved exactly',
-              'No valid group → Listed MRP 0',
+              'Nothing listed in Dept · Display → Unmapped',
             ].map(c => (
               <div key={c} style={{ display: 'flex', gap: 7, marginBottom: 6, fontSize: 11, color: theme.textMuted }}>
                 <span style={{ color: theme.accent, flexShrink: 0 }}>✓</span>
@@ -482,7 +435,7 @@ export default function MrpReapportionment() {
                   <div style={{ padding: '32px 0', textAlign: 'center', color: theme.textMuted, fontSize: 13 }}>
                     Click <strong style={{ color: theme.primary }}>Load Groups</strong> to load MRP groups from the mapping master.
                     <div style={{ fontSize: 11, marginTop: 6 }}>
-                      Each group shows discontinued MRPs and lets you set the split % across valid MRPs.
+                      Each group shows where every discontinued MRP's sales go.
                     </div>
                   </div>
                 )}
@@ -496,7 +449,7 @@ export default function MrpReapportionment() {
                   <>
                     <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'center' }}>
                       <input
-                        placeholder="Filter by dept / display / attribute…"
+                        placeholder="Filter by dept / display…"
                         value={filter}
                         onChange={e => setFilter(e.target.value)}
                         style={{
@@ -507,19 +460,11 @@ export default function MrpReapportionment() {
                       />
                       <div style={{ fontSize: 11, color: theme.textMuted, whiteSpace: 'nowrap' }}>
                         {filteredGroups.length}/{groups.total_groups}
-                        {overrideCount > 0 && (
-                          <span style={{ marginLeft: 8, color: theme.accent }}>· {overrideCount} custom</span>
-                        )}
                       </div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 520, overflowY: 'auto' }}>
                       {filteredGroups.map(g => (
-                        <GroupRow
-                          key={g.group_key}
-                          group={g}
-                          overrides={overrides[g.group_key] || null}
-                          onChange={handleGroupChange}
-                        />
+                        <GroupRow key={g.group_key} group={g} />
                       ))}
                       {filteredGroups.length === 0 && filter && (
                         <div style={{ textAlign: 'center', color: theme.textMuted, fontSize: 12, padding: 20 }}>
@@ -539,7 +484,8 @@ export default function MrpReapportionment() {
                   <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                     <StatCard label="INPUT ROWS" value={result.input_rows?.toLocaleString()} />
                     <StatCard label="OUTPUT ROWS" value={result.output_rows?.toLocaleString()} color={theme.primary} />
-                    <StatCard label="UNMAPPED" value={result.unmapped} color={result.unmapped > 0 ? '#B45309' : theme.textMuted} />
+                    <StatCard label="UNMAPPED" value={result.unmapped} color={result.unmapped > 0 ? '#B45309' : theme.textMuted}
+                      sub={result.total_unmapped ? '₹' + (result.total_unmapped/100000).toFixed(2) + 'L' : undefined} />
                     <StatCard label="TOTAL BEFORE" value={'₹' + (result.total_before/100000).toFixed(1) + 'L'}
                       sub={result.total_before.toLocaleString('en-IN', { maximumFractionDigits: 0 })} />
                     <StatCard label="TOTAL AFTER" value={'₹' + (result.total_after/100000).toFixed(1) + 'L'}
@@ -591,14 +537,9 @@ export default function MrpReapportionment() {
           <div style={{
             background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`, padding: '18px 22px',
           }}>
-            {groups && (
-              <div style={{ marginBottom: 10, fontSize: 12, color: theme.textMuted }}>
-                {overrideCount > 0
-                  ? <><span style={{ color: theme.accent, fontWeight: 700 }}>{overrideCount}</span> group{overrideCount !== 1 ? 's' : ''} with custom splits · {groups.total_groups - overrideCount} using equal split</>
-                  : <span>All groups using equal split — load groups above to customise</span>
-                }
-              </div>
-            )}
+            <div style={{ marginBottom: 10, fontSize: 12, color: theme.textMuted }}>
+              Discontinued MRPs → nearest listed MRP below / above · 40 / 60 (Summer 60 / 40) · one side → 100%
+            </div>
             <button
               onClick={handleRun}
               disabled={!canRun}
