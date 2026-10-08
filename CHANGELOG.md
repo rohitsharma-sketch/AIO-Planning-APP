@@ -7,6 +7,9 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### MRP Re-apportionment: Groups list showed empty strips
+- Reported (user, screenshot): 284 blank lines in MRP Groups. The cards sat in a fixed-height (520 px) flex column and were shrunk to their borders; `flexShrink: 0` on each card. Checked in the built page with 284 stub groups: every card 113-171 px with its content, list scrolls.
+
 ### Right: "Import a new MRP master"
 - **Asked (user):** "yes add the right for mrp master import".
 - New right `mrp_master` (auth/rights.py) - an admin can switch it off per person in Users & access. Landing GUARDED blocks `POST …/mrp-reapportionment/mapping/upload` without it (403 with the reason); Export and Run stay open. The MRP page reads `/api/auth/rights` and shows Import switched off (with the reason on hover) when the right is off.

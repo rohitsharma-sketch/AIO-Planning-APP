@@ -39,6 +39,7 @@ function GroupRow({ group }) {
     <div style={{
       border: `1px solid ${theme.border}`, borderRadius: 9,
       background: theme.surfaceAlt, overflow: 'hidden',
+      flexShrink: 0,   // in the 520px scrolling list, 284 cards were squeezed to bare borders (2026-10-08)
     }}>
       {/* Group header */}
       <div style={{
