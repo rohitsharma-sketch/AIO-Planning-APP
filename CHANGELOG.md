@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### AOP re-run on the new base - Version 3 (live; Lock to Planning still on Version 2)
+- **Asked (user):** "rerun the AOP forecast with the new base"; "go ahead and rerun the AOP forecast".
+- Fresh session from the DB (today's store actuals = proportional calendarised split, data to 28 Sep month-wise / 7 Oct day-wise; closed through Aug'26), run with Version 2's own growth settings, saved as **Version 3 — 08 Oct 2026** (now the live AOP BIS reads). Lock to Planning untouched (Version 2, MAMJ 43,184.66 L). Backup: `Backups\aop_before_rerun_20261008_145928.json`.
+- LfL (Rs L): Mar'27 base 13,694.3 -> 13,201.3 (Holi days of Mar'26 now land in Feb'27, outside the plan year); Mar'27 forecast unchanged 15,624.2 (the March override); Apr-Aug unchanged within 1 L; Sep'27 base 0 -> 8,701.2 / forecast 9,223.2 (Sep'26 now in the base - month-wise file stops at 28 Sep, so about 4.8% short until the next export). Live MAMJ 43,185.67 L, LfL growth 12.5%.
+- NSO (97 stores): each store's 750 L ramp is now spread over its whole first year in the reference store's (LAM) shape - Version 2 had no LAM forecast after Aug'27, so it was packed into Mar-Aug. Apr-Aug NSO 24,888 -> 17,571 L; full-year NSO 29,481 -> 46,667 L. Ramp FY27 - Q1 stores +161 L Apr-Aug.
+
 ### AOP Output: Eff Sales / Eff Cont % / Eff Gr% columns + Department filter (Departments tab and sale-type switch removed)
 - **Asked (user):** "instead of reindexed and actual sales switch, add 2 columns named Eff Sales, Eff Cont % and Eff Gr% in Output. Month Wise and Total Both"; "Remove the separate departments tab and add the department filter field in the output tab only"; "All sales should match with calendarised sales on month level make sure of that".
 - Output now has three more values (on by default, every month + Total): **Eff Sales** = the Calendar's calendarised (reindexed) LY sales of the row, **Eff Cont %** = its share of the row above, **Eff Gr%** = Fcst vs Eff Sales. '—' where the LY month has not closed yet.
