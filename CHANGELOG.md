@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### Listing / Delisting: Festival lift -> "Daily trend" for the department
+- **Asked (user):** "if i were to see festival lift in detail can i get a link for the sales trend in the department".
+- Seasonality tab, Festival lift table: every festival row has a **Daily trend ›** link. It opens the department's day-by-day sales from 14 days before to 14 days after the festival date, one line per year (2022 onwards, incl. 2026 where closed), per trading store-day, in the stores whose calendar cluster keeps that festival; festival days and build-up / after-days shaded (Festival Master windows). Below: per year the festival date and window, festival-day rate vs the days around it, the local lift and festival-window sales. Hover a point for its date, sales and stores.
+- New nightly output `app/festival_trend.json` (build_suggestions.py; 238 departments, 46 festival-years, 1.2 MB, loaded only when a trend is opened).
+- ML_JEANS Dussehra: 1.87x / 2.00x / 1.96x / 1.93x (2022-25) against the surrounding days (pooled table: 2.22x vs the same months' normal days).
+
 ### AOP base now read from the Calendar's multi-year sales (Phase 1)
 - **Asked (user):** "once done, go ahead with phase 1".
 - `sync/store_actuals_sync.py` (the AOP base: levers `store_actuals` and `store_actuals_fy26`) reads `calendar.sales_fact` instead of re-reading the parquet and repeating the reindex (14 s instead of a file read + reindex). Nightly order now: day weights -> multi-year sales -> AOP base -> Calendar reindex -> check (the multi-year loader works out "closed" itself, by the same rule on the same export).

@@ -185,6 +185,7 @@ const ACTIONS = {
   kind: el => { ST.sug.kind = el.dataset.kind; ST.sug.sort = makeSort(); VIEWS.suggestions.controls(); VIEWS.suggestions.results(); },
   'sug-csv': () => exportSuggestions(),
   'ev-csv': () => exportEvents(),
+  'fest-trend': el => openFestTrend(el.dataset.dept, el.dataset.fest),
   'clear-f': el => { const [k, f] = el.dataset.clear.split('.'); ST[k][f] = typeof ST[k][f] === 'boolean' ? false : ''; VIEWS[mode].controls(); VIEWS[mode].results(); },
 };
 const CAP = 300;
@@ -403,14 +404,15 @@ const VIEWS = {
         return `<tr><td>${m.month}</td><td>${wchip(m.type)}</td><td class="num">${fmtRate(m.rate)}</td><td class="num ${cls}">${pct(v)}</td>
           <td class="num">${fmtN(m.days)}</td><td class="num">${fmtR(m.sales)}</td><td class="num muted">${c.index[m.month].toFixed(2)}</td></tr>`; }).join('');
       const frows = d.festivals.map(f => `<tr><td>${esc(f.festival)}</td><td class="num ${f.lift >= 1.15 ? 'up' : f.lift <= 0.85 ? 'dn' : ''}">${f.lift.toFixed(2)}×</td>
-        <td class="num">${fmtRate(f.festival_sales / f.festival_days)}</td><td class="num">${fmtRate(f.normal_rate)}</td><td class="num">${fmtN(f.festival_days)}</td><td class="num">${f.stores}</td></tr>`).join('');
+        <td class="num">${fmtRate(f.festival_sales / f.festival_days)}</td><td class="num">${fmtRate(f.normal_rate)}</td><td class="num">${fmtN(f.festival_days)}</td><td class="num">${f.stores}</td>
+        <td><button type="button" class="link-btn" data-act="fest-trend" data-dept="${esc(dep)}" data-fest="${esc(f.festival)}" title="${esc(dep)}: day-by-day sales around ${esc(f.festival)}, every year">Daily trend ›</button></td></tr>`).join('');
       $('#res').innerHTML = `<h2 class="h2">${esc(dep)} <span class="muted">· ${esc(divisionOf(dep))} · ${esc(CAT[d.category] || d.category)} season category</span></h2>
         <div class="ov-card">${seasonSvg(d)}<div class="ov-legend">${['in', 'normal', 'off'].map(t => `<span>${wchip(t)}</span>`).join('')}<span>dashed line = that window's benchmark</span></div></div>
         <div class="ov-grid" style="margin-top:12px">
           <div class="ov-card"><h3>Window benchmarks <span class="hint">what each month is compared with</span></h3>
             <table><thead><tr><th>Window</th><th>Months</th><th class="num">Benchmark</th><th class="num">Store-days</th><th class="num">Sales</th></tr></thead><tbody>${wrows}</tbody></table></div>
           <div class="ov-card"><h3>Festival lift <span class="hint">festival days vs the same stores' normal days, same months</span></h3>
-            ${frows ? `<table><thead><tr><th>Festival</th><th class="num">Lift</th><th class="num">Festival days</th><th class="num">Normal days</th><th class="num">Store-days</th><th class="num">Stores</th></tr></thead><tbody>${frows}</tbody></table>` : '<p class="ov-empty">No festival sales recorded.</p>'}</div>
+            ${frows ? `<table><thead><tr><th>Festival</th><th class="num">Lift</th><th class="num">Festival days</th><th class="num">Normal days</th><th class="num">Store-days</th><th class="num">Stores</th><th></th></tr></thead><tbody>${frows}</tbody></table>` : '<p class="ov-empty">No festival sales recorded.</p>'}</div>
           <div class="ov-card wide"><h3>Month by month <span class="hint">vs its own window benchmark · red = weak (&lt; 85%), green = strong (&gt; 115%) · category index = chain-wide ${esc(CAT[d.category] || d.category)} month vs its yearly average</span></h3>
             <table><thead><tr><th>Month</th><th>Window</th><th class="num">Festival-free rate</th><th class="num">vs window</th><th class="num">Store-days</th><th class="num">Sales</th><th class="num">Category index</th></tr></thead><tbody>${mrows}</tbody></table></div>
         </div>`;
@@ -611,6 +613,63 @@ function openDrill(store, dept) {
       <span><i style="background:var(--y)"></i>listed</span><span><i style="background:var(--n)"></i>unlisted</span><span><i style="background:var(--dot)"></i>no record</span></div>` +
     (x ? why(x.kind, x.r) : `<p class="why muted">No current suggestion for this store × department.</p>`);
   modal.hidden = false;
+}
+
+// Festival lift in detail (user, 2026-10-08: "if i were to see festival lift in detail can i get a link for the sales
+// trend in the department"): the department's day-by-day sales around one festival, every year - festival_trend.json
+// (build_suggestions.py), fetched the first time a trend is opened.
+let trendData = null;
+const YEAR_COL = ['#94A3B8', '#60A5FA', '#F59E0B', '#10B981', 'var(--color-primary)', '#A855F7'];
+const addDays = (s, k) => { const t = new Date(`${s}T00:00:00Z`); t.setUTCDate(t.getUTCDate() + k); return t.toISOString().slice(0, 10); };
+const dayDiff = (a, b) => Math.round((new Date(`${a}T00:00:00Z`) - new Date(`${b}T00:00:00Z`)) / 864e5);
+function openFestTrend(dept, fest) {
+  $('#drill-title').textContent = `${dept} — ${fest}: daily sales around the festival`;
+  $('#drill-sub').textContent = 'Loading…';
+  $('#drill-body').innerHTML = '';
+  modal.hidden = false;
+  (trendData ||= fetch('festival_trend.json').then(r => { if (!r.ok) throw new Error(`festival_trend.json: ${r.status}`); return r.json(); }))
+    .then(t => renderFestTrend(t, dept, fest))
+    .catch(e => { trendData = null; $('#drill-sub').textContent = `Couldn't load the trend: ${e.message} (the daily sync builds it).`; });
+}
+function renderFestTrend(t, dept, fest) {
+  const meta = t.festivals[fest] || {}, sales = t.departments[dept]?.[fest] || {}, P = t.pad;
+  const years = Object.keys(meta).filter(y => sales[y]).sort();
+  if (!years.length) { $('#drill-sub').textContent = `No day-wise sales of ${dept} around ${fest} in the stores that keep it.`; return; }
+  const last = meta[years.at(-1)];
+  $('#drill-sub').textContent = `${divisionOf(dept)} · stores in the clusters that keep ${fest} (${last.clusters.join(', ')}; ${last.stores} stores) · day 0 = festival date · sales per trading store-day`;
+  const series = years.map((y, k) => {
+    const m = meta[y], s = sales[y];
+    const rate = s.map((v, i) => (m.open[i] ? v / m.open[i] : null));
+    const inWin = i => { const day = addDays(m.date, i - P); return day >= m.from && day <= m.to; };
+    const fi = rate.map((_, i) => i).filter(inWin), ni = rate.map((_, i) => i).filter(i => !inWin(i));
+    const avg = ix => { const sv = ix.reduce((a, i) => a + s[i], 0), od = ix.reduce((a, i) => a + m.open[i], 0); return od ? sv / od : null; };
+    return { y, m, s, rate, col: YEAR_COL[k % YEAR_COL.length], fRate: avg(fi), nRate: avg(ni), fDays: fi.length, fSales: fi.reduce((a, i) => a + s[i], 0) };
+  });
+  // chart: x = days from the festival date, festival window of the latest year shaded (core days darker)
+  const W = 900, H = 280, pl = 64, pr = 16, pt = 14, pb = 34, n = 2 * P + 1;
+  const max = Math.max(1, ...series.flatMap(v => v.rate.filter(x => x != null)));
+  const x = i => pl + (i + 0.5) * (W - pl - pr) / n, y = v => pt + (H - pt - pb) * (1 - v / max), cw = (W - pl - pr) / n;
+  const a0 = dayDiff(last.from, last.date) + P, a1 = dayDiff(last.to, last.date) + P, c1 = dayDiff(last.core_to, last.date) + P;
+  const band = `<rect x="${pl + a0 * cw}" y="${pt}" width="${(a1 - a0 + 1) * cw}" height="${H - pt - pb}" fill="rgba(245,158,11,.10)"/>
+    <rect x="${pl + P * cw}" y="${pt}" width="${(c1 - P + 1) * cw}" height="${H - pt - pb}" fill="rgba(245,158,11,.22)"/>`;
+  const ticks = [0, 0.5, 1].map(f => `<line x1="${pl}" x2="${W - pr}" y1="${y(max * f)}" y2="${y(max * f)}" stroke="var(--line)"/><text x="${pl - 6}" y="${y(max * f)}" text-anchor="end" dominant-baseline="middle" font-size="10" fill="var(--color-muted-foreground)">${fmtR(max * f)}</text>`).join('');
+  const xl = Array.from({ length: n }, (_, i) => i - P).filter(o => o % 7 === 0 || o === 0).map(o => `<text x="${x(o + P)}" y="${H - 14}" font-size="10" text-anchor="middle" fill="var(--color-muted-foreground)">${o === 0 ? 'festival' : (o > 0 ? '+' : '') + o + 'd'}</text>`).join('');
+  const lines = series.map(v => {
+    const pts = v.rate.map((r, i) => (r == null ? null : [x(i), y(r), i])).filter(Boolean);
+    return `<path d="${pts.map((p, j) => `${j ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ')}" fill="none" stroke="${v.col}" stroke-width="${v === series.at(-1) ? 2.5 : 1.6}"/>` +
+      pts.map(p => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.6" fill="${v.col}"><title>${v.y} · ${dmy(addDays(v.m.date, p[2] - P))} · ${fmtR(v.s[p[2]])} in ${v.m.open[p[2]]} stores = ${fmtRate(v.rate[p[2]])}</title></circle>`).join('');
+  }).join('');
+  const legend = series.map(v => `<span><i style="background:${v.col}"></i>${v.y} (${dmy(v.m.date)})</span>`).join('') +
+    '<span><i style="background:rgba(245,158,11,.22)"></i>festival days</span><span><i style="background:rgba(245,158,11,.10)"></i>build-up / after-days</span>';
+  const rows = series.map(v => `<tr><td><i class="dot" style="background:${v.col}"></i> ${v.y}</td><td>${dmy(v.m.date)}</td><td>${span(v.m.from, v.m.to)}</td>
+      <td class="num">${fmtRate(v.fRate)}</td><td class="num">${fmtRate(v.nRate)}</td>
+      <td class="num ${v.fRate / v.nRate >= 1.15 ? 'up' : v.fRate / v.nRate <= 0.85 ? 'dn' : ''}">${v.nRate ? (v.fRate / v.nRate).toFixed(2) + '×' : '—'}</td>
+      <td class="num">${fmtR(v.fSales)}</td></tr>`).join('');
+  $('#drill-body').innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(dept)} daily sales around ${esc(fest)}">${band}${ticks}${lines}${xl}</svg>
+    <div class="ov-legend">${legend}</div>
+    <table class="mini" style="margin-top:10px"><thead><tr><th>Year</th><th>Festival date</th><th>Festival window</th><th class="num">Festival days</th><th class="num">Days around it</th><th class="num">Lift</th><th class="num">Festival-window sales</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="src">Day-wise sales of ${esc(dept)} in the stores whose calendar cluster keeps ${esc(fest)}, ${P} days either side of the festival date, per trading store-day (a day a store sold anything). "Days around it" = the other days in that ±${P}-day span, so this lift is local to the festival;
+      the Festival lift table pools ${win.params.years[0]}–${win.params.years.at(-1)} against the same stores' normal days in the same months. Festival windows (build-up / festival / after-days) from the Calendar app's Festival Master. Hover a point for its date, sales and stores.</p>`;
 }
 
 function festivalsIn(cluster, a, b) {

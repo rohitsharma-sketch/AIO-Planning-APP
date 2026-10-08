@@ -325,6 +325,46 @@ def build():
     for v in depts.values():
         v["festivals"].sort(key=lambda x: -x["lift"])
 
+    # ---- festival trend (user, 2026-10-08: "if i were to see festival lift in detail can i get a link for the sales
+    #      trend in the department"): each department's day-by-day sales from TREND_PAD days before to TREND_PAD days
+    #      after each festival date, every year in the day-wise data, in the stores whose calendar cluster keeps that
+    #      festival (+ how many of them traded each day) -> app/festival_trend.json, loaded when a trend is opened.
+    TREND_PAD = 14
+    trend_meta, trend = {}, {}
+    fwin = {}
+    for r in fest_rows:
+        fwin.setdefault((r["festival"], r["year"]), []).append(r)
+    stores_of = {}
+    for st, cl in store_cl.items():
+        stores_of.setdefault(cl, set()).add(st)
+    for (fe, y), rs in sorted(fwin.items()):
+        d0 = ordn(datetime.date.fromisoformat(rs[0]["date"]))
+        a, b = d0 - TREND_PAD, d0 + TREND_PAD
+        if y < YEARS[0] or b > A:
+            continue
+        stores = set().union(*(stores_of.get(r["cluster"], set()) for r in rs))
+        if not stores:
+            continue
+        span_days = range(a, b + 1)
+        opn = od[(od["day"] >= a) & (od["day"] <= b) & od["STORE_NAME"].isin(stores)].groupby("day").size().reindex(span_days, fill_value=0)
+        if not opn.any():
+            continue
+        core = max(set(r["core"] for r in rs), key=[r["core"] for r in rs].count)
+        trend_meta.setdefault(fe, {})[str(y)] = {
+            "date": iso(d0), "from": min(r["from"] for r in rs), "to": max(r["to"] for r in rs),
+            "core_to": iso(d0 + core - 1), "clusters": sorted(r["cluster"] for r in rs), "stores": len(stores),
+            "open": [int(x) for x in opn]}
+        sel = d[(d["day"] >= a) & (d["day"] <= b) & d["STORE_NAME"].isin(stores)]
+        for dep, g in sel.groupby("DEPARTMENT"):
+            if dep in depts:
+                s_ = g.groupby("day")["SL_V"].sum().reindex(span_days, fill_value=0.0)
+                trend.setdefault(dep, {}).setdefault(fe, {})[str(y)] = [int(round(float(x))) for x in s_]
+    with open(os.path.join(APP, "festival_trend.json"), "w", encoding="utf-8") as fh:
+        json.dump({"generated_at": datetime.datetime.now().isoformat(timespec="seconds"), "pad": TREND_PAD,
+                   "festivals": trend_meta, "departments": trend}, fh, separators=(",", ":"))
+    print(f"festival_trend.json: {len(trend)} departments, {sum(len(v) for v in trend_meta.values())} festival-years "
+          f"({time.time() - t0:.0f}s)", flush=True)
+
     # ---- relist: delisted combos whose department's in-season / normal window is starting
     relist = []
     for cat, w in windows_now.items():
