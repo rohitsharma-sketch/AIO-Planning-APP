@@ -1,7 +1,7 @@
 /* ── Planning Inputs Editor ─────────────────────────────────────── */
 
 .pie-wrap {
-  max-width: 1140px;
+  max-width: 1560px;
   margin: 0 auto;
   padding: 20px 20px 60px;
 }
@@ -309,7 +309,7 @@
 }
 
 .pie-scroll {
-  max-height: 440px;
+  max-height: max(440px, calc(100vh - 320px));
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: 8px;

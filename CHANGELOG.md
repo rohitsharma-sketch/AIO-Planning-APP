@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### AOP Forecaster: Planning Inputs uses the full window
+- **Asked (user):** "improve scaling on this" (Ref Store Mapping tab screenshot).
+- Page width 1140 px -> 1560 px; the store tables (all Planning Inputs tabs) now grow with the window height (`max(440px, 100vh - 320px)`) instead of a fixed 440 px box. Layout only, no data or logic change.
+
 ### Listing / Delisting: festival trend - store-by-store table, links to the store history
 - **Asked (user):** "instead of the dropping the graph in daily trend, i want to have some detailed tabular format to understand where can i see store wise change or make a hyperlink for a similar tab already existing in the module."
 - Under the Daily trend chart: **Store by store** for the year picked (year chips): festival-day rate vs the days around it (each store's own cluster window), lift, last year's lift, change, festival-window sales, trading days and whether it is listed now; sortable; total row = the year table. Each store opens the module's existing store x department pop-up (listing history, monthly sales, why delist / relist) with "‹ Back to ... trend".
