@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### Calendar: Month Wise Matrix "Planning divisions only" toggle
+- **Asked (user):** "where to see 169.8 March sales in ALC in calendar ?" then "add the planning divisions only toggle".
+- A checkbox next to Download XLSX: on = only the five planning divisions (MENS, LADIES, KIDS, GM's Footwear / Household / Lifestyle / Home Furnishing / Sports & Toys / Stationery / Travel Accessories, RETAIL incl. Non Food); DND, non-trading, fixed assets etc. left out - the figures AOP (Eff Sales), BIS and Sales Plan use. Remembered per browser; the store heading and the XLSX file name say when it is on.
+- ALC TY Mar'27: 170.19 L (all) -> 169.76 L (planning divisions) = AOP Output Eff Sales.
+
 ### AOP re-run on the new base - Version 3 (live; Lock to Planning still on Version 2)
 - **Asked (user):** "rerun the AOP forecast with the new base"; "go ahead and rerun the AOP forecast".
 - Fresh session from the DB (today's store actuals = proportional calendarised split, data to 28 Sep month-wise / 7 Oct day-wise; closed through Aug'26), run with Version 2's own growth settings, saved as **Version 3 — 08 Oct 2026** (now the live AOP BIS reads). Lock to Planning untouched (Version 2, MAMJ 43,184.66 L). Backup: `Backups\aop_before_rerun_20261008_145928.json`.

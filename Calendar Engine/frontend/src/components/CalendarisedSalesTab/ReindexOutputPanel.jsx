@@ -177,6 +177,13 @@ const KEY_LABELS = { store: 'Store', division: 'Division' }
 
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
+// The five planning divisions as the data lake names them (AOP / BIS / Sales Plan map these to MENS, LADIES, KIDS,
+// GM and RETAIL - see AOP app.py dept_mix and Sales Plan actuals_manager). Anything else (DND, NON-TRADING,
+// FIXED ASSETS, CONSIGNMENT, CDIT ...) is not planned.
+const PLAN_DIVISIONS = new Set(['KIDS', 'LADIES', 'MENS', 'RETAIL', 'NON FOOD', 'FOOTWEAR', 'HOME FURNISHING', 'HOUSEHOLD',
+  'LIFESTYLE', 'SPORTS & TOYS', 'STATIONERY', 'TRAVEL ACCESSORIES'])
+const isPlanDivision = d => PLAN_DIVISIONS.has(String(d ?? '').toUpperCase().split(/\s+/).filter(Boolean).join(' '))
+
 export default function ReindexOutputPanel({ result, festivalByCluster, refDateByCluster, refMonthsByCluster, fwdSplitByCluster, moveInfo }) {
   const [activeSub, setActiveSub] = useState('reindexed')
   const isDayWise = result?.source === 'dw'
@@ -192,7 +199,9 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
   // add more from the dropdown to compare stores side by side.
   const [mwMatrixStores, setMwMatrixStores] = useState(null)
   const [mwMatrixSearch, setMwMatrixSearch] = useState('')
-  const [mxDrill, setMxDrill] = useState(null)   // {store, rm?, fm?, view: 'ty'|'ly'} - the whole-month day pop-up
+  const [mxDrill, setMxDrill] = useState(null)
+  const [mxPlanOnly, setMxPlanOnly] = useState(() => { try { return localStorage.getItem('cal.mx.planOnly') === '1' } catch { return false } })
+  useEffect(() => { try { localStorage.setItem('cal.mx.planOnly', mxPlanOnly ? '1' : '0') } catch {} }, [mxPlanOnly])   // {store, rm?, fm?, view: 'ty'|'ly'} - the whole-month day pop-up
   const [mwMatrixPickerOpen, setMwMatrixPickerOpen] = useState(false)
   // Reindexed Sales has two layouts to choose from: Wide (the existing
   // pivot - one row per store[+extra fields], one column per date/month;
@@ -341,10 +350,12 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
   // own split is the only available signal for dividing a month's total -
   // this is why DW has no equivalent tab, its rows are already day-exact.
   const isMwMatrix = ok && result.source === 'mw' && !!result.actualRows
+  const mxHasDivision = isMwMatrix && result.actualRows.some(r => r.division != null)
   const mwMatrixData = useMemo(() => {
     if (!isMwMatrix) return { stores: [], byStore: new Map() }
     const byStoreRefMonth = new Map()  // store -> {refMonth -> total}
     for (const row of result.actualRows) {
+      if (mxPlanOnly && mxHasDivision && !isPlanDivision(row.division)) continue
       const rm = row.col.slice(0, 7)
       let e = byStoreRefMonth.get(row.store)
       if (!e) { e = {}; byStoreRefMonth.set(row.store, e) }
@@ -375,7 +386,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
       }
     }
     return { stores, byStore, cols }
-  }, [isMwMatrix, result, fwdSplitByCluster, monthCols, storeCluster])
+  }, [isMwMatrix, result, fwdSplitByCluster, monthCols, storeCluster, mxPlanOnly, mxHasDivision])
   const mxCols = mwMatrixData.cols || []
 
   useEffect(() => {
@@ -414,7 +425,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
     ws['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, ...mxCols.map(() => ({ wch: 12 })), { wch: 16 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Month Wise Matrix')
-    XLSX.writeFile(wb, `${fileStem}_month_wise_matrix.xlsx`)
+    XLSX.writeFile(wb, `${fileStem}_month_wise_matrix${mxPlanOnly ? '_planning_divisions' : ''}.xlsx`)
   }
 
   // Reset the month filter to "everything" on a new result (a fresh reindex
@@ -1112,6 +1123,13 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
               <button className="btn" onClick={downloadMwMatrixXlsx} disabled={!mwMatrixData.stores.length || !hasSplitMap}>
                 Download XLSX (All Stores)
               </button>
+              {/* user, 2026-10-08: "add the planning divisions only toggle" - the figures AOP / BIS / Sales Plan use */}
+              <label className="mx-plan-toggle" title={mxHasDivision
+                ? 'Only the five planning divisions (MENS, LADIES, KIDS, GM incl. Footwear / Household / Lifestyle / Home Furnishing / Sports & Toys / Stationery / Travel Accessories, RETAIL incl. Non Food) - leaves out DND, non-trading, fixed assets etc. These are the figures AOP, BIS and Sales Plan use (AOP Output\'s Eff Sales).'
+                : 'This result has no division field, so it cannot be limited to the planning divisions'}>
+                <input type="checkbox" checked={mxPlanOnly} disabled={!mxHasDivision} onChange={e => setMxPlanOnly(e.target.checked)} />
+                Planning divisions only
+              </label>
             </div>
             <div style={{ fontSize: '11px', color: 'var(--muted)', marginBottom: '8px' }}>
               Each reference month's actual sales, split across TY months by the actual sales of the days that
@@ -1139,7 +1157,8 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                   const openTy = m => setMxDrill({ store, fm: m, view: 'ty' })
                   return (
                     <div key={store} style={{ marginBottom: '18px' }}>
-                      <h4 style={{ margin: '0 0 6px' }}>{store} <span style={{ fontWeight: 400, color: 'var(--muted)' }}>({sel.cluster})</span></h4>
+                      <h4 style={{ margin: '0 0 6px' }}>{store} <span style={{ fontWeight: 400, color: 'var(--muted)' }}>({sel.cluster})</span>
+                        {mxPlanOnly && mxHasDivision && <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: '12px' }}> · planning divisions only (DND / non-trading left out)</span>}</h4>
                       <table>
                         <thead>
                           <tr>

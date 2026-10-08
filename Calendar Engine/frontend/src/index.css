@@ -1113,6 +1113,7 @@ details.rx-section > summary.rx-label { cursor: pointer; display: list-item; }
 .mx-moved:hover { background: rgba(245, 158, 11, 0.28) !important; }
 /* click-through day table (2026-10-08) */
 .mx-click { cursor: pointer; }
+.mx-plan-toggle { display: inline-flex; align-items: center; gap: 6px; align-self: flex-end; margin-left: 4px; padding: 6px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
 .mx-click:focus-visible { outline: 2px solid var(--st-btn-text, #1F4D3A); outline-offset: -2px; }
 .mx-on { outline: 2px solid var(--st-btn-text, #1F4D3A); outline-offset: -2px; font-weight: 700; }
 .mx-drill-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; font-size: 13px; }
