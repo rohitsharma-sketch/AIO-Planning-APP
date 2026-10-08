@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### MRP Re-apportionment: keep last good run + run history
+- **Asked (user):** "add keep last good run and run history".
+- Every run is logged in `Output\_run_history.json` (time, MRP master, sales file, checks, totals, output file; newest first). A run whose checks fail is saved as `MRP Reapportioned <time> - FAILED.xlsx` and never becomes the default download: `GET /download` gives the newest run that passed (`?file=` any run from the history; names outside the output pattern refused). New `GET /runs`. File names now carry seconds (two runs in one minute overwrote each other).
+- Page: last-run banner says when the last run failed and that Download gives the last good run; results' download is marked "FAILED - not for use" for a failed run; Run history panel (★ = what Download gives, per-run download).
+- Fixed on the way: `/status` never returned `has_result`, so MRP Plan Output always showed Re-apportionment as Pending; it now means "a run has passed its checks".
+- Checked through the real endpoints on a temp output folder: good run, then a planted failed run -> saved as FAILED, history lists both, default download = the good one, `?file=` gives the failed one, `../` names refused, `has_result` true. Page checked in the built app with stub data.
+
 ### MRP Re-apportionment: checks built in (red stops Run, each says how to fix and re-run)
 - **Asked (user):** "how can checks be embedded in this - and how can we rerun if the checks are not passed ?" -> chose the checks strip + blocking.
 - Before a run (`GET /checks`, shown above Run): MRP master readable (red if not), LY sales tie to the Calendar department sales (red if not), share of LY sales on MRPs in the master (amber), Dept x Display with nothing listed (amber). Red disables Run (the endpoints refuse it too); every non-green item says what to fix, then Refresh -> Run again.

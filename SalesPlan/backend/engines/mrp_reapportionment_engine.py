@@ -26,7 +26,8 @@ Endpoints:
   GET  /checks           → pre-run checks (red = Run disabled), each with how to fix it
   GET  /mrp-groups       → groups (Dept, Display): listed MRPs and where each discontinued one goes
   POST /run              → redistribution by the nearest-listed-MRP rule
-  GET  /download         → latest output Excel
+  GET  /download         → the last run whose checks passed (?file= any run from the history)
+  GET  /runs             → run history, newest first
   POST /mapping/upload   → new version of the MRP master (checked first; the old one moves to MRP Mapping/Archive)
   GET  /mapping/download → the active MRP master, as uploaded
 """
@@ -63,6 +64,8 @@ BASE         = r"C:\Users\A9820\Documents\CLaude - New Projects"
 MAPPING_DIR  = os.path.join(BASE, r"MRP Merging Engine\Sales Reapportionment\MRP Mapping")
 OUTPUT_DIR   = os.path.join(BASE, r"MRP Merging Engine\Sales Reapportionment\Output")
 LAST_RUN_JSON = os.path.join(OUTPUT_DIR, "_last_run.json")
+RUN_HISTORY_JSON = os.path.join(OUTPUT_DIR, "_run_history.json")   # every run, newest first (2026-10-08)
+_HISTORY_LOCK = threading.Lock()
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(MAPPING_DIR, exist_ok=True)
@@ -492,6 +495,37 @@ def _post_checks(sales_df, output_df, unmapped_df, month_cols, mapping_df, val_p
     return out
 
 
+# ── Run history + last good run (user, 2026-10-08: "add keep last good run and run history") ───────────────────────
+# Every run is logged; a run whose checks fail is saved as "... - FAILED.xlsx" and never becomes the default download.
+
+def _history() -> list:
+    try:
+        with open(RUN_HISTORY_JSON, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return []
+
+
+def _last_good() -> Optional[dict]:
+    """The newest run whose checks passed and whose file is still there. Before run history existed: the newest
+    output file not marked FAILED."""
+    runs = _history()
+    for h in runs:
+        if h.get("checks_pass") and os.path.exists(os.path.join(OUTPUT_DIR, h["output_file"])):
+            return h
+    if runs:
+        return None
+    files = [f for f in glob.glob(os.path.join(OUTPUT_DIR, "MRP Reapportioned*.xlsx")) if "FAILED" not in f]
+    return {"output_file": os.path.basename(max(files, key=os.path.getmtime)), "legacy": True} if files else None
+
+
+@router.get("/runs")
+def get_runs():
+    """Run history (newest first) and which output Download gives by default."""
+    good = _last_good()
+    return {"runs": _history(), "last_good": good["output_file"] if good else None}
+
+
 @router.get("/checks")
 def get_checks():
     """The pre-run checks the page shows above Run (a red one disables it)."""
@@ -502,10 +536,6 @@ def get_checks():
 def get_status():
     sales_file   = _find_sales_file()
     mapping_file = _find_mapping_file()
-    output_files = sorted(
-        glob.glob(os.path.join(OUTPUT_DIR, "MRP Reapportioned*.xlsx")),
-        key=os.path.getmtime, reverse=True
-    )
     last_run = None
     if os.path.exists(LAST_RUN_JSON):
         try:
@@ -514,13 +544,16 @@ def get_status():
         except Exception:
             pass
 
+    good = _last_good()
     return {
+        "has_result":         good is not None,   # read by the MRP Plan Output page
+        "last_good_run":      good,
         "sales_file_found":   sales_file is not None,
         "sales_file":         os.path.basename(sales_file) if sales_file else None,
         "mapping_file_found": mapping_file is not None,
         "mapping_file":       os.path.basename(mapping_file) if mapping_file else None,
-        "output_found":       len(output_files) > 0,
-        "last_output":        os.path.basename(output_files[0]) if output_files else None,
+        "output_found":       good is not None,
+        "last_output":        good["output_file"] if good else None,
         "last_run":           last_run,
         "mapping_folder":     MAPPING_DIR,
     }
@@ -625,8 +658,8 @@ def run_engine(body: RunRequest):
         *eng_log,
     ]
 
-    ts_str = datetime.datetime.now().strftime("%d%b%Y_%H%M")
-    out_filename = f"MRP Reapportioned {ts_str}.xlsx"
+    ts_str = datetime.datetime.now().strftime("%d%b%Y_%H%M%S")
+    out_filename = f"MRP Reapportioned {ts_str}{'' if checks_pass else ' - FAILED'}.xlsx"
     out_path = os.path.join(OUTPUT_DIR, out_filename)
     xlsx_bytes = _build_excel(output_df, unmapped_df, val_rows, val_pass, full_log, sales_df, month_cols)
     with open(out_path, "wb") as f:
@@ -642,6 +675,7 @@ def run_engine(body: RunRequest):
     run_meta = {
         "run_at":      datetime.datetime.now().isoformat(),
         "sales_file":  os.path.basename(sales_path),
+        "mapping_file": os.path.basename(mapping_file),
         "sales_check": check,
         "input_rows":  len(sales_df),
         "output_rows": len(output_df),
@@ -656,6 +690,8 @@ def run_engine(body: RunRequest):
         "month_cols":   month_cols,
     }
     save_json(LAST_RUN_JSON, run_meta, indent=2)
+    with _HISTORY_LOCK:
+        save_json(RUN_HISTORY_JSON, [{**run_meta, "total_unmapped": total_unmapped}] + _history(), indent=1)
 
     return {
         "ok":           True,
@@ -678,21 +714,21 @@ def run_engine(body: RunRequest):
 
 
 @router.get("/download")
-def download_latest():
-    files = sorted(
-        glob.glob(os.path.join(OUTPUT_DIR, "MRP Reapportioned*.xlsx")),
-        key=os.path.getmtime, reverse=True
-    )
-    if not files:
-        raise HTTPException(404, detail="No output file found. Run the engine first.")
-    path = files[0]
-    with open(path, "rb") as f:
-        data = f.read()
-    return StreamingResponse(
-        io.BytesIO(data),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={os.path.basename(path)}"},
-    )
+def download_latest(file: Optional[str] = None):
+    """?file= one run's output (from the history); without it the last run whose checks passed."""
+    if file:
+        name = os.path.basename(file)
+        if name != file or not (name.startswith("MRP Reapportioned") and name.endswith(".xlsx")):
+            raise HTTPException(400, detail="Not a re-apportionment output file")
+    else:
+        good = _last_good()
+        if not good:
+            raise HTTPException(404, detail="No run has passed its checks yet - fix what the checks show and Run again.")
+        name = good["output_file"]
+    path = os.path.join(OUTPUT_DIR, name)
+    if not os.path.exists(path):
+        raise HTTPException(404, detail=f"{name} is no longer in the Output folder")
+    return FileResponse(path, media_type=XLSX, filename=name)
 
 
 # ── MRP master versions: import / export (user, 2026-10-08: "what if i have a new version for mrp mapping master ?

@@ -250,12 +250,16 @@ export default function MrpReapportionment() {
   }
 
   const [checks, setChecks] = useState(null)
+  const [runs, setRuns] = useState(null)   // {runs: [...newest first], last_good: file}
   const reload = useCallback(() => {
     setChecks(null)
     fetch('/api/planning/mrp-reapportionment/checks')
       .then(r => r.ok ? r.json() : null)
       .then(d => setChecks(d ? d.checks : [{ key: 'x', label: 'Checks', status: 'fail', detail: "couldn't be read", fix: 'Press Refresh.' }]))
       .catch(() => setChecks([{ key: 'x', label: 'Checks', status: 'fail', detail: "couldn't be read", fix: 'Press Refresh.' }]))
+    fetch('/api/planning/mrp-reapportionment/runs')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setRuns(d) })
     fetch('/api/planning/mrp-reapportionment/status')
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setStatus(d) })
@@ -394,15 +398,22 @@ export default function MrpReapportionment() {
             <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>
               {lastRun.input_rows?.toLocaleString()} in → {lastRun.output_rows?.toLocaleString()} out
               &ensp;·&ensp;{lastRun.stores} stores, {lastRun.departments} depts
-              &ensp;·&ensp;Validation: <strong style={{ color: (lastRun.checks_pass ?? lastRun.val_pass) ? theme.accent : theme.danger }}>
+              &ensp;·&ensp;Checks: <strong style={{ color: (lastRun.checks_pass ?? lastRun.val_pass) ? theme.accent : theme.danger }}>
                 {(lastRun.checks_pass ?? lastRun.val_pass) ? 'PASSED' : 'FAILED'}
               </strong>
             </div>
+            {!(lastRun.checks_pass ?? lastRun.val_pass) && (
+              <div style={{ fontSize: 11, color: theme.danger, marginTop: 2 }}>
+                Not for use - {runs?.last_good ? `Download gives the last good run (${runs.last_good})` : 'no run has passed its checks yet'}
+              </div>
+            )}
           </div>
-          <a href="/api/planning/mrp-reapportionment/download" style={{
-            padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 600,
-            background: 'var(--st-btn,#A8CBB7)', color: 'var(--st-btn-text,#1F4D3A)', textDecoration: 'none', flexShrink: 0,
-          }}>↓ Download</a>
+          {runs?.last_good && (
+            <a href="/api/planning/mrp-reapportionment/download" title={runs.last_good} style={{
+              padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 600,
+              background: 'var(--st-btn,#A8CBB7)', color: 'var(--st-btn-text,#1F4D3A)', textDecoration: 'none', flexShrink: 0,
+            }}>↓ Download last good run</a>
+          )}
         </div>
       )}
 
@@ -599,11 +610,13 @@ export default function MrpReapportionment() {
                     </button>
                   ))}
                   <div style={{ flex: 1 }} />
-                  <a href="/api/planning/mrp-reapportionment/download" style={{
+                  <a href={`/api/planning/mrp-reapportionment/download?file=${encodeURIComponent(result.output_file)}`} style={{
                     display: 'flex', alignItems: 'center', padding: '6px 14px', borderRadius: 7,
-                    fontSize: 12, fontWeight: 700, background: 'var(--st-btn,#A8CBB7)', color: 'var(--st-btn-text,#1F4D3A)',
-                    textDecoration: 'none', margin: '8px 0',
-                  }}>↓ Download Excel</a>
+                    fontSize: 12, fontWeight: 700, textDecoration: 'none', margin: '8px 0',
+                    ...(result.checks_pass
+                      ? { background: 'var(--st-btn,#A8CBB7)', color: 'var(--st-btn-text,#1F4D3A)' }
+                      : { border: `1px solid ${alpha(theme.danger, '55')}`, color: theme.danger }),
+                  }}>{result.checks_pass ? '↓ Download Excel' : '↓ Download (FAILED - not for use)'}</a>
                 </div>
                 <div style={{ padding: '0 0 8px 0' }}>
                   {resultTab === 'preview' && (
@@ -654,6 +667,48 @@ export default function MrpReapportionment() {
               }}>✗ {error}</div>
             )}
           </div>
+
+          {/* Run history (2026-10-08) - every run, newest first; ★ = what Download gives (the last run whose checks passed) */}
+          {runs?.runs?.length > 0 && (
+            <details className="sp-fold" style={{ background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`, padding: '12px 22px' }}>
+              <summary style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.4 }}>
+                RUN HISTORY ({runs.runs.length})
+              </summary>
+              <div style={{ overflowX: 'auto', marginTop: 10 }}>
+                <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 11 }}>
+                  <thead>
+                    <tr style={{ color: theme.textMuted, textAlign: 'left' }}>
+                      {['Run', 'MRP master', 'Checks', 'Re-apportioned', 'Unmapped', ''].map(h => (
+                        <th key={h} style={{ padding: '5px 8px', borderBottom: `1px solid ${theme.border}`, fontWeight: 600 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {runs.runs.map(h => {
+                      const ok = h.checks_pass
+                      const good = h.output_file === runs.last_good
+                      return (
+                        <tr key={h.output_file} style={{ borderBottom: `1px solid ${alpha(theme.border, '33')}` }}>
+                          <td style={{ padding: '5px 8px', whiteSpace: 'nowrap' }}>
+                            {good && <span title="Download gives this run" style={{ color: theme.accent }}>★ </span>}
+                            {new Date(h.run_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                          </td>
+                          <td style={{ padding: '5px 8px', ...mono }}>{h.mapping_file || '—'}</td>
+                          <td style={{ padding: '5px 8px', fontWeight: 700, color: ok ? theme.accent : theme.danger }}>{ok ? 'PASSED' : 'FAILED'}</td>
+                          <td style={{ padding: '5px 8px', textAlign: 'right', ...mono }}>₹{((h.total_after || 0) / 1e5).toLocaleString('en-IN', { maximumFractionDigits: 2 })} L</td>
+                          <td style={{ padding: '5px 8px', textAlign: 'right', ...mono }}>₹{((h.total_unmapped || 0) / 1e5).toLocaleString('en-IN', { maximumFractionDigits: 2 })} L</td>
+                          <td style={{ padding: '5px 8px', whiteSpace: 'nowrap' }}>
+                            <a href={`/api/planning/mrp-reapportionment/download?file=${encodeURIComponent(h.output_file)}`}
+                              style={{ color: ok ? theme.primary : theme.danger }}>↓ {ok ? 'Download' : 'Download (not for use)'}</a>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          )}
         </div>
 
       </div>
