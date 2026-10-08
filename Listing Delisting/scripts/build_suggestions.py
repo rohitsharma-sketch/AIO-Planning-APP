@@ -350,19 +350,50 @@ def build():
         if not opn.any():
             continue
         core = max(set(r["core"] for r in rs), key=[r["core"] for r in rs].count)
+        # store-wise (user, 2026-10-08: "detailed tabular format to understand ... store wise change"): each store's
+        # own cluster window decides which of its days are festival days
+        win_of = {r["cluster"]: (ordn(datetime.date.fromisoformat(r["from"])), ordn(datetime.date.fromisoformat(r["to"]))) for r in rs}
+        st_lo = {st: win_of[cl][0] for st, cl in store_cl.items() if cl in win_of}
+        st_hi = {st: win_of[cl][1] for st, cl in store_cl.items() if cl in win_of}
+        def in_win(frame):
+            lo_, hi_ = frame["STORE_NAME"].map(st_lo), frame["STORE_NAME"].map(st_hi)
+            return ((frame["day"] >= lo_) & (frame["day"] <= hi_)).fillna(False).astype(bool).to_numpy()
+        od_s = od[(od["day"] >= a) & (od["day"] <= b) & od["STORE_NAME"].isin(stores)].copy()
+        od_s["inw"] = in_win(od_s)
+        sod = od_s.groupby(["STORE_NAME", "inw"]).size().unstack(fill_value=0)
         trend_meta.setdefault(fe, {})[str(y)] = {
             "date": iso(d0), "from": min(r["from"] for r in rs), "to": max(r["to"] for r in rs),
             "core_to": iso(d0 + core - 1), "clusters": sorted(r["cluster"] for r in rs), "stores": len(stores),
-            "open": [int(x) for x in opn]}
-        sel = d[(d["day"] >= a) & (d["day"] <= b) & d["STORE_NAME"].isin(stores)]
+            "open": [int(x) for x in opn],
+            # store -> [festival-window trading days, other trading days in the span]
+            "store_days": {st: [int(sod.at[st, True]) if True in sod.columns else 0, int(sod.at[st, False]) if False in sod.columns else 0]
+                           for st in sod.index}}
+        sel = d[(d["day"] >= a) & (d["day"] <= b) & d["STORE_NAME"].isin(stores)].copy()
+        sel["inw"] = in_win(sel)
         for dep, g in sel.groupby("DEPARTMENT"):
             if dep in depts:
                 s_ = g.groupby("day")["SL_V"].sum().reindex(span_days, fill_value=0.0)
-                trend.setdefault(dep, {}).setdefault(fe, {})[str(y)] = [int(round(float(x))) for x in s_]
+                ss = g.groupby(["STORE_NAME", "inw"])["SL_V"].sum().unstack(fill_value=0.0)
+                trend.setdefault(dep, {}).setdefault(fe, {})[str(y)] = {
+                    "daily": [int(round(float(x))) for x in s_],
+                    # store -> [festival-window sales, other days' sales]
+                    "stores": {st: [int(round(float(ss.at[st, True]))) if True in ss.columns else 0,
+                                    int(round(float(ss.at[st, False]))) if False in ss.columns else 0] for st in ss.index}}
+    # one small file per department (store-wise detail for every department in one file would be ~40 MB)
+    tdir = os.path.join(APP, "festival_trend")
+    os.makedirs(tdir, exist_ok=True)
+    for f in os.listdir(tdir):
+        if f.endswith(".json"):
+            os.remove(os.path.join(tdir, f))
+    files = {}
+    for i, dep in enumerate(sorted(trend)):
+        files[dep] = f"festival_trend/d{i}.json"
+        with open(os.path.join(APP, files[dep]), "w", encoding="utf-8") as fh:
+            json.dump(trend[dep], fh, separators=(",", ":"))
     with open(os.path.join(APP, "festival_trend.json"), "w", encoding="utf-8") as fh:
         json.dump({"generated_at": datetime.datetime.now().isoformat(timespec="seconds"), "pad": TREND_PAD,
-                   "festivals": trend_meta, "departments": trend}, fh, separators=(",", ":"))
-    print(f"festival_trend.json: {len(trend)} departments, {sum(len(v) for v in trend_meta.values())} festival-years "
+                   "festivals": trend_meta, "files": files}, fh, separators=(",", ":"))
+    print(f"festival_trend.json + {len(files)} department files, {sum(len(v) for v in trend_meta.values())} festival-years "
           f"({time.time() - t0:.0f}s)", flush=True)
 
     # ---- relist: delisted combos whose department's in-season / normal window is starting

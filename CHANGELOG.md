@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### Listing / Delisting: festival trend - store-by-store table, links to the store history
+- **Asked (user):** "instead of the dropping the graph in daily trend, i want to have some detailed tabular format to understand where can i see store wise change or make a hyperlink for a similar tab already existing in the module."
+- Under the Daily trend chart: **Store by store** for the year picked (year chips): festival-day rate vs the days around it (each store's own cluster window), lift, last year's lift, change, festival-window sales, trading days and whether it is listed now; sortable; total row = the year table. Each store opens the module's existing store x department pop-up (listing history, monthly sales, why delist / relist) with "‹ Back to ... trend".
+- Data: `app/festival_trend.json` is now an index (62 KB) + one file per department `app/festival_trend/dN.json` (238 files, <= 70 KB, loaded only when that department's trend is opened). Nightly Listing build +~2.5 min.
+- ML_JEANS Dussehra 2025: 144 stores, all 1.93x (= year table); e.g. PNA 5.08x vs 6.04x in 2024, GWT 8.44x vs 5.26x.
+
 ### Listing / Delisting: Festival lift -> "Daily trend" for the department
 - **Asked (user):** "if i were to see festival lift in detail can i get a link for the sales trend in the department".
 - Seasonality tab, Festival lift table: every festival row has a **Daily trend ›** link. It opens the department's day-by-day sales from 14 days before to 14 days after the festival date, one line per year (2022 onwards, incl. 2026 where closed), per trading store-day, in the stores whose calendar cluster keeps that festival; festival days and build-up / after-days shaded (Festival Master windows). Below: per year the festival date and window, festival-day rate vs the days around it, the local lift and festival-window sales. Hover a point for its date, sales and stores.

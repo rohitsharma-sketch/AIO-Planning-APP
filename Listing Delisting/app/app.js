@@ -603,13 +603,15 @@ $('#drill-close').addEventListener('click', () => { modal.hidden = true; });
 modal.addEventListener('click', e => { if (e.target === modal) modal.hidden = true; });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') modal.hidden = true; });
 
-function openDrill(store, dept) {
+let drillBack = null;   // set when the store drill was opened from a festival trend: "‹ Back to ..." returns there
+function openDrill(store, dept, back = null) {
+  drillBack = back;
   const h = kb.data[store]?.[dept] || '';
   $('#drill-title').textContent = `${store} — ${dept}`;
   $('#drill-sub').textContent = [storeLine(store), `${divisionOf(dept)} · ${catLabel(dept)} season category`].filter(Boolean).join(' · ');
   const pts = kb.months.map((m, i) => ({ m, f: h[i] || '.', v: sale(store, dept, m), t: typeOf(dept, m) }));
   const x = sugIndex.get(`${store}|${dept}`);
-  $('#drill-body').innerHTML = trendSvg(pts) + `<div class="ov-legend">${['in', 'normal', 'off'].map(t => `<span>${wchip(t)}</span>`).join('')}
+  $('#drill-body').innerHTML = (back ? `<button type="button" class="link-btn" data-back style="margin-bottom:6px">‹ Back to ${esc(back.label)}</button>` : '') + trendSvg(pts) + `<div class="ov-legend">${['in', 'normal', 'off'].map(t => `<span>${wchip(t)}</span>`).join('')}
       <span><i style="background:var(--y)"></i>listed</span><span><i style="background:var(--n)"></i>unlisted</span><span><i style="background:var(--dot)"></i>no record</span></div>` +
     (x ? why(x.kind, x.r) : `<p class="why muted">No current suggestion for this store × department.</p>`);
   modal.hidden = false;
@@ -619,22 +621,30 @@ function openDrill(store, dept) {
 // trend in the department"): the department's day-by-day sales around one festival, every year - festival_trend.json
 // (build_suggestions.py), fetched the first time a trend is opened.
 let trendData = null;
+const trendDept = {};   // department file cache (festival_trend/dN.json - one per department, with store-wise detail)
 const YEAR_COL = ['#94A3B8', '#60A5FA', '#F59E0B', '#10B981', 'var(--color-primary)', '#A855F7'];
 const addDays = (s, k) => { const t = new Date(`${s}T00:00:00Z`); t.setUTCDate(t.getUTCDate() + k); return t.toISOString().slice(0, 10); };
 const dayDiff = (a, b) => Math.round((new Date(`${a}T00:00:00Z`) - new Date(`${b}T00:00:00Z`)) / 864e5);
+const getJson = f => fetch(f).then(r => { if (!r.ok) throw new Error(`${f}: ${r.status}`); return r.json(); });
+let trendCtx = null;   // {t, dd, dept, fest, year, sort: {key, dir}}
 function openFestTrend(dept, fest) {
   $('#drill-title').textContent = `${dept} — ${fest}: daily sales around the festival`;
   $('#drill-sub').textContent = 'Loading…';
   $('#drill-body').innerHTML = '';
+  drillBack = null;
   modal.hidden = false;
-  (trendData ||= fetch('festival_trend.json').then(r => { if (!r.ok) throw new Error(`festival_trend.json: ${r.status}`); return r.json(); }))
-    .then(t => renderFestTrend(t, dept, fest))
-    .catch(e => { trendData = null; $('#drill-sub').textContent = `Couldn't load the trend: ${e.message} (the daily sync builds it).`; });
+  (trendData ||= getJson('festival_trend.json'))
+    .then(t => { const f = t.files?.[dept]; if (!f) return [t, {}]; return (trendDept[dept] ||= getJson(f)).then(dd => [t, dd]); })
+    .then(([t, dd]) => { trendCtx = { t, dd, dept, fest, year: null, sort: { key: 'fs', dir: -1 } }; renderFestTrend(); })
+    .catch(e => { trendData = null; delete trendDept[dept]; $('#drill-sub').textContent = `Couldn't load the trend: ${e.message} (the daily sync builds it).`; });
 }
-function renderFestTrend(t, dept, fest) {
-  const meta = t.festivals[fest] || {}, sales = t.departments[dept]?.[fest] || {}, P = t.pad;
+function renderFestTrend() {
+  const { t, dd, dept, fest } = trendCtx;
+  $('#drill-title').textContent = `${dept} — ${fest}: daily sales around the festival`;
+  const meta = t.festivals[fest] || {}, P = t.pad, sales = Object.fromEntries(Object.entries(dd[fest] || {}).map(([y, v]) => [y, v.daily]));
   const years = Object.keys(meta).filter(y => sales[y]).sort();
-  if (!years.length) { $('#drill-sub').textContent = `No day-wise sales of ${dept} around ${fest} in the stores that keep it.`; return; }
+  if (!years.length) { $('#drill-sub').textContent = `No day-wise sales of ${dept} around ${fest} in the stores that keep it.`; $('#drill-body').innerHTML = ''; return; }
+  trendCtx.year ||= years.at(-1);
   const last = meta[years.at(-1)];
   $('#drill-sub').textContent = `${divisionOf(dept)} · stores in the clusters that keep ${fest} (${last.clusters.join(', ')}; ${last.stores} stores) · day 0 = festival date · sales per trading store-day`;
   const series = years.map((y, k) => {
@@ -668,9 +678,69 @@ function renderFestTrend(t, dept, fest) {
   $('#drill-body').innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(dept)} daily sales around ${esc(fest)}">${band}${ticks}${lines}${xl}</svg>
     <div class="ov-legend">${legend}</div>
     <table class="mini" style="margin-top:10px"><thead><tr><th>Year</th><th>Festival date</th><th>Festival window</th><th class="num">Festival days</th><th class="num">Days around it</th><th class="num">Lift</th><th class="num">Festival-window sales</th></tr></thead><tbody>${rows}</tbody></table>
+    ${storeTable(meta, years, P)}
     <p class="src">Day-wise sales of ${esc(dept)} in the stores whose calendar cluster keeps ${esc(fest)}, ${P} days either side of the festival date, per trading store-day (a day a store sold anything). "Days around it" = the other days in that ±${P}-day span, so this lift is local to the festival;
-      the Festival lift table pools ${win.params.years[0]}–${win.params.years.at(-1)} against the same stores' normal days in the same months. Festival windows (build-up / festival / after-days) from the Calendar app's Festival Master. Hover a point for its date, sales and stores.</p>`;
+      the Festival lift table pools ${win.params.years[0]}–${win.params.years.at(-1)} against the same stores' normal days in the same months. Festival windows (build-up / festival / after-days) from the Calendar app's Festival Master - store-wise, each store's own cluster window. Hover a point for its date, sales and stores.</p>`;
 }
+
+// Store-wise (user, 2026-10-08: "detailed tabular format to understand where can i see store wise change or make a
+// hyperlink for a similar tab already existing"): each store's festival-day vs surrounding-day rate for the year picked,
+// last year's lift beside it, and a link to the existing store x department drill (listing history, monthly trend, why).
+function storeTable(meta, years, P) {
+  const { dd, fest, dept, year, sort } = trendCtx;
+  const rateOf = (y, st) => {
+    const m = meta[y], s = dd[fest]?.[y]?.stores?.[st], dys = m?.store_days?.[st];
+    if (!s || !dys) return null;
+    const f = dys[0] ? s[0] / dys[0] : null, o = dys[1] ? s[1] / dys[1] : null;
+    return { f, o, lift: f != null && o ? f / o : null, fs: s[0], os: s[1], fd: dys[0], od: dys[1] };
+  };
+  const ly = String(+year - 1);
+  const stores = Object.keys(dd[fest]?.[year]?.stores || {});
+  const rows = stores.map(st => {
+    const c = rateOf(year, st), p = years.includes(ly) ? rateOf(ly, st) : null;
+    const listed = (kb.data[st]?.[dept] || '').slice(-1);
+    return c && (c.fs || c.os) ? { st, ...c, liftLy: p?.lift ?? null, chg: c.lift != null && p?.lift != null ? c.lift - p.lift : null, listed } : null;
+  }).filter(Boolean);
+  const k = sort.key, dir = sort.dir;
+  rows.sort((a, b) => (k === 'st' ? dir * a.st.localeCompare(b.st) : (a[k] == null) - (b[k] == null) || dir * ((a[k] ?? 0) - (b[k] ?? 0))));
+  const tot = rows.reduce((a, r) => ({ fs: a.fs + r.fs, os: a.os + r.os, fd: a.fd + r.fd, od: a.od + r.od }), { fs: 0, os: 0, fd: 0, od: 0 });
+  const tf = tot.fd ? tot.fs / tot.fd : null, to = tot.od ? tot.os / tot.od : null;
+  const cls = v => (v == null ? '' : v >= 1.15 ? 'up' : v <= 0.85 ? 'dn' : '');
+  const th = (key, label, num, tip) => `<th class="${num ? 'num' : ''} sortable" data-sk="${key}" ${tip ? `title="${esc(tip)}"` : ''}>${label}${sort.key === key ? (sort.dir < 0 ? ' ↓' : ' ↑') : ''}</th>`;
+  const chips = years.map(y => `<button type="button" class="seg-btn${y === year ? ' on' : ''}" data-tyear="${y}">${y}</button>`).join('');
+  const body = rows.map(r => `<tr class="drillable" data-tstore="${esc(r.st)}" tabindex="0" title="${esc(storeLine(r.st) || r.st)} - open its ${esc(dept)} history">
+      <td><span class="link-btn">${esc(r.st)}</span></td>
+      <td>${r.listed === 'Y' ? '<span class="chip y">&nbsp;</span> listed' : r.listed === 'N' ? '<span class="chip n">&nbsp;</span> not listed' : '<span class="muted">—</span>'}</td>
+      <td class="num">${r.f == null ? '—' : fmtRate(r.f)}</td><td class="num">${r.o == null ? '—' : fmtRate(r.o)}</td>
+      <td class="num ${cls(r.lift)}">${r.lift == null ? '—' : r.lift.toFixed(2) + '×'}</td>
+      <td class="num">${r.liftLy == null ? '—' : r.liftLy.toFixed(2) + '×'}</td>
+      <td class="num ${r.chg == null ? '' : r.chg >= 0.15 ? 'up' : r.chg <= -0.15 ? 'dn' : ''}">${r.chg == null ? '—' : (r.chg > 0 ? '+' : '') + r.chg.toFixed(2)}</td>
+      <td class="num">${fmtR(r.fs)}</td><td class="num muted">${r.fd} / ${r.od}</td></tr>`).join('');
+  return `<h3 style="margin:16px 0 4px">Store by store <span class="hint">click a store for its ${esc(dept)} history (listing, monthly sales, why delist / relist)</span></h3>
+    <div class="seg" role="group" aria-label="Year" style="margin-bottom:6px">${chips}</div>
+    <div class="tbl-wrap" style="max-height:420px"><table class="mini tbl-stores"><thead><tr>${th('st', 'Store')}<th>Listed now</th>
+      ${th('f', 'Festival days', 1, 'Festival-window sales per trading day of that store')}${th('o', 'Days around it', 1, `Other days in the ±${P}-day span, per trading day`)}
+      ${th('lift', 'Lift', 1)}${th('liftLy', `Lift ${ly}`, 1, 'Same store, same festival, a year earlier')}${th('chg', 'Change', 1, `Lift ${year} - lift ${ly}`)}
+      ${th('fs', 'Festival-window sales', 1)}${th('fd', 'Trading days', 1, 'Festival-window / other days the store traded')}</tr></thead>
+      <tbody>${body || '<tr><td colspan="9" class="muted">No store sold this department around the festival that year.</td></tr>'}</tbody>
+      ${rows.length ? `<tfoot><tr class="tot"><td>All ${rows.length} stores</td><td></td><td class="num">${tf == null ? '—' : fmtRate(tf)}</td><td class="num">${to == null ? '—' : fmtRate(to)}</td>
+        <td class="num ${cls(tf && to ? tf / to : null)}">${tf && to ? (tf / to).toFixed(2) + '×' : '—'}</td><td></td><td></td><td class="num">${fmtR(tot.fs)}</td><td class="num muted">${tot.fd} / ${tot.od}</td></tr></tfoot>` : ''}</table></div>`;
+}
+$('#drill-body').addEventListener('click', e => {
+  const back = e.target.closest('[data-back]');
+  if (back && drillBack) { const b = drillBack; drillBack = null; b.go(); return; }
+  if (!trendCtx || drillBack) return;
+  const yr = e.target.closest('[data-tyear]');
+  if (yr) { trendCtx.year = yr.dataset.tyear; renderFestTrend(); return; }
+  const h = e.target.closest('th[data-sk]');
+  if (h) { const s = trendCtx.sort; s.dir = s.key === h.dataset.sk ? -s.dir : (h.dataset.sk === 'st' ? 1 : -1); s.key = h.dataset.sk; renderFestTrend(); return; }
+  const tr = e.target.closest('tr[data-tstore]');
+  if (tr) openDrill(tr.dataset.tstore, trendCtx.dept, { label: `${trendCtx.fest} trend`, go: () => renderFestTrend() });
+});
+$('#drill-body').addEventListener('keydown', e => {
+  const tr = e.target.closest('tr[data-tstore]');
+  if (tr && e.key === 'Enter' && trendCtx && !drillBack) openDrill(tr.dataset.tstore, trendCtx.dept, { label: `${trendCtx.fest} trend`, go: () => renderFestTrend() });
+});
 
 function festivalsIn(cluster, a, b) {
   return win.festivals.filter(f => (cluster === 'ALL' || f.cluster === cluster) && f.to >= a && f.from <= b)

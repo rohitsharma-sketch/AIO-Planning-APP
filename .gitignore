@@ -52,6 +52,7 @@ RS Planning Platform/backend/data/suite_theme.json
 # Listing/Delisting (additional app): source workbooks and generated data - business data, never in git
 data/listing/
 Listing Delisting/app/*.json
+Listing Delisting/app/festival_trend/
 Landing/keep_alive.log
 RS Planning Platform/backend/data/user_rights.json
 RS Planning Platform/backend/data/sign_in_as.log

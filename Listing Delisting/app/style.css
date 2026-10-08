@@ -127,6 +127,13 @@ header h1 { margin: 0 0 2px; font-size: 22px; font-weight: 500; color: var(--col
 .link-btn { background: none; border: 0; padding: 0; font: inherit; font-size: 12px; font-weight: 600; color: var(--color-primary); cursor: pointer; white-space: nowrap; }
 .link-btn:hover, .link-btn:focus-visible { text-decoration: underline; }
 i.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: 0; }
+/* festival trend: store-by-store table (2026-10-08) */
+#drill-body h3 .hint { font-weight: 500; font-size: 12px; color: var(--color-muted-foreground); }
+.tbl-stores { width: 100%; }
+.tbl-stores th { position: sticky; top: 0; z-index: 1; background: var(--color-card); }
+.tbl-stores tbody tr.drillable { cursor: pointer; }
+.tbl-stores tbody tr.drillable:hover td, .tbl-stores tbody tr.drillable:focus-visible td { background: var(--st-tint-e, #F3F8F5); }
+.tbl-stores tfoot td { position: sticky; bottom: 0; background: var(--color-card); border-top: 2px solid var(--line); }
 .ov-empty { color: var(--color-muted-foreground); font-size: 13px; padding: 6px 0; }
 
 /* --- Revamp (2026-09-26): one control bar, one table style, season-window colours ---------------- */
