@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### Right: "Import a new MRP master"
+- **Asked (user):** "yes add the right for mrp master import".
+- New right `mrp_master` (auth/rights.py) - an admin can switch it off per person in Users & access. Landing GUARDED blocks `POST …/mrp-reapportionment/mapping/upload` without it (403 with the reason); Export and Run stay open. The MRP page reads `/api/auth/rights` and shows Import switched off (with the reason on hover) when the right is off.
+- Tests: Landing `test_rights_guard.py` (upload guarded, download / run not), platform `tests/test_rights.py` pass. Landing + 8010 restarted; unauthenticated upload via 7800 -> 401.
+
 ### Sales Plan › MRP Re-apportionment: import / export the MRP master
 - **Asked (user):** "what if i have a new version for mrp mapping master ? Importing and exporting feature - add it".
 - MRP Mapping Master card: **⇪ Import new version** (.xlsx, confirm before replacing) and **↓ Export current**. `POST /mapping/upload` reads the file with the same reader a run uses (wide "MRP Adj" grid or plain list) before it goes live - an unusable file changes nothing; the replaced version moves to `MRP Mapping\Archive\<YYYY-MM-DD HHMMSS> <name>` (kept, never overwritten). The reply says what changed vs the previous version (old MRPs added / removed / given a different new MRP) and how many Dept x Display have nothing listed. `GET /mapping/download` returns the active master exactly as uploaded.

@@ -21,6 +21,7 @@ RIGHTS = {   # key -> what the admin sees
     "realigner_run": "Run the Re-Aligner (Run, Re-phase & run)",
     "suite_theme": "Change the colour theme for everyone",
     "buyer_push": "Send the Buyer's plan to Sales Plan (Save in BIS)",   # audit 2026-10-07: one POST replaces everyone's
+    "mrp_master": "Import a new MRP master (Sales Plan, MRP Re-apportionment)",   # user 2026-10-08: replaces it for everyone
 }
 _FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "user_rights.json")
 

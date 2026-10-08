@@ -18,4 +18,7 @@ assert need("POST", "/realigner/api/rephase-overrides") is None and need("POST",
 assert need("POST", "/api/suite-theme") == "suite_theme" and need("GET", "/api/suite-theme.js") is None
 assert need("POST", "/api/config/buyer-department-growth") == need("POST", "/buyer/api/config/buyer-department-growth") == "buyer_push"
 assert need("GET", "/api/config/buyer-department-growth") is None              # Sales Plan's read stays open
+assert need("POST", "/api/planning/mrp-reapportionment/mapping/upload") == "mrp_master"
+assert need("GET", "/api/planning/mrp-reapportionment/mapping/download") is None   # export stays open
+assert need("POST", "/api/planning/mrp-reapportionment/run") is None
 print("all rights-guard checks passed")

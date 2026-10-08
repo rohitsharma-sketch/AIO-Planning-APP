@@ -431,6 +431,8 @@ class Handler(SimpleHTTPRequestHandler):
         # BIS Save -> Sales Plan: one POST replaces every division's buyer growth (audit 2026-10-07: any signed-in
         # person could send it; now an admin can switch it off per person, e.g. reviewers / approvers)
         ("POST", re.compile(r"/config/buyer-department-growth$"), "buyer_push"),
+        # Sales Plan MRP master import: the new version replaces the one every run uses (user, 2026-10-08)
+        ("POST", re.compile(r"/mrp-reapportionment/mapping/upload$"), "mrp_master"),
     ]
 
     def _right_refusal(self):

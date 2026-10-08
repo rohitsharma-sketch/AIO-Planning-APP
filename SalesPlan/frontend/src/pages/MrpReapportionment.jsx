@@ -193,6 +193,14 @@ export default function MrpReapportionment() {
   const [resultTab, setResultTab] = useState('preview')
   const [importing, setImporting] = useState(false)
   const [importMsg, setImportMsg] = useState(null)   // {ok, text}
+  // admin-switchable right (Users & access): null = not known yet, Landing refuses the upload either way
+  const [canImport, setCanImport] = useState(null)
+  useEffect(() => {
+    fetch('/api/auth/rights', { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setCanImport(d.rights.includes('mrp_master')) })
+      .catch(() => {})
+  }, [])
 
   // a new version of the MRP master: checked by the server before it goes live; the old one moves to Archive (2026-10-08)
   const importMaster = async (file) => {
@@ -414,12 +422,13 @@ export default function MrpReapportionment() {
                   : <div style={{ fontSize: 11, color: theme.textMuted }}>No master yet - import one</div>
                 }
                 <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                  <label style={{
-                    padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: importing ? 'wait' : 'pointer',
+                  <label title={canImport === false ? 'An admin has switched off your access to: Import a new MRP master' : undefined} style={{
+                    padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                    cursor: canImport === false ? 'not-allowed' : importing ? 'wait' : 'pointer', opacity: canImport === false ? 0.5 : 1,
                     background: 'var(--st-btn,#A8CBB7)', color: 'var(--st-btn-text,#1F4D3A)',
                   }}>
                     {importing ? '⟳ Checking…' : '⇪ Import new version'}
-                    <input type="file" accept=".xlsx" hidden disabled={importing}
+                    <input type="file" accept=".xlsx" hidden disabled={importing || canImport === false}
                       onChange={e => { importMaster(e.target.files[0]); e.target.value = '' }} />
                   </label>
                   {status?.mapping_file_found && (
