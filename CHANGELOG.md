@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### AOP base now read from the Calendar's multi-year sales (Phase 1)
+- **Asked (user):** "once done, go ahead with phase 1".
+- `sync/store_actuals_sync.py` (the AOP base: levers `store_actuals` and `store_actuals_fy26`) reads `calendar.sales_fact` instead of re-reading the parquet and repeating the reindex (14 s instead of a file read + reindex). Nightly order now: day weights -> multi-year sales -> AOP base -> Calendar reindex -> check (the multi-year loader works out "closed" itself, by the same rule on the same export).
+- Tie-out before switching, cell by cell: FY26 placeholder (Mar'25-Feb'26) identical on 8,839 cells; base Apr'26-Aug'26 identical. Only Mar'26 label (TY Mar'27) moves, 15,482.1 -> 14,750.4 L = the Calendar's own Mar'27: the old sync kept all of Mar'26 there because it did not count Jan / Feb'26 as closed, so the 731.7 L of Holi days that land in Feb'27 (and Feb'26 days that land in Mar'27) were ignored. GM 2,305.3 -> 2,309.1, KIDS 4,272.5 -> 4,015.5, LADIES 3,509.8 -> 3,334.6, MENS 5,100.3 -> 4,825.3, RETAIL 294.3 -> 265.9.
+- Saved AOP versions are unchanged (they keep their own inputs); a new session / re-run picks this up. Full nightly sync ran end to end on the new order - every check passed, including check 8.
+
 ### Calendar: multi-year calendar sales table (Phase 0 of "flow all sales ... from calendarised app")
 - **Asked (user):** "flow all sales for actual and reindexed in all other apps from calendarised app"; "go ahead and plan the multi-year calendar sales switch"; "go ahead with phase 0".
 - New table `calendar.sales_fact` (+ `calendar.sales_fact_load`, migration `b5d1e8f2a9c4`): every closed month as plain rows - **actual** Jan 2019 - Aug 2026 (91 months; Apr 2020 had no sales) and **reindexed** per saved calendar (2021 -> 22, 2024 -> 25, 2025 -> 26 all 12 months, 2026 -> 27 Jan-Aug) by the Calendar's own proportional split - at store x division x department x ATTRIBUTE1, value and quantity, plus the planning division. 2,825,818 actual cells, 518,515.77 L.
