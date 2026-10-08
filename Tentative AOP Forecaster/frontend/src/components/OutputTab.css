@@ -555,6 +555,9 @@
 .pv-vals button, .pv-seg button { background: var(--white); color: var(--muted); font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 0; }
 .pv-vals button + button, .pv-seg button + button { border-left: 1px solid var(--border); }
 .pv-vals button.on, .pv-seg button.on { background: var(--st-btn,#A8CBB7); color: var(--st-btn-text,#1F4D3A); }
+.pv-table tr.pv-recon td { background: var(--light, #F6F4EE); font-size: 11px; }
+.pv-table tr.pv-recon td.sdt-name small { font-weight: 400; color: var(--muted); }
+.pv-table tr.pv-recon-total td { border-bottom: 2px solid var(--border); }
 .pv-seg-label { align-self: center; padding: 0 8px; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); border-right: 1px solid var(--border); }
 .pv-vals button:disabled { cursor: default; opacity: 1; }
 .pv-link { background: none; color: var(--navy3); font-size: 11.5px; font-weight: 600; padding: 2px 4px; }

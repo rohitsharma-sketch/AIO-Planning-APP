@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### AOP Output: reconciliation rows to the Calendar ("+ Not in plan" / "= Calendar total")
+- **Asked (user):** "How will i know about DND and such cases where there will be a slight difference either make such a provision in the output tab too to know why is there a slight difference in sales from the calendarised app."
+- Under Grand total (Eff Sales columns, every month + Total): **+ Not in plan (DND, NON-TRADING, FIXED ASSETS ...)** = calendarised sales of the divisions planning leaves out, for the stores in view (hover = by division), and **= Calendar total** = Grand total + those = the Calendar's Month Wise Matrix with "Planning divisions only" off. Shown when no Division / Department filter is on. `dept-mix` now also returns those divisions (`other`) and keeps plan-division rows with no department as "(NO DEPARTMENT)".
+- ALC Mar'27: Eff 169.76 + DND 0.43 = 170.19 L = Calendar. All 1,449 store-months tie within Rs 180.
+
 ### Calendar: Month Wise Matrix "Planning divisions only" toggle
 - **Asked (user):** "where to see 169.8 March sales in ALC in calendar ?" then "add the planning divisions only toggle".
 - A checkbox next to Download XLSX: on = only the five planning divisions (MENS, LADIES, KIDS, GM's Footwear / Household / Lifestyle / Home Furnishing / Sports & Toys / Stationery / Travel Accessories, RETAIL incl. Non Food); DND, non-trading, fixed assets etc. left out - the figures AOP (Eff Sales), BIS and Sales Plan use. Remembered per browser; the store heading and the XLSX file name say when it is on.

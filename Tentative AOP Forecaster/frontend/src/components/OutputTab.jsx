@@ -442,6 +442,29 @@ export default function OutputTab({ sessionId, runKey }) {
     ))
   })
 
+  // Reconciliation to the Calendar (user, 2026-10-08: "How will i know about DND and such cases where there will be a
+  // slight difference ... make such a provision in the output tab too"): the calendarised sales of divisions that are
+  // not planned (DND, non-trading ...) for the stores in view, and Grand total + those = the Calendar's own total.
+  // Only when no Division / Department filter is on (those views are not whole stores).
+  const notPlanned = useMemo(() => {
+    if (!mix?.other || dimSel('Division').length || dimSel('Department').length) return null
+    const stores = new Set(filtered.map(r => String(r.Store).trim().toUpperCase()))
+    const e = new Array(13).fill(0), names = {}
+    for (const st of stores) for (const [dv, v] of Object.entries(mix.other[st] || {})) {
+      v.forEach((x, i) => { e[i] += x || 0 })
+      names[dv] = (names[dv] || 0) + v.reduce((a, x) => a + (x || 0), 0)
+    }
+    return e.some(x => Math.abs(x) > 1e-9) ? { e, names } : null
+  }, [mix, filtered, d.dimF])   // eslint-disable-line react-hooks/exhaustive-deps
+  const reconCells = (e, cls) => groups.flatMap(g => {
+    const gi = g.idx.filter(i => effIdx.has(i)), vs = valsFor(g)
+    return vs.map(v => (
+      <td key={`${g.key}|${v}`} className={`num ${cls} ${g.total ? 'pv-total' : ''} ${v === vs[0] ? 'pv-gstart' : ''}`}>
+        {v === 'eff' ? (gi.length ? fmt1(sumIdx(e, gi) * U) : '—') : ''}
+      </td>
+    ))
+  })
+
   // Header row 1: quarter bands (clickable) / stand-alone groups
   const bandCells = []
   for (let i = 0; i < groups.length; i++) {
@@ -539,6 +562,17 @@ export default function OutputTab({ sessionId, runKey }) {
                 <td className="sdt-name pv-sticky"><strong>Grand total</strong></td>
                 {valueCells(grand, true)}
               </tr>
+              {notPlanned && valueFields.includes('eff') && <>
+                <tr className="sdt-row pv-recon" title={'Calendarised sales of divisions that are not planned, for the stores in view: '
+                  + Object.entries(notPlanned.names).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${fmt1(v * U)}`).join(', ')}>
+                  <td className="sdt-name pv-sticky">+ Not in plan <small>({Object.keys(notPlanned.names).sort().join(', ')})</small></td>
+                  {reconCells(notPlanned.e, 'muted')}
+                </tr>
+                <tr className="sdt-row pv-recon pv-recon-total" title="= the Calendar's calendarised sales for these stores (Month Wise Matrix with 'Planning divisions only' off)">
+                  <td className="sdt-name pv-sticky">= Calendar total</td>
+                  {reconCells(grand.e.map((x, i) => x + notPlanned.e[i]), 'fw-bold')}
+                </tr>
+              </>}
               {flat.map(n => (
                 <tr key={n.id} className={`sdt-row d${n.depth}${!n.children.length ? ' leaf' : ''}`} onClick={() => n.children.length && d.toggleNode(tree, n.id)}>
                   {renderName(n)}
@@ -553,7 +587,7 @@ export default function OutputTab({ sessionId, runKey }) {
           ? <div className="pv-foot">Eff Sales unavailable: {mix.error}</div>
           : <div className="pv-foot">
               Eff Sales = the Calendar's calendarised (reindexed) LY sales - the same month figures as its Month Wise Matrix, for the five planning divisions
-              (DND / non-trading left out); '—' = LY month not closed yet. Eff Cont% = share of the row above; Eff Gr% = Fcst vs Eff Sales.
+              (DND / non-trading left out - shown under Grand total as "+ Not in plan", so "= Calendar total" matches the Calendar); '—' = LY month not closed yet. Eff Cont% = share of the row above; Eff Gr% = Fcst vs Eff Sales.
               {deptOn && ' Department rows: Base and Fcst split by the department\'s share of its store-division\'s Eff Sales in that month (store mix over the closed months where a month has none; new stores use the division\'s network mix).'}
               {' '}Calendarised sales as of {new Date(mix.computedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}.
             </div>}

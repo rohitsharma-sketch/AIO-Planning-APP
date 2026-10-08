@@ -414,21 +414,31 @@ def dept_mix(sale_type: str = "reindexed"):
     col_idx = {f"{y - shift}-{m:02d}": i for i, (y, m) in enumerate(months)}
     today = _dt.date.today()
     usable = {c for c in col_idx if (int(c[:4]) - (1 - shift), int(c[5:])) < (today.year, today.month)}  # LY month closed
-    mix = {}
+    mix, other = {}, {}
     for r in rows:
         i = col_idx.get(r["col"])
-        div = plan_div.get(" ".join(str(r.get("division") or "").upper().split()))
+        raw = " ".join(str(r.get("division") or "").upper().split())
+        div = plan_div.get(raw)
         dept = str(r.get("DEPARTMENT") or "").strip().upper()
-        if i is None or r["col"] not in usable or not div or not dept:
+        if i is None or r["col"] not in usable:
             continue
+        if not div:   # not a planning division (DND, NON-TRADING ...): kept apart so Output can reconcile to the Calendar
+            v = other.setdefault(str(r["store"]).strip().upper(), {}).setdefault(raw or "(BLANK)", [0.0] * 13)
+            v[i] += float(r["value"]) / 1e5
+            continue
+        dept = dept or "(NO DEPARTMENT)"   # kept, so Eff Sales add up to the Calendar
         v = mix.setdefault(str(r["store"]).strip().upper(), {}).setdefault(div, {}).setdefault(dept, [None] * 13)
         v[i] = (v[i] or 0.0) + float(r["value"]) / 1e5
     for divs in mix.values():
         for depts in divs.values():
             for k, v in depts.items():
                 depts[k] = [None if x is None else round(x, 4) for x in v]
+    for divs in other.values():
+        for k, v in divs.items():
+            divs[k] = [round(x, 4) for x in v]
     out = {"ok": True, "saleType": sale_type, "computedAt": at.isoformat(),
-           "months": [i for c, i in sorted(col_idx.items(), key=lambda t: t[1]) if c in usable], "mix": mix}
+           "months": [i for c, i in sorted(col_idx.items(), key=lambda t: t[1]) if c in usable], "mix": mix,
+           "other": other}
     _DEPT_MIX_CACHE[sale_type] = (key, out)
     return out
 
