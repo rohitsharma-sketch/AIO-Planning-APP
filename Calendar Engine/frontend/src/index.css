@@ -1128,6 +1128,7 @@ details.rx-section > summary.rx-label { cursor: pointer; display: list-item; }
 .mx-pop-body { overflow-x: auto; }
 .mx-drill-tbl tr.mx-hit td { box-shadow: inset 0 2px 0 -1px var(--st-btn-text, #1F4D3A), inset 0 -2px 0 -1px var(--st-btn-text, #1F4D3A); font-weight: 600; }
 .mx-drill-tbl tr.mx-hit td:first-child { border-left: 3px solid var(--st-btn-text, #1F4D3A); }
+.mx-drill-tbl tr.mx-gap td { color: var(--muted); font-style: italic; background: rgba(148, 163, 184, 0.12); }
 .mx-views { display: flex; gap: 6px; margin-top: 6px; }
 .mx-views .btn { padding: 3px 10px; font-size: 12px; }
 .mx-views .btn.on { background: var(--st-btn-text, #1F4D3A); color: #fff; }

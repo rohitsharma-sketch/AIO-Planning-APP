@@ -44,6 +44,7 @@ const money = (v) => (v == null ? '' : Math.round(v).toLocaleString('en-IN'))
 // numbers"). Every day of the ref month that landed in the TY month: where it went, why, the day's sales the split is
 // weighted by, and this store's rupees - the rows add up to the cell.
 const fmtD = s => new Date(`${s}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+const DOW_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 // Pop-up (user, 2026-10-08: "instead of the down bar - i need it as a pop up ... also for the whole month mapping";
 // then "i want the whole month from 1 - 30 days of the month , 1- 28/29 day detail for feb"): always a WHOLE month, day 1
 // to the last day. view 'ty' = every day of TY month fm and the LY day it came from; view 'ly' = every day of LY month rm
@@ -61,16 +62,21 @@ function MxDayTable({ store, cluster, drill, monthRows, info, onClose, onView })
   }, [info, cluster, monthRows, rm, fm, view])
   const dlg = useRef(null)
   useEffect(() => { const d = dlg.current; d?.showModal(); return () => d?.close() }, [])
-  const rows = parts.flatMap(p => p.b.rows.map(x => ({ ...x, r: p.r, f: p.f })))
-    .sort((a, b) => (view === 'ty' ? (a.fut < b.fut ? -1 : 1) : (a.ref < b.ref ? -1 : 1)))
-  const sales = parts.some(p => p.b.basis === 'sales')
-  const total = parts.reduce((a, p) => a + p.amt, 0)
-  const sumSales = rows.reduce((a, x) => a + (x.daySales || 0), 0)
-  const sumAmt = rows.reduce((a, x) => a + x.amount, 0)
-  const pct = v => `${(v * 100).toFixed(1)}%`
   const month = view === 'ty' ? fm : rm
   const [y, mo] = month.split('-').map(Number)
   const monthLen = new Date(y, mo, 0).getDate()
+  const dateOf = x => (view === 'ty' ? x.fut : x.ref)
+  const mapped = parts.flatMap(p => p.b.rows.map(x => ({ ...x, r: p.r, f: p.f })))
+  // every calendar day is listed - a day with no partner (29 Feb of a leap reference year has no TY day) gets a row too
+  const have = new Set(mapped.map(dateOf))
+  const gaps = Array.from({ length: monthLen }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`).filter(d => !have.has(d))
+    .map(d => ({ ...(view === 'ty' ? { fut: d } : { ref: d }), gap: true }))
+  const rows = [...mapped, ...gaps].sort((a, b) => (dateOf(a) < dateOf(b) ? -1 : 1))
+  const sales = parts.some(p => p.b.basis === 'sales')
+  const total = parts.reduce((a, p) => a + p.amt, 0)
+  const sumSales = mapped.reduce((a, x) => a + (x.daySales || 0), 0)
+  const sumAmt = mapped.reduce((a, x) => a + x.amount, 0)
+  const pct = v => `${(v * 100).toFixed(1)}%`
   const mix = parts.map(p => `${fmtMonth(view === 'ty' ? p.r : p.f)} (${p.b.cellDays})`).join(', ')
   const hit = rm && fm ? parts.find(p => p.r === rm && p.f === fm) : null
   const title = view === 'ty' ? `${fmtMonth(fm)} (TY) - every day, 1-${monthLen}` : `${fmtMonth(rm)} (LY) - every day, 1-${monthLen}`
@@ -82,8 +88,8 @@ function MxDayTable({ store, cluster, drill, monthRows, info, onClose, onView })
         <div>
           <b>{store}</b> <span className="mx-muted">({cluster})</span> · <b>{title}</b> · ₹{money(total)}
           <div className="mx-muted">
-            {view === 'ty' ? <>{rows.length} of {monthLen} TY days ← {mix}</> : <>{rows.length} of {monthLen} days of {fmtMonth(rm)} → {mix}</>}
-            {rows.length < monthLen && ' (the rest have no day in this calendar)'}
+            {view === 'ty' ? <>{mapped.length} of {monthLen} TY days ← {mix}</> : <>{mapped.length} of {monthLen} days of {fmtMonth(rm)} → {mix}</>}
+            {gaps.length > 0 && ` · ${gaps.length} day${gaps.length > 1 ? 's' : ''} with no ${view === 'ty' ? 'LY' : 'TY'} day (listed)`}
           </div>
           {hit && <div className="mx-muted">Clicked cell <b>{fmtMonth(rm)} → {fmtMonth(fm)}</b> (highlighted): {hit.b.cellDays} of {hit.b.monthDays} days
             of {fmtMonth(rm)}, ₹{money(hit.amt)} - {pct(hit.b.shareOfMonth)} of the month's {hit.b.basis === 'sales' ? 'sales' : 'days'}.</div>}
@@ -110,7 +116,16 @@ function MxDayTable({ store, cluster, drill, monthRows, info, onClose, onView })
           </tr>
         </thead>
         <tbody>
-          {rows.map((x, i) => (
+          {rows.map((x, i) => x.gap ? (
+            <tr key={dateOf(x)} className="mx-gap">
+              <td>{i + 1}</td><td>{x.ref ? fmtD(x.ref) : '-'}</td><td>{x.ref ? DOW_SHORT[new Date(`${x.ref}T00:00:00`).getDay()] : ''}</td>
+              <td>{x.fut ? fmtD(x.fut) : '-'}</td><td>{x.fut ? DOW_SHORT[new Date(`${x.fut}T00:00:00`).getDay()] : ''}</td><td /><td />
+              <td className="mx-wrap" colSpan={sales ? 4 : 3}>{x.ref
+                ? (x.ref.endsWith('-02-29') ? 'Leap day - the TY year has no 29 Feb, so no TY day takes it; ' : 'No TY day takes this day; ')
+                  + 'its sales stay in the month total, which is split over the month\'s mapped days'
+                : 'No LY day maps here in this calendar - this TY day gets no reindexed sales'}</td>
+            </tr>
+          ) : (
             <tr key={x.ref} className={[x.festival && 'mx-fest', hit && x.r === rm && x.f === fm && 'mx-hit'].filter(Boolean).join(' ') || undefined}>
               <td>{i + 1}</td><td>{fmtD(x.ref)}</td><td>{x.refDow}</td><td>{fmtD(x.fut)}</td>
               <td style={x.refDow !== x.futDow ? { color: 'var(--warn, #B45309)', fontWeight: 600 } : undefined}>{x.futDow}</td>
@@ -132,7 +147,7 @@ function MxDayTable({ store, cluster, drill, monthRows, info, onClose, onView })
             </tr>
           ))}
           <tr>
-            <td colSpan={8}><b>Total</b> - {rows.length} days</td>
+            <td colSpan={8}><b>Total</b> - {mapped.length} days{gaps.length ? ` (+${gaps.length} unmapped)` : ''}</td>
             {sales && <td style={{ textAlign: 'right' }}><b>{money(sumSales)}</b></td>}
             <td />
             <td style={{ textAlign: 'right' }}><b>{money(sumAmt)}</b> {Math.abs(sumAmt - total) < 0.5 ? '✓' : '✗'}</td>
