@@ -14,7 +14,7 @@ Newest first. Each entry names its commit.
 
 ### Calendar: saved runs open without Run Reindex; past calendars have no Re-index
 - **Asked (user):** "also cache the previous ran versions so that all previews ready to view instead of running re-index evertime the calendar is loaded. For current template like 26-27 or related to future you can perhaps ask for re-index push button but not for all the templates which belong to the past".
-- Picking a calendar on Calendarised Sales now loads its last run straight from the month cache (new `POST /salesdata/reindex/saved`, no data-lake read - 2025 -> 26: 12 months in 0.7 s). A **past** calendar (every reference month closed) shows "Past calendar - saved run shown" and no button; the current / future one (2026 -> 27) shows **Re-index**. Saved runs were filled for every calendar with the page's fields (Sales Value, no extra fields).
+- Picking a calendar on Calendarised Sales now loads its last run straight from the month cache (new `POST /salesdata/reindex/saved`, no data-lake read - 2025 -> 26: 12 months in 0.7 s). A **past** calendar (every reference month closed) shows "Past calendar - saved run shown" and no button; the current / future one (2026 -> 27) shows **Re-index**. Saved runs were filled for every calendar with the page's fields (Sales Value, no extra fields): 2021 -> 22, 2024 -> 25, 2025 -> 26 all 12 months (past, 0.3-0.6 s to open); 2026 -> 27 Jan-Aug (Sep-Dec not closed - Re-index fills them). Commit `2270d08` (all three entries above).
 - A one-month run now splits that month exactly as a full-year run does (the "closed months" for the split are the calendar's, not just the run's).
 
 ### Month-wise reindex: proportional split (AOP's rule) instead of whole-month
