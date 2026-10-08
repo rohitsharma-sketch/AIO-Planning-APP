@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### AOP Forecaster: Ref Store Mapping - readable % pop-up, visible scrollbar
+- **Asked (user):** "it is difficult to see when i click on % and make the side slider stay visible and tangible"
+- The % (division mix) pop-up is now pinned to the window beside the button (opens upward near the bottom), so the table's scroll box no longer clips it; larger text, right-aligned numbers, bigger close button, % button stays highlighted while open. Closes on outside click, scroll or resize.
+- Planning Inputs tables get a wide (14 px), always-visible scrollbar with a solid thumb. Layout only.
+
 ### AOP Forecaster: Planning Inputs uses the full window
 - **Asked (user):** "improve scaling on this" (Ref Store Mapping tab screenshot).
 - Page width 1140 px -> 1560 px; the store tables (all Planning Inputs tabs) now grow with the window height (`max(440px, 100vh - 320px)`) instead of a fixed 440 px box. Layout only, no data or logic change.

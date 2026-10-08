@@ -664,6 +664,9 @@ function RefStoreMapTab({ stores, loadErr, reload }) {
   // to-close (see the document listener below) fixes both the flicker and
   // gives the user a stable, deliberately-dismissed panel.
   const [openMixStore, setOpenMixStore] = useState(null)
+  // Screen position of the open popover: it is position:fixed so the table's
+  // scroll box can't clip it; closes when the table or page scrolls.
+  const [mixPos, setMixPos] = useState(null)
   const [mixByStore, setMixByStore] = useState({})  // {store_id -> {totalLakhs, mix: {div: pct}}}
   const mixPopoverRef = useRef(null)
   const safeStores = stores || []
@@ -673,8 +676,18 @@ function RefStoreMapTab({ stores, loadErr, reload }) {
     function onDocClick(e) {
       if (mixPopoverRef.current && !mixPopoverRef.current.contains(e.target)) setOpenMixStore(null)
     }
+    function onScroll(e) {
+      if (mixPopoverRef.current && mixPopoverRef.current.contains(e.target)) return
+      setOpenMixStore(null)
+    }
     document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
+    document.addEventListener('scroll', onScroll, true)
+    window.addEventListener('resize', onScroll)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('resize', onScroll)
+    }
   }, [openMixStore])
 
   function loadLatestLog() {
@@ -836,9 +849,17 @@ function RefStoreMapTab({ stores, loadErr, reload }) {
                     <button
                       type="button"
                       className="refmap-mix-btn"
+                      aria-expanded={mixOpen}
                       title="Compare division sales mix vs old/current ref store"
-                      onClick={() => {
+                      onClick={e => {
                         if (mixOpen) { setOpenMixStore(null); return }
+                        const r = e.currentTarget.getBoundingClientRect()
+                        // open below the button, or above it when near the bottom of the window
+                        const below = r.bottom + 330 < window.innerHeight
+                        setMixPos({
+                          left: Math.max(8, Math.min(r.right + 8, window.innerWidth - 440)),
+                          ...(below ? { top: r.top } : { bottom: window.innerHeight - r.bottom }),
+                        })
                         setOpenMixStore(s.store_id)
                         loadMix(s)
                       }}
@@ -848,7 +869,7 @@ function RefStoreMapTab({ stores, loadErr, reload }) {
                     {mixOpen && (
                       <DivisionMixPopover store={s} priorEntry={priorEntry}
                         currentRef={edits[s.store_id] !== undefined ? edits[s.store_id] : (s.ref_store || '')}
-                        mix={mixByStore[s.store_id]}
+                        mix={mixByStore[s.store_id]} pos={mixPos}
                         onClose={() => setOpenMixStore(null)} />
                     )}
                   </td>
@@ -871,10 +892,10 @@ function RefStoreMapTab({ stores, loadErr, reload }) {
 // the % button is clicked again or the user clicks anywhere outside it (see
 // the mousedown listener in RefStoreMapTab) - no more hover-close-on-the-
 // way-there.
-function DivisionMixPopover({ store, priorEntry, currentRef, mix, onClose }) {
+function DivisionMixPopover({ store, priorEntry, currentRef, mix, pos, onClose }) {
   const closeBtn = <button type="button" className="refmap-popover-close" onClick={onClose} aria-label="Close">×</button>
   if (!mix) return (
-    <div className="refmap-popover">{closeBtn}<span className="pie-count-label">Loading division mix…</span></div>
+    <div className="refmap-popover" style={pos}>{closeBtn}<span className="pie-count-label">Loading division mix…</span></div>
   )
   const cols = [
     { label: store.store_id, id: store.store_id },
@@ -882,10 +903,10 @@ function DivisionMixPopover({ store, priorEntry, currentRef, mix, onClose }) {
     ...(currentRef ? [{ label: `${currentRef} (current)`, id: currentRef }] : []),
   ].filter(c => c.id)
   if (cols.length < 2) return (
-    <div className="refmap-popover">{closeBtn}<span className="pie-count-label">No ref store to compare yet.</span></div>
+    <div className="refmap-popover" style={pos}>{closeBtn}<span className="pie-count-label">No ref store to compare yet.</span></div>
   )
   return (
-    <div className="refmap-popover">
+    <div className="refmap-popover" style={pos}>
       {closeBtn}
       <table className="pie-row-table sm-table">
         <thead><tr><th>Division</th>{cols.map(c => <th key={c.id}>{c.label}</th>)}</tr></thead>

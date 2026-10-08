@@ -315,6 +315,17 @@
   border-radius: 8px;
   overflow-x: auto;
 }
+/* Always-visible, wide scrollbar (the thin auto-hiding one was hard to grab). */
+.pie-scroll::-webkit-scrollbar { width: 14px; height: 14px; }
+.pie-scroll::-webkit-scrollbar-track { background: var(--light); border-left: 1px solid var(--border); }
+.pie-scroll::-webkit-scrollbar-thumb {
+  min-height: 48px;
+  background: var(--navy3);
+  border: 3px solid var(--light);
+  border-radius: 8px;
+}
+.pie-scroll::-webkit-scrollbar-thumb:hover { background: var(--navy); }
+.pie-scroll::-webkit-scrollbar-corner { background: var(--light); }
 
 /* ── Store Master tab ─────────────────────────────────────────────── */
 
@@ -513,24 +524,26 @@
 }
 .refmap-mix-btn:hover { border-color: var(--navy3); color: var(--navy); background: var(--light); }
 .refmap-popover {
-  position: absolute;
-  z-index: 20;
-  top: 100%;
-  left: 0;
-  margin-top: 4px;
-  padding: 8px 24px 8px 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  position: fixed;          /* pinned to the window so the table's scroll box can't clip it */
+  z-index: 200;
+  padding: 12px 34px 12px 12px;
+  border: 1px solid var(--navy3);
+  border-radius: 10px;
   background: var(--white);
-  box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.22);
   white-space: nowrap;
 }
+.refmap-popover .sm-table { font-size: 13.5px; }
+.refmap-popover .sm-table th,
+.refmap-popover .sm-table td { padding: 7px 12px; }
+.refmap-popover .sm-table td:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+.refmap-mix-btn[aria-expanded="true"] { border-color: var(--navy); color: var(--white); background: var(--navy); }
 .refmap-popover-close {
   position: absolute;
   top: 4px;
   right: 4px;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: none;
   background: transparent;
