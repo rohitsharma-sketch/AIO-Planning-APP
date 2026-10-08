@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### Landing: "Sync all data" in the account (admin) menu
+- **Asked (user):** "give me a sync button to start refresh all syncs in the admin button on the landing page - so that i can manage the console better."
+- Admins only (like Users & access; greyed out for anyone whose "data sync" right is off). One click starts the database sync (`sync/run_all.py`: site / store master, store actuals, day weights, Calendar month-wise reindex + check, day-wise reindex, festivals, Listing / Delisting) and Buyer's Input's sales, sell-through and history syncs, all from the newest data-lake files, then opens the Data sync panel to follow each source. The label shows when it started, or which part could not start.
+
 ### AOP Forecaster: Results "Departments" tab - division forecast split by LY department contribution
 - **Asked (user):** "i want a similar tab where the aop forecast decided on division will be bifurcated on reindexed cont % and will be multiplied by the aop forecasted"; "give me a similar tab filter for sale type - reindexed or actual sales"; "yes go ahead and build it".
 - New tab next to Output, same pivot (Month / Type / Division / Tag / Cluster / Store filters, quarter bands, ₹ L / Cr) plus a **Department** layer, a **Sale type** switch (Reindexed / Actual) and a **Cont%** value (share of the row above).

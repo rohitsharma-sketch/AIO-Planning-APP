@@ -417,6 +417,9 @@
           <span>Theme</span>
         </button>
         <a class="tmenu-item" id="admin-link" href="/auth/users" style="display:none" title="Users & access - who can sign in and what they can do (admins)"><span>Users</span><small>&amp; access</small></a>
+        <!-- Sync all (2026-10-08, user: "a sync button to start refresh all syncs in the admin button") - admins only -->
+        <button class="tmenu-item" id="sync-all-btn" type="button" style="display:none"
+                title="Refresh every sync from the latest data-lake files: database sync (site / store master, store actuals, day weights, Calendar month-wise + day-wise reindex and its check, festivals, Listing / Delisting) and Buyer's Input sales, sell-through and history"><span>Sync all data</span><small id="sync-all-label">refresh every sync</small></button>
         <!-- Master Switch -->
         <button id="launch-all-btn" class="tmenu-item" type="button" title="Start or stop all planning servers">
           <span>Servers</span><small>start all / stop all</small>
@@ -1164,6 +1167,21 @@ fetch('/api/auth/me', {credentials: 'include', cache: 'no-store'}).then(r => r.o
   .then(u => {
     if (!u) return;
     if (u.is_admin) document.getElementById('admin-link').style.display = 'inline-flex';
+    if (u.is_admin) {   /* Sync all data: the database sync (run_all) + BIS's three syncs, then the progress panel */
+      const sa = document.getElementById('sync-all-btn'), lbl = document.getElementById('sync-all-label');
+      sa.style.display = 'inline-flex';
+      sa.onclick = () => {
+        closeMenus(); sa.disabled = true; lbl.textContent = 'starting…';
+        const go = (url, opts) => fetch(url, { credentials: 'include', cache: 'no-store', ...opts }).then(r => r.ok).catch(() => false);
+        Promise.all([go('/api/config/db-sync', { method: 'POST' }), go('/buyer/api/sync'), go('/buyer/api/sync/history')])
+          .then(([db, bis, hist]) => {
+            lbl.textContent = db && bis && hist ? 'started ' + new Date().toLocaleTimeString('en-IN', { timeStyle: 'short' })
+              : 'not all started: ' + [!db && 'database', !bis && 'BIS sales / sell-thru', !hist && 'BIS history'].filter(Boolean).join(', ');
+            document.getElementById('sync-card').click();   /* Data sync panel - shows each source's progress */
+          })
+          .finally(() => { setTimeout(() => { sa.disabled = false; }, 30000); });
+      };
+    }
     const b = document.getElementById('signout-btn');   /* sign out / switch user (2026-09-30) */
     document.getElementById('signout-label').textContent = u.username;
     document.getElementById('acct-name').textContent = u.username;   /* account-menu button (2026-10-07) */
@@ -1176,7 +1194,7 @@ fetch('/api/auth/me', {credentials: 'include', cache: 'no-store'}).then(r => r.o
    Landing's server refuses them anyway - this just says so up front. */
 fetch('/api/auth/rights', {credentials: 'include', cache: 'no-store'}).then(r => r.ok ? r.json() : null).then(d => {
   if (!d) return;
-  [['launch-all-btn', 'servers'], ['sync-now-btn', 'data_sync']].forEach(([id, k]) => {
+  [['launch-all-btn', 'servers'], ['sync-now-btn', 'data_sync'], ['sync-all-btn', 'data_sync']].forEach(([id, k]) => {
     const b = document.getElementById(id);
     if (b && !d.rights.includes(k)) { b.disabled = true; b.style.opacity = '.45'; b.title = 'An admin has switched this off for you: ' + d.labels[k]; }
   });
