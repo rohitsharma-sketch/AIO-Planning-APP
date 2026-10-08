@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### AOP Forecaster: Results "Departments" tab - division forecast split by LY department contribution
+- **Asked (user):** "i want a similar tab where the aop forecast decided on division will be bifurcated on reindexed cont % and will be multiplied by the aop forecasted"; "give me a similar tab filter for sale type - reindexed or actual sales"; "yes go ahead and build it".
+- New tab next to Output, same pivot (Month / Type / Division / Tag / Cluster / Store filters, quarter bands, ₹ L / Cr) plus a **Department** layer, a **Sale type** switch (Reindexed / Actual) and a **Cont%** value (share of the row above).
+- Department Fcst = each store's division forecast × the department's share of that store-division's LY sales in the same month: Reindexed = the Calendar's festival-aligned department sales on the TY month, Actual = the same month last year on its own dates (`GET /api/config/dept-mix`). LY column = those sales. Months without closed LY sales use the store's mix over the months that have it; new stores (no LY) use the division's network mix.
+- Checked on the live session: 1,595 store-division rows -> 140,416 department rows (539 departments); every store x division x month forecast kept exactly (132,172.72 L in = out) for both sale types. ALC MENS Mar'27 78.19 L -> ML_JEANS 11.67 L reindexed (MSE_R/N T-SHIRT H/S 12.65 L on actual).
+
 ### Calendar: 2025 -> 2026 calendar approved and backed up
 - **Asked (user):** "make sure the calendar version is saved now. This calendar is perfect."
 - Confirmed saved: "2025 -> 2026 Calendar - All" (id 1791441518950, saved 8 Oct 12:08) is the only 2025 calendar, so it is what the Calendar, AOP and Sales Plan read. 10 clusters x 365 days, no LY day used twice, year-alignment check PASS, day-map fingerprint `f4dafc4c1aaf36cc`. Dated copy: `Backups\calendar_2025_2026_APPROVED_20261008_141544.json`.

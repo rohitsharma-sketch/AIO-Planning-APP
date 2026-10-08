@@ -154,29 +154,65 @@ const VALUE_DEFS = {
   stores: { label: 'Stores',    short: 'Stores' },
   base:   { label: 'Base',      short: 'Base' },
   fcst:   { label: 'Forecast',  short: 'Fcst' },
+  cont:   { label: 'Contribution % of the row above', short: 'Cont%' },   // Departments tab only
   dev:    { label: 'Deviation', short: 'Dev' },
   gr:     { label: 'Growth %',  short: 'Gr%', locked: true },
 }
-const VALUE_KEYS = Object.keys(VALUE_DEFS)
-const DEFAULT_LAYOUT = { rows: LEVEL_KEYS, values: ['base', 'fcst', 'gr'], unit: 'L', collapsedQ: [] }
 const QTR_DEF = [['Q1', [1, 2, 3]], ['Q2', [4, 5, 6]], ['Q3', [7, 8, 9]], ['Q4', [10, 11, 12]]]   // MONTHS idx; 0 = Mar'27
-const LAYOUT_KEY = 'aop.output.pivotLayout'
 
-function loadLayout() {
+function loadLayout(storeKey, keys, valueKeys, dflt) {
   try {
-    const l = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null')
-    if (!l) return DEFAULT_LAYOUT
-    const saved = (l.rows || []).filter(k => LEVEL_KEYS.includes(k))
-    const rows = saved.length ? saved : LEVEL_KEYS   // removed layers wait in the filter bar
-    const values = VALUE_KEYS.filter(k => k === 'gr' || (l.values || []).includes(k))
-    return { rows, values, unit: l.unit === 'Cr' ? 'Cr' : 'L', collapsedQ: Array.isArray(l.collapsedQ) ? l.collapsedQ : [] }
-  } catch { return DEFAULT_LAYOUT }
+    const l = JSON.parse(localStorage.getItem(storeKey) || 'null')
+    if (!l) return dflt
+    const saved = (l.rows || []).filter(k => keys.includes(k))
+    const rows = saved.length ? saved : keys   // removed layers wait in the filter bar
+    const values = valueKeys.filter(k => k === 'gr' || (l.values || []).includes(k))
+    return { rows, values, unit: l.unit === 'Cr' ? 'Cr' : 'L', collapsedQ: Array.isArray(l.collapsedQ) ? l.collapsedQ : [],
+             saleType: l.saleType === 'actual' ? 'actual' : 'reindexed' }
+  } catch { return dflt }
 }
 
 const sumIdx = (arr, idx) => idx.reduce((s, i) => s + (arr[i] || 0), 0)
-function cellsFor(n, g) {
-  const b = sumIdx(n.mb, g.idx), f = sumIdx(n.m, g.idx)
-  return { stores: n.stores, base: b, fcst: f, dev: f - b, gr: b > 0 ? (f / b - 1) * 100 : null }
+function cellsFor(n, g, parent) {
+  const b = sumIdx(n.mb, g.idx), f = sumIdx(n.m, g.idx), pf = parent ? sumIdx(parent.m, g.idx) : 0
+  return { stores: n.stores, base: b, fcst: f, dev: f - b, gr: b > 0 ? (f / b - 1) * 100 : null,
+           cont: pf > 0 ? (f / pf) * 100 : null }
+}
+
+// Departments tab (user, 2026-10-08: "the aop forecast decided on division will be bifurcated on reindexed cont % and
+// will be multiplied by the aop forecasted"; "filter for sale type - reindexed or actual sales"). Each store x division
+// row's forecast is split over its departments by their share of that store-division's LY sales in the same month
+// (dept-mix endpoint); Base = the department's own LY sales of that sale type. A month without closed LY data uses the
+// store-division's mix over the months that have it; a store with no LY sales at all (new stores) uses the division's
+// network-wide mix. Shares add to 100%, so every division's forecast is kept exactly.
+function deptShares(src) {
+  const depts = Object.keys(src), tot = new Array(13).fill(0), ytd = {}
+  let ytdTot = 0
+  for (const dp of depts) {
+    ytd[dp] = 0
+    src[dp].forEach((x, i) => { const v = Math.max(x || 0, 0); tot[i] += v; ytd[dp] += v })
+    ytdTot += ytd[dp]
+  }
+  if (ytdTot <= 0) return null
+  return Object.fromEntries(depts.map(dp => [dp, tot.map((t, i) => (t > 0 ? Math.max(src[dp][i] || 0, 0) / t : ytd[dp] / ytdTot))]))
+}
+export function splitByDept(leaves, mix) {
+  const net = {}
+  for (const divs of Object.values(mix)) for (const [div, depts] of Object.entries(divs)) for (const [dp, v] of Object.entries(depts)) {
+    const a = ((net[div] ??= {})[dp] ??= new Array(13).fill(0))
+    v.forEach((x, i) => { if (x > 0) a[i] += x })
+  }
+  const netShares = Object.fromEntries(Object.entries(net).map(([div, src]) => [div, deptShares(src)]))
+  const zero = new Array(13).fill(0), out = []
+  for (const r of leaves) {
+    const own = mix[String(r.Store).trim().toUpperCase()]?.[r.Division]
+    const ownShares = own && deptShares(own)
+    const shares = ownShares || netShares[r.Division]
+    if (!shares) { out.push({ ...r, Department: '(no LY mix)', mb: zero }); continue }
+    for (const [dp, sh] of Object.entries(shares))
+      out.push({ ...r, Department: dp, m: r.m.map((x, i) => x * sh[i]), mb: ownShares ? own[dp].map(x => x || 0) : zero })
+  }
+  return out
 }
 const fmtGr = v => (v == null ? 'new' : (v > 0 ? '+' : '') + v.toFixed(1) + '%')
 
@@ -188,14 +224,29 @@ export function reorder(list, key, target, side) {
   return [...without.slice(0, i), key, ...without.slice(i)]
 }
 
-export default function OutputTab({ sessionId, runKey }) {
+export default function OutputTab({ sessionId, runKey, dept = false }) {
   const [rows, setRows]       = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
+  // dept = the Departments tab: one more layer (Department), a Cont% value and a sale-type switch
+  const KEYS = useMemo(() => (dept ? [...LEVEL_KEYS, 'Department'] : LEVEL_KEYS), [dept])
+  const VALUE_KEYS = Object.keys(VALUE_DEFS).filter(k => dept || k !== 'cont')
+  const LAYOUT_KEY = dept ? 'aop.output.deptLayout' : 'aop.output.pivotLayout'
+  const short = k => (dept && k === 'base' ? 'LY' : VALUE_DEFS[k].short)
 
   // Pivot layout (remembered per browser)
-  const [layout, setLayout] = useState(loadLayout)
-  useEffect(() => { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)) } catch {} }, [layout])
+  const [layout, setLayout] = useState(() => loadLayout(LAYOUT_KEY, KEYS, VALUE_KEYS,
+    { rows: KEYS, values: dept ? ['base', 'fcst', 'cont', 'gr'] : ['base', 'fcst', 'gr'], unit: 'L', collapsedQ: [], saleType: 'reindexed' }))
+  useEffect(() => { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)) } catch {} }, [layout, LAYOUT_KEY])
+  const [mix, setMix] = useState(null)   // Departments: LY store x division x department sales (dept-mix)
+  useEffect(() => {
+    if (!dept) return
+    setMix(null)
+    fetch(apiUrl(`/api/config/dept-mix?sale_type=${layout.saleType}`))
+      .then(r => r.json())
+      .then(j => setMix(j.ok ? j : { error: j.reason || j.detail || 'No department sales' }))
+      .catch(e => setMix({ error: e.message }))
+  }, [dept, layout.saleType, runKey])
   const { rows: rowFields, values: valueFields, unit } = layout
   const collapsedQ = useMemo(() => new Set(layout.collapsedQ), [layout.collapsedQ])
   const setL = patch => setLayout(l => ({ ...l, ...(typeof patch === 'function' ? patch(l) : patch) }))
@@ -225,13 +276,16 @@ export default function OutputTab({ sessionId, runKey }) {
   }, [sessionId, runKey])
 
   // ── Data pipeline ──────────────────────────────────────────────────────
-  const leaves   = useMemo(() => (rows || []).map(r => toLeaf(r, 1)), [rows])          // ₹ Lakhs
+  const leaves   = useMemo(() => {                                                       // ₹ Lakhs
+    const ls = (rows || []).map(r => toLeaf(r, 1))
+    return dept ? (mix?.mix ? splitByDept(ls, mix.mix) : []) : ls
+  }, [rows, dept, mix])
   const options  = useMemo(() => {
-    const o = dimOptions(leaves), out = {}
-    for (const k of LEVEL_KEYS) out[k] = o[k].map(x => x.value).filter(v => v != null && v !== '' && v !== '—')
+    const o = dimOptions(leaves, KEYS), out = {}
+    for (const k of KEYS) out[k] = o[k].map(x => x.value).filter(v => v != null && v !== '' && v !== '—')
     return out
-  }, [leaves])
-  const filtered = useMemo(() => filterLeaves(leaves, { dimF: d.dimF, idx: SEL_IDX }), [leaves, d.dimF, SEL_IDX])
+  }, [leaves, KEYS])
+  const filtered = useMemo(() => filterLeaves(leaves, { dimF: d.dimF, idx: SEL_IDX, keys: KEYS }), [leaves, d.dimF, SEL_IDX, KEYS])
 
   // Column groups: Mar'27, then quarter bands (months, or one column when folded), then Total
   const groups = useMemo(() => {
@@ -260,6 +314,9 @@ export default function OutputTab({ sessionId, runKey }) {
   const grand = useMemo(() => aggregate(filtered, SEL_IDX), [filtered, SEL_IDX])
   const exp   = d.expandedFor(tree)
   const flat  = useMemo(() => flatten(tree, exp), [tree, exp])
+  // Cont% = this row's forecast / the row above it (grand total = 100%)
+  const byId  = useMemo(() => { const m = new Map(); const walk = ns => ns.forEach(n => { m.set(n.id, n); walk(n.children) }); walk(tree); return m }, [tree])
+  const parentOf = n => (n === grand ? grand : byId.get(n.id.slice(0, n.id.lastIndexOf('/'))) || grand)
 
   // Node ids change with the layer order, so re-open the same number of layers.
   useEffect(() => {
@@ -270,11 +327,13 @@ export default function OutputTab({ sessionId, runKey }) {
 
   // ── Helpers ────────────────────────────────────────────────────────────
   const U = unit === 'Cr' ? 0.01 : 1
-  const fmtVal = (v, key) => key === 'gr' ? fmtGr(v) : key === 'stores' ? v : key === 'dev' ? fmtDev(v * U) : fmt1(v * U)
+  const fmtVal = (v, key) => key === 'gr' ? fmtGr(v) : key === 'stores' ? v : key === 'cont' ? (v == null ? '—' : v.toFixed(1) + '%')
+    : key === 'dev' ? fmtDev(v * U) : fmt1(v * U)
   const clsVal = (v, key) => key === 'gr' ? (v == null ? 'muted' : v >= 0 ? 'positive' : 'negative')
-    : key === 'dev' ? (v > 0 ? 'positive' : v < 0 ? 'negative' : '') : key === 'fcst' ? 'fw-bold' : ''
-  const levelLabel = k => LEVELS.find(l => l.key === k).label
-  const anyFilter = monthF.length > 0 || LEVEL_KEYS.some(k => d.dimF[k].length)
+    : key === 'dev' ? (v > 0 ? 'positive' : v < 0 ? 'negative' : '') : key === 'fcst' ? 'fw-bold' : key === 'cont' ? 'muted' : ''
+  const levelLabel = k => LEVELS.find(l => l.key === k)?.label ?? k
+  const dimSel = k => d.dimF[k] || []
+  const anyFilter = monthF.length > 0 || KEYS.some(k => dimSel(k).length)
 
   // One click on layer chip i = expand every node of that layer (show layer i+1),
   // click again = collapse them all. The last layer has nothing below it.
@@ -345,7 +404,7 @@ export default function OutputTab({ sessionId, runKey }) {
     </td>
   )
   const valueCells = (n, bold) => groups.flatMap(g => {
-    const c = cellsFor(n, g), vs = valsFor(g)
+    const c = cellsFor(n, g, parentOf(n)), vs = valsFor(g)
     return vs.map(v => (
       <td key={`${g.key}|${v}`} className={`num ${clsVal(c[v], v)} ${bold ? 'fw-bold' : ''} ${g.total ? 'pv-total' : ''} ${v === vs[0] ? 'pv-gstart' : ''}`}>
         {fmtVal(c[v], v)}
@@ -376,6 +435,8 @@ export default function OutputTab({ sessionId, runKey }) {
   if (loading) return <div className="out-loading">Loading detail data…</div>
   if (error)   return <div className="out-error">Error: {error}</div>
   if (!rows)   return null
+  if (dept && mix?.error) return <div className="out-error">Department sales: {mix.error}</div>
+  if (dept && !mix) return <div className="out-loading">Loading department sales…</div>
 
   return (
     <div className="out-wrap out-drill">
@@ -385,20 +446,29 @@ export default function OutputTab({ sessionId, runKey }) {
           <MultiSelect label="Month" options={VIS} selected={monthF} onChange={setMonthF} className="pv-mfilter" />
           {/* One filter per layer: hierarchy layers in chip order, then removed layers (dashed) -
               every one is a chip you can drag onto the header to place in the hierarchy */}
-          {[...rowFields, ...LEVEL_KEYS.filter(k => !rowFields.includes(k))].map(k => (
-            <MultiSelect key={k} label={levelLabel(k)} options={options[k]} selected={d.dimF[k]} colorMap={LEVEL_COLORS[k]}
+          {[...rowFields, ...KEYS.filter(k => !rowFields.includes(k))].map(k => (
+            <MultiSelect key={k} label={levelLabel(k)} options={options[k]} selected={dimSel(k)} colorMap={LEVEL_COLORS[k]}
                          onChange={v => d.setDimF(f => ({ ...f, [k]: v }))}
                          className={`pv-fchip${rowFields.includes(k) ? '' : ' pv-fchip--off'}${drag === k ? ' dragging' : ''}`}
                          wrapProps={{ ...dragFrom(k), title: rowFields.includes(k) ? `Drag onto the header to move ${levelLabel(k)}` : `${levelLabel(k)} is not in the hierarchy - drag it onto the header to add it` }} />
           ))}
           {anyFilter && <button className="pv-link" onClick={() => { d.setDimF(EMPTY_DIM); setMonthF([]) }}>Clear filters</button>}
           <span className="pv-bar-gap" />
+          {dept && (
+            <div className="pv-seg" role="group" aria-label="Sale type"
+                 title="Which LY sales give each department's share of its division: Reindexed = festival-aligned onto this year's calendar, Actual = on their own dates (same month last year)">
+              <span className="pv-seg-label">Sale type</span>
+              {[['reindexed', 'Reindexed'], ['actual', 'Actual']].map(([k, l]) => (
+                <button key={k} className={layout.saleType === k ? 'on' : ''} aria-pressed={layout.saleType === k} onClick={() => setL({ saleType: k })}>{l}</button>
+              ))}
+            </div>
+          )}
           <div className="pv-vals" role="group" aria-label="Values">
             {VALUE_KEYS.map(k => (
               <button key={k} className={valueFields.includes(k) ? 'on' : ''} disabled={VALUE_DEFS[k].locked}
                       aria-pressed={valueFields.includes(k)} onClick={() => toggleVal(k)}
-                      title={VALUE_DEFS[k].locked ? 'Growth % is always shown' : `Show ${VALUE_DEFS[k].label}`}>
-                {VALUE_DEFS[k].short}
+                      title={VALUE_DEFS[k].locked ? 'Growth % is always shown' : dept && k === 'base' ? `Show LY ${layout.saleType} sales` : `Show ${VALUE_DEFS[k].label}`}>
+                {short(k)}
               </button>
             ))}
           </div>
@@ -416,7 +486,7 @@ export default function OutputTab({ sessionId, runKey }) {
                     {rowFields.map((k, i) => (
                       <div key={k} role="button" tabIndex={0} {...chipDnd(k, i)} onClick={() => layerToggle(i)}
                               aria-expanded={i < rowFields.length - 1 ? depth > i + 1 : undefined}
-                              className={`pv-layer${i < depth ? ' on' : ''}${depth > i + 1 ? ' open' : ''}${drag === k ? ' dragging' : ''}${d.dimF[k].length ? ' filtered' : ''}${over?.key === k && drag !== k ? (over.side < 0 ? ' drop-l' : ' drop-r') : ''}`}
+                              className={`pv-layer${i < depth ? ' on' : ''}${depth > i + 1 ? ' open' : ''}${drag === k ? ' dragging' : ''}${dimSel(k).length ? ' filtered' : ''}${over?.key === k && drag !== k ? (over.side < 0 ? ' drop-l' : ' drop-r') : ''}`}
                               title={`${i < rowFields.length - 1 ? `Click to ${depth > i + 1 ? 'collapse' : 'expand'} every ${levelLabel(k)} · ` : ''}drag to re-order (Alt+←/→) · drag up to the filter bar to remove (Delete)`}>
                         {levelLabel(k)}
                       </div>
@@ -437,9 +507,9 @@ export default function OutputTab({ sessionId, runKey }) {
                   <th key={`${g.key}|${v}`} className={`num pv-val ${v === vs[0] ? 'pv-gstart' : ''} ${g.total ? 'pv-total-h' : ''}`}>
                     {g.total
                       ? <button className="pv-valsort" onClick={() => sortBy(v)} title={`Sort by total ${VALUE_DEFS[v].label}`}>
-                          {VALUE_DEFS[v].short}{sort.key === v ? (sort.dir < 0 ? ' ↓' : ' ↑') : ''}
+                          {short(v)}{sort.key === v ? (sort.dir < 0 ? ' ↓' : ' ↑') : ''}
                         </button>
-                      : VALUE_DEFS[v].short}
+                      : short(v)}
                   </th>
                 )) })}
               </tr>
@@ -459,6 +529,11 @@ export default function OutputTab({ sessionId, runKey }) {
             </tbody>
           </table>
         </div>
+        {dept && <div className="pv-foot">
+          Fcst = each store's division forecast × the department's share of that store-division's LY {layout.saleType === 'reindexed' ? 'reindexed (festival-aligned)' : 'actual'} sales in the same month
+          (LY = those sales). Months without closed LY sales use the store's mix over the months that have it; new stores use the division's network mix.
+          Department sales as of {new Date(mix.computedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}.
+        </div>}
         {VIS.length < MONTHS.length && <div className="pv-foot">{monthSpan(VIS)} shown · {monthsPicked ? 'months as picked in Review' : 'later months appear as their base month closes'}</div>}
       </div>
 

@@ -378,6 +378,61 @@ def base_sales_reindexed():
         db_session.close()
 
 
+_DEPT_MIX_CACHE = {}
+
+
+@router.get("/api/config/dept-mix")
+def dept_mix(sale_type: str = "reindexed"):
+    """LY store x division x department sales per AOP month (Mar'27..Mar'28, Rs Lakhs) for the Results "Departments"
+    tab (user, 2026-10-08: the AOP division forecast "bifurcated on reindexed cont %" with a sale-type filter -
+    reindexed or actual). Reads the Calendar's department snapshots (calendar_reindex_sync): 'reindexed' =
+    trend_shifted_dept on the TY month itself, 'actual' = actual_dept on the same month a year earlier. Only closed LY
+    months; a month with no LY data is null (the tab then uses the months that have it). Divisions map to the plan's
+    five (FOOTWEAR / HOUSEHOLD ... -> GM, NON FOOD -> RETAIL), same as Sales Plan's actuals_manager."""
+    import datetime as _dt
+    from sqlalchemy import text
+    from db.base import SessionLocal
+    if sale_type not in ("reindexed", "actual"):
+        raise HTTPException(422, "sale_type must be 'reindexed' or 'actual'")
+    kind = "trend_shifted_dept" if sale_type == "reindexed" else "actual_dept"
+    with SessionLocal() as s:
+        at = s.execute(text("SELECT computed_at FROM calendar.sales_snapshots WHERE source_type = 'mw' AND kind = :k"),
+                       {"k": kind}).scalar()
+        if at is None:
+            return {"ok": False, "saleType": sale_type, "reason": "no department snapshot yet - run the Calendar sync"}
+        key = (kind, at, _dt.date.today())
+        if _DEPT_MIX_CACHE.get(sale_type, (None,))[0] == key:
+            return _DEPT_MIX_CACHE[sale_type][1]
+        rows = s.execute(text("SELECT rows FROM calendar.sales_snapshots WHERE source_type = 'mw' AND kind = :k"),
+                         {"k": kind}).scalar() or []
+    plan_div = {"KIDS": "KIDS", "LADIES": "LADIES", "MENS": "MENS", "RETAIL": "RETAIL", "NON FOOD": "RETAIL",
+                "FOOTWEAR": "GM", "HOME FURNISHING": "GM", "HOUSEHOLD": "GM", "LIFESTYLE": "GM", "SPORTS & TOYS": "GM",
+                "STATIONERY": "GM", "TRAVEL ACCESSORIES": "GM"}
+    # AOP month i = Mar'27 + i; its LY column: reindexed = that TY month, actual = the same month a year earlier
+    months = [(2027 + (2 + i) // 12, (2 + i) % 12 + 1) for i in range(13)]
+    shift = 0 if sale_type == "reindexed" else 1
+    col_idx = {f"{y - shift}-{m:02d}": i for i, (y, m) in enumerate(months)}
+    today = _dt.date.today()
+    usable = {c for c in col_idx if (int(c[:4]) - (1 - shift), int(c[5:])) < (today.year, today.month)}  # LY month closed
+    mix = {}
+    for r in rows:
+        i = col_idx.get(r["col"])
+        div = plan_div.get(" ".join(str(r.get("division") or "").upper().split()))
+        dept = str(r.get("DEPARTMENT") or "").strip().upper()
+        if i is None or r["col"] not in usable or not div or not dept:
+            continue
+        v = mix.setdefault(str(r["store"]).strip().upper(), {}).setdefault(div, {}).setdefault(dept, [None] * 13)
+        v[i] = (v[i] or 0.0) + float(r["value"]) / 1e5
+    for divs in mix.values():
+        for depts in divs.values():
+            for k, v in depts.items():
+                depts[k] = [None if x is None else round(x, 4) for x in v]
+    out = {"ok": True, "saleType": sale_type, "computedAt": at.isoformat(),
+           "months": [i for c, i in sorted(col_idx.items(), key=lambda t: t[1]) if c in usable], "mix": mix}
+    _DEPT_MIX_CACHE[sale_type] = (key, out)
+    return out
+
+
 @router.get("/api/config/aop-versions")
 def aop_versions():
     """Saved AOP plan versions (newest first) for BIS's version selector -

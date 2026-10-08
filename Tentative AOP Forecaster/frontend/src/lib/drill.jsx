@@ -89,9 +89,9 @@ export function allIds(nodes, maxDepth = Infinity, out = []) {
 }
 
 // Distinct values + counts per dimension (for the header filter dropdowns)
-export function dimOptions(leaves) {
+export function dimOptions(leaves, keys = LEVEL_KEYS) {
   const out = {}
-  for (const k of LEVEL_KEYS) {
+  for (const k of keys) {
     const c = new Map()
     for (const r of leaves) c.set(r[k], (c.get(r[k]) || 0) + 1)
     out[k] = [...c].map(([value, count]) => ({ value, count })).sort((a, b) => cmpStr(a.value, b.value))
@@ -101,9 +101,9 @@ export function dimOptions(leaves) {
 
 // Apply header dimension filters, free-text search and numeric (store-total) range filters.
 // numF: { [key]: {min,max} } where key ∈ metric names returned by aggregate() (base, fcst, dev, growth).
-export function filterLeaves(leaves, { dimF = EMPTY_DIM, search = '', numF = {}, idx = ALL_IDX } = {}) {
+export function filterLeaves(leaves, { dimF = EMPTY_DIM, search = '', numF = {}, idx = ALL_IDX, keys = LEVEL_KEYS } = {}) {
   let rs = leaves
-  for (const k of LEVEL_KEYS) if (dimF[k]?.length) rs = rs.filter(r => dimF[k].includes(r[k]))
+  for (const k of keys) if (dimF[k]?.length) rs = rs.filter(r => dimF[k].includes(r[k]))
   const q = search.trim().toLowerCase()
   if (q) rs = rs.filter(r => LEVEL_KEYS.some(k => String(r[k]).toLowerCase().includes(q)))
   const numKeys = Object.keys(numF).filter(k => numF[k].min !== '' || numF[k].max !== '')
