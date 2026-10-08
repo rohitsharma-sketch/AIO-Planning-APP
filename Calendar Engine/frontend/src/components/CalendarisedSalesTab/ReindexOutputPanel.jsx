@@ -282,6 +282,9 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
           ...mxCols.map(fm => r.cells[fm] == null ? '' : +r.cells[fm].toFixed(2)),
           r.splitTotal == null ? '' : +r.splitTotal.toFixed(2)])
       }
+      const sum = f => rows.reduce((a, r) => a + (f(r) || 0), 0)
+      aoa.push([store, cluster, 'Total', +sum(r => r.total).toFixed(2),
+        ...mxCols.map(fm => +sum(r => r.cells[fm]).toFixed(2)), +sum(r => r.splitTotal).toFixed(2)])
     }
     const ws = XLSX.utils.aoa_to_sheet(aoa)
     ws['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, ...mxCols.map(() => ({ wch: 12 })), { wch: 16 }]
@@ -1045,6 +1048,26 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                             </tr>
                           ))}
                         </tbody>
+                        {/* month totals (user, 2026-10-08: "need a total of months in the bottom row") */}
+                        <tfoot>
+                          {(() => {
+                            const sum = f => sel.rows.reduce((a, r) => a + (f(r) || 0), 0)
+                            const ref = sum(r => r.total), split = sum(r => r.splitTotal)
+                            const has = sel.rows.some(r => r.splitTotal != null)
+                            const ties = has && Math.abs(split - ref) < 0.5
+                            const foot = { ...num, fontWeight: 800, borderTop: '2px solid var(--ink, #1E2723)' }
+                            return (
+                              <tr>
+                                <td style={{ ...foot, textAlign: 'left' }}>Total</td>
+                                <td style={foot}>{money(ref)}</td>
+                                {mxCols.map(m => <td key={m} style={foot}>{money(sum(r => r.cells[m]))}</td>)}
+                                <td style={{ ...foot, color: !has ? 'var(--muted)' : ties ? 'var(--ok, #15803D)' : 'var(--danger, #B42318)' }}>
+                                  {has ? `${money(split)} ${ties ? '✓' : '✗'}` : ''}
+                                </td>
+                              </tr>
+                            )
+                          })()}
+                        </tfoot>
                       </table>
                     </div>
                   )

@@ -7,6 +7,9 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### Calendar: Month Wise Matrix totals row
+- **Asked (user):** "need a total of months in the bottom row". Bottom Total row per store: Ref Actual Sales, every TY month, Split Total (tick when it equals Ref Actual Sales); a Total row per store in the XLSX download too. Display only.
+
 ### Calendar: Month Wise Matrix rows now tally (Split Total column)
 - **Reported (user, LAD screenshot):** "the split shows waywardness - check how the total is not tallying up. It should tally up".
 - Cause: the matrix showed only the TY months of the run's own output, but a reference month's sales are split over every TY month its days land in. A share landing in a month the run didn't output (here 2026-02) was worked out but had no column, so e.g. 2025-01 (Rs 1,18,09,539) showed only Rs 1,01,07,891.
