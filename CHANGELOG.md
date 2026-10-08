@@ -7,6 +7,21 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### Calendar: day table is a pop-up, and whole months open too
+- **Asked (user):** "instead of the down bar - i need it as a pop up when i click also i need it for the whole month mapping like the whole of Feb, the whole of whichever month is there which is clicked so that the month detail can be made visible for view".
+- The day-by-day table now opens as a pop-up (Esc, ✕ or a click outside closes). Three ways in: a tinted **cell** (as before); a **Ref Month** label (every day of that LY month and the TY month each one went to); a **TY month** header or its total (every day landing in that TY month and the LY month it came from). Whole-month views add a "Cell" column, a "why ordinary days moved" line per moved cell and a subtotal per cell.
+- Checked (LAD, 2025 -> 26): all of Feb'25 = 28 days -> Feb'26 18 + Mar'26 10, Rs 1,00,23,118 ✓; everything landing in Mar'26 = 31 days <- Feb'25 10 + Mar'25 19 + Apr'25 2, Rs 1,53,44,425 ✓.
+
+### Calendar: saved runs open without Run Reindex; past calendars have no Re-index
+- **Asked (user):** "also cache the previous ran versions so that all previews ready to view instead of running re-index evertime the calendar is loaded. For current template like 26-27 or related to future you can perhaps ask for re-index push button but not for all the templates which belong to the past".
+- Picking a calendar on Calendarised Sales now loads its last run straight from the month cache (new `POST /salesdata/reindex/saved`, no data-lake read - 2025 -> 26: 12 months in 0.7 s). A **past** calendar (every reference month closed) shows "Past calendar - saved run shown" and no button; the current / future one (2026 -> 27) shows **Re-index**. Saved runs were filled for every calendar with the page's fields (Sales Value, no extra fields).
+- A one-month run now splits that month exactly as a full-year run does (the "closed months" for the split are the calendar's, not just the run's).
+
+### Month-wise reindex: proportional split (AOP's rule) instead of whole-month
+- **Asked (user):** "yes go ahead with the split switch" (option chosen: switch to AOP's rule; also AOP's store actuals sync and the nightly check; regenerate the snapshots).
+- Each reference month's sales now spread over TY months by the actual sales of its days landing in each (day count where a month has no daily data) - the same split as the Month Wise Matrix and AOP's festival shift. Was: the whole month to the TY month most of its days fall in. A month not closed yet (and a closed month feeding the same TY month) keeps the whole-month rule until it closes (`db/calendar_shift.month_plan`).
+- Snapshots regenerated, live 2026 -> 27 calendar (lakh): Feb'27 9,270.54 -> 10,002.22 (+731.69), Mar'27 15,482.22 -> 14,750.54 (-731.69), Jun'27 -0.92, Jul'27 +0.92, every other month unchanged (Sep'27 9,540.27), total 108,358.06 unchanged; actuals unchanged (108,679.61). Nightly calendar check: all passed. store_actuals_sync re-run with the same split. Backups: `Backups\sales_snapshots_mw_before_split_20261008_122146.json`, `Backups\input_values_store_actuals_before_split_20261008_122146.json`.
+
 ### Calendar: click a Month Wise Matrix cell for the day-by-day table
 - **Asked (user):** "when i click on the colored cell i want a day wise breakup for the store which is live, and is more detailed than the hover comment. Keep the hover comment on for summarised version but when the user clicks on it then it should give a detailed date wise tabular format so that they can navigate to the reasoning with numbers".
 - Hover keeps the summary. Clicking (or Enter on) any non-zero cell opens a panel under that store's table: every day of the ref month that landed in the TY month - LY date / day, TY date / day (weekday change in amber), shift in days (+364 = same weekday last year), why (festival build-up / festival days / after-days with both years' festival dates, or ordinary day re-placed + the chain of festival moves behind it), the cluster's day sales the split is weighted by, the day's share and the store's rupees. Total row adds up to the cell (tick). Esc or Close shuts it; clicking the same cell again closes it.

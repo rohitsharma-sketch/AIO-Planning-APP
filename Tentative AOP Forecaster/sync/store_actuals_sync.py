@@ -188,11 +188,18 @@ def run(include_partial=False):
         unmapped_stores = sorted(df.loc[df["cluster"].isna(), "STORE_NAME"].unique().tolist())
         df = df.dropna(subset=["cluster"])
 
-        def _fut_month(row):
-            return cluster_month_map.get(row["cluster"], {}).get(row["ym"])
-
-        df["fut_month"] = df.apply(_fut_month, axis=1)
-        df = df.dropna(subset=["fut_month"])
+        # each LY month spread over TY months by its days' sales - the same rule as the month-wise reindex since
+        # 2026-10-08 (db.calendar_shift.month_plan; whole month next to a month not in ref_months) - was the whole
+        # month to the TY month most of its days fall in (cluster_month_map above)
+        from db.calendar_shift import load_day_weights, month_plan
+        by_cluster = {}
+        for p in pairs:
+            by_cluster.setdefault(p.cluster_name, []).append((p.ref_date, p.fut_date))
+        plan, _ = month_plan(by_cluster, load_day_weights(session), set(ref_months))
+        shares = pd.DataFrame([(cl, rm, fm, s) for cl, pl in plan.items() for rm, fs in pl.items() for fm, s in fs.items() if s > 0],
+                              columns=["cluster", "ym", "fut_month", "_share"])
+        df = df.merge(shares, on=["cluster", "ym"])
+        df["SL_V"] = df["SL_V"] * df["_share"]
 
         df["DIVISION"] = df["DIVISION"].fillna("(none)")
         # ATTRIBUTE1 carried through as its own group so a store/division/month's

@@ -887,20 +887,34 @@ def reindex_daywise(months, store_cluster, day_map, sync_id=None, progress=None,
     }
 
 
-def reindex_monthwise(months, store_cluster, day_map, sync_id=None, progress=None, extra_dims=None, metric_col=None):
+MW_SPLIT_TAG = "#mwsplit=prop1"   # in the month cache key: results from the old whole-month rule are never reused
+
+
+def mw_month_plan(day_map, have_months):
+    """(plan, frozen) for the month-wise reindex - db.calendar_shift.month_plan with the calendar's day pairs and the
+    clusters' day sales (calendar.cluster_day_sales). See month_plan for the rule (user, 2026-10-08)."""
+    from db.base import SessionLocal
+    from db.calendar_shift import load_day_weights, month_plan
+    pairs = {cl: [(datetime.date.fromisoformat(r[:10]), datetime.date.fromisoformat(f[:10])) for r, f in ps]
+             for cl, ps in day_map.items()}
+    with SessionLocal() as session:
+        weights = load_day_weights(session)
+    return month_plan(pairs, weights, set(have_months))
+
+
+def reindex_monthwise(months, store_cluster, day_map, sync_id=None, progress=None, extra_dims=None, metric_col=None,
+                      plan=None):
+    import pandas as pd
     extra_dims = [d for d in (extra_dims or []) if d in SOURCE_SCHEMA["mw"]["dimensions"]]
     metric_col = metric_col if metric_col in SOURCE_SCHEMA["mw"]["metrics"] else SOURCE_SCHEMA["mw"]["default_metric"]
 
-    # Per-cluster ref-month -> fut-month, by plurality of that month's mapped days
-    # (a locked calendar maps individual days; month-wise source only has monthly
-    # totals, so each LY month is assigned the TY month most of its days fall in).
-    cluster_month_map = {}
-    for cluster, pairs in day_map.items():
-        buckets = {}
-        for p in pairs:
-            ref_m, fut_m = p[0][:7], p[1][:7]
-            buckets.setdefault(ref_m, Counter())[fut_m] += 1
-        cluster_month_map[cluster] = {rm: c.most_common(1)[0][0] for rm, c in buckets.items()}
+    # Per cluster, how each reference month's sales spread over TY months (user, 2026-10-08: "yes go ahead with the
+    # split switch"): by the actual sales of its days landing in each TY month (day count without daily data) - the
+    # Month Wise Matrix's split and AOP's festival shift. Was: the whole month to the TY month most of its days fall
+    # in, which e.g. gave TY Feb'26 nothing of LAD's Feb 2025. run_reindex passes the plan worked out over the whole
+    # run (a month next to a not-yet-closed one keeps the whole-month rule - see db.calendar_shift.month_plan).
+    if plan is None:
+        plan, _ = mw_month_plan(day_map, [m for m in months if _is_month_closed(m)] or months)
 
     df, total_read, used_cache = _get_raw("mw", months, sync_id, _fetch_raw_monthwise, progress=progress,
                                            extra_dims=extra_dims, metric_col=metric_col)
@@ -924,12 +938,15 @@ def reindex_monthwise(months, store_cluster, day_map, sync_id=None, progress=Non
     unmapped_stores = sorted(df.loc[df["cluster"].isna(), "STORE_NAME"].dropna().unique().tolist())
     df = df.dropna(subset=["cluster"])
 
-    df, unknown_clusters, unknown_cluster_stores = _split_unknown_clusters(df, set(cluster_month_map))
+    df, unknown_clusters, unknown_cluster_stores = _split_unknown_clusters(df, set(day_map))
 
-    df = _vectorized_lookup(df, "cluster", "ym", "fut_month", cluster_month_map)
+    shares = pd.DataFrame([(cl, rm, fm, sh) for cl, p in plan.items() for rm, fs in p.items() for fm, sh in fs.items() if sh > 0],
+                          columns=["cluster", "ym", "fut_month", "_share"])
+    df = df.merge(shares, on=["cluster", "ym"], how="left")
     unmapped_months = int(df["fut_month"].isna().sum())
     unmapped_sample = sorted(df.loc[df["fut_month"].isna(), "ym"].unique().tolist())[:20]
     df = df.dropna(subset=["fut_month"])
+    df[metric_col] = df[metric_col] * df["_share"]
 
     # See the matching comment in reindex_daywise - same plurality rule, one
     # grain up (reference MONTH most commonly mapped to each future month).
@@ -1173,7 +1190,7 @@ def reindex_month_cache_status(source, months, day_map, extra_dims, metric_col, 
     'pending' (closed but never cached under this combination - the next run
     will do real work for it, same as before this feature existed)."""
     calendar_fp = _calendar_fingerprint(day_map, store_cluster)
-    fields_key = _reindex_fields_key(extra_dims, metric_col)
+    fields_key = _reindex_fields_key(extra_dims, metric_col) + (MW_SPLIT_TAG if source == "mw" else "")
     closed = [m for m in months if _is_month_closed(m)]
     cached = _cached_months_status(source, closed, calendar_fp, fields_key) if closed else {}
     out = []
@@ -1185,6 +1202,46 @@ def reindex_month_cache_status(source, months, day_map, extra_dims, metric_col, 
         else:
             out.append({"month": m, "status": "pending"})
     return {"ok": True, "months": out}
+
+
+SAVED_DW_MAX_ROWS = 300_000   # a saved day-wise run bigger than this is not sent whole - Run Reindex streams it
+
+
+def saved_reindex(source, calendar_id, extra_dims=None, metric_col=None):
+    """A calendar's last run, put together from the month cache - no data-lake read (user, 2026-10-08: "cache the
+    previous ran versions so that all previews ready to view instead of running re-index evertime the calendar is
+    loaded"). Uses the same key a run would (this calendar's saved day map + the store -> cluster map + fields), so it
+    shows exactly what the last Run Reindex with these fields produced. pastCalendar = every reference month has
+    closed, so the result can no longer change (the page offers no Re-index for it)."""
+    from sqlalchemy import select
+    from db.base import SessionLocal
+    from db.models.calendar import Calendar, CalendarDayPair, StoreCalendarCluster
+
+    with SessionLocal() as session:
+        cal = session.get(Calendar, int(calendar_id))
+        if cal is None:
+            return {"ok": False, "reason": "calendar not found"}
+        day_map = {}
+        for p in session.execute(select(CalendarDayPair).where(CalendarDayPair.calendar_id == cal.calendar_id)
+                                 .order_by(CalendarDayPair.cluster_name, CalendarDayPair.seq)).scalars():
+            day_map.setdefault(p.cluster_name, []).append([p.ref_date.isoformat(), p.fut_date.isoformat()])
+        store_cluster = {r.store_id: r.cluster_name for r in session.execute(select(StoreCalendarCluster)).scalars()}
+    months = [f"{cal.ref_year}-{m:02d}" for m in range(1, 13)]
+    closed = [m for m in months if _is_month_closed(m)]
+    calendar_fp = _calendar_fingerprint(day_map, store_cluster)
+    fields_key = _reindex_fields_key(extra_dims or [], metric_col) + (MW_SPLIT_TAG if source == "mw" else "")
+    status = _cached_months_status(source, closed, calendar_fp, fields_key)
+    base = {"savedRun": True, "calendarId": cal.calendar_id, "refYear": cal.ref_year, "futYear": cal.fut_year,
+            "pastCalendar": len(closed) == len(months), "cachedMonths": sorted(status),
+            "missingMonths": [m for m in months if m not in status],
+            "computedAt": max(status.values()) if status else None}
+    if not status:
+        return {"ok": False, **base, "reason": "no saved run for this calendar and these fields yet"}
+    results = [_load_month_cache(source, m, calendar_fp, fields_key) for m in sorted(status)]
+    merged = _merge_reindex_results([r for r in results if r])
+    if source == "dw" and len(merged.get("rows", [])) > SAVED_DW_MAX_ROWS:
+        return {"ok": False, **base, "reason": f"the saved day-wise run has {len(merged['rows']):,} rows - Run Reindex to download it"}
+    return {**merged, "ok": True, **base}
 
 
 def _merge_reindex_results(results):
@@ -1267,9 +1324,14 @@ def run_reindex(payload, progress=None):
         # fresh work every time. This is the main lever for "every login
         # doesn't have to re-run the same months" - see ReindexMonthCache.
         calendar_fp = _calendar_fingerprint(day_map, store_cluster)
-        fields_key = _reindex_fields_key(extra_dims, metric_col)
+        fields_key = _reindex_fields_key(extra_dims, metric_col) + (MW_SPLIT_TAG if source == "mw" else "")
+        # closed = every closed reference month of the calendar, not just this run's - a one-month run must split that
+        # month exactly as a full-year run does (same cache entry either way)
+        ref_months = {r[:7] for ps in day_map.values() for r, _ in ps}
+        plan, frozen = mw_month_plan(day_map, [m for m in ref_months if _is_month_closed(m)]) if source == "mw" else (None, set())
+        frozen_months = {rm for _, rm in frozen}   # whole-month rule this run only - never read from / written to cache
         cached_status = _cached_months_status(
-            source, [m for m in months if _is_month_closed(m)], calendar_fp, fields_key)
+            source, [m for m in months if _is_month_closed(m) and m not in frozen_months], calendar_fp, fields_key)
 
         results = []
         computed_months = []
@@ -1304,7 +1366,7 @@ def run_reindex(payload, progress=None):
             # source per month - _get_raw serves each one from the already-
             # fetched combined frame.
             r = fn(months=[m], store_cluster=store_cluster, day_map=day_map, sync_id=sync_id,
-                   progress=progress, extra_dims=extra_dims, metric_col=metric_col)
+                   progress=progress, extra_dims=extra_dims, metric_col=metric_col, **({"plan": plan} if plan else {}))
             if not r.get("ok"):
                 return r
             results.append(r)
@@ -1319,7 +1381,8 @@ def run_reindex(payload, progress=None):
             # permanent: every later run replayed the same empty result
             # forever, even once the source came back. Only a month that
             # actually read real rows is safe to treat as "done for good".
-            if _is_month_closed(m) and r.get("rowsRead", 0) > 0 and (source != "dw" or _covers_month_end(r, m)):
+            if (_is_month_closed(m) and m not in frozen_months and r.get("rowsRead", 0) > 0
+                    and (source != "dw" or _covers_month_end(r, m))):
                 _save_month_cache(source, m, calendar_fp, fields_key, r)
 
         result = _merge_reindex_results(results)

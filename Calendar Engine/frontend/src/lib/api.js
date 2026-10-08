@@ -132,4 +132,6 @@ export async function pollReindex(jobId) {
   return res.json()
 }
 export const getReindexCacheStatus = (payload) => jsonPost('/salesdata/reindex/cache-status', payload)
+// the picked calendar's last run from the month cache - ready to view without a Run Reindex (2026-10-08)
+export const getSavedReindex = (payload) => jsonPost('/salesdata/reindex/saved', payload)
 export const getSourceSchema = (sourceType) => fetchJson(`/salesdata/schema/${sourceType}`)

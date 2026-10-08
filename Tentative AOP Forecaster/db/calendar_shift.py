@@ -44,6 +44,34 @@ def month_shares(pairs, weights=None):
     return dict(out)
 
 
+def month_plan(pairs_by_cluster, weights_by_cluster, have_months):
+    """How the month-wise reindex moves each reference month's sales (user, 2026-10-08: "yes go ahead with the split
+    switch" - was the whole month to the TY month most of its days land in, which e.g. gave TY Feb'26 nothing of
+    LAD's Jan / Feb 2025). Returns ({cluster: {ref 'YYYY-MM': {fut 'YYYY-MM': share}}}, {(cluster, ref month)}).
+
+    Shares = month_shares (the days' actual sales, day count where a month has no daily data) - the Month Wise Matrix
+    and AOP's festival shift use the same split. A reference month that feeds a TY month ALSO fed by a reference month
+    not in have_months (not closed / not in this run) keeps the whole-month rule instead, so that TY month keeps its
+    old value until the missing month arrives (AOP's incomplete_targets rule) - those (cluster, month) pairs are the
+    second return value. Each reference month is entirely on one rule, so its total is always conserved."""
+    plan, frozen = {}, set()
+    for cl, pairs in pairs_by_cluster.items():
+        shares = month_shares(pairs, (weights_by_cluster or {}).get(cl))
+        counts = defaultdict(Counter)
+        for r, f in pairs:
+            counts[r.strftime("%Y-%m")][f.strftime("%Y-%m")] += 1
+        incomplete = {f for rm, fs in shares.items() if rm not in have_months for f, s in fs.items() if s > 0}
+        p = plan[cl] = {}
+        for rm, fs in shares.items():
+            # a month not closed yet is still reindexed - whole month, as before (8 Oct: skipping it dropped Sep'26)
+            if rm not in have_months or any(s > 0 and f in incomplete for f, s in fs.items()):
+                p[rm] = {counts[rm].most_common(1)[0][0]: 1.0}
+                frozen.add((cl, rm))
+            else:
+                p[rm] = fs
+    return plan, frozen
+
+
 def alignment_issues(pairs_by_cluster):
     """{cluster: what's wrong} for clusters whose day map is out of line with the year (user, 2026-10-08: "make a check
     for this issue in the system ... for all calendars - saved or unsaved"; the 2025->26 calendar filled TY 1-5 Jan

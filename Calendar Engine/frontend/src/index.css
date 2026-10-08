@@ -1115,13 +1115,18 @@ details.rx-section > summary.rx-label { cursor: pointer; display: list-item; }
 .mx-click { cursor: pointer; }
 .mx-click:focus-visible { outline: 2px solid var(--st-btn-text, #1F4D3A); outline-offset: -2px; }
 .mx-on { outline: 2px solid var(--st-btn-text, #1F4D3A); outline-offset: -2px; font-weight: 700; }
-.mx-drill { margin: 10px 0 4px; padding: 12px 14px; border: 1px solid var(--border); border-left: 4px solid #F59E0B; border-radius: 10px; background: var(--bg); }
 .mx-drill-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; font-size: 13px; }
 .mx-muted { color: var(--muted); font-size: 12px; font-weight: 400; }
 .mx-why { font-size: 12px; margin: 0 0 8px; }
 .mx-drill-tbl { width: 100%; font-size: 12px; }
 .mx-drill-tbl td, .mx-drill-tbl th { padding: 4px 8px; white-space: nowrap; }
-.mx-drill-tbl td:nth-child(7) { white-space: normal; }
+.mx-drill-tbl td.mx-wrap { white-space: normal; min-width: 180px; }
+/* the day table is a pop-up (native <dialog>, 2026-10-08) */
+.mx-pop { width: min(1200px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 14px 16px; border: 1px solid var(--border);
+  border-top: 4px solid #F59E0B; border-radius: 12px; background: var(--bg, #fff); color: inherit; overflow: auto; }
+.mx-pop::backdrop { background: rgba(15, 23, 20, 0.45); }
+.mx-pop-body { overflow-x: auto; }
+.mx-drill-tbl tr.mx-sub td { color: var(--muted); font-size: 11px; border-top: 1px dashed var(--border); }
 .mx-drill-tbl tr.mx-fest td { background: rgba(245, 158, 11, 0.12); }
 .mx-drill-tbl tfoot td { border-top: 2px solid var(--border); }
 

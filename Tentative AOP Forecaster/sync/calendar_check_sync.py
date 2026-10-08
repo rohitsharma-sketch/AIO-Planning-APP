@@ -8,7 +8,8 @@ the Sales Sync page shows next to the last sync.
 Checks (month-wise snapshots, the ones the nightly sync rebuilds):
   1. saved actuals       = a fresh read of the raw month-wise export (store x division x month)
   2. saved reindexed     = the actuals moved by an independent rebuild of each cluster's month map
-                           (plurality of the saved day pairs, the same rule as scans.reindex_monthwise)
+                           (db.calendar_shift.month_plan - each LY month spread by its days' sales, whole month
+                           next to a not-yet-closed month - the same rule as scans.reindex_monthwise since 8 Oct 2026)
   3. conservation        = reindexed total = actual total per store x division (nothing created or lost)
   4. department tables   = the main tables (actual and reindexed, store x division x month)
   5. day maps            = each cluster of the calendar used covers every plan-year day once, no LY day reused
@@ -79,6 +80,20 @@ def shift(actual, store_cluster, cmap):
     return df.dropna(subset=["col"])[KEYS + ["v"]], df[df["col"].isna()]
 
 
+def shift_shares(actual, store_cluster, plan):
+    """Actual cells spread over plan months by db.calendar_shift.month_plan's shares - the rule the month-wise reindex
+    uses since 2026-10-08 (proportional; whole month next to a not-yet-closed month). -> (shifted, unmapped cells)."""
+    df = actual.copy()
+    df["cluster"] = df["store"].map(store_cluster)
+    have = {(cl, rm) for cl, p in plan.items() for rm in p}
+    miss = [(c, m) not in have for c, m in zip(df["cluster"], df["col"])]
+    sh = pd.DataFrame([(cl, rm, fm, s) for cl, p in plan.items() for rm, fs in p.items() for fm, s in fs.items() if s > 0],
+                      columns=["cluster", "col", "fut", "share"])
+    m = df[[not x for x in miss]].merge(sh, on=["cluster", "col"])
+    m = m.assign(v=m["v"] * m["share"], col=m["fut"])
+    return m.groupby(KEYS, as_index=False)["v"].sum(), df[miss]
+
+
 def day_map_issues(pairs, fut_year):
     """Clusters whose map does not cover each plan-year day exactly once, or reuses an LY day."""
     days = 366 if _cal.isleap(fut_year) else 365
@@ -141,7 +156,15 @@ def run_checks(session):
     actual, shifted = snapshot(session, "actual"), snapshot(session, "trend_shifted")
     months = sorted(actual["col"].unique())
     raw, raw_file = raw_monthwise(session, months)
-    recomputed, unmapped = shift(actual, store_cluster, cluster_month_map(pairs))
+    from db.calendar_shift import load_day_weights, month_plan
+    by_cluster = {}
+    for cl, ref, fut in pairs:
+        by_cluster.setdefault(cl, []).append((ref, fut))
+    # same rule and the same "closed" test as the reindex (scans._is_month_closed: through sync closed_through)
+    from sync.common import get_closed_through
+    ct = get_closed_through()
+    plan, _ = month_plan(by_cluster, load_day_weights(session), {m for m in months if not ct or m <= ct})
+    recomputed, unmapped = shift_shares(actual, store_cluster, plan)
 
     checks = [compare("1 saved actuals = raw export", actual, raw),
               compare("2 saved reindexed = independent recompute", shifted, recomputed),

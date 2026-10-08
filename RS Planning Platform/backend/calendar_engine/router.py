@@ -907,6 +907,16 @@ def salesdata_reindex_start(payload: dict = Body(...), actor: dict = Depends(req
     return {"ok": True, "jobId": start_reindex_job(payload)}
 
 
+@router.post("/salesdata/reindex/saved")
+def salesdata_reindex_saved(payload: dict = Body(...), user: dict = Depends(require_login)):
+    """The picked calendar's last run from the month cache, ready to view without a Run Reindex (user, 2026-10-08).
+    body {source, calendarId, extraDims, metric} - the same fields the page would run with."""
+    from calendar_engine.scans import saved_reindex
+    if payload.get("source") not in ("mw", "dw") or not payload.get("calendarId"):
+        raise HTTPException(422, "source ('mw' / 'dw') and calendarId are required")
+    return saved_reindex(payload["source"], payload["calendarId"], payload.get("extraDims") or [], payload.get("metric"))
+
+
 @router.get("/salesdata/reindex/poll/{job_id}")
 def salesdata_reindex_poll(job_id: str, user: dict = Depends(require_login)):
     # A completed job's result is streamed straight off disk instead of being

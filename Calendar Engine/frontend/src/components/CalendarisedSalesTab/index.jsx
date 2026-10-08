@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { buildMoveInfo } from '../../lib/moveReasons'
 import LinkStatusPanel from './LinkStatusPanel'
 import ReindexOutputPanel from './ReindexOutputPanel'
-import { getClusterDaySales, startReindex, pollReindex, getReindexCacheStatus, listCalendarLibrary, getCalendar, getStoreClusterMap, getSourceSchema, putSalesdataLinkSelection, getSalesSnapshotSummary } from '../../lib/api'
+import { getClusterDaySales, startReindex, pollReindex, getReindexCacheStatus, getSavedReindex, listCalendarLibrary, getCalendar, getStoreClusterMap, getSourceSchema, putSalesdataLinkSelection, getSalesSnapshotSummary } from '../../lib/api'
 import { parseDate, fmtISO, addDays } from '../../lib/dateUtils'
 
 // Same compact "45s" / "2m 05s" style as LinkStatusPanel's fmtDuration.
@@ -149,6 +149,10 @@ export default function CalendarisedSalesTab({ isPlanner, rights }) {
   // open the tab without waiting for a fresh reindex. Cleared when source changes
   // so a stale dw snapshot never shows on the mw tab, or vice versa.
   const [snapshotResult, setSnapshotResult] = useState(null)
+  // the picked calendar's last run, shown without a Run Reindex (user, 2026-10-08: "cache the previous ran versions so
+  // that all previews ready to view ... re-index push button [for current / future templates] but not for all the
+  // templates which belong to the past") - {pastCalendar, computedAt, cachedMonths, missingMonths} or null
+  const [savedRun, setSavedRun] = useState(null)
   // {cluster -> {futureDate -> [festival names]}} built from the selected
   // calendar's own festival records (getCalendar already returns
   // clusters[].festivals[]) so ReindexOutputPanel can label which output
@@ -243,6 +247,25 @@ export default function CalendarisedSalesTab({ isPlanner, rights }) {
     }).catch(() => {})
     return () => { alive = false }
   }, [calendarId, source])
+
+  // the saved run for this calendar + fields, straight from the month cache (no data-lake read)
+  useEffect(() => {
+    setSavedRun(null)
+    if (!calendarId || !schema?.ok) return
+    let alive = true
+    getSavedReindex({ source, calendarId, extraDims, metric })
+      .then(r => {
+        if (!alive || !r) return
+        setSavedRun(r)
+        if (r.ok && !progress) {
+          setResult(r)
+          setStatus({ ok: true, msg: `Showing the saved run of this calendar (${r.cachedMonths.length} months, computed ${new Date(r.computedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}) - `
+            + (r.pastCalendar ? 'a past calendar: its sales are final, nothing to re-index.' : `press Re-index to refresh${r.missingMonths.length ? ` (not saved yet: ${r.missingMonths.join(', ')})` : ''}.`) })
+        }
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [calendarId, source, schema, extraDims, metric])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Hydrate extraDims/metric from the persisted selection once it's available
   // (LinkStatusPanel loads it independently via GET and reports it up through
@@ -533,10 +556,14 @@ export default function CalendarisedSalesTab({ isPlanner, rights }) {
               {schema.metrics.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           )}
-          {isPlanner && canReindex && (
+          {/* a past calendar with its saved run shown has nothing to re-index (its sales are final) */}
+          {isPlanner && canReindex && !(savedRun?.ok && savedRun.pastCalendar) && (
             <button className="btn" onClick={runRx} disabled={!!progress || activeRunMonths.size === 0}>
-              {progress ? 'Reindexing...' : `Run Reindex${activeRunMonths.size ? ` (${activeRunMonths.size} mo)` : ''}`}
+              {progress ? 'Reindexing...' : `${savedRun?.ok ? 'Re-index' : 'Run Reindex'}${activeRunMonths.size ? ` (${activeRunMonths.size} mo)` : ''}`}
             </button>
+          )}
+          {savedRun?.ok && savedRun.pastCalendar && (
+            <span className="muted" style={{ fontSize: 12 }}>Past calendar - saved run shown (final, no re-index needed)</span>
           )}
         </div>
         {selectedCalendar && (
