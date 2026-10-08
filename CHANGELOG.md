@@ -7,6 +7,25 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### Calendar: Month Wise Matrix rows now tally (Split Total column)
+- **Reported (user, LAD screenshot):** "the split shows waywardness - check how the total is not tallying up. It should tally up".
+- Cause: the matrix showed only the TY months of the run's own output, but a reference month's sales are split over every TY month its days land in. A share landing in a month the run didn't output (here 2026-02) was worked out but had no column, so e.g. 2025-01 (Rs 1,18,09,539) showed only Rs 1,01,07,891.
+- Fix: columns = every TY month any split lands in; new **Split Total** column with a check mark when it equals Ref Actual Sales (red cross + the difference on hover otherwise). Same in the XLSX download. Numbers unchanged - nothing was lost, it just wasn't shown.
+
+### MRP Re-apportionment: audit fixes, progress bar, output check indicator, lighter output colours
+- **Asked (user):** "audit the mrp re-apportionment module"; then "NO PROGRESS BAR, NO output check indicator, install it"; "give better colors in the output file"; and confirmed the master can be imported as a 4-column list (Department, Display Type, Current MRP, Listed MRP - already supported).
+- Audit (3 reviewers: engine, security, page; criticals none). Fixed:
+  - **Sales silently dropped (found while testing):** pandas' str dtype keeps blanks through astype(str), so the pivot dropped every row with a blank DISPLAY_TYPE / ATTRIBUTE1 - Rs 181.13 L of sales never reached the run, while the tie (checked on the raw rows) passed. Blanks are now "(BLANK)" (they land in Unmapped), and the tie runs on the table the run actually uses (now 245,872 cells, 56,646.33 L = Calendar, max diff 0.0). The master's departments were not affected (41,062.26 L before and after).
+  - Sales tie cached on the sales file alone: a later Calendar snapshot never re-ran it (red until restart). The cache key now includes the snapshot time.
+  - Red pre-run checks were enforced only by the page: /run now refuses them itself (409 with the fix). One run or master import at a time (409 "in progress"). A master whose departments have no sales is refused (400) instead of saving a FAILED run.
+  - Import: unsafe file names made safe (CON.xlsx, ".xlsx", ':' or '<'); the new file is placed before the old one is archived and the old one is put back if placing fails; archive names carry microseconds; 50 MB cap; negative MRPs refused; a blank current MRP row is dropped (was MRP 0).
+  - Checks: store x dept totals in lakh (rupees at 8 dp is below float noise); month totals per store x dept x month (was one total per month); new **split** check re-derives every discontinued MRP's split a second way (merge_asof) - 30,569 rows, a swapped 40/60 turns it red.
+  - Page: Import is a real button (keyboard / screen reader); errors read as one line whatever comes back (HTML 502, FastAPI 422 list); every reload starts fresh and only the newest answer lands; a refused run reloads the checks; Import and Run can't overlap; download links stay on the page if a file is missing.
+  - Stand-alone Sales Plan scripts (start.bat, watchdog.ps1, install_service.ps1, port 8002, no sign-in) bound to 127.0.0.1 - not running today, but would have been open to the LAN.
+- **Progress bar + output check indicator:** GET /progress (step, %, elapsed, output checks); the page polls it while a run goes - Pre-run checks, Reading master and sales, Re-apportioning, Output checks, Writing the Excel file (with its own %), Saving, Done. The five output checks show with a tick / cross as soon as they're done (while the Excel is still being written); after the run "Output checks 5/5 passed - see results". A run started from another tab shows too.
+- **Output file colours:** light "ink and paper" like the app instead of dark rows: deep-green header, old MRP red, new MRP bold green, split shares amber (e.g. 40%), sales 2 decimals with "-" for zero (values still full precision), wider columns (headers no longer wrap), Validation PASS green / FAIL red, readable Engine Log, coloured tabs.
+- Tests: module test (incl. the real tie catching a planted Rs 2,000, import, post-checks) and end-to-end on temp folders (busy 409, red-check 409, unsafe names, rollback, 413, negative MRP, empty sales, progress feed) pass. Not done (low): error texts still show server paths (behind sign-in); output folder never pruned.
+
 ### MRP Re-apportionment: keep last good run + run history
 - **Asked (user):** "add keep last good run and run history".
 - Every run is logged in `Output\_run_history.json` (time, MRP master, sales file, checks, totals, output file; newest first). A run whose checks fail is saved as `MRP Reapportioned <time> - FAILED.xlsx` and never becomes the default download: `GET /download` gives the newest run that passed (`?file=` any run from the history; names outside the output pattern refused). New `GET /runs`. File names now carry seconds (two runs in one minute overwrote each other).

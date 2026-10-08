@@ -5,13 +5,13 @@
 $taskName    = "CityKart Sales Plan Server"
 $pythonExe   = "C:\Users\A9820\AppData\Local\Python\pythoncore-3.14-64\Scripts\uvicorn.exe"
 $backendDir  = "$PSScriptRoot\backend"
-$args        = "main:app --host 0.0.0.0 --port 8002"
+$args        = "main:app --host 127.0.0.1 --port 8002"
 
 # Validate paths
 if (-not (Test-Path $pythonExe)) {
     # Fallback: find uvicorn next to python.exe
     $pythonExe = "C:\Users\A9820\AppData\Local\Python\pythoncore-3.14-64\python.exe"
-    $args      = "-m uvicorn main:app --host 0.0.0.0 --port 8002"
+    $args      = "-m uvicorn main:app --host 127.0.0.1 --port 8002"
     if (-not (Test-Path $pythonExe)) {
         Write-Host "  ERROR: Python not found. Check the path in this script." -ForegroundColor Red
         pause; exit 1

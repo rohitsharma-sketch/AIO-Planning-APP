@@ -44,7 +44,7 @@ Get-CimInstance Win32_Process -Filter "Name = 'python.exe' OR Name = 'uvicorn.ex
 Start-Sleep -Seconds 1
 
 Start-Process -FilePath $py `
-    -ArgumentList "-m uvicorn main:app --host 0.0.0.0 --port $port" `
+    -ArgumentList "-m uvicorn main:app --host 127.0.0.1 --port $port" `
     -WorkingDirectory $backendDir `
     -WindowStyle Hidden
 

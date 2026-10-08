@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { theme, alpha } from '../theme'
 
 const mono = { fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }
@@ -99,7 +99,19 @@ function GroupRow({ group }) {
 
 // ── Checks (2026-10-08): green ok · amber worth a look · red stops Run - each not-ok one says what to fix, then Run again ──
 
-const CHECK_LOOK = { ok: ['✓', 'accent'], warn: ['!', 'warn'], fail: ['✗', 'danger'] }
+// a refusal as one readable line, whatever came back: {detail: "..."}, FastAPI's 422 list, or an HTML error page (audit
+// 2026-10-08: r.json() on a 502 page showed "Unexpected token <", and a list detail blanked the whole page)
+async function readErr(r) {
+  const t = await r.text().catch(() => '')
+  try {
+    const d = JSON.parse(t).detail
+    if (typeof d === 'string') return d
+    if (Array.isArray(d)) return d.map(x => x.msg || JSON.stringify(x)).join('; ')
+  } catch { /* not JSON */ }
+  return `${r.status} ${r.statusText || 'error'}`
+}
+
+const CHECK_LOOK ={ ok: ['✓', 'accent'], warn: ['!', 'warn'], fail: ['✗', 'danger'] }
 
 function ChecksList({ checks, title }) {
   if (!checks) return <div style={{ fontSize: 11, color: theme.textMuted, marginBottom: 10 }}>⟳ Checking…</div>
@@ -120,6 +132,29 @@ function ChecksList({ checks, title }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ── Run progress (user, 2026-10-08: "NO PROGRESS BAR, NO output check indicator") - the server's step, %, elapsed time,
+// and the output checks the moment they're done (they show while the Excel file is still being written) ──
+function RunProgress({ p }) {
+  const pct = Math.max(2, Math.min(100, p?.pct ?? 2))
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+        <span style={{ fontWeight: 700, color: theme.textPrimary }}>{p?.stage || 'Starting…'}</span>
+        <span style={{ color: theme.textMuted, ...mono }}>{Math.round(pct)}% · {Math.round(p?.elapsed ?? 0)} s</span>
+      </div>
+      <div role="progressbar" aria-label="Re-apportionment progress" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}
+        style={{ height: 8, borderRadius: 4, background: alpha(theme.border, '66'), overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: 'var(--st-btn,#A8CBB7)', transition: 'width .5s' }} />
+      </div>
+      <div style={{ marginTop: 10 }}>
+        {p?.checks
+          ? <ChecksList checks={p.checks} title="OUTPUT CHECKS" />
+          : <div style={{ fontSize: 11, color: theme.textMuted }}>Output checks: run as soon as the re-apportioning is done…</div>}
+      </div>
     </div>
   )
 }
@@ -220,6 +255,7 @@ export default function MrpReapportionment() {
   const [error, setError]         = useState('')
   const [resultTab, setResultTab] = useState('preview')
   const [importing, setImporting] = useState(false)
+  const fileRef = useRef(null)
   const [importMsg, setImportMsg] = useState(null)   // {ok, text}
   // admin-switchable right (Users & access): null = not known yet, Landing refuses the upload either way
   const [canImport, setCanImport] = useState(null)
@@ -233,56 +269,66 @@ export default function MrpReapportionment() {
   // a new version of the MRP master: checked by the server before it goes live; the old one moves to Archive (2026-10-08)
   const importMaster = async (file) => {
     if (!file) return
-    if (status?.mapping_file_found && !window.confirm(`Make "${file.name}" the MRP master? The current one (${status.mapping_file}) moves to MRP Mapping\\Archive.`)) return
+    if (status?.mapping_file_found !== false && !window.confirm(`Make "${file.name}" the MRP master? The current one${status?.mapping_file ? ` (${status.mapping_file})` : ''} moves to MRP Mapping\\Archive.`)) return
     setImporting(true); setImportMsg(null)
     try {
       const fd = new FormData(); fd.append('file', file)
       const r = await fetch('/api/planning/mrp-reapportionment/mapping/upload', { method: 'POST', body: fd })
+      if (!r.ok) { setImportMsg({ ok: false, text: await readErr(r) }); return }
       const d = await r.json()
-      if (!r.ok) { setImportMsg({ ok: false, text: d.detail || 'Import failed' }); return }
       const c = d.changes
       setImportMsg({ ok: true, text: `${d.file}: ${d.rows.toLocaleString('en-IN')} old MRPs in ${d.groups} Dept · Display (${d.listed} listed, ${d.discontinued} discontinued`
         + `${d.no_listed_groups ? `, ${d.no_listed_groups} with nothing listed` : ''}). vs previous: ${c.added} added, ${c.removed} removed, ${c.changed} changed.` })
-      setGroups(null); setResult(null)
-      reload()
+      setGroups(null); setResult(null); setActiveTab('groups'); setError(''); setGroupsErr('')
     } catch (e) { setImportMsg({ ok: false, text: String(e) }) }
-    finally { setImporting(false) }
+    finally { setImporting(false); reload() }
   }
 
   const [checks, setChecks] = useState(null)
   const [runs, setRuns] = useState(null)   // {runs: [...newest first], last_good: file}
+  const [progress, setProgress] = useState(null)   // the server's {running, stage, pct, elapsed, checks}
+  // every reload starts from nothing and only the newest one may land (audit 2026-10-08: an older /checks answer
+  // arriving last could turn Run back on for a master that had just been replaced)
+  const seq = useRef(0)
   const reload = useCallback(() => {
-    setChecks(null)
-    fetch('/api/planning/mrp-reapportionment/checks')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => setChecks(d ? d.checks : [{ key: 'x', label: 'Checks', status: 'fail', detail: "couldn't be read", fix: 'Press Refresh.' }]))
-      .catch(() => setChecks([{ key: 'x', label: 'Checks', status: 'fail', detail: "couldn't be read", fix: 'Press Refresh.' }]))
-    fetch('/api/planning/mrp-reapportionment/runs')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setRuns(d) })
-    fetch('/api/planning/mrp-reapportionment/status')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setStatus(d) })
-    fetch('/api/planning/mrp-reapportionment/sales-status')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setSalesInfo(d) })
+    const n = ++seq.current
+    const get = (path, set, fallback) => fetch('/api/planning/mrp-reapportionment/' + path)
+      .then(r => r.ok ? r.json() : null).catch(() => null)
+      .then(d => { if (n === seq.current) set(d ?? fallback) })
+    const unread = [{ key: 'x', label: 'Checks', status: 'fail', detail: "couldn't be read", fix: 'Press ↺ Refresh.' }]
+    setChecks(null); setStatus(null); setSalesInfo(null)
+    get('checks', d => setChecks(d?.checks || unread), null)
+    get('runs', setRuns, null)
+    get('status', setStatus, { unreadable: true })
+    get('sales-status', setSalesInfo, { file_found: false, error: "Couldn't read the sales status - press ↺ Refresh." })
+    get('progress', setProgress, null)   // a run started from another tab shows its progress here too
   }, [])
 
   const loadGroups = useCallback(() => {
     setGroupsErr('')
     fetch('/api/planning/mrp-reapportionment/mrp-groups')
-      .then(r => r.json())
-      .then(d => {
-        if (d.detail) { setGroupsErr(d.detail); return }
-        setGroups(d)
-      })
+      .then(async r => { if (r.ok) setGroups(await r.json()); else setGroupsErr(await readErr(r)) })
       .catch(e => setGroupsErr(String(e)))
   }, [])
 
   useEffect(() => { reload() }, [reload])
 
+  // while a run is going (this tab's or another's), ask the server for its step every 0.7 s; reload once it ends
+  const live = running || !!progress?.running
+  useEffect(() => {
+    if (!live) return
+    const t = setInterval(() => {
+      fetch('/api/planning/mrp-reapportionment/progress').then(r => r.ok ? r.json() : null).catch(() => null)
+        .then(d => { if (d) setProgress(d) })
+    }, 700)
+    return () => clearInterval(t)
+  }, [live])
+  const wasLive = useRef(false)
+  useEffect(() => { if (wasLive.current && !live) reload(); wasLive.current = live }, [live, reload])
+
   const handleRun = async () => {
-    setRunning(true); setError(''); setResult(null)
+    setRunning(true); setError(''); setResult(null); setActiveTab('groups')
+    setProgress({ running: true, stage: 'Starting…', pct: 2, elapsed: 0, checks: null })
     try {
       const body = {}   // the split comes from the master's rule
       const r = await fetch('/api/planning/mrp-reapportionment/run', {
@@ -290,14 +336,14 @@ export default function MrpReapportionment() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       })
+      if (!r.ok) { setError(await readErr(r)); return }
       const d = await r.json()
-      if (!r.ok) { setError(d.detail || 'Engine error'); return }
       setResult(d); setResultTab('preview'); setActiveTab('results')
-      reload()
     } catch (e) {
       setError(String(e))
     } finally {
       setRunning(false)
+      reload()   // a refused run too: the checks / sales tie on screen must match what the server just said
     }
   }
 
@@ -312,7 +358,7 @@ export default function MrpReapportionment() {
 
   const salesOk = !!(salesInfo?.file_found && salesInfo.check?.pass)
   const checksFail = !checks || checks.some(c => c.status === 'fail')   // a red pre-run check stops Run
-  const canRun = salesOk && status?.mapping_file_found && !checksFail && !running
+  const canRun = salesOk && status?.mapping_file_found && !checksFail && !running && !importing && !progress?.running
   const lastRun = status?.last_run
 
   return (
@@ -409,7 +455,7 @@ export default function MrpReapportionment() {
             )}
           </div>
           {runs?.last_good && (
-            <a href="/api/planning/mrp-reapportionment/download" title={runs.last_good} style={{
+            <a download href="/api/planning/mrp-reapportionment/download" title={runs.last_good} style={{
               padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 600,
               background: 'var(--st-btn,#A8CBB7)', color: 'var(--st-btn-text,#1F4D3A)', textDecoration: 'none', flexShrink: 0,
             }}>↓ Download last good run</a>
@@ -465,20 +511,22 @@ export default function MrpReapportionment() {
                 </div>
                 {status?.mapping_file_found
                   ? <div style={{ fontSize: 11, color: theme.textPrimary, ...mono }}>{status.mapping_file}</div>
-                  : <div style={{ fontSize: 11, color: theme.textMuted }}>No master yet - import one</div>
+                  : <div style={{ fontSize: 11, color: theme.textMuted }}>
+                      {!status ? 'Reading…' : status.unreadable ? "Couldn't read the status - press ↺ Refresh" : 'No master yet - import one'}
+                    </div>
                 }
                 <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                  <label title={canImport === false ? 'An admin has switched off your access to: Import a new MRP master' : undefined} style={{
-                    padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                  {/* a real button (keyboard / screen reader); the file input stays hidden (audit 2026-10-08) */}
+                  <button type="button" onClick={() => fileRef.current?.click()} disabled={importing || running || canImport === false}
+                    title={canImport === false ? 'An admin has switched off your access to: Import a new MRP master' : undefined} style={{
+                    padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, border: 'none',
                     cursor: canImport === false ? 'not-allowed' : importing ? 'wait' : 'pointer', opacity: canImport === false ? 0.5 : 1,
                     background: 'var(--st-btn,#A8CBB7)', color: 'var(--st-btn-text,#1F4D3A)',
-                  }}>
-                    {importing ? '⟳ Checking…' : '⇪ Import new version'}
-                    <input type="file" accept=".xlsx" hidden disabled={importing || canImport === false}
-                      onChange={e => { importMaster(e.target.files[0]); e.target.value = '' }} />
-                  </label>
+                  }}>{importing ? '⟳ Checking…' : '⇪ Import new version'}</button>
+                  <input ref={fileRef} type="file" accept=".xlsx" hidden tabIndex={-1}
+                    onChange={e => { importMaster(e.target.files[0]); e.target.value = '' }} />
                   {status?.mapping_file_found && (
-                    <a href="/api/planning/mrp-reapportionment/mapping/download" style={{
+                    <a href="/api/planning/mrp-reapportionment/mapping/download" download style={{
                       padding: '4px 10px', borderRadius: 6, fontSize: 11, textDecoration: 'none',
                       border: `1px solid ${theme.border}`, color: theme.textMuted,
                     }}>↓ Export current</a>
@@ -610,7 +658,7 @@ export default function MrpReapportionment() {
                     </button>
                   ))}
                   <div style={{ flex: 1 }} />
-                  <a href={`/api/planning/mrp-reapportionment/download?file=${encodeURIComponent(result.output_file)}`} style={{
+                  <a download href={`/api/planning/mrp-reapportionment/download?file=${encodeURIComponent(result.output_file)}`} style={{
                     display: 'flex', alignItems: 'center', padding: '6px 14px', borderRadius: 7,
                     fontSize: 12, fontWeight: 700, textDecoration: 'none', margin: '8px 0',
                     ...(result.checks_pass
@@ -643,7 +691,9 @@ export default function MrpReapportionment() {
           <div style={{
             background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`, padding: '18px 22px',
           }}>
-            <ChecksList checks={checks} title="BEFORE YOU RUN · fix any red item, press ↺ Refresh, then Run" />
+            {running || progress?.running
+              ? <RunProgress p={progress} />
+              : <ChecksList checks={checks} title="BEFORE YOU RUN · fix any red item, press ↺ Refresh, then Run" />}
             <div style={{ marginBottom: 10, fontSize: 12, color: theme.textMuted }}>
               Discontinued MRPs → nearest listed MRP below / above · 40 / 60 (Summer 60 / 40) · one side → 100%
             </div>
@@ -658,8 +708,21 @@ export default function MrpReapportionment() {
                 color: canRun ? 'var(--st-btn-text,#1F4D3A)' : theme.textMuted, border: canRun ? 'none' : `1px solid ${theme.border}`,
               }}
             >
-              {running ? '⟳  Running engine…' : '▶  Run Re-apportionment'}
+              {running || progress?.running ? '⟳  Running engine…' : '▶  Run Re-apportionment'}
             </button>
+            {result && !running && (() => {
+              const pc = result.post_checks || [], ok = pc.filter(c => c.status === 'ok').length
+              return (
+                <div style={{ marginTop: 10, fontSize: 12, fontWeight: 600, color: result.checks_pass ? theme.accent : theme.danger }}>
+                  {result.checks_pass ? '✓' : '✗'} Output checks: {ok}/{pc.length} passed
+                  {result.checks_pass ? '' : ' - FAILED, not for use (Download still gives the last good run)'}
+                  <button type="button" onClick={() => setActiveTab('results')} style={{
+                    marginLeft: 10, padding: 0, border: 'none', background: 'none', cursor: 'pointer',
+                    color: theme.primary, fontSize: 12, textDecoration: 'underline',
+                  }}>see results</button>
+                </div>
+              )
+            })()}
             {error && (
               <div style={{
                 marginTop: 10, padding: '10px 14px', borderRadius: 8, fontSize: 12,
@@ -698,7 +761,7 @@ export default function MrpReapportionment() {
                           <td style={{ padding: '5px 8px', textAlign: 'right', ...mono }}>₹{((h.total_after || 0) / 1e5).toLocaleString('en-IN', { maximumFractionDigits: 2 })} L</td>
                           <td style={{ padding: '5px 8px', textAlign: 'right', ...mono }}>₹{((h.total_unmapped || 0) / 1e5).toLocaleString('en-IN', { maximumFractionDigits: 2 })} L</td>
                           <td style={{ padding: '5px 8px', whiteSpace: 'nowrap' }}>
-                            <a href={`/api/planning/mrp-reapportionment/download?file=${encodeURIComponent(h.output_file)}`}
+                            <a download href={`/api/planning/mrp-reapportionment/download?file=${encodeURIComponent(h.output_file)}`}
                               style={{ color: ok ? theme.primary : theme.danger }}>↓ {ok ? 'Download' : 'Download (not for use)'}</a>
                           </td>
                         </tr>

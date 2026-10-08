@@ -70,10 +70,13 @@ assert max(v["DIFF"] for v in val) < 5e-9, max(v["DIFF"] for v in val)          
 assert not set(out["LISTED_MRP"]) & set(mapping.loc[mapping["MRP_LISTED"] == 0, "MRP_CURRENT"]) - set(mapping["MRP_LISTED"])
 
 # planted: 0.02 L on one store x dept x month must break the tie
-raw = sub.melt(id_vars=["STORE", "DEPARTMENT"], value_vars=months, var_name="m", value_name="SL_V")
 print(f"{dept}: {len(sub)} rows -> {len(out)}, {len(val)} store totals kept; tie {check['cells']} cells max {check['max_diff_lakh']} L")
-cal_like = {(r.STORE, r.DEPARTMENT, r.m): r.SL_V for r in raw.itertuples()}
-k0 = next(iter(cal_like)); cal_like[k0] += 2000.0   # Rs 2,000 = 0.02 L
-worst = max(abs(cal_like[k] - v) / 1e5 for k, v in {(r.STORE, r.DEPARTMENT, r.m): r.SL_V for r in raw.itertuples()}.items())
-assert worst > 0.01, worst
+# through the real tie (audit 2026-10-08: this compared the sales with themselves)
+import datetime  # noqa: E402
+ym = {datetime.date(int(x[:4]), int(x[5:]), 1).strftime("%b %Y"): x for x in m.LY_MONTHS}
+raw = sales.melt(id_vars=["STORE", "DEPARTMENT"], value_vars=months, var_name="m", value_name="SL_V")
+raw["ym"] = raw["m"].map(ym)
+assert m._engine_check(raw)["pass"]
+raw.loc[raw.index[0], "SL_V"] += 2000.0   # Rs 2,000 = 0.02 L
+assert not m._engine_check(raw)["pass"]
 print("mrp re-apportionment checks passed")

@@ -23,6 +23,7 @@ Sources:
 Endpoints:
   GET  /status           → file presence, last-run metadata
   GET  /sales-status     → sales engine file, LY months, tie to Calendar dept sales
+  GET  /progress         → the running run's step / % / output checks (progress bar)
   GET  /checks           → pre-run checks (red = Run disabled), each with how to fix it
   GET  /mrp-groups       → groups (Dept, Display): listed MRPs and where each discontinued one goes
   POST /run              → redistribution by the nearest-listed-MRP rule
@@ -36,6 +37,9 @@ import os
 import io
 import glob
 import json
+import time
+import re
+import uuid
 import shutil
 import tempfile
 import warnings
@@ -66,6 +70,15 @@ OUTPUT_DIR   = os.path.join(BASE, r"MRP Merging Engine\Sales Reapportionment\Out
 LAST_RUN_JSON = os.path.join(OUTPUT_DIR, "_last_run.json")
 RUN_HISTORY_JSON = os.path.join(OUTPUT_DIR, "_run_history.json")   # every run, newest first (2026-10-08)
 _HISTORY_LOCK = threading.Lock()
+# the running run's step for the page's progress bar (user, 2026-10-08: "NO PROGRESS BAR, NO output check indicator")
+_PROGRESS: dict = {"running": False}
+
+
+def _step(stage: str, pct: float, **kw):
+    _PROGRESS.update(stage=stage, pct=round(pct, 1), **kw)
+
+
+_BUSY = threading.Lock()   # one run or master import at a time (audit 2026-10-08: parallel runs raced files)
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(MAPPING_DIR, exist_ok=True)
@@ -105,14 +118,31 @@ def _find_sales_file() -> Optional[str]:
     return files[0] if files else None
 
 
+_AOP_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "Tentative AOP Forecaster"))
+
+
+def _db():
+    if _AOP_DIR not in sys.path:   # was inserted on every call (audit 2026-10-08)
+        sys.path.insert(0, _AOP_DIR)
+    from db.base import SessionLocal
+    return SessionLocal()
+
+
+def _snapshot_stamp():
+    """When the Calendar 'actual_dept' snapshot was last written. Part of the sales cache key (audit 2026-10-08: the
+    tie was cached on the sales file alone - a sync that refreshed the snapshot after the file left the check red
+    until the server restarted, though the fix text says "wait for the sync, Refresh, Run again")."""
+    from sqlalchemy import text
+    with _db() as db:
+        return db.execute(text("SELECT computed_at FROM calendar.sales_snapshots "
+                               "WHERE source_type='mw' AND kind='actual_dept'")).scalar()
+
+
 def _engine_check(raw: pd.DataFrame) -> dict:
     """Store x department x month of the MRP-level sales vs the Calendar 'actual_dept' snapshot (Rs in, lakh diff)."""
     import collections
-    import sys
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "Tentative AOP Forecaster"))
-    from db.base import SessionLocal
     from sqlalchemy import text
-    with SessionLocal() as db:
+    with _db() as db:
         snap = db.execute(text("SELECT rows FROM calendar.sales_snapshots "
                                "WHERE source_type='mw' AND kind='actual_dept'")).scalar() or []
     want = set(LY_MONTHS)
@@ -134,11 +164,11 @@ def _engine_sales() -> tuple:
     path = _find_sales_file()
     if not path:
         raise ValueError(f"Sales engine file not reachable: {scans.PARQUET_DIR}")
-    key = (path, os.path.getmtime(path))
+    key = (path, os.path.getmtime(path), _snapshot_stamp())
     with _SALES_LOCK:
         if _SALES_CACHE.get("key") != key:
             _read_engine_sales(scans, path, key)
-    return _SALES_CACHE["df"].copy(), list(_SALES_CACHE["month_cols"]), _SALES_CACHE["check"]
+        return _SALES_CACHE["df"].copy(), list(_SALES_CACHE["month_cols"]), _SALES_CACHE["check"]
 
 
 def _read_engine_sales(scans, path, key):
@@ -149,14 +179,19 @@ def _read_engine_sales(scans, path, key):
     raw = raw[raw["ym"].isin(LY_MONTHS)].rename(
         columns={"STORE_NAME": "STORE", "DISPLAY_TYPE": "DISPLAY", "ATTRIBUTE1": "ATTRIBUTE"})
     for c in ("STORE", "DIVISION", "DEPARTMENT", "DISPLAY", "ATTRIBUTE"):
-        raw[c] = raw[c].astype(str).str.strip().str.upper()
+        # blank -> "(BLANK)" first: pandas' str dtype keeps NaN through astype(str) and the pivot below dropped those
+        # rows - Rs 181 L of blank-DISPLAY_TYPE sales never reached the run, yet the tie (on raw) passed (audit
+        # 2026-10-08). They now reach the run and land in Unmapped (no master row has a blank display).
+        raw[c] = raw[c].fillna("(BLANK)").astype(str).str.strip().str.upper()
     raw["MRP"] = pd.to_numeric(raw["MRP"], errors="coerce").fillna(0).round().astype(int)
     raw["SL_V"] = pd.to_numeric(raw["SL_V"], errors="coerce").fillna(0.0)
-    check = _engine_check(raw)
     label = {m: datetime.date(int(m[:4]), int(m[5:]), 1).strftime("%b %Y") for m in LY_MONTHS}
     wide = raw.pivot_table(index=["STORE", "DIVISION", "DEPARTMENT", "MRP", "DISPLAY", "ATTRIBUTE"],
                            columns="ym", values="SL_V", aggfunc="sum", fill_value=0.0).reset_index()
     wide.columns.name = None
+    # the tie on the table the run uses, not on raw - a row the pivot loses now fails the check
+    check = _engine_check(wide.melt(id_vars=["STORE", "DEPARTMENT"], value_vars=[x for x in LY_MONTHS if x in wide.columns],
+                                    var_name="ym", value_name="SL_V"))
     wide = wide.rename(columns=label)
     month_cols = [label[m] for m in LY_MONTHS if label[m] in wide.columns]
     _SALES_CACHE.update(key=key, df=wide, month_cols=month_cols, check=check)
@@ -227,10 +262,14 @@ def _load_mapping(path: Optional[str] = None) -> pd.DataFrame:
             raise ValueError(f"MRP Mapping Master missing columns: {missing}")
 
     df = df.dropna(subset=["DEPARTMENT"])[["DEPARTMENT", "DISPLAY", "MRP_CURRENT", "MRP_LISTED"]].copy()
+    df = df[pd.to_numeric(df["MRP_CURRENT"], errors="coerce").notna()]   # a blank current MRP isn't an MRP 0 (audit)
     for c in ["DEPARTMENT", "DISPLAY"]:
         df[c] = df[c].astype(str).str.strip().str.upper()
     df["MRP_CURRENT"] = pd.to_numeric(df["MRP_CURRENT"], errors="coerce").fillna(0).round().astype(int)
     df["MRP_LISTED"]  = pd.to_numeric(df["MRP_LISTED"],  errors="coerce").fillna(0).round().astype(int)
+    neg = df[(df["MRP_CURRENT"] < 0) | (df["MRP_LISTED"] < 0)]
+    if not neg.empty:
+        raise ValueError(f"MRP master has {len(neg)} negative MRPs, e.g. {neg.head(3).to_dict('records')}")
     df = df.drop_duplicates()
     clash = df[df.duplicated(["DEPARTMENT", "DISPLAY", "MRP_CURRENT"], keep=False)]
     if not clash.empty:
@@ -308,7 +347,7 @@ def _validate(sales_df: pd.DataFrame, output_df: pd.DataFrame,
     own sheet, not lost (user, 2026-10-08: departments with no listed MRP go to Unmapped)."""
     if unmapped_df is not None and not unmapped_df.empty:
         output_df = pd.concat([output_df, unmapped_df[["STORE", "DEPARTMENT"] + month_cols]], ignore_index=True)
-    tol = SHOWN   # any difference that shows at 8 decimals (was 0.01)
+    tol = SHOWN   # any difference that shows at 8 decimals of a lakh (audit 2026-10-08: was rupees)
     val_rows = []
     val_pass = True
 
@@ -334,86 +373,113 @@ def _validate(sales_df: pd.DataFrame, output_df: pd.DataFrame,
 
     merged = orig.merge(after, on=["STORE", "DEPARTMENT"], how="outer").fillna(0)
     merged["DIFF"]   = (merged["AFTER"] - merged["BEFORE"]).abs()
-    merged["STATUS"] = merged["DIFF"].apply(lambda d: "PASS" if d <= tol else "FAIL")
+    merged["STATUS"] = merged["DIFF"].apply(lambda d: "PASS" if d / 1e5 <= tol else "FAIL")   # in lakh, as the ties
     val_pass = bool((merged["STATUS"] == "PASS").all())
     return merged.to_dict("records"), val_pass
 
 
 # ── Excel output builder ───────────────────────────────────────────────────────
 
-def _build_excel(output_df, unmapped_df, val_rows, val_pass, log_lines, sales_df, month_cols) -> bytes:
+def _build_excel(output_df, unmapped_df, val_rows, val_pass, log_lines, sales_df, month_cols, on_rows=None) -> bytes:
     """The run's workbook. xlsxwriter with one format per column and the row banding as a single conditional format
-    (user, 2026-10-08: "speed up the excel export" - openpyxl styled ~3.4 M cells one by one, ~7 min a run)."""
+    (user, 2026-10-08: "speed up the excel export" - openpyxl styled ~3.4 M cells one by one, ~7 min a run).
+    Light "ink and paper" look as the app (user, 2026-10-08: "give better colors in the output file" - was dark rows
+    with light text): old MRP red, new MRP green, split shares amber, PASS green / FAIL red. Values stay full
+    precision; sales show 2 decimals ("-" for zero), the Validation sheet 8."""
     import xlsxwriter
 
-    NAVY = "#1F3864"; GREEN = "#C6EFCE"; RED = "#FF9999"; GREY = "#2C3538"; DKGREY = "#1C2022"
-    INT_COLS = {"MRP_CURRENT", "LISTED_MRP", "SHARE_PCT"}
+    INK, MUTED, HEAD, BAND, LINE = "#1E2723", "#667085", "#1F4D3A", "#F3F6F2", "#D9DED7"
+    OLD, NEW, AMBER, AMBER_BG = "#B42318", "#15803D", "#9C6500", "#FFF4E0"
+    OK_BG, OK_FG, BAD_BG, BAD_FG = "#E7F4EA", "#14532D", "#FDE8E8", "#9B1C1C"
+    MONEY = '#,##0.00;-#,##0.00;"-"'
     buf = io.BytesIO()
     wb = xlsxwriter.Workbook(buf, {"in_memory": True, "strings_to_formulas": False, "strings_to_urls": False})
-    base = {"font_name": "Arial", "font_size": 9, "border": 1, "border_color": "#2D3B40", "valign": "vcenter"}
+    base = {"font_name": "Arial", "font_size": 9, "font_color": INK, "border": 1, "border_color": LINE, "valign": "vcenter"}
 
     def F(**k):
         return wb.add_format({**base, **k})
 
-    head = F(bold=True, font_color="#FFFFFF", font_size=10, bg_color=NAVY, align="center", text_wrap=True)
-    band = wb.add_format({"bg_color": GREY})
-    col_fmt = {kind: F(bg_color=DKGREY, font_color="#E2EAED", align="left" if kind is None else "right",
-                       num_format={None: "General", "int": "#,##0", "dec": "#,##0.00000000"}[kind])
-               for kind in (None, "int", "dec")}
-    note = wb.add_format({"font_name": "Arial", "font_size": 9, "font_color": "#7FA0AD"})
+    head = F(bold=True, font_color="#FFFFFF", font_size=10, bg_color=HEAD, align="center", text_wrap=True,
+             border_color=HEAD)
+    band = wb.add_format({"bg_color": BAND})
+    split_bg = wb.add_format({"bg_color": AMBER_BG, "font_color": AMBER, "bold": True})
+    by_col = {
+        "MRP_CURRENT": F(font_color=OLD, num_format="#,##0", align="right"),
+        "LISTED_MRP":  F(font_color=NEW, bold=True, num_format="#,##0", align="right"),
+        "SHARE_PCT":   F(num_format='0"%"', align="center"),
+        "REASON":      F(font_color=AMBER),
+    }
+    text_fmt, money_fmt = F(), F(num_format=MONEY, align="right")
+    note = wb.add_format({"font_name": "Arial", "font_size": 9, "font_color": MUTED, "italic": True})
 
-    def write_df(ws, df, title):
+    total_rows = max(1, len(output_df) + len(unmapped_df) + len(sales_df))
+    done = [0]
+
+    def write_df(ws, df, title, tab):
+        ws.set_tab_color(tab)
         if df.empty:
             ws.write(0, 0, f"No data — {title}", note)
             return
         cols = list(df.columns)
-        ws.set_row(0, 26)
+        ws.set_row(0, 30)
         ws.write_row(0, 0, cols, head)
         data = []
         for ci, c in enumerate(cols):
             num = pd.api.types.is_numeric_dtype(df[c])
-            kind = ("int" if c in INT_COLS else "dec") if num else None
-            ws.set_column(ci, ci, min(28, max(10, len(c) + 4)), col_fmt[kind])
             v = df[c].astype(float).round(8) if num else df[c]   # full precision to 8 dp, as before
+            sample = df[c].head(2000).astype(str).str.len().max() if not num else 9
+            ws.set_column(ci, ci, min(34, max(9, len(c) + 3, int(sample) + 2)),
+                          by_col.get(c) or (money_fmt if num else text_fmt))
             data.append(v.astype(object).where(v.notna(), None).tolist())
         for r, row in enumerate(zip(*data), 1):
             ws.write_row(r, 0, row)
+            if on_rows and r % 5000 == 0:
+                on_rows((done[0] + r) / total_rows)
+        done[0] += len(df)
         last = len(df)
+        if "SHARE_PCT" in cols:   # first rule wins over the banding: a split share stands out in amber
+            sc = cols.index("SHARE_PCT")
+            ws.conditional_format(1, sc, last, sc, {"type": "cell", "criteria": "<", "value": 100, "format": split_bg})
         ws.conditional_format(1, 0, last, len(cols) - 1, {"type": "formula", "criteria": "=MOD(ROW(),2)=0", "format": band})
         ws.freeze_panes(1, 0)
         ws.autofilter(0, 0, last, len(cols) - 1)
 
-    write_df(wb.add_worksheet("Reapportioned Sales"), output_df, "Reapportioned Sales")
+    write_df(wb.add_worksheet("Reapportioned Sales"), output_df, "Reapportioned Sales", NEW)
 
     ws2 = wb.add_worksheet("Validation")
-    ws2.write(0, 0, "Validation — Store × Department Totals", F(bold=True, font_color="#E2EAED", font_size=12, border=0))
-    ws2.write(1, 0, f"Overall: {'PASSED' if val_pass else 'FAILED'}",
-              F(bold=True, font_color="#006100" if val_pass else "#9C0006", font_size=11, border=0))
+    ws2.set_tab_color(NEW if val_pass else OLD)
+    ws2.write(0, 0, "Validation — Store × Department totals (before = after + Unmapped)", F(bold=True, font_size=12, border=0))
+    ws2.write(1, 0, f"Overall: {'PASSED' if val_pass else 'FAILED - not for use'}",
+              F(bold=True, font_color=OK_FG if val_pass else BAD_FG, bg_color=OK_BG if val_pass else BAD_BG, font_size=11))
     vcols = ["STORE", "DEPARTMENT", "BEFORE", "AFTER", "DIFF", "STATUS"]
     ws2.set_row(3, 26)
     ws2.write_row(3, 0, vcols, head)
-    vf = {(ok, ci): F(bg_color=GREEN if ok else RED, font_color="#000000", bold=not ok,
-                      align="right" if ci >= 2 else "left",
+    for ci, w in enumerate([10, 30, 22, 22, 18, 10]):
+        ws2.set_column(ci, ci, w)
+    vf = {(ok, ci): F(bg_color=OK_BG if ok else BAD_BG, font_color=OK_FG if ok else BAD_FG, bold=(ci == 5 or not ok),
+                      align="center" if ci == 5 else "right" if ci >= 2 else "left",
                       num_format="#,##0.00000000" if ci in (2, 3, 4) else "General")
           for ok in (True, False) for ci in range(6)}
     for ri, r in enumerate(val_rows, 4):
         ok = r["STATUS"] == "PASS"
         for ci, k in enumerate(vcols):
             ws2.write(ri, ci, r[k], vf[(ok, ci)])
+    ws2.freeze_panes(4, 0)
 
-    write_df(wb.add_worksheet("Unmapped (Listed MRP 0)"), unmapped_df, "Unmapped Sales")
+    write_df(wb.add_worksheet("Unmapped (Listed MRP 0)"), unmapped_df, "Unmapped Sales", AMBER)
 
     ws4 = wb.add_worksheet("Engine Log")
-    ws4.set_column(0, 0, 90)
-    lf = {c: wb.add_format({"font_name": "Arial", "font_size": 9, "font_color": c})
-          for c in ("#7FA0AD", "#9C0006", "#006100", "#9C6500", "#E2EAED")}
-    ws4.write(0, 0, f"Run: {datetime.datetime.now().strftime('%d-%b-%Y %H:%M:%S')}", lf["#7FA0AD"])
+    ws4.set_tab_color(MUTED)
+    ws4.set_column(0, 0, 110)
+    lf = {c: wb.add_format({"font_name": "Consolas", "font_size": 9, "font_color": c, "bold": c != INK and c != MUTED})
+          for c in (MUTED, BAD_FG, OK_FG, AMBER, INK)}
+    ws4.write(0, 0, f"Run: {datetime.datetime.now().strftime('%d-%b-%Y %H:%M:%S')}", lf[MUTED])
     for ri, line in enumerate(log_lines, 2):
-        c = ("#9C0006" if "FAIL" in line or "ERROR" in line else "#006100" if "PASS" in line
-             else "#9C6500" if "WARN" in line else "#E2EAED")
+        c = (BAD_FG if "FAIL" in line or "ERROR" in line else OK_FG if "PASS" in line
+             else AMBER if "WARN" in line else INK)
         ws4.write_string(ri, 0, line, lf[c])
 
-    write_df(wb.add_worksheet("Original Sales"), sales_df, "Original Sales")
+    write_df(wb.add_worksheet("Original Sales"), sales_df, "Original Sales", MUTED)
 
     wb.close()
     return buf.getvalue()
@@ -475,11 +541,15 @@ def _post_checks(sales_df, output_df, unmapped_df, month_cols, mapping_df, val_p
     out = [_check("store_dept", "Store x Dept totals: before = after + Unmapped", "ok" if val_pass else "fail",
                   "every store x department to 8 decimals" if val_pass else "some store x department totals differ "
                   "(see the Validation sheet)", FIX_ENGINE)]
-    after = output_df[month_cols].sum() + (unmapped_df[month_cols].sum() if not unmapped_df.empty else 0)
-    # in lakh, as the suite's other ties: a ~Rs 1,000 Cr month summed over 140k rows carries ~Rs 1e-7 of float noise
-    worst = float((sales_df[month_cols].sum() - after).abs().max()) / 1e5
-    out.append(_check("months", "Month totals: before = after + Unmapped", "ok" if worst <= SHOWN else "fail",
-                      f"{len(month_cols)} months, largest difference {worst:.8f} L", FIX_ENGINE))
+    # per store x dept x month, in lakh as the suite's other ties (audit 2026-10-08: was one total per month)
+    sd = ["STORE", "DEPARTMENT"]
+    parts = [output_df[sd + month_cols]] + ([unmapped_df[sd + month_cols]] if not unmapped_df.empty else [])
+    after = pd.concat(parts).groupby(sd)[month_cols].sum()
+    before = sales_df.groupby(sd)[month_cols].sum()
+    worst = float(before.sub(after, fill_value=0).abs().max().max()) / 1e5 if len(before) else 0.0
+    out.append(_check("months", "Store x Dept x month: before = after + Unmapped", "ok" if worst <= SHOWN else "fail",
+                      f"{len(before):,} store x dept x {len(month_cols)} months, largest difference {worst:.8f} L",
+                      FIX_ENGINE))
     k = ["STORE", "DIVISION", "DEPARTMENT", "DISPLAY", "ATTRIBUTE", "MRP_CURRENT"]
     shares = output_df.groupby(k, dropna=False)["SHARE_PCT"].sum()
     bad = int(((shares - 100).abs() > 1e-9).sum())
@@ -492,7 +562,38 @@ def _post_checks(sales_df, output_df, unmapped_df, month_cols, mapping_df, val_p
     out.append(_check("targets", "Every new MRP is a listed MRP of its Dept x Display", "ok" if stray == 0 else "fail",
                       f"{len(hit):,} Dept x Display x new MRP" + (f", {stray} not listed in the master" if stray else ""),
                       FIX_ENGINE))
+    bad, n = _split_mismatches(output_df, mapping_df)
+    out.append(_check("split", "Each discontinued MRP's split re-derived independently", "ok" if bad == 0 else "fail",
+                      f"{n:,} store x discontinued MRP rows re-derived (nearest listed below / above, 40/60, "
+                      f"Summer 60/40)" + (f", {bad:,} differ" if bad else ""), FIX_ENGINE))
     return out
+
+
+def _split_mismatches(output_df, mapping_df) -> tuple:
+    """(mismatches, rows checked): the discontinued MRPs' shares worked out a second way - merge_asof for the nearest
+    listed old MRP below / above, not _targets' running scan - and compared with what the run wrote (audit 2026-10-08:
+    the other checks were structural and would pass a swapped or wrong-neighbour split)."""
+    k = ["STORE", "DIVISION", "DEPARTMENT", "DISPLAY", "ATTRIBUTE", "MRP_CURRENT"]
+    g = ["DEPARTMENT", "DISPLAY"]
+    disc = mapping_df[mapping_df["MRP_LISTED"] == 0][g + ["MRP_CURRENT"]]
+    got = output_df.merge(disc, on=g + ["MRP_CURRENT"])[k + ["LISTED_MRP", "SHARE_PCT"]]
+    if got.empty:
+        return 0, 0
+    keys = got[k].drop_duplicates().astype({"MRP_CURRENT": "int64"}).sort_values("MRP_CURRENT")
+    lst = (mapping_df[mapping_df["MRP_LISTED"] > 0][g + ["MRP_CURRENT", "MRP_LISTED"]]
+           .rename(columns={"MRP_CURRENT": "NB", "MRP_LISTED": "NEW"}).astype({"NB": "int64"}).sort_values("NB"))
+    near = {d: pd.merge_asof(keys, lst, left_on="MRP_CURRENT", right_on="NB", by=g, direction=d,
+                             allow_exact_matches=False)["NEW"] for d in ("backward", "forward")}
+    lo_new, hi_new = near["backward"].values, near["forward"].values
+    lo_pct = keys["ATTRIBUTE"].map(LOWER_PCT).fillna(LOWER_PCT_DEFAULT).values
+    lo_pct = pd.Series(lo_pct).where(pd.notna(hi_new), 100.0).where(pd.notna(lo_new), 0.0).values
+    k_vals = keys.reset_index(drop=True)
+    exp = pd.concat([k_vals.assign(LISTED_MRP=lo_new, EXP=lo_pct), k_vals.assign(LISTED_MRP=hi_new, EXP=100.0 - lo_pct)])
+    exp = exp[exp["EXP"] > 0].dropna(subset=["LISTED_MRP"]).astype({"LISTED_MRP": "int64"})
+    exp = exp.groupby(k + ["LISTED_MRP"], dropna=False)["EXP"].sum().reset_index()
+    cmp = got.astype({"LISTED_MRP": "int64"}).merge(exp, on=k + ["LISTED_MRP"], how="outer")
+    bad = int(((cmp["SHARE_PCT"].fillna(-1) - cmp["EXP"].fillna(-1)).abs() > 1e-9).sum())
+    return bad, len(keys)
 
 
 # ── Run history + last good run (user, 2026-10-08: "add keep last good run and run history") ───────────────────────
@@ -524,6 +625,15 @@ def get_runs():
     """Run history (newest first) and which output Download gives by default."""
     good = _last_good()
     return {"runs": _history(), "last_good": good["output_file"] if good else None}
+
+
+@router.get("/progress")
+def get_progress():
+    """The running run's step, % and (once done) its output checks - polled by the page while Run is pressed."""
+    p = dict(_PROGRESS)
+    if p.get("started"):
+        p["elapsed"] = round(time.time() - p["started"], 1)
+    return p
 
 
 @router.get("/checks")
@@ -611,7 +721,28 @@ def get_mrp_groups():
 
 @router.post("/run")
 def run_engine(body: RunRequest):
-    """Run re-apportionment by the master's nearest-listed-MRP rule (see module docstring)."""
+    """Run re-apportionment by the master's nearest-listed-MRP rule (see module docstring). One run (or master import)
+    at a time; a red pre-run check refuses the run here too, not only on the page (audit 2026-10-08)."""
+    if not _BUSY.acquire(blocking=False):
+        raise HTTPException(409, detail="A run or a master import is already in progress - wait for it, then Run again.")
+    _PROGRESS.clear()
+    _PROGRESS.update(running=True, started=time.time(), checks=None, stage="Pre-run checks", pct=2)
+    try:
+        bad = [c for c in _pre_checks() if c["status"] == "fail"]
+        if bad:
+            raise HTTPException(409, detail=f"{bad[0]['label']}: {bad[0]['detail']} - {bad[0]['fix']}")
+        out = _run_engine()
+        _step("Done", 100)
+        return out
+    except Exception:
+        _step("Stopped", _PROGRESS.get("pct", 0))
+        raise
+    finally:
+        _PROGRESS["running"] = False
+        _BUSY.release()
+
+
+def _run_engine():
     sales_path = _find_sales_file()
     if not sales_path:
         raise HTTPException(400, detail="Sales engine file not reachable")
@@ -620,21 +751,28 @@ def run_engine(body: RunRequest):
     if not mapping_file:
         raise HTTPException(400, detail=f"No mapping master found in: {MAPPING_DIR}")
 
+    _step("Reading the MRP master and LY sales", 8)
     try:
         mapping_df = _load_mapping()
         sales_df, month_cols, check = _mapped_sales(mapping_df)
     except Exception as e:
         raise HTTPException(400, detail=str(e))
+    if sales_df.empty:
+        raise HTTPException(400, detail="No LY sales in the MRP master's departments - nothing to re-apportion. "
+                                        "Check the master's department names, Import it, then Run again.")
     if not check["pass"]:   # never re-apportion sales that don't tie to the sales engine's structure
         raise HTTPException(409, detail=f"Sales do not tie to the Calendar department sales (max diff {check['max_diff_lakh']} L)")
 
     try:
+        _step("Re-apportioning", 18)
         output_df, unmapped_df, eng_log = _redistribute(sales_df, mapping_df, month_cols)
     except Exception as e:
         raise HTTPException(500, detail=f"Redistribution error: {e}")
 
     val_rows, val_pass = _validate(sales_df, output_df, month_cols, unmapped_df)
+    _step("Output checks", 25)
     post_checks = _post_checks(sales_df, output_df, unmapped_df, month_cols, mapping_df, val_pass)
+    _step("Writing the Excel file", 32, checks=post_checks)   # the checks show on the page while the file is written
     checks_pass = all(c["status"] == "ok" for c in post_checks)
 
     total_before = round(float(sales_df[month_cols].sum().sum()), 8)
@@ -661,7 +799,9 @@ def run_engine(body: RunRequest):
     ts_str = datetime.datetime.now().strftime("%d%b%Y_%H%M%S")
     out_filename = f"MRP Reapportioned {ts_str}{'' if checks_pass else ' - FAILED'}.xlsx"
     out_path = os.path.join(OUTPUT_DIR, out_filename)
-    xlsx_bytes = _build_excel(output_df, unmapped_df, val_rows, val_pass, full_log, sales_df, month_cols)
+    xlsx_bytes = _build_excel(output_df, unmapped_df, val_rows, val_pass, full_log, sales_df, month_cols,
+                              on_rows=lambda f: _step("Writing the Excel file", 32 + 60 * f))
+    _step("Saving", 94)
     with open(out_path, "wb") as f:
         f.write(xlsx_bytes)
 
@@ -747,17 +887,34 @@ def _mapping_changes(old: Optional[pd.DataFrame], new: pd.DataFrame) -> dict:
             "changed": int((o[both] != n[both]).sum())}
 
 
+MAX_MASTER_MB = 50
+_RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+
+
+def _safe_name(name: str) -> str:
+    """The upload's own name, made safe for the Windows folder (audit 2026-10-08: CON.xlsx, ':' or '<' in the name,
+    or '.xlsx' alone left the suite with no usable master)."""
+    stem = re.sub(r"[^\w\-. ()]+", "_", os.path.splitext(os.path.basename(name))[0]).strip(" ._")[:120]
+    return f"{stem if stem and stem.upper() not in _RESERVED else 'MRP master'}.xlsx"
+
+
 @router.post("/mapping/upload")
 def upload_mapping(file: UploadFile = File(...)):
     """A new version of the MRP master. Read with the same reader a run uses before it goes live; the version it
     replaces moves to MRP Mapping\\Archive with a time stamp (kept, never overwritten)."""
-    name = os.path.basename(file.filename or "").strip()
-    if not name.lower().endswith(".xlsx"):
+    if not (file.filename or "").lower().endswith(".xlsx"):
         raise HTTPException(400, detail="Upload the MRP master as an .xlsx file")
+    if not _BUSY.acquire(blocking=False):
+        raise HTTPException(409, detail="A run or another import is in progress - wait for it, then import again.")
     fd, tmp = tempfile.mkstemp(suffix=".xlsx")
     try:
+        size = 0
         with os.fdopen(fd, "wb") as f:
-            shutil.copyfileobj(file.file, f)
+            while chunk := file.file.read(1 << 20):
+                size += len(chunk)
+                if size > MAX_MASTER_MB << 20:
+                    raise HTTPException(413, detail=f"The file is over {MAX_MASTER_MB} MB - nothing changed")
+                f.write(chunk)
         try:
             new = _load_mapping(tmp)
         except Exception as e:
@@ -768,20 +925,33 @@ def upload_mapping(file: UploadFile = File(...)):
             old = _load_mapping() if _find_mapping_file() else None
         except Exception:
             old = None
+        name = _safe_name(file.filename)
+        staged = os.path.join(MAPPING_DIR, f".incoming-{uuid.uuid4().hex}.xlsx")   # dot-file: not seen as a master
+        shutil.move(tmp, staged)
         archive = os.path.join(MAPPING_DIR, "Archive")
         os.makedirs(archive, exist_ok=True)
-        stamp = datetime.datetime.now().strftime("%Y-%m-%d %H%M%S")
-        archived = []
-        for f in glob.glob(os.path.join(MAPPING_DIR, "*.xls*")):
-            dest = os.path.join(archive, f"{stamp} {os.path.basename(f)}")
-            shutil.move(f, dest)
-            archived.append(os.path.basename(dest))
-        shutil.move(tmp, os.path.join(MAPPING_DIR, name))
+        now = datetime.datetime.now()
+        stamp = f"{now:%Y-%m-%d %H%M%S}-{now.microsecond:06d}"
+        moved = []
+        try:
+            for f in glob.glob(os.path.join(MAPPING_DIR, "*.xls*")):
+                dest = os.path.join(archive, f"{stamp} {os.path.basename(f)}")
+                shutil.move(f, dest)
+                moved.append((f, dest))
+            os.replace(staged, os.path.join(MAPPING_DIR, name))
+        except Exception as e:
+            for src, dest in reversed(moved):   # put the old master back - never leave the suite without one
+                shutil.move(dest, src)
+            raise HTTPException(500, detail=f"Couldn't place the new master - the old one is still in use: {e}")
+        finally:
+            if os.path.exists(staged):
+                os.remove(staged)
     finally:
+        _BUSY.release()
         if os.path.exists(tmp):
             os.remove(tmp)
     t = _targets(new)
-    return {"ok": True, "file": name, "archived": archived,
+    return {"ok": True, "file": name, "archived": [os.path.basename(d) for _, d in moved],
             "rows": len(new), "groups": int(new.groupby(["DEPARTMENT", "DISPLAY"]).ngroups),
             "listed": int((new["MRP_LISTED"] > 0).sum()), "discontinued": int((new["MRP_LISTED"] == 0).sum()),
             "no_listed_groups": int(t.groupby(["DEPARTMENT", "DISPLAY"])["MRP_LISTED"].max().eq(0).sum()),

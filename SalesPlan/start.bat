@@ -29,7 +29,7 @@ echo.
 :: (ping is used as a sleep because "timeout" fails when stdin is redirected.)
 start "" /b cmd /c "for /l %%i in (1,1,60) do (netstat -ano | findstr /r /c:":%PORT% .*LISTENING" >nul && (start "" "%URL%" & exit /b) || ping -n 2 127.0.0.1 >nul)"
 
-"%PY%" -m uvicorn main:app --host 0.0.0.0 --port %PORT%
+"%PY%" -m uvicorn main:app --host 127.0.0.1 --port %PORT%
 
 if errorlevel 1 (
     echo.
