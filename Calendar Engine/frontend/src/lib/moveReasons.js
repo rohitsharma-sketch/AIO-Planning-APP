@@ -82,6 +82,40 @@ function dominoReason(info, cluster, rm, fm, festivals) {
   return bits.length ? bits.join('; ') + '.' : 'Re-placed to keep every TY day matched to one LY day after festival days shifted.'
 }
 
+// Day-by-day rows behind one Month Wise Matrix cell (user, 2026-10-08: "when the user clicks on it then it should give
+// a detailed date wise tabular format so that they can navigate to the reasoning with numbers"). Same numbers as the
+// cell: the ref month's sales split by its days' sales (or day count where the month has no daily data), so the rows'
+// amounts add up to the cell exactly. info needs dayMap + weights (fetchCalendarMaps).
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+export function dayBreakup(info, cluster, rm, fm, amount) {
+  const all = info?.dayMap?.[cluster] || []
+  const monthPairs = all.filter(([r]) => r.slice(0, 7) === rm)
+  const pairs = monthPairs.filter(([, f]) => f.slice(0, 7) === fm).sort((a, b) => (a[1] < b[1] ? -1 : 1))
+  if (!pairs.length) return null
+  const festivals = info.fests?.[cluster] || []
+  const w = info.weights?.[cluster] || {}
+  const bySales = info.basis?.[cluster]?.[rm] === 'sales'
+  const weightOf = r => (bySales ? Math.max(w[r] || 0, 0) : 1)
+  const cellW = pairs.reduce((a, [r]) => a + weightOf(r), 0)
+  const monthW = monthPairs.reduce((a, [r]) => a + weightOf(r), 0)
+  const moved = rm.slice(5) !== fm.slice(5)
+  const rows = pairs.map(([ref, fut]) => {
+    const hit = followedFestival(festivals, ref, fut)
+    const share = cellW ? weightOf(ref) / cellW : 0
+    return {
+      ref, fut, refDow: DOW[toDate(ref).getDay()], futDow: DOW[toDate(fut).getDay()], shift: dayDiff(fut, ref),
+      reason: hit ? `${hit.f.name} ${hit.part} (${hit.f.name} ${fmtDay(hit.f.refDate)} → ${fmtDay(hit.f.futDate)})`
+        : moved ? 'Ordinary day re-placed' : 'Stays in its month',
+      festival: !!hit, daySales: bySales ? (w[ref] ?? 0) : null, share, amount: amount * share,
+    }
+  })
+  return {
+    rows, basis: bySales ? 'sales' : 'days', cellDays: pairs.length, monthDays: monthPairs.length,
+    shareOfMonth: monthW ? cellW / monthW : 0,
+    domino: moved && rows.some(r => !r.festival) ? dominoReason(info, cluster, rm, fm, festivals) : null,
+  }
+}
+
 // Multi-line hover text for one Month Wise Matrix cell; null when no day changed month.
 export function explainMove(info, cluster, rm, fm, { amount, refDays } = {}) {
   const pairs = info?.moves?.[cluster]?.[rm]?.[fm]

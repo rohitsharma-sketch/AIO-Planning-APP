@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### Calendar: click a Month Wise Matrix cell for the day-by-day table
+- **Asked (user):** "when i click on the colored cell i want a day wise breakup for the store which is live, and is more detailed than the hover comment. Keep the hover comment on for summarised version but when the user clicks on it then it should give a detailed date wise tabular format so that they can navigate to the reasoning with numbers".
+- Hover keeps the summary. Clicking (or Enter on) any non-zero cell opens a panel under that store's table: every day of the ref month that landed in the TY month - LY date / day, TY date / day (weekday change in amber), shift in days (+364 = same weekday last year), why (festival build-up / festival days / after-days with both years' festival dates, or ordinary day re-placed + the chain of festival moves behind it), the cluster's day sales the split is weighted by, the day's share and the store's rupees. Total row adds up to the cell (tick). Esc or Close shuts it; clicking the same cell again closes it.
+- Checked on real data (LAD, fixed 2025 -> 26 calendar, UP + NCR daily sales): Mar'25 -> Feb'26 10 days Rs 59,27,653, -> Mar'26 19 days Rs 1,13,79,162, -> Apr'26 2 days Rs 9,67,262 - rows add up to each cell. (lib/moveReasons.js dayBreakup; the matrix now gets the full day map + day sales.)
+
 ### Calendar engine: year-end wrap fixed + a year-alignment check for every calendar (saved or unsaved)
 - **Asked (user):** "check if the rule mentioned in this matrix is right or is it reversed"; "why is it the holi shift needs apr days ?"; "yes fix the calendar and show me before/after"; "make a check for this issue in the system"; "for all calendars - saved or unsaved".
 - Finding: the matrix direction is right (LY day -> TY day). Holi is right too (ref 1-10 Mar 2025 -> TY 19-28 Feb 2026, offset 355, as the user's reference calendar). The real fault was in the **2025 -> 2026 calendar**: TY 1-5 Jan 2026 were filled from ref 26-31 Dec 2025, so almost every day ran a week late (+371 instead of +364, 1,287 vs 747 days) and each month's last week spilled into the next (e.g. ref 17-26 Mar -> TY 1-8 Apr). The 2024 -> 25 and 2026 -> 27 calendars were fine.

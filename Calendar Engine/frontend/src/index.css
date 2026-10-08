@@ -1111,6 +1111,19 @@ details.rx-section > summary.rx-label { cursor: pointer; display: list-item; }
    hover shows which days moved and why (lib/moveReasons.js, 2026-09-25). */
 .mx-moved { background: rgba(245, 158, 11, 0.16) !important; cursor: help; text-decoration: underline dotted rgba(180, 83, 9, 0.55); text-underline-offset: 3px; }
 .mx-moved:hover { background: rgba(245, 158, 11, 0.28) !important; }
+/* click-through day table (2026-10-08) */
+.mx-click { cursor: pointer; }
+.mx-click:focus-visible { outline: 2px solid var(--st-btn-text, #1F4D3A); outline-offset: -2px; }
+.mx-on { outline: 2px solid var(--st-btn-text, #1F4D3A); outline-offset: -2px; font-weight: 700; }
+.mx-drill { margin: 10px 0 4px; padding: 12px 14px; border: 1px solid var(--border); border-left: 4px solid #F59E0B; border-radius: 10px; background: var(--bg); }
+.mx-drill-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 8px; font-size: 13px; }
+.mx-muted { color: var(--muted); font-size: 12px; font-weight: 400; }
+.mx-why { font-size: 12px; margin: 0 0 8px; }
+.mx-drill-tbl { width: 100%; font-size: 12px; }
+.mx-drill-tbl td, .mx-drill-tbl th { padding: 4px 8px; white-space: nowrap; }
+.mx-drill-tbl td:nth-child(7) { white-space: normal; }
+.mx-drill-tbl tr.mx-fest td { background: rgba(245, 158, 11, 0.12); }
+.mx-drill-tbl tfoot td { border-top: 2px solid var(--border); }
 
 /* Engine selector in the navy header (was grey-on-navy, barely readable) */
 .app-engine { display: flex; align-items: center; gap: 8px; margin-right: 12px; }

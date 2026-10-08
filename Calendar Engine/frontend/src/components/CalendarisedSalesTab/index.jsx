@@ -121,7 +121,8 @@ async function fetchCalendarMaps(calendarId, source) {
     }
   }
   // Hover reasons for the Month Wise Matrix (lib/moveReasons.js, 2026-09-25).
-  const moveInfo = { ...buildMoveInfo(detail), basis: splitBasis }
+  // dayMap + weights also feed the click-through day table (dayBreakup, 2026-10-08)
+  const moveInfo = { ...buildMoveInfo(detail), basis: splitBasis, dayMap: detail.dayMap || {}, weights: daySales.days || {} }
   return { detail, festivalByDate, refByCluster, refMonthsByCluster, fwdSplitByCluster, moveInfo }
 }
 

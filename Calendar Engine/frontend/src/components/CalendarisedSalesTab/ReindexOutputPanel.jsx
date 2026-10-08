@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, Fragment } from 'react'
-import { explainMove } from '../../lib/moveReasons'
+import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
+import { explainMove, dayBreakup, fmtMonth } from '../../lib/moveReasons'
 import * as XLSX from 'xlsx'
 import { getStoreClusterMap } from '../../lib/api'
 import { Menu } from '../ui'
@@ -38,6 +38,74 @@ function downloadCsv(rows, filename) {
 const cell = (v) => (v == null ? '' : v)
 // On-screen only (CSV keeps cell()/round2 full precision): whole rupees, Indian grouping.
 const money = (v) => (v == null ? '' : Math.round(v).toLocaleString('en-IN'))
+
+// Click-through behind one Month Wise Matrix cell (user, 2026-10-08: "when i click on the colored cell i want a day wise
+// breakup for the store ... a detailed date wise tabular format so that they can navigate to the reasoning with
+// numbers"). Every day of the ref month that landed in the TY month: where it went, why, the day's sales the split is
+// weighted by, and this store's rupees - the rows add up to the cell.
+const fmtD = s => new Date(`${s}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+function MxDayTable({ store, cluster, rm, fm, amount, info, onClose }) {
+  const b = useMemo(() => dayBreakup(info, cluster, rm, fm, amount), [info, cluster, rm, fm, amount])
+  const ref = useRef(null)
+  useEffect(() => { ref.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) }, [rm, fm])
+  useEffect(() => {
+    const esc = e => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', esc)
+    return () => window.removeEventListener('keydown', esc)
+  }, [onClose])
+  if (!b) return <div ref={ref} className="mx-drill"><p>No day map for {fmtMonth(rm)} → {fmtMonth(fm)} in this calendar.</p></div>
+  const sales = b.basis === 'sales'
+  const sumSales = b.rows.reduce((a, r) => a + (r.daySales || 0), 0)
+  const sumAmt = b.rows.reduce((a, r) => a + r.amount, 0)
+  const pct = v => `${(v * 100).toFixed(1)}%`
+  return (
+    <div ref={ref} className="mx-drill" role="region" aria-label={`${store} ${rm} to ${fm} day by day`}>
+      <div className="mx-drill-head">
+        <div>
+          <b>{store}</b> <span className="mx-muted">({cluster})</span> · <b>{fmtMonth(rm)} → {fmtMonth(fm)}</b> · ₹{money(amount)}
+          <div className="mx-muted">{b.cellDays} of {b.monthDays} days of {fmtMonth(rm)} landed in {fmtMonth(fm)} - {pct(b.shareOfMonth)} of the month's
+            {sales ? ' sales (split by the days\' actual sales)' : ' days (no daily sales for this month - split by day count)'}.</div>
+        </div>
+        <button className="btn" onClick={onClose} aria-label="Close the day table">✕ Close</button>
+      </div>
+      {b.domino && <p className="mx-why"><b>Why ordinary days moved:</b> {b.domino}</p>}
+      <table className="mx-drill-tbl">
+        <thead>
+          <tr>
+            <th>#</th><th>LY date</th><th>Day</th><th>→ TY date</th><th>Day</th><th style={{ textAlign: 'right' }}>Shift</th><th>Why</th>
+            {sales && <th style={{ textAlign: 'right' }} title={`${cluster}'s actual sales that day - what the split is weighted by`}>Day sales ({cluster})</th>}
+            <th style={{ textAlign: 'right' }}>Share of cell</th><th style={{ textAlign: 'right' }}>₹ for {store}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {b.rows.map((r, i) => (
+            <tr key={r.ref} className={r.festival ? 'mx-fest' : undefined}>
+              <td>{i + 1}</td><td>{fmtD(r.ref)}</td><td>{r.refDow}</td><td>{fmtD(r.fut)}</td>
+              <td style={r.refDow !== r.futDow ? { color: 'var(--warn, #B45309)', fontWeight: 600 } : undefined}>{r.futDow}</td>
+              <td style={{ textAlign: 'right' }} title={r.shift === 364 ? 'Same weekday last year' : undefined}>{r.shift > 0 ? '+' : ''}{r.shift} d</td>
+              <td>{r.reason}</td>
+              {sales && <td style={{ textAlign: 'right' }}>{money(r.daySales)}</td>}
+              <td style={{ textAlign: 'right' }}>{pct(r.share)}</td>
+              <td style={{ textAlign: 'right', fontWeight: 600 }}>{money(r.amount)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colSpan={7}><b>Total</b> - {b.cellDays} days</td>
+            {sales && <td style={{ textAlign: 'right' }}><b>{money(sumSales)}</b></td>}
+            <td style={{ textAlign: 'right' }}><b>100%</b></td>
+            <td style={{ textAlign: 'right' }}><b>{money(sumAmt)}</b> {Math.abs(sumAmt - amount) < 0.5 ? '✓' : '✗'}</td>
+          </tr>
+        </tfoot>
+      </table>
+      <p className="mx-muted" style={{ marginTop: 6 }}>
+        ₹ for {store} = the cell (₹{money(amount)}) × each day's share{sales ? ` - its ${cluster} day sales over the ${b.cellDays} days' total` : ' - one day of ' + b.cellDays}.
+        Shift +364 d = same weekday last year; amber rows follow a festival. Esc or ✕ closes.
+      </p>
+    </div>
+  )
+}
 // Deliberately `== null` rather than the old app's falsy test (`v ? ... : ''`):
 // a month whose rows genuinely sum to 0 is a real, different fact from one with
 // no rows at all, and the live data does contain such totals - 49 of them in
@@ -69,6 +137,7 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
   // add more from the dropdown to compare stores side by side.
   const [mwMatrixStores, setMwMatrixStores] = useState(null)
   const [mwMatrixSearch, setMwMatrixSearch] = useState('')
+  const [mxDrill, setMxDrill] = useState(null)   // {store, refMonth, fm} - the clicked matrix cell's day table
   const [mwMatrixPickerOpen, setMwMatrixPickerOpen] = useState(false)
   // Reindexed Sales has two layouts to choose from: Wide (the existing
   // pivot - one row per store[+extra fields], one column per date/month;
@@ -1034,7 +1103,19 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                                   amount: r.cells[m],
                                   refDays: new Date(+r.refMonth.slice(0, 4), +r.refMonth.slice(5, 7), 0).getDate(),
                                 })
-                                return <td key={m} style={num} className={why ? 'mx-moved' : undefined} title={why || undefined}>{money(r.cells[m])}</td>
+                                // click (or Enter) -> the day-by-day table below (user, 2026-10-08); hover keeps the summary
+                                const open = r.cells[m] > 0 && moveInfo?.dayMap
+                                  ? () => setMxDrill(d => (d?.store === store && d.refMonth === r.refMonth && d.fm === m ? null : { store, refMonth: r.refMonth, fm: m }))
+                                  : null
+                                const on = mxDrill?.store === store && mxDrill.refMonth === r.refMonth && mxDrill.fm === m
+                                return (
+                                  <td key={m} style={num} title={why || (open ? 'Click for the day-by-day table' : undefined)}
+                                    className={[why && 'mx-moved', open && 'mx-click', on && 'mx-on'].filter(Boolean).join(' ') || undefined}
+                                    {...(open ? { role: 'button', tabIndex: 0, onClick: open,
+                                      onKeyDown: e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open() } } } : {})}>
+                                    {money(r.cells[m])}
+                                  </td>
+                                )
                               })}
                               {(() => {
                                 const ties = r.splitTotal != null && Math.abs(r.splitTotal - r.total) < 0.5
@@ -1069,6 +1150,11 @@ export default function ReindexOutputPanel({ result, festivalByCluster, refDateB
                           })()}
                         </tfoot>
                       </table>
+                      {mxDrill?.store === store && (() => {
+                        const row = sel.rows.find(x => x.refMonth === mxDrill.refMonth)
+                        return row ? <MxDayTable store={store} cluster={sel.cluster} rm={mxDrill.refMonth} fm={mxDrill.fm}
+                          amount={row.cells[mxDrill.fm] || 0} info={moveInfo} onClose={() => setMxDrill(null)} /> : null
+                      })()}
                     </div>
                   )
                 })}
