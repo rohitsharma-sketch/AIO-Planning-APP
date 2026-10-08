@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### Calendar: every pop-up is a whole month, day 1 to the last day
+- **Asked (user):** "pop up okay i want the whole month from 1 - 30 days of the month , 1- 28/29 day detail for frb"; "make it for all months wherever shift is there and colored cells are there".
+- Clicking any cell (every tinted / shifted cell, any month) now opens its **whole TY month**, every day from the 1st to the last, with the clicked cell's days outlined and a "clicked cell" line (its days, rupees, share). Two buttons flip to the cell's **whole LY month**. Ref Month labels open the whole LY month; TY headers / totals open the whole TY month.
+- Checked on the 2025 -> 26 calendar (UP + NCR): all 12 TY months and all 12 LY months list day 1 to the last day (Feb = 28) and every cell ties; Mar'25 -> Feb'26 opens Feb'26 with 28 days (18 from Feb'25, 10 from Mar'25 highlighted).
+
 ### Calendar: day table is a pop-up, and whole months open too
 - **Asked (user):** "instead of the down bar - i need it as a pop up when i click also i need it for the whole month mapping like the whole of Feb, the whole of whichever month is there which is clicked so that the month detail can be made visible for view".
 - The day-by-day table now opens as a pop-up (Esc, ✕ or a click outside closes). Three ways in: a tinted **cell** (as before); a **Ref Month** label (every day of that LY month and the TY month each one went to); a **TY month** header or its total (every day landing in that TY month and the LY month it came from). Whole-month views add a "Cell" column, a "why ordinary days moved" line per moved cell and a subtotal per cell.

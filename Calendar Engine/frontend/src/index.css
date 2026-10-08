@@ -1126,6 +1126,11 @@ details.rx-section > summary.rx-label { cursor: pointer; display: list-item; }
   border-top: 4px solid #F59E0B; border-radius: 12px; background: var(--bg, #fff); color: inherit; overflow: auto; }
 .mx-pop::backdrop { background: rgba(15, 23, 20, 0.45); }
 .mx-pop-body { overflow-x: auto; }
+.mx-drill-tbl tr.mx-hit td { box-shadow: inset 0 2px 0 -1px var(--st-btn-text, #1F4D3A), inset 0 -2px 0 -1px var(--st-btn-text, #1F4D3A); font-weight: 600; }
+.mx-drill-tbl tr.mx-hit td:first-child { border-left: 3px solid var(--st-btn-text, #1F4D3A); }
+.mx-views { display: flex; gap: 6px; margin-top: 6px; }
+.mx-views .btn { padding: 3px 10px; font-size: 12px; }
+.mx-views .btn.on { background: var(--st-btn-text, #1F4D3A); color: #fff; }
 .mx-drill-tbl tr.mx-sub td { color: var(--muted); font-size: 11px; border-top: 1px dashed var(--border); }
 .mx-drill-tbl tr.mx-fest td { background: rgba(245, 158, 11, 0.12); }
 .mx-drill-tbl tfoot td { border-top: 2px solid var(--border); }
