@@ -26,6 +26,24 @@ assert got == {("REGULAR", 199, 250): 10, ("REGULAR", 249, 250): 10, ("REGULAR",
 assert sorted(u["REASON"]) == ["MRP combination not in mapping master", "No listed MRP in this Department x Display"]
 assert m._validate(sl, o, M, u)[1]
 
+# importing a new master version: a bad file changes nothing; a good one goes live, the old one moves to Archive
+import io, tempfile  # noqa: E402
+from fastapi import HTTPException  # noqa: E402
+from starlette.datastructures import UploadFile  # noqa: E402
+m.MAPPING_DIR = tempfile.mkdtemp()
+def _up(name, df):  # noqa: E302
+    b = io.BytesIO(); df.to_excel(b, index=False); b.seek(0)
+    return m.upload_mapping(UploadFile(file=b, filename=name))
+try:
+    _up("bad.xlsx", pd.DataFrame({"X": [1]})); raise AssertionError("bad master accepted")
+except HTTPException as e:
+    assert e.status_code == 400 and os.listdir(m.MAPPING_DIR) == []
+assert _up("v1.xlsx", mp)["changes"] == {"added": 7, "removed": 0, "changed": 0}
+mp2 = mp.assign(MRP_LISTED=[0, 250, 299, 0, 399, 0, 0])   # 299 now listed
+r = _up("v2.xlsx", mp2)
+assert r["changes"] == {"added": 0, "removed": 0, "changed": 1} and len(r["archived"]) == 1, r
+assert sorted(os.listdir(m.MAPPING_DIR)) == ["Archive", "v2.xlsx"]
+
 sales, months, check = m._engine_sales()
 assert check["pass"] and check["max_diff_lakh"] <= 0.01, check
 

@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### Sales Plan › MRP Re-apportionment: import / export the MRP master
+- **Asked (user):** "what if i have a new version for mrp mapping master ? Importing and exporting feature - add it".
+- MRP Mapping Master card: **⇪ Import new version** (.xlsx, confirm before replacing) and **↓ Export current**. `POST /mapping/upload` reads the file with the same reader a run uses (wide "MRP Adj" grid or plain list) before it goes live - an unusable file changes nothing; the replaced version moves to `MRP Mapping\Archive\<YYYY-MM-DD HHMMSS> <name>` (kept, never overwritten). The reply says what changed vs the previous version (old MRPs added / removed / given a different new MRP) and how many Dept x Display have nothing listed. `GET /mapping/download` returns the active master exactly as uploaded.
+- Checked through the real endpoints on a temp folder (bad file 400 + folder unchanged; v1 5,837 rows; v2 2 added / 1 removed / 2 changed, v1 archived; export byte-identical); repo test `engines/test_mrp_reapportionment.py` covers it. The live mapping folder was not touched.
+- Answered: the LY Actual Sales here are the sales engine's data-lake file (Calendar reader), tied cell by cell to the Calendar `actual_dept` snapshot before every run - actual bill-month sales, not the reindexed LY the department plan uses.
+
 ### Sales Plan › MRP Re-apportionment: faster Excel export
 - **Asked (user):** "yes speed up the excel export" (a run took ~7 min, nearly all of it writing the workbook).
 - `_build_excel` now writes with xlsxwriter (already used by the Sales Plan engines): one format per column, row banding as a single conditional format, instead of openpyxl styling ~3.4 M cells one by one. Same five sheets, columns, number formats and colours.

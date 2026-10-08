@@ -191,6 +191,27 @@ export default function MrpReapportionment() {
   const [result, setResult]       = useState(null)
   const [error, setError]         = useState('')
   const [resultTab, setResultTab] = useState('preview')
+  const [importing, setImporting] = useState(false)
+  const [importMsg, setImportMsg] = useState(null)   // {ok, text}
+
+  // a new version of the MRP master: checked by the server before it goes live; the old one moves to Archive (2026-10-08)
+  const importMaster = async (file) => {
+    if (!file) return
+    if (status?.mapping_file_found && !window.confirm(`Make "${file.name}" the MRP master? The current one (${status.mapping_file}) moves to MRP Mapping\\Archive.`)) return
+    setImporting(true); setImportMsg(null)
+    try {
+      const fd = new FormData(); fd.append('file', file)
+      const r = await fetch('/api/planning/mrp-reapportionment/mapping/upload', { method: 'POST', body: fd })
+      const d = await r.json()
+      if (!r.ok) { setImportMsg({ ok: false, text: d.detail || 'Import failed' }); return }
+      const c = d.changes
+      setImportMsg({ ok: true, text: `${d.file}: ${d.rows.toLocaleString('en-IN')} old MRPs in ${d.groups} Dept · Display (${d.listed} listed, ${d.discontinued} discontinued`
+        + `${d.no_listed_groups ? `, ${d.no_listed_groups} with nothing listed` : ''}). vs previous: ${c.added} added, ${c.removed} removed, ${c.changed} changed.` })
+      setGroups(null); setResult(null)
+      reload()
+    } catch (e) { setImportMsg({ ok: false, text: String(e) }) }
+    finally { setImporting(false) }
+  }
 
   const reload = useCallback(() => {
     fetch('/api/planning/mrp-reapportionment/status')
@@ -262,7 +283,7 @@ export default function MrpReapportionment() {
 
           <div style={{ background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`, padding: '18px 20px' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: theme.textMuted, letterSpacing: 0.5, marginBottom: 12 }}>
-              DROP THE MRP STRUCTURE HERE
+              MRP MASTER · IMPORT A NEW VERSION (OLD ONES MOVE TO ARCHIVE)
             </div>
             {[
               { label: 'MRP Mapping Master (.xlsx)',   path: 'Sales Reapportionment\\MRP Mapping\\' },
@@ -390,10 +411,34 @@ export default function MrpReapportionment() {
                 </div>
                 {status?.mapping_file_found
                   ? <div style={{ fontSize: 11, color: theme.textPrimary, ...mono }}>{status.mapping_file}</div>
-                  : <div style={{ fontSize: 11, color: theme.textMuted }}>Drop .xlsx in MRP Mapping\</div>
+                  : <div style={{ fontSize: 11, color: theme.textMuted }}>No master yet - import one</div>
                 }
+                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                  <label style={{
+                    padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: importing ? 'wait' : 'pointer',
+                    background: 'var(--st-btn,#A8CBB7)', color: 'var(--st-btn-text,#1F4D3A)',
+                  }}>
+                    {importing ? '⟳ Checking…' : '⇪ Import new version'}
+                    <input type="file" accept=".xlsx" hidden disabled={importing}
+                      onChange={e => { importMaster(e.target.files[0]); e.target.value = '' }} />
+                  </label>
+                  {status?.mapping_file_found && (
+                    <a href="/api/planning/mrp-reapportionment/mapping/download" style={{
+                      padding: '4px 10px', borderRadius: 6, fontSize: 11, textDecoration: 'none',
+                      border: `1px solid ${theme.border}`, color: theme.textMuted,
+                    }}>↓ Export current</a>
+                  )}
+                </div>
               </div>
             </div>
+            {importMsg && (
+              <div style={{
+                marginBottom: 10, padding: '8px 12px', borderRadius: 8, fontSize: 11,
+                background: alpha(importMsg.ok ? theme.accent : theme.danger, '10'),
+                border: `1px solid ${alpha(importMsg.ok ? theme.accent : theme.danger, '33')}`,
+                color: importMsg.ok ? theme.textPrimary : theme.danger,
+              }}>{importMsg.ok ? '✓ ' : '✗ '}{importMsg.text}</div>
+            )}
             <button onClick={reload} style={{
               padding: '5px 12px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
               background: 'transparent', border: `1px solid ${theme.border}`, color: theme.textMuted,

@@ -26,12 +26,16 @@ Endpoints:
   GET  /mrp-groups       → groups (Dept, Display): listed MRPs and where each discontinued one goes
   POST /run              → redistribution by the nearest-listed-MRP rule
   GET  /download         → latest output Excel
+  POST /mapping/upload   → new version of the MRP master (checked first; the old one moves to MRP Mapping/Archive)
+  GET  /mapping/download → the active MRP master, as uploaded
 """
 
 import os
 import io
 import glob
 import json
+import shutil
+import tempfile
 import warnings
 import datetime
 import threading
@@ -44,8 +48,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from apportion import SHOWN  # noqa: E402
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from plan_cache import save_json  # noqa: E402 - atomic JSON writes (audit 2026-10-06)
 
@@ -194,10 +198,10 @@ def _wide_master(path: str) -> Optional[pd.DataFrame]:
     return None
 
 
-def _load_mapping() -> pd.DataFrame:
+def _load_mapping(path: Optional[str] = None) -> pd.DataFrame:
     """Load the MRP master -> DEPARTMENT, DISPLAY, MRP_CURRENT, MRP_LISTED (one row per Department x Display x old
     MRP). Reads the planners' wide "MRP Adj" layout, or a plain list with those columns."""
-    path = _find_mapping_file()
+    path = path or _find_mapping_file()
     if not path:
         raise ValueError(f"No mapping file found in: {MAPPING_DIR}")
 
@@ -601,3 +605,69 @@ def download_latest():
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={os.path.basename(path)}"},
     )
+
+
+# ── MRP master versions: import / export (user, 2026-10-08: "what if i have a new version for mrp mapping master ?
+# Importing and exporting feature - add it") ─────────────────────────────────────────────────────────────────────
+
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def _mapping_changes(old: Optional[pd.DataFrame], new: pd.DataFrame) -> dict:
+    """Old MRPs added / removed / given a different new MRP, versus the master being replaced."""
+    if old is None:
+        return {"added": len(new), "removed": 0, "changed": 0}
+    o, n = old.set_index(KEYS)["MRP_LISTED"], new.set_index(KEYS)["MRP_LISTED"]
+    both = o.index.intersection(n.index)
+    return {"added": len(n.index.difference(o.index)), "removed": len(o.index.difference(n.index)),
+            "changed": int((o[both] != n[both]).sum())}
+
+
+@router.post("/mapping/upload")
+def upload_mapping(file: UploadFile = File(...)):
+    """A new version of the MRP master. Read with the same reader a run uses before it goes live; the version it
+    replaces moves to MRP Mapping\\Archive with a time stamp (kept, never overwritten)."""
+    name = os.path.basename(file.filename or "").strip()
+    if not name.lower().endswith(".xlsx"):
+        raise HTTPException(400, detail="Upload the MRP master as an .xlsx file")
+    fd, tmp = tempfile.mkstemp(suffix=".xlsx")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+        try:
+            new = _load_mapping(tmp)
+        except Exception as e:
+            raise HTTPException(400, detail=f"Not a usable MRP master - nothing changed: {e}")
+        if new.empty:
+            raise HTTPException(400, detail="The MRP master has no Department x Display x MRP rows - nothing changed")
+        try:
+            old = _load_mapping() if _find_mapping_file() else None
+        except Exception:
+            old = None
+        archive = os.path.join(MAPPING_DIR, "Archive")
+        os.makedirs(archive, exist_ok=True)
+        stamp = datetime.datetime.now().strftime("%Y-%m-%d %H%M%S")
+        archived = []
+        for f in glob.glob(os.path.join(MAPPING_DIR, "*.xls*")):
+            dest = os.path.join(archive, f"{stamp} {os.path.basename(f)}")
+            shutil.move(f, dest)
+            archived.append(os.path.basename(dest))
+        shutil.move(tmp, os.path.join(MAPPING_DIR, name))
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+    t = _targets(new)
+    return {"ok": True, "file": name, "archived": archived,
+            "rows": len(new), "groups": int(new.groupby(["DEPARTMENT", "DISPLAY"]).ngroups),
+            "listed": int((new["MRP_LISTED"] > 0).sum()), "discontinued": int((new["MRP_LISTED"] == 0).sum()),
+            "no_listed_groups": int(t.groupby(["DEPARTMENT", "DISPLAY"])["MRP_LISTED"].max().eq(0).sum()),
+            "changes": _mapping_changes(old, new)}
+
+
+@router.get("/mapping/download")
+def download_mapping():
+    """The active MRP master exactly as it was uploaded - edit it and import it back as the next version."""
+    path = _find_mapping_file()
+    if not path:
+        raise HTTPException(404, detail=f"No MRP master in: {MAPPING_DIR}")
+    return FileResponse(path, media_type=XLSX, filename=os.path.basename(path))
