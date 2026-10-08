@@ -7,6 +7,18 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### Suite: Undo / Redo in every app
+- **Asked (user):** "Add an undo button feature in all apps, Forward and Backward."
+- New `RS Planning Platform/backend/static/suite-undo.js`, served inside `GET /api/suite-theme.js` (which every app page already loads), so Calendar, AOP, Sales Plan, BIS, Listing, Re-Aligner, GR Plan Converter and the platform pages all get it with no per-app change.
+- A small Undo | Redo pill (bottom-left) on any page with editable fields; Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z) when the cursor is not in a text box. Hover shows what it will undo; a toast says what was undone.
+- Records every committed field edit (input / select / textarea / checkbox / slider) and puts values back as a normal edit (React and plain-HTML handlers both recompute). Undo does not save - each app's own Save still applies. Fields re-drawn by the app are found again by id / data-key / name / aria-label.
+- Not covered yet: app actions that are not a field edit (Clear all, drag-and-drop, Re-seed, custom dropdowns such as the Ref Store picker).
+
+### BIS: factor table - preview a department under each method, one simple picker
+- **Asked (user):** "i want a preview pane to see if i choose matrix, weight builder or Continuous what will be my result before selecting the default factor matrix, simplify the picker as possible"
+- Top of the factor table: pick a department (grouped by division); three cards - Matrix / Weighted builder / Continuous - each with the department's factor, its Phase 1 plan for Mar-Jun (Rs Cr and vs LY, every department of the division scored the same way and re-balanced to the AOP, as the planner does), the change vs plain AOP share, the back-test error and the reason. Draft edits show immediately.
+- "Use this" replaces the old Planner uses dropdown (Save applies it); "Settings" replaces the view tabs. Checked: the Matrix card for MSE_R/N T-SHIRT H/S = Rs 29.39 Cr +12.4%, identical to the planner's own value.
+
 ### AOP Forecaster: Ref Store Mapping - readable % pop-up, visible scrollbar
 - **Asked (user):** "it is difficult to see when i click on % and make the side slider stay visible and tangible"
 - The % (division mix) pop-up is now pinned to the window beside the button (opens upward near the bottom), so the table's scroll box no longer clips it; larger text, right-aligned numbers, bigger close button, % button stays highlighted while open. Closes on outside click, scroll or resize.
