@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### AOP Output: Eff Sales / Eff Cont % / Eff Gr% columns + Department filter (Departments tab and sale-type switch removed)
+- **Asked (user):** "instead of reindexed and actual sales switch, add 2 columns named Eff Sales, Eff Cont % and Eff Gr% in Output. Month Wise and Total Both"; "Remove the separate departments tab and add the department filter field in the output tab only"; "All sales should match with calendarised sales on month level make sure of that".
+- Output now has three more values (on by default, every month + Total): **Eff Sales** = the Calendar's calendarised (reindexed) LY sales of the row, **Eff Cont %** = its share of the row above, **Eff Gr%** = Fcst vs Eff Sales. '—' where the LY month has not closed yet.
+- **Department** is a filter field in the bar (dashed, like Tag / Cluster) - drag it onto the header to add the layer. With it on, each store-division's Base and Fcst are split by the department's share of its Eff Sales in that month (totals kept exactly). The separate Departments tab and the Reindexed | Actual switch are gone.
+- Tie-out vs the Calendar (store x month, Mar'27-Sep'27, 2,233 checks): largest gap Rs 180; network within Rs 7,000 a month (e.g. Mar'27 14,741.20 L both). Only the non-planning divisions (DND etc., 2.8-9.8 L a month) are left out, as everywhere in planning - e.g. ALC Mar'27 Eff 169.76 L = Calendar 170.19 L - DND 0.43 L.
+
 ### Landing: "Sync all data" in the account (admin) menu
 - **Asked (user):** "give me a sync button to start refresh all syncs in the admin button on the landing page - so that i can manage the console better."
 - Admins only (like Users & access; greyed out for anyone whose "data sync" right is off). One click starts the database sync (`sync/run_all.py`: site / store master, store actuals, day weights, Calendar month-wise reindex + check, day-wise reindex, festivals, Listing / Delisting) and Buyer's Input's sales, sell-through and history syncs, all from the newest data-lake files, then opens the Data sync panel to follow each source. The label shows when it started, or which part could not start.

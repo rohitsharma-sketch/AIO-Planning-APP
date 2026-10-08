@@ -154,37 +154,50 @@ const VALUE_DEFS = {
   stores: { label: 'Stores',    short: 'Stores' },
   base:   { label: 'Base',      short: 'Base' },
   fcst:   { label: 'Forecast',  short: 'Fcst' },
-  cont:   { label: 'Contribution % of the row above', short: 'Cont%' },   // Departments tab only
   dev:    { label: 'Deviation', short: 'Dev' },
   gr:     { label: 'Growth %',  short: 'Gr%', locked: true },
+  // Eff = the Calendar's calendarised (reindexed) LY sales of the row - user, 2026-10-08: "add 2 columns named Eff
+  // Sales, Eff Cont % and Eff Gr% in Output. Month Wise and Total Both"; "All sales should match with calendarised
+  // sales on month level"
+  eff:    { label: 'Eff Sales - calendarised (reindexed) LY sales, = the Calendar\'s Month Wise Matrix', short: 'Eff Sales' },
+  effc:   { label: 'Eff Cont % - this row\'s share of the row above, in Eff Sales', short: 'Eff Cont%' },
+  effgr:  { label: 'Eff Gr% - Forecast vs Eff Sales', short: 'Eff Gr%' },
 }
+const VALUE_KEYS = Object.keys(VALUE_DEFS)
+const EFF_KEYS = ['eff', 'effc', 'effgr']
+const DEFAULT_LAYOUT = { rows: LEVEL_KEYS, values: ['base', 'fcst', 'gr', ...EFF_KEYS], unit: 'L', collapsedQ: [] }
 const QTR_DEF = [['Q1', [1, 2, 3]], ['Q2', [4, 5, 6]], ['Q3', [7, 8, 9]], ['Q4', [10, 11, 12]]]   // MONTHS idx; 0 = Mar'27
+const LAYOUT_KEY = 'aop.output.pivotLayout'
+const KEYS = [...LEVEL_KEYS, 'Department']   // Department = a filter field; drag it onto the header to add the layer
 
-function loadLayout(storeKey, keys, valueKeys, dflt) {
+function loadLayout() {
   try {
-    const l = JSON.parse(localStorage.getItem(storeKey) || 'null')
-    if (!l) return dflt
-    const saved = (l.rows || []).filter(k => keys.includes(k))
-    const rows = saved.length ? saved : keys   // removed layers wait in the filter bar
-    const values = valueKeys.filter(k => k === 'gr' || (l.values || []).includes(k))
-    return { rows, values, unit: l.unit === 'Cr' ? 'Cr' : 'L', collapsedQ: Array.isArray(l.collapsedQ) ? l.collapsedQ : [],
-             saleType: l.saleType === 'actual' ? 'actual' : 'reindexed' }
-  } catch { return dflt }
+    const l = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null')
+    if (!l) return DEFAULT_LAYOUT
+    const saved = (l.rows || []).filter(k => KEYS.includes(k))
+    const rows = saved.length ? saved : LEVEL_KEYS   // removed layers wait in the filter bar
+    // layouts saved before the Eff columns existed get them switched on once
+    const values = VALUE_KEYS.filter(k => k === 'gr' || (l.values || []).includes(k) || (!l.eff && EFF_KEYS.includes(k)))
+    return { rows, values, unit: l.unit === 'Cr' ? 'Cr' : 'L', collapsedQ: Array.isArray(l.collapsedQ) ? l.collapsedQ : [], eff: true }
+  } catch { return DEFAULT_LAYOUT }
 }
 
 const sumIdx = (arr, idx) => idx.reduce((s, i) => s + (arr[i] || 0), 0)
-function cellsFor(n, g, parent) {
-  const b = sumIdx(n.mb, g.idx), f = sumIdx(n.m, g.idx), pf = parent ? sumIdx(parent.m, g.idx) : 0
+// effIdx = the months that have calendarised LY sales (closed LY months); Eff values are '—' for a group without any
+function cellsFor(n, g, parent, effIdx) {
+  const b = sumIdx(n.mb, g.idx), f = sumIdx(n.m, g.idx)
+  const gi = g.idx.filter(i => effIdx.has(i))
+  const e = gi.length ? sumIdx(n.e, gi) : undefined, pe = gi.length && parent ? sumIdx(parent.e, gi) : 0, fe = sumIdx(n.m, gi)
   return { stores: n.stores, base: b, fcst: f, dev: f - b, gr: b > 0 ? (f / b - 1) * 100 : null,
-           cont: pf > 0 ? (f / pf) * 100 : null }
+           eff: e, effc: e === undefined ? undefined : pe > 0 ? (e / pe) * 100 : null,
+           effgr: e === undefined ? undefined : e > 0 ? (fe / e - 1) * 100 : null }
 }
 
-// Departments tab (user, 2026-10-08: "the aop forecast decided on division will be bifurcated on reindexed cont % and
-// will be multiplied by the aop forecasted"; "filter for sale type - reindexed or actual sales"). Each store x division
-// row's forecast is split over its departments by their share of that store-division's LY sales in the same month
-// (dept-mix endpoint); Base = the department's own LY sales of that sale type. A month without closed LY data uses the
-// store-division's mix over the months that have it; a store with no LY sales at all (new stores) uses the division's
-// network-wide mix. Shares add to 100%, so every division's forecast is kept exactly.
+// Department split (user, 2026-10-08, "add the department filter field in the output tab"): each store x division
+// row's Base and Forecast are split over its departments by their share of that store-division's calendarised LY
+// sales in the same month (dept-mix); the department's Eff Sales are its own calendarised sales. A month without closed
+// LY data uses the store-division's mix over the months that have it; a store with no LY sales (new stores) uses the
+// division's network-wide mix. Shares add to 100%, so every division's Base / Forecast is kept exactly.
 function deptShares(src) {
   const depts = Object.keys(src), tot = new Array(13).fill(0), ytd = {}
   let ytdTot = 0
@@ -208,11 +221,23 @@ export function splitByDept(leaves, mix) {
     const own = mix[String(r.Store).trim().toUpperCase()]?.[r.Division]
     const ownShares = own && deptShares(own)
     const shares = ownShares || netShares[r.Division]
-    if (!shares) { out.push({ ...r, Department: '(no LY mix)', mb: zero }); continue }
+    if (!shares) { out.push({ ...r, Department: '(no LY mix)', e: zero }); continue }
     for (const [dp, sh] of Object.entries(shares))
-      out.push({ ...r, Department: dp, m: r.m.map((x, i) => x * sh[i]), mb: ownShares ? own[dp].map(x => x || 0) : zero })
+      out.push({ ...r, Department: dp, m: r.m.map((x, i) => x * sh[i]), mb: r.mb.map((x, i) => x * sh[i]),
+                 e: ownShares ? own[dp].map(x => x || 0) : zero })
   }
   return out
+}
+// Store x division Eff Sales = the sum of its departments' calendarised sales (no split needed)
+function withEff(leaves, mix) {
+  const zero = new Array(13).fill(0)
+  return leaves.map(r => {
+    const own = mix[String(r.Store).trim().toUpperCase()]?.[r.Division]
+    if (!own) return { ...r, e: zero }
+    const e = new Array(13).fill(0)
+    for (const v of Object.values(own)) v.forEach((x, i) => { e[i] += x || 0 })
+    return { ...r, e }
+  })
 }
 const fmtGr = v => (v == null ? 'new' : (v > 0 ? '+' : '') + v.toFixed(1) + '%')
 
@@ -224,32 +249,26 @@ export function reorder(list, key, target, side) {
   return [...without.slice(0, i), key, ...without.slice(i)]
 }
 
-export default function OutputTab({ sessionId, runKey, dept = false }) {
+export default function OutputTab({ sessionId, runKey }) {
   const [rows, setRows]       = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
-  // dept = the Departments tab: one more layer (Department), a Cont% value and a sale-type switch
-  const KEYS = useMemo(() => (dept ? [...LEVEL_KEYS, 'Department'] : LEVEL_KEYS), [dept])
-  const VALUE_KEYS = Object.keys(VALUE_DEFS).filter(k => dept || k !== 'cont')
-  const LAYOUT_KEY = dept ? 'aop.output.deptLayout' : 'aop.output.pivotLayout'
-  const short = k => (dept && k === 'base' ? 'LY' : VALUE_DEFS[k].short)
+  const short = k => VALUE_DEFS[k].short
 
   // Pivot layout (remembered per browser)
-  const [layout, setLayout] = useState(() => loadLayout(LAYOUT_KEY, KEYS, VALUE_KEYS,
-    { rows: KEYS, values: dept ? ['base', 'fcst', 'cont', 'gr'] : ['base', 'fcst', 'gr'], unit: 'L', collapsedQ: [], saleType: 'reindexed' }))
-  useEffect(() => { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)) } catch {} }, [layout, LAYOUT_KEY])
-  // LY store x division x department sales (dept-mix): the Departments split, and Output's Base when the corner
-  // switch is on Actual (user, 2026-10-08: "a switch on the corner between re-indexed and actual sales")
-  const needMix = dept || layout.saleType === 'actual'
+  const [layout, setLayout] = useState(loadLayout)
+  useEffect(() => { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify({ ...layout, eff: true })) } catch {} }, [layout])
+  // Calendarised LY sales per store x division x department (dept-mix, the Calendar's reindexed department snapshot):
+  // Eff Sales, and the department split
   const [mix, setMix] = useState(null)
   useEffect(() => {
-    if (!needMix) return
     setMix(null)
-    fetch(apiUrl(`/api/config/dept-mix?sale_type=${layout.saleType}`))
+    fetch(apiUrl('/api/config/dept-mix?sale_type=reindexed'))
       .then(r => r.json())
-      .then(j => setMix(j.ok ? j : { error: j.reason || j.detail || 'No department sales' }))
+      .then(j => setMix(j.ok ? j : { error: j.reason || j.detail || 'No calendarised sales' }))
       .catch(e => setMix({ error: e.message }))
-  }, [needMix, layout.saleType, runKey])
+  }, [runKey])
+  const effIdx = useMemo(() => new Set(mix?.months || []), [mix])
   const { rows: rowFields, values: valueFields, unit } = layout
   const collapsedQ = useMemo(() => new Set(layout.collapsedQ), [layout.collapsedQ])
   const setL = patch => setLayout(l => ({ ...l, ...(typeof patch === 'function' ? patch(l) : patch) }))
@@ -279,25 +298,23 @@ export default function OutputTab({ sessionId, runKey, dept = false }) {
   }, [sessionId, runKey])
 
   // ── Data pipeline ──────────────────────────────────────────────────────
+  // Department rows only when the Department layer or filter is in use (the split is ~90x the rows)
+  const deptOn = layout.rows.includes('Department') || (d.dimF.Department || []).length > 0
   const leaves   = useMemo(() => {                                                       // ₹ Lakhs
     const ls = (rows || []).map(r => toLeaf(r, 1))
-    if (dept) return mix?.mix ? splitByDept(ls, mix.mix) : []
-    if (layout.saleType !== 'actual') return ls   // Reindexed = AOP's own base (LY sales festival-aligned)
-    if (!mix?.mix) return []
-    // Actual: Base = the store-division's LY sales in the same calendar month last year (no LY = 0, e.g. new stores)
-    return ls.map(r => {
-      const own = mix.mix[String(r.Store).trim().toUpperCase()]?.[r.Division] || {}
-      const mb = new Array(13).fill(0)
-      for (const v of Object.values(own)) v.forEach((x, i) => { mb[i] += x || 0 })
-      return { ...r, mb }
-    })
-  }, [rows, dept, mix, layout.saleType])
+    if (!mix?.mix) return ls
+    return deptOn ? splitByDept(ls, mix.mix) : withEff(ls, mix.mix)
+  }, [rows, mix, deptOn])
   const options  = useMemo(() => {
-    const o = dimOptions(leaves, KEYS), out = {}
-    for (const k of KEYS) out[k] = o[k].map(x => x.value).filter(v => v != null && v !== '' && v !== '—')
+    const o = dimOptions(leaves, LEVEL_KEYS), out = {}
+    for (const k of LEVEL_KEYS) out[k] = o[k].map(x => x.value).filter(v => v != null && v !== '' && v !== '—')
+    // departments listed from the calendarised sales (for the divisions shown), even before the split is on
+    const divs = new Set(out.Division), deps = new Set()
+    for (const sd of Object.values(mix?.mix || {})) for (const [dv, dps] of Object.entries(sd)) if (divs.has(dv)) Object.keys(dps).forEach(x => deps.add(x))
+    out.Department = [...deps].sort()
     return out
-  }, [leaves, KEYS])
-  const filtered = useMemo(() => filterLeaves(leaves, { dimF: d.dimF, idx: SEL_IDX, keys: KEYS }), [leaves, d.dimF, SEL_IDX, KEYS])
+  }, [leaves, mix])
+  const filtered = useMemo(() => filterLeaves(leaves, { dimF: d.dimF, idx: SEL_IDX, keys: deptOn ? KEYS : LEVEL_KEYS }), [leaves, d.dimF, SEL_IDX, deptOn])
 
   // Column groups: Mar'27, then quarter bands (months, or one column when folded), then Total
   const groups = useMemo(() => {
@@ -320,7 +337,7 @@ export default function OutputTab({ sessionId, runKey, dept = false }) {
   const valsFor = g => valueFields.filter(v => g.total || v !== 'stores')   // store count only in Total
 
   const tree = useMemo(() => {
-    const val = n => (sort.key === 'name' ? n.name : cellsFor(n, totalGroup)[sort.key])
+    const val = n => (sort.key === 'name' ? n.name : cellsFor(n, totalGroup, null, effIdx)[sort.key] ?? null)
     return sortTree(buildTree(filtered, rowFields, SEL_IDX), val, sort.dir)
   }, [filtered, rowFields, SEL_IDX, sort, totalGroup])
   const grand = useMemo(() => aggregate(filtered, SEL_IDX), [filtered, SEL_IDX])
@@ -339,10 +356,11 @@ export default function OutputTab({ sessionId, runKey, dept = false }) {
 
   // ── Helpers ────────────────────────────────────────────────────────────
   const U = unit === 'Cr' ? 0.01 : 1
-  const fmtVal = (v, key) => key === 'gr' ? fmtGr(v) : key === 'stores' ? v : key === 'cont' ? (v == null ? '—' : v.toFixed(1) + '%')
+  const fmtVal = (v, key) => v === undefined ? '—'
+    : key === 'gr' || key === 'effgr' ? fmtGr(v) : key === 'stores' ? v : key === 'effc' ? (v == null ? '—' : v.toFixed(1) + '%')
     : key === 'dev' ? fmtDev(v * U) : fmt1(v * U)
-  const clsVal = (v, key) => key === 'gr' ? (v == null ? 'muted' : v >= 0 ? 'positive' : 'negative')
-    : key === 'dev' ? (v > 0 ? 'positive' : v < 0 ? 'negative' : '') : key === 'fcst' ? 'fw-bold' : key === 'cont' ? 'muted' : ''
+  const clsVal = (v, key) => key === 'gr' || key === 'effgr' ? (v == null ? 'muted' : v >= 0 ? 'positive' : 'negative')
+    : key === 'dev' ? (v > 0 ? 'positive' : v < 0 ? 'negative' : '') : key === 'fcst' ? 'fw-bold' : key === 'effc' ? 'muted' : ''
   const levelLabel = k => LEVELS.find(l => l.key === k)?.label ?? k
   const dimSel = k => d.dimF[k] || []
   const anyFilter = monthF.length > 0 || KEYS.some(k => dimSel(k).length)
@@ -416,7 +434,7 @@ export default function OutputTab({ sessionId, runKey, dept = false }) {
     </td>
   )
   const valueCells = (n, bold) => groups.flatMap(g => {
-    const c = cellsFor(n, g, parentOf(n)), vs = valsFor(g)
+    const c = cellsFor(n, g, parentOf(n), effIdx), vs = valsFor(g)
     return vs.map(v => (
       <td key={`${g.key}|${v}`} className={`num ${clsVal(c[v], v)} ${bold ? 'fw-bold' : ''} ${g.total ? 'pv-total' : ''} ${v === vs[0] ? 'pv-gstart' : ''}`}>
         {fmtVal(c[v], v)}
@@ -447,8 +465,7 @@ export default function OutputTab({ sessionId, runKey, dept = false }) {
   if (loading) return <div className="out-loading">Loading detail data…</div>
   if (error)   return <div className="out-error">Error: {error}</div>
   if (!rows)   return null
-  if (needMix && mix?.error) return <div className="out-error">LY {layout.saleType} sales: {mix.error}</div>
-  if (needMix && !mix) return <div className="out-loading">Loading LY {layout.saleType} sales…</div>
+  if (!mix) return <div className="out-loading">Loading calendarised sales…</div>
 
   return (
     <div className="out-wrap out-drill">
@@ -470,22 +487,13 @@ export default function OutputTab({ sessionId, runKey, dept = false }) {
             {VALUE_KEYS.map(k => (
               <button key={k} className={valueFields.includes(k) ? 'on' : ''} disabled={VALUE_DEFS[k].locked}
                       aria-pressed={valueFields.includes(k)} onClick={() => toggleVal(k)}
-                      title={VALUE_DEFS[k].locked ? 'Growth % is always shown' : dept && k === 'base' ? `Show LY ${layout.saleType} sales` : `Show ${VALUE_DEFS[k].label}`}>
+                      title={VALUE_DEFS[k].locked ? 'Growth % is always shown' : `Show ${VALUE_DEFS[k].label}`}>
                 {short(k)}
               </button>
             ))}
           </div>
           <div className="pv-seg" role="group" aria-label="Unit">
             {['L', 'Cr'].map(u => <button key={u} className={unit === u ? 'on' : ''} onClick={() => setL({ unit: u })}>₹ {u === 'L' ? 'L' : 'Cr'}</button>)}
-          </div>
-          {/* Sale type, in the corner (user, 2026-10-08) */}
-          <div className="pv-seg" role="group" aria-label="Sale type"
-               title={dept
-                 ? 'Which LY sales give each department\'s share of its division (and the LY column): Reindexed = festival-aligned onto this year\'s calendar, Actual = same month last year on its own dates'
-                 : 'What Base and Gr% compare against: Reindexed = AOP\'s base (LY sales festival-aligned onto this year\'s calendar), Actual = the store-division\'s sales in the same month last year'}>
-            {[['reindexed', 'Reindexed'], ['actual', 'Actual']].map(([k, l]) => (
-              <button key={k} className={layout.saleType === k ? 'on' : ''} aria-pressed={layout.saleType === k} onClick={() => setL({ saleType: k })}>{l}</button>
-            ))}
           </div>
         </div>
 
@@ -541,15 +549,14 @@ export default function OutputTab({ sessionId, runKey, dept = false }) {
             </tbody>
           </table>
         </div>
-        {!dept && layout.saleType === 'actual' && <div className="pv-foot">
-          Base = each store-division's actual sales in the same month last year (on their own dates; 0 where there were none, e.g. new stores) - Gr% is Fcst against that.
-          Forecast unchanged. Switch to Reindexed for AOP's own base.
-        </div>}
-        {dept && <div className="pv-foot">
-          Fcst = each store's division forecast × the department's share of that store-division's LY {layout.saleType === 'reindexed' ? 'reindexed (festival-aligned)' : 'actual'} sales in the same month
-          (LY = those sales). Months without closed LY sales use the store's mix over the months that have it; new stores use the division's network mix.
-          Department sales as of {new Date(mix.computedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}.
-        </div>}
+        {mix.error
+          ? <div className="pv-foot">Eff Sales unavailable: {mix.error}</div>
+          : <div className="pv-foot">
+              Eff Sales = the Calendar's calendarised (reindexed) LY sales - the same month figures as its Month Wise Matrix, for the five planning divisions
+              (DND / non-trading left out); '—' = LY month not closed yet. Eff Cont% = share of the row above; Eff Gr% = Fcst vs Eff Sales.
+              {deptOn && ' Department rows: Base and Fcst split by the department\'s share of its store-division\'s Eff Sales in that month (store mix over the closed months where a month has none; new stores use the division\'s network mix).'}
+              {' '}Calendarised sales as of {new Date(mix.computedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}.
+            </div>}
         {VIS.length < MONTHS.length && <div className="pv-foot">{monthSpan(VIS)} shown · {monthsPicked ? 'months as picked in Review' : 'later months appear as their base month closes'}</div>}
       </div>
 

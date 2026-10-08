@@ -55,7 +55,6 @@ const CustomTooltip = ({ active, payload, label }) => {
 export default function ResultsDashboard({ results, session, runKey, onDownload }) {
   const { summary } = results
   const [activeTab, setActiveTab] = useState('summary')
-  const [deptSeen, setDeptSeen] = useState(false)
   const [leaves, setLeaves]       = useState(null)
   const [dataErr, setDataErr]     = useState(null)
   const [typeFilter, setTypeFilter] = useState([])      // [] = all types
@@ -291,18 +290,12 @@ export default function ResultsDashboard({ results, session, runKey, onDownload 
       <div className="dash-tabs">
         <button className={`dash-tab ${activeTab === 'summary' ? 'active' : ''}`} onClick={() => setActiveTab('summary')}>Summary</button>
         <button className={`dash-tab ${activeTab === 'output' ? 'active' : ''}`} onClick={() => setActiveTab('output')}>Output</button>
-        <button className={`dash-tab ${activeTab === 'departments' ? 'active' : ''}`} onClick={() => { setActiveTab('departments'); setDeptSeen(true) }}
-                title="The division forecast split into departments by LY contribution % (reindexed or actual sales)">Departments</button>
       </div>
 
       {/* ── Output tab — always mounted so filter state survives Summary↔Output toggling ── */}
       <div style={{ display: activeTab === 'output' ? '' : 'none' }}>
         <OutputTab sessionId={session?.session_id} runKey={runKey} />
       </div>
-      {/* ── Departments (2026-10-08) - mounted on first visit, then kept like Output ── */}
-      {deptSeen && <div style={{ display: activeTab === 'departments' ? '' : 'none' }}>
-        <OutputTab sessionId={session?.session_id} runKey={runKey} dept />
-      </div>}
 
       {/* ── Summary tab ── */}
       {activeTab === 'summary' && <>

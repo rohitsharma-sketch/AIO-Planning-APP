@@ -26,17 +26,17 @@ export const cmpStr = (a, b) => String(a).localeCompare(String(b), undefined, { 
 // ── Aggregation ────────────────────────────────────────────────────────────
 // `idx` = month indexes included in the scalar totals (base/fcst/dev). Month arrays stay full-length.
 export function aggregate(leaves, idx = ALL_IDX) {
-  const mb = new Array(13).fill(0), m = new Array(13).fill(0)
+  const mb = new Array(13).fill(0), m = new Array(13).fill(0), e = new Array(13).fill(0)   // e = Eff Sales (Output)
   const storesByType = { LfL: new Set(), Ramp: new Set(), NSO: new Set() }
   const stores = new Set()
   for (const r of leaves) {
     stores.add(r.Store); storesByType[r.Type]?.add(r.Store)
-    for (let i = 0; i < 13; i++) { mb[i] += r.mb[i]; m[i] += r.m[i] }
+    for (let i = 0; i < 13; i++) { mb[i] += r.mb[i]; m[i] += r.m[i]; if (r.e) e[i] += r.e[i] }
   }
   let base = 0, fcst = 0
   for (const i of idx) { base += mb[i]; fcst += m[i] }
   return {
-    base, fcst, dev: fcst - base, mb, m,
+    base, fcst, dev: fcst - base, mb, m, e,
     stores: stores.size,
     typeCounts: Object.fromEntries(TYPES.map(t => [t, storesByType[t].size])),
     // Forecast (incl. the ref-store deviation layer) vs Base - the same growth
