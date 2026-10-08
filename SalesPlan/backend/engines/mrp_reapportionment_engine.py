@@ -334,88 +334,80 @@ def _validate(sales_df: pd.DataFrame, output_df: pd.DataFrame,
 # ── Excel output builder ───────────────────────────────────────────────────────
 
 def _build_excel(output_df, unmapped_df, val_rows, val_pass, log_lines, sales_df, month_cols) -> bytes:
-    def fill(h): return PatternFill("solid", fgColor=h)
-    def fnt(bold=False, color="E2EAED", size=9): return Font(name="Arial", bold=bold, color=color, size=size)
-    def bdr():
-        t = Side(style="thin", color="2D3B40")
-        return Border(left=t, right=t, top=t, bottom=t)
-    def aln(h="left"): return Alignment(horizontal=h, vertical="center")
+    """The run's workbook. xlsxwriter with one format per column and the row banding as a single conditional format
+    (user, 2026-10-08: "speed up the excel export" - openpyxl styled ~3.4 M cells one by one, ~7 min a run)."""
+    import xlsxwriter
 
-    NAVY = "1F3864"; GREEN = "C6EFCE"; RED = "FF9999"; GREY = "2C3538"; DKGREY = "1C2022"
+    NAVY = "#1F3864"; GREEN = "#C6EFCE"; RED = "#FF9999"; GREY = "#2C3538"; DKGREY = "#1C2022"
+    INT_COLS = {"MRP_CURRENT", "LISTED_MRP", "SHARE_PCT"}
+    buf = io.BytesIO()
+    wb = xlsxwriter.Workbook(buf, {"in_memory": True, "strings_to_formulas": False, "strings_to_urls": False})
+    base = {"font_name": "Arial", "font_size": 9, "border": 1, "border_color": "#2D3B40", "valign": "vcenter"}
 
-    def write_header(ws, cols, row=1):
-        for ci, c in enumerate(cols, 1):
-            cell = ws.cell(row=row, column=ci, value=c)
-            cell.fill = fill(NAVY); cell.font = fnt(True, "FFFFFF", 10)
-            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-            cell.border = bdr()
-        ws.row_dimensions[row].height = 26
+    def F(**k):
+        return wb.add_format({**base, **k})
 
-    def write_df(ws, df, title=""):
+    head = F(bold=True, font_color="#FFFFFF", font_size=10, bg_color=NAVY, align="center", text_wrap=True)
+    band = wb.add_format({"bg_color": GREY})
+    col_fmt = {kind: F(bg_color=DKGREY, font_color="#E2EAED", align="left" if kind is None else "right",
+                       num_format={None: "General", "int": "#,##0", "dec": "#,##0.00000000"}[kind])
+               for kind in (None, "int", "dec")}
+    note = wb.add_format({"font_name": "Arial", "font_size": 9, "font_color": "#7FA0AD"})
+
+    def write_df(ws, df, title):
         if df.empty:
-            ws.cell(1, 1, f"No data — {title}").font = fnt(False, "7FA0AD")
+            ws.write(0, 0, f"No data — {title}", note)
             return
         cols = list(df.columns)
-        write_header(ws, cols)
-        num_cols = {c for c in cols if pd.api.types.is_numeric_dtype(df[c])}
-        for ri, (_, row) in enumerate(df.iterrows(), 2):
-            bg = GREY if ri % 2 == 0 else DKGREY
-            for ci, c in enumerate(cols, 1):
-                v = row[c]
-                cell = ws.cell(ri, ci, v)
-                cell.fill = fill(bg); cell.font = fnt(); cell.border = bdr()
-                cell.alignment = aln("right" if c in num_cols else "left")
-                if c in num_cols and isinstance(v, (int, float)):
-                    # full precision to 8 dp (was round(v, 2) - it undid the exact split in the file)
-                    cell.value = round(float(v), 8) + 0.0
-                    if c in ("MRP_CURRENT", "LISTED_MRP", "SHARE_PCT"):
-                        cell.number_format = "#,##0"
-                    else:
-                        cell.number_format = "#,##0.00000000"
-        ws.freeze_panes = "A2"
-        if len(df) > 0:
-            ws.auto_filter.ref = ws.dimensions
-        for ci, c in enumerate(cols, 1):
-            ws.column_dimensions[get_column_letter(ci)].width = min(28, max(10, len(c) + 4))
+        ws.set_row(0, 26)
+        ws.write_row(0, 0, cols, head)
+        data = []
+        for ci, c in enumerate(cols):
+            num = pd.api.types.is_numeric_dtype(df[c])
+            kind = ("int" if c in INT_COLS else "dec") if num else None
+            ws.set_column(ci, ci, min(28, max(10, len(c) + 4)), col_fmt[kind])
+            v = df[c].astype(float).round(8) if num else df[c]   # full precision to 8 dp, as before
+            data.append(v.astype(object).where(v.notna(), None).tolist())
+        for r, row in enumerate(zip(*data), 1):
+            ws.write_row(r, 0, row)
+        last = len(df)
+        ws.conditional_format(1, 0, last, len(cols) - 1, {"type": "formula", "criteria": "=MOD(ROW(),2)=0", "format": band})
+        ws.freeze_panes(1, 0)
+        ws.autofilter(0, 0, last, len(cols) - 1)
 
-    wb = openpyxl.Workbook()
+    write_df(wb.add_worksheet("Reapportioned Sales"), output_df, "Reapportioned Sales")
 
-    ws1 = wb.active; ws1.title = "Reapportioned Sales"
-    write_df(ws1, output_df if not output_df.empty else pd.DataFrame(), "Reapportioned Sales")
+    ws2 = wb.add_worksheet("Validation")
+    ws2.write(0, 0, "Validation — Store × Department Totals", F(bold=True, font_color="#E2EAED", font_size=12, border=0))
+    ws2.write(1, 0, f"Overall: {'PASSED' if val_pass else 'FAILED'}",
+              F(bold=True, font_color="#006100" if val_pass else "#9C0006", font_size=11, border=0))
+    vcols = ["STORE", "DEPARTMENT", "BEFORE", "AFTER", "DIFF", "STATUS"]
+    ws2.set_row(3, 26)
+    ws2.write_row(3, 0, vcols, head)
+    vf = {(ok, ci): F(bg_color=GREEN if ok else RED, font_color="#000000", bold=not ok,
+                      align="right" if ci >= 2 else "left",
+                      num_format="#,##0.00000000" if ci in (2, 3, 4) else "General")
+          for ok in (True, False) for ci in range(6)}
+    for ri, r in enumerate(val_rows, 4):
+        ok = r["STATUS"] == "PASS"
+        for ci, k in enumerate(vcols):
+            ws2.write(ri, ci, r[k], vf[(ok, ci)])
 
-    ws2 = wb.create_sheet("Validation")
-    ws2.cell(1, 1, "Validation — Store × Department Totals").font = fnt(True, "E2EAED", 12)
-    ws2.cell(2, 1, f"Overall: {'PASSED' if val_pass else 'FAILED'}").font = \
-        fnt(True, "006100" if val_pass else "9C0006", 11)
-    write_header(ws2, ["STORE", "DEPARTMENT", "BEFORE", "AFTER", "DIFF", "STATUS"], row=4)
-    for ri, r in enumerate(val_rows, 5):
-        bg = GREEN if r["STATUS"] == "PASS" else RED
-        for ci, (k, v) in enumerate(zip(
-            ["STORE","DEPARTMENT","BEFORE","AFTER","DIFF","STATUS"],
-            [r["STORE"],r["DEPARTMENT"],r["BEFORE"],r["AFTER"],r["DIFF"],r["STATUS"]]), 1):
-            cell = ws2.cell(ri, ci, v)
-            cell.fill = fill(bg); cell.font = fnt(r["STATUS"]!="PASS", "000000"); cell.border = bdr()
-            cell.alignment = aln("right" if ci >= 3 else "left")
-            if ci in (3,4,5) and isinstance(v, float): cell.number_format = "#,##0.00000000"
+    write_df(wb.add_worksheet("Unmapped (Listed MRP 0)"), unmapped_df, "Unmapped Sales")
 
-    ws3 = wb.create_sheet("Unmapped (Listed MRP 0)")
-    write_df(ws3, unmapped_df if not unmapped_df.empty else pd.DataFrame(), "Unmapped Sales")
+    ws4 = wb.add_worksheet("Engine Log")
+    ws4.set_column(0, 0, 90)
+    lf = {c: wb.add_format({"font_name": "Arial", "font_size": 9, "font_color": c})
+          for c in ("#7FA0AD", "#9C0006", "#006100", "#9C6500", "#E2EAED")}
+    ws4.write(0, 0, f"Run: {datetime.datetime.now().strftime('%d-%b-%Y %H:%M:%S')}", lf["#7FA0AD"])
+    for ri, line in enumerate(log_lines, 2):
+        c = ("#9C0006" if "FAIL" in line or "ERROR" in line else "#006100" if "PASS" in line
+             else "#9C6500" if "WARN" in line else "#E2EAED")
+        ws4.write_string(ri, 0, line, lf[c])
 
-    ws4 = wb.create_sheet("Engine Log")
-    ws4.column_dimensions["A"].width = 90
-    ws4.cell(1, 1, f"Run: {datetime.datetime.now().strftime('%d-%b-%Y %H:%M:%S')}").font = fnt(False, "7FA0AD")
-    for ri, line in enumerate(log_lines, 3):
-        c = ws4.cell(ri, 1, line)
-        if "FAIL" in line or "ERROR" in line: c.font = fnt(False, "9C0006")
-        elif "PASS" in line: c.font = fnt(False, "006100")
-        elif "WARN" in line: c.font = fnt(False, "9C6500")
-        else: c.font = fnt(False, "E2EAED")
+    write_df(wb.add_worksheet("Original Sales"), sales_df, "Original Sales")
 
-    ws5 = wb.create_sheet("Original Sales")
-    write_df(ws5, sales_df, "Original Sales")
-
-    buf = io.BytesIO()
-    wb.save(buf)
+    wb.close()
     return buf.getvalue()
 
 

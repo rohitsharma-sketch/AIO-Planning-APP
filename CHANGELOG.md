@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-08
 
+### Sales Plan › MRP Re-apportionment: faster Excel export
+- **Asked (user):** "yes speed up the excel export" (a run took ~7 min, nearly all of it writing the workbook).
+- `_build_excel` now writes with xlsxwriter (already used by the Sales Plan engines): one format per column, row banding as a single conditional format, instead of openpyxl styling ~3.4 M cells one by one. Same five sheets, columns, number formats and colours.
+- Real LY run: export 590.5 s -> 42.1 s; every sheet read back identical to the old export (Reapportioned Sales 140,409 rows, Unmapped 9,539, Original Sales 136,589, Validation, Engine Log).
+
 ### Sales Plan › MRP Re-apportionment: the planners' MRP master rule
 - **Asked (user):** the MRP master design ("MRP MASTER - 27-04-2026 - New(Shubham).xlsx") that suggests the new MRP by Department x old MRP x Display, built into the existing Sales Plan module (not a new app). Decisions: replace the old method; PreWinter / Winter split like Regular; a Department x Display with nothing listed -> Unmapped; LY Mar-Jun 2026 sales from the sales engine.
 - Rule: a listed old MRP moves to its new MRP; a discontinued one splits to the nearest listed MRP below / above (old MRPs in value order within Department x Display): 40/60 (Regular, Occasional, all Winter), 60/40 (Summer); one side only -> 100%. Was: spread over every listed MRP of Department x Display x Attribute, equal or typed %s (the %-editor is gone; the Groups tab shows where each discontinued MRP goes).
