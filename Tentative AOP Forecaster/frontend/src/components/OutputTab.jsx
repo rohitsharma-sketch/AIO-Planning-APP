@@ -238,15 +238,18 @@ export default function OutputTab({ sessionId, runKey, dept = false }) {
   const [layout, setLayout] = useState(() => loadLayout(LAYOUT_KEY, KEYS, VALUE_KEYS,
     { rows: KEYS, values: dept ? ['base', 'fcst', 'cont', 'gr'] : ['base', 'fcst', 'gr'], unit: 'L', collapsedQ: [], saleType: 'reindexed' }))
   useEffect(() => { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)) } catch {} }, [layout, LAYOUT_KEY])
-  const [mix, setMix] = useState(null)   // Departments: LY store x division x department sales (dept-mix)
+  // LY store x division x department sales (dept-mix): the Departments split, and Output's Base when the corner
+  // switch is on Actual (user, 2026-10-08: "a switch on the corner between re-indexed and actual sales")
+  const needMix = dept || layout.saleType === 'actual'
+  const [mix, setMix] = useState(null)
   useEffect(() => {
-    if (!dept) return
+    if (!needMix) return
     setMix(null)
     fetch(apiUrl(`/api/config/dept-mix?sale_type=${layout.saleType}`))
       .then(r => r.json())
       .then(j => setMix(j.ok ? j : { error: j.reason || j.detail || 'No department sales' }))
       .catch(e => setMix({ error: e.message }))
-  }, [dept, layout.saleType, runKey])
+  }, [needMix, layout.saleType, runKey])
   const { rows: rowFields, values: valueFields, unit } = layout
   const collapsedQ = useMemo(() => new Set(layout.collapsedQ), [layout.collapsedQ])
   const setL = patch => setLayout(l => ({ ...l, ...(typeof patch === 'function' ? patch(l) : patch) }))
@@ -278,8 +281,17 @@ export default function OutputTab({ sessionId, runKey, dept = false }) {
   // ── Data pipeline ──────────────────────────────────────────────────────
   const leaves   = useMemo(() => {                                                       // ₹ Lakhs
     const ls = (rows || []).map(r => toLeaf(r, 1))
-    return dept ? (mix?.mix ? splitByDept(ls, mix.mix) : []) : ls
-  }, [rows, dept, mix])
+    if (dept) return mix?.mix ? splitByDept(ls, mix.mix) : []
+    if (layout.saleType !== 'actual') return ls   // Reindexed = AOP's own base (LY sales festival-aligned)
+    if (!mix?.mix) return []
+    // Actual: Base = the store-division's LY sales in the same calendar month last year (no LY = 0, e.g. new stores)
+    return ls.map(r => {
+      const own = mix.mix[String(r.Store).trim().toUpperCase()]?.[r.Division] || {}
+      const mb = new Array(13).fill(0)
+      for (const v of Object.values(own)) v.forEach((x, i) => { mb[i] += x || 0 })
+      return { ...r, mb }
+    })
+  }, [rows, dept, mix, layout.saleType])
   const options  = useMemo(() => {
     const o = dimOptions(leaves, KEYS), out = {}
     for (const k of KEYS) out[k] = o[k].map(x => x.value).filter(v => v != null && v !== '' && v !== '—')
@@ -435,8 +447,8 @@ export default function OutputTab({ sessionId, runKey, dept = false }) {
   if (loading) return <div className="out-loading">Loading detail data…</div>
   if (error)   return <div className="out-error">Error: {error}</div>
   if (!rows)   return null
-  if (dept && mix?.error) return <div className="out-error">Department sales: {mix.error}</div>
-  if (dept && !mix) return <div className="out-loading">Loading department sales…</div>
+  if (needMix && mix?.error) return <div className="out-error">LY {layout.saleType} sales: {mix.error}</div>
+  if (needMix && !mix) return <div className="out-loading">Loading LY {layout.saleType} sales…</div>
 
   return (
     <div className="out-wrap out-drill">
@@ -454,15 +466,6 @@ export default function OutputTab({ sessionId, runKey, dept = false }) {
           ))}
           {anyFilter && <button className="pv-link" onClick={() => { d.setDimF(EMPTY_DIM); setMonthF([]) }}>Clear filters</button>}
           <span className="pv-bar-gap" />
-          {dept && (
-            <div className="pv-seg" role="group" aria-label="Sale type"
-                 title="Which LY sales give each department's share of its division: Reindexed = festival-aligned onto this year's calendar, Actual = on their own dates (same month last year)">
-              <span className="pv-seg-label">Sale type</span>
-              {[['reindexed', 'Reindexed'], ['actual', 'Actual']].map(([k, l]) => (
-                <button key={k} className={layout.saleType === k ? 'on' : ''} aria-pressed={layout.saleType === k} onClick={() => setL({ saleType: k })}>{l}</button>
-              ))}
-            </div>
-          )}
           <div className="pv-vals" role="group" aria-label="Values">
             {VALUE_KEYS.map(k => (
               <button key={k} className={valueFields.includes(k) ? 'on' : ''} disabled={VALUE_DEFS[k].locked}
@@ -474,6 +477,15 @@ export default function OutputTab({ sessionId, runKey, dept = false }) {
           </div>
           <div className="pv-seg" role="group" aria-label="Unit">
             {['L', 'Cr'].map(u => <button key={u} className={unit === u ? 'on' : ''} onClick={() => setL({ unit: u })}>₹ {u === 'L' ? 'L' : 'Cr'}</button>)}
+          </div>
+          {/* Sale type, in the corner (user, 2026-10-08) */}
+          <div className="pv-seg" role="group" aria-label="Sale type"
+               title={dept
+                 ? 'Which LY sales give each department\'s share of its division (and the LY column): Reindexed = festival-aligned onto this year\'s calendar, Actual = same month last year on its own dates'
+                 : 'What Base and Gr% compare against: Reindexed = AOP\'s base (LY sales festival-aligned onto this year\'s calendar), Actual = the store-division\'s sales in the same month last year'}>
+            {[['reindexed', 'Reindexed'], ['actual', 'Actual']].map(([k, l]) => (
+              <button key={k} className={layout.saleType === k ? 'on' : ''} aria-pressed={layout.saleType === k} onClick={() => setL({ saleType: k })}>{l}</button>
+            ))}
           </div>
         </div>
 
@@ -529,6 +541,10 @@ export default function OutputTab({ sessionId, runKey, dept = false }) {
             </tbody>
           </table>
         </div>
+        {!dept && layout.saleType === 'actual' && <div className="pv-foot">
+          Base = each store-division's actual sales in the same month last year (on their own dates; 0 where there were none, e.g. new stores) - Gr% is Fcst against that.
+          Forecast unchanged. Switch to Reindexed for AOP's own base.
+        </div>}
         {dept && <div className="pv-foot">
           Fcst = each store's division forecast × the department's share of that store-division's LY {layout.saleType === 'reindexed' ? 'reindexed (festival-aligned)' : 'actual'} sales in the same month
           (LY = those sales). Months without closed LY sales use the store's mix over the months that have it; new stores use the division's network mix.
