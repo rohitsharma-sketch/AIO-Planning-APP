@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: peak-oriented STR suggestion in the click message
+- **Asked (user):** "i want a peak oriented separate STR too as a suggestion from which i can differ from the regular suggestion of yours. Keep the suggestion in the message which appears on the click."
+- Every calculation popup (any level, and the store x month cells of the department editor) now shows a "Peak-oriented suggestion" under the regular band: the same display stock sized for the row's busiest planned month - days = MDQ / (that month's planned qty per day), band = nearest 30 within 60-180 - with the regular suggestion beside it. E.g. a NE - (P) store's R/N T-shirt May: regular 120 days (off month, 112.7 days) vs peak-oriented 60 days (42.5 days at April's rate).
+
 ### STR Forecaster: Season chip in the Rows bar
 - **Asked (user):** "add a season filter chip to the Rows bar too"
 - Season (Peak / Normal / Off - each cluster's own, festivals included) is now a chip like Cluster / Department / Store: drag it in as a layer (e.g. Season > Cluster > Department: normal 97.8 lakh pcs planned, off 15.1 lakh at band 90, peak 28.2 lakh) and its search filter picks one or more seasons. The separate season dropdown is gone - one place to filter. Server: season is a rollup layer / values key / Excel drill-down column.
