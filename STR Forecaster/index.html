@@ -392,9 +392,6 @@ function rollCols(){
     html:r=>{const d=r._d||0,k=L[d],last=d>=L.length-1,o=S.open.has(pk(r._p));
       return `<span style="display:inline-block;width:${d*16}px"></span>`+(last?'<span class="tgl"></span>':`<button class="tgl" data-tog aria-expanded="${o}" aria-label="${o?'Close':'Open'} ${h(r[k])}">${o?'&#9662;':'&#9656;'}</button>`)+
         h(k==='tag'?(tagLab(r[k])||r[k]):r[k])+(k==='department'?(r.edited?' <span title="has edits" class="dot">&#9679;</span>':'')+` <button class="edb" data-edit="${h(r.department)}" title="Stores and fixtures of ${h(r.department)} - edit here">&#9998;</button>`:'');}}];
-  if(L.includes('department'))cols.push(
-    {id:'tag',label:'Tag',cls:'l',filt:true,get:r=>tagLab(r.tag)||null,html:r=>tagLab(r.tag)?`<span class="tg ${r.tag.toLowerCase()}">${tagLab(r.tag)}</span>`:'<span class="note">—</span>'},
-    {id:'attribute',label:'Attribute',cls:'l',filt:true,get:r=>r.attribute,html:r=>r.attribute?`<span title="from the ${h(r.attribute_from)}">${h(r.attribute)}</span>`:'<span class="note">—</span>'});
   // user, 9 Oct: "view the 4 month avg in the first place and if i want then only i will see monthly changes" - the
   // 4-month average comes first; the months fold behind the toggle on its header (remembered per browser)
   const ml=R.months.map(mon),tog=`<button class="mtog" data-mtog aria-expanded="${S.months}" title="${S.months?'Hide':'Show'} the months">${S.months?'&#9666; hide months':'&#9656; '+h(ml[0]+'–'+ml[ml.length-1])}</button>`;

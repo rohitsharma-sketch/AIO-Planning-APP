@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: Tag / Attribute columns removed (the layers replace them)
+- **Asked (user):** "tag and attribute are duplicate features check"
+- The Tag and Attribute columns in the forecast table duplicated the new Tag / Attribute row layers (and were blank on every non-department row), so the columns are gone; group, sort and filter by them with the layers. The Department tags tab and the Excel tag / attribute columns stay.
+
 ### STR Forecaster: 4-month average first, months fold away
 - **Asked (user):** "Give the months a collapsable ticker on the header so that i can view the 4 month avg in the first place and if i want then only i will see monthly changes"
 - The forecast table opens on the 4-month average (Band, STR days, LY days, Plan qty, MDQ) only; the toggle on its header ("> Mar'27-Jun'27" / "< hide months") adds the month columns after it. The choice is remembered per browser. The department fixture editor keeps its months.
