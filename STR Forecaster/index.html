@@ -185,6 +185,8 @@ tr.lv0 td.l1{font-weight:700}tr.lv1 td,tr.lv3 td{background:#FCFBF8}tr.lv1 td.l1
       <a class="btn ghost sm" href="api/stores/download" download>&#8595; Excel</a></div>
     <div class="card-c">
       <div class="meta" id="sm-sum" style="margin-bottom:10px"></div>
+      <div class="bar" style="align-items:flex-start;margin-bottom:4px"><div id="sm-mx"></div>
+        <button class="btn ghost sm" id="sm-rev" hidden title="Back to the store list as it was before clicking a count">&#8634; Revert</button></div>
       <div class="tw"><table id="sm-t"></table></div>
       <p class="note">Click a header to sort; &#9662; filters it.</p>
     </div>
@@ -288,6 +290,13 @@ const RENDER={roll:()=>renderRoll(),cells:()=>renderCells(),tags:()=>renderTags(
 function renderStores(){
   const rows=((S.st&&S.st.info&&S.st.info.common)||{}).store_map||[],cnt={};rows.forEach(r=>{cnt[r.status]=(cnt[r.status]||0)+1;});
   $('#sm-sum').innerHTML=Object.entries(cnt).map(([k,v])=>`<span><b>${v}</b> ${h(k)}</span>`).join('')+`<span>${rows.length} stores in all</span>`;
+  // cluster x status counts (user, 9 Oct: "add a cluster count table similar to the STR main page"); a count filters the list
+  const st=['Mapped - compared','Month missing','Sales plan only','Fixture plan only'].filter(k=>cnt[k]),cls=[...new Set(rows.map(r=>r.cluster))].sort(),a=S.smx;
+  const n=(c,k)=>rows.filter(r=>(!c||r.cluster===c)&&(!k||r.status===k)).length;
+  const cell=(c,k)=>{const v=n(c,k);return `<td>${v?`<button class="mxb${a&&a.c===c&&a.k===k?' on':''}" data-smx="${h(c)}|${h(k)}" title="List these ${v} stores">${v}</button>`:'<span class="note">0</span>'}</td>`;};
+  $('#sm-mx').innerHTML=`<table class="mx"><thead><tr><th class="l">Stores by cluster</th>${st.map(k=>`<th>${h(k)}</th>`).join('')}<th>Total</th></tr></thead><tbody>`+
+    [...cls,''].map(c=>`<tr${c?'':' class="tot"'}><td class="l"><b>${h(c||'All')}</b></td>${st.map(k=>cell(c,k)).join('')}${cell(c,'')}</tr>`).join('')+'</tbody></table>';
+  $('#sm-rev').hidden=!S.smPrev;
   grid('stores',$('#sm-t'),[{id:'store',label:'Store',cls:'l1',filt:true,get:r=>r.store},
     {id:'status',label:'Status',cls:'l',filt:true,get:r=>r.status,html:r=>`<span class="tg ${r.status.startsWith('Mapped')?'core':'seasonal'}">${h(r.status)}</span>`},
     {id:'cluster',label:'Cluster',cls:'l',filt:true,get:r=>r.cluster},{id:'fm',label:'Fixture plan months',cls:'l',get:r=>r.fixture_months||null},
@@ -589,6 +598,11 @@ document.addEventListener('click',async e=>{
   const rb=e.target.closest('[data-rb]');if(rb){if(!confirm('Roll back the latest '+(rb.dataset.rb==='fixture'?'fixture plan':'sales plan')+' upload? The one before it (if any) is used again.'))return;
     try{await post('api/rollback',{kind:rb.dataset.rb});dirty();S.dept=null;$('#dd').hidden=true;await load();}catch(err){alert(err.message);}return;}
   if(e.target.id==='clr'){S.grid.roll={sort:null,filt:{}};S.mx=null;S.lf={};await loadRoll();return;}
+  const smx=e.target.closest('[data-smx]');
+  if(smx){const [c,k]=smx.dataset.smx.split('|'),g=gstate('stores');
+    if(!S.smPrev)S.smPrev={sort:g.sort,filt:{...g.filt}};
+    S.smx={c,k};g.filt={};if(c)g.filt.cluster=new Set([c]);if(k)g.filt.status=new Set([k]);renderStores();return;}
+  if(e.target.id==='sm-rev'&&S.smPrev){S.grid.stores=S.smPrev;S.smPrev=null;S.smx=null;renderStores();return;}
   const lfx=e.target.closest('[data-lf]');if(lfx){await openLayerFilter(lfx.dataset.lf,lfx);return;}
   const mx=e.target.closest('[data-mx]');
   if(mx){const [d,b]=mx.dataset.mx.split('|'),g=S.grid.roll;

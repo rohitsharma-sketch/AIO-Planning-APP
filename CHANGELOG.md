@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: cluster count table on Store mapping; article split prepared
+- **Asked (user):** "add a cluster count table similar to the STR main page" and "I will give an Article name Sheet too so you can break the fixture plan as per the sales plan imported and make the fixture plan as per the Cont % of sales plan. Be ready with other things in the module, keep it handy"
+- Store mapping tab: a Cluster x status count table (Mapped - compared / Month missing / Sales plan only / Fixture plan only / Total, plus All); clicking a count filters the store list to that cluster and status, "Revert" restores the list.
+- New STR Forecaster/str_article.py (not wired into the page or DB yet): read_plan_detail keeps the sales plan below department (MRP, ATTRIBUTE, ATTRIBUTE 2, UDF06 TABLE / NON_TABLE - 414,240 rows in MAMJ'26, 65 MRPs); read_articles reads DEPARTMENT + ARTICLE plus any link column (MRP / ATTRIBUTE / ATTRIBUTE 2 / UDF06) or an own CONT % column; split() gives each store x department x month fixture row per article with fixtures / MDQ x the article's cont % of the plan (store's own plan, else chain, else sheet CONT %, else equal; unclaimed plan -> "(other)") so totals always add back. Self-check: python str_article.py.
+
 ### STR Forecaster: Store mapping tab; Regular vs Peak-oriented side by side in the popup
 - **Asked (user):** "also add the mapped and unmapped store list tab in the app just like Department Tags" and "i need complete info on the peak oriented subject and remove duplicacy sentences, also from where is the 21.2 pcs coming ? How about if i click and the pop up shows side by side comparison for peak and Regular ones"
 - New "Store mapping" tab: every store in the fixture plan or the sales plan with its status (Mapped - compared 180, Month missing 9, Sales plan only 7, Fixture plan only 6), AOP cluster, months in each file, what is missing, MDQ and plan; sortable / filterable; Excel export (GET /api/stores/download). Built in str_engine.build (info.common.store_map).
