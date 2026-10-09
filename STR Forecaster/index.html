@@ -349,6 +349,7 @@ function renderRoll(){
   $('#t-note').textContent=(isD?'Click a department to see its stores and edit fixtures; click a figure for its calculation. ':'Click a figure for its calculation. ')+
     'The All row adds up the rows shown (after the header filters). Plan qty and MDQ are summed before the days are worked out; the 4-month figure = average MDQ ÷ planned qty per day. LY days = last year’s sales qty on this same fixture plan (store-months that sold last year).'+
     (lo.length?` Stores not compared: ${lo.join('; ')} - MDQ ${n0(cm.left_out_mdq)}, Rs ${n0(cm.left_out_rs)} left out.`:'')+
+    (Object.keys(i.split_departments||{}).length?` Old department names split as in the core apps, fixtures / MDQ / plan halved into each: ${Object.entries(i.split_departments).map(([o,n])=>o+' → '+n.join(' + ')).join('; ')}.`:'')+
     (i.qty_by_price_rows?` ${i.qty_by_price_rows} rows had no plan qty and use Rs ÷ LY selling price.`:'')+
     (i.sales_plan?` Left out of STR days: plan with no fixtures Rs ${n0(i.plan_rs_without_fixtures)}; fixtures with no plan MDQ ${n0(i.mdq_without_plan)}.`:'')+
     ((i.price_from_division||[]).filter(d=>!(i.no_ly_departments||[]).includes(d)).length?` Selling price from the division (no department price): ${i.price_from_division.filter(d=>!(i.no_ly_departments||[]).includes(d)).join(', ')}.`:'')+

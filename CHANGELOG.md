@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: old department names split into the core apps' new departments
+- **Asked (user):** "split these departments in the new departments as mentioned in the core apps, check it and reference back, split the plan equally in the new departments"
+- The five names with no LY sales are split as in the suite's data-lake department split (same list as BIS DEPT_SPLITS / Listing / fill rate): KB_T-SHIRT H/S -> KB_R/N + KB_POLO T-SHIRT H/S; KB_BERMUDA -> KB_HSR + KB_TXTL BERMUDA; LW_L_PALAZZO -> LW_L_WES + LW_L_ETH PALAZZO; LW_L_JEGGING -> LW_L_DNM + LW_L_WVN JOGGER; MSE_PYJAMA -> MSE_HSR + MSE_TXTL PYJAMA. Fixtures, MDQ, plan Rs and plan qty are halved into each (at read time - stored uploads unchanged). Each new department now has its own LY sales, so all departments have LY days; plan qty / MDQ / forecast days unchanged in total (All 54.5 days), LY 54.5 -> 53.1 days. L_IN_BRA keeps its name (core apps carve L_IN_SPRT BRA out of it) and is not split.
+
 ### STR Forecaster: faster views, calculation popups, header sort / filter, full-month stores, department tags
 - **Asked (user):** "1.) reduce toggle delay time and population time. 2.) It will be helpful if every department tile will have the calculation popup once clicked on it 3.)add filters and sort functions on headers remove the find bar 4.) Most likely the stores which have their plan and fixtures only qualify those. All months should be present in both sales and fixtures. 5.) Add a tab to add Core or Seasonal Tag to the department and Add Attribute to them. I will give the master so that you can tag each department with it"
 - Speed: views 0.06-0.2 s (were 3-8 s) - rollup is one groupby (same figures, checked against the old code), upload rows and LY sales cached, the page keeps every view and loads the others in the background; department detail 0.15 s (was 2.4 s); Excel ~11 s (was ~66 s, xlsxwriter).

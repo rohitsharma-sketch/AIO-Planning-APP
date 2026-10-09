@@ -225,6 +225,28 @@ def version():
                                                (SELECT coalesce(max(id), 0) FROM planning_inputs.str_edits)""")).one())
 
 
+# user, 9 Oct: "split these departments in the new departments as mentioned in the core apps ... split the plan equally
+# in the new departments" - the data-lake department split (5 Sep export, used suite-wide: BIS DEPT_SPLITS, Listing
+# build_knowledge_base.DEPT_SPLITS, fill_rate_import.SPLITS). L_IN_BRA keeps its name there, so it is not split here.
+DEPT_SPLITS = {
+    "MSE_PYJAMA": ["MSE_HSR PYJAMA", "MSE_TXTL PYJAMA"], "KB_T-SHIRT H/S": ["KB_R/N T-SHIRT H/S", "KB_POLO T-SHIRT H/S"],
+    "KB_BERMUDA": ["KB_HSR BERMUDA", "KB_TXTL BERMUDA"], "LW_L_PALAZZO": ["LW_L_WES PALAZZO", "LW_L_ETH PALAZZO"],
+    "LW_L_JEGGING": ["LW_L_DNM JOGGER", "LW_L_WVN JOGGER"],
+}
+
+
+def split_depts(f, cols):
+    """an old department's row -> one row per new department, each with an equal share of `cols` (fixtures, MDQ, plan);
+    a store that already has the new name gets the share added to it"""
+    old = f.department.isin(DEPT_SPLITS)
+    if not old.any():
+        return f
+    parts = f[old].assign(department=f.department[old].map(DEPT_SPLITS)).explode("department")
+    parts[cols] = parts[cols].div(f.department[old].map(lambda d: len(DEPT_SPLITS[d])).reindex(parts.index), axis=0)
+    f = pd.concat([f[~old], parts], ignore_index=True)
+    return f.groupby(["month", "store", "division", "department"], as_index=False)[cols].sum(min_count=1)
+
+
 def _period(col):
     return pd.to_datetime(col).dt.to_period("M")
 
@@ -405,9 +427,12 @@ def build():
                              AND plan_division = ANY(:d) GROUP BY 1, 2, 3, 4""",
                      {"m": [f"{m - 12}-01" for m in months], "d": list(DIVS)}, key=("ly", tuple(map(str, months)), date.today()))
     common = {}
+    split = sorted((set(fx.department) | (set(pl.department) if len(pl) else set())) & set(DEPT_SPLITS))
+    fx = split_depts(fx.astype({"fixtures": float, "mdq": float}), ["fixtures", "mdq"])
     if len(pl):
         pl["month"] = _period(pl.month)
         pl = pl[pl.month.isin(months)]
+        pl = split_depts(pl.astype({"plan_rs": float, "plan_qty_file": float}), ["plan_rs", "plan_qty_file"])
     if len(pl) == 0 and pu:
         common = {"month_mismatch": True}   # the plan's months miss the fixture months: show the fixture view and say why
     if len(pl):
@@ -440,7 +465,7 @@ def build():
         lys["month"] = _period(lys.month) + 12   # LY aligned to its forecast month
     df = add_ly(df, lys)
     info = {"fixture": fu, "sales_plan": pu, "months": [str(m) for m in months], "ly_months": [str(m - 12) for m in months],
-            "common": common, "qty_by_price_rows": int((df.qty_from == "Rs / LY price").sum()),
+            "common": common, "split_departments": {d: DEPT_SPLITS[d] for d in split}, "qty_by_price_rows": int((df.qty_from == "Rs / LY price").sum()),
             "edits": int(len(ed)), "stores": int(df.store.nunique()), "departments": int(df.department.nunique()),
             "no_asp_rows": int(((df.plan_rs > 0) & ~(df.asp > 0)).sum()),
             "plan_without_fixtures": int(((df.plan_rs > 0) & (df.mdq <= 0)).sum()),
@@ -558,4 +583,8 @@ if __name__ == "__main__":   # self-check of the maths on tiny frames (no DB)
     assert [str_band(x) for x in (20, 54, 75, 104, 105, 250, None)] == [60, 60, 90, 90, 120, 180, None]
     assert t["band"] == 150 and t["ly_band"] == 180          # 155 days -> 150; 620 days -> capped at 180
     assert (_tag(" core"), _tag("Seasonal"), _tag("x"), _tag(None)) == ("CORE", "SEASONAL", None, None)
+    sp = split_depts(pd.DataFrame({"month": [P("2027-03")] * 2, "store": ["S1"] * 2, "division": ["MENS"] * 2,
+                                   "department": ["MSE_PYJAMA", "MSE_TXTL PYJAMA"], "plan_rs": [100.0, 10.0], "q": [np.nan, 4.0]}), ["plan_rs", "q"])
+    assert sp.set_index("department").plan_rs.to_dict() == {"MSE_HSR PYJAMA": 50.0, "MSE_TXTL PYJAMA": 60.0}   # half each, added
+    assert np.isnan(sp.set_index("department").q["MSE_HSR PYJAMA"])                                         # no qty stays no qty
     print("str_engine self-check: OK")
