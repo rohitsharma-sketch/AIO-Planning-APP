@@ -89,7 +89,7 @@ td.ed,td.ed input{background:#FFF8E6}
 .lays{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .lay{display:inline-flex;align-items:center;gap:3px;border:1px solid var(--btn);background:var(--btn);color:var(--btn-t);border-radius:999px;padding:3px 10px;font:inherit;font-size:12.5px;font-weight:700;cursor:grab;user-select:none}
 .lay.ghost{background:#fff;border:1px dashed var(--input);color:var(--foreground);font-weight:500;cursor:pointer}
-.lay.over{outline:2px solid var(--primary)}
+.lay.over{outline:2px solid var(--primary)}.lay.ghost.on{border-style:solid;border-color:var(--primary);color:var(--primary);font-weight:700}
 .lfb{border:0;background:none;cursor:pointer;color:inherit;font:inherit;font-size:11px;padding:0 2px;border-radius:4px;line-height:1}
 .lfb.on{background:var(--primary);color:#fff;padding:1px 4px}
 .lx{border:0;background:none;cursor:pointer;font-size:13px;color:inherit;padding:0 0 0 2px;line-height:1}
@@ -160,6 +160,7 @@ tr.lv0 td.l1{font-weight:700}tr.lv1 td,tr.lv3 td{background:#FCFBF8}tr.lv1 td.l1
       <button class="btn ghost sm" id="dd-x">&#x2715; Close</button></div>
     <div class="card-c">
       <div class="bar" style="margin-bottom:10px" id="dd-dens"></div>
+      <div class="bar" id="dd-f" style="margin-bottom:6px"></div>
       <div class="tw"><table id="dt"></table></div>
       <p class="note" id="dd-note"></p>
     </div>
@@ -432,7 +433,7 @@ function calcCell(title,c,lyMon,pk){
     L('Planned qty',c.qty_from==='plan'?`<b>${n0(c.plan_qty)}</b> <span class="note">from the sales plan file (Rs ${n0(c.plan_rs)})</span>`:
       c.qty_from?`Rs ${n0(c.plan_rs)} ÷ Rs ${n0(c.asp)} = <b>${n0(c.plan_qty)}</b> <span class="note">at last year's selling price (${h(c.asp_from)})</span>`:'— <span class="note">no plan</span>')];
   if(c.days!=null)R.push(`<tr><td colspan="2">${compare({...c,n_months:1},pk,c.plan_qty,c.n_days,'this month')}</td></tr>`,seaLine(c),
-    ...(c.fest_days?[L('Festivals',`${h(c.festivals)}: ${c.fest_days} of ${c.n_days} days at ×${n2(c.fest_lift)} sales <span class="note">(index ${n2(c.season_base)} without festivals → ${n2(c.season_year)})</span>`)]:[]));
+    ...(c.fest_days?[L('Festivals',`${h(c.fest_detail||c.festivals)} of ${c.n_days} days <span class="note">(each festival's sales lift for this department, learnt from every store that celebrates it; index ${n2(c.season_base)} without festivals → ${n2(c.season_year)})</span>`)]:[]));
   else R.push(L('STR','— <span class="note">needs both a plan and fixtures</span>'));
   R.push(c.ly_days!=null?lyLine(c,c.ly_q,c.mdq_base,c.ly_n_days,0,lyMon):L('Last year','— <span class="note">no sales last year</span>'));
   return calcBox(title,R);
@@ -595,6 +596,11 @@ function renderCells(){
     {id:'band:'+i,grp:g,label:'Band',title:'band (actual · LY days)',num:true,m:i,filt:true,fmt:v=>v+' days',get:r=>bandOf(c(r)),
       html:r=>{const x=c(r);return !x?'':`<b style="color:var(--primary)" title="${h(bandWhy(x))}">${dd(bandOf(x))}</b>${seaTag(x)} <span class="note">${x.days!=null?Math.round(x.days):'—'} · ${x.ly_days!=null?Math.round(x.ly_days):'—'}</span>`;}});});
   grid('cells',$('#dt'),cols,C.rows);
+  // user, 9 Oct: "add the same search filter to the department editor table" - visible search buttons (same menu as the headers)
+  const gc=gstate('cells'),on=k=>gc.filt[k]||gc.cond[k];
+  $('#dd-f').innerHTML=`<span class="note">Search:</span> `+[['store','Store'],['cluster','Cluster']].map(([k,l])=>`<button class="lay ghost${on(k)?' on':''}" data-ef="${k}" title="Search / pick ${l.toLowerCase()}s - type, tick, type again to add">${l} &#9662;${gc.filt[k]?' '+gc.filt[k].size:''}</button>`).join(' ')+
+    ` <span class="note">${S.vis.cells.length} of ${C.rows.length} stores shown · every column header has the same ▾ menu</span>`+
+    (Object.keys(gc.filt).length||Object.keys(gc.cond).length?` <button class="btn ghost sm" data-efc>Clear</button>`:'');
   $('#dd-note').textContent=(ed?'Change a fixture count and press Enter or leave the box - it saves at once (MDQ = fixtures × qty per fixture). Highlighted cells are edited; hover shows the file value. Edits stay when a new fixture file is uploaded - use Reset to file to drop them. ':'Read-only: only an admin or a planner can edit. ')+'Click a figure for its calculation.';
 }
 
@@ -668,6 +674,8 @@ document.addEventListener('click',async e=>{
     if(!S.smPrev)S.smPrev={sort:g.sort,filt:{...g.filt}};
     S.smx={c,k};g.filt={};if(c)g.filt.cluster=new Set([c]);if(k)g.filt.status=new Set([k]);renderStores();return;}
   if(e.target.id==='sm-rev'&&S.smPrev){S.grid.stores=S.smPrev;S.smPrev=null;S.smx=null;renderStores();return;}
+  const ef=e.target.closest('[data-ef]');if(ef){openFilter('cells',ef.dataset.ef,ef);return;}
+  if(e.target.closest('[data-efc]')){S.grid.cells={sort:null,filt:{},cond:{}};renderCells();return;}
   const lfx=e.target.closest('[data-lf]');if(lfx){await openLayerFilter(lfx.dataset.lf,lfx);return;}
   const mx=e.target.closest('[data-mx]');
   if(mx){const [d,b]=mx.dataset.mx.split('|'),g=S.grid.roll;

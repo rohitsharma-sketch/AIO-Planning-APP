@@ -526,11 +526,18 @@ def build(articles=False):
     dep = df.department.str.upper()
     df["season_base"] = np.array([look.base(c, d, p.month) for c, d, p in zip(df.cluster, dep, df.month)], dtype=float)
     fd = {k: look.fest(*k) for k in set(zip(df.store, df.month))}
-    df["fest_days"] = [fd[k][0] for k in zip(df.store, df.month)]
-    df["festivals"] = [", ".join(fd[k][1]) for k in zip(df.store, df.month)]
-    df["fest_lift"] = [look.lift(c, d) for c, d in zip(df.cluster, dep)]
-    # the festival-free curve raised by the month's festival days at the department's festival lift in that cluster
-    df["season_idx"] = df.season_base * (1 + df.fest_days / df.month.dt.days_in_month * (df.fest_lift - 1))
+    sk = list(zip(df.store, df.month))
+    df["fest_days"] = [sum(fd[k].values()) for k in sk]
+    df["festivals"] = [", ".join(fd[k]) for k in sk]
+    up, det = [], []
+    for k, dd in zip(sk, dep):
+        fx = fd[k]
+        up.append(sum(n * (look.lift(f, dd) - 1) for f, n in fx.items()) / k[1].days_in_month if fx else 0.0)
+        det.append(", ".join(f"{f} {n} days x{look.lift(f, dd):.2f}" for f, n in fx.items()))
+    df["fest_uplift"], df["fest_detail"] = up, det
+    df["fest_lift"] = np.where(df.fest_days > 0, 1 + df.fest_uplift * df.month.dt.days_in_month / df.fest_days.where(df.fest_days > 0, 1), 1.0)
+    # the festival-free curve raised by each festival in the month: its days / the month's days x (its lift - 1)
+    df["season_idx"] = df.season_base * (1 + df.fest_uplift)
     no_season = sorted(df.loc[df.season_base.isna(), "department"].unique().tolist())
     df["season_idx"] = df.season_idx.fillna(1.0)   # no season history under this name: treated as a normal month
     # user, 9 Oct: "I see generic peak tags ... I want the tags to be dynamic which ... point to the cluster's performance and
@@ -643,7 +650,7 @@ class _Season:
     def __init__(self, w):
         self.w, self.built_at = w, w.get("built_at")
         self.ch, self.cl = w.get("chain", {}), w.get("cluster", {})
-        self.lc, self.lh = w.get("fest_lift", {}), w.get("fest_lift_chain", {})
+        self.lf, self.lh = w.get("fest_lift_by_festival", {}), w.get("fest_lift_chain", {})
         self.fd, self.sc = w.get("fest_days", {}), w.get("store_cal", {})
 
     def base(self, c, d, m):
@@ -651,11 +658,13 @@ class _Season:
         return v[m - 1] if v else None
 
     def fest(self, s, p):
-        n, names = self.fd.get(self.sc.get(s, "ALL"), {}).get(f"{p.year}-{p.month:02d}", [0, []])
-        return n, names
+        """{festival: its days} in the store's own calendar cluster that month"""
+        v = self.fd.get(self.sc.get(s, "ALL"), {}).get(f"{p.year}-{p.month:02d}", {})
+        return v if isinstance(v, dict) else {}
 
-    def lift(self, c, d):
-        return self.lc.get(c, {}).get(d) or self.lh.get(d) or 1.0
+    def lift(self, f, d):
+        """the department's sales lift on festival f (learnt from every store that celebrates it)"""
+        return self.lf.get(f, {}).get(d) or self.lh.get(d) or 1.0
 
 
 def season_index():

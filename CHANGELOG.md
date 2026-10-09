@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: festival lift per festival (Bihu for all N. East); search buttons on the department editor
+- **Asked (user):** "Bihu is there in NE as a whole not just NE(P) so why only Peak season for NE(P) and not the other one" and "add the same search filter to the department editor table"
+- Cause: the festival lift was pooled per AOP cluster x department over all Mar-Jun festivals; NE - (NP) has 2 stores with history, so it leaned on the chain lift (Holi / Eid dominated, no Bihu) - x1.40 vs x2.65 in NE - (P) - and April did not stand out. Now each festival has its own lift per department, learnt from every store whose calendar has it (str_season.festival_lift: festival-day sales per open store-day / the same stores' other Mar-Jun days, 2022-25; few stores lean on the department's pooled lift; clipped 0.5-3), and a month's uplift = sum over its festivals of days / month days x (lift - 1). R/N T-shirts: Bihu x2.85, Holi x1.63, Eid al-Adha x1.61, Eid al-Fitr x1.22, Rath Yatra x0.95. NE - (NP) R/N T-shirts is now Peak (festival) in Mar and Apr like NE - (P); NE - (NP) Apr: 62 of 109 departments peak. Popups / Excel show each festival's days and lift ("Bihu 8 days x2.85").
+- Department editor: Store and Cluster search buttons above the table (same menu as the headers: type, tick, type again to add), "N of M stores shown", Clear.
+
 ### STR Forecaster: search-driven picking in every filter
 - **Asked (user):** "if i filter something by typing and i click on it, it should be the default and add a multi selection by typing norm in the serch filter too"
 - In every filter menu (hierarchy chips and column menus): with a search typed, the first tick makes that value the only one selected; further ticks - after the same or another search - add to it (multi-select by typing); Enter or Select all picks every match of the search, None drops them; without a search, ticks work as before. The menu shows "N of M selected" and the match count; every value is searchable (the list shows the first 500 matches).

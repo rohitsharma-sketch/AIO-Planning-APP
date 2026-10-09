@@ -204,8 +204,9 @@ def workbook(df, months, has_plan, layers, info, filters):
         "plan qty per day": np.where(ok, df.plan_qty / dim, np.nan), "STR days = MDQ / qty per day": days,
         "LY days = MDQ (file) / LY qty per day": ly_days,
         "season base index (festival-free, cluster)": df.season_base, "festival days (store calendar)": df.fest_days,
-        "festivals": df.festivals, "festival lift (cluster x dept, Mar-Jun)": df.fest_lift,
-        "year index = base x (1 + fest days / days x (lift - 1))": df.season_year_idx,
+        "festivals": df.festivals, "festival days x lift (per festival, learnt from every store that has it)": df.fest_detail,
+        "festival lift (effective)": df.fest_lift,
+        "year index = base x (1 + sum of festival days / days x (lift - 1))": df.season_year_idx,
         "season index = year index / cluster x dept window average": df.season_idx, "season": df.season,
         "peak reason (festival / high sales vs the year)": df.peak_why})
     d["STR band (season)"] = [se.str_band(x, sea) for x, sea in zip(days, df.season)]
@@ -325,7 +326,7 @@ class H(BaseHTTPRequestHandler):
                          "ly_days": se.days_of(r.ly_q, r.mdq_base, ldim) if r.ly_known else None, "edited": r.edited}
                     sea = r.season
                     c.update(season=sea, season_idx=r.season_idx, band=se.str_band(c["days"], sea), base_band=se.str_band(c["days"]),
-                             season_base=r.season_base, fest_days=r.fest_days, festivals=r.festivals, fest_lift=r.fest_lift,
+                             season_base=r.season_base, fest_days=r.fest_days, festivals=r.festivals, fest_lift=r.fest_lift, fest_detail=r.fest_detail,
                              season_year=r.season_year_idx, fest_share=1.0 if r.fest_days > 0 else 0.0, peak_why=r.peak_why,
                              pk=r.plan_qty if r.peak_ok else 0.0)
                     by_store.setdefault(r.store, [None] * len(months))[mi[r.month]] = c
