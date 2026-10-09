@@ -262,11 +262,11 @@ function calcAgg(title,c){
       L('Band',`${n1(c.days)} → nearest 30, kept 60–180 = <b>${c.band} days</b>`,1),
       L('As a %',`${n0(c.qty)} ÷ (${n0(c.qty)} + ${n0(c.mdq)}) = ${pct(c.str)}`));}
   if(c.ly_rows){const la=c.ly_mdq/c.ly_n_months;
-    R.push(L('LY days',`${n0(la)} ÷ (${n0(c.ly_qty)} ÷ ${c.ly_n_days}) = <b>${n1(c.ly_days)}</b> → band ${c.ly_band} <span class="note">LY qty on the file MDQ${c.ly_n_months>1?' (avg of '+c.ly_n_months+' months)':''}, ${c.ly_rows} store-months that sold last year</span>`));}
+    R.push(L('LY qty',`${n0(c.ly_qty)} <span class="note">pieces actually sold the same month(s) last year (sales actuals)</span>`),L('LY days',`${n0(la)} ÷ (${n0(c.ly_qty)} ÷ ${c.ly_n_days}) = <b>${n1(c.ly_days)}</b> → band ${c.ly_band} <span class="note">LY qty on the file MDQ${c.ly_n_months>1?' (avg of '+c.ly_n_months+' months)':''}, ${c.ly_rows} store-months that sold last year</span>`));}
   else R.push(L('LY days','— <span class="note">no last-year sales here</span>'));
   return calcBox(title,R);
 }
-function calcCell(title,c){
+function calcCell(title,c,lyMon){
   const R=[L('Fixtures',n2(c.fixtures)+(Math.abs(c.fixtures-c.fixtures_file)>1e-9?` <span class="note">edited - file ${n2(c.fixtures_file)}</span>`:'')),
     L('Qty per fixture',n2(c.density)+(c.edited.includes('qty per fixture')?' <span class="note">edited</span>':'')),
     L('MDQ',`${n2(c.fixtures)} × ${n2(c.density)} = <b>${n0(c.mdq)}</b>`),
@@ -275,6 +275,7 @@ function calcCell(title,c){
   if(c.days!=null)R.push(L('Days in month',c.n_days),L('STR days',`${n0(c.mdq)} ÷ (${n0(c.plan_qty)} ÷ ${c.n_days}) = <b>${n1(c.days)}</b>`,1),
     L('Band',`${n1(c.days)} → nearest 30, kept 60–180 = <b>${c.band} days</b>`,1),L('As a %',pct(c.str)));
   else R.push(L('STR days','— <span class="note">needs both a plan and fixtures</span>'));
+  R.push(L('LY qty',c.ly_days!=null?`${n0(c.ly_q)} <span class="note">pieces this store actually sold in this department in ${lyMon} (sales actuals, net of returns)</span>`:'—'));
   R.push(L('LY days',c.ly_days!=null?`${n0(c.mdq_base)} ÷ (${n0(c.ly_q)} ÷ ${c.ly_n_days}) = <b>${n1(c.ly_days)}</b> <span class="note">LY qty on the file MDQ</span>`:'— <span class="note">no last-year sales</span>'));
   return calcBox(title,R);
 }
@@ -421,7 +422,7 @@ document.addEventListener('click',async e=>{
     if(tbl==='t'){const R=S.roll,r=tr.dataset.k==='all'?S.allAgg:S.vis.roll[+tr.dataset.k],ml=i==='t'?'4-month avg':mon(R.months[i]);
       const who=tr.dataset.k==='all'?'All'+(S.div?' '+S.div:''):R.by.map(k=>r[k]).join(' · ');
       showPop(cc,calcAgg(`${who} · ${ml}`,cellOf(r,i)));}
-    else if(tbl==='dt'){const r=S.vis.cells[+tr.dataset.k],c=r.months[i];if(c)showPop(cc,calcCell(`${S.cells.department} · ${r.store} · ${mon(S.cells.months[i])}`,c));}
+    else if(tbl==='dt'){const r=S.vis.cells[+tr.dataset.k],c=r.months[i];if(c)showPop(cc,calcCell(`${S.cells.department} · ${r.store} · ${mon(S.cells.months[i])}`,c,mon(addM(S.cells.months[i],-12))));}
     return;}
   const b=e.target.closest('[data-by]');if(b){S.by=b.dataset.by;await loadRoll();return;}
   const r=e.target.closest('#t tr[data-dept]');if(r&&!e.target.closest('input,select,button')){S.dept=r.dataset.dept;renderRoll();await loadCells();$('#dd').scrollIntoView({behavior:'smooth',block:'start'});return;}
