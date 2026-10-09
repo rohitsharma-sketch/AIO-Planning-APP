@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: Store mapping tab; Regular vs Peak-oriented side by side in the popup
+- **Asked (user):** "also add the mapped and unmapped store list tab in the app just like Department Tags" and "i need complete info on the peak oriented subject and remove duplicacy sentences, also from where is the 21.2 pcs coming ? How about if i click and the pop up shows side by side comparison for peak and Regular ones"
+- New "Store mapping" tab: every store in the fixture plan or the sales plan with its status (Mapped - compared 180, Month missing 9, Sales plan only 7, Fixture plan only 6), AOP cluster, months in each file, what is missing, MDQ and plan; sortable / filterable; Excel export (GET /api/stores/download). Built in str_engine.build (info.common.store_map).
+- Calculation popup rebuilt: a Regular | Peak-oriented table - selling rate source, planned qty and days, qty per day, MDQ, STR days, range, suggested band, sell-thru at MDQ - then Season, Festivals and Last year once each (repeated sentences removed). The peak column shows where its rate comes from, e.g. KI_AP_JEANS NE - (P) Apr'27: busiest planned month Mar'27 = 656 pcs / 31 days = 21.2 pcs/day -> 1,600 / 21.2 = 75.6 days -> 90 vs regular 215.4 -> 180.
+
 ### STR Forecaster: peak-oriented STR suggestion in the click message
 - **Asked (user):** "i want a peak oriented separate STR too as a suggestion from which i can differ from the regular suggestion of yours. Keep the suggestion in the message which appears on the click."
 - Every calculation popup (any level, and the store x month cells of the department editor) now shows a "Peak-oriented suggestion" under the regular band: the same display stock sized for the row's busiest planned month - days = MDQ / (that month's planned qty per day), band = nearest 30 within 60-180 - with the regular suggestion beside it. E.g. a NE - (P) store's R/N T-shirt May: regular 120 days (off month, 112.7 days) vs peak-oriented 60 days (42.5 days at April's rate).

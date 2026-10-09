@@ -100,7 +100,9 @@ tr.lv0 td.l1{font-weight:700}tr.lv1 td,tr.lv3 td{background:#FCFBF8}tr.lv1 td.l1
 .tg.core{background:#E3EEF9;color:#1D4F86}.tg.seasonal{background:#FBEFD9;color:#8A5300}
 .note{font-size:12px;color:var(--muted-foreground)}
 .empty{padding:22px;text-align:center;color:var(--muted-foreground)}
-.pop{position:fixed;z-index:50;background:#fff;border:1px solid var(--input);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.16);padding:10px 12px;max-width:min(460px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto;font-size:12.5px}
+.cmp{width:100%;border-collapse:collapse;margin-top:2px}.cmp th,.cmp td{border-bottom:1px solid var(--border)!important;padding:4px 8px 4px 0;vertical-align:top}
+.cmp thead th{color:var(--foreground);font-weight:800;text-align:left}.cmp .bd{color:var(--primary);font-size:13.5px}
+.pop{position:fixed;z-index:50;background:#fff;border:1px solid var(--input);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.16);padding:10px 12px;max-width:min(600px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto;font-size:12.5px}
 .pop th{position:static;background:none;text-align:left;font-weight:600;color:var(--muted-foreground);padding:3px 12px 3px 0;border:0;vertical-align:top}
 .pop td{text-align:left;white-space:normal;padding:3px 0;border:0}
 .pop tr.k td,.pop tr.k th{color:var(--foreground)}
@@ -121,6 +123,7 @@ tr.lv0 td.l1{font-weight:700}tr.lv1 td,tr.lv3 td{background:#FCFBF8}tr.lv1 td.l1
   <nav class="tabs" role="tablist" aria-label="Pages">
     <button class="tab on" role="tab" data-tab="fc" aria-selected="true">Forecast</button>
     <button class="tab" role="tab" data-tab="tg" aria-selected="false">Department tags</button>
+    <button class="tab" role="tab" data-tab="sm" aria-selected="false">Store mapping</button>
   </nav>
 
   <div class="panel" id="p-fc">
@@ -165,12 +168,25 @@ tr.lv0 td.l1{font-weight:700}tr.lv1 td,tr.lv3 td{background:#FCFBF8}tr.lv1 td.l1
   <div class="panel" id="p-tg" hidden>
   <section class="card">
     <div class="card-h"><div class="grow"><h2>Department tags</h2>
-      <p class="desc">Core or Seasonal and the attribute of each department in the fixture plan. Upload the tag master or set them here; an empty attribute shows the suite's attribute master. Tags show as columns (sortable, filterable) in the Department view of the forecast and in the Excel.</p></div></div>
+      <p class="desc">Core or Seasonal and the attribute of each department in the fixture plan. Upload the tag master or set them here; an empty attribute shows the suite's attribute master. Tag and Attribute are row layers (with search filters) in the forecast and columns in the Excel.</p></div></div>
     <div class="card-c">
       <div class="inputs" style="margin-bottom:12px"><div class="in" id="in-tags"></div><div class="in"><h3>Summary</h3><div class="meta" id="tg-sum"></div></div></div>
       <div class="tw"><table id="tg-t"></table></div>
       <datalist id="tg-att"></datalist>
       <p class="note" id="tg-note"></p>
+    </div>
+  </section>
+  </div>
+
+  <div class="panel" id="p-sm" hidden>
+  <section class="card">
+    <div class="card-h"><div class="grow"><h2>Store mapping</h2>
+      <p class="desc">Every store in the fixture plan or the sales plan and whether it is compared. A store is mapped (compared) only when every forecast month is in both files; the others are left out of the STR so the comparison is like for like. Cluster from the AOP Forecaster&#39;s Store Master.</p></div>
+      <a class="btn ghost sm" href="api/stores/download" download>&#8595; Excel</a></div>
+    <div class="card-c">
+      <div class="meta" id="sm-sum" style="margin-bottom:10px"></div>
+      <div class="tw"><table id="sm-t"></table></div>
+      <p class="note">Click a header to sort; &#9662; filters it.</p>
     </div>
   </section>
   </div>
@@ -267,7 +283,17 @@ function grid(n,el,cols,rows,o={}){
   el.innerHTML=`<thead>${head}</thead><tbody>${body||`<tr><td class="empty" colspan="${cols.length}">No rows${rows.length?' match the filters':''}.</td></tr>`}${o.tail?o.tail(vis,cols):''}</tbody>`;
   return vis;
 }
-const RENDER={roll:()=>renderRoll(),cells:()=>renderCells(),tags:()=>renderTags()};
+const RENDER={roll:()=>renderRoll(),cells:()=>renderCells(),tags:()=>renderTags(),stores:()=>renderStores()};
+// user, 9 Oct: "add the mapped and unmapped store list tab in the app just like Department Tags"
+function renderStores(){
+  const rows=((S.st&&S.st.info&&S.st.info.common)||{}).store_map||[],cnt={};rows.forEach(r=>{cnt[r.status]=(cnt[r.status]||0)+1;});
+  $('#sm-sum').innerHTML=Object.entries(cnt).map(([k,v])=>`<span><b>${v}</b> ${h(k)}</span>`).join('')+`<span>${rows.length} stores in all</span>`;
+  grid('stores',$('#sm-t'),[{id:'store',label:'Store',cls:'l1',filt:true,get:r=>r.store},
+    {id:'status',label:'Status',cls:'l',filt:true,get:r=>r.status,html:r=>`<span class="tg ${r.status.startsWith('Mapped')?'core':'seasonal'}">${h(r.status)}</span>`},
+    {id:'cluster',label:'Cluster',cls:'l',filt:true,get:r=>r.cluster},{id:'fm',label:'Fixture plan months',cls:'l',get:r=>r.fixture_months||null},
+    {id:'pm',label:'Sales plan months',cls:'l',get:r=>r.plan_months||null},{id:'miss',label:'Missing',cls:'l',filt:true,get:r=>r.missing||null},
+    {id:'mdq',label:'MDQ (4 months)',num:true,get:r=>r.mdq,html:r=>n0(r.mdq)},{id:'rs',label:'Plan (Rs lakh)',num:true,get:r=>r.plan_rs,html:r=>n1(r.plan_rs/1e5)}],rows);
+}
 
 /* ---- popover: header filters and the calculation of a figure */
 function showPop(a,html){const p=$('#pop');p.innerHTML=html;p.hidden=false;const r=a.getBoundingClientRect(),w=p.offsetWidth,hh=p.offsetHeight;
@@ -291,49 +317,56 @@ function pfApply(){
 function calcBox(title,rows,foot=''){return `<div class="calc"><div class="calc-h"><b>${h(title)}</b><button class="px" data-px aria-label="Close">&#x2715;</button></div><table>${rows.join('')}</table>${foot?`<p class="note" style="margin:6px 0 0">${foot}</p>`:''}</div>`;}
 const L=(a,b,k)=>`<tr${k?' class="k"':''}><th>${a}</th><td>${b}</td></tr>`;
 // user, 9 Oct: "every department tile will have the calculation popup once clicked on it"
-function seaLine(c){return L('Season',c.season?`<b>${c.season[0].toUpperCase()+c.season.slice(1)}${festy(c)?' ✦ festival':''}</b> <span class="note">${h(seaWhy(c))}${c.rows>1?' Weighted by plan qty.':''}</span>`:'—');}
-function bandLine(c){const [lo,hi]=S.seasonal?lim(c.season):lim(null);
-  return L('Band',`${n1(c.days)} → nearest 30, kept ${lo}–${hi}${S.seasonal&&c.season?' ('+c.season+')':''} = <b>${bandOf(c)} days</b>${S.seasonal&&c.band!==c.base_band?` <span class="note">base rule 60–180: ${c.base_band}</span>`:''}`,1);}
-// peak-oriented suggestion (user, 9 Oct: "a peak oriented separate STR too as a suggestion from which i can differ from the
-// regular suggestion"): the same display stock sized for the busiest planned month of the row - days = MDQ / (that month's
-// planned qty per day), band = nearest 30 within 60-180. Shown next to the regular band in the click message.
-function peakSug(cells,c,ms,qpdOf){
-  const xs=cells.map((x,j)=>({j,q:x?qpdOf(x,j):0})).filter(x=>x.q>0);
+// popup (user, 9 Oct: "complete info on the peak oriented subject and remove duplicacy sentences ... side by side comparison
+// for peak and Regular"): the working of both suggestions in two columns, then season, festivals and last year once each
+const cap=x=>x?x[0].toUpperCase()+x.slice(1):'';
+function seaLine(c){if(!c.season)return L('Season','—');const cut=S.st.info.season_cut||[1.15,.85];
+  return L('Season',`<b>${cap(c.season)}${festy(c)?' ✦ festival':''}</b> <span class="note">sells ${n2(c.season_idx)}× its average ${win()} month here`+
+    (c.season_year!=null?`, ${n2(c.season_year)}× its average month of the year`:'')+` (this cluster's sales 2022–25${c.fest_share?', festival days included':''}${c.rows>1?', weighted by plan qty':''}). Peak ≥ ${cut[0]}×, off ≤ ${cut[1]}× the ${win()} average.</span>`);}
+// the peak-oriented suggestion: the same display stock, sold at the row's busiest planned month's rate
+// qd(cell, j) -> [planned qty, days in that month] or null
+function peakSug(cells,c,ms,qd){
+  const xs=cells.map((x,j)=>{const v=x?qd(x,j):null;return v&&v[0]>0?{j,qty:v[0],nd:v[1],qpd:v[0]/v[1]}:null;}).filter(Boolean);
   if(!xs.length||!c||!c.mdq||c.days==null)return null;
-  const pk=xs.reduce((a,b)=>b.q>a.q?b:a),d=c.mdq/(c.n_months||1)/pk.q;
-  return {days:d,band:bandS(d,'peak'),month:ms[pk.j],qpd:pk.q};}
-const peakLine=(c,p)=>p?L('Peak-oriented suggestion',`<b>${p.band} days</b> <span class="note">${n0(c.mdq/(c.n_months||1))} MDQ ÷ ${n1(p.qpd)} pcs/day = ${n1(p.days)} days, sized for the busiest planned month (${mon(p.month)}); regular suggestion ${bandOf(c)} days</span>`,1):'';
-function calcAgg(title,c,fest,pk){
+  const pk=xs.reduce((a,b)=>b.qpd>a.qpd?b:a),d=c.mdq/(c.n_months||1)/pk.qpd;
+  return {...pk,days:d,band:bandS(d,'peak'),month:ms[pk.j]};}
+// Regular | Peak-oriented, side by side. q / nd = this period's planned qty and days; per = its label
+function compare(c,p,q,nd,per){
+  const avg=c.mdq/(c.n_months||1),[lo,hi]=S.seasonal?lim(c.season):lim(null),qpd=q/nd;
+  const row=(k,a,b)=>`<tr><th>${k}</th><td>${a}</td><td>${p?b:'—'}</td></tr>`,P=p||{};
+  const pq=p?P.qpd*nd:0;
+  return `<table class="cmp"><thead><tr><th></th><th>Regular</th><th>Peak-oriented</th></tr></thead><tbody>`+
+    row('Selling rate from',`the plan of ${per}`,`the busiest planned month, ${mon(P.month)}`)+
+    row('Planned qty',`${n0(q)} pcs in ${nd} days`,`${n0(P.qty)} pcs in ${P.nd} days`)+
+    row('Qty per day',`${n0(q)} ÷ ${nd} = <b>${n1(qpd)}</b>`,`${n0(P.qty)} ÷ ${P.nd} = <b>${n1(P.qpd)}</b>`)+
+    row('MDQ',`${n0(avg)}${c.n_months>1?` <span class="note">(${n0(c.mdq)} ÷ ${c.n_months} months)</span>`:''}`,`${n0(avg)} <span class="note">(same)</span>`)+
+    row('STR days',`${n0(avg)} ÷ ${n1(qpd)} = <b>${n1(c.days)}</b>`,`${n0(avg)} ÷ ${n1(P.qpd)} = <b>${n1(P.days)}</b>`)+
+    row('Range',`${lo}–${hi}${S.seasonal&&c.season?' ('+c.season+')':''}`,'60–180')+
+    row('Suggested band',`<b class="bd">${bandOf(c)} days</b>${S.seasonal&&c.band!==c.base_band?` <span class="note">(${c.base_band} on 60–180)</span>`:''}`,`<b class="bd">${P.band} days</b>`)+
+    row('Sell-thru at MDQ',`${n0(q)} ÷ (${n0(q)} + ${n0(c.mdq)}) = ${pct(q/(q+c.mdq))}`,`${n0(pq)} ÷ (${n0(pq)} + ${n0(c.mdq)}) = ${pct(pq/(pq+c.mdq))}`)+
+    `</tbody></table><p class="note" style="margin:4px 0 8px">Regular = the stock at this period's own planned selling rate. Peak-oriented = the same stock if every day sold like ${p?mon(P.month):'the busiest month'} (its planned qty ÷ its days) - how tight the display gets at the peak. Days are rounded to the nearest 30.</p>`;}
+function lyLine(c,q,mdq,nd,rows,lyMon){
+  return q>0?L('Last year',`${n0(q)} pcs sold${lyMon?' in '+lyMon:''} → ${n0(mdq)} ÷ (${n0(q)} ÷ ${nd}) = <b>${n1(c.ly_days)} days</b>, band ${S.seasonal?c.ly_band??bandS(c.ly_days,c.season):band(c.ly_days)} <span class="note">(last year's sales on this year's file MDQ${rows?'; '+rows+' store-months that sold':''})</span>`):L('Last year','— <span class="note">no sales last year</span>');}
+function calcAgg(title,c,fest,pk,per){
   const R=[];
-  if(!c.rows)R.push(L('STR days','— <span class="note">'+(S.roll.has_plan?'no store rows with both a plan and fixtures':'no sales plan loaded')+'</span>'),L('MDQ',n0(c.mdq)+' pcs'));
-  else{const avg=c.mdq/c.n_months,qpd=c.qty/c.n_days;
-    R.push(L('Plan qty',`${n0(c.qty)} pcs <span class="note">${c.rows} store × department × month rows with a plan and fixtures</span>`),
-      L('MDQ',`${n0(c.mdq)} pcs <span class="note">Σ fixtures × qty per fixture, same rows</span>`));
-    if(c.n_months>1)R.push(L('Average MDQ',`${n0(c.mdq)} ÷ ${c.n_months} months = ${n0(avg)}`));
-    R.push(L('Days',`${c.n_days} <span class="note">${c.n_months>1?'in the '+c.n_months+' months':'in the month'}</span>`),
-      L('Plan qty per day',`${n0(c.qty)} ÷ ${c.n_days} = ${n1(qpd)}`),
-      L('STR days',`${n0(avg)} ÷ ${n1(qpd)} = <b>${n1(c.days)}</b>`,1),
-      seaLine(c),...(fest?[L('Festivals',fest)]:[]),bandLine(c),...(pk?[peakLine(c,pk)]:[]),
-      L('As a %',`${n0(c.qty)} ÷ (${n0(c.qty)} + ${n0(c.mdq)}) = ${pct(c.str)}`));}
-  if(c.ly_rows){const la=c.ly_mdq/c.ly_n_months;
-    R.push(L('LY qty',`${n0(c.ly_qty)} <span class="note">pieces actually sold the same month(s) last year (sales actuals)</span>`),L('LY days',`${n0(la)} ÷ (${n0(c.ly_qty)} ÷ ${c.ly_n_days}) = <b>${n1(c.ly_days)}</b> → band ${S.seasonal?c.ly_band:c.ly_base_band} <span class="note">LY qty on the file MDQ${c.ly_n_months>1?' (avg of '+c.ly_n_months+' months)':''}, ${c.ly_rows} store-months that sold last year</span>`));}
-  else R.push(L('LY days','— <span class="note">no last-year sales here</span>'));
+  if(!c.rows)return calcBox(title,[L('STR','— <span class="note">'+(S.roll.has_plan?'no store has both a plan and fixtures here':'no sales plan loaded')+'</span>'),L('MDQ',n0(c.mdq)+' pcs')]);
+  R.push(L('Based on',`<span class="note">${c.rows} store × department × month rows with a plan and fixtures; MDQ = Σ fixtures × qty per fixture</span>`));
+  R.push(`<tr><td colspan="2">${compare(c,pk,c.qty,c.n_days,per)}</td></tr>`);
+  R.push(seaLine(c));if(fest)R.push(L('Festivals',fest));
+  R.push(c.ly_rows?lyLine(c,c.ly_qty,c.ly_mdq/c.ly_n_months,c.ly_n_days,c.ly_rows):L('Last year','— <span class="note">no sales last year</span>'));
   return calcBox(title,R);
 }
 function calcCell(title,c,lyMon,pk){
-  const R=[L('Fixtures',n2(c.fixtures)+(Math.abs(c.fixtures-c.fixtures_file)>1e-9?` <span class="note">edited - file ${n2(c.fixtures_file)}</span>`:'')),
-    L('Qty per fixture',n2(c.density)+(c.edited.includes('qty per fixture')?' <span class="note">edited</span>':'')),
-    L('MDQ',`${n2(c.fixtures)} × ${n2(c.density)} = <b>${n0(c.mdq)}</b>`),
-    L('Plan qty',c.qty_from==='plan'?`<b>${n0(c.plan_qty)}</b> <span class="note">from the sales plan file (Rs ${n0(c.plan_rs)})</span>`:
-      c.qty_from?`Rs ${n0(c.plan_rs)} ÷ Rs ${n0(c.asp)} <span class="note">LY selling price, ${h(c.asp_from)}</span> = <b>${n0(c.plan_qty)}</b>`:'— <span class="note">no plan</span>')];
-  if(c.days!=null)R.push(L('Days in month',c.n_days),L('STR days',`${n0(c.mdq)} ÷ (${n0(c.plan_qty)} ÷ ${c.n_days}) = <b>${n1(c.days)}</b>`,1),
-    seaLine(c),...(c.fest_days?[L('Festivals',`${h(c.festivals)} - ${c.fest_days} of ${c.n_days} days at a ×${n2(c.fest_lift)} sales lift: index ${n2(c.season_base)} festival-free → ${n2(c.season_idx)}`)]:[]),bandLine(c),...(pk?[peakLine({...c,n_months:1},pk)]:[]),L('As a %',pct(c.str)));
-  else R.push(L('STR days','— <span class="note">needs both a plan and fixtures</span>'));
-  R.push(L('LY qty',c.ly_days!=null?`${n0(c.ly_q)} <span class="note">pieces this store actually sold in this department in ${lyMon} (sales actuals, net of returns)</span>`:'—'));
-  R.push(L('LY days',c.ly_days!=null?`${n0(c.mdq_base)} ÷ (${n0(c.ly_q)} ÷ ${c.ly_n_days}) = <b>${n1(c.ly_days)}</b> <span class="note">LY qty on the file MDQ</span>`:'— <span class="note">no last-year sales</span>'));
+  const R=[L('MDQ',`${n2(c.fixtures)} fixtures × ${n2(c.density)} per fixture = <b>${n0(c.mdq)}</b>`+
+      ([Math.abs(c.fixtures-c.fixtures_file)>1e-9?`fixtures edited (file ${n2(c.fixtures_file)})`:'',c.edited.includes('qty per fixture')?'qty per fixture edited':''].filter(Boolean).map(x=>` <span class="note">${x}</span>`).join(''))),
+    L('Planned qty',c.qty_from==='plan'?`<b>${n0(c.plan_qty)}</b> <span class="note">from the sales plan file (Rs ${n0(c.plan_rs)})</span>`:
+      c.qty_from?`Rs ${n0(c.plan_rs)} ÷ Rs ${n0(c.asp)} = <b>${n0(c.plan_qty)}</b> <span class="note">at last year's selling price (${h(c.asp_from)})</span>`:'— <span class="note">no plan</span>')];
+  if(c.days!=null)R.push(`<tr><td colspan="2">${compare({...c,n_months:1},pk,c.plan_qty,c.n_days,'this month')}</td></tr>`,seaLine(c),
+    ...(c.fest_days?[L('Festivals',`${h(c.festivals)}: ${c.fest_days} of ${c.n_days} days at ×${n2(c.fest_lift)} sales <span class="note">(index ${n2(c.season_base)} without festivals → ${n2(c.season_year)})</span>`)]:[]));
+  else R.push(L('STR','— <span class="note">needs both a plan and fixtures</span>'));
+  R.push(c.ly_days!=null?lyLine(c,c.ly_q,c.mdq_base,c.ly_n_days,0,lyMon):L('Last year','— <span class="note">no sales last year</span>'));
   return calcBox(title,R);
 }
-
 function inputCard(kind){
   const u=(S.st.info||{})[kind],ed=S.st.can_edit,fx=kind==='fixture';
   let m='';
@@ -359,7 +392,7 @@ async function load(){
   if(cm.month_mismatch){$('#job').className='status err';$('#job').textContent='The sales plan months do not match the fixture plan months - re-upload it with the other "Months in the file are" choice. Showing the fixture plan only.';}
   $('#fc-desc').textContent=(cm.stores_both!=null?`${cm.stores_both} stores with every month in both the fixture plan and the sales plan (only these are compared)`:`${i.stores} stores`)+` · ${i.departments} departments · ${i.months.map(mon).join(', ')} · last year = ${i.ly_months.map(mon).join(', ')}`+
     (i.sales_plan?'':' · no sales plan yet, so forecast STR shows "—"');
-  await loadRoll();if(S.dept)await loadCells();if(S.tab==='tg')loadTags();
+  await loadRoll();if(S.dept)await loadCells();if(S.tab==='tg')loadTags();if(S.tab==='sm')renderStores();
 }
 // per-hierarchy search filters (user, 9 Oct: "INDIVIDIUAL SEARCH FILTER MISSING ADD THAT FOR EVERY HIERARCHY"): S.lf = {layer: Set}
 const gf=()=>{const f={};for(const [k,v] of Object.entries(S.lf))f[k]=[...v];return f;};
@@ -519,8 +552,9 @@ function renderTags(){
     (T.not_in_plan.length?` Tagged but not in this fixture plan: ${T.not_in_plan.join(', ')}.`:'');
 }
 function setTab(t){S.tab=t;document.querySelectorAll('.tab').forEach(b=>{b.classList.toggle('on',b.dataset.tab===t);b.setAttribute('aria-selected',b.dataset.tab===t);});
-  $('#p-fc').hidden=t!=='fc';$('#p-tg').hidden=t!=='tg';hidePop();
-  try{history.replaceState(null,'',t==='tg'?'#tags':location.pathname+location.search);}catch(e){}
+  $('#p-fc').hidden=t!=='fc';$('#p-tg').hidden=t!=='tg';$('#p-sm').hidden=t!=='sm';hidePop();
+  try{history.replaceState(null,'',t==='tg'?'#tags':t==='sm'?'#stores':location.pathname+location.search);}catch(e){}
+  if(t==='sm'&&S.st)renderStores();
   if(t==='tg'&&S.st?.info?.fixture)loadTags();
   if(t==='fc'&&S.roll)loadRoll();}
 function dirty(){S.cache={};S.vals={};}
@@ -541,10 +575,10 @@ document.addEventListener('click',async e=>{
       const who=tr.dataset.k==='all'?'All'+(lfText()?' · '+lfText():''):r._p.join(' · ');
       const ci=S.layers.indexOf('cluster'),cl=(S.lf.cluster&&S.lf.cluster.size===1?[...S.lf.cluster][0]:null)||(tr.dataset.k!=='all'&&ci>=0&&r._p.length>ci?r._p[ci]:null),fx=(S.st.info.festivals||{})[cl]||{};
       const fm=(i==='t'?R.months:[R.months[i]]).filter(m=>fx[m]).map(m=>`${mon(m)}: ${fx[m].join(', ')}`).join('; ');
-      const pk=peakSug(r.months,cellOf(r,i),R.months,(x,j)=>x.rows&&x.qty>0?x.qty/dim(R.months[j]):0);
-      showPop(cc,calcAgg(`${who} · ${ml}`,cellOf(r,i),fm?`${h(fm)} <span class="note">(${h(cl)} - in the season index at each department&#39;s festival sales lift)</span>`:'',pk));}
+      const pk=peakSug(r.months,cellOf(r,i),R.months,(x,j)=>x.rows&&x.qty>0?[x.qty,dim(R.months[j])]:null);
+      showPop(cc,calcAgg(`${who} · ${ml}`,cellOf(r,i),fm?`${h(fm)} <span class="note">(${h(cl)})</span>`:'',pk,i==='t'?ml:mon(R.months[i])));}
     else if(tbl==='dt'){const r=S.vis.cells[+tr.dataset.k],c=r.months[i];if(c)showPop(cc,calcCell(`${S.cells.department} · ${r.store} · ${mon(S.cells.months[i])}`,c,mon(addM(S.cells.months[i],-12)),
-      peakSug(r.months,c.days!=null?c:null,S.cells.months,x=>x.days!=null&&x.plan_qty>0?x.plan_qty/x.n_days:0)));}
+      peakSug(r.months,c.days!=null?{...c,n_months:1}:null,S.cells.months,x=>x.days!=null&&x.plan_qty>0?[x.plan_qty,x.n_days]:null)));}
     return;}
   if(e.target.closest('[data-mtog]')){S.months=!S.months;try{localStorage.setItem('str.months',S.months?'1':'0');}catch(err){}renderRoll();return;}
   const tg=e.target.closest('[data-tog]');if(tg){await toggle(S.vis.roll[+tg.closest('tr').dataset.k]._p);return;}
@@ -617,7 +651,7 @@ async function upload(kind,f){
   catch(e){$('#job').className='status err';$('#job').textContent=e.message;return;}
   dirty();S.dept=null;$('#dd').hidden=true;load();
 }
-S.tab=location.hash==='#tags'?'tg':'fc';if(S.tab==='tg')setTab('tg');
+S.tab=location.hash==='#tags'?'tg':location.hash==='#stores'?'sm':'fc';if(S.tab!=='fc')setTab(S.tab);
 load();
 </script>
 </body>

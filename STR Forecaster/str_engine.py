@@ -491,7 +491,21 @@ def build():
         for st in sorted((fs & ps) - both_):
             a, b = gaps(fx, st), gaps(pl, st)
             part.append(f"{st} (" + "; ".join(x for x in ((a and "no fixtures " + a), (b and "no plan " + b)) if x) + ")")
+        # every store of either file with its status (user, 9 Oct: "add the mapped and unmapped store list tab")
+        fmo, pmo, clm = fx.groupby("store").month.apply(set), pl.groupby("store").month.apply(set), store_clusters()
+        fxm, plr = fx.groupby("store").mdq.sum(), pl.groupby("store").plan_rs.sum()
+        lab = lambda ms: ", ".join(m.strftime("%b'%y") for m in months if m in ms)   # noqa: E731
+        smap = []
+        for st in sorted(fs | ps):
+            a, b = fmo.get(st, set()), pmo.get(st, set())
+            status = ("Mapped - compared" if st in both_ else "Fixture plan only" if not b else "Sales plan only" if not a
+                      else "Month missing")
+            miss = "; ".join(x for x in ((len(a) < len(months) and a and "no fixtures " + lab(set(months) - a)) or "",
+                                          (len(b) < len(months) and b and "no plan " + lab(set(months) - b)) or "") if x)
+            smap.append({"store": st, "status": status, "cluster": clm.get(st, "(no AOP cluster)"), "fixture_months": lab(a),
+                         "plan_months": lab(b), "missing": miss, "mdq": float(fxm.get(st, 0.0)), "plan_rs": float(plr.get(st, 0.0))})
         common = {"stores_both": len(both_), "fixture_only": sorted(fs - ps), "plan_only": sorted(ps - fs), "part_months": part,
+                  "store_map": smap,
                   "left_out_mdq": float(fx.loc[~fx.store.isin(both_), "mdq"].sum()),
                   "left_out_rs": float(pl.loc[~pl.store.isin(both_), "plan_rs"].sum())}
         fx, pl = fx[fx.store.isin(both_)], pl[pl.store.isin(both_)]

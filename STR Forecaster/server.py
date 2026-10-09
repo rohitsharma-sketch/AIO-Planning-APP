@@ -356,6 +356,18 @@ class H(BaseHTTPRequestHandler):
                 name = f"STR Department tags - {time.strftime('%d.%m.%y')}.xlsx"
                 return self._send(200, out.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                   {"Content-Disposition": f'attachment; filename="{name}"'})
+            if path == "/api/stores/download":   # the Store mapping tab as Excel
+                sm = pd.DataFrame((info.get("common") or {}).get("store_map") or [])
+                if len(sm):
+                    sm = sm.rename(columns={"store": "Store", "status": "Status", "cluster": "Cluster (AOP)", "fixture_months": "Fixture plan months",
+                                            "plan_months": "Sales plan months", "missing": "Missing", "mdq": "MDQ (4 months)", "plan_rs": "Plan Rs (4 months)"})
+                    for c in ("Store", "Cluster (AOP)"):
+                        sm[c] = sm[c].map(_safe)
+                out = io.BytesIO()
+                with pd.ExcelWriter(out, engine="xlsxwriter", engine_kwargs={"options": {"strings_to_formulas": False}}) as xw:
+                    sm.to_excel(xw, sheet_name="Store mapping", index=False)
+                return self._send(200, out.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                  {"Content-Disposition": f'attachment; filename="STR Store mapping - {time.strftime("%d.%m.%y")}.xlsx"'})
             if path == "/api/download":
                 name = f"STR Forecast - {time.strftime('%d.%m.%y')}.xlsx"
                 lay = [k for k in q.get("layers", ["cluster,department,store"])[0].split(",") if k in LAYER_KEYS] or ["cluster", "department", "store"]
