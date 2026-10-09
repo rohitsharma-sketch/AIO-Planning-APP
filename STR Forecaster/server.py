@@ -99,14 +99,29 @@ def _tag_cols(rows):
     t, master = se.tags()
     for r in rows:
         own = t.get(str(r["department"]).upper(), {})
-        r["tag"] = own.get("tag")
-        r["attribute"] = own.get("attribute") or master.get(str(r["department"]).upper())
-        r["attribute_from"] = "tag master" if own.get("attribute") else "attribute master" if r["attribute"] else ""
+        if "tag" not in r:   # a Tag / Attribute layer already grouped the row - keep its value (it is the row's path)
+            r["tag"] = own.get("tag")
+        if "attribute" not in r:
+            r["attribute"] = own.get("attribute") or master.get(str(r["department"]).upper())
+        r["attribute_from"] = "tag master" if own.get("attribute") else "attribute master" if master.get(str(r["department"]).upper()) else ""
     return rows
 
 
+TAG_KEYS = ("tag", "attribute")
+
+
+def _with_tags(df):
+    """Tag and Attribute as row layers (user, 9 Oct: "add Tag and Attribute as draggable layers too"): each department's
+    Core / Seasonal tag ("(untagged)") and attribute (own, else the suite attribute master; "(no attribute)")"""
+    t, master = se.tags()
+    deps = df.department.unique()
+    own = {d: t.get(str(d).upper(), {}) for d in deps}
+    return df.assign(tag=df.department.map({d: own[d].get("tag") or "(untagged)" for d in deps}),
+                     attribute=df.department.map({d: own[d].get("attribute") or master.get(str(d).upper()) or "(no attribute)" for d in deps}))
+
+
 def _filter(df, q):
-    for k in ("division", "cluster", "department", "store"):
+    for k in ("division", "cluster", "department", "store") + TAG_KEYS:
         v = q.get(k, [""])[0]
         if v:
             df = df[df[k] == v]
@@ -222,10 +237,11 @@ class H(BaseHTTPRequestHandler):
             if path == "/api/rollup":
                 # any layer path, e.g. "division,department,cluster" (user, 9 Oct: "drag and drop function which drills to
                 # any level for STR similar to AOP forecaster output model"); a department carries its one division along
-                by = [k for k in q.get("by", ["division"])[0].split(",") if k in ("division", "department", "cluster", "store")] or ["division"]
+                by = [k for k in q.get("by", ["division"])[0].split(",") if k in ("division", "department", "cluster", "store") + TAG_KEYS] or ["division"]
                 if "department" in by and "division" not in by:
                     by.insert(by.index("department"), "division")
-                d, hp = _filter(df, q), bool(info.get("sales_plan"))
+                d = _with_tags(df) if any(k in by or q.get(k) for k in TAG_KEYS) else df
+                d, hp = _filter(d, q), bool(info.get("sales_plan"))
                 rows = se.rollup(d, by, months, hp)
                 if len(rows) > 6000:
                     return self._send(413, {"error": f"{len(rows):,} rows at that level - open rows one at a time instead."})

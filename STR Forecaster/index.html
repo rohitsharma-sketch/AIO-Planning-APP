@@ -195,7 +195,7 @@ const post=(p,body)=>api(p,{method:'POST',headers:{'Content-Type':'application/j
 const S={layers:['division','department','cluster','store'],open:new Set(),kids:{},cl:'',seasonal:true,st:null,by:'division',div:'',dept:null,roll:null,cells:null,tags:null,cache:{},grid:{},gt:{},vis:{},allAgg:null,pf:null};
 // row layers (user, 9 Oct: "a similar drag and drop function which drills to any level for STR similar to AOP forecaster
 // output model"): drag to reorder, x to drop a layer, + to add it back; a row opens into the next layer
-const LAYERS={division:'Division',department:'Department',cluster:'Cluster',store:'Store'};
+const LAYERS={division:'Division',department:'Department',cluster:'Cluster',store:'Store',tag:'Tag',attribute:'Attribute'};
 function addM(s,n){const d=new Date(+s.slice(0,4),+s.slice(5,7)-1+n,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 
 /* ---- the All row: the server's sums, worked out over the rows shown (str_engine.rollup: sum first, then the ratio) */
@@ -390,9 +390,9 @@ function rollCols(){
   const cols=[{id:'label',label:L.map(k=>LAYERS[k]).join(' › '),cls:'l1',filt:true,get:r=>r[L[r._d||0]],
     html:r=>{const d=r._d||0,k=L[d],last=d>=L.length-1,o=S.open.has(pk(r._p));
       return `<span style="display:inline-block;width:${d*16}px"></span>`+(last?'<span class="tgl"></span>':`<button class="tgl" data-tog aria-expanded="${o}" aria-label="${o?'Close':'Open'} ${h(r[k])}">${o?'&#9662;':'&#9656;'}</button>`)+
-        h(r[k])+(k==='department'?(r.edited?' <span title="has edits" class="dot">&#9679;</span>':'')+` <button class="edb" data-edit="${h(r.department)}" title="Stores and fixtures of ${h(r.department)} - edit here">&#9998;</button>`:'');}}];
+        h(k==='tag'?(tagLab(r[k])||r[k]):r[k])+(k==='department'?(r.edited?' <span title="has edits" class="dot">&#9679;</span>':'')+` <button class="edb" data-edit="${h(r.department)}" title="Stores and fixtures of ${h(r.department)} - edit here">&#9998;</button>`:'');}}];
   if(L.includes('department'))cols.push(
-    {id:'tag',label:'Tag',cls:'l',filt:true,get:r=>tagLab(r.tag)||null,html:r=>r.tag?`<span class="tg ${r.tag.toLowerCase()}">${tagLab(r.tag)}</span>`:'<span class="note">—</span>'},
+    {id:'tag',label:'Tag',cls:'l',filt:true,get:r=>tagLab(r.tag)||null,html:r=>tagLab(r.tag)?`<span class="tg ${r.tag.toLowerCase()}">${tagLab(r.tag)}</span>`:'<span class="note">—</span>'},
     {id:'attribute',label:'Attribute',cls:'l',filt:true,get:r=>r.attribute,html:r=>r.attribute?`<span title="from the ${h(r.attribute_from)}">${h(r.attribute)}</span>`:'<span class="note">—</span>'});
   for(const [i,g] of [...R.months.map((m,i)=>[i,mon(m)]),['t','4-month avg']])for(const [f,l,t] of FIG)
     cols.push({id:f+':'+i,grp:g,gtitle:i==='t'?'sum over the months, then the days - an average monthly rate':'',label:l,title:t,m:i,
@@ -519,7 +519,7 @@ document.addEventListener('click',async e=>{
     if(!S.prev)S.prev={layers:[...S.layers],open:[...S.open],div:S.div,cl:S.cl,grid:g?{sort:g.sort,filt:{...g.filt}}:null};   // what Revert goes back to
     S.mx={d,b:b===''?null:+b};S.div=d;$('#f-div').value=d;
     S.grid.roll={sort:{id:'days:t',dir:-1},filt:{'band:t':new Set([b===''?'(blank)':b+' days'])}};
-    setLayers(['department',...S.layers.filter(k=>k!=='department'&&k!=='division')]);
+    setLayers(['department',...S.layers.filter(k=>!['department','division','tag','attribute'].includes(k))]);
     $('#t').closest('.tw').scrollIntoView({behavior:'smooth',block:'nearest'});return;}
   if(e.target.id==='rev'&&S.prev){const p=S.prev;S.prev=null;S.mx=null;S.div=p.div;$('#f-div').value=p.div;S.cl=p.cl;$('#f-cl').value=p.cl;
     S.layers=p.layers;S.open=new Set(p.open);S.kids={};S.grid.roll=p.grid||{sort:null,filt:{}};await loadRoll();return;}

@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: Tag and Attribute as row layers
+- **Asked (user):** "add Tag and Attribute as draggable layers too"
+- "+ Tag" and "+ Attribute" chips in the Rows bar: drag them into any position (e.g. Attribute > Division > Department > Cluster > Store). Tag = the department's Core / Seasonal tag ("(untagged)" until set); Attribute = its own attribute, else the suite attribute master ("(no attribute)" if neither). Read live from the Department tags tab, so a tag change shows on the next load. Server: /api/rollup and its filters accept tag / attribute.
+
 ### STR Forecaster: drag-and-drop row layers that drill to any level
 - **Asked (user):** "instead of the sepearate tab why dont you give a similar drag and drop function which drills to any level for STR similar to AOP forecaster ouput model"
 - The Division / Department / Cluster / Store view buttons are replaced by a "Rows" layer bar like the AOP Output pivot: drag the chips to change the order, x drops a layer, "+ Layer" adds it back (or drag it into place). Each row opens (triangle) into the next layer, e.g. Division > Department > Cluster > Store; "Open to" opens every row down to a layer in one request per layer (guarded at 6,000 rows). Children load on demand and are cached; sorting applies at every level, header filters to the top layer; the All row adds up the top-layer rows shown. A pencil on any department row opens its store-level fixture editor. The band table click puts Department on top for that division and band; Revert restores the layers, open rows, filters and sort.
