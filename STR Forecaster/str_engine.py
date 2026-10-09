@@ -540,7 +540,15 @@ def build(articles=False):
     df["season_year_idx"] = df.season_idx
     wm = df.groupby(["cluster", "department"]).season_year_idx.transform("mean")
     df["season_idx"] = (df.season_year_idx / wm.where(wm > 0)).fillna(1.0)   # no sales history in the window: normal
-    df["season"] = df.season_idx.map(season_of)
+    # user, 9 Oct: "differentiate peak only if the festival is there or high sales is recorded as per the yoy avg": a month
+    # high inside the window is peak only with a reason - festival days in it (with a sales lift) or its festival-free
+    # history at >= 1.15x the department's average month of the year (2022-25 average); otherwise normal
+    fest = (df.fest_days > 0) & (df.fest_lift > 1)
+    high = df.season_base >= SEASON_CUT[0]
+    df["peak_ok"] = fest | high
+    df["peak_why"] = np.select([fest & high, fest, high], ["festival + high sales", "festival", "high sales"], "")
+    sea = df.season_idx.map(season_of)
+    df["season"] = sea.where(~(sea.eq("peak") & ~df.peak_ok), "normal")
     fests = {}
     for (c, m), g in df.loc[df.fest_days > 0, ["cluster", "month", "festivals"]].drop_duplicates().groupby(["cluster", "month"]):
         fests.setdefault(c, {})[str(m)] = sorted({x for v in g.festivals for x in v.split(", ") if x})
@@ -695,8 +703,9 @@ def rollup(df, by, months, has_plan=True):
     a["sq"] = np.where(both, df.plan_qty * (df["season_idx"] if "season_idx" in df else 1.0), 0.0)
     a["sy"] = np.where(both, df.plan_qty * (df["season_year_idx"] if "season_year_idx" in df else 1.0), 0.0)
     a["fq"] = np.where(both & (df["fest_days"] > 0 if "fest_days" in df else False), df.plan_qty, 0.0)   # planned qty in festival months
+    a["pk"] = np.where(both & (df["peak_ok"] if "peak_ok" in df else True), df.plan_qty, 0.0)   # planned qty with a peak reason
     a = a[a.mi >= 0]
-    V = ["q", "md", "nb", "lq", "lmd", "nl", "fixtures", "plan_rs", "ed", "sq", "sy", "fq"]
+    V = ["q", "md", "nb", "lq", "lmd", "nl", "fixtures", "plan_rs", "ed", "sq", "sy", "fq", "pk"]
     g = a.groupby(by + ["mi"], dropna=False, sort=True)[V].sum()
     dim = [m.days_in_month for m in months]
     ldim = [(m - 12).days_in_month for m in months]
@@ -707,9 +716,11 @@ def rollup(df, by, months, has_plan=True):
         ly_days = days_of(s[3], s[4], lnd, lnm) if lnm else None
         sidx = s[9] / s[0] if s[2] and s[0] > 0 else None
         sea = season_of(sidx)
+        if sea == "peak" and s[12] < 0.5 * s[0]:   # most of its plan has no festival / high-sales reason
+            sea = "normal"
         return {"qty": float(s[0]), "mdq": float(s[1]), "str": float(str_of(s[0], s[1])) if s[2] else None,
                 "days": days, "ly_days": ly_days, "band": str_band(days, sea), "ly_band": str_band(ly_days, sea),
-                "base_band": str_band(days), "ly_base_band": str_band(ly_days), "season": sea, "season_idx": sidx, "sq": float(s[9]), "sy": float(s[10]), "fq": float(s[11]),
+                "base_band": str_band(days), "ly_base_band": str_band(ly_days), "season": sea, "season_idx": sidx, "sq": float(s[9]), "sy": float(s[10]), "fq": float(s[11]), "pk": float(s[12]),
                 "season_year": s[10] / s[0] if sidx is not None else None, "fest_share": s[11] / s[0] if sidx is not None else None,
                 "ly_qty": float(s[3]), "ly_mdq": float(s[4]), "ly_str": float(str_of(s[3], s[4])) if s[5] else None,
                 "fixtures": float(s[6]), "plan_rs": float(s[7]), "rows": int(s[2]), "ly_rows": int(s[5]),

@@ -110,6 +110,7 @@ tr.lv0 td.l1{font-weight:700}tr.lv1 td,tr.lv3 td{background:#FCFBF8}tr.lv1 td.l1
 .px{border:0;background:none;cursor:pointer;font-size:14px;color:var(--muted-foreground)}
 .pf{display:flex;flex-direction:column;gap:6px;min-width:220px}
 .pf-l{max-height:260px;overflow:auto;display:flex;flex-direction:column;gap:1px}
+.pf-s,.pf-c{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .pf-l label{display:flex;gap:6px;align-items:center;cursor:pointer;padding:1px 2px}
 </style>
 </head>
@@ -223,7 +224,7 @@ const dim=s=>new Date(+s.slice(0,4),+s.slice(5,7),0).getDate();
 const lyDim=s=>new Date(+s.slice(0,4)-1,+s.slice(5,7),0).getDate();
 const band=d=>d==null?null:Math.min(Math.max(Math.floor(d/30+0.5)*30,60),180);
 const daysOf=(q,md,nd,nm)=>q>0&&nd?(md/nm)/(q/nd):null;
-const SUMS=['qty','mdq','ly_qty','ly_mdq','fixtures','plan_rs','rows','ly_rows','sq','sy','fq'];
+const SUMS=['qty','mdq','ly_qty','ly_mdq','fixtures','plan_rs','rows','ly_rows','sq','sy','fq','pk'];
 // season (user, 9 Oct: "incorporate the seasonality trends from the Listing - Delisting Analyser App") - same rule as str_engine
 const seasonOf=x=>{const c=S.st.info.season_cut||[1.15,.85];return x==null?null:x>=c[0]?'peak':x<=c[1]?'off':'normal';};
 const lim=s=>(S.st.info.season_bands||{})[s]||S.st.info.base_band||[60,180];
@@ -233,15 +234,16 @@ const bandOf=c=>c?(S.seasonal?c.band:c.base_band):null;
 const win=()=>{const m=S.st.info.months||[];return m.length?mon(m[0])+'–'+mon(m[m.length-1]):'the plan window';};
 const festy=c=>c&&c.season==='peak'&&(c.fest_share||0)>=0.5;
 const seaWhy=c=>{if(!c||!c.season)return '';const x=c.season_idx,cut=S.st.info.season_cut||[1.15,.85];
-  return `${c.season[0].toUpperCase()+c.season.slice(1)}${festy(c)?' (festival)':''}: here this department sells ${n2(x)}× its average month of ${win()} (this cluster's own sales 2022–25${c.fest_share?', raised by the festival days that fall in this month':''})`+
-    (c.season_year!=null?` - ${n2(c.season_year)}× its average month of the whole year`:'')+`. Peak = ${cut[0]}× the window average or more, off = ${cut[1]}× or less.`;};
+  const why=c.season==='peak'?(festy(c)?' (festival)':' (high sales: '+n2(c.season_year)+'× its average month of the year)'):'';
+  return `${c.season[0].toUpperCase()+c.season.slice(1)}${why}: here this department sells ${n2(x)}× its average month of ${win()} (this cluster's own sales 2022–25${c.fest_share?', raised by the festival days that fall in this month':''})`+
+    (c.season_year!=null?` - ${n2(c.season_year)}× its average month of the whole year`:'')+`. Peak = ${cut[0]}× the window average or more AND a reason - festival days in the month or sales of ${cut[0]}× the department's average month of the year or more; off = ${cut[1]}× or less.`;};
 const bandWhy=c=>{if(!c)return '';const d=c.days;if(d==null)return 'No band: no store has both a plan and fixtures here.';
   const raw=Math.floor(d/30+0.5)*30,b=bandOf(c),[lo,hi]=S.seasonal?lim(c.season):lim(null);
   return `${Math.round(d)} days of cover → nearest 30 = ${raw}`+(raw!==b?` → kept within ${lo}–${hi} = ${b}`:'')+'. '+
     (!S.seasonal||!c.season?'Base rule: 60–180 days.':c.season==='off'?'Off months start the band at 90 - with low sales, stock is expected to sit longer (60–180 otherwise). ':'Peak and normal months use the 60–180 range. ')+(S.seasonal?seaWhy(c):'');};
 const seaTag=c=>S.seasonal&&c&&c.season&&c.season!=='normal'?`<span class="sb ${c.season}" title="${h(seaWhy(c))}">${c.season==='peak'?(festy(c)?'Peak ✦':'Peak'):'Off'}</span>`:'';
 function mkCell(t,nd,nm,lnd,lnm){const d=nm?daysOf(t.qty,t.mdq,nd,nm):null,l=lnm?daysOf(t.ly_qty,t.ly_mdq,lnd,lnm):null;
-  const sx=t.rows&&t.qty>0?t.sq/t.qty:null,se=seasonOf(sx);
+  const sx=t.rows&&t.qty>0?t.sq/t.qty:null,s0=seasonOf(sx),se=s0==='peak'&&(t.pk||0)<0.5*t.qty?'normal':s0;   // peak needs a reason (as str_engine)
   return {...t,season_year:sx==null?null:t.sy/t.qty,fest_share:sx==null?null:t.fq/t.qty,days:d,ly_days:l,band:bandS(d,se),ly_band:bandS(l,se),base_band:band(d),ly_base_band:band(l),season:se,season_idx:sx,str:t.rows?t.qty/(t.qty+t.mdq):null,ly_str:t.ly_rows?t.ly_qty/(t.ly_qty+t.ly_mdq):null,
     n_days:nm?nd:0,n_months:nm,ly_n_days:lnm?lnd:0,ly_n_months:lnm};}
 function agg(rows,ms){
@@ -253,11 +255,25 @@ function agg(rows,ms){
 }
 
 /* ---- header sort + filter (user, 9 Oct: "add filters and sort functions on headers remove the find bar") */
-const gstate=n=>S.grid[n]??={sort:null,filt:{}};
+// Excel-style column menus (user, 9 Oct: "inculcate filter and sort functions like they are in excel spreadsheets"):
+// every column: sort ascending / descending, a number or text condition, a searchable value list, clear
+const gstate=n=>{const g=S.grid[n]??={sort:null,filt:{},cond:{}};g.cond??={};return g;};
 const fv=(c,r)=>{const v=c.get(r);return v==null||v===''?'(blank)':c.fmt?c.fmt(v):String(v);};
+const NUM_OPS=[['=','equals'],['≠','does not equal'],['>','greater than'],['≥','greater than or equal to'],['<','less than'],['≤','less than or equal to'],['between','between'],['top','top N'],['bottom','bottom N']];
+const TXT_OPS=[['has','contains'],['nothas','does not contain'],['begins','begins with'],['ends','ends with'],['eq','equals'],['ne','does not equal']];
+function condOk(k,v){
+  if(k.op==='top'||k.op==='bottom')return true;
+  if(typeof k.a==='string'){const x=String(v??'').toLowerCase(),a=k.a.toLowerCase();
+    return {has:x.includes(a),nothas:!x.includes(a),begins:x.startsWith(a),ends:x.endsWith(a),eq:x===a,ne:x!==a}[k.op];}
+  if(v==null||isNaN(v))return false;
+  return {'=':v===k.a,'≠':v!==k.a,'>':v>k.a,'≥':v>=k.a,'<':v<k.a,'≤':v<=k.a,between:v>=Math.min(k.a,k.b)&&v<=Math.max(k.a,k.b)}[k.op];
+}
 function applyGrid(n,cols,rows,sortOnly){
   const g=gstate(n);
-  let out=sortOnly?rows:rows.filter(r=>cols.every(c=>!g.filt[c.id]||g.filt[c.id].has(fv(c,r))));
+  let out=sortOnly?rows:rows.filter(r=>cols.every(c=>(!g.filt[c.id]||g.filt[c.id].has(fv(c,r)))&&(!g.cond[c.id]||condOk(g.cond[c.id],c.get(r)))));
+  if(!sortOnly)for(const c of cols){const k=g.cond[c.id];if(!k||(k.op!=='top'&&k.op!=='bottom'))continue;   // top / bottom N after the other filters
+    const vs=out.map(r=>c.get(r)).filter(v=>v!=null&&!isNaN(v)).sort((x,y)=>k.op==='top'?y-x:x-y),t=vs[Math.min(k.a,vs.length)-1];
+    if(t!=null)out=out.filter(r=>{const v=c.get(r);return v!=null&&(k.op==='top'?v>=t:v<=t);});}
   const c=g.sort&&cols.find(c=>c.id===g.sort.id);
   if(c){const d=g.sort.dir;out=[...out].sort((a,b)=>{const x=c.get(a),y=c.get(b);
     if(x==null||x==='')return y==null||y===''?0:1;if(y==null||y==='')return -1;
@@ -265,8 +281,8 @@ function applyGrid(n,cols,rows,sortOnly){
   return out;
 }
 function th(n,c,extra=''){
-  const g=gstate(n),s=g.sort?.id===c.id?(g.sort.dir>0?' ▲':' ▼'):'';
-  return `<th class="sh ${c.cls||''}" data-g="${n}" data-col="${h(c.id)}" ${extra} title="${h((c.title?c.title+' - ':'')+'click to sort')}">${h(c.label)}${s}${c.filt?`<button class="hf${g.filt[c.id]?' on':''}" data-hf aria-label="Filter ${h(c.label)}${c.grp?' '+h(c.grp):''}">&#9662;</button>`:''}</th>`;
+  const g=gstate(n),s=g.sort?.id===c.id?(g.sort.dir>0?' ▲':' ▼'):'',on=g.filt[c.id]||g.cond[c.id];
+  return `<th class="sh ${c.cls||''}" data-g="${n}" data-col="${h(c.id)}" ${extra} title="${h((c.title?c.title+' - ':'')+'click to sort; ▾ = sort / filter menu')}">${h(c.label)}${s}${c.filt!==false?`<button class="hf${on?' on':''}" data-hf aria-label="Sort / filter ${h(c.label)}${c.grp?' '+h(c.grp):''}">&#9662;</button>`:''}</th>`;
 }
 function grid(n,el,cols,rows,o={}){
   S.gt[n]={cols,rows:o.base||rows};
@@ -310,19 +326,28 @@ function showPop(a,html){const p=$('#pop');p.innerHTML=html;p.hidden=false;const
   p.style.left=Math.max(8,Math.min(r.left,innerWidth-w-8))+'px';p.style.top=y+'px';}
 function hidePop(){$('#pop').hidden=true;S.pf=null;}
 function openFilter(n,id,btn){
-  const T=S.gt[n],c=T.cols.find(c=>c.id===id),sel=gstate(n).filt[id];
+  const T=S.gt[n],c=T.cols.find(c=>c.id===id),g=gstate(n),sel=g.filt[id],k=g.cond[id];
+  const num=c.num||T.rows.every(r=>{const v=c.get(r);return v==null||typeof v==='number';});
   const vals=[...new Set(T.rows.map(r=>fv(c,r)))].sort((a,b)=>{const x=parseFloat(a),y=parseFloat(b);return !isNaN(x)&&!isNaN(y)?x-y:a.localeCompare(b);});
+  const ops=num?NUM_OPS:TXT_OPS,shown=vals.slice(0,500);
   showPop(btn,`<div class="pf"><div class="calc-h"><b>${h(c.label)}${c.grp?' · '+h(c.grp):''}</b><button class="px" data-px aria-label="Close">&#x2715;</button></div>
+    <div class="pf-s"><button class="btn ghost sm" data-ps="1">${num?'↑ Smallest to largest':'↑ Sort A to Z'}</button><button class="btn ghost sm" data-ps="-1">${num?'↓ Largest to smallest':'↓ Sort Z to A'}</button>${g.sort?.id===id?'<button class="btn ghost sm" data-ps="0">Clear sort</button>':''}</div>
+    <div class="pf-c"><span class="note">${num?'Number':'Text'} filter</span> <select class="pf-op" aria-label="Condition"><option value="">choose…</option>${ops.map(([v,l])=>`<option value="${v}"${k&&k.op===v?' selected':''}>${l}</option>`).join('')}</select>
+      <input class="pf-a" ${num?'type="number" step="any"':'type="text"'} value="${k?h(k.a):''}" aria-label="Value" style="width:90px">
+      <input class="pf-b" type="number" step="any" value="${k&&k.b!=null?h(k.b):''}" aria-label="and" style="width:90px${k&&k.op==='between'?'':';display:none'}">
+      <button class="btn sm" data-pc>Apply</button></div>
     <input type="search" class="pf-q" placeholder="Search…" aria-label="Search values">
-    <div><button class="btn ghost sm" data-pf="all">All</button> <button class="btn ghost sm" data-pf="none">None</button></div>
-    <div class="pf-l">${vals.map(v=>`<label><input type="checkbox" value="${h(v)}"${!sel||sel.has(v)?' checked':''}> ${h(v)}</label>`).join('')}</div></div>`);
-  S.pf={n,id};
+    <div><button class="btn ghost sm" data-pf="all">Select all</button> <button class="btn ghost sm" data-pf="none">None</button> <span class="note">${vals.length} values${vals.length>shown.length?' - first '+shown.length+' listed, search to find others':''}</span></div>
+    <div class="pf-l">${shown.map(v=>`<label><input type="checkbox" value="${h(v)}"${!sel||sel.has(v)?' checked':''}> ${h(v)}</label>`).join('')}</div>
+    ${sel||k?'<div><button class="btn ghost sm" data-pclr>Clear filter from this column</button></div>':''}</div>`);
+  S.pf={n,id,num,all:vals};
 }
 function pfApply(){
   if(S.pf.layer){const k=S.pf.layer,boxes=[...$('#pop').querySelectorAll('.pf-l input')],on=boxes.filter(b=>b.checked).map(b=>b.value);
     if(on.length===boxes.length)delete S.lf[k];else S.lf[k]=new Set(on);loadRoll();return;}
-  const {n,id}=S.pf,boxes=[...$('#pop').querySelectorAll('.pf-l input')],on=boxes.filter(b=>b.checked).map(b=>b.value),g=gstate(n);
-  if(on.length===boxes.length)delete g.filt[id];else g.filt[id]=new Set(on);RENDER[n]();}
+  const {n,id,all}=S.pf,boxes=[...$('#pop').querySelectorAll('.pf-l input')],g=gstate(n);
+  const off=new Set(boxes.filter(b=>!b.checked).map(b=>b.value)),on=all.filter(v=>!off.has(v));   // values past the list stay in
+  if(!off.size)delete g.filt[id];else g.filt[id]=new Set(on);RENDER[n]();}
 function calcBox(title,rows,foot=''){return `<div class="calc"><div class="calc-h"><b>${h(title)}</b><button class="px" data-px aria-label="Close">&#x2715;</button></div><table>${rows.join('')}</table>${foot?`<p class="note" style="margin:6px 0 0">${foot}</p>`:''}</div>`;}
 const L=(a,b,k)=>`<tr${k?' class="k"':''}><th>${a}</th><td>${b}</td></tr>`;
 // user, 9 Oct: "every department tile will have the calculation popup once clicked on it"
@@ -334,26 +359,40 @@ function seaLine(c){if(!c.season)return L('Season','—');const cut=S.st.info.se
     (c.season_year!=null?`, ${n2(c.season_year)}× its average month of the year`:'')+` (this cluster's sales 2022–25${c.fest_share?', festival days included':''}${c.rows>1?', weighted by plan qty':''}). Peak ≥ ${cut[0]}×, off ≤ ${cut[1]}× the ${win()} average.</span>`);}
 // the peak-oriented suggestion: the same display stock, sold at the row's busiest planned month's rate
 // qd(cell, j) -> [planned qty, days in that month] or null
-function peakSug(cells,c,ms,qd){
-  const xs=cells.map((x,j)=>{const v=x?qd(x,j):null;return v&&v[0]>0?{j,qty:v[0],nd:v[1],qpd:v[0]/v[1]}:null;}).filter(Boolean);
-  if(!xs.length||!c||!c.mdq||c.days==null)return null;
-  const pk=xs.reduce((a,b)=>b.qpd>a.qpd?b:a),d=c.mdq/(c.n_months||1)/pk.qpd;
-  return {...pk,days:d,band:bandS(d,'peak'),month:ms[pk.j]};}
+// peak-oriented suggestion (user, 9 Oct: "peak should inculcate future stock days on the basis of peak month + its
+// effective month(s) so that we can plan better in advance till the festive period" and "if the peak has ended then it
+// should revert to its regular monthly STR suggestion"): the peak run = consecutive peak months of this row (its own
+// season, festivals included). A month before or inside a run is sized at that run's planned selling rate (its qty / its
+// days) - stock is built ahead of the festive period; after the last run it is the regular suggestion again. The
+// 4-month figure uses all peak months. qd(cell, j) -> [planned qty, days] or null.
+function peakSug(cells,c,ms,qd,cur){
+  if(!c||!c.mdq||c.days==null)return null;
+  const pk=cells.map((x,j)=>x&&x.season==='peak'&&qd(x,j)?j:-1).filter(j=>j>=0);
+  if(!pk.length)return {none:true};
+  const runs=[];for(const j of pk){const r=runs[runs.length-1];if(r&&r[r.length-1]===j-1)r.push(j);else runs.push([j]);}
+  const run=cur==='t'?pk:runs.find(r=>r[r.length-1]>=cur);
+  if(!run)return {ended:true,last:ms[pk[pk.length-1]]};
+  const q=run.reduce((s,j)=>s+qd(cells[j],j)[0],0),nd=run.reduce((s,j)=>s+qd(cells[j],j)[1],0),qpd=q/nd,d=c.mdq/(c.n_months||1)/qpd;
+  return {qty:q,nd,qpd,days:d,band:bandS(d,'peak'),months:run.map(j=>ms[j]),ahead:cur!=='t'&&run[0]>cur};}
+const span=ms=>ms.length>1?`${mon(ms[0])}–${mon(ms[ms.length-1])}`:mon(ms[0]);
 // Regular | Peak-oriented, side by side. q / nd = this period's planned qty and days; per = its label
 function compare(c,p,q,nd,per){
   const avg=c.mdq/(c.n_months||1),[lo,hi]=S.seasonal?lim(c.season):lim(null),qpd=q/nd;
-  const row=(k,a,b)=>`<tr><th>${k}</th><td>${a}</td><td>${p?b:'—'}</td></tr>`,P=p||{};
-  const pq=p?P.qpd*nd:0;
+  const reg=!p||p.none||p.ended,P=p||{},row=(k,a,b)=>`<tr><th>${k}</th><td>${a}</td><td>${b}</td></tr>`;
+  const why=!p?'—':p.none?'no peak month here in the window - same as regular':p.ended?`the peak ended in ${mon(P.last)} - back to the regular suggestion`:
+    `${P.months.length>1?'the peak run ':'the peak month '}${span(P.months)}${P.ahead?' - planned ahead, before the festive period':' - now in the peak'}`;
+  const pq=reg?q:P.qpd*nd;
   return `<table class="cmp"><thead><tr><th></th><th>Regular</th><th>Peak-oriented</th></tr></thead><tbody>`+
-    row('Selling rate from',`the plan of ${per}`,`the busiest planned month, ${mon(P.month)}`)+
-    row('Planned qty',`${n0(q)} pcs in ${nd} days`,`${n0(P.qty)} pcs in ${P.nd} days`)+
-    row('Qty per day',`${n0(q)} ÷ ${nd} = <b>${n1(qpd)}</b>`,`${n0(P.qty)} ÷ ${P.nd} = <b>${n1(P.qpd)}</b>`)+
-    row('MDQ',`${n0(avg)}${c.n_months>1?` <span class="note">(${n0(c.mdq)} ÷ ${c.n_months} months)</span>`:''}`,`${n0(avg)} <span class="note">(same)</span>`)+
-    row('STR days',`${n0(avg)} ÷ ${n1(qpd)} = <b>${n1(c.days)}</b>`,`${n0(avg)} ÷ ${n1(P.qpd)} = <b>${n1(P.days)}</b>`)+
-    row('Range',`${lo}–${hi}${S.seasonal&&c.season?' ('+c.season+')':''}`,'60–180')+
-    row('Suggested band',`<b class="bd">${bandOf(c)} days</b>${S.seasonal&&c.band!==c.base_band?` <span class="note">(${c.base_band} on 60–180)</span>`:''}`,`<b class="bd">${P.band} days</b>`)+
-    row('Sell-thru at MDQ',`${n0(q)} ÷ (${n0(q)} + ${n0(c.mdq)}) = ${pct(q/(q+c.mdq))}`,`${n0(pq)} ÷ (${n0(pq)} + ${n0(c.mdq)}) = ${pct(pq/(pq+c.mdq))}`)+
-    `</tbody></table><p class="note" style="margin:4px 0 8px">Regular = the stock at this period's own planned selling rate. Peak-oriented = the same stock if every day sold like ${p?mon(P.month):'the busiest month'} (its planned qty ÷ its days) - how tight the display gets at the peak. Days are rounded to the nearest 30.</p>`;}
+    row('Selling rate from',`the plan of ${per}`,why)+
+    (reg?'':row('Planned qty',`${n0(q)} pcs in ${nd} days`,`${n0(P.qty)} pcs in ${P.nd} days <span class="note">(${span(P.months)})</span>`)+
+      row('Qty per day',`${n0(q)} ÷ ${nd} = <b>${n1(qpd)}</b>`,`${n0(P.qty)} ÷ ${P.nd} = <b>${n1(P.qpd)}</b>`)+
+      row('MDQ',`${n0(avg)}${c.n_months>1?` <span class="note">(${n0(c.mdq)} ÷ ${c.n_months} months)</span>`:''}`,`${n0(avg)} <span class="note">(same)</span>`)+
+      row('STR days',`${n0(avg)} ÷ ${n1(qpd)} = <b>${n1(c.days)}</b>`,`${n0(avg)} ÷ ${n1(P.qpd)} = <b>${n1(P.days)}</b>`)+
+      row('Range',`${lo}–${hi}${S.seasonal&&c.season?' ('+c.season+')':''}`,'60–180'))+
+    (reg?row('STR days',`${n0(avg)} ÷ ${n1(qpd)} = <b>${n1(c.days)}</b>`,'same as regular'):'')+
+    row('Suggested band',`<b class="bd">${bandOf(c)} days</b>${S.seasonal&&c.band!==c.base_band?` <span class="note">(${c.base_band} on 60–180)</span>`:''}`,`<b class="bd">${reg?bandOf(c):P.band} days</b>`)+
+    row('Sell-thru at MDQ',`${n0(q)} ÷ (${n0(q)} + ${n0(c.mdq)}) = ${pct(q/(q+c.mdq))}`,reg?'same as regular':`${n0(pq)} ÷ (${n0(pq)} + ${n0(c.mdq)}) = ${pct(pq/(pq+c.mdq))}`)+
+    `</tbody></table><p class="note" style="margin:4px 0 8px">Regular = the stock at this period's own planned selling rate. Peak-oriented = the same stock at the selling rate of the coming peak (its peak month plus the peak months next to it, festivals included), so stock is planned ahead of the festive period; once the peak has passed it is the regular suggestion again. Days are rounded to the nearest 30.</p>`;}
 function lyLine(c,q,mdq,nd,rows,lyMon){
   return q>0?L('Last year',`${n0(q)} pcs sold${lyMon?' in '+lyMon:''} → ${n0(mdq)} ÷ (${n0(q)} ÷ ${nd}) = <b>${n1(c.ly_days)} days</b>, band ${S.seasonal?c.ly_band??bandS(c.ly_days,c.season):band(c.ly_days)} <span class="note">(last year's sales on this year's file MDQ${rows?'; '+rows+' store-months that sold':''})</span>`):L('Last year','— <span class="note">no sales last year</span>');}
 function calcAgg(title,c,fest,pk,per){
@@ -473,7 +512,7 @@ function rollCols(){
   const ml=R.months.map(mon),tog=`<button class="mtog" data-mtog aria-expanded="${S.months}" title="${S.months?'Hide':'Show'} the months">${S.months?'&#9666; hide months':'&#9656; '+h(ml[0]+'–'+ml[ml.length-1])}</button>`;
   for(const [i,g] of [['t','4-month avg'],...(S.months?R.months.map((m,i)=>[i,ml[i]]):[])])for(const [f,l,t] of FIG)
     cols.push({id:f+':'+i,grp:g,grpHtml:i==='t'?h(g)+' '+tog:null,gtitle:i==='t'?'sum over the months, then the days - an average monthly rate':'',label:l,title:t,m:i,
-      cls:f==='band'?'b band':f==='ly_days'?'ly':'',num:true,filt:f==='band',fmt:f==='band'?v=>v+' days':null,
+      cls:f==='band'?'b band':f==='ly_days'?'ly':'',num:true,filt:true,fmt:f==='band'?v=>v+' days':null,
       get:r=>f==='band'?bandOf(cellOf(r,i)):cellOf(r,i)[f],
       html:r=>{const c=cellOf(r,i),v=c[f];return f==='band'?`<span title="${h(bandWhy(c))}">${dd(bandOf(c))}</span>`+seaTag(c):f==='qty'||f==='mdq'?n0(v):dd(v);}});
   return cols;
@@ -486,7 +525,7 @@ function renderRoll(){
     tail:(vis,cols)=>{const top=vis.filter(r=>r._d===0);if(!top.length)return '';S.allAgg=agg(top,R.months);const nk=cols.filter(c=>c.m==null).length;
       return `<tr class="tot" data-k="all"><td class="l1" colspan="${nk}">All${lfText()?' · '+h(lfText()):''}${top.length<R.rows.length?` <span class="note">(${top.length} of ${R.rows.length} shown)</span>`:''}</td>`+
         cols.filter(c=>c.m!=null).map(c=>`<td class="${c.cls} c" data-m="${c.m}">${c.html(S.allAgg)}</td>`).join('')+'</tr>';}});
-  $('#clr').hidden=!g.sort&&!Object.keys(g.filt).length&&!Object.keys(S.lf).length;$('#rev').hidden=!S.prev;renderMatrix();
+  $('#clr').hidden=!g.sort&&!Object.keys(g.filt).length&&!Object.keys(g.cond).length&&!Object.keys(S.lf).length;$('#rev').hidden=!S.prev;renderMatrix();
   const i=S.st.info,po=cm.part_months||[];
   const lo=[cm.fixture_only?.length?`in the fixture plan only ${cm.fixture_only.length} (${cm.fixture_only.join(', ')})`:'',
     cm.plan_only?.length?`in the sales plan only ${cm.plan_only.length} (${cm.plan_only.join(', ')})`:'',
@@ -571,6 +610,10 @@ function dirty(){S.cache={};S.vals={};}
 document.addEventListener('click',async e=>{
   const p=e.target.closest('#pop');
   if(p){if(e.target.closest('[data-px]'))hidePop();
+    const ps=e.target.closest('[data-ps]');if(ps&&S.pf&&!S.pf.layer){const g=gstate(S.pf.n),d=+ps.dataset.ps;g.sort=d?{id:S.pf.id,dir:d}:null;const n=S.pf.n;hidePop();RENDER[n]();return;}
+    if(e.target.closest('[data-pc]')&&S.pf){const g=gstate(S.pf.n),op=p.querySelector('.pf-op').value,av=p.querySelector('.pf-a').value,bv=p.querySelector('.pf-b').value,n=S.pf.n;
+      if(!op||av==='')delete g.cond[S.pf.id];else g.cond[S.pf.id]={op,a:S.pf.num?+av:av,b:bv===''?null:+bv};hidePop();RENDER[n]();return;}
+    if(e.target.closest('[data-pclr]')&&S.pf){const g=gstate(S.pf.n),n=S.pf.n;delete g.filt[S.pf.id];delete g.cond[S.pf.id];hidePop();RENDER[n]();return;}
     const a=e.target.closest('[data-pf]');if(a&&S.pf){p.querySelectorAll('.pf-l input').forEach(b=>{if(b.parentElement.style.display!=='none')b.checked=a.dataset.pf==='all';});pfApply();}
     return;}
   hidePop();
@@ -584,10 +627,10 @@ document.addEventListener('click',async e=>{
       const who=tr.dataset.k==='all'?'All'+(lfText()?' · '+lfText():''):r._p.join(' · ');
       const ci=S.layers.indexOf('cluster'),cl=(S.lf.cluster&&S.lf.cluster.size===1?[...S.lf.cluster][0]:null)||(tr.dataset.k!=='all'&&ci>=0&&r._p.length>ci?r._p[ci]:null),fx=(S.st.info.festivals||{})[cl]||{};
       const fm=(i==='t'?R.months:[R.months[i]]).filter(m=>fx[m]).map(m=>`${mon(m)}: ${fx[m].join(', ')}`).join('; ');
-      const pk=peakSug(r.months,cellOf(r,i),R.months,(x,j)=>x.rows&&x.qty>0?[x.qty,dim(R.months[j])]:null);
+      const pk=peakSug(r.months,cellOf(r,i),R.months,(x,j)=>x.rows&&x.qty>0?[x.qty,dim(R.months[j])]:null,i);
       showPop(cc,calcAgg(`${who} · ${ml}`,cellOf(r,i),fm?`${h(fm)} <span class="note">(${h(cl)})</span>`:'',pk,i==='t'?ml:mon(R.months[i])));}
     else if(tbl==='dt'){const r=S.vis.cells[+tr.dataset.k],c=r.months[i];if(c)showPop(cc,calcCell(`${S.cells.department} · ${r.store} · ${mon(S.cells.months[i])}`,c,mon(addM(S.cells.months[i],-12)),
-      peakSug(r.months,c.days!=null?{...c,n_months:1}:null,S.cells.months,x=>x.days!=null&&x.plan_qty>0?[x.plan_qty,x.n_days]:null)));}
+      peakSug(r.months,c.days!=null?{...c,n_months:1}:null,S.cells.months,x=>x.days!=null&&x.plan_qty>0?[x.plan_qty,x.n_days]:null,i)));}
     return;}
   if(e.target.closest('[data-mtog]')){S.months=!S.months;try{localStorage.setItem('str.months',S.months?'1':'0');}catch(err){}renderRoll();return;}
   const tg=e.target.closest('[data-tog]');if(tg){await toggle(S.vis.roll[+tg.closest('tr').dataset.k]._p);return;}
@@ -597,7 +640,7 @@ document.addEventListener('click',async e=>{
   const lv=e.target.closest('[data-lv]');if(lv){await openTo(+lv.dataset.lv);return;}
   const rb=e.target.closest('[data-rb]');if(rb){if(!confirm('Roll back the latest '+(rb.dataset.rb==='fixture'?'fixture plan':'sales plan')+' upload? The one before it (if any) is used again.'))return;
     try{await post('api/rollback',{kind:rb.dataset.rb});dirty();S.dept=null;$('#dd').hidden=true;await load();}catch(err){alert(err.message);}return;}
-  if(e.target.id==='clr'){S.grid.roll={sort:null,filt:{}};S.mx=null;S.lf={};await loadRoll();return;}
+  if(e.target.id==='clr'){S.grid.roll={sort:null,filt:{},cond:{}};S.mx=null;S.lf={};await loadRoll();return;}
   const smx=e.target.closest('[data-smx]');
   if(smx){const [c,k]=smx.dataset.smx.split('|'),g=gstate('stores');
     if(!S.smPrev)S.smPrev={sort:g.sort,filt:{...g.filt}};
@@ -608,7 +651,7 @@ document.addEventListener('click',async e=>{
   if(mx){const [d,b]=mx.dataset.mx.split('|'),g=S.grid.roll;
     if(!S.prev)S.prev={layers:[...S.layers],open:[...S.open],lf:Object.fromEntries(Object.entries(S.lf).map(([k,v])=>[k,new Set(v)])),grid:g?{sort:g.sort,filt:{...g.filt}}:null};   // what Revert goes back to
     S.mx={d,b:b===''?null:+b};if(d)S.lf.division=new Set([d]);else delete S.lf.division;
-    S.grid.roll={sort:{id:'days:t',dir:-1},filt:{'band:t':new Set([b===''?'(blank)':b+' days'])}};
+    S.grid.roll={sort:{id:'days:t',dir:-1},cond:{},filt:{'band:t':new Set([b===''?'(blank)':b+' days'])}};
     setLayers(['department',...S.layers.filter(k=>!['department','division','tag','attribute'].includes(k))]);
     $('#t').closest('.tw').scrollIntoView({behavior:'smooth',block:'nearest'});return;}
   if(e.target.id==='rev'&&S.prev){const p=S.prev;S.prev=null;S.mx=null;S.lf=p.lf;
@@ -630,6 +673,7 @@ document.addEventListener('input',e=>{if(e.target.matches('.pf-q')){const q=e.ta
 document.addEventListener('change',async e=>{
   const t=e.target;
   if(t.closest('#pop .pf-l')){pfApply();return;}
+  if(t.matches('#pop .pf-op')){const b=$('#pop .pf-b');if(b)b.style.display=t.value==='between'?'':'none';return;}
   if(t.id==='f-season'){S.seasonal=t.checked;renderRoll();if(S.cells&&!$('#dd').hidden)renderCells();return;}
   if(t.matches('input[type=file]')){const f=t.files[0];if(f)upload(t.closest('[data-kind]').dataset.kind,f);t.value='';return;}
   if(t.matches('#dt input[type=number]')){const v=t.value;if(v===''||+v<0)return;

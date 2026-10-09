@@ -206,7 +206,8 @@ def workbook(df, months, has_plan, layers, info, filters):
         "season base index (festival-free, cluster)": df.season_base, "festival days (store calendar)": df.fest_days,
         "festivals": df.festivals, "festival lift (cluster x dept, Mar-Jun)": df.fest_lift,
         "year index = base x (1 + fest days / days x (lift - 1))": df.season_year_idx,
-        "season index = year index / cluster x dept window average": df.season_idx, "season": df.season})
+        "season index = year index / cluster x dept window average": df.season_idx, "season": df.season,
+        "peak reason (festival / high sales vs the year)": df.peak_why})
     d["STR band (season)"] = [se.str_band(x, sea) for x, sea in zip(days, df.season)]
     d["base band (60-180)"] = [se.str_band(x) for x in days]
     d["LY band (season)"] = [se.str_band(x, sea) for x, sea in zip(ly_days, df.season)]
@@ -322,10 +323,11 @@ class H(BaseHTTPRequestHandler):
                          "ly_str": float(se.str_of(r.ly_q, r.mdq_base)) if r.ly_known and r.ly_q > 0 else None,
                          "days": se.days_of(r.plan_qty, r.mdq, dim) if info.get("sales_plan") and r.mdq > 0 else None,
                          "ly_days": se.days_of(r.ly_q, r.mdq_base, ldim) if r.ly_known else None, "edited": r.edited}
-                    sea = se.season_of(r.season_idx)
+                    sea = r.season
                     c.update(season=sea, season_idx=r.season_idx, band=se.str_band(c["days"], sea), base_band=se.str_band(c["days"]),
                              season_base=r.season_base, fest_days=r.fest_days, festivals=r.festivals, fest_lift=r.fest_lift,
-                             season_year=r.season_year_idx, fest_share=1.0 if r.fest_days > 0 else 0.0)
+                             season_year=r.season_year_idx, fest_share=1.0 if r.fest_days > 0 else 0.0, peak_why=r.peak_why,
+                             pk=r.plan_qty if r.peak_ok else 0.0)
                     by_store.setdefault(r.store, [None] * len(months))[mi[r.month]] = c
                 cl = dict(zip(d.store, d.cluster))
                 rows = [{"store": st, "cluster": cl.get(st), "months": by_store[st]} for st in sorted(by_store)]
