@@ -121,7 +121,7 @@ def _with_tags(df):
 
 
 def _filter(df, q):
-    for k in ("division", "cluster", "department", "store") + TAG_KEYS:
+    for k in ("division", "cluster", "department", "store", "season") + TAG_KEYS:
         v = q.get(k, [""])[0]
         if v:
             df = df[df[k] == v]
@@ -151,53 +151,90 @@ def _safe(v):
     return "'" + v if isinstance(v, str) and v[:1] in ("=", "+", "-", "@") else v
 
 
-def workbook(df, months, has_plan):
+LAYER_KEYS = ("division", "department", "cluster", "store", "tag", "attribute")
+LAYER_LABEL = {"division": "Division", "department": "Department", "cluster": "Cluster", "store": "Store", "tag": "Tag",
+               "attribute": "Attribute"}
+
+
+def _cells_wide(c, pre):
+    """one period's figures as Excel columns"""
+    return {f"{pre} season": c["season"], f"{pre} season index": c["season_idx"], f"{pre} STR band": c["band"],
+            f"{pre} base band (60-180)": c["base_band"], f"{pre} STR days": c["days"], f"{pre} LY days": c["ly_days"],
+            f"{pre} plan qty": c["qty"], f"{pre} MDQ": c["mdq"], f"{pre} LY qty": c["ly_qty"], f"{pre} plan Rs": c["plan_rs"],
+            f"{pre} fixtures": c["fixtures"], f"{pre} max STR %": c["str"], f"{pre} LY STR %": c["ly_str"]}
+
+
+def workbook(df, months, has_plan, layers, info, filters):
+    """the full working, not the screen (user, 9 Oct: "make sure the excel gives me a detailed version not just a summary
+    excerpt"): Read me, every store x department x month with every input and step, the drill-down of the page's layers
+    fully opened (every level, 4-month and each month), and the long by-month roll-ups"""
     out = io.BytesIO()
-    cols = ["division", "department", "cluster", "store", "month", "fixtures_file", "fixtures", "density", "mdq", "plan_rs", "asp",
-            "asp_from", "plan_qty", "ly_q", "mdq_base", "edited"]
-    d = df[cols].copy()
-    d["month"] = d.month.astype(str)
-    for c in ("store", "department", "division", "cluster"):
-        d[c] = d[c].map(_safe)
-    ok = (d.mdq > 0) & (d.plan_qty > 0)
+    df = _with_tags(df)
+    has_plan = bool(has_plan)
     dim = df.month.map(lambda m: m.days_in_month).astype(float)
     dly = df.month.map(lambda m: (m - 12).days_in_month).astype(float)
+    ok = (df.mdq > 0) & (df.plan_qty > 0) & has_plan
     lyok = df.ly_known & (df.ly_q > 0)
-    d["days of cover (plan)"] = np.where(ok, d.mdq / (d.plan_qty.where(d.plan_qty > 0) / dim), np.nan) if has_plan else np.nan
-    d["LY days of cover"] = np.where(lyok, d.mdq_base / (d.ly_q.where(d.ly_q > 0) / dly), np.nan)
-    d["season index"] = df.season_idx
-    d["season"] = df.season_idx.map(se.season_of)
-    d["STR band (days)"] = [se.str_band(x, sea) for x, sea in zip(d["days of cover (plan)"], d["season"])]
-    d["base band (60-180)"] = d["days of cover (plan)"].map(se.str_band)
-    d["max STR at MDQ"] = np.where(ok, se.str_of(d.plan_qty, d.mdq), np.nan) if has_plan else np.nan
-    d["LY STR (same formula)"] = np.where(lyok, se.str_of(d.ly_q, d.mdq_base), np.nan)
-    d = d.rename(columns={"fixtures_file": "fixtures (file)", "density": "qty per fixture", "mdq": "MDQ", "plan_rs": "plan (Rs)",
-                          "asp": "LY avg selling price", "asp_from": "price from", "plan_qty": "plan qty", "ly_q": "LY qty",
-                          "mdq_base": "MDQ (file)"})
-    tg = {r["department"]: r for r in _tag_cols([{"department": x} for x in df.department.unique()])}
-    d.insert(2, "tag", df.department.map(lambda x: tg[x]["tag"]))
-    d.insert(3, "attribute", df.department.map(lambda x: tg[x]["attribute"]))
-    # xlsxwriter (installed): ~1.7M cells far faster than openpyxl (~45 s); text is never read as a formula
+    days = np.where(ok, df.mdq / (df.plan_qty.where(df.plan_qty > 0) / dim), np.nan)
+    ly_days = np.where(lyok, df.mdq_base / (df.ly_q.where(df.ly_q > 0) / dly), np.nan)
+    d = pd.DataFrame({
+        "division": df.division, "cluster": df.cluster, "store": df.store, "department": df.department, "tag": df.tag,
+        "attribute": df.attribute, "month": df.month.astype(str), "days in month": dim,
+        "fixtures (file)": df.fixtures_file, "fixtures": df.fixtures, "qty per fixture": df.density, "MDQ (file)": df.mdq_base,
+        "MDQ = fixtures x qty per fixture": df.mdq, "edited": df.edited,
+        "plan Rs": df.plan_rs, "plan qty": df.plan_qty, "plan qty from": df.qty_from, "LY avg selling price": df.asp,
+        "price from": df.asp_from, "LY month": (df.month - 12).astype(str), "LY qty": df.ly_q, "LY Rs": df.ly_v,
+        "plan qty per day": np.where(ok, df.plan_qty / dim, np.nan), "STR days = MDQ / qty per day": days,
+        "LY days = MDQ (file) / LY qty per day": ly_days,
+        "season base index (festival-free, cluster)": df.season_base, "festival days (store calendar)": df.fest_days,
+        "festivals": df.festivals, "festival lift (cluster x dept, Mar-Jun)": df.fest_lift,
+        "season index = base x (1 + fest days / days x (lift - 1))": df.season_idx, "season": df.season})
+    d["STR band (season)"] = [se.str_band(x, sea) for x, sea in zip(days, df.season)]
+    d["base band (60-180)"] = [se.str_band(x) for x in days]
+    d["LY band (season)"] = [se.str_band(x, sea) for x, sea in zip(ly_days, df.season)]
+    d["max STR % = qty / (qty + MDQ)"] = np.where(ok, se.str_of(df.plan_qty, df.mdq), np.nan)
+    d["LY STR %"] = np.where(lyok, se.str_of(df.ly_q, df.mdq_base), np.nan)
+    for c in ("store", "department", "division", "cluster", "attribute"):
+        d[c] = d[c].map(_safe)
+    bands = ", ".join(f"{k} {lo}-{hi}" for k, (lo, hi) in se.SEASON_BANDS.items())
+    readme = [("What", "STR Forecaster - full working behind the page"), ("Built", time.strftime("%d %b %Y %H:%M")),
+              ("Filters", filters or "none"), ("Months", ", ".join(str(m) for m in months)),
+              ("Stores", f"{df.store.nunique()} (every month in both the fixture plan and the sales plan)"),
+              ("STR days", "MDQ / (planned qty / days in month); 4-month = average MDQ / (planned qty / days in the months); only rows with both a plan and fixtures"),
+              ("LY days", "the file MDQ / (last year's qty / days in that month), store-months that sold last year"),
+              ("Season", f"the cluster's festival-free sales curve (day-wise sales 2022-25) raised by the month's festival days at the cluster x department festival lift; peak >= {se.SEASON_CUT[0]}, off <= {se.SEASON_CUT[1]}; built {info.get('season_built')}"),
+              ("Band", f"STR days rounded to the nearest 30, kept inside the season's limits ({bands}); never under {se.BAND_MIN} or over {se.BAND_MAX}"),
+              ("Roll-ups", "plan qty and MDQ are summed first, then the days; a group's season = its departments' season index weighted by plan qty"),
+              ("Sheets", "STR detail = every store x department x month; Drill-down = the page's row layers fully opened, 4-month and each month; By month = long format per level")]
     with pd.ExcelWriter(out, engine="xlsxwriter", engine_kwargs={"options": {"strings_to_formulas": False}}) as xw:
-        d.sort_values(["division", "department", "store", "month"]).to_excel(xw, sheet_name="STR detail", index=False)
-        for by, nm in ((["division"], "By division"), (["division", "department"], "By department"),
-                        (["cluster"], "By cluster"), (["cluster", "store"], "By store")):
-            rows = []
+        pd.DataFrame(readme, columns=["", "How it is worked out"]).to_excel(xw, sheet_name="Read me", index=False)
+        d.sort_values(["cluster", "division", "department", "store", "month"]).to_excel(xw, sheet_name="STR detail", index=False)
+        # drill-down: every level of the layers, parents before their children
+        keys = [LAYER_LABEL[x] for x in layers]
+        rows = []
+        for k in range(1, len(layers) + 1):
+            by = list(layers[:k])
+            if "department" in by and "division" not in by:
+                by.insert(by.index("department"), "division")
             for r in se.rollup(df, by, months, has_plan):
-                base = {k: r[k] for k in by}
-                if "department" in by:
-                    base.update(tag=tg[r["department"]]["tag"], attribute=tg[r["department"]]["attribute"])
+                row = {"level": k, **{LAYER_LABEL[x]: _safe(str(r.get(x, ""))) for x in layers[:k]}}
+                row.update(_cells_wide(r["total"], "4-month"))
                 for m, c in zip(months, r["months"]):
-                    rows.append({**base, "month": str(m), "plan qty": c["qty"], "MDQ": c["mdq"], "season": c["season"], "STR band": c["band"],
-                                 "base band": c["base_band"], "days of cover": c["days"],
-                                 "LY days of cover": c["ly_days"], "max STR at MDQ": c["str"], "LY STR": c["ly_str"]})
-                rows.append({**base, "month": "4-month avg", "plan qty": r["total"]["qty"], "MDQ": r["total"]["mdq"],
-                             "season": r["total"]["season"], "STR band": r["total"]["band"], "base band": r["total"]["base_band"], "days of cover": r["total"]["days"], "LY days of cover": r["total"]["ly_days"],
-                             "max STR at MDQ": r["total"]["str"], "LY STR": r["total"]["ly_str"]})
-            out_df = pd.DataFrame(rows)
-            for k in by:
-                out_df[k] = out_df[k].map(_safe)
-            out_df.to_excel(xw, sheet_name=nm, index=False)
+                    row.update(_cells_wide(c, m.strftime("%b %y")))
+                rows.append(row)
+        dr = pd.DataFrame(rows)
+        for c in keys:
+            dr[c] = dr[c].fillna("") if c in dr else ""
+        dr = dr.sort_values(keys + ["level"], kind="stable")
+        dr[["level"] + keys + [c for c in dr.columns if c not in keys and c != "level"]].to_excel(xw, sheet_name="Drill-down", index=False)
+        long = []
+        for by, nm in ((["cluster"], "cluster"), (["division"], "division"), (["division", "department"], "department"),
+                       (["cluster", "division", "department"], "cluster x department"), (["cluster", "store"], "store")):
+            for r in se.rollup(df, by, months, has_plan):
+                base = {"level": nm, **{k: _safe(r[k]) for k in by}}
+                for m, c in [("4-month avg", r["total"])] + [(str(m), c) for m, c in zip(months, r["months"])]:
+                    long.append({**base, "month": m, **{k.split(" ", 1)[1]: v for k, v in _cells_wide(c, "x").items()}})
+        pd.DataFrame(long).to_excel(xw, sheet_name="By month", index=False)
     return out.getvalue()
 
 
@@ -267,7 +304,8 @@ class H(BaseHTTPRequestHandler):
                          "days": se.days_of(r.plan_qty, r.mdq, dim) if info.get("sales_plan") and r.mdq > 0 else None,
                          "ly_days": se.days_of(r.ly_q, r.mdq_base, ldim) if r.ly_known else None, "edited": r.edited}
                     sea = se.season_of(r.season_idx)
-                    c.update(season=sea, season_idx=r.season_idx, band=se.str_band(c["days"], sea), base_band=se.str_band(c["days"]))
+                    c.update(season=sea, season_idx=r.season_idx, band=se.str_band(c["days"], sea), base_band=se.str_band(c["days"]),
+                             season_base=r.season_base, fest_days=r.fest_days, festivals=r.festivals, fest_lift=r.fest_lift)
                     by_store.setdefault(r.store, [None] * len(months))[mi[r.month]] = c
                 cl = dict(zip(d.store, d.cluster))
                 rows = [{"store": st, "cluster": cl.get(st), "months": by_store[st]} for st in sorted(by_store)]
@@ -311,7 +349,10 @@ class H(BaseHTTPRequestHandler):
                                   {"Content-Disposition": f'attachment; filename="{name}"'})
             if path == "/api/download":
                 name = f"STR Forecast - {time.strftime('%d.%m.%y')}.xlsx"
-                return self._send(200, workbook(_filter(df, q), months, bool(info.get("sales_plan"))),
+                lay = [k for k in q.get("layers", ["cluster,department,store"])[0].split(",") if k in LAYER_KEYS] or ["cluster", "department", "store"]
+                fl = "; ".join(f"{k} = {q[k][0]}" for k in ("division", "cluster", "season", "tag", "attribute") if q.get(k, [""])[0])
+                d = _with_tags(df) if any(q.get(k) for k in TAG_KEYS) else df
+                return self._send(200, workbook(_filter(d, q), months, bool(info.get("sales_plan")), lay, info, fl),
                                   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                   {"Content-Disposition": f'attachment; filename="{name}"'})
             return self._send(404, {"error": "Not found"})

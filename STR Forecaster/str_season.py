@@ -55,6 +55,30 @@ def index_by(sales, days, keys):
     return pd.DataFrame(yr, index=s.index, columns=range(1, 13)).groupby(level=lv).mean()   # average over the years
 
 
+FEST_MONTHS = (3, 6)   # user, 9 Oct: "Take festivals falling in MAMJ into account" - lift measured on Mar-Jun festivals
+LIFT_CLIP = (0.5, 3.0)
+
+
+def festival_lift(mm):
+    """sales per open store-day on the store's own festival days / on its other days, Mar-Jun 2022-25 -> ({(cluster,
+    DEPT): lift}, {DEPT: chain lift}); clipped to LIFT_CLIP so a thin department cannot swing the season"""
+    od = mm.drop_duplicates(["STORE_NAME", "day"])
+
+    def lift(keys):
+        sf = mm[mm["fest"]].groupby(keys)["SL_V"].sum()
+        sn = mm[~mm["fest"]].groupby(keys)["SL_V"].sum()
+        t = pd.DataFrame({"sf": sf, "sn": sn}).fillna(0.0)
+        if "cl" in keys:
+            ix = t.index.get_level_values("cl")
+            df_, dn = od[od["fest"]].groupby("cl").size().reindex(ix).values, od[~od["fest"]].groupby("cl").size().reindex(ix).values
+        else:
+            df_, dn = od["fest"].sum(), (~od["fest"]).sum()
+        with np.errstate(divide="ignore", invalid="ignore"):
+            r = (t["sf"] / df_) / (t["sn"] / dn)
+        return r.where(np.isfinite(r) & (t["sn"] > 0)).clip(*LIFT_CLIP)
+    return lift(["cl", "DEPARTMENT"]).dropna().to_dict(), lift(["DEPARTMENT"]).dropna().to_dict()
+
+
 def build():
     t0 = time.time()
     files, se = sources()
@@ -67,11 +91,13 @@ def build():
     for cl, ix in pd.Series(cal).groupby(cal).indices.items():   # the store's own calendar cluster's festival days
         fest[ix] = np.isin(d["day"].values[ix], np.fromiter(fdays.get(cl, {}).keys(), np.int64))
     dt = pd.to_datetime(d["BILLDATE"])
-    d["y"], d["m"] = dt.dt.year.values, dt.dt.month.values
-    d = d[~fest & d["y"].isin(bs.YEARS)].copy()
+    d["y"], d["m"], d["fest"] = dt.dt.year.values, dt.dt.month.values, fest
+    d = d[d["y"].isin(bs.YEARS)].copy()
     d["DEPARTMENT"] = d["DEPARTMENT"].astype(str).str.strip().str.upper()
     d["STORE_NAME"] = d["STORE_NAME"].astype(str).str.strip().str.upper()
     d["cl"] = d["STORE_NAME"].map(se.store_clusters())
+    lift_cl, lift_ch = festival_lift(d[d["m"].between(*FEST_MONTHS)])
+    d = d[~d["fest"]]
     od = d.drop_duplicates(["STORE_NAME", "day"])                 # open store-days (the store sold anything)
     chain = index_by(d.groupby(["DEPARTMENT", "y", "m"])["SL_V"].sum(), od.groupby(["y", "m"]).size(), [])
     dc = d[d["cl"].notna()]
@@ -83,12 +109,28 @@ def build():
            "years": bs.YEARS, "cut": [bs.IN_AT, bs.OFF_AT], "shrink": SHRINK,
            "chain": {k: [round(float(v), 4) for v in row] for k, row in zip(chain.index, chain.fillna(1.0).values)},
            "cluster": {}, "stores": {}}
+    out["fest_lift_chain"] = {k: round(float(v), 4) for k, v in lift_ch.items()}
+    out["fest_lift"] = {}
     for (cl, dep), row in zip(clus.index, clus.values):
         ch = np.array(out["chain"].get(dep, [1.0] * 12))
         k = int(n.get((cl, dep), 0))
         w = k / (k + SHRINK)
         out["cluster"].setdefault(cl, {})[dep] = [round(float(v), 4) for v in w * np.where(np.isfinite(row), row, ch) + (1 - w) * ch]
         out["stores"].setdefault(cl, {})[dep] = k
+        lc, lh = lift_cl.get((cl, dep), np.nan), out["fest_lift_chain"].get(dep, 1.0)
+        out["fest_lift"].setdefault(cl, {})[dep] = round(float(w * (lc if np.isfinite(lc) else lh) + (1 - w) * lh), 4)
+    # festival days per calendar cluster and month for this year and next (the forecast months), and store -> calendar cluster
+    y0 = datetime.date.today().year
+    out["fest_days"] = {}
+    for cal, days in fdays.items():
+        for n_, name in days.items():
+            dd = datetime.date(1970, 1, 1) + datetime.timedelta(days=int(n_))
+            if y0 <= dd.year <= y0 + 1:
+                e = out["fest_days"].setdefault(cal, {}).setdefault(f"{dd.year}-{dd.month:02d}", [0, []])
+                e[0] += 1
+                if name not in e[1]:
+                    e[1].append(name)
+    out["store_cal"] = {str(k).strip().upper(): v for k, v in store_cl.items()}
     tmp = OUT + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(out, fh)

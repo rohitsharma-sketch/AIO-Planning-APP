@@ -280,6 +280,7 @@ def split_depts(f, cols, ly=None):
                 den = tot.reindex(pd.MultiIndex.from_frame(parts[keys + ["old"]])).values
                 sh = sh.fillna(pd.Series(np.where(den > 0, num / np.where(den > 0, den, 1), np.nan), index=parts.index))
         parts[c] = parts[c] * sh.fillna(equal)
+    parts = parts[(parts[list(cols)].fillna(0) != 0).any(axis=1)]   # a part with no share in this store-month: no row
     f = pd.concat([f[~old], parts.drop(columns="old")], ignore_index=True)
     cols = list(cols)
     return f.groupby(["month", "store", "division", "department"], as_index=False)[cols].sum(min_count=1)
@@ -503,9 +504,20 @@ def build():
     df = apply_inputs(df, ed)
     df["cluster"] = df.store.map(store_clusters()).fillna("(no AOP cluster)")
     look = season_index()
-    df["season_idx"] = np.array([look(c, d, m) for c, d, m in zip(df.cluster, df.department.str.upper(), df.month.dt.month)], dtype=float)
-    no_season = sorted(df.loc[df.season_idx.isna(), "department"].unique().tolist())
-    df["season_idx"] = df.season_idx.fillna(1.0)   # no Listing history under this name: treated as a normal month
+    dep = df.department.str.upper()
+    df["season_base"] = np.array([look.base(c, d, p.month) for c, d, p in zip(df.cluster, dep, df.month)], dtype=float)
+    fd = {k: look.fest(*k) for k in set(zip(df.store, df.month))}
+    df["fest_days"] = [fd[k][0] for k in zip(df.store, df.month)]
+    df["festivals"] = [", ".join(fd[k][1]) for k in zip(df.store, df.month)]
+    df["fest_lift"] = [look.lift(c, d) for c, d in zip(df.cluster, dep)]
+    # the festival-free curve raised by the month's festival days at the department's festival lift in that cluster
+    df["season_idx"] = df.season_base * (1 + df.fest_days / df.month.dt.days_in_month * (df.fest_lift - 1))
+    no_season = sorted(df.loc[df.season_base.isna(), "department"].unique().tolist())
+    df["season_idx"] = df.season_idx.fillna(1.0)   # no season history under this name: treated as a normal month
+    df["season"] = df.season_idx.map(season_of)
+    fests = {}
+    for (c, m), g in df.loc[df.fest_days > 0, ["cluster", "month", "festivals"]].drop_duplicates().groupby(["cluster", "month"]):
+        fests.setdefault(c, {})[str(m)] = sorted({x for v in g.festivals for x in v.split(", ") if x})
     if len(lys):
         lys["month"] = _period(lys.month) + 12   # LY aligned to its forecast month
     df = add_ly(df, lys)
@@ -518,7 +530,7 @@ def build():
             "mdq_without_plan": float(df.loc[(df.mdq > 0) & (df.plan_qty <= 0), "mdq"].sum()) if pu else 0.0,
             "price_from_division": sorted(df.loc[df.asp_from.str.startswith("division"), "department"].unique().tolist()),
             "no_ly_departments": sorted(df.loc[~df.ly_known, "department"].unique().tolist()),
-            "no_season_departments": no_season, "season_built": getattr(look, "built_at", None),
+            "no_season_departments": no_season, "season_built": look.built_at, "festivals": fests,
             "clusters": sorted(df.cluster.unique().tolist()), "season_cut": list(SEASON_CUT), "season_bands": SEASON_BANDS,
             "base_band": [BAND_MIN, BAND_MAX]}
     return df.reset_index(drop=True), info
@@ -556,22 +568,37 @@ SEASON_BANDS = {"peak": (60, 90), "normal": (BAND_MIN, BAND_MAX), "off": (90, 18
 SEASON_CUT = [1.15, 0.85]
 
 
+class _Season:
+    """season inputs from str_season.py: base(cluster, DEPT, month) = the cluster's festival-free curve (chain where the
+    cluster has few stores), fest(store, period) = (festival days, names) of the store's own calendar cluster that month,
+    lift(cluster, DEPT) = sales lift on its Mar-Jun festival days (user, 9 Oct: "Take festivals falling in MAMJ into account")"""
+    def __init__(self, w):
+        self.w, self.built_at = w, w.get("built_at")
+        self.ch, self.cl = w.get("chain", {}), w.get("cluster", {})
+        self.lc, self.lh = w.get("fest_lift", {}), w.get("fest_lift_chain", {})
+        self.fd, self.sc = w.get("fest_days", {}), w.get("store_cal", {})
+
+    def base(self, c, d, m):
+        v = self.cl.get(c, {}).get(d) or self.ch.get(d)
+        return v[m - 1] if v else None
+
+    def fest(self, s, p):
+        n, names = self.fd.get(self.sc.get(s, "ALL"), {}).get(f"{p.year}-{p.month:02d}", [0, []])
+        return n, names
+
+    def lift(self, c, d):
+        return self.lc.get(c, {}).get(d) or self.lh.get(d) or 1.0
+
+
 def season_index():
-    """lookup(cluster, DEPARTMENT, month 1-12) -> season index: the cluster's own curve (str_season.py, day-wise sales,
-    leaning on the chain where the cluster has few stores), else the chain's, else None; sets SEASON_CUT"""
+    """the season inputs (empty when str_season.py has not run: every month normal); sets SEASON_CUT"""
     try:
         with open(SEASON_FILE, encoding="utf-8") as fh:
             w = json.load(fh)
-    except Exception:  # noqa: BLE001 - not built yet: every month is normal
-        return lambda c, d, m: None
+    except Exception:  # noqa: BLE001 - not built yet
+        w = {}
     SEASON_CUT[:] = [float(x) for x in w.get("cut", SEASON_CUT)]
-    ch, cl = w.get("chain", {}), w.get("cluster", {})
-
-    def look(c, d, m):
-        v = cl.get(c, {}).get(d) or ch.get(d)
-        return v[m - 1] if v else None
-    look.built_at = w.get("built_at")
-    return look
+    return _Season(w)
 
 
 def season_of(idx):
@@ -691,6 +718,6 @@ if __name__ == "__main__":   # self-check of the maths on tiny frames (no DB)
                        "mdq": [100.0] * 3, "plan_rs": [100.0] * 3})
     sp = split_depts(f3, {"mdq": "sl_q", "plan_rs": "sl_v"}, lyx).set_index(["store", "department"])
     assert sp.mdq[("S1", "MSE_HSR PYJAMA")] == 75.0 and sp.plan_rs[("S1", "MSE_HSR PYJAMA")] == 60.0   # S1's own LY: 30 of 40 pcs, 600 of 1000 Rs
-    assert sp.mdq[("S2", "MSE_HSR PYJAMA")] == 0.0 and sp.mdq[("S2", "MSE_TXTL PYJAMA")] == 100.0   # S2 sold only TXTL
+    assert ("S2", "MSE_HSR PYJAMA") not in sp.index and sp.mdq[("S2", "MSE_TXTL PYJAMA")] == 100.0   # S2 sold only TXTL: no HSR row
     assert abs(sp.mdq[("S3", "MSE_HSR PYJAMA")] - 100 * 30 / 45) < 1e-9                         # S3 no LY: chain month share
     print("str_engine self-check: OK")
