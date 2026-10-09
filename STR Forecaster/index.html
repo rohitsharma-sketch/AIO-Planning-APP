@@ -329,7 +329,7 @@ function openFilter(n,id,btn){
   const T=S.gt[n],c=T.cols.find(c=>c.id===id),g=gstate(n),sel=g.filt[id],k=g.cond[id];
   const num=c.num||T.rows.every(r=>{const v=c.get(r);return v==null||typeof v==='number';});
   const vals=[...new Set(T.rows.map(r=>fv(c,r)))].sort((a,b)=>{const x=parseFloat(a),y=parseFloat(b);return !isNaN(x)&&!isNaN(y)?x-y:a.localeCompare(b);});
-  const ops=num?NUM_OPS:TXT_OPS,shown=vals.slice(0,500);
+  const ops=num?NUM_OPS:TXT_OPS;
   showPop(btn,`<div class="pf"><div class="calc-h"><b>${h(c.label)}${c.grp?' · '+h(c.grp):''}</b><button class="px" data-px aria-label="Close">&#x2715;</button></div>
     <div class="pf-s"><button class="btn ghost sm" data-ps="1">${num?'↑ Smallest to largest':'↑ Sort A to Z'}</button><button class="btn ghost sm" data-ps="-1">${num?'↓ Largest to smallest':'↓ Sort Z to A'}</button>${g.sort?.id===id?'<button class="btn ghost sm" data-ps="0">Clear sort</button>':''}</div>
     <div class="pf-c"><span class="note">${num?'Number':'Text'} filter</span> <select class="pf-op" aria-label="Condition"><option value="">choose…</option>${ops.map(([v,l])=>`<option value="${v}"${k&&k.op===v?' selected':''}>${l}</option>`).join('')}</select>
@@ -337,17 +337,39 @@ function openFilter(n,id,btn){
       <input class="pf-b" type="number" step="any" value="${k&&k.b!=null?h(k.b):''}" aria-label="and" style="width:90px${k&&k.op==='between'?'':';display:none'}">
       <button class="btn sm" data-pc>Apply</button></div>
     <input type="search" class="pf-q" placeholder="Search…" aria-label="Search values">
-    <div><button class="btn ghost sm" data-pf="all">Select all</button> <button class="btn ghost sm" data-pf="none">None</button> <span class="note">${vals.length} values${vals.length>shown.length?' - first '+shown.length+' listed, search to find others':''}</span></div>
-    <div class="pf-l">${shown.map(v=>`<label><input type="checkbox" value="${h(v)}"${!sel||sel.has(v)?' checked':''}> ${h(v)}</label>`).join('')}</div>
+    <div><button class="btn ghost sm" data-pf="all">Select all</button> <button class="btn ghost sm" data-pf="none">None</button> <span class="note pf-n"></span></div>
+    <div class="pf-l"></div>
     ${sel||k?'<div><button class="btn ghost sm" data-pclr>Clear filter from this column</button></div>':''}</div>`);
-  S.pf={n,id,num,all:vals};
+  S.pf={n,id,num,all:vals,lab:v=>v,sel:sel?new Set(sel):null};pfList();$('#pop .pf-q').focus();
 }
-function pfApply(){
-  if(S.pf.layer){const k=S.pf.layer,boxes=[...$('#pop').querySelectorAll('.pf-l input')],on=boxes.filter(b=>b.checked).map(b=>b.value);
-    if(on.length===boxes.length)delete S.lf[k];else S.lf[k]=new Set(on);loadRoll();return;}
-  const {n,id,all}=S.pf,boxes=[...$('#pop').querySelectorAll('.pf-l input')],g=gstate(n);
-  const off=new Set(boxes.filter(b=>!b.checked).map(b=>b.value)),on=all.filter(v=>!off.has(v));   // values past the list stay in
-  if(!off.size)delete g.filt[id];else g.filt[id]=new Set(on);RENDER[n]();}
+// search-driven picking, as in Excel: with a search typed, the first tick makes that value the only one picked; more
+// ticks - after the same or another search - add to it; Enter or Select all picks every match; None drops the matches
+const pfQ=()=>(($('#pop .pf-q')||{}).value||'').trim();
+function pfList(){
+  const P=S.pf,q=pfQ().toLowerCase(),m=P.all.filter(v=>!q||String(P.lab(v)).toLowerCase().includes(q)),shown=m.slice(0,500);
+  P.match=m;
+  $('#pop .pf-l').innerHTML=shown.map(v=>`<label><input type="checkbox" value="${h(v)}"${P.sel==null||P.sel.has(v)?' checked':''}> ${h(P.lab(v))}</label>`).join('')||'<span class="note">no match</span>';
+  $('#pop .pf-n').textContent=(P.sel==null?`all ${P.all.length} selected`:`${P.sel.size} of ${P.all.length} selected`)+
+    (q?` · ${m.length} match${m.length===1?'':'es'}${m.length>shown.length?' (first 500 listed)':''} · Enter selects them`:'');
+}
+function pfCommit(){
+  const P=S.pf,full=P.sel==null||P.sel.size===P.all.length;
+  if(P.layer){if(full)delete S.lf[P.layer];else S.lf[P.layer]=new Set(P.sel);loadRoll();}
+  else{const g=gstate(P.n);if(full)delete g.filt[P.id];else g.filt[P.id]=new Set(P.sel);RENDER[P.n]();}
+  pfList();
+}
+function pfToggle(box){
+  const P=S.pf,v=box.value;
+  if(P.sel==null){if(pfQ())P.sel=new Set([v]);else{P.sel=new Set(P.all);P.sel.delete(v);}}   // a searched pick = the selection
+  else if(box.checked)P.sel.add(v);else P.sel.delete(v);
+  pfCommit();
+}
+function pfBulk(all){
+  const P=S.pf;
+  if(!pfQ())P.sel=all?null:new Set();
+  else{if(P.sel==null)P.sel=all?new Set():new Set(P.all);for(const v of P.match)all?P.sel.add(v):P.sel.delete(v);}
+  pfCommit();
+}
 function calcBox(title,rows,foot=''){return `<div class="calc"><div class="calc-h"><b>${h(title)}</b><button class="px" data-px aria-label="Close">&#x2715;</button></div><table>${rows.join('')}</table>${foot?`<p class="note" style="margin:6px 0 0">${foot}</p>`:''}</div>`;}
 const L=(a,b,k)=>`<tr${k?' class="k"':''}><th>${a}</th><td>${b}</td></tr>`;
 // user, 9 Oct: "every department tile will have the calculation popup once clicked on it"
@@ -479,9 +501,9 @@ async function openLayerFilter(k,btn){
   const sel=S.lf[k];
   showPop(btn,`<div class="pf"><div class="calc-h"><b>${LAYERS[k]}</b><button class="px" data-px aria-label="Close">&#x2715;</button></div>
     <input type="search" class="pf-q" placeholder="Search ${LAYERS[k].toLowerCase()}…" aria-label="Search ${LAYERS[k]}">
-    <div><button class="btn ghost sm" data-pf="all">All</button> <button class="btn ghost sm" data-pf="none">None</button> <span class="note">${v.length} values</span></div>
-    <div class="pf-l">${v.map(x=>`<label><input type="checkbox" value="${h(x)}"${!sel||sel.has(x)?' checked':''}> ${h(lv(k,x))}</label>`).join('')}</div></div>`);
-  S.pf={layer:k};$('#pop .pf-q').focus();
+    <div><button class="btn ghost sm" data-pf="all">Select all</button> <button class="btn ghost sm" data-pf="none">None</button> <span class="note pf-n"></span></div>
+    <div class="pf-l"></div></div>`);
+  S.pf={layer:k,all:v,lab:x=>lv(k,x),sel:sel?new Set(sel):null};pfList();$('#pop .pf-q').focus();
 }
 function renderLayers(){
   const off=Object.keys(LAYERS).filter(k=>!S.layers.includes(k));
@@ -614,7 +636,7 @@ document.addEventListener('click',async e=>{
     if(e.target.closest('[data-pc]')&&S.pf){const g=gstate(S.pf.n),op=p.querySelector('.pf-op').value,av=p.querySelector('.pf-a').value,bv=p.querySelector('.pf-b').value,n=S.pf.n;
       if(!op||av==='')delete g.cond[S.pf.id];else g.cond[S.pf.id]={op,a:S.pf.num?+av:av,b:bv===''?null:+bv};hidePop();RENDER[n]();return;}
     if(e.target.closest('[data-pclr]')&&S.pf){const g=gstate(S.pf.n),n=S.pf.n;delete g.filt[S.pf.id];delete g.cond[S.pf.id];hidePop();RENDER[n]();return;}
-    const a=e.target.closest('[data-pf]');if(a&&S.pf){p.querySelectorAll('.pf-l input').forEach(b=>{if(b.parentElement.style.display!=='none')b.checked=a.dataset.pf==='all';});pfApply();}
+    const a=e.target.closest('[data-pf]');if(a&&S.pf){pfBulk(a.dataset.pf==='all');}
     return;}
   hidePop();
   const tb=e.target.closest('[data-tab]');if(tb){setTab(tb.dataset.tab);return;}
@@ -666,13 +688,13 @@ document.addEventListener('click',async e=>{
 });
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){hidePop();return;}
+  if(e.key==='Enter'&&e.target.matches&&e.target.matches('#pop .pf-q')&&S.pf&&S.pf.all){e.preventDefault();pfBulk(true);return;}
   const d=e.target.closest&&e.target.closest('.drop');if(d&&(e.key==='Enter'||e.key===' ')){e.preventDefault();d.querySelector('input').click();}
 });
-document.addEventListener('input',e=>{if(e.target.matches('.pf-q')){const q=e.target.value.toLowerCase();
-  $('#pop').querySelectorAll('.pf-l label').forEach(l=>{l.style.display=l.textContent.toLowerCase().includes(q)?'':'none';});}});
+document.addEventListener('input',e=>{if(e.target.matches('.pf-q')&&S.pf&&S.pf.all)pfList();});
 document.addEventListener('change',async e=>{
   const t=e.target;
-  if(t.closest('#pop .pf-l')){pfApply();return;}
+  if(t.closest('#pop .pf-l')){pfToggle(t);return;}
   if(t.matches('#pop .pf-op')){const b=$('#pop .pf-b');if(b)b.style.display=t.value==='between'?'':'none';return;}
   if(t.id==='f-season'){S.seasonal=t.checked;renderRoll();if(S.cells&&!$('#dd').hidden)renderCells();return;}
   if(t.matches('input[type=file]')){const f=t.files[0];if(f)upload(t.closest('[data-kind]').dataset.kind,f);t.value='';return;}

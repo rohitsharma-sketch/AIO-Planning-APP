@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: search-driven picking in every filter
+- **Asked (user):** "if i filter something by typing and i click on it, it should be the default and add a multi selection by typing norm in the serch filter too"
+- In every filter menu (hierarchy chips and column menus): with a search typed, the first tick makes that value the only one selected; further ticks - after the same or another search - add to it (multi-select by typing); Enter or Select all picks every match of the search, None drops them; without a search, ticks work as before. The menu shows "N of M selected" and the match count; every value is searchable (the list shows the first 500 matches).
+
 ### STR Forecaster: Excel-style column menus; peak-oriented plans ahead to the peak; peak needs a reason
 - **Asked (user):** "incuclcate filter and sort functions like theyr are in excel spreadsheets"; "peak should inculcate future stock days on the basis of peak month + its effective month(s) so that we can plan better in advance till the festive period" / "if the peak has ended then it should revert to its regular monthly STR suggestion"; "differentiate peak only if the festival is there or high sales is recorded as per the yoy avg"
 - Every column of every table (forecast, department editor, Store mapping, Department tags) has a menu: Sort smallest-largest / largest-smallest (A-Z / Z-A for text), Clear sort, a Number filter (=, !=, >, >=, <, <=, between, top N, bottom N) or Text filter (contains, does not contain, begins / ends with, equals, does not equal), a searchable value list with Select all / None, and Clear filter. Filtered columns are highlighted; Clear sort & filters resets all.
