@@ -106,7 +106,7 @@ def _tag_cols(rows):
 
 
 def _filter(df, q):
-    for k in ("division", "department", "store"):
+    for k in ("division", "cluster", "department", "store"):
         v = q.get(k, [""])[0]
         if v:
             df = df[df[k] == v]
@@ -370,9 +370,23 @@ class H(BaseHTTPRequestHandler):
             return self._send(500, {"error": str(e)})
 
 
+def _season_watch():
+    """cluster season curves (str_season.py) rebuilt when the Listing day-wise cache or the AOP store master is newer -
+    checked hourly; the version stamp then rebuilds the frame"""
+    import str_season
+    while True:
+        try:
+            if str_season.stale():
+                str_season.build()
+        except Exception:  # noqa: BLE001 - keep serving with the curves we have
+            traceback.print_exc()
+        time.sleep(3600)
+
+
 def main():
     print(f"STR Forecaster on http://127.0.0.1:{PORT}")
     threading.Thread(target=lambda: frame(), daemon=True).start()   # warm the frame so the first page load is quick
+    threading.Thread(target=_season_watch, daemon=True).start()
     ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
 
 

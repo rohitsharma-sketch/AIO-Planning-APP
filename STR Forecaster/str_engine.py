@@ -225,7 +225,7 @@ def version():
         v = tuple(s.execute(text("""SELECT (SELECT coalesce(max(id), 0) FROM planning_inputs.str_uploads),
                                             (SELECT count(*) FROM planning_inputs.str_uploads WHERE active),
                                             (SELECT coalesce(max(id), 0) FROM planning_inputs.str_edits)""")).one())
-    for f in ("cfg", SEASON_FILE):   # AOP store master (clusters) and the Listing app's seasonality
+    for f in ("cfg", SEASON_FILE):   # AOP store master (clusters) and the cluster season curves
         try:
             if f == "cfg":
                 import config_store
@@ -502,8 +502,8 @@ def build():
     df = df[df.month.isin(months)]          # a plan month with no fixture month cannot get an STR
     df = apply_inputs(df, ed)
     df["cluster"] = df.store.map(store_clusters()).fillna("(no AOP cluster)")
-    sidx = season_index()
-    df["season_idx"] = [sidx.get(k, np.nan) for k in zip(df.department.str.upper(), df.month.dt.month)]
+    look = season_index()
+    df["season_idx"] = np.array([look(c, d, m) for c, d, m in zip(df.cluster, df.department.str.upper(), df.month.dt.month)], dtype=float)
     no_season = sorted(df.loc[df.season_idx.isna(), "department"].unique().tolist())
     df["season_idx"] = df.season_idx.fillna(1.0)   # no Listing history under this name: treated as a normal month
     if len(lys):
@@ -518,7 +518,8 @@ def build():
             "mdq_without_plan": float(df.loc[(df.mdq > 0) & (df.plan_qty <= 0), "mdq"].sum()) if pu else 0.0,
             "price_from_division": sorted(df.loc[df.asp_from.str.startswith("division"), "department"].unique().tolist()),
             "no_ly_departments": sorted(df.loc[~df.ly_known, "department"].unique().tolist()),
-            "no_season_departments": no_season, "season_cut": list(SEASON_CUT), "season_bands": SEASON_BANDS,
+            "no_season_departments": no_season, "season_built": getattr(look, "built_at", None),
+            "clusters": sorted(df.cluster.unique().tolist()), "season_cut": list(SEASON_CUT), "season_bands": SEASON_BANDS,
             "base_band": [BAND_MIN, BAND_MAX]}
     return df.reset_index(drop=True), info
 
@@ -544,30 +545,31 @@ BAND_STEP, BAND_MIN, BAND_MAX = 30, 60, 180
 
 # user, 9 Oct: "incorporate the seasonality trends from the Listing - Delisting Analyser App where peak seasons can be
 # differentiated from the normal ones and STR can differ according to it". Season of a department x month = its
-# festival-free sales rate that month / its 12-month average (Listing app windows.json, 2022-25), peak / off at the
+# festival-free sales rate that month / its 12-month average, 2022-25, per AOP cluster (str_season.py; was the chain curve of
+# the Listing app windows.json until the user asked for cluster curves), peak / off at the
 # Listing app's own in / off season index (1.15 / 0.85). The band keeps the nearest-30 rounding; only its limits move:
 # peak = the shelf should turn faster (30-90), normal = the base rule (60-180), off = slower months (90-180).
-SEASON_FILE = os.path.join(ROOT, "Listing Delisting", "app", "windows.json")
+SEASON_FILE = os.path.join(HERE, "season_cluster.json")   # str_season.py (user, 9 Oct: "use each cluster's own season curve")
 SEASON_BANDS = {"peak": (30, 90), "normal": (BAND_MIN, BAND_MAX), "off": (90, 180)}
 SEASON_CUT = [1.15, 0.85]
 
 
 def season_index():
-    """{(DEPARTMENT, month 1-12): index} from the Listing app; also sets SEASON_CUT from its params"""
+    """lookup(cluster, DEPARTMENT, month 1-12) -> season index: the cluster's own curve (str_season.py, day-wise sales,
+    leaning on the chain where the cluster has few stores), else the chain's, else None; sets SEASON_CUT"""
     try:
         with open(SEASON_FILE, encoding="utf-8") as fh:
             w = json.load(fh)
-    except Exception:  # noqa: BLE001 - no Listing data: every month is normal
-        return {}
-    p = w.get("params", {})
-    SEASON_CUT[:] = [float(p.get("in_season_index", 1.15)), float(p.get("off_season_index", 0.85))]
-    out = {}
-    for d, v in w.get("departments", {}).items():
-        r = {MON3.index(x["month"][:3].upper()) + 1: float(x.get("rate") or 0) for x in v.get("months", [])}
-        avg = sum(r.values()) / 12
-        if avg > 0:
-            out.update({(d.strip().upper(), m): x / avg for m, x in r.items()})
-    return out
+    except Exception:  # noqa: BLE001 - not built yet: every month is normal
+        return lambda c, d, m: None
+    SEASON_CUT[:] = [float(x) for x in w.get("cut", SEASON_CUT)]
+    ch, cl = w.get("chain", {}), w.get("cluster", {})
+
+    def look(c, d, m):
+        v = cl.get(c, {}).get(d) or ch.get(d)
+        return v[m - 1] if v else None
+    look.built_at = w.get("built_at")
+    return look
 
 
 def season_of(idx):

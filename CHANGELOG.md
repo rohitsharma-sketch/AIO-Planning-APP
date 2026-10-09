@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: each cluster's own season curve, cluster filter, simpler notes
+- **Asked (user):** "i like this suggestion - Store-level seasonality: use each cluster's own season curve from the day-wise sales, rather than one for the whole chain. Club it with their respective cluster and amalgamate the already present structure for a deeper meaning but simplified version of the app"
+- New str_season.py: the Listing - Delisting Analyser's season method (day-wise data-lake cache, each store's calendar-cluster festival days left out, sales per festival-free open store-day, month vs that year's average, 2022-25 averaged) run per AOP cluster x department and chain-wide; a cluster leans on the chain curve where few of its stores sell the department (w = stores / (stores + 3)). Output season_cluster.json (gitignored), rebuilt by the server when the day-wise cache or the AOP store master is newer (hourly check); 11 s. Every store x department x month now takes its own cluster's season; roll-ups weight by plan qty. Replaces the chain-wide windows.json rates (e.g. KI_AP_JEANS Mar = normal 1.05, Apr-Jun off; NE - (P) R/N T-shirts dip in May).
+- Cluster filter beside the division one: the table, the All row, the Division x band table, Revert and the Excel all follow it. Popup says which curve the season came from. The long note under the table folds into "Data notes".
+
 ### STR Forecaster: split departments by LY share instead of 50/50
 - **Asked (user):** "split the plan by LY share instead of 50/50"
 - The five old department names are now divided by each new part's share of last year's sales: the same store and month a year earlier, else the chain's that month, else equal. Pieces for plan qty, fixtures and MDQ; value for plan Rs. A store that sold only one part LY gives it the whole row. Old-department totals and the All figures are unchanged (All 54.5 days); e.g. MSE_PYJAMA 75% HSR / 25% TXTL, KB_T-SHIRT H/S 77% R/N / 23% POLO, KB_BERMUDA 42% HSR / 58% TXTL, LW_L_PALAZZO 58% WES / 42% ETH, LW_L_JEGGING 48% DNM / 52% WVN (4-month plan qty). Each pair's forecast and LY days now agree with each other.

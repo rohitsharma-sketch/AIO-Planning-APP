@@ -131,7 +131,8 @@ td.ed,td.ed input{background:#FFF8E6}
       <div class="bar" style="margin-bottom:10px">
         <div class="chips" role="group" aria-label="View by" id="by"></div>
         <select id="f-div" aria-label="Division"><option value="">All divisions</option><option>MENS</option><option>LADIES</option><option>KIDS</option></select>
-        <label class="note" title="Peak / off months from the Listing - Delisting Analyser: peak band 30-90 days, normal 60-180, off 90-180"><input type="checkbox" id="f-season" checked> Season-aware band</label>
+        <select id="f-cl" aria-label="Cluster"><option value="">All clusters</option></select>
+        <label class="note" title="Peak / off months from each cluster&#39;s own season curve (day-wise sales, festival days left out, as in the Listing - Delisting Analyser): peak band 30-90 days, normal 60-180, off 90-180"><input type="checkbox" id="f-season" checked> Season-aware band</label>
         <span class="note">Click a header to sort; &#9662; filters it.</span>
       </div>
       <div class="bar" style="align-items:flex-start;margin-bottom:4px"><div id="mx"></div>
@@ -183,7 +184,7 @@ const tagLab=t=>t==='CORE'?'Core':t==='SEASONAL'?'Seasonal':'';
 async function api(p,o){const r=await fetch(p,o);const j=(r.headers.get('content-type')||'').includes('json')?await r.json():null;
   if(!r.ok)throw new Error(j?.error||r.statusText);return j;}
 const post=(p,body)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-const S={seasonal:true,st:null,by:'division',div:'',dept:null,roll:null,cells:null,tags:null,cache:{},grid:{},gt:{},vis:{},allAgg:null,pf:null};
+const S={cl:'',seasonal:true,st:null,by:'division',div:'',dept:null,roll:null,cells:null,tags:null,cache:{},grid:{},gt:{},vis:{},allAgg:null,pf:null};
 const BY=[['division','Division'],['department','Department'],['cluster','Cluster'],['store','Store']];
 function addM(s,n){const d=new Date(+s.slice(0,4),+s.slice(5,7)-1+n,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 
@@ -266,7 +267,7 @@ function calcBox(title,rows,foot=''){return `<div class="calc"><div class="calc-
 const L=(a,b,k)=>`<tr${k?' class="k"':''}><th>${a}</th><td>${b}</td></tr>`;
 // user, 9 Oct: "every department tile will have the calculation popup once clicked on it"
 function seaLine(c){const cut=S.st.info.season_cut||[1.15,.85];
-  return L('Season',c.season?`<b>${c.season[0].toUpperCase()+c.season.slice(1)}</b> <span class="note">index ${n2(c.season_idx)} = this month&#39;s festival-free sales rate ÷ the department&#39;s 12-month average (Listing - Delisting Analyser, 2022–25${c.rows>1?', weighted by plan qty':''}); peak ≥ ${cut[0]}, off ≤ ${cut[1]}</span>`:'—');}
+  return L('Season',c.season?`<b>${c.season[0].toUpperCase()+c.season.slice(1)}</b> <span class="note">index ${n2(c.season_idx)} = this month&#39;s festival-free sales rate ÷ the department&#39;s 12-month average in the store&#39;s own cluster (day-wise sales 2022–25; a cluster with few stores leans on the chain curve${c.rows>1?'; weighted by plan qty':''}); peak ≥ ${cut[0]}, off ≤ ${cut[1]}</span>`:'—');}
 function bandLine(c){const [lo,hi]=S.seasonal?lim(c.season):lim(null);
   return L('Band',`${n1(c.days)} → nearest 30, kept ${lo}–${hi}${S.seasonal&&c.season?' ('+c.season+')':''} = <b>${bandOf(c)} days</b>${S.seasonal&&c.band!==c.base_band?` <span class="note">base rule 60–180: ${c.base_band}</span>`:''}`,1);}
 function calcAgg(title,c){
@@ -325,10 +326,11 @@ async function load(){
   if(cm.month_mismatch){$('#job').className='status err';$('#job').textContent='The sales plan months do not match the fixture plan months - re-upload it with the other "Months in the file are" choice. Showing the fixture plan only.';}
   $('#fc-desc').textContent=(cm.stores_both!=null?`${cm.stores_both} stores with every month in both the fixture plan and the sales plan (only these are compared)`:`${i.stores} stores`)+` · ${i.departments} departments · ${i.months.map(mon).join(', ')} · last year = ${i.ly_months.map(mon).join(', ')}`+
     (i.sales_plan?'':' · no sales plan yet, so forecast STR shows "—"');
+  $('#f-cl').innerHTML='<option value="">All clusters</option>'+(i.clusters||[]).map(c=>`<option${c===S.cl?' selected':''}>${h(c)}</option>`).join('');
   await loadRoll();if(S.dept)await loadCells();if(S.tab==='tg')loadTags();
 }
-function getRoll(by,div){const k=by+'|'+div;
-  if(!S.cache[k]){const p=new URLSearchParams({by});if(div)p.set('division',div);S.cache[k]=api('api/rollup?'+p).catch(e=>{delete S.cache[k];throw e;});}
+function getRoll(by,div,cl=S.cl){const k=by+'|'+div+'|'+cl;
+  if(!S.cache[k]){const p=new URLSearchParams({by});if(div)p.set('division',div);if(cl)p.set('cluster',cl);S.cache[k]=api('api/rollup?'+p).catch(e=>{delete S.cache[k];throw e;});}
   return S.cache[k];}
 async function loadRoll(){
   try{S.roll=await getRoll(S.by,S.div);}catch(e){$('#t-note').textContent=e.message;return;}
@@ -360,30 +362,32 @@ function renderRoll(){
   const vis=grid('roll',$('#t'),rollCols(),R.rows,{
     rowAttr:r=>isD?`data-dept="${h(r.department)}" tabindex="0" class="r${r.department===S.dept?' sel':''}"`:'',
     tail:(vis,cols)=>{if(!vis.length)return '';S.allAgg=agg(vis,R.months);const nk=cols.filter(c=>c.m==null).length;
-      return `<tr class="tot" data-k="all"><td class="l1" colspan="${nk}">All${S.div?' '+h(S.div):''}${vis.length<R.rows.length?` <span class="note">(${vis.length} of ${R.rows.length} shown)</span>`:''}</td>`+
+      return `<tr class="tot" data-k="all"><td class="l1" colspan="${nk}">All${S.div?' '+h(S.div):''}${S.cl?' · '+h(S.cl):''}${vis.length<R.rows.length?` <span class="note">(${vis.length} of ${R.rows.length} shown)</span>`:''}</td>`+
         cols.filter(c=>c.m!=null).map(c=>`<td class="${c.cls} c" data-m="${c.m}">${c.html(S.allAgg)}</td>`).join('')+'</tr>';}});
   $('#clr').hidden=!g.sort&&!Object.keys(g.filt).length;$('#rev').hidden=!S.prev;renderMatrix();
   const i=S.st.info,po=cm.part_months||[];
   const lo=[cm.fixture_only?.length?`in the fixture plan only ${cm.fixture_only.length} (${cm.fixture_only.join(', ')})`:'',
     cm.plan_only?.length?`in the sales plan only ${cm.plan_only.length} (${cm.plan_only.join(', ')})`:'',
     po.length?`a month missing in one file ${po.length} (${po.join(', ')})`:''].filter(Boolean);
-  $('#t-note').textContent=(isD?'Click a department to see its stores and edit fixtures; click a figure for its calculation. ':'Click a figure for its calculation. ')+
-    'The All row adds up the rows shown (after the header filters). Plan qty and MDQ are summed before the days are worked out; the 4-month figure = average MDQ ÷ planned qty per day. LY days = last year’s sales qty on this same fixture plan (store-months that sold last year).'+
+  const tn=(isD?'Click a department to see its stores and edit fixtures; click a figure for its calculation. ':'Click a figure for its calculation. ')+
+    'The All row adds up the rows shown (after the header filters).',dn=
+    'Plan qty and MDQ are summed before the days are worked out; the 4-month figure = average MDQ ÷ planned qty per day. LY days = last year’s sales qty on this same fixture plan (store-months that sold last year). Season = each cluster’s own curve from day-wise sales'+(i.season_built?` (built ${String(i.season_built).slice(0,16).replace('T',' ')})`:'')+'.'+
     (lo.length?` Stores not compared: ${lo.join('; ')} - MDQ ${n0(cm.left_out_mdq)}, Rs ${n0(cm.left_out_rs)} left out.`:'')+
     (Object.keys(i.split_departments||{}).length?` Old department names split as in the core apps, fixtures / MDQ / plan by each part's last-year share (same store and month, else the chain's month; pieces for qty, value for Rs): ${Object.entries(i.split_departments).map(([o,n])=>o+' → '+n.join(' + ')).join('; ')}.`:'')+
     (i.qty_by_price_rows?` ${i.qty_by_price_rows} rows had no plan qty and use Rs ÷ LY selling price.`:'')+
     (i.sales_plan?` Left out of STR days: plan with no fixtures Rs ${n0(i.plan_rs_without_fixtures)}; fixtures with no plan MDQ ${n0(i.mdq_without_plan)}.`:'')+
     ((i.price_from_division||[]).filter(d=>!(i.no_ly_departments||[]).includes(d)).length?` Selling price from the division (no department price): ${i.price_from_division.filter(d=>!(i.no_ly_departments||[]).includes(d)).join(', ')}.`:'')+
     (i.no_asp_rows?` ${i.no_asp_rows} planned rows have no last-year selling price and count as 0 qty.`:'')+
-    ((i.no_season_departments||[]).length?` No Listing seasonality under these names (treated as normal months): ${i.no_season_departments.join(', ')}.`:'')+
+    ((i.no_season_departments||[]).length?` No season history under these names (treated as normal months): ${i.no_season_departments.join(', ')}.`:'')+
     ((i.no_ly_departments||[]).length?` No last-year sales under these department names (new or renamed - no LY STR; selling price taken from their division until mapped to an old department): ${i.no_ly_departments.join(', ')}.`:'');
+  $('#t-note').innerHTML=h(tn)+`<details><summary>Data notes - how it is worked out, stores left out, splits</summary>${h(dn)}</details>`;
 }
 async function renderMatrix(){
-  let R;try{R=await getRoll('department','');}catch(e){return;}
+  let R;try{R=await getRoll('department','',S.cl);}catch(e){return;}
   const vals=R.rows.map(r=>bandOf(r.total)??null),a=S.mx;
   const bands=[...new Set([60,90,120,150,180,...vals.filter(v=>v!=null)])].sort((x,y)=>x-y).concat(vals.includes(null)?[null]:[]);
   const n=(d,b)=>R.rows.filter(r=>(!d||r.division===d)&&(bandOf(r.total)??null)===b).length;
-  $('#mx').innerHTML=`<table class="mx"><thead><tr><th class="l">Departments by final ${S.seasonal?'season-aware ':''}band (4-month)</th>${bands.map(b=>`<th>${b?b+' days':'No band'}</th>`).join('')}<th>Total</th></tr></thead><tbody>`+
+  $('#mx').innerHTML=`<table class="mx"><thead><tr><th class="l">Departments by final ${S.seasonal?'season-aware ':''}band (4-month)${S.cl?' · '+h(S.cl):''}</th>${bands.map(b=>`<th>${b?b+' days':'No band'}</th>`).join('')}<th>Total</th></tr></thead><tbody>`+
     ['MENS','LADIES','KIDS',''].map(d=>`<tr${d?'':' class="tot"'}><td class="l"><b>${d||'All'}</b></td>`+bands.map(b=>{const k=n(d,b);
       return `<td>${k?`<button class="mxb${a&&a.d===d&&a.b===b?' on':''}" data-mx="${d}|${b??''}" title="Show the ${k} ${d||''} departments in the ${b?b+'-day':'no'} band">${k}</button>`:'<span class="note">0</span>'}</td>`;}).join('')+
       `<td>${R.rows.filter(r=>!d||r.division===d).length}</td></tr>`).join('')+'</tbody></table>';
@@ -464,12 +468,12 @@ document.addEventListener('click',async e=>{
   if(e.target.id==='clr'){S.grid.roll={sort:null,filt:{}};S.mx=null;renderRoll();return;}
   const mx=e.target.closest('[data-mx]');
   if(mx){const [d,b]=mx.dataset.mx.split('|'),g=S.grid.roll;
-    if(!S.prev)S.prev={by:S.by,div:S.div,grid:g?{sort:g.sort,filt:{...g.filt}}:null};   // what Revert goes back to
+    if(!S.prev)S.prev={by:S.by,div:S.div,cl:S.cl,grid:g?{sort:g.sort,filt:{...g.filt}}:null};   // what Revert goes back to
     S.mx={d,b:b===''?null:+b};S.by='department';S.div='';$('#f-div').value='';
     const f={'band:t':new Set([b===''?'(blank)':b+' days'])};if(d)f.division=new Set([d]);
     S.grid.roll={sort:{id:'days:t',dir:-1},filt:f};await loadRoll();
     $('#t').closest('.tw').scrollIntoView({behavior:'smooth',block:'nearest'});return;}
-  if(e.target.id==='rev'&&S.prev){const p=S.prev;S.prev=null;S.mx=null;S.by=p.by;S.div=p.div;$('#f-div').value=p.div;
+  if(e.target.id==='rev'&&S.prev){const p=S.prev;S.prev=null;S.mx=null;S.by=p.by;S.div=p.div;$('#f-div').value=p.div;S.cl=p.cl;$('#f-cl').value=p.cl;
     S.grid.roll=p.grid||{sort:null,filt:{}};await loadRoll();return;}
   if(e.target.id==='dd-x'){S.dept=null;$('#dd').hidden=true;renderRoll();return;}
   if(e.target.id==='dd-reset'){if(!confirm(`Reset ${S.dept} to the fixture file? Its edited fixtures and qty per fixture are dropped (the edit history is kept).`))return;
@@ -477,7 +481,7 @@ document.addEventListener('click',async e=>{
   if(e.target.id==='dens-save'){const v=$('#dens').value;if(v===''||+v<0)return;
     if(!confirm(`Set qty per fixture = ${v} for every store and month of ${S.dept}? It replaces each store's own value from the file (typical now: ${n2(S.cells.density)}). Reset to file undoes it.`))return;
     try{await post('api/edit',{field:'density',department:S.dept,value:+v});dirty();await loadRoll();await loadCells();}catch(err){alert(err.message);}return;}
-  if(e.target.id==='dl'){const p=new URLSearchParams();if(S.div)p.set('division',S.div);location.href='api/download?'+p;}
+  if(e.target.id==='dl'){const p=new URLSearchParams();if(S.div)p.set('division',S.div);if(S.cl)p.set('cluster',S.cl);location.href='api/download?'+p;}
 });
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){hidePop();return;}
@@ -490,6 +494,7 @@ document.addEventListener('change',async e=>{
   const t=e.target;
   if(t.closest('#pop .pf-l')){pfApply();return;}
   if(t.id==='f-div'){S.div=t.value;await loadRoll();return;}
+  if(t.id==='f-cl'){S.cl=t.value;await loadRoll();return;}
   if(t.id==='f-season'){S.seasonal=t.checked;renderRoll();if(S.cells&&!$('#dd').hidden)renderCells();return;}
   if(t.matches('input[type=file]')){const f=t.files[0];if(f)upload(t.closest('[data-kind]').dataset.kind,f);t.value='';return;}
   if(t.matches('#dt input[type=number]')){const v=t.value;if(v===''||+v<0)return;

@@ -53,6 +53,7 @@ RS Planning Platform/backend/data/suite_theme.json
 data/listing/
 Listing Delisting/app/*.json
 Listing Delisting/app/festival_trend/
+STR Forecaster/season_cluster.json
 Landing/keep_alive.log
 RS Planning Platform/backend/data/user_rights.json
 RS Planning Platform/backend/data/sign_in_as.log
