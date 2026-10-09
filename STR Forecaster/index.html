@@ -94,6 +94,7 @@ td.ed,td.ed input{background:#FFF8E6}
 .tgl{display:inline-block;width:18px;border:0;background:none;cursor:pointer;color:var(--muted-foreground);padding:0;font-size:12px}
 .edb{border:0;background:none;cursor:pointer;color:var(--primary);font-size:12.5px;padding:0 2px}
 tr.lv0 td.l1{font-weight:700}tr.lv1 td,tr.lv3 td{background:#FCFBF8}tr.lv1 td.l1,tr.lv3 td.l1{background:#FCFBF8}
+.mtog{border:1px solid var(--input);background:#fff;border-radius:999px;font:inherit;font-size:11.5px;font-weight:600;padding:0 8px;margin-left:6px;cursor:pointer;color:var(--primary)}
 .tg.core{background:#E3EEF9;color:#1D4F86}.tg.seasonal{background:#FBEFD9;color:#8A5300}
 .note{font-size:12px;color:var(--muted-foreground)}
 .empty{padding:22px;text-align:center;color:var(--muted-foreground)}
@@ -192,7 +193,7 @@ const tagLab=t=>t==='CORE'?'Core':t==='SEASONAL'?'Seasonal':'';
 async function api(p,o){const r=await fetch(p,o);const j=(r.headers.get('content-type')||'').includes('json')?await r.json():null;
   if(!r.ok)throw new Error(j?.error||r.statusText);return j;}
 const post=(p,body)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-const S={layers:['division','department','cluster','store'],open:new Set(),kids:{},cl:'',seasonal:true,st:null,by:'division',div:'',dept:null,roll:null,cells:null,tags:null,cache:{},grid:{},gt:{},vis:{},allAgg:null,pf:null};
+const S={months:(()=>{try{return localStorage.getItem('str.months')==='1';}catch(e){return false;}})(),layers:['division','department','cluster','store'],open:new Set(),kids:{},cl:'',seasonal:true,st:null,by:'division',div:'',dept:null,roll:null,cells:null,tags:null,cache:{},grid:{},gt:{},vis:{},allAgg:null,pf:null};
 // row layers (user, 9 Oct: "a similar drag and drop function which drills to any level for STR similar to AOP forecaster
 // output model"): drag to reorder, x to drop a layer, + to add it back; a row opens into the next layer
 const LAYERS={division:'Division',department:'Department',cluster:'Cluster',store:'Store',tag:'Tag',attribute:'Attribute'};
@@ -246,7 +247,7 @@ function grid(n,el,cols,rows,o={}){
     for(let j=0;j<cols.length;){const c=cols[j];
       if(!c.grp){r1+=th(n,c,'rowspan="2"');j++;continue;}
       let k=j;while(k<cols.length&&cols[k].grp===c.grp)k++;
-      r1+=`<th class="grp" colspan="${k-j}"${c.gtitle?` title="${h(c.gtitle)}"`:''}>${h(c.grp)}</th>`;
+      r1+=`<th class="grp" colspan="${k-j}"${c.gtitle?` title="${h(c.gtitle)}"`:''}>${c.grpHtml||h(c.grp)}</th>`;
       for(let x=j;x<k;x++)r2+=th(n,cols[x]);j=k;}
     head=`<tr>${r1}</tr><tr>${r2}</tr>`;}
   else head=`<tr>${cols.map(c=>th(n,c)).join('')}</tr>`;
@@ -394,8 +395,11 @@ function rollCols(){
   if(L.includes('department'))cols.push(
     {id:'tag',label:'Tag',cls:'l',filt:true,get:r=>tagLab(r.tag)||null,html:r=>tagLab(r.tag)?`<span class="tg ${r.tag.toLowerCase()}">${tagLab(r.tag)}</span>`:'<span class="note">—</span>'},
     {id:'attribute',label:'Attribute',cls:'l',filt:true,get:r=>r.attribute,html:r=>r.attribute?`<span title="from the ${h(r.attribute_from)}">${h(r.attribute)}</span>`:'<span class="note">—</span>'});
-  for(const [i,g] of [...R.months.map((m,i)=>[i,mon(m)]),['t','4-month avg']])for(const [f,l,t] of FIG)
-    cols.push({id:f+':'+i,grp:g,gtitle:i==='t'?'sum over the months, then the days - an average monthly rate':'',label:l,title:t,m:i,
+  // user, 9 Oct: "view the 4 month avg in the first place and if i want then only i will see monthly changes" - the
+  // 4-month average comes first; the months fold behind the toggle on its header (remembered per browser)
+  const ml=R.months.map(mon),tog=`<button class="mtog" data-mtog aria-expanded="${S.months}" title="${S.months?'Hide':'Show'} the months">${S.months?'&#9666; hide months':'&#9656; '+h(ml[0]+'–'+ml[ml.length-1])}</button>`;
+  for(const [i,g] of [['t','4-month avg'],...(S.months?R.months.map((m,i)=>[i,ml[i]]):[])])for(const [f,l,t] of FIG)
+    cols.push({id:f+':'+i,grp:g,grpHtml:i==='t'?h(g)+' '+tog:null,gtitle:i==='t'?'sum over the months, then the days - an average monthly rate':'',label:l,title:t,m:i,
       cls:f==='band'?'b band':f==='ly_days'?'ly':'',num:true,filt:f==='band',fmt:f==='band'?v=>v+' days':null,
       get:r=>f==='band'?bandOf(cellOf(r,i)):cellOf(r,i)[f],
       html:r=>{const c=cellOf(r,i),v=c[f];return f==='band'?dd(bandOf(c))+seaTag(c):f==='qty'||f==='mdq'?n0(v):dd(v);}});
@@ -506,6 +510,7 @@ document.addEventListener('click',async e=>{
       showPop(cc,calcAgg(`${who} · ${ml}`,cellOf(r,i)));}
     else if(tbl==='dt'){const r=S.vis.cells[+tr.dataset.k],c=r.months[i];if(c)showPop(cc,calcCell(`${S.cells.department} · ${r.store} · ${mon(S.cells.months[i])}`,c,mon(addM(S.cells.months[i],-12))));}
     return;}
+  if(e.target.closest('[data-mtog]')){S.months=!S.months;try{localStorage.setItem('str.months',S.months?'1':'0');}catch(err){}renderRoll();return;}
   const tg=e.target.closest('[data-tog]');if(tg){await toggle(S.vis.roll[+tg.closest('tr').dataset.k]._p);return;}
   const eb=e.target.closest('[data-edit]');if(eb){S.dept=eb.dataset.edit;renderRoll();await loadCells();$('#dd').scrollIntoView({behavior:'smooth',block:'start'});return;}
   const lx=e.target.closest('[data-lx]');if(lx){setLayers(S.layers.filter(k=>k!==lx.dataset.lx));return;}

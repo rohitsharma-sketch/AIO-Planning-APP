@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: 4-month average first, months fold away
+- **Asked (user):** "Give the months a collapsable ticker on the header so that i can view the 4 month avg in the first place and if i want then only i will see monthly changes"
+- The forecast table opens on the 4-month average (Band, STR days, LY days, Plan qty, MDQ) only; the toggle on its header ("> Mar'27-Jun'27" / "< hide months") adds the month columns after it. The choice is remembered per browser. The department fixture editor keeps its months.
+
 ### STR Forecaster: Tag and Attribute as row layers
 - **Asked (user):** "add Tag and Attribute as draggable layers too"
 - "+ Tag" and "+ Attribute" chips in the Rows bar: drag them into any position (e.g. Attribute > Division > Department > Cluster > Store). Tag = the department's Core / Seasonal tag ("(untagged)" until set); Attribute = its own attribute, else the suite attribute master ("(no attribute)" if neither). Read live from the Department tags tab, so a tag change shows on the next load. Server: /api/rollup and its filters accept tag / attribute.
