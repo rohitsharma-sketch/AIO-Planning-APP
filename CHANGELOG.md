@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: hover messages removed; detailed calculation table
+- **Asked (user):** "remove the hover message now" and "make the tabular form info as detailed as it can be. Make sure it gives a good detailed view as earlier for all calculations. Donot clutter it though"
+- The hover texts on band cells, Peak / Off badges and the band-table headers are gone (the click popup carries the working).
+- The click popup is one table with three columns - Regular | Peak-oriented | Last year - and a row per step: selling rate (whose plan / which peak run, planned ahead or ended / which LY month), qty and days, qty per day, MDQ (average per month; LY on the fixture file), STR days, nearest 30, range (and why: peak / normal 60-180, off from 90), suggested band (and the 60-180 base band when different), sell-thru at MDQ. Below it: Season (tag and reason), Season index (vs the window and vs the year), Festivals (each festival's days and lift at store level), and a one-line rule. Store-month cells also show MDQ = fixtures x qty per fixture (edits noted) and where the planned qty comes from.
+
 ### STR Forecaster: festival lift per festival (Bihu for all N. East); search buttons on the department editor
 - **Asked (user):** "Bihu is there in NE as a whole not just NE(P) so why only Peak season for NE(P) and not the other one" and "add the same search filter to the department editor table"
 - Cause: the festival lift was pooled per AOP cluster x department over all Mar-Jun festivals; NE - (NP) has 2 stores with history, so it leaned on the chain lift (Holi / Eid dominated, no Bihu) - x1.40 vs x2.65 in NE - (P) - and April did not stand out. Now each festival has its own lift per department, learnt from every store whose calendar has it (str_season.festival_lift: festival-day sales per open store-day / the same stores' other Mar-Jun days, 2022-25; few stores lean on the department's pooled lift; clipped 0.5-3), and a month's uplift = sum over its festivals of days / month days x (lift - 1). R/N T-shirts: Bihu x2.85, Holi x1.63, Eid al-Adha x1.61, Eid al-Fitr x1.22, Rath Yatra x0.95. NE - (NP) R/N T-shirts is now Peak (festival) in Mar and Apr like NE - (P); NE - (NP) Apr: 62 of 109 departments peak. Popups / Excel show each festival's days and lift ("Bihu 8 days x2.85").
