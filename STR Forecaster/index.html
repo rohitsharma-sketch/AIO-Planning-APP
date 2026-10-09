@@ -519,7 +519,6 @@ function flat(cols){   // the rows on screen: top layer filtered + sorted, open 
 }
 const FIG=[['band','Band','actual STR days rounded to the nearest 30, kept between 60 and 180'],
   ['days','STR days','days the MDQ lasts at the planned selling rate: MDQ ÷ (planned qty ÷ days), over rows with both a plan and fixtures'],
-  ['ly_days','LY days','the same with last year’s sales qty on this fixture plan - store-months that sold last year'],
   ['qty','Plan qty','planned qty: the sales plan’s own, else planned sales ÷ LY selling price'],['mdq','MDQ','fixtures × qty per fixture']];
 const cellOf=(r,i)=>i==='t'?r.total:r.months[i];
 function rollCols(){
@@ -553,7 +552,7 @@ function renderRoll(){
     po.length?`a month missing in one file ${po.length} (${po.join(', ')})`:''].filter(Boolean);
   const tn='▸ opens a row into the next layer; drag the layer chips to change the order; ✎ on a department opens its stores to edit fixtures; click a figure for its calculation; ▾ on any hierarchy chip searches / filters it (shown as a layer or not); click a header to sort. '+
     'The All row adds up the rows shown (after the header filters).',dn=
-    'Plan qty and MDQ are summed before the days are worked out; the 4-month figure = average MDQ ÷ planned qty per day. LY days = last year’s sales qty on this same fixture plan (store-months that sold last year). Season = each cluster’s own curve from day-wise sales'+(i.season_built?` (built ${String(i.season_built).slice(0,16).replace('T',' ')})`:'')+'.'+
+    'Plan qty and MDQ are summed before the days are worked out; the 4-month figure = average MDQ ÷ planned qty per day.  Season = each cluster’s own curve from day-wise sales'+(i.season_built?` (built ${String(i.season_built).slice(0,16).replace('T',' ')})`:'')+'.'+
     (lo.length?` Stores not compared: ${lo.join('; ')} - MDQ ${n0(cm.left_out_mdq)}, Rs ${n0(cm.left_out_rs)} left out.`:'')+
     (Object.keys(i.split_departments||{}).length?` Old department names split as in the core apps, fixtures / MDQ / plan by each part's last-year share (same store and month, else the chain's month; pieces for qty, value for Rs): ${Object.entries(i.split_departments).map(([o,n])=>o+' → '+n.join(' + ')).join('; ')}.`:'')+
     (i.qty_by_price_rows?` ${i.qty_by_price_rows} rows had no plan qty and use Rs ÷ LY selling price.`:'')+
@@ -591,8 +590,8 @@ function renderCells(){
       html:r=>!c(r)?'—':ed?`<input type="number" min="0" step="0.5" value="${+(+c(r).fixtures).toFixed(2)}" data-store="${h(r.store)}" data-month="${m}" aria-label="Fixtures ${h(r.store)} ${g}" title="file: ${n2(c(r).fixtures_file)}">`:n2(c(r).fixtures)},
     {id:'mdq:'+i,grp:g,label:'MDQ',num:true,m:i,get:r=>c(r)?.mdq,html:r=>c(r)?n0(c(r).mdq):''},
     {id:'qty:'+i,grp:g,label:'Plan qty',num:true,m:i,get:r=>c(r)?.plan_qty,html:r=>c(r)?n0(c(r).plan_qty):''},
-    {id:'band:'+i,grp:g,label:'Band',title:'band (actual · LY days)',num:true,m:i,filt:true,fmt:v=>v+' days',get:r=>bandOf(c(r)),
-      html:r=>{const x=c(r);return !x?'':`<b style="color:var(--primary)">${dd(bandOf(x))}</b>${seaTag(x)} <span class="note">${x.days!=null?Math.round(x.days):'—'} · ${x.ly_days!=null?Math.round(x.ly_days):'—'}</span>`;}});});
+    {id:'band:'+i,grp:g,label:'Band',title:'band (actual STR days)',num:true,m:i,filt:true,fmt:v=>v+' days',get:r=>bandOf(c(r)),
+      html:r=>{const x=c(r);return !x?'':`<b style="color:var(--primary)">${dd(bandOf(x))}</b>${seaTag(x)} <span class="note">${x.days!=null?Math.round(x.days)+' days':'—'}</span>`;}});});
   grid('cells',$('#dt'),cols,C.rows);
   // user, 9 Oct: "add the same search filter to the department editor table" - visible search buttons (same menu as the headers)
   const gc=gstate('cells'),on=k=>gc.filt[k]||gc.cond[k];
