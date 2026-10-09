@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster fix: no band under 60 days in peak months
+- **Reported (user):** "i found a bug - why is 30 days STR being suggested where min 60 Days - max 180 days is capping"
+- Cause: the season-aware band's peak limits were 30-90 (my default, never confirmed), which broke the user's 60-day minimum. Peak is now 60-90, normal 60-180, off 90-180, and str_band clamps every season inside BAND_MIN-BAND_MAX (60-180) so a season can never go outside the user's range. Checked: every roll-up level now has bands 60 / 90 / 120 / 150 / 180 only (e.g. KG_TEES in JH, OD - (P): 42 days, peak -> 60). Self-check asserts no band under 60.
+
 ### STR Forecaster: Tag / Attribute columns removed (the layers replace them)
 - **Asked (user):** "tag and attribute are duplicate features check"
 - The Tag and Attribute columns in the forecast table duplicated the new Tag / Attribute row layers (and were blank on every non-department row), so the columns are gone; group, sort and filter by them with the layers. The Department tags tab and the Excel tag / attribute columns stay.
