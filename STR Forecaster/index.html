@@ -141,7 +141,6 @@ tr.lv0 td.l1{font-weight:700}tr.lv1 td,tr.lv3 td{background:#FCFBF8}tr.lv1 td.l1
     <div class="card-c">
       <div class="bar" style="margin-bottom:10px">
         <div class="lays" id="lays" role="group" aria-label="Row layers - drag to change the order"></div>
-        <select id="f-se" aria-label="Season" title="Only the store x department x month rows in this season (each cluster&#39;s own season, festivals included)"><option value="">All seasons</option><option value="peak">Peak</option><option value="normal">Normal</option><option value="off">Off</option></select>
         <label class="note" title="Peak / off months from each cluster&#39;s own season curve (day-wise sales, festival days left out, as in the Listing - Delisting Analyser): peak and normal band 60-180 days, off 90-180"><input type="checkbox" id="f-season" checked> Season-aware band</label>
 
       </div>
@@ -194,10 +193,11 @@ const tagLab=t=>t==='CORE'?'Core':t==='SEASONAL'?'Seasonal':'';
 async function api(p,o){const r=await fetch(p,o);const j=(r.headers.get('content-type')||'').includes('json')?await r.json():null;
   if(!r.ok)throw new Error(j?.error||r.statusText);return j;}
 const post=(p,body)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-const S={lf:{},vals:{},se:'',months:(()=>{try{return localStorage.getItem('str.months')==='1';}catch(e){return false;}})(),layers:['cluster','department','store'],open:new Set(),kids:{},cl:'',seasonal:true,st:null,by:'division',div:'',dept:null,roll:null,cells:null,tags:null,cache:{},grid:{},gt:{},vis:{},allAgg:null,pf:null};
+const S={lf:{},vals:{},months:(()=>{try{return localStorage.getItem('str.months')==='1';}catch(e){return false;}})(),layers:['cluster','department','store'],open:new Set(),kids:{},cl:'',seasonal:true,st:null,by:'division',div:'',dept:null,roll:null,cells:null,tags:null,cache:{},grid:{},gt:{},vis:{},allAgg:null,pf:null};
 // row layers (user, 9 Oct: "a similar drag and drop function which drills to any level for STR similar to AOP forecaster
 // output model"): drag to reorder, x to drop a layer, + to add it back; a row opens into the next layer
-const LAYERS={division:'Division',department:'Department',cluster:'Cluster',store:'Store',tag:'Tag',attribute:'Attribute'};
+const LAYERS={division:'Division',department:'Department',cluster:'Cluster',store:'Store',tag:'Tag',attribute:'Attribute',season:'Season'};
+const lv=(k,x)=>k==='tag'?(tagLab(x)||x):k==='season'&&x?x[0].toUpperCase()+x.slice(1):x;   // a layer value as shown
 function addM(s,n){const d=new Date(+s.slice(0,4),+s.slice(5,7)-1+n,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 
 /* ---- the All row: the server's sums, worked out over the rows shown (str_engine.rollup: sum first, then the ratio) */
@@ -353,8 +353,8 @@ async function load(){
   await loadRoll();if(S.dept)await loadCells();if(S.tab==='tg')loadTags();
 }
 // per-hierarchy search filters (user, 9 Oct: "INDIVIDIUAL SEARCH FILTER MISSING ADD THAT FOR EVERY HIERARCHY"): S.lf = {layer: Set}
-const gf=()=>{const f={};for(const [k,v] of Object.entries(S.lf))f[k]=[...v];if(S.se)f.season=S.se;return f;};
-const lfText=()=>Object.entries(S.lf).map(([k,v])=>`${LAYERS[k]}: ${v.size>2?v.size+' selected':[...v].join(', ')}`).join(' · ');
+const gf=()=>{const f={};for(const [k,v] of Object.entries(S.lf))f[k]=[...v];return f;};
+const lfText=()=>Object.entries(S.lf).map(([k,v])=>`${LAYERS[k]}: ${v.size>2?v.size+' selected':[...v].map(x=>lv(k,x)).join(', ')}`).join(' · ');
 const qs=(p,f)=>{for(const [k,v] of Object.entries(f))for(const x of [].concat(v))p.append(k,x);return p;};
 const pk=p=>p.join('\u0001');
 function getRoll(by,f={}){const p=qs(new URLSearchParams({by}),f),k=p.toString();
@@ -390,7 +390,7 @@ async function openLayerFilter(k,btn){
   showPop(btn,`<div class="pf"><div class="calc-h"><b>${LAYERS[k]}</b><button class="px" data-px aria-label="Close">&#x2715;</button></div>
     <input type="search" class="pf-q" placeholder="Search ${LAYERS[k].toLowerCase()}…" aria-label="Search ${LAYERS[k]}">
     <div><button class="btn ghost sm" data-pf="all">All</button> <button class="btn ghost sm" data-pf="none">None</button> <span class="note">${v.length} values</span></div>
-    <div class="pf-l">${v.map(x=>`<label><input type="checkbox" value="${h(x)}"${!sel||sel.has(x)?' checked':''}> ${h(k==='tag'?(tagLab(x)||x):x)}</label>`).join('')}</div></div>`);
+    <div class="pf-l">${v.map(x=>`<label><input type="checkbox" value="${h(x)}"${!sel||sel.has(x)?' checked':''}> ${h(lv(k,x))}</label>`).join('')}</div></div>`);
   S.pf={layer:k};$('#pop .pf-q').focus();
 }
 function renderLayers(){
@@ -416,7 +416,7 @@ function rollCols(){
   const cols=[{id:'label',label:L.map(k=>LAYERS[k]).join(' › '),cls:'l1',filt:false,get:r=>r[L[r._d||0]],
     html:r=>{const d=r._d||0,k=L[d],last=d>=L.length-1,o=S.open.has(pk(r._p));
       return `<span style="display:inline-block;width:${d*16}px"></span>`+(last?'<span class="tgl"></span>':`<button class="tgl" data-tog aria-expanded="${o}" aria-label="${o?'Close':'Open'} ${h(r[k])}">${o?'&#9662;':'&#9656;'}</button>`)+
-        h(k==='tag'?(tagLab(r[k])||r[k]):r[k])+(k==='department'?(r.edited?' <span title="has edits" class="dot">&#9679;</span>':'')+` <button class="edb" data-edit="${h(r.department)}" title="Stores and fixtures of ${h(r.department)} - edit here">&#9998;</button>`:'');}}];
+        h(lv(k,r[k]))+(k==='department'?(r.edited?' <span title="has edits" class="dot">&#9679;</span>':'')+` <button class="edb" data-edit="${h(r.department)}" title="Stores and fixtures of ${h(r.department)} - edit here">&#9998;</button>`:'');}}];
   // user, 9 Oct: "view the 4 month avg in the first place and if i want then only i will see monthly changes" - the
   // 4-month average comes first; the months fold behind the toggle on its header (remembered per browser)
   const ml=R.months.map(mon),tog=`<button class="mtog" data-mtog aria-expanded="${S.months}" title="${S.months?'Hide':'Show'} the months">${S.months?'&#9666; hide months':'&#9656; '+h(ml[0]+'–'+ml[ml.length-1])}</button>`;
@@ -433,9 +433,9 @@ function renderRoll(){
   const vis=grid('roll',$('#t'),cols,flat(cols),{ordered:true,base:R.rows,
     rowAttr:r=>`class="lv${r._d}${S.layers[r._d]==='department'&&r.department===S.dept?' sel':''}"`,
     tail:(vis,cols)=>{const top=vis.filter(r=>r._d===0);if(!top.length)return '';S.allAgg=agg(top,R.months);const nk=cols.filter(c=>c.m==null).length;
-      return `<tr class="tot" data-k="all"><td class="l1" colspan="${nk}">All${lfText()?' · '+h(lfText()):''}${S.se?' · '+S.se+' months':''}${top.length<R.rows.length?` <span class="note">(${top.length} of ${R.rows.length} shown)</span>`:''}</td>`+
+      return `<tr class="tot" data-k="all"><td class="l1" colspan="${nk}">All${lfText()?' · '+h(lfText()):''}${top.length<R.rows.length?` <span class="note">(${top.length} of ${R.rows.length} shown)</span>`:''}</td>`+
         cols.filter(c=>c.m!=null).map(c=>`<td class="${c.cls} c" data-m="${c.m}">${c.html(S.allAgg)}</td>`).join('')+'</tr>';}});
-  $('#clr').hidden=!g.sort&&!Object.keys(g.filt).length&&!Object.keys(S.lf).length&&!S.se;$('#rev').hidden=!S.prev;renderMatrix();
+  $('#clr').hidden=!g.sort&&!Object.keys(g.filt).length&&!Object.keys(S.lf).length;$('#rev').hidden=!S.prev;renderMatrix();
   const i=S.st.info,po=cm.part_months||[];
   const lo=[cm.fixture_only?.length?`in the fixture plan only ${cm.fixture_only.length} (${cm.fixture_only.join(', ')})`:'',
     cm.plan_only?.length?`in the sales plan only ${cm.plan_only.length} (${cm.plan_only.join(', ')})`:'',
@@ -459,7 +459,7 @@ async function renderMatrix(){
   const vals=R.rows.map(r=>bandOf(r.total)??null),a=S.mx;
   const bands=[...new Set([60,90,120,150,180,...vals.filter(v=>v!=null)])].sort((x,y)=>x-y).concat(vals.includes(null)?[null]:[]);
   const n=(d,b)=>R.rows.filter(r=>(!d||r.division===d)&&(bandOf(r.total)??null)===b).length;
-  $('#mx').innerHTML=`<table class="mx"><thead><tr><th class="l">Departments by final ${S.seasonal?'season-aware ':''}band (4-month)${lfText()?' · '+h(lfText()):''}${S.se?' · '+S.se+' months':''}</th>${bands.map(b=>`<th title="${b?`Departments whose 4-month STR days round to ${b} (nearest 30, kept within 60–180; off-season rows start at 90). Click a count to list them.`:'No band: no store has both a plan and fixtures.'}">${b?b+' days':'No band'}</th>`).join('')}<th>Total</th></tr></thead><tbody>`+
+  $('#mx').innerHTML=`<table class="mx"><thead><tr><th class="l">Departments by final ${S.seasonal?'season-aware ':''}band (4-month)${lfText()?' · '+h(lfText()):''}</th>${bands.map(b=>`<th title="${b?`Departments whose 4-month STR days round to ${b} (nearest 30, kept within 60–180; off-season rows start at 90). Click a count to list them.`:'No band: no store has both a plan and fixtures.'}">${b?b+' days':'No band'}</th>`).join('')}<th>Total</th></tr></thead><tbody>`+
     ['MENS','LADIES','KIDS',''].map(d=>`<tr${d?'':' class="tot"'}><td class="l"><b>${d||'All'}</b></td>`+bands.map(b=>{const k=n(d,b);
       return `<td>${k?`<button class="mxb${a&&a.d===d&&a.b===b?' on':''}" data-mx="${d}|${b??''}" title="Show the ${k} ${d||''} departments in the ${b?b+'-day':'no'} band">${k}</button>`:'<span class="note">0</span>'}</td>`;}).join('')+
       `<td>${R.rows.filter(r=>!d||r.division===d).length}</td></tr>`).join('')+'</tbody></table>';
@@ -543,16 +543,16 @@ document.addEventListener('click',async e=>{
   const lv=e.target.closest('[data-lv]');if(lv){await openTo(+lv.dataset.lv);return;}
   const rb=e.target.closest('[data-rb]');if(rb){if(!confirm('Roll back the latest '+(rb.dataset.rb==='fixture'?'fixture plan':'sales plan')+' upload? The one before it (if any) is used again.'))return;
     try{await post('api/rollback',{kind:rb.dataset.rb});dirty();S.dept=null;$('#dd').hidden=true;await load();}catch(err){alert(err.message);}return;}
-  if(e.target.id==='clr'){S.grid.roll={sort:null,filt:{}};S.mx=null;S.lf={};S.se='';$('#f-se').value='';await loadRoll();return;}
+  if(e.target.id==='clr'){S.grid.roll={sort:null,filt:{}};S.mx=null;S.lf={};await loadRoll();return;}
   const lfx=e.target.closest('[data-lf]');if(lfx){await openLayerFilter(lfx.dataset.lf,lfx);return;}
   const mx=e.target.closest('[data-mx]');
   if(mx){const [d,b]=mx.dataset.mx.split('|'),g=S.grid.roll;
-    if(!S.prev)S.prev={layers:[...S.layers],open:[...S.open],lf:Object.fromEntries(Object.entries(S.lf).map(([k,v])=>[k,new Set(v)])),se:S.se,grid:g?{sort:g.sort,filt:{...g.filt}}:null};   // what Revert goes back to
+    if(!S.prev)S.prev={layers:[...S.layers],open:[...S.open],lf:Object.fromEntries(Object.entries(S.lf).map(([k,v])=>[k,new Set(v)])),grid:g?{sort:g.sort,filt:{...g.filt}}:null};   // what Revert goes back to
     S.mx={d,b:b===''?null:+b};if(d)S.lf.division=new Set([d]);else delete S.lf.division;
     S.grid.roll={sort:{id:'days:t',dir:-1},filt:{'band:t':new Set([b===''?'(blank)':b+' days'])}};
     setLayers(['department',...S.layers.filter(k=>!['department','division','tag','attribute'].includes(k))]);
     $('#t').closest('.tw').scrollIntoView({behavior:'smooth',block:'nearest'});return;}
-  if(e.target.id==='rev'&&S.prev){const p=S.prev;S.prev=null;S.mx=null;S.lf=p.lf;S.se=p.se;$('#f-se').value=p.se;
+  if(e.target.id==='rev'&&S.prev){const p=S.prev;S.prev=null;S.mx=null;S.lf=p.lf;
     S.layers=p.layers;S.open=new Set(p.open);S.kids={};S.grid.roll=p.grid||{sort:null,filt:{}};await loadRoll();return;}
   if(e.target.id==='dd-x'){S.dept=null;$('#dd').hidden=true;renderRoll();return;}
   if(e.target.id==='dd-reset'){if(!confirm(`Reset ${S.dept} to the fixture file? Its edited fixtures and qty per fixture are dropped (the edit history is kept).`))return;
@@ -571,7 +571,6 @@ document.addEventListener('input',e=>{if(e.target.matches('.pf-q')){const q=e.ta
 document.addEventListener('change',async e=>{
   const t=e.target;
   if(t.closest('#pop .pf-l')){pfApply();return;}
-  if(t.id==='f-se'){S.se=t.value;await loadRoll();return;}
   if(t.id==='f-season'){S.seasonal=t.checked;renderRoll();if(S.cells&&!$('#dd').hidden)renderCells();return;}
   if(t.matches('input[type=file]')){const f=t.files[0];if(f)upload(t.closest('[data-kind]').dataset.kind,f);t.value='';return;}
   if(t.matches('#dt input[type=number]')){const v=t.value;if(v===''||+v<0)return;

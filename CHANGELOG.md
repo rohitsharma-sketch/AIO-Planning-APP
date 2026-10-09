@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: Season chip in the Rows bar
+- **Asked (user):** "add a season filter chip to the Rows bar too"
+- Season (Peak / Normal / Off - each cluster's own, festivals included) is now a chip like Cluster / Department / Store: drag it in as a layer (e.g. Season > Cluster > Department: normal 97.8 lakh pcs planned, off 15.1 lakh at band 90, peak 28.2 lakh) and its search filter picks one or more seasons. The separate season dropdown is gone - one place to filter. Server: season is a rollup layer / values key / Excel drill-down column.
+
 ### STR Forecaster: search filter on every hierarchy; dynamic cluster season tags
 - **Asked (user):** "INDIVIDIUAL SEARCH FILTER MISSING ADD THAT FOR EVERY HIERARCHY" and "I see generic peak tags in 100/ 100 department clusters. I want the tags to be dynamic which in terms will point to the cluster's performance and thierrespective festive period and their performacne if it was peak or not"
 - Every hierarchy chip in the Rows bar (Cluster, Department, Store, Division, Tag, Attribute - shown as a layer or not) has a search filter: search box, All / None, multi-select. Filters apply to every level, the All row, the band table and the Excel; the chip shows how many values are picked; "Clear sort & filters" resets them. The separate division / cluster dropdowns and the top-layer header filter are gone (one place to filter). Server: filters take several values; GET /api/values?key= lists a hierarchy's values.

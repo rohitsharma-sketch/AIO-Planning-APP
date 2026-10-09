@@ -151,9 +151,9 @@ def _safe(v):
     return "'" + v if isinstance(v, str) and v[:1] in ("=", "+", "-", "@") else v
 
 
-LAYER_KEYS = ("division", "department", "cluster", "store", "tag", "attribute")
+LAYER_KEYS = ("division", "department", "cluster", "store", "tag", "attribute", "season")
 LAYER_LABEL = {"division": "Division", "department": "Department", "cluster": "Cluster", "store": "Store", "tag": "Tag",
-               "attribute": "Attribute"}
+               "attribute": "Attribute", "season": "Season"}
 
 
 def _cells_wide(c, pre):
@@ -276,7 +276,7 @@ class H(BaseHTTPRequestHandler):
             if path == "/api/rollup":
                 # any layer path, e.g. "division,department,cluster" (user, 9 Oct: "drag and drop function which drills to
                 # any level for STR similar to AOP forecaster output model"); a department carries its one division along
-                by = [k for k in q.get("by", ["division"])[0].split(",") if k in ("division", "department", "cluster", "store") + TAG_KEYS] or ["division"]
+                by = [k for k in q.get("by", ["division"])[0].split(",") if k in ("division", "department", "cluster", "store", "season") + TAG_KEYS] or ["division"]
                 if "department" in by and "division" not in by:
                     by.insert(by.index("department"), "division")
                 d = _with_tags(df) if any(k in by or q.get(k) for k in TAG_KEYS) else df
