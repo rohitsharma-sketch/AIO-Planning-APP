@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### AOP Forecaster: department split on Actual Sales Cont %
+- **Asked (user):** "In the AOP Forecaster : change the cont% to break AOP into Department to Actual Sales Cont % instead of RE-indexed Cont %".
+- Output's Department layer / filter now splits each store x division's Base and Forecast by the department's share of its ACTUAL LY sales in the same month last year (`/api/config/dept-mix?sale_type=actual`, calendar.sales_snapshots actual_dept), instead of the re-indexed share. Fallbacks unchanged (store mix over closed months; new stores = division network mix). Eff Sales / Eff Cont% / Eff Gr% and the "= Calendar total" rows stay calendarised (re-indexed) so they still match the Calendar. Division totals unchanged (checked: split adds back to 100%; e.g. AMG MENS R/N T-shirt Mar 16.8% actual vs 16.4% re-indexed). OutputTab.jsx splitByDept(leaves, mix, shareMix); dist rebuilt.
+
 ### STR Forecaster: STR band (60-180 days)
 - **Asked (user):** "give me STR days according to the nearest round ranging from a store base minimum to 60 till 180 max after the actual STR is calculated."
 - After the actual STR days are worked out, Band = the days rounded to the nearest 30 (half rounds up), kept between 60 and 180 (54 -> 60, 75 -> 90, 104 -> 90, 250 -> 180); per store x department x month and for every roll-up from its own actual days. New Band column (main table and department detail, actual and LY days alongside); Excel "STR band (days)" / "STR band". Step and limits = BAND_STEP / BAND_MIN / BAND_MAX in str_engine.py.

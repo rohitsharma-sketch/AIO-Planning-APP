@@ -194,8 +194,10 @@ function cellsFor(n, g, parent, effIdx) {
 }
 
 // Department split (user, 2026-10-08, "add the department filter field in the output tab"): each store x division
-// row's Base and Forecast are split over its departments by their share of that store-division's calendarised LY
-// sales in the same month (dept-mix); the department's Eff Sales are its own calendarised sales. A month without closed
+// row's Base and Forecast are split over its departments by their share of that store-division's ACTUAL LY sales in the
+// same month (user, 2026-10-09: "change the cont% to break AOP into Department to Actual Sales Cont % instead of
+// RE-indexed Cont %" - dept-mix?sale_type=actual); the department's Eff Sales stay its own calendarised (reindexed)
+// sales, so Eff still matches the Calendar. A month without closed
 // LY data uses the store-division's mix over the months that have it; a store with no LY sales (new stores) uses the
 // division's network-wide mix. Shares add to 100%, so every division's Base / Forecast is kept exactly.
 function deptShares(src) {
@@ -209,22 +211,25 @@ function deptShares(src) {
   if (ytdTot <= 0) return null
   return Object.fromEntries(depts.map(dp => [dp, tot.map((t, i) => (t > 0 ? Math.max(src[dp][i] || 0, 0) / t : ytd[dp] / ytdTot))]))
 }
-export function splitByDept(leaves, mix) {
+export function splitByDept(leaves, mix, shareMix = mix) {
   const net = {}
-  for (const divs of Object.values(mix)) for (const [div, depts] of Object.entries(divs)) for (const [dp, v] of Object.entries(depts)) {
+  for (const divs of Object.values(shareMix)) for (const [div, depts] of Object.entries(divs)) for (const [dp, v] of Object.entries(depts)) {
     const a = ((net[div] ??= {})[dp] ??= new Array(13).fill(0))
     v.forEach((x, i) => { if (x > 0) a[i] += x })
   }
   const netShares = Object.fromEntries(Object.entries(net).map(([div, src]) => [div, deptShares(src)]))
   const zero = new Array(13).fill(0), out = []
   for (const r of leaves) {
-    const own = mix[String(r.Store).trim().toUpperCase()]?.[r.Division]
-    const ownShares = own && deptShares(own)
-    const shares = ownShares || netShares[r.Division]
+    const st = String(r.Store).trim().toUpperCase()
+    const own = mix[st]?.[r.Division], shOwn = shareMix[st]?.[r.Division]
+    const shares = (shOwn && deptShares(shOwn)) || netShares[r.Division]
     if (!shares) { out.push({ ...r, Department: '(no LY mix)', e: zero }); continue }
-    for (const [dp, sh] of Object.entries(shares))
+    // every department with a share or with Eff Sales, so Base / Fcst and Eff each still add up to the store-division
+    for (const dp of new Set([...Object.keys(shares), ...Object.keys(own || {})])) {
+      const sh = shares[dp] || zero
       out.push({ ...r, Department: dp, m: r.m.map((x, i) => x * sh[i]), mb: r.mb.map((x, i) => x * sh[i]),
-                 e: ownShares ? own[dp].map(x => x || 0) : zero })
+                 e: own?.[dp] ? own[dp].map(x => x || 0) : zero })
+    }
   }
   return out
 }
@@ -261,8 +266,13 @@ export default function OutputTab({ sessionId, runKey }) {
   // Calendarised LY sales per store x division x department (dept-mix, the Calendar's reindexed department snapshot):
   // Eff Sales, and the department split
   const [mix, setMix] = useState(null)
+  const [mixA, setMixA] = useState(null)   // actual LY sales: the department cont % for the split
   useEffect(() => {
-    setMix(null)
+    setMix(null); setMixA(null)
+    fetch(apiUrl('/api/config/dept-mix?sale_type=actual'))
+      .then(r => r.json())
+      .then(j => setMixA(j.ok ? j : { error: j.reason || j.detail || 'No actual department sales' }))
+      .catch(e => setMixA({ error: e.message }))
     fetch(apiUrl('/api/config/dept-mix?sale_type=reindexed'))
       .then(r => r.json())
       .then(j => setMix(j.ok ? j : { error: j.reason || j.detail || 'No calendarised sales' }))
@@ -303,17 +313,17 @@ export default function OutputTab({ sessionId, runKey }) {
   const leaves   = useMemo(() => {                                                       // ₹ Lakhs
     const ls = (rows || []).map(r => toLeaf(r, 1))
     if (!mix?.mix) return ls
-    return deptOn ? splitByDept(ls, mix.mix) : withEff(ls, mix.mix)
-  }, [rows, mix, deptOn])
+    return deptOn ? splitByDept(ls, mix.mix, mixA?.mix || mix.mix) : withEff(ls, mix.mix)
+  }, [rows, mix, mixA, deptOn])
   const options  = useMemo(() => {
     const o = dimOptions(leaves, LEVEL_KEYS), out = {}
     for (const k of LEVEL_KEYS) out[k] = o[k].map(x => x.value).filter(v => v != null && v !== '' && v !== '—')
     // departments listed from the calendarised sales (for the divisions shown), even before the split is on
     const divs = new Set(out.Division), deps = new Set()
-    for (const sd of Object.values(mix?.mix || {})) for (const [dv, dps] of Object.entries(sd)) if (divs.has(dv)) Object.keys(dps).forEach(x => deps.add(x))
+    for (const sd of [...Object.values(mix?.mix || {}), ...Object.values(mixA?.mix || {})]) for (const [dv, dps] of Object.entries(sd)) if (divs.has(dv)) Object.keys(dps).forEach(x => deps.add(x))
     out.Department = [...deps].sort()
     return out
-  }, [leaves, mix])
+  }, [leaves, mix, mixA])
   const filtered = useMemo(() => filterLeaves(leaves, { dimF: d.dimF, idx: SEL_IDX, keys: deptOn ? KEYS : LEVEL_KEYS }), [leaves, d.dimF, SEL_IDX, deptOn])
 
   // Column groups: Mar'27, then quarter bands (months, or one column when folded), then Total
@@ -488,7 +498,7 @@ export default function OutputTab({ sessionId, runKey }) {
   if (loading) return <div className="out-loading">Loading detail data…</div>
   if (error)   return <div className="out-error">Error: {error}</div>
   if (!rows)   return null
-  if (!mix) return <div className="out-loading">Loading calendarised sales…</div>
+  if (!mix || (deptOn && !mixA)) return <div className="out-loading">Loading calendarised sales…</div>
 
   return (
     <div className="out-wrap out-drill">
@@ -588,7 +598,9 @@ export default function OutputTab({ sessionId, runKey }) {
           : <div className="pv-foot">
               Eff Sales = the Calendar's calendarised (reindexed) LY sales - the same month figures as its Month Wise Matrix, for the five planning divisions
               (DND / non-trading left out - shown under Grand total as "+ Not in plan", so "= Calendar total" matches the Calendar); '—' = LY month not closed yet. Eff Cont% = share of the row above; Eff Gr% = Fcst vs Eff Sales.
-              {deptOn && ' Department rows: Base and Fcst split by the department\'s share of its store-division\'s Eff Sales in that month (store mix over the closed months where a month has none; new stores use the division\'s network mix).'}
+              {deptOn && (mixA?.mix
+                ? ' Department rows: Base and Fcst split by the department\'s share of its store-division\'s ACTUAL LY sales in the same month last year (Actual Sales Cont %; store mix over the closed months where a month has none; new stores use the division\'s network mix); each department\'s Eff Sales stay calendarised.'
+                : ` Department rows: actual department sales unavailable (${mixA?.error || 'not loaded'}) - split by the calendarised Eff Sales share instead.`)}
               {' '}Calendarised sales as of {new Date(mix.computedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}.
             </div>}
         {VIS.length < MONTHS.length && <div className="pv-foot">{monthSpan(VIS)} shown · {monthsPicked ? 'months as picked in Review' : 'later months appear as their base month closes'}</div>}
