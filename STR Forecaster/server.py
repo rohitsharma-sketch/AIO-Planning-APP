@@ -122,9 +122,9 @@ def _with_tags(df):
 
 def _filter(df, q):
     for k in ("division", "cluster", "department", "store", "season") + TAG_KEYS:
-        v = q.get(k, [""])[0]
+        v = [x for x in q.get(k, []) if x]   # one or several values (repeated params) - the per-layer search filters
         if v:
-            df = df[df[k] == v]
+            df = df[df[k].isin(v)]
     return df
 
 
@@ -158,7 +158,8 @@ LAYER_LABEL = {"division": "Division", "department": "Department", "cluster": "C
 
 def _cells_wide(c, pre):
     """one period's figures as Excel columns"""
-    return {f"{pre} season": c["season"], f"{pre} season index": c["season_idx"], f"{pre} STR band": c["band"],
+    return {f"{pre} season": c["season"], f"{pre} season index (vs window)": c["season_idx"], f"{pre} year index": c.get("season_year"),
+            f"{pre} share of plan in festival months": c.get("fest_share"), f"{pre} STR band": c["band"],
             f"{pre} base band (60-180)": c["base_band"], f"{pre} STR days": c["days"], f"{pre} LY days": c["ly_days"],
             f"{pre} plan qty": c["qty"], f"{pre} MDQ": c["mdq"], f"{pre} LY qty": c["ly_qty"], f"{pre} plan Rs": c["plan_rs"],
             f"{pre} fixtures": c["fixtures"], f"{pre} max STR %": c["str"], f"{pre} LY STR %": c["ly_str"]}
@@ -188,7 +189,8 @@ def workbook(df, months, has_plan, layers, info, filters):
         "LY days = MDQ (file) / LY qty per day": ly_days,
         "season base index (festival-free, cluster)": df.season_base, "festival days (store calendar)": df.fest_days,
         "festivals": df.festivals, "festival lift (cluster x dept, Mar-Jun)": df.fest_lift,
-        "season index = base x (1 + fest days / days x (lift - 1))": df.season_idx, "season": df.season})
+        "year index = base x (1 + fest days / days x (lift - 1))": df.season_year_idx,
+        "season index = year index / cluster x dept window average": df.season_idx, "season": df.season})
     d["STR band (season)"] = [se.str_band(x, sea) for x, sea in zip(days, df.season)]
     d["base band (60-180)"] = [se.str_band(x) for x in days]
     d["LY band (season)"] = [se.str_band(x, sea) for x, sea in zip(ly_days, df.season)]
@@ -202,7 +204,7 @@ def workbook(df, months, has_plan, layers, info, filters):
               ("Stores", f"{df.store.nunique()} (every month in both the fixture plan and the sales plan)"),
               ("STR days", "MDQ / (planned qty / days in month); 4-month = average MDQ / (planned qty / days in the months); only rows with both a plan and fixtures"),
               ("LY days", "the file MDQ / (last year's qty / days in that month), store-months that sold last year"),
-              ("Season", f"the cluster's festival-free sales curve (day-wise sales 2022-25) raised by the month's festival days at the cluster x department festival lift; peak >= {se.SEASON_CUT[0]}, off <= {se.SEASON_CUT[1]}; built {info.get('season_built')}"),
+              ("Season", f"year index = the cluster's festival-free sales curve (day-wise sales 2022-25: the month vs the department's average month of the year) raised by the month's festival days at the cluster x department festival lift; season index = that month vs the same cluster x department's average month of the plan window ({', '.join(str(m) for m in months)}), so a tag shows which months stand out for that cluster; peak >= {se.SEASON_CUT[0]}, off <= {se.SEASON_CUT[1]}; built {info.get('season_built')}"),
               ("Band", f"STR days rounded to the nearest 30, kept inside the season's limits ({bands}); never under {se.BAND_MIN} or over {se.BAND_MAX}"),
               ("Roll-ups", "plan qty and MDQ are summed first, then the days; a group's season = its departments' season index weighted by plan qty"),
               ("Sheets", "STR detail = every store x department x month; Drill-down = the page's row layers fully opened, 4-month and each month; By month = long format per level")]
@@ -305,7 +307,8 @@ class H(BaseHTTPRequestHandler):
                          "ly_days": se.days_of(r.ly_q, r.mdq_base, ldim) if r.ly_known else None, "edited": r.edited}
                     sea = se.season_of(r.season_idx)
                     c.update(season=sea, season_idx=r.season_idx, band=se.str_band(c["days"], sea), base_band=se.str_band(c["days"]),
-                             season_base=r.season_base, fest_days=r.fest_days, festivals=r.festivals, fest_lift=r.fest_lift)
+                             season_base=r.season_base, fest_days=r.fest_days, festivals=r.festivals, fest_lift=r.fest_lift,
+                             season_year=r.season_year_idx, fest_share=1.0 if r.fest_days > 0 else 0.0)
                     by_store.setdefault(r.store, [None] * len(months))[mi[r.month]] = c
                 cl = dict(zip(d.store, d.cluster))
                 rows = [{"store": st, "cluster": cl.get(st), "months": by_store[st]} for st in sorted(by_store)]
@@ -325,6 +328,12 @@ class H(BaseHTTPRequestHandler):
                                  "updated_by": own.get("updated_by"), "updated_at": own.get("updated_at")})
                 return self._send(200, {"rows": rows, "attributes": sorted(set(master.values()) | {v["attribute"] for v in t.values() if v.get("attribute")}),
                                         "not_in_plan": sorted(set(t) - {str(x).upper() for x in g.department})})
+            if path == "/api/values":   # every value of one hierarchy, for its search filter
+                k = q.get("key", [""])[0]
+                if k not in LAYER_KEYS:
+                    return self._send(400, {"error": "unknown key"})
+                d = _with_tags(df) if k in TAG_KEYS else df
+                return self._send(200, {"key": k, "values": sorted(str(x) for x in d[k].dropna().unique())})
             if path == "/api/tags/download":
                 t, master = se.tags()
                 g = df.drop_duplicates(["division", "department"])[["division", "department"]].sort_values(["division", "department"])
@@ -350,7 +359,7 @@ class H(BaseHTTPRequestHandler):
             if path == "/api/download":
                 name = f"STR Forecast - {time.strftime('%d.%m.%y')}.xlsx"
                 lay = [k for k in q.get("layers", ["cluster,department,store"])[0].split(",") if k in LAYER_KEYS] or ["cluster", "department", "store"]
-                fl = "; ".join(f"{k} = {q[k][0]}" for k in ("division", "cluster", "season", "tag", "attribute") if q.get(k, [""])[0])
+                fl = "; ".join(f"{k} = {', '.join(q[k])}" for k in ("division", "cluster", "department", "store", "season", "tag", "attribute") if q.get(k))
                 d = _with_tags(df) if any(q.get(k) for k in TAG_KEYS) else df
                 return self._send(200, workbook(_filter(d, q), months, bool(info.get("sales_plan")), lay, info, fl),
                                   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

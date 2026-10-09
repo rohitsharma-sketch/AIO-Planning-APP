@@ -514,6 +514,13 @@ def build():
     df["season_idx"] = df.season_base * (1 + df.fest_days / df.month.dt.days_in_month * (df.fest_lift - 1))
     no_season = sorted(df.loc[df.season_base.isna(), "department"].unique().tolist())
     df["season_idx"] = df.season_idx.fillna(1.0)   # no season history under this name: treated as a normal month
+    # user, 9 Oct: "I see generic peak tags ... I want the tags to be dynamic which ... point to the cluster's performance and
+    # their respective festive period": against the whole year every summer department is peak in Mar-Jun, so the tag
+    # compares a month with the same cluster x department's average month of the plan window (festivals included) -
+    # peak = it stands out inside the window, off = it lags. The whole-year index stays as season_year_idx.
+    df["season_year_idx"] = df.season_idx
+    wm = df.groupby(["cluster", "department"]).season_year_idx.transform("mean")
+    df["season_idx"] = (df.season_year_idx / wm.where(wm > 0)).fillna(1.0)   # no sales history in the window: normal
     df["season"] = df.season_idx.map(season_of)
     fests = {}
     for (c, m), g in df.loc[df.fest_days > 0, ["cluster", "month", "festivals"]].drop_duplicates().groupby(["cluster", "month"]):
@@ -633,8 +640,10 @@ def rollup(df, by, months, has_plan=True):
     a["fixtures"], a["plan_rs"], a["ed"] = df.fixtures.values, df.plan_rs.values, (df.edited != "").values.astype(int)
     # season of a group = its departments' season index weighted by planned qty
     a["sq"] = np.where(both, df.plan_qty * (df["season_idx"] if "season_idx" in df else 1.0), 0.0)
+    a["sy"] = np.where(both, df.plan_qty * (df["season_year_idx"] if "season_year_idx" in df else 1.0), 0.0)
+    a["fq"] = np.where(both & (df["fest_days"] > 0 if "fest_days" in df else False), df.plan_qty, 0.0)   # planned qty in festival months
     a = a[a.mi >= 0]
-    V = ["q", "md", "nb", "lq", "lmd", "nl", "fixtures", "plan_rs", "ed", "sq"]
+    V = ["q", "md", "nb", "lq", "lmd", "nl", "fixtures", "plan_rs", "ed", "sq", "sy", "fq"]
     g = a.groupby(by + ["mi"], dropna=False, sort=True)[V].sum()
     dim = [m.days_in_month for m in months]
     ldim = [(m - 12).days_in_month for m in months]
@@ -647,7 +656,8 @@ def rollup(df, by, months, has_plan=True):
         sea = season_of(sidx)
         return {"qty": float(s[0]), "mdq": float(s[1]), "str": float(str_of(s[0], s[1])) if s[2] else None,
                 "days": days, "ly_days": ly_days, "band": str_band(days, sea), "ly_band": str_band(ly_days, sea),
-                "base_band": str_band(days), "ly_base_band": str_band(ly_days), "season": sea, "season_idx": sidx, "sq": float(s[9]),
+                "base_band": str_band(days), "ly_base_band": str_band(ly_days), "season": sea, "season_idx": sidx, "sq": float(s[9]), "sy": float(s[10]), "fq": float(s[11]),
+                "season_year": s[10] / s[0] if sidx is not None else None, "fest_share": s[11] / s[0] if sidx is not None else None,
                 "ly_qty": float(s[3]), "ly_mdq": float(s[4]), "ly_str": float(str_of(s[3], s[4])) if s[5] else None,
                 "fixtures": float(s[6]), "plan_rs": float(s[7]), "rows": int(s[2]), "ly_rows": int(s[5]),
                 "n_days": nd if nm else 0, "n_months": nm, "ly_n_days": lnd if lnm else 0, "ly_n_months": lnm}

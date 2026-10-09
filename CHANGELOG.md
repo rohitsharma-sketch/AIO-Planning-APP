@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: search filter on every hierarchy; dynamic cluster season tags
+- **Asked (user):** "INDIVIDIUAL SEARCH FILTER MISSING ADD THAT FOR EVERY HIERARCHY" and "I see generic peak tags in 100/ 100 department clusters. I want the tags to be dynamic which in terms will point to the cluster's performance and thierrespective festive period and their performacne if it was peak or not"
+- Every hierarchy chip in the Rows bar (Cluster, Department, Store, Division, Tag, Attribute - shown as a layer or not) has a search filter: search box, All / None, multi-select. Filters apply to every level, the All row, the band table and the Excel; the chip shows how many values are picked; "Clear sort & filters" resets them. The separate division / cluster dropdowns and the top-layer header filter are gone (one place to filter). Server: filters take several values; GET /api/values?key= lists a hierarchy's values.
+- Season tags: against the whole year every summer department was "Peak" in Mar-Jun. The tag now compares a month with the same cluster x department's average month of the plan window (Mar-Jun), festivals included, so it shows which months stand out for that cluster: across cluster x department x month 1,951 normal / 944 off / 766 peak (was nearly all peak). "Peak ✦" = festival-driven (most of the planned qty in months with festival days). Hover gives the window multiple and the whole-year multiple (e.g. "Peak (festival): sells 1.33x its average month of Mar'27-Jun'27 ... - 2.90x its average month of the whole year"). Off months keep the 90-day band floor. Excel: year index and window index columns.
+
 ### STR Forecaster: peak keeps the 60-180 range; hover text explains every band
 - **Asked (user):** "make ranges fall under 60 to 180 scale" (chose "Peak 60-180, Off 90-180") and "if any reasonable hover message can be there to make others understand of the choice you took based on data"
 - Season band limits: peak 60-180 and normal 60-180 (the base rule), off 90-180. An overstocked peak row now shows its real band (e.g. 169 days -> 180, was capped at 90). Department counts by 4-month band: 60:65, 90:19, 120:9, 150:5, 180:13, no band 4.
