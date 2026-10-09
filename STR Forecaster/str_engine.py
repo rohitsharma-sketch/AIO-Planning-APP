@@ -47,7 +47,7 @@ def _sheet_month(name):
 def read_fixture(data):
     """Fixture workbook (one sheet per month) -> (frame month/store/division/department/fixtures/mdq, notes).
     The header row is found by its STORE cell (Jun'26 has a blank first row); the month comes from a MONTH column or
-    else the sheet name. TABLE + NON_TABLE rows of a store x department are summed."""
+    else the sheet name. The display type (UDF-06: TABLE / NON_TABLE) is kept per row ('' when the file has none)."""
     xl = pd.ExcelFile(io.BytesIO(data))
     frames, notes = [], []
     for sh in xl.sheet_names:
@@ -76,7 +76,9 @@ def read_fixture(data):
             "month": month, "store": df["STORE"].astype(str).str.strip().str.upper(),
             "division": df["DIVISION"].map(plan_division), "department": df["DEPARTMENT"].astype(str).str.strip(),
             "fixtures": pd.to_numeric(df[fix], errors="coerce").fillna(0.0),
-            "mdq": pd.to_numeric(df["MDQ"], errors="coerce").fillna(0.0)}))
+            "mdq": pd.to_numeric(df["MDQ"], errors="coerce").fillna(0.0),
+            "display": _display(df[next(c for c in ("UDF-06", "UDF06", "DISPLAY TYPE") if c in df.columns)])
+            if any(c in df.columns for c in ("UDF-06", "UDF06", "DISPLAY TYPE")) else ""}))
     if not frames:
         raise ValueError("No usable sheet: each month needs STORE, DIVISION, DEPARTMENT, a fixture column and MDQ. " + " ".join(notes))
     f = pd.concat(frames, ignore_index=True)
@@ -84,7 +86,7 @@ def read_fixture(data):
     if len(left_out):
         notes.append(f"{left_out.department.nunique()} GM / other departments left out (no Capacity / MDQ) - MENS, LADIES, KIDS only")
     f = f[f.division.isin(DIVS)]
-    g = f.groupby(["month", "store", "division", "department"], as_index=False)[["fixtures", "mdq"]].sum()
+    g = f.groupby(["month", "store", "division", "department", "display"], as_index=False)[["fixtures", "mdq"]].sum()
     return g[(g.fixtures > 0) | (g.mdq > 0)].reset_index(drop=True), notes
 
 
@@ -95,7 +97,7 @@ LAKH = 1e5
 def read_sales_plan(data, name=""):
     """Store-level sales plan (user, 9 Oct: "MAMJ'26 - Sales Plan.xlsx") -> (frame month/store/division/department/
     plan_rs/plan_qty, notes). Columns STORE_NAME (or STORE), DIVISION, DEPARTMENT and one "<Mon>'<yy> _V" (Rs lakh) and
-    "<Mon>'<yy> _Q" (pieces) pair per month; MRP / ATTRIBUTE / TABLE-NON_TABLE rows of a store x department are summed;
+    "<Mon>'<yy> _Q" (pieces) pair per month; MRP / ATTRIBUTE rows of a store x department x article x display type (UDF06) are summed;
     totals such as "MAMJ'26_V" are not months and are ignored."""
     xl = pd.ExcelFile(io.BytesIO(data), engine="pyxlsb" if name.lower().endswith(".xlsb") else None)
     frames, notes = [], []
@@ -127,6 +129,8 @@ def read_sales_plan(data, name=""):
         ac = next((c for k, c in up.items() if "ARTICLE" in k), None)
         if ac is not None:   # ARTICLE NAME, e.g. "02-ECO [KB02]"
             base["article"] = df[ac].map(lambda v: "" if v is None or v != v else " ".join(str(v).split()))
+        dc = next((c for k, c in up.items() if k in ("UDF06", "UDF-06", "DISPLAY TYPE")), None)
+        base["display"] = _display(df[dc]) if dc is not None else ""
         for pm, cols in sorted(months.items()):
             v = pd.to_numeric(df[cols["V"]], errors="coerce").fillna(0.0) * LAKH if "V" in cols else 0.0
             q = pd.to_numeric(df[cols["Q"]], errors="coerce").fillna(0.0) if "Q" in cols else np.nan
@@ -138,7 +142,7 @@ def read_sales_plan(data, name=""):
     if len(out):
         notes.append(f"{out.department.nunique()} departments outside MENS / LADIES / KIDS left out")
     f = f[f.division.isin(DIVS) & f.department.ne("") & f.store.ne("")]
-    g = f.groupby(["month", "store", "division", "department"] + (["article"] if "article" in f else []), as_index=False)[["plan_rs", "plan_qty"]].sum(min_count=1)
+    g = f.groupby(["month", "store", "division", "department", "display"] + (["article"] if "article" in f else []), as_index=False)[["plan_rs", "plan_qty"]].sum(min_count=1)
     g = g[(g.plan_rs > 0) | (g.plan_qty > 0)].reset_index(drop=True)
     notes.append(f"value read as Rs lakh: Rs {g.plan_rs.sum() / 1e7:,.1f} Cr, {g.plan_qty.sum():,.0f} pcs over {g.store.nunique()} stores")
     return g, notes
@@ -163,6 +167,7 @@ def save_upload(kind, file_name, frame, shift, user):
     """store one upload (forecast month = file month + shift); returns the upload id"""
     table = {"fixture": "planning_inputs.str_fixture_rows", "sales_plan": "planning_inputs.str_plan_rows"}[kind]
     vals = {"fixture": ["fixtures", "mdq"], "sales_plan": ["plan_rs", "plan_qty"] + (["article"] if "article" in frame else [])}[kind]
+    vals += ["display"] if "display" in frame else []
     fr = frame.copy()
     fr["month"] = [(m + shift).to_timestamp().date() for m in fr["month"]]
     months = ",".join(sorted({str(m)[:7] for m in fr["month"]}))
@@ -286,7 +291,7 @@ def split_depts(f, cols, ly=None):
     parts = parts[(parts[list(cols)].fillna(0) != 0).any(axis=1)]   # a part with no share in this store-month: no row
     f = pd.concat([f[~old], parts.drop(columns="old")], ignore_index=True)
     cols = list(cols)
-    return f.groupby(["month", "store", "division", "department"] + (["article"] if "article" in f else []), as_index=False)[cols].sum(min_count=1)
+    return f.groupby(["month", "store", "division", "department"] + [c for c in ("article", "display") if c in f], as_index=False)[cols].sum(min_count=1)
 
 
 def _period(col):
@@ -456,9 +461,9 @@ def build(articles=False):
         fu, pu = active_upload(s, "fixture"), active_upload(s, "sales_plan")
         if not fu:
             return None, {"fixture": None, "sales_plan": pu}
-        fx = _frame(s, "SELECT month, store, division, department, fixtures, mdq FROM planning_inputs.str_fixture_rows WHERE upload_id = :i",
+        fx = _frame(s, "SELECT month, store, division, department, fixtures, mdq, display FROM planning_inputs.str_fixture_rows WHERE upload_id = :i",
                     {"i": fu["id"]}, key=("fx", fu["id"]))
-        pl = _frame(s, "SELECT month, store, division, department, plan_rs, plan_qty AS plan_qty_file, coalesce(article, '') AS article FROM planning_inputs.str_plan_rows WHERE upload_id = :i",
+        pl = _frame(s, "SELECT month, store, division, department, plan_rs, plan_qty AS plan_qty_file, coalesce(article, '') AS article, display FROM planning_inputs.str_plan_rows WHERE upload_id = :i",
                     {"i": pu["id"]}, key=("pl", pu["id"])) if pu else pd.DataFrame()
         ed = _frame(s, """SELECT DISTINCT ON (field, department, month, store) field, department, month, store, value
                           FROM planning_inputs.str_edits ORDER BY field, department, month, store, edited_at DESC, id DESC""")
@@ -473,6 +478,9 @@ def build(articles=False):
     split = sorted((set(fx.department) | (set(pl.department) if len(pl) else set())) & set(DEPT_SPLITS))
     ly_sh = lys.assign(month=_period(lys.month) + 12) if len(lys) else None   # LY sales on their forecast month
     fx = split_depts(fx.astype({"fixtures": float, "mdq": float}), {"fixtures": "sl_q", "mdq": "sl_q"}, ly_sh)
+    fxd = fx   # by display type (display_frame); the department frame sums it
+    fx = fx.groupby(["month", "store", "division", "department"], as_index=False)[["fixtures", "mdq"]].sum()
+    pld = pd.DataFrame()
     if len(pl):
         pl["month"] = _period(pl.month)
         pl = pl[pl.month.isin(months)]
@@ -513,6 +521,7 @@ def build(articles=False):
                   "left_out_rs": float(pl.loc[~pl.store.isin(both_), "plan_rs"].sum())}
         fx, pl = fx[fx.store.isin(both_)], pl[pl.store.isin(both_)]
         art = pl[pl.article.ne("")] if "article" in pl else pl.iloc[0:0]
+        pld = pl.groupby(KEY + ["display"], as_index=False)[["plan_rs", "plan_qty_file"]].sum(min_count=1) if "display" in pl else pd.DataFrame()
         pl = pl.groupby(KEY + ["division"], as_index=False)[["plan_rs", "plan_qty_file"]].sum(min_count=1)   # department total
         df = fx.merge(pl, on=KEY, how="outer", suffixes=("", "_p"))
         df["division"] = df["division"].fillna(df.pop("division_p"))
@@ -575,10 +584,52 @@ def build(articles=False):
             "clusters": sorted(df.cluster.unique().tolist()), "season_cut": list(SEASON_CUT), "season_bands": SEASON_BANDS,
             "base_band": [BAND_MIN, BAND_MAX]}
     info["articles"] = int(art.article.nunique()) if len(art) else 0
-    return (df.reset_index(drop=True), info, art) if articles else (df.reset_index(drop=True), info)
+    info["displays"] = sorted(set(fxd.display) - {""})
+    return (df.reset_index(drop=True), info, art, (fxd, pld)) if articles else (df.reset_index(drop=True), info)
 
 
 ART_STOCK, ART_LY = ("fixtures", "fixtures_file", "mdq", "mdq_base"), ("ly_q", "ly_v")
+
+# user, 9 Oct: "Break it further into table and non-tbale" ... "display type": both files carry the display type (fixture
+# UDF-06, sales plan UDF06: TABLE / NON_TABLE); it is kept per row and the department frame splits into it
+DISPLAYS = ("TABLE", "NON_TABLE")
+NO_DISP = "(no display type)"
+
+
+def _display(col):
+    v = col.astype(str).str.strip().str.upper().str.replace(r"[\s-]+", "_", regex=True)
+    return v.where(v.isin(DISPLAYS), "")
+
+
+def display_frame(df, fxd, pld):
+    """the store x department x month frame split to display types: fixtures and MDQ by the display type's share in the
+    fixture plan (its own rows), planned Rs / qty and last year's sales by its share of the sales plan (qty; Rs where
+    the store-month has no qty). A display type with fixtures but no plan (or the reverse) gets a row with that side 0.
+    Department totals unchanged; dept_mdq / dept_q keep the department's figures for the article cap."""
+    base = df.assign(dept_mdq=df.mdq, dept_q=df.plan_qty)
+    if fxd is None or not len(fxd) or fxd.display.eq("").all():
+        return base.assign(display=NO_DISP)
+    f = fxd.groupby(KEY + ["display"])[["fixtures", "mdq"]].sum()
+    p = pld.groupby(KEY + ["display"])[["plan_rs", "plan_qty_file"]].sum() if len(pld) else None
+    j = (f.join(p, how="outer") if p is not None else f).fillna(0.0).reset_index()
+    for c in ("plan_rs", "plan_qty_file"):
+        if c not in j:
+            j[c] = 0.0
+    t = j.groupby(KEY)
+    sh = lambda c: (j[c] / t[c].transform("sum")).where(t[c].transform("sum") > 0)   # noqa: E731
+    j["sh_fx"], j["sh_md"] = sh("fixtures"), sh("mdq")
+    j["sh_pl"] = sh("plan_qty_file").where(t.plan_qty_file.transform("sum") > 0, sh("plan_rs"))
+    j["display"] = j.display.replace("", NO_DISP)
+    out = base.merge(j[KEY + ["display", "sh_fx", "sh_md", "sh_pl"]], on=KEY, how="left")
+    one = out.display.isna()   # no display rows for this store-month: the department as a whole
+    out["display"] = out.display.fillna(NO_DISP)
+    for c, s_ in (("fixtures", "sh_fx"), ("fixtures_file", "sh_fx"), ("mdq", "sh_md"), ("mdq_base", "sh_md"),
+                  ("plan_rs", "sh_pl"), ("plan_qty", "sh_pl"), ("ly_q", "sh_pl"), ("ly_v", "sh_pl")):
+        if c in out:
+            out[c] = out[c] * out[s_].where(~one, 1.0).fillna(0.0)
+    keep = (out[["fixtures", "mdq", "plan_rs", "plan_qty"]].abs().sum(axis=1) > 0) | one
+    return out[keep].drop(columns=["sh_fx", "sh_md", "sh_pl"]).reset_index(drop=True)
+
 NO_ART = "(no article plan)"
 
 
@@ -597,21 +648,27 @@ def article_frame(df, art):
     cluster holds fewer days, never more than the department: stock share = min(store cont, cluster cont)."""
     if not len(art):
         return df.assign(article=NO_ART, cont=1.0, cont_from="no article plan")
-    a = art.groupby(KEY + ["article"], as_index=False)[["plan_rs", "plan_qty_file"]].sum(min_count=1)
-    a["w"] = a.plan_qty_file.fillna(0.0).where(a.groupby(KEY).plan_qty_file.transform("sum") > 0, a.plan_rs)
-    a["cont"] = a.w / a.groupby(KEY).w.transform("sum")
+    # inside a display type when the frame is split to them (an article's plan rows carry their display type)
+    dk = ["display"] if "display" in df and "display" in art else []
+    K = KEY + dk
+    if dk:
+        art = art.assign(display=art.display.replace("", NO_DISP))
+    a = art.groupby(K + ["article"], as_index=False)[["plan_rs", "plan_qty_file"]].sum(min_count=1)
+    a["w"] = a.plan_qty_file.fillna(0.0).where(a.groupby(K).plan_qty_file.transform("sum") > 0, a.plan_rs)
+    a["cont"] = a.w / a.groupby(K).w.transform("sum")
     a = a[a.cont > 0]
     cl = a.store.map(df.drop_duplicates("store").set_index("store").cluster) if "cluster" in df else a.store
-    g, gd = [cl, a.month, a.department, a.article], [cl, a.month, a.department]
+    gd = [cl, a.month, a.department] + [a[c] for c in dk]
+    g = gd + [a.article]
     cq = a.plan_qty_file.fillna(0.0)
     cw = cq.where(cq.groupby(gd).transform("sum") > 0, a.plan_rs.fillna(0.0))   # qty share, Rs where the cluster has no qty
     a["cont_cluster"] = (cw.groupby(g).transform("sum") / cw.groupby(gd).transform("sum")).where(cl.ne("(no AOP cluster)"), a.cont)
-    ch = a.groupby(["month", "department", "article"], as_index=False).w.sum()
-    ch["cont"] = ch.w / ch.groupby(["month", "department"]).w.transform("sum")
-    own = df.merge(a[KEY + ["article", "cont", "cont_cluster", "plan_rs", "plan_qty_file"]].rename(columns={"plan_rs": "a_rs", "plan_qty_file": "a_q"}), on=KEY)
+    ch = a.groupby(["month", "department"] + dk + ["article"], as_index=False).w.sum()
+    ch["cont"] = ch.w / ch.groupby(["month", "department"] + dk).w.transform("sum")
+    own = df.merge(a[K + ["article", "cont", "cont_cluster", "plan_rs", "plan_qty_file"]].rename(columns={"plan_rs": "a_rs", "plan_qty_file": "a_q"}), on=K)
     own["cont_from"] = "store plan"
-    rest = df[~df.set_index(KEY).index.isin(a.set_index(KEY).index.unique())]
-    rest = rest.merge(ch[["month", "department", "article", "cont"]], on=["month", "department"], how="left")
+    rest = df[~df.set_index(K).index.isin(a.set_index(K).index.unique())]
+    rest = rest.merge(ch[["month", "department"] + dk + ["article", "cont"]], on=["month", "department"] + dk, how="left")
     rest["cont_from"] = np.where(rest.article.isna(), "no article plan", "chain plan")
     rest["article"], rest["cont"] = rest.article.fillna(NO_ART), rest.cont.fillna(1.0)
     out = pd.concat([own, rest], ignore_index=True)
@@ -622,6 +679,12 @@ def article_frame(df, art):
             out[c] = out[c] * (out.stock_cont if c in ART_STOCK else out.cont)
     out["plan_rs"] = out.a_rs.where(out.a_rs.notna(), out.plan_rs * out.cont) if "a_rs" in out else out.plan_rs * out.cont
     out["plan_qty"] = out.a_q.where(out.a_q.notna(), out.plan_qty * out.cont) if "a_q" in out else out.plan_qty * out.cont
+    if "dept_mdq" in out:   # never more days than the department in that store and month (a display type can run slower)
+        cap = (out.dept_mdq * out.plan_qty / out.dept_q.where(out.dept_q > 0)).where(out.plan_qty > 0)
+        r = (cap / out.mdq.where(out.mdq > 0)).clip(upper=1.0).fillna(1.0)
+        for c in ART_STOCK:
+            if c in out:
+                out[c] = out[c] * r
     return out.drop(columns=[c for c in ("a_rs", "a_q") if c in out]).reset_index(drop=True)
 
 
@@ -834,4 +897,17 @@ if __name__ == "__main__":   # self-check of the maths on tiny frames (no DB)
     assert a2.mdq[("S1", "ECO")] == 200.0 and a2.mdq[("S1", "PREM")] == 80.0   # 25 days (x .5/.8) and 40 = the department's
     dd = a2.mdq / a2.plan_qty
     assert (dd <= 400.0 / 10.0 + 1e-9).all() and dd[("S1", "ECO")] < 40.0      # never above the department, some below
+    # display types: S1 dept A = TABLE 1 fixture / 100 MDQ + NON_TABLE 3 / 300; plan TABLE 2 pcs, NON_TABLE 8
+    fd = pd.DataFrame({"month": [P("2027-03")] * 2, "store": ["S1"] * 2, "department": ["A"] * 2, "display": ["TABLE", "NON_TABLE"],
+                       "fixtures": [1.0, 3.0], "mdq": [100.0, 300.0]})
+    pd_ = pd.DataFrame({"month": [P("2027-03")] * 2, "store": ["S1"] * 2, "department": ["A"] * 2, "display": ["TABLE", "NON_TABLE"],
+                        "plan_rs": [100.0, 900.0], "plan_qty_file": [2.0, 8.0]})
+    dv = display_frame(fr, fd, pd_).set_index(["store", "display"])
+    assert dv.mdq[("S1", "TABLE")] == 100.0 and dv.plan_qty[("S1", "TABLE")] == 2.0 and dv.fixtures[("S1", "NON_TABLE")] == 3.0
+    assert dv.mdq[("S2", NO_DISP)] == 200.0                                     # no display rows: the department whole
+    assert abs(dv.mdq.sum() - fr.mdq.sum()) < 1e-9 and abs(dv.plan_qty.sum() - fr.plan_qty.sum()) < 1e-9
+    # articles inside TABLE (50 days vs the department's 40): capped at the department
+    ad = article_frame(dv.reset_index(), ar.assign(display="TABLE", plan_qty_file=[1.0, 1.0])).set_index(["store", "display", "article"])
+    t = ad.sort_index().loc[("S1", "TABLE")]
+    assert ((t.mdq / t.plan_qty) <= 400.0 / 10.0 + 1e-9).all()
     print("str_engine self-check: OK")

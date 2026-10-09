@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: Display type (TABLE / NON_TABLE) layer
+- **Asked (user):** "Break it further into table and non-tbale" ... "display type"
+- Both files carry the display type (fixture plan UDF-06, sales plan UDF06); it was summed per store x department. Now kept per row: migration `a3d8e1f5c2b7` adds `display` to str_fixture_rows / str_plan_rows (in the PK); both files re-uploaded as uploads 5 (fixtures) and 6 (sales plan) - totals identical to uploads 1 / 4 (fixtures 221,169, MDQ 26.4M, plan Rs 508.6 Cr, 15.4M pcs); backups in `Backups\planning_inputs_*_before_display_type_20261009_1753.csv`.
+- New row layer and filter **Display type**: each display type gets its own fixtures / MDQ (its fixture-plan rows) and planned Rs / qty (its plan rows; LY by the plan share), so its STR is its own (e.g. MSE_R/N T-SHIRT H/S: TABLE 41.5 days, NON_TABLE 30.0, department 37.7). Department totals unchanged. Articles now split inside their display type and are still capped at the department's days in each store and month (0 of 208,280 rows above). Excel adds a "display type" column.
+
 ### STR Forecaster: every season on the 60-180 band range
 - **Asked (user):** "range for all tags seasonality is 60 -180 remove 90 - 180 range from wherever it was the minimum"
 - Off months were 90-180; now peak, normal and off all band 60-180, so the season no longer moves a band - it stays as a tag (Peak / Peak ✦ / Off) and drives the peak-oriented suggestion. The checkbox is now "Season tags" (shows / hides the tags); page note, popup range and matrix title updated.

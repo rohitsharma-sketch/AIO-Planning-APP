@@ -63,24 +63,34 @@ def frame():
         with lock:
             if not state["dirty"] and state.get("ver") == ver:
                 return state["df"], state["info"]
-        df, info, art = se.build(articles=True)
+        df, info, art, disp = se.build(articles=True)
         with lock:
-            state.update(df=df, info=info, art=art, af=None, dirty=False, ver=ver)
+            state.update(df=df, info=info, art=art, disp=disp, af=None, dfd=None, dirty=False, ver=ver)
         return df, info
 
 
-def article_df():
-    """the frame split to articles by their cont % of the sales plan (built on first use, kept until the next rebuild)"""
+def display_df():
+    """the frame split to display types (TABLE / NON_TABLE; built on first use, kept until the next rebuild)"""
     frame()
     with lock:
+        if state.get("dfd") is None:
+            state["dfd"] = se.display_frame(state["df"], *state["disp"])
+        return state["dfd"]
+
+
+def article_df():
+    """the display-type frame split to articles by their cont % of the sales plan (built on first use)"""
+    dfd = display_df()
+    with lock:
         if state.get("af") is None:
-            state["af"] = se.article_frame(state["df"], state["art"])
+            state["af"] = se.article_frame(dfd, state["art"])
         return state["af"]
 
 
 def _base(df, q, keys=()):
-    """the frame a request needs: split to articles when Article is a layer or a filter; tags added when used"""
-    d = article_df() if "article" in keys or q.get("article") else df
+    """the frame a request needs: split to articles / display types when one is a layer or a filter; tags added when used"""
+    d = (article_df() if "article" in keys or q.get("article") else
+         display_df() if "display" in keys or q.get("display") else df)
     return _with_tags(d) if any(k in keys or q.get(k) for k in TAG_KEYS) else d
 
 
@@ -136,7 +146,7 @@ def _with_tags(df):
 
 
 def _filter(df, q):
-    for k in ("division", "cluster", "department", "store", "season", "article") + TAG_KEYS:
+    for k in ("division", "cluster", "department", "store", "season", "display", "article") + TAG_KEYS:
         v = [x for x in q.get(k, []) if x]   # one or several values (repeated params) - the per-layer search filters
         if v:
             df = df[df[k].isin(v)]
@@ -166,9 +176,9 @@ def _safe(v):
     return "'" + v if isinstance(v, str) and v[:1] in ("=", "+", "-", "@") else v
 
 
-LAYER_KEYS = ("division", "department", "cluster", "store", "tag", "attribute", "season", "article")
+LAYER_KEYS = ("division", "department", "cluster", "store", "tag", "attribute", "season", "display", "article")
 LAYER_LABEL = {"division": "Division", "department": "Department", "cluster": "Cluster", "store": "Store", "tag": "Tag",
-               "attribute": "Attribute", "season": "Season", "article": "Article"}
+               "attribute": "Attribute", "season": "Season", "display": "Display type", "article": "Article"}
 
 
 def _cells_wide(c, pre):
@@ -194,7 +204,7 @@ def workbook(df, months, has_plan, layers, info, filters):
     days = np.where(ok, df.mdq / (df.plan_qty.where(df.plan_qty > 0) / dim), np.nan)
     ly_days = np.where(lyok, df.mdq_base / (df.ly_q.where(df.ly_q > 0) / dly), np.nan)
     d = pd.DataFrame({
-        "division": df.division, "cluster": df.cluster, "store": df.store, "department": df.department, **({"article": df.article, "article cont % of the department's plan": df.cont,
+        "division": df.division, "cluster": df.cluster, "store": df.store, "department": df.department, **({"display type": df.display} if "display" in df else {}), **({"article": df.article, "article cont % of the department's plan": df.cont,
                                          "cont % from": df.cont_from, "article cont % in its cluster": df.cont_cluster,
                                          "stock share = min(store, cluster cont %)": df.stock_cont} if "article" in df else {}), "tag": df.tag,
         "attribute": df.attribute, "month": df.month.astype(str), "days in month": dim,
@@ -392,7 +402,7 @@ class H(BaseHTTPRequestHandler):
             if path == "/api/download":
                 name = f"STR Forecast - {time.strftime('%d.%m.%y')}.xlsx"
                 lay = [k for k in q.get("layers", ["cluster,department,store"])[0].split(",") if k in LAYER_KEYS] or ["cluster", "department", "store"]
-                fl = "; ".join(f"{k} = {', '.join(q[k])}" for k in ("division", "cluster", "department", "store", "season", "tag", "attribute") if q.get(k))
+                fl = "; ".join(f"{k} = {', '.join(q[k])}" for k in ("division", "cluster", "department", "store", "season", "display", "article", "tag", "attribute") if q.get(k))
                 d = _base(df, q, lay)
                 return self._send(200, workbook(_filter(d, q), months, bool(info.get("sales_plan")), lay, info, fl),
                                   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
