@@ -137,8 +137,7 @@ function inputCard(kind){
       <span>${sh?`${mon(addM(a,-sh))}–${mon(addM(z,-sh))} used as <b>${mon(a)}–${mon(z)}</b>`:`<b>${mon(a)}–${mon(z)}</b>`}</span>
       <span>${h(u.uploaded_by||'')} · ${h(String(u.uploaded_at).slice(0,16).replace('T',' '))}</span></div>`;}
   else m=`<div class="status warn">${fx?'Not uploaded yet.':'Not loaded yet - the forecast STR shows once the tentative sales plan is loaded. Until then the page shows the fixture plan, MDQ and last year\'s STR on the same formula.'}</div>`;
-  const up=ed&&fx?`<label class="note">Months in the file are <select data-shift aria-label="Which months the file is for"><option value="12" selected>for the same months next year (+12)</option><option value="0">the forecast months as they are</option></select></label><label class="drop" data-kind="${kind}" tabindex="0">Drop the workbook here or click to choose<small>One sheet per month (STORE, DIVISION, DEPARTMENT, MC_FIX / FINAL FIXTURE, MDQ); past months are used for the same months next year</small><input type="file" accept=".xlsx,.xlsm" hidden></label>`
-    :(ed&&!fx?'<div class="note">The upload opens once the tentative sales-plan file has been shared and its layout set up.</div>':'');
+  const up=ed?`<label class="note">Months in the file are <select data-shift aria-label="Which months the file is for"><option value="12" selected>for the same months next year (+12)</option><option value="0">the forecast months as they are</option></select></label><label class="drop" data-kind="${kind}" tabindex="0">Drop the workbook here or click to choose<small>${fx?'One sheet per month (STORE, DIVISION, DEPARTMENT, MC_FIX / FINAL FIXTURE, MDQ)':'STORE_NAME, DIVISION, DEPARTMENT and per month "Mar&#39;26 _V" (Rs lakh) / "Mar&#39;26 _Q" (pieces)'}</small><input type="file" accept=".xlsx,.xlsm${fx?'':',.xlsb'}" hidden></label>`:'';
   const rb=ed&&u?`<div><button class="btn ghost sm" data-rb="${kind}">Roll back this upload</button></div>`:'';
   $('#in-'+kind).innerHTML=`<h3>${fx?'Fixture plan (store × department × month)':'Sales plan (month-wise)'}</h3>${m}${up}${rb}`;
 }
@@ -151,7 +150,9 @@ async function load(){
   if(j?.status==='running'){setTimeout(load,2000);return;}
   const i=S.st.info||{};$('#fc').hidden=!i.fixture;
   if(!i.fixture)return;
-  $('#fc-desc').textContent=`${i.stores} stores · ${i.departments} departments · ${i.months.map(mon).join(', ')} · last year = ${i.ly_months.map(mon).join(', ')}`+
+  const cm=i.common||{};
+  if(cm.month_mismatch){$('#job').className='status err';$('#job').textContent='The sales plan months do not match the fixture plan months - re-upload it with the other "Months in the file are" choice. Showing the fixture plan only.';}
+  $('#fc-desc').textContent=(cm.stores_both!=null?`${cm.stores_both} stores in both the fixture plan and the sales plan (only these are compared)`:`${i.stores} stores`)+` · ${i.departments} departments · ${i.months.map(mon).join(', ')} · last year = ${i.ly_months.map(mon).join(', ')}`+
     (i.sales_plan?'':' · no sales plan yet, so forecast STR shows "—"');
   await loadRoll();if(S.dept)await loadCells();
 }
@@ -162,7 +163,7 @@ async function loadRoll(){
 }
 function renderRoll(){
   $('#by').innerHTML=BY.map(([k,t])=>`<button class="chip${S.by===k?' on':''}" data-by="${k}" aria-pressed="${S.by===k}">${t}</button>`).join('');
-  const R=S.roll,ms=R.months,keys=R.by,q=S.q.toLowerCase(),isD=keys.includes('department');
+  const R=S.roll,ms=R.months,keys=R.by,q=S.q.toLowerCase(),isD=keys.includes('department'),cm=S.st.info.common||{};
   const rows=R.rows.filter(r=>!q||keys.some(k=>String(r[k]).toLowerCase().includes(q)));
   const lab=k=>k[0].toUpperCase()+k.slice(1);
   const head1=`<tr>${keys.map((k,i)=>`<th class="${i?'l':'l1'}" rowspan="2">${lab(k)}</th>`).join('')}${ms.map(m=>`<th class="grp" colspan="4">${mon(m)}</th>`).join('')}<th class="grp" colspan="4" title="sum over the months, then the ratio - an average monthly rate, not a season sell-thru">4-month avg</th></tr>`;
@@ -176,10 +177,11 @@ function renderRoll(){
   const i=S.st.info;
   $('#t-note').textContent=(isD?'Click a department to see its stores and edit fixtures. ':'Switch to Department to edit. ')+
     'Plan qty and MDQ are summed before the ratio. LY STR = last year\'s sales qty on this same fixture plan (store-months that sold last year).'+
+    (cm.stores_both!=null&&(cm.fixture_only.length||cm.plan_only.length)?` Not compared (store in one file only): fixture plan only ${cm.fixture_only.length} (${cm.fixture_only.join(', ')}; MDQ ${n0(cm.fixture_only_mdq)}), sales plan only ${cm.plan_only.length} (${cm.plan_only.join(', ')}; Rs ${n0(cm.plan_only_rs)}).`:'')+
+    (i.qty_by_price_rows?` ${i.qty_by_price_rows} rows had no plan qty and use Rs ÷ LY selling price.`:'')+
     (i.sales_plan?` Left out of Max STR: plan with no fixtures Rs ${n0(i.plan_rs_without_fixtures)}; fixtures with no plan MDQ ${n0(i.mdq_without_plan)}.`:'')+
     ((i.price_from_division||[]).filter(d=>!(i.no_ly_departments||[]).includes(d)).length?` Selling price from the division (no department price): ${i.price_from_division.filter(d=>!(i.no_ly_departments||[]).includes(d)).join(', ')}.`:'')+
     (i.no_asp_rows?` ${i.no_asp_rows} planned rows have no last-year selling price and count as 0 qty.`:'')+
-    (i.plan_without_fixtures?` ${i.plan_without_fixtures} planned rows have no fixtures (STR 100%).`:'')+
     ((i.no_ly_departments||[]).length?` No last-year sales under these department names (new or renamed - no LY STR; selling price taken from their division until mapped to an old department): ${i.no_ly_departments.join(', ')}.`:'');
 }
 async function loadCells(){

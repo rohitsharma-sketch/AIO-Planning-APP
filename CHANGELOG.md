@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: store-level sales plan, stores matched across both files (reviewed)
+- **Asked (user):** "@MAMJ'26 - Sales Plan.xlsx use this" and "also map and match the stores which are availble in the fixture sheet too so that the comparison is apple to apple".
+- New reader for the store-level plan (STORE_NAME, DIVISION, DEPARTMENT, "<Mon>'yy _V" Rs lakh / "_Q" pieces per month; MRP / ATTRIBUTE / TABLE-NON_TABLE rows summed; totals like "MAMJ'26_V" ignored); planned qty comes from the plan itself (Rs / LY price only where a row has no qty). Migration `d4a8c1e7f2b9` adds plan_qty to planning_inputs.str_plan_rows.
+- Apples to apples: STR only over stores present in both the fixture plan and the sales plan; fixture-only / plan-only stores are listed with their MDQ / Rs. A plan whose months miss the fixture months now falls back to the fixture view with a clear message.
+- Loaded the user's plan (upload 2, Mar-Jun'26 used as Mar-Jun'27 like the fixture file): 80,751 rows, Rs 508.6 Cr, 1.54 crore pcs; 189 stores in both (fixture only: BSC, GCG, GPG, LSR, MAR, RSG; plan only: BGP, BNP, DMH, GWL, LPA, RSN, SCL). Max STR vs LY STR (actual MAMJ'26, same stores and fixtures): MENS 40.6 / 41.5, LADIES 34.5 / 33.2, KIDS 33.0 / 33.0, all 35.9 / 35.9.
+- Reviewed (approve): fixed the month-mismatch empty page and a combined-month total column being read as a month.
+
 ### STR Forecaster - new additional app (Landing > Additional tools, /str/, port 8085)
 - **Asked (user):** "I want to make a STR Forecaster, the components will be - Total Fixture Plan on Store Wise x Month Wise, Minimum Density Qty, Sales Plan Month Wise. Add it in the additional APP section" (+ "this is the month wise fixture file"; "for the time being i will give you a sales plan tentative").
 - Choices (user): STR = sales qty / (sales qty + fixture stock); store x department x month; Excel upload + edit in app; sales qty = plan Rs / LY avg selling price; forecast MAMJ'27 using the MAMJ'26 fixture file; GM left out (no Capacity / MDQ); storage = new DB tables.

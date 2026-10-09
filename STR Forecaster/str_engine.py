@@ -87,6 +87,59 @@ def read_fixture(data):
     return g[(g.fixtures > 0) | (g.mdq > 0)].reset_index(drop=True), notes
 
 
+PLAN_COL = re.compile(r"^\s*([A-Za-z]{3,9})\W*(\d{2}|\d{4})\s*_\s*([VQ])\s*$")   # "Mar'26 _V", "June'26 _Q"
+LAKH = 1e5
+
+
+def read_sales_plan(data, name=""):
+    """Store-level sales plan (user, 9 Oct: "MAMJ'26 - Sales Plan.xlsx") -> (frame month/store/division/department/
+    plan_rs/plan_qty, notes). Columns STORE_NAME (or STORE), DIVISION, DEPARTMENT and one "<Mon>'<yy> _V" (Rs lakh) and
+    "<Mon>'<yy> _Q" (pieces) pair per month; MRP / ATTRIBUTE / TABLE-NON_TABLE rows of a store x department are summed;
+    totals such as "MAMJ'26_V" are not months and are ignored."""
+    xl = pd.ExcelFile(io.BytesIO(data), engine="pyxlsb" if name.lower().endswith(".xlsb") else None)
+    frames, notes = [], []
+    for sh in xl.sheet_names:
+        head = xl.parse(sh, header=None, nrows=10)
+        hdr = next((i for i in range(len(head)) if any(str(v).strip().upper() in ("STORE_NAME", "STORE") for v in head.iloc[i])), None)
+        if hdr is None:
+            notes.append(f"{sh}: no STORE_NAME header row - skipped")
+            continue
+        df = xl.parse(sh, header=hdr)
+        up = {str(c).strip().upper(): c for c in df.columns}
+        sc = up.get("STORE_NAME", up.get("STORE"))
+        if "DIVISION" not in up or "DEPARTMENT" not in up:
+            notes.append(f"{sh}: missing DIVISION / DEPARTMENT - skipped")
+            continue
+        months = {}
+        for c in df.columns:
+            m = PLAN_COL.match(str(c))
+            word = m.group(1).upper() if m else ""
+            ok = len(word) == 3 or word in ('JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','SEPT','OCTOBER','NOVEMBER','DECEMBER')   # a "MARAPR'26_V" total is not March
+            pm = _sheet_month(f"{word[:3]} {m.group(2)}") if m and ok else None
+            if pm is not None:
+                months.setdefault(pm, {})[m.group(3).upper()] = c
+        if not months:
+            notes.append(f"{sh}: no month value / qty columns (like \"Mar'26 _V\") - skipped")
+            continue
+        base = pd.DataFrame({"store": df[sc].astype(str).str.strip().str.upper(), "division": df[up["DIVISION"]].map(plan_division),
+                             "department": df[up["DEPARTMENT"]].astype(str).str.strip()})
+        for pm, cols in sorted(months.items()):
+            v = pd.to_numeric(df[cols["V"]], errors="coerce").fillna(0.0) * LAKH if "V" in cols else 0.0
+            q = pd.to_numeric(df[cols["Q"]], errors="coerce").fillna(0.0) if "Q" in cols else np.nan
+            frames.append(base.assign(month=pm, plan_rs=v, plan_qty=q))
+    if not frames:
+        raise ValueError("No usable sheet: needs STORE_NAME, DIVISION, DEPARTMENT and month columns like \"Mar'26 _V\" / \"Mar'26 _Q\". " + " ".join(notes))
+    f = pd.concat(frames, ignore_index=True)
+    out = f[~f.division.isin(DIVS)]
+    if len(out):
+        notes.append(f"{out.department.nunique()} departments outside MENS / LADIES / KIDS left out")
+    f = f[f.division.isin(DIVS) & f.department.ne("") & f.store.ne("")]
+    g = f.groupby(["month", "store", "division", "department"], as_index=False)[["plan_rs", "plan_qty"]].sum(min_count=1)
+    g = g[(g.plan_rs > 0) | (g.plan_qty > 0)].reset_index(drop=True)
+    notes.append(f"value read as Rs lakh: Rs {g.plan_rs.sum() / 1e7:,.1f} Cr, {g.plan_qty.sum():,.0f} pcs over {g.store.nunique()} stores")
+    return g, notes
+
+
 def default_shift(months):
     """The pre-selected choice on the upload card (the planner picks): a file whose months are all past is the plan for
     the same months next year (MAMJ'26 file -> MAMJ'27); otherwise as is."""
@@ -105,7 +158,7 @@ def _copy(session, table, cols, frame):
 def save_upload(kind, file_name, frame, shift, user):
     """store one upload (forecast month = file month + shift); returns the upload id"""
     table = {"fixture": "planning_inputs.str_fixture_rows", "sales_plan": "planning_inputs.str_plan_rows"}[kind]
-    vals = {"fixture": ["fixtures", "mdq"], "sales_plan": ["plan_rs"]}[kind]
+    vals = {"fixture": ["fixtures", "mdq"], "sales_plan": ["plan_rs", "plan_qty"]}[kind]
     fr = frame.copy()
     fr["month"] = [(m + shift).to_timestamp().date() for m in fr["month"]]
     months = ",".join(sorted({str(m)[:7] for m in fr["month"]}))
@@ -237,7 +290,11 @@ def add_ly(df, lys):
         take = df.asp.isna() & (v > 0)
         df.loc[take, "asp"] = v[take]
         df.loc[take, "asp_from"] = name
-    df["plan_qty"] = (df.plan_rs / df.asp).where(df.asp > 0, 0.0).fillna(0.0)
+    by_price = (df.plan_rs / df.asp).where(df.asp > 0, 0.0).fillna(0.0)
+    own_q = df["plan_qty_file"] if "plan_qty_file" in df else pd.Series(np.nan, index=df.index)
+    use_own = own_q.notna() & ((own_q > 0) | (df.plan_rs <= 0))       # the plan's own qty wherever it gives one
+    df["plan_qty"] = np.where(use_own, own_q.fillna(0.0), by_price)
+    df["qty_from"] = np.where(use_own, "plan", np.where(by_price > 0, "Rs / LY price", ""))
     return df.drop(columns=["asp_dm", "asp_d", "asp_vm"])
 
 
@@ -249,7 +306,7 @@ def build():
             return None, {"fixture": None, "sales_plan": pu}
         fx = pd.DataFrame(s.execute(text("SELECT month, store, division, department, fixtures, mdq FROM planning_inputs.str_fixture_rows WHERE upload_id = :i"),
                                     {"i": fu["id"]}).mappings().all())
-        pl = pd.DataFrame(s.execute(text("SELECT month, store, division, department, plan_rs FROM planning_inputs.str_plan_rows WHERE upload_id = :i"),
+        pl = pd.DataFrame(s.execute(text("SELECT month, store, division, department, plan_rs, plan_qty AS plan_qty_file FROM planning_inputs.str_plan_rows WHERE upload_id = :i"),
                                     {"i": pu["id"]}).mappings().all()) if pu else pd.DataFrame()
         ed = pd.DataFrame(s.execute(text("""SELECT DISTINCT ON (field, department, month, store) field, department, month, store, value
                                             FROM planning_inputs.str_edits ORDER BY field, department, month, store, edited_at DESC, id DESC""")).mappings().all())
@@ -260,8 +317,19 @@ def build():
                                              WHERE kind = 'actual' AND calendar_id = 0 AND month = ANY(CAST(:m AS date[]))
                                                AND plan_division = ANY(:d) GROUP BY 1, 2, 3, 4"""),
                                         {"m": [f"{m - 12}-01" for m in months], "d": list(DIVS)}).mappings().all())
+    common = {}
     if len(pl):
         pl["month"] = _period(pl.month)
+        pl = pl[pl.month.isin(months)]
+    if len(pl) == 0 and pu:
+        common = {"month_mismatch": True}   # the plan's months miss the fixture months: show the fixture view and say why
+    if len(pl):
+        fs, ps = set(fx.store), set(pl.store)
+        both_ = fs & ps                    # user, 9 Oct: "map and match the stores ... so that the comparison is apple to apple"
+        common = {"stores_both": len(both_),
+                  "fixture_only": sorted(fs - ps), "fixture_only_mdq": float(fx.loc[~fx.store.isin(both_), "mdq"].sum()),
+                  "plan_only": sorted(ps - fs), "plan_only_rs": float(pl.loc[~pl.store.isin(both_), "plan_rs"].sum())}
+        fx, pl = fx[fx.store.isin(both_)], pl[pl.store.isin(both_)]
         df = fx.merge(pl, on=KEY, how="outer", suffixes=("", "_p"))
         df["division"] = df["division"].fillna(df.pop("division_p"))
     else:
@@ -273,6 +341,7 @@ def build():
         lys["month"] = _period(lys.month) + 12   # LY aligned to its forecast month
     df = add_ly(df, lys)
     info = {"fixture": fu, "sales_plan": pu, "months": [str(m) for m in months], "ly_months": [str(m - 12) for m in months],
+            "common": common, "qty_by_price_rows": int((df.qty_from == "Rs / LY price").sum()),
             "edits": int(len(ed)), "stores": int(df.store.nunique()), "departments": int(df.department.nunique()),
             "no_asp_rows": int(((df.plan_rs > 0) & ~(df.asp > 0)).sum()),
             "plan_without_fixtures": int(((df.plan_rs > 0) & (df.mdq <= 0)).sum()),
@@ -331,6 +400,9 @@ if __name__ == "__main__":   # self-check of the maths on tiny frames (no DB)
     lys = pd.DataFrame({"month": [P("2027-03")], "store": ["S1"], "department": ["A"], "division": ["MENS"], "sl_v": [1000.0], "sl_q": [10.0]})
     d = add_ly(d, lys)
     assert d.plan_qty.iloc[0] == 30.0 and d.asp_from.iloc[0] == "store"   # 3000 / (1000 / 10)
+    d3 = add_ly(apply_inputs(base, ed).assign(plan_qty_file=[45.0, np.nan, np.nan]), lys)
+    assert d3.plan_qty.iloc[0] == 45.0 and d3.qty_from.iloc[0] == "plan"   # the plan's own qty, not 3000 / 100
+    assert PLAN_COL.match("June'26 _Q") and PLAN_COL.match("Mar'26 _V") and _sheet_month("MAM 26") is None   # MAMJ total ignored
     r = rollup(d, ["division"], [P("2027-03")])[0]
     assert abs(r["total"]["str"] - 30 / (30 + 150)) < 1e-12        # forecast: only S1 has both a plan and fixtures
     assert abs(r["total"]["ly_str"] - 10 / (10 + 200)) < 1e-12     # LY: only S1 sold LY; its file MDQ (no edits)

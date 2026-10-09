@@ -106,9 +106,7 @@ def _job(kind, data, name, user, shift=None):
     try:
         with lock:
             state["job"]["step"] = "Reading the file"
-        if kind != "fixture":
-            raise ValueError("The sales-plan reader is set up once the tentative sales plan file is shared.")
-        g, notes = se.read_fixture(data)
+        g, notes = se.read_fixture(data) if kind == "fixture" else se.read_sales_plan(data, name)
         shift = se.default_shift(list(g.month.unique())) if shift is None else shift
         with lock:
             state["job"]["step"] = f"Saving {len(g):,} rows"
