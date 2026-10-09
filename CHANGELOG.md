@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: tag master import / export, AOP clusters, Division x band counts
+- **Asked (user):** "1.)give me an import master and export master for department tags 2.) Add Clusters to Stores from AOP forecaster 3.) I need a small table indicating the Division and final STR Band ... when i click on the count of departments falling under that band the list automatically should filter out the specific departments and there should be a revert button"
+- Department tags tab: "Export master" (GET /api/tags/download) = every department with Core / Seasonal, own attribute and the suite attribute master (info), plus a Read me sheet; the same layout imports back ("Import master" drop zone).
+- Clusters from the AOP Forecaster's Store Master (config_store.get_stores, levers.json; all 180 stores have one): new Cluster view; Store view = Cluster + Store; Cluster column in the department detail and Excel (+ By cluster sheet). A save of the AOP store master refreshes it (version stamp includes levers.json).
+- Division x final (4-month) band table above the forecast: counts of departments per band; clicking a count switches to the Department view filtered to that division and band (sorted by STR days); "Revert to previous view" restores the view, division, filters and sort you had before. "Clear sort & filters" also still clears.
+
 ### STR Forecaster: old department names split into the core apps' new departments
 - **Asked (user):** "split these departments in the new departments as mentioned in the core apps, check it and reference back, split the plan equally in the new departments"
 - The five names with no LY sales are split as in the suite's data-lake department split (same list as BIS DEPT_SPLITS / Listing / fill rate): KB_T-SHIRT H/S -> KB_R/N + KB_POLO T-SHIRT H/S; KB_BERMUDA -> KB_HSR + KB_TXTL BERMUDA; LW_L_PALAZZO -> LW_L_WES + LW_L_ETH PALAZZO; LW_L_JEGGING -> LW_L_DNM + LW_L_WVN JOGGER; MSE_PYJAMA -> MSE_HSR + MSE_TXTL PYJAMA. Fixtures, MDQ, plan Rs and plan qty are halved into each (at read time - stored uploads unchanged). Each new department now has its own LY sales, so all departments have LY days; plan qty / MDQ / forecast days unchanged in total (All 54.5 days), LY 54.5 -> 53.1 days. L_IN_BRA keeps its name (core apps carve L_IN_SPRT BRA out of it) and is not split.

@@ -218,11 +218,26 @@ def reset_department(department, user):
 
 
 def version():
-    """a cheap stamp of the stored inputs - any upload, rollback or edit (from any process) changes it"""
+    """a cheap stamp of the stored inputs - any upload, rollback or edit (from any process) changes it; so does a save
+    of the AOP Forecaster's store master (clusters)"""
     with SessionLocal() as s:
-        return tuple(s.execute(text("""SELECT (SELECT coalesce(max(id), 0) FROM planning_inputs.str_uploads),
-                                               (SELECT count(*) FROM planning_inputs.str_uploads WHERE active),
-                                               (SELECT coalesce(max(id), 0) FROM planning_inputs.str_edits)""")).one())
+        v = tuple(s.execute(text("""SELECT (SELECT coalesce(max(id), 0) FROM planning_inputs.str_uploads),
+                                            (SELECT count(*) FROM planning_inputs.str_uploads WHERE active),
+                                            (SELECT coalesce(max(id), 0) FROM planning_inputs.str_edits)""")).one())
+    try:
+        import config_store
+        return v + (os.path.getmtime(config_store.CONFIG_FILE),)
+    except Exception:  # noqa: BLE001 - no AOP config: clusters just stay empty
+        return v
+
+
+def store_clusters():
+    """store -> cluster from the AOP Forecaster's Store Master (user, 9 Oct: "Add Clusters to Stores from AOP forecaster")"""
+    try:
+        import config_store   # Tentative AOP Forecaster/config_store.py (on sys.path above)
+        return {str(s["store"]).strip().upper(): s["cluster"] for s in config_store.get_stores()["stores"] if s.get("cluster")}
+    except Exception:  # noqa: BLE001 - the AOP config is optional here
+        return {}
 
 
 # user, 9 Oct: "split these departments in the new departments as mentioned in the core apps ... split the plan equally
@@ -271,6 +286,7 @@ def _frame(s, sql, params=None, key=None):
 # I will give the master") - planning_inputs.str_dept_tags (migration e5b9d2f1a7c3); attribute falls back to the
 # suite's attribute master (masterdata.attribute_master.attribute1)
 TAGS = ("CORE", "SEASONAL")
+TAG_LABEL = {"CORE": "Core", "SEASONAL": "Seasonal"}
 
 
 def _tag(v):
@@ -461,6 +477,7 @@ def build():
     df[["fixtures", "mdq", "plan_rs"]] = df[["fixtures", "mdq", "plan_rs"]].apply(pd.to_numeric, errors="coerce").fillna(0.0)
     df = df[df.month.isin(months)]          # a plan month with no fixture month cannot get an STR
     df = apply_inputs(df, ed)
+    df["cluster"] = df.store.map(store_clusters()).fillna("(no AOP cluster)")
     if len(lys):
         lys["month"] = _period(lys.month) + 12   # LY aligned to its forecast month
     df = add_ly(df, lys)

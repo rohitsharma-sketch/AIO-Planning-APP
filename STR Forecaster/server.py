@@ -138,11 +138,11 @@ def _safe(v):
 
 def workbook(df, months, has_plan):
     out = io.BytesIO()
-    cols = ["division", "department", "store", "month", "fixtures_file", "fixtures", "density", "mdq", "plan_rs", "asp",
+    cols = ["division", "department", "cluster", "store", "month", "fixtures_file", "fixtures", "density", "mdq", "plan_rs", "asp",
             "asp_from", "plan_qty", "ly_q", "mdq_base", "edited"]
     d = df[cols].copy()
     d["month"] = d.month.astype(str)
-    for c in ("store", "department", "division"):
+    for c in ("store", "department", "division", "cluster"):
         d[c] = d[c].map(_safe)
     ok = (d.mdq > 0) & (d.plan_qty > 0)
     dim = df.month.map(lambda m: m.days_in_month).astype(float)
@@ -162,7 +162,8 @@ def workbook(df, months, has_plan):
     # xlsxwriter (installed): ~1.7M cells far faster than openpyxl (~45 s); text is never read as a formula
     with pd.ExcelWriter(out, engine="xlsxwriter", engine_kwargs={"options": {"strings_to_formulas": False}}) as xw:
         d.sort_values(["division", "department", "store", "month"]).to_excel(xw, sheet_name="STR detail", index=False)
-        for by, nm in ((["division"], "By division"), (["division", "department"], "By department"), (["store"], "By store")):
+        for by, nm in ((["division"], "By division"), (["division", "department"], "By department"),
+                        (["cluster"], "By cluster"), (["cluster", "store"], "By store")):
             rows = []
             for r in se.rollup(df, by, months, has_plan):
                 base = {k: r[k] for k in by}
@@ -215,7 +216,8 @@ class H(BaseHTTPRequestHandler):
                 return self._send(400, {"error": "Upload the fixture plan first."})
             months = sorted(df.month.unique())
             if path == "/api/rollup":
-                by = {"division": ["division"], "department": ["division", "department"], "store": ["store"]}.get(q.get("by", ["division"])[0], ["division"])
+                by = {"division": ["division"], "department": ["division", "department"], "cluster": ["cluster"],
+                      "store": ["cluster", "store"]}.get(q.get("by", ["division"])[0], ["division"])
                 d, hp = _filter(df, q), bool(info.get("sales_plan"))
                 rows = se.rollup(d, by, months, hp)
                 if "department" in by:
@@ -241,7 +243,8 @@ class H(BaseHTTPRequestHandler):
                          "ly_days": se.days_of(r.ly_q, r.mdq_base, ldim) if r.ly_known else None, "edited": r.edited}
                     c["band"] = se.str_band(c["days"])
                     by_store.setdefault(r.store, [None] * len(months))[mi[r.month]] = c
-                rows = [{"store": st, "months": by_store[st]} for st in sorted(by_store)]
+                cl = dict(zip(d.store, d.cluster))
+                rows = [{"store": st, "cluster": cl.get(st), "months": by_store[st]} for st in sorted(by_store)]
                 dens = d.drop_duplicates("store").density
                 return self._send(200, {"department": dept, "division": d.division.iloc[0], "months": [str(m) for m in months],
                                         "density": float(dens.median()) if len(dens) else None,
@@ -258,6 +261,28 @@ class H(BaseHTTPRequestHandler):
                                  "updated_by": own.get("updated_by"), "updated_at": own.get("updated_at")})
                 return self._send(200, {"rows": rows, "attributes": sorted(set(master.values()) | {v["attribute"] for v in t.values() if v.get("attribute")}),
                                         "not_in_plan": sorted(set(t) - {str(x).upper() for x in g.department})})
+            if path == "/api/tags/download":
+                t, master = se.tags()
+                g = df.drop_duplicates(["division", "department"])[["division", "department"]].sort_values(["division", "department"])
+                known = {str(x).upper() for x in g.department}
+                rows = [{"DIVISION": r.division, "DEPARTMENT": r.department,
+                         "CORE / SEASONAL": se.TAG_LABEL.get(t.get(str(r.department).upper(), {}).get("tag"), ""),
+                         "ATTRIBUTE": t.get(str(r.department).upper(), {}).get("attribute") or "",
+                         "SUITE ATTRIBUTE MASTER (info)": master.get(str(r.department).upper(), "")} for r in g.itertuples()]
+                rows += [{"DIVISION": "", "DEPARTMENT": k, "CORE / SEASONAL": se.TAG_LABEL.get(v.get("tag"), ""),
+                          "ATTRIBUTE": v.get("attribute") or "", "SUITE ATTRIBUTE MASTER (info)": master.get(k, "")}
+                         for k, v in sorted(t.items()) if k not in known]   # tagged, not in this fixture plan
+                out = io.BytesIO()
+                with pd.ExcelWriter(out, engine="xlsxwriter", engine_kwargs={"options": {"strings_to_formulas": False}}) as xw:
+                    pd.DataFrame(rows).to_excel(xw, sheet_name="Department tags", index=False)
+                    pd.DataFrame({"How to use": [
+                        "Fill CORE / SEASONAL with Core or Seasonal and ATTRIBUTE with the attribute, then upload this file on the Department tags tab.",
+                        "A blank cell keeps the value already saved; clear a value in the app.",
+                        "SUITE ATTRIBUTE MASTER (info) is the suite's attribute master - shown when ATTRIBUTE is blank; it is not read on upload."]}
+                    ).to_excel(xw, sheet_name="Read me", index=False)
+                name = f"STR Department tags - {time.strftime('%d.%m.%y')}.xlsx"
+                return self._send(200, out.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                  {"Content-Disposition": f'attachment; filename="{name}"'})
             if path == "/api/download":
                 name = f"STR Forecast - {time.strftime('%d.%m.%y')}.xlsx"
                 return self._send(200, workbook(_filter(df, q), months, bool(info.get("sales_plan"))),

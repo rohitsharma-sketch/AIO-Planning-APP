@@ -80,6 +80,10 @@ td select{padding:3px 6px}
 td.ed,td.ed input{background:#FFF8E6}
 .dot{color:var(--warn)}
 .tg{display:inline-block;border-radius:999px;padding:0 8px;font-size:11.5px;font-weight:700}
+.mx{width:auto;margin:0 0 10px}.mx th{position:static;text-align:center}.mx th.l{text-align:left}
+.mx td{text-align:center;min-width:70px}.mx td.l{text-align:left}
+.mxb{border:0;background:none;color:var(--primary);font:inherit;font-weight:800;text-decoration:underline;cursor:pointer;padding:0 6px;border-radius:6px}
+.mxb.on{background:var(--btn);color:var(--btn-t);text-decoration:none}
 .tg.core{background:#E3EEF9;color:#1D4F86}.tg.seasonal{background:#FBEFD9;color:#8A5300}
 .note{font-size:12px;color:var(--muted-foreground)}
 .empty{padding:22px;text-align:center;color:var(--muted-foreground)}
@@ -127,6 +131,8 @@ td.ed,td.ed input{background:#FFF8E6}
         <select id="f-div" aria-label="Division"><option value="">All divisions</option><option>MENS</option><option>LADIES</option><option>KIDS</option></select>
         <span class="note">Click a header to sort; &#9662; filters it.</span>
       </div>
+      <div class="bar" style="align-items:flex-start;margin-bottom:4px"><div id="mx"></div>
+        <button class="btn ghost sm" id="rev" hidden title="Back to the view, filters and sort you had before clicking a count">&#8634; Revert to previous view</button></div>
       <div class="tw"><table id="t"></table></div>
       <p class="note" id="t-note"></p>
     </div>
@@ -175,7 +181,7 @@ async function api(p,o){const r=await fetch(p,o);const j=(r.headers.get('content
   if(!r.ok)throw new Error(j?.error||r.statusText);return j;}
 const post=(p,body)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
 const S={st:null,by:'division',div:'',dept:null,roll:null,cells:null,tags:null,cache:{},grid:{},gt:{},vis:{},allAgg:null,pf:null};
-const BY=[['division','Division'],['department','Department'],['store','Store']];
+const BY=[['division','Division'],['department','Department'],['cluster','Cluster'],['store','Store']];
 function addM(s,n){const d=new Date(+s.slice(0,4),+s.slice(5,7)-1+n,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 
 /* ---- the All row: the server's sums, worked out over the rows shown (str_engine.rollup: sum first, then the ratio) */
@@ -341,7 +347,7 @@ function renderRoll(){
     tail:(vis,cols)=>{if(!vis.length)return '';S.allAgg=agg(vis,R.months);const nk=cols.filter(c=>c.m==null).length;
       return `<tr class="tot" data-k="all"><td class="l1" colspan="${nk}">All${S.div?' '+h(S.div):''}${vis.length<R.rows.length?` <span class="note">(${vis.length} of ${R.rows.length} shown)</span>`:''}</td>`+
         cols.filter(c=>c.m!=null).map(c=>`<td class="${c.cls} c" data-m="${c.m}">${c.html(S.allAgg)}</td>`).join('')+'</tr>';}});
-  $('#clr').hidden=!g.sort&&!Object.keys(g.filt).length;
+  $('#clr').hidden=!g.sort&&!Object.keys(g.filt).length;$('#rev').hidden=!S.prev;renderMatrix();
   const i=S.st.info,po=cm.part_months||[];
   const lo=[cm.fixture_only?.length?`in the fixture plan only ${cm.fixture_only.length} (${cm.fixture_only.join(', ')})`:'',
     cm.plan_only?.length?`in the sales plan only ${cm.plan_only.length} (${cm.plan_only.join(', ')})`:'',
@@ -356,6 +362,15 @@ function renderRoll(){
     (i.no_asp_rows?` ${i.no_asp_rows} planned rows have no last-year selling price and count as 0 qty.`:'')+
     ((i.no_ly_departments||[]).length?` No last-year sales under these department names (new or renamed - no LY STR; selling price taken from their division until mapped to an old department): ${i.no_ly_departments.join(', ')}.`:'');
 }
+async function renderMatrix(){
+  let R;try{R=await getRoll('department','');}catch(e){return;}
+  const bands=[60,90,120,150,180,...(R.rows.some(r=>r.total.band==null)?[null]:[])],a=S.mx;
+  const n=(d,b)=>R.rows.filter(r=>(!d||r.division===d)&&(r.total.band??null)===b).length;
+  $('#mx').innerHTML=`<table class="mx"><thead><tr><th class="l">Departments by final band (4-month)</th>${bands.map(b=>`<th>${b?b+' days':'No band'}</th>`).join('')}<th>Total</th></tr></thead><tbody>`+
+    ['MENS','LADIES','KIDS',''].map(d=>`<tr${d?'':' class="tot"'}><td class="l"><b>${d||'All'}</b></td>`+bands.map(b=>{const k=n(d,b);
+      return `<td>${k?`<button class="mxb${a&&a.d===d&&a.b===b?' on':''}" data-mx="${d}|${b??''}" title="Show the ${k} ${d||''} departments in the ${b?b+'-day':'no'} band">${k}</button>`:'<span class="note">0</span>'}</td>`;}).join('')+
+      `<td>${R.rows.filter(r=>!d||r.division===d).length}</td></tr>`).join('')+'</tbody></table>';
+}
 async function loadCells(){
   try{S.cells=await api('api/cells?department='+encodeURIComponent(S.dept));}catch(e){S.dept=null;$('#dd').hidden=true;return;}
   renderCells();
@@ -366,7 +381,7 @@ function renderCells(){
   $('#dd-dens').innerHTML=`<span>Qty per fixture (minimum density): <b>${n2(C.density)}</b> <span class="note">${C.density_edited?'(edited, every store)':'(typical store, from the file)'}</span></span>`+
     (ed?` <label class="note">Set one value for every store <input type="number" id="dens" min="0" step="1" placeholder="${C.density!=null?Math.round(C.density):''}" aria-label="Qty per fixture for ${h(C.department)}"></label> <button class="btn sm" id="dens-save">Apply</button>`:'')+
     (ed&&(C.density_edited||C.rows.some(r=>r.months.some(c=>c&&c.edited.includes('fixtures'))))?` <button class="btn ghost sm" id="dd-reset">Reset to file</button>`:'');
-  const cols=[{id:'store',label:'Store',cls:'l1',filt:true,get:r=>r.store}];
+  const cols=[{id:'store',label:'Store',cls:'l1',filt:true,get:r=>r.store},{id:'cluster',label:'Cluster',cls:'l',filt:true,get:r=>r.cluster}];
   ms.forEach((m,i)=>{const c=r=>r.months[i],g=mon(m);cols.push(
     {id:'fx:'+i,grp:g,label:'Fixtures',cls:'b',num:true,get:r=>c(r)?.fixtures,tdc:r=>c(r)?.edited.includes('fixtures')?'ed':'',
       html:r=>!c(r)?'—':ed?`<input type="number" min="0" step="0.5" value="${+(+c(r).fixtures).toFixed(2)}" data-store="${h(r.store)}" data-month="${m}" aria-label="Fixtures ${h(r.store)} ${g}" title="file: ${n2(c(r).fixtures_file)}">`:n2(c(r).fixtures)},
@@ -381,7 +396,7 @@ function renderCells(){
 /* ---- department tags (user, 9 Oct: "Add a tab to add Core or Seasonal Tag to the department and Add Attribute to them") */
 function tagCard(){
   const ed=S.st.can_edit;
-  $('#in-tags').innerHTML=`<h3>Tag master</h3>`+(ed?`<label class="drop" data-kind="tags" tabindex="0">Drop the tag master here or click to choose<small>DEPARTMENT, a Core / Seasonal column (CORE/SEASONAL, TAG or TYPE) and ATTRIBUTE - a blank cell keeps the current value</small><input type="file" accept=".xlsx,.xlsm" hidden></label>`:'<p class="note">Read-only: only an admin or a planner can change tags.</p>')+'<div class="status" id="tg-job"></div>';
+  $('#in-tags').innerHTML=`<h3>Import / export master</h3><div><a class="btn ghost sm" href="api/tags/download" download>&#8595; Export master</a> <span class="note">every department in the fixture plan with its tag and attribute - edit it and import it back</span></div>`+(ed?`<label class="drop" data-kind="tags" tabindex="0">Import master: drop the file here or click to choose<small>DEPARTMENT, a Core / Seasonal column (CORE/SEASONAL, TAG or TYPE) and ATTRIBUTE - a blank cell keeps the current value</small><input type="file" accept=".xlsx,.xlsm" hidden></label>`:'<p class="note">Read-only: only an admin or a planner can change tags.</p>')+'<div class="status" id="tg-job"></div>';
 }
 async function loadTags(){try{S.tags=await api('api/tags');}catch(e){$('#tg-note').textContent=e.message;return;}renderTags();}
 function renderTags(){
@@ -429,7 +444,16 @@ document.addEventListener('click',async e=>{
   const r=e.target.closest('#t tr[data-dept]');if(r&&!e.target.closest('input,select,button')){S.dept=r.dataset.dept;renderRoll();await loadCells();$('#dd').scrollIntoView({behavior:'smooth',block:'start'});return;}
   const rb=e.target.closest('[data-rb]');if(rb){if(!confirm('Roll back the latest '+(rb.dataset.rb==='fixture'?'fixture plan':'sales plan')+' upload? The one before it (if any) is used again.'))return;
     try{await post('api/rollback',{kind:rb.dataset.rb});dirty();S.dept=null;$('#dd').hidden=true;await load();}catch(err){alert(err.message);}return;}
-  if(e.target.id==='clr'){S.grid.roll={sort:null,filt:{}};renderRoll();return;}
+  if(e.target.id==='clr'){S.grid.roll={sort:null,filt:{}};S.mx=null;renderRoll();return;}
+  const mx=e.target.closest('[data-mx]');
+  if(mx){const [d,b]=mx.dataset.mx.split('|'),g=S.grid.roll;
+    if(!S.prev)S.prev={by:S.by,div:S.div,grid:g?{sort:g.sort,filt:{...g.filt}}:null};   // what Revert goes back to
+    S.mx={d,b:b===''?null:+b};S.by='department';S.div='';$('#f-div').value='';
+    const f={'band:t':new Set([b===''?'(blank)':b+' days'])};if(d)f.division=new Set([d]);
+    S.grid.roll={sort:{id:'days:t',dir:-1},filt:f};await loadRoll();
+    $('#t').closest('.tw').scrollIntoView({behavior:'smooth',block:'nearest'});return;}
+  if(e.target.id==='rev'&&S.prev){const p=S.prev;S.prev=null;S.mx=null;S.by=p.by;S.div=p.div;$('#f-div').value=p.div;
+    S.grid.roll=p.grid||{sort:null,filt:{}};await loadRoll();return;}
   if(e.target.id==='dd-x'){S.dept=null;$('#dd').hidden=true;renderRoll();return;}
   if(e.target.id==='dd-reset'){if(!confirm(`Reset ${S.dept} to the fixture file? Its edited fixtures and qty per fixture are dropped (the edit history is kept).`))return;
     try{await post('api/reset',{department:S.dept});dirty();await loadRoll();await loadCells();}catch(err){alert(err.message);}return;}
