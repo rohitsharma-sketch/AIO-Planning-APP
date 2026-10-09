@@ -358,10 +358,18 @@ def str_of(qty, mdq):
     return np.where(den > 0, qty / np.where(den > 0, den, 1), np.nan)
 
 
+def days_of(qty, mdq, n_days, n_months=1):
+    """STR in days (user, 9 Oct: "STR should be in days like 60 Days, 30 Days"): how many days the minimum display stock
+    lasts at the planned selling rate = average MDQ / (qty per day). = days in month x (1 / STR - 1) for one month."""
+    if not qty or qty <= 0 or not n_days:
+        return None
+    return float((mdq / n_months) / (qty / n_days))
+
+
 def rollup(df, by, months, has_plan=True):
     """rows grouped by `by`, each with per-month and total qty / MDQ / STR / LY STR (sum first, then the ratio);
     no sales plan loaded -> forecast STR None (never a false 0%). Biggest MDQ first within the first key."""
-    def cell(g):
+    def cell(g, ms):
         # forecast: rows with both a plan and fixtures (plan with no fixtures = 100%, fixtures with no plan = 0% - both
         # reported apart in info, never inside a total); no plan loaded -> MDQ shown, STR None (never a false 0%)
         both = (g.mdq > 0) & (g.plan_qty > 0)
@@ -369,14 +377,20 @@ def rollup(df, by, months, has_plan=True):
         # LY: store-months that sold last year, in departments with LY sales under their name (else not open / renamed)
         lyv = g.ly_known & (g.ly_q > 0)
         lq, lmd = g.ly_q[lyv].sum(), g.mdq_base[lyv].sum()
+        # days: over the months that have matched rows (days in those months; LY = the same months a year earlier)
+        pm = sorted(set(g.month[both])) if has_plan else []
+        lm = sorted(set(g.month[lyv]))
+        days = days_of(q, md, sum(m.days_in_month for m in pm), len(pm)) if pm else None
+        ly_days = days_of(lq, lmd, sum((m - 12).days_in_month for m in lm), len(lm)) if lm else None
         return {"qty": float(q), "mdq": float(md), "str": float(str_of(q, md)) if has_plan and both.any() else None,
+                "days": days, "ly_days": ly_days,
                 "ly_qty": float(lq), "ly_str": float(str_of(lq, lmd)) if lyv.any() else None,
                 "fixtures": float(g.fixtures.sum()), "plan_rs": float(g.plan_rs.sum())}
     out = []
     for keys, g in df.groupby(by, dropna=False, sort=True):
         keys = keys if isinstance(keys, tuple) else (keys,)
         row = dict(zip(by, keys))
-        row.update(months=[cell(g[g.month == m]) for m in months], total=cell(g), edited=bool((g.edited != "").any()))
+        row.update(months=[cell(g[g.month == m], [m]) for m in months], total=cell(g, months), edited=bool((g.edited != "").any()))
         out.append(row)
     if len(by) > 1:   # department view: divisions together, biggest departments first
         out.sort(key=lambda r: (str(r[by[0]]), -r["total"]["mdq"]))
@@ -411,4 +425,7 @@ if __name__ == "__main__":   # self-check of the maths on tiny frames (no DB)
     ed2 = pd.concat([ed, pd.DataFrame({"field": ["density"], "department": ["A"], "month": [None], "store": [None], "value": [-1.0]})])
     ed2 = ed2.drop_duplicates(["field", "department", "month", "store"], keep="last")
     assert list(apply_inputs(base, ed2).mdq) == [300.0, 100.0, 100.0]   # density reset to the file (100); S1 fixture edit 3 stays
+    assert abs(days_of(30, 150, 31) - 155.0) < 1e-9 and days_of(0, 150, 31) is None   # 150 pcs at 30 a month of 31 days
+    t = r["months"][0]
+    assert abs(t["days"] - 150 / (30 / 31)) < 1e-9 and abs(t["ly_days"] - 200 / (10 / 31)) < 1e-9   # Mar'27 / Mar'26: 31 days
     print("str_engine self-check: OK")

@@ -134,8 +134,13 @@ def workbook(df, months, has_plan):
     for c in ("store", "department", "division"):
         d[c] = d[c].map(_safe)
     ok = (d.mdq > 0) & (d.plan_qty > 0)
+    dim = df.month.map(lambda m: m.days_in_month).astype(float)
+    dly = df.month.map(lambda m: (m - 12).days_in_month).astype(float)
+    lyok = df.ly_known & (df.ly_q > 0)
+    d["days of cover (plan)"] = np.where(ok, d.mdq / (d.plan_qty.where(d.plan_qty > 0) / dim), np.nan) if has_plan else np.nan
+    d["LY days of cover"] = np.where(lyok, d.mdq_base / (d.ly_q.where(d.ly_q > 0) / dly), np.nan)
     d["max STR at MDQ"] = np.where(ok, se.str_of(d.plan_qty, d.mdq), np.nan) if has_plan else np.nan
-    d["LY STR (same formula)"] = np.where(df.ly_known & (df.ly_q > 0), se.str_of(d.ly_q, d.mdq_base), np.nan)
+    d["LY STR (same formula)"] = np.where(lyok, se.str_of(d.ly_q, d.mdq_base), np.nan)
     d = d.rename(columns={"fixtures_file": "fixtures (file)", "density": "qty per fixture", "mdq": "MDQ", "plan_rs": "plan (Rs)",
                           "asp": "LY avg selling price", "asp_from": "price from", "plan_qty": "plan qty", "ly_q": "LY qty",
                           "mdq_base": "MDQ (file)"})
@@ -146,8 +151,10 @@ def workbook(df, months, has_plan):
             for r in se.rollup(df, by, months, has_plan):
                 base = {k: r[k] for k in by}
                 for m, c in zip(months, r["months"]):
-                    rows.append({**base, "month": str(m), "plan qty": c["qty"], "MDQ": c["mdq"], "max STR at MDQ": c["str"], "LY STR": c["ly_str"]})
+                    rows.append({**base, "month": str(m), "plan qty": c["qty"], "MDQ": c["mdq"], "days of cover": c["days"],
+                                 "LY days of cover": c["ly_days"], "max STR at MDQ": c["str"], "LY STR": c["ly_str"]})
                 rows.append({**base, "month": "4-month avg", "plan qty": r["total"]["qty"], "MDQ": r["total"]["mdq"],
+                             "days of cover": r["total"]["days"], "LY days of cover": r["total"]["ly_days"],
                              "max STR at MDQ": r["total"]["str"], "LY STR": r["total"]["ly_str"]})
             out_df = pd.DataFrame(rows)
             for k in by:
@@ -212,6 +219,8 @@ class H(BaseHTTPRequestHandler):
                                       "plan_rs": r.plan_rs, "plan_qty": r.plan_qty, "asp": r.asp, "asp_from": r.asp_from,
                                       "str": float(se.str_of(r.plan_qty, r.mdq)) if info.get("sales_plan") and r.mdq > 0 and r.plan_qty > 0 else None,
                                       "ly_str": float(se.str_of(r.ly_q, r.mdq_base)) if r.ly_known and r.ly_q > 0 else None,
+                                      "days": se.days_of(r.plan_qty, r.mdq, r.month.days_in_month) if info.get("sales_plan") and r.mdq > 0 else None,
+                                      "ly_days": se.days_of(r.ly_q, r.mdq_base, (r.month - 12).days_in_month) if r.ly_known else None,
                                       "edited": r.edited})
                     rows.append({"store": st, "months": cells})
                 dens = d.drop_duplicates("store").density

@@ -75,13 +75,13 @@ td.ed,td.ed input{background:#FFF8E6}
 <body>
 <header class="topbar"><div class="topbar-inner">
   <div class="logo">STR</div>
-  <div class="brand"><h1>STR Forecaster</h1><p>Max sell-thru the plan allows = planned qty ÷ (planned qty + minimum display stock)</p></div>
+  <div class="brand"><h1>STR Forecaster</h1><p>STR in days = how long the minimum display stock lasts at the planned selling rate</p></div>
   <a class="home" href="/">&larr; Landing</a>
 </div></header>
 <main class="wrap">
   <section class="card">
     <div class="card-h"><div class="grow"><h2>1 &middot; Inputs</h2>
-      <p class="desc">MENS, LADIES and KIDS by store, department and month. Minimum display stock (MDQ) = fixtures × qty per fixture, from the fixture plan; planned qty = planned sales ÷ last year's average selling price. <b>Max STR</b> assumes every store ends the month at exactly its minimum display stock, so it is the highest sell-thru the plan allows (real closing stock is higher). Monthly, so not comparable to the BIS weekly ST%.</p></div></div>
+      <p class="desc">MENS, LADIES and KIDS by store, department and month. Minimum display stock (MDQ) = fixtures × qty per fixture, from the fixture plan; planned qty = planned sales ÷ last year's average selling price. <b>STR in days</b> = MDQ ÷ planned qty per day: 60 days means the minimum display stock lasts 60 days at the plan's selling rate - fewer days, faster sell-through. It is the fastest the plan can turn the stock (stores hold at least MDQ); hover a figure for the same thing as a %.</p></div></div>
     <div class="card-c"><div class="inputs">
       <div class="in" id="in-fixture"></div>
       <div class="in" id="in-sales_plan"></div>
@@ -123,6 +123,7 @@ const mon=s=>s?MON[+s.slice(5,7)-1]+"'"+s.slice(2,4):'';
 const pct=v=>v==null?'—':(v*100).toFixed(1)+'%';
 const n0=v=>v==null?'—':Math.round(v).toLocaleString('en-IN');
 const n2=v=>v==null?'—':(+v).toFixed(2);
+const dd=v=>v==null?'—':Math.round(v)+' days';
 async function api(p,o){const r=await fetch(p,o);const j=(r.headers.get('content-type')||'').includes('json')?await r.json():null;
   if(!r.ok)throw new Error(j?.error||r.statusText);return j;}
 const S={st:null,by:'division',div:'',q:'',dept:null,roll:null,cells:null};
@@ -167,8 +168,8 @@ function renderRoll(){
   const rows=R.rows.filter(r=>!q||keys.some(k=>String(r[k]).toLowerCase().includes(q)));
   const lab=k=>k[0].toUpperCase()+k.slice(1);
   const head1=`<tr>${keys.map((k,i)=>`<th class="${i?'l':'l1'}" rowspan="2">${lab(k)}</th>`).join('')}${ms.map(m=>`<th class="grp" colspan="4">${mon(m)}</th>`).join('')}<th class="grp" colspan="4" title="sum over the months, then the ratio - an average monthly rate, not a season sell-thru">4-month avg</th></tr>`;
-  const sub='<th class="b" title="max sell-thru the plan allows: planned qty ÷ (planned qty + MDQ), over rows with both a plan and fixtures">Max STR</th><th title="last year\'s sales qty ÷ (that qty + this MDQ) - store-months that sold last year">LY STR</th><th title="planned sales ÷ LY average selling price">Plan qty</th><th title="fixtures × qty per fixture">MDQ</th>';
-  const cells=c=>`<td class="b str">${pct(c.str)}</td><td class="ly">${pct(c.ly_str)}</td><td>${n0(c.qty)}</td><td>${n0(c.mdq)}</td>`;
+  const sub='<th class="b" title="days the MDQ lasts at the planned selling rate: MDQ ÷ (planned qty ÷ days), over rows with both a plan and fixtures">STR days</th><th title="the same with last year\'s sales qty on this fixture plan - store-months that sold last year">LY days</th><th title="planned sales ÷ LY average selling price">Plan qty</th><th title="fixtures × qty per fixture">MDQ</th>';
+  const cells=c=>`<td class="b str" title="${c.str!=null?'STR '+pct(c.str):''}">${dd(c.days)}</td><td class="ly" title="${c.ly_str!=null?'LY STR '+pct(c.ly_str):''}">${dd(c.ly_days)}</td><td>${n0(c.qty)}</td><td>${n0(c.mdq)}</td>`;
   const body=rows.map(r=>`<tr class="${isD?'r':''}${isD&&r.department===S.dept?' sel':''}"${isD?` data-dept="${h(r.department)}" tabindex="0"`:''}>`+
     keys.map((k,i)=>`<td class="${i?'l':'l1'}">${h(r[k])}${k==='department'&&r.edited?' <span title="has edits" style="color:var(--warn)">&#9679;</span>':''}</td>`).join('')+
     r.months.map(cells).join('')+cells(r.total)+'</tr>').join('');
@@ -176,10 +177,10 @@ function renderRoll(){
   $('#t').innerHTML=`<thead>${head1}<tr>${ms.map(()=>sub).join('')}${sub}</tr></thead><tbody>${body||`<tr><td class="empty" colspan="${keys.length+4*(ms.length+1)}">No rows.</td></tr>`}${all}</tbody>`;
   const i=S.st.info;
   $('#t-note').textContent=(isD?'Click a department to see its stores and edit fixtures. ':'Switch to Department to edit. ')+
-    'Plan qty and MDQ are summed before the ratio. LY STR = last year\'s sales qty on this same fixture plan (store-months that sold last year).'+
+    'Plan qty and MDQ are summed before the days are worked out; the 4-month figure = average MDQ ÷ planned qty per day. LY days = last year\'s sales qty on this same fixture plan (store-months that sold last year).'+
     (cm.stores_both!=null&&(cm.fixture_only.length||cm.plan_only.length)?` Not compared (store in one file only): fixture plan only ${cm.fixture_only.length} (${cm.fixture_only.join(', ')}; MDQ ${n0(cm.fixture_only_mdq)}), sales plan only ${cm.plan_only.length} (${cm.plan_only.join(', ')}; Rs ${n0(cm.plan_only_rs)}).`:'')+
     (i.qty_by_price_rows?` ${i.qty_by_price_rows} rows had no plan qty and use Rs ÷ LY selling price.`:'')+
-    (i.sales_plan?` Left out of Max STR: plan with no fixtures Rs ${n0(i.plan_rs_without_fixtures)}; fixtures with no plan MDQ ${n0(i.mdq_without_plan)}.`:'')+
+    (i.sales_plan?` Left out of STR days: plan with no fixtures Rs ${n0(i.plan_rs_without_fixtures)}; fixtures with no plan MDQ ${n0(i.mdq_without_plan)}.`:'')+
     ((i.price_from_division||[]).filter(d=>!(i.no_ly_departments||[]).includes(d)).length?` Selling price from the division (no department price): ${i.price_from_division.filter(d=>!(i.no_ly_departments||[]).includes(d)).join(', ')}.`:'')+
     (i.no_asp_rows?` ${i.no_asp_rows} planned rows have no last-year selling price and count as 0 qty.`:'')+
     ((i.no_ly_departments||[]).length?` No last-year sales under these department names (new or renamed - no LY STR; selling price taken from their division until mapped to an old department): ${i.no_ly_departments.join(', ')}.`:'');
@@ -195,10 +196,10 @@ function renderCells(){
     (ed?` <label class="note">Set one value for every store <input type="number" id="dens" min="0" step="1" placeholder="${C.density!=null?Math.round(C.density):''}" aria-label="Qty per fixture for ${h(C.department)}"></label> <button class="btn sm" id="dens-save">Apply</button>`:'')+
     (ed&&(C.density_edited||C.rows.some(r=>r.months.some(c=>c&&c.edited.includes('fixtures'))))?` <button class="btn ghost sm" id="dd-reset">Reset to file</button>`:'');
   const head=`<thead><tr><th class="l1" rowspan="2">Store</th>${ms.map(m=>`<th class="grp" colspan="4">${mon(m)}</th>`).join('')}</tr>
-    <tr>${ms.map(()=>'<th class="b">Fixtures</th><th>MDQ</th><th>Plan qty</th><th>Max STR <span class="note">(LY)</span></th>').join('')}</tr></thead>`;
+    <tr>${ms.map(()=>'<th class="b">Fixtures</th><th>MDQ</th><th>Plan qty</th><th>STR days <span class="note">(LY)</span></th>').join('')}</tr></thead>`;
   const body=C.rows.map(r=>`<tr><td class="l1">${h(r.store)}</td>${r.months.map((c,i)=>!c?'<td class="b">—</td><td></td><td></td><td></td>':
     `<td class="b${c.edited.includes('fixtures')?' ed':''}">${ed?`<input type="number" min="0" step="0.5" value="${+(+c.fixtures).toFixed(2)}" data-store="${h(r.store)}" data-month="${ms[i]}" aria-label="Fixtures ${h(r.store)} ${mon(ms[i])}" title="file: ${n2(c.fixtures_file)}">`:n2(c.fixtures)}</td>`+
-    `<td>${n0(c.mdq)}</td><td title="${c.asp?h('Rs '+n0(c.plan_rs)+' ÷ Rs '+n0(c.asp)+' ('+c.asp_from+')'):''}">${n0(c.plan_qty)}</td><td><b>${pct(c.str)}</b> <span class="note">${pct(c.ly_str)}</span></td>`).join('')}</tr>`).join('');
+    `<td>${n0(c.mdq)}</td><td title="${c.asp?h('Rs '+n0(c.plan_rs)+' ÷ Rs '+n0(c.asp)+' ('+c.asp_from+')'):''}">${n0(c.plan_qty)}</td><td title="${c.str!=null?'STR '+pct(c.str):''}"><b>${dd(c.days)}</b> <span class="note">${dd(c.ly_days)}</span></td>`).join('')}</tr>`).join('');
   $('#dt').innerHTML=head+'<tbody>'+body+'</tbody>';
   $('#dd-note').textContent=ed?'Change a fixture count and press Enter or leave the box - it saves at once (MDQ = fixtures × qty per fixture). Highlighted cells are edited; hover shows the file value. Edits stay when a new fixture file is uploaded - use Reset to file to drop them.':'Read-only: only an admin or a planner can edit.';
 }

@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: STR shown in days
+- **Asked (user):** "STR should be in days like 60 Days, 30 Days etc."
+- STR days = MDQ / (planned qty per day) - how long the minimum display stock lasts at the plan's selling rate (fewer days = faster sell-through; = days in month x (1 / STR - 1)). 4-month figure = average MDQ / planned qty per day over the months with data; LY days the same with LY sales qty (LY month lengths). Shown in the division / department / store table and the department detail; the % stays in the hover; Excel gains "days of cover (plan)" / "LY days of cover".
+- Today (189 matched stores, Mar-Jun): MENS 45 days (LY 43), LADIES 58 (LY 61), KIDS 62 (LY 62), all 54 (LY 55).
+
 ### STR Forecaster: store-level sales plan, stores matched across both files (reviewed)
 - **Asked (user):** "@MAMJ'26 - Sales Plan.xlsx use this" and "also map and match the stores which are availble in the fixture sheet too so that the comparison is apple to apple".
 - New reader for the store-level plan (STORE_NAME, DIVISION, DEPARTMENT, "<Mon>'yy _V" Rs lakh / "_Q" pieces per month; MRP / ATTRIBUTE / TABLE-NON_TABLE rows summed; totals like "MAMJ'26_V" ignored); planned qty comes from the plan itself (Rs / LY price only where a row has no qty). Migration `d4a8c1e7f2b9` adds plan_qty to planning_inputs.str_plan_rows.
