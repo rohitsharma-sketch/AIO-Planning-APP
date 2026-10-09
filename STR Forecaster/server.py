@@ -94,6 +94,17 @@ def _clean(o):
     return o
 
 
+def _tag_cols(rows):
+    """department rows get their Core / Seasonal tag and attribute (own, else the suite attribute master)"""
+    t, master = se.tags()
+    for r in rows:
+        own = t.get(str(r["department"]).upper(), {})
+        r["tag"] = own.get("tag")
+        r["attribute"] = own.get("attribute") or master.get(str(r["department"]).upper())
+        r["attribute_from"] = "tag master" if own.get("attribute") else "attribute master" if r["attribute"] else ""
+    return rows
+
+
 def _filter(df, q):
     for k in ("division", "department", "store"):
         v = q.get(k, [""])[0]
@@ -145,12 +156,18 @@ def workbook(df, months, has_plan):
     d = d.rename(columns={"fixtures_file": "fixtures (file)", "density": "qty per fixture", "mdq": "MDQ", "plan_rs": "plan (Rs)",
                           "asp": "LY avg selling price", "asp_from": "price from", "plan_qty": "plan qty", "ly_q": "LY qty",
                           "mdq_base": "MDQ (file)"})
-    with pd.ExcelWriter(out, engine="openpyxl") as xw:
+    tg = {r["department"]: r for r in _tag_cols([{"department": x} for x in df.department.unique()])}
+    d.insert(2, "tag", df.department.map(lambda x: tg[x]["tag"]))
+    d.insert(3, "attribute", df.department.map(lambda x: tg[x]["attribute"]))
+    # xlsxwriter (installed): ~1.7M cells far faster than openpyxl (~45 s); text is never read as a formula
+    with pd.ExcelWriter(out, engine="xlsxwriter", engine_kwargs={"options": {"strings_to_formulas": False}}) as xw:
         d.sort_values(["division", "department", "store", "month"]).to_excel(xw, sheet_name="STR detail", index=False)
         for by, nm in ((["division"], "By division"), (["division", "department"], "By department"), (["store"], "By store")):
             rows = []
             for r in se.rollup(df, by, months, has_plan):
                 base = {k: r[k] for k in by}
+                if "department" in by:
+                    base.update(tag=tg[r["department"]]["tag"], attribute=tg[r["department"]]["attribute"])
                 for m, c in zip(months, r["months"]):
                     rows.append({**base, "month": str(m), "plan qty": c["qty"], "MDQ": c["mdq"], "STR band": c["band"], "days of cover": c["days"],
                                  "LY days of cover": c["ly_days"], "max STR at MDQ": c["str"], "LY STR": c["ly_str"]})
@@ -200,35 +217,47 @@ class H(BaseHTTPRequestHandler):
             if path == "/api/rollup":
                 by = {"division": ["division"], "department": ["division", "department"], "store": ["store"]}.get(q.get("by", ["division"])[0], ["division"])
                 d, hp = _filter(df, q), bool(info.get("sales_plan"))
-                all_ = se.rollup(d.assign(_all="All"), ["_all"], months, hp)[0] if len(d) else None   # summed, then the ratio
-                return self._send(200, {"months": [str(m) for m in months], "rows": se.rollup(d, by, months, hp), "by": by, "all": all_})
+                rows = se.rollup(d, by, months, hp)
+                if "department" in by:
+                    _tag_cols(rows)
+                return self._send(200, {"months": [str(m) for m in months], "rows": rows, "by": by, "has_plan": hp})
             if path == "/api/cells":
                 dept = q.get("department", [""])[0]
                 d = df[df.department == dept]
                 if d.empty:
                     return self._send(404, {"error": "No such department in the fixture plan."})
-                rows = []
-                for st, g in d.groupby("store", sort=True):
-                    cells = []
-                    for m in months:
-                        gm = g[g.month == m]
-                        if gm.empty:
-                            cells.append(None)
-                            continue
-                        r = gm.iloc[0]
-                        cells.append({"fixtures": r.fixtures, "fixtures_file": r.fixtures_file, "density": r.density, "mdq": r.mdq,
-                                      "plan_rs": r.plan_rs, "plan_qty": r.plan_qty, "asp": r.asp, "asp_from": r.asp_from,
-                                      "str": float(se.str_of(r.plan_qty, r.mdq)) if info.get("sales_plan") and r.mdq > 0 and r.plan_qty > 0 else None,
-                                      "ly_str": float(se.str_of(r.ly_q, r.mdq_base)) if r.ly_known and r.ly_q > 0 else None,
-                                      "days": se.days_of(r.plan_qty, r.mdq, r.month.days_in_month) if info.get("sales_plan") and r.mdq > 0 else None,
-                                      "ly_days": se.days_of(r.ly_q, r.mdq_base, (r.month - 12).days_in_month) if r.ly_known else None,
-                                      "edited": r.edited})
-                        cells[-1]["band"] = se.str_band(cells[-1]["days"])
-                    rows.append({"store": st, "months": cells})
+                mi = {m: i for i, m in enumerate(months)}
+                by_store = {}
+                for r in d.itertuples():
+                    if r.month not in mi:
+                        continue
+                    dim, ldim = r.month.days_in_month, (r.month - 12).days_in_month
+                    c = {"fixtures": r.fixtures, "fixtures_file": r.fixtures_file, "density": r.density, "mdq": r.mdq,
+                         "mdq_base": r.mdq_base, "plan_rs": r.plan_rs, "plan_qty": r.plan_qty, "qty_from": r.qty_from,
+                         "asp": r.asp, "asp_from": r.asp_from, "ly_q": r.ly_q, "n_days": dim, "ly_n_days": ldim,
+                         "str": float(se.str_of(r.plan_qty, r.mdq)) if info.get("sales_plan") and r.mdq > 0 and r.plan_qty > 0 else None,
+                         "ly_str": float(se.str_of(r.ly_q, r.mdq_base)) if r.ly_known and r.ly_q > 0 else None,
+                         "days": se.days_of(r.plan_qty, r.mdq, dim) if info.get("sales_plan") and r.mdq > 0 else None,
+                         "ly_days": se.days_of(r.ly_q, r.mdq_base, ldim) if r.ly_known else None, "edited": r.edited}
+                    c["band"] = se.str_band(c["days"])
+                    by_store.setdefault(r.store, [None] * len(months))[mi[r.month]] = c
+                rows = [{"store": st, "months": by_store[st]} for st in sorted(by_store)]
                 dens = d.drop_duplicates("store").density
                 return self._send(200, {"department": dept, "division": d.division.iloc[0], "months": [str(m) for m in months],
                                         "density": float(dens.median()) if len(dens) else None,
                                         "density_edited": bool(d.edited.str.contains("qty per fixture").any()), "rows": rows})
+            if path == "/api/tags":
+                t, master = se.tags()
+                g = df.groupby(["division", "department"], as_index=False)[["mdq", "plan_rs"]].sum()
+                rows = []
+                for r in g.itertuples():
+                    own = t.get(str(r.department).upper(), {})
+                    rows.append({"division": r.division, "department": r.department, "mdq": r.mdq, "plan_rs": r.plan_rs,
+                                 "tag": own.get("tag"), "attribute": own.get("attribute"),
+                                 "attribute_master": master.get(str(r.department).upper()), "source": own.get("source"),
+                                 "updated_by": own.get("updated_by"), "updated_at": own.get("updated_at")})
+                return self._send(200, {"rows": rows, "attributes": sorted(set(master.values()) | {v["attribute"] for v in t.values() if v.get("attribute")}),
+                                        "not_in_plan": sorted(set(t) - {str(x).upper() for x in g.department})})
             if path == "/api/download":
                 name = f"STR Forecast - {time.strftime('%d.%m.%y')}.xlsx"
                 return self._send(200, workbook(_filter(df, q), months, bool(info.get("sales_plan"))),
@@ -262,6 +291,12 @@ class H(BaseHTTPRequestHandler):
                 shift = qs.get("shift", [None])[0]
                 if shift not in (None, "0", "12"):
                     return self._send(400, {"error": "shift must be 0 or 12"})
+                if kind == "tags":   # a small master: read and saved at once
+                    if not data:
+                        return self._send(400, {"error": "No file received."})
+                    f, notes = se.read_tags(data)
+                    n_ = se.save_tags(f, user, "upload: " + urllib.parse.unquote(self.headers.get("X-File-Name", "tags.xlsx")))
+                    return self._send(200, {"ok": True, "rows": n_, "notes": notes})
                 if kind not in ("fixture", "sales_plan"):
                     return self._send(400, {"error": "kind must be fixture or sales_plan"})
                 if not data:
@@ -278,6 +313,16 @@ class H(BaseHTTPRequestHandler):
                 se.add_edit(body.get("field"), str(body.get("department") or ""), body.get("value"), user,
                             month=(body.get("month") + "-01") if body.get("month") else None, store=body.get("store") or None)
                 _dirty()
+                return self._send(200, {"ok": True})
+            if path == "/api/tags":
+                dep = str(body.get("department") or "").strip()
+                if not dep:
+                    return self._send(400, {"error": "department is required"})
+                tag = (body.get("tag") or "").strip().upper() or None
+                if tag not in (None,) + se.TAGS:
+                    return self._send(400, {"error": "tag must be Core or Seasonal"})
+                att = (body.get("attribute") or "").strip().upper()[:60] or None
+                se.save_tags(pd.DataFrame([{"department": dep, "tag": tag, "attribute": att}]), user, "edit")
                 return self._send(200, {"ok": True})
             if path == "/api/reset":
                 n_ = se.reset_department(str(body.get("department") or ""), user)
@@ -297,6 +342,7 @@ class H(BaseHTTPRequestHandler):
 
 def main():
     print(f"STR Forecaster on http://127.0.0.1:{PORT}")
+    threading.Thread(target=lambda: frame(), daemon=True).start()   # warm the frame so the first page load is quick
     ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
 
 

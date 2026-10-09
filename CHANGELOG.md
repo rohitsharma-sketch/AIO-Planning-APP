@@ -7,6 +7,14 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: faster views, calculation popups, header sort / filter, full-month stores, department tags
+- **Asked (user):** "1.) reduce toggle delay time and population time. 2.) It will be helpful if every department tile will have the calculation popup once clicked on it 3.)add filters and sort functions on headers remove the find bar 4.) Most likely the stores which have their plan and fixtures only qualify those. All months should be present in both sales and fixtures. 5.) Add a tab to add Core or Seasonal Tag to the department and Add Attribute to them. I will give the master so that you can tag each department with it"
+- Speed: views 0.06-0.2 s (were 3-8 s) - rollup is one groupby (same figures, checked against the old code), upload rows and LY sales cached, the page keeps every view and loads the others in the background; department detail 0.15 s (was 2.4 s); Excel ~11 s (was ~66 s, xlsxwriter).
+- Click any figure (main table, All row, department detail) for its calculation: plan qty, MDQ, average MDQ, days, qty per day, STR days, band, %, LY.
+- Headers sort (click) and filter (value list, Band included); the find bar is gone; the All row adds up the rows shown.
+- Only stores with every forecast month in both the fixture plan and the sales plan are compared (180 today; 9 with a missing month listed in the note).
+- New "Department tags" tab: Core / Seasonal and attribute per department (planning_inputs.str_dept_tags, migration e5b9d2f1a7c3), from a tag master upload or edited in place; attribute defaults to the suite attribute master. Tag and attribute show (sortable, filterable) in the Department view and the Excel.
+
 ### AOP Forecaster: department split on Actual Sales Cont %
 - **Asked (user):** "In the AOP Forecaster : change the cont% to break AOP into Department to Actual Sales Cont % instead of RE-indexed Cont %".
 - Output's Department layer / filter now splits each store x division's Base and Forecast by the department's share of its ACTUAL LY sales in the same month last year (`/api/config/dept-mix?sale_type=actual`, calendar.sales_snapshots actual_dept), instead of the re-indexed share. Fallbacks unchanged (store mix over closed months; new stores = division network mix). Eff Sales / Eff Cont% / Eff Gr% and the "= Calendar total" rows stay calendarised (re-indexed) so they still match the Calendar. Division totals unchanged (checked: split adds back to 100%; e.g. AMG MENS R/N T-shirt Mar 16.8% actual vs 16.4% re-indexed). OutputTab.jsx splitByDept(leaves, mix, shareMix); dist rebuilt.

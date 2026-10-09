@@ -229,6 +229,93 @@ def _period(col):
     return pd.to_datetime(col).dt.to_period("M")
 
 
+_CACHE = {}   # an upload's rows never change and LY months are closed: fetched once (user, 9 Oct: "reduce ... population time")
+
+
+def _frame(s, sql, params=None, key=None):
+    """query -> DataFrame built from row tuples (dict rows took ~1 s of a rebuild); `key` caches a result that cannot change"""
+    if key is not None and key in _CACHE:
+        return _CACHE[key].copy()
+    r = s.execute(text(sql), params or {})
+    df = pd.DataFrame(r.all(), columns=list(r.keys()))
+    if key is not None:
+        if len(_CACHE) > 20:
+            _CACHE.clear()
+        _CACHE[key] = df
+    return df.copy()
+
+
+# ---- department tags (user, 9 Oct: "Add a tab to add Core or Seasonal Tag to the department and Add Attribute to them.
+# I will give the master") - planning_inputs.str_dept_tags (migration e5b9d2f1a7c3); attribute falls back to the
+# suite's attribute master (masterdata.attribute_master.attribute1)
+TAGS = ("CORE", "SEASONAL")
+
+
+def _tag(v):
+    v = str(v or "").strip().upper()
+    return "CORE" if v.startswith("CORE") else "SEASONAL" if v.startswith("SEASON") else None
+
+
+def read_tags(data):
+    """tag master workbook -> (frame department/tag/attribute, notes). First sheet with a DEPARTMENT header; the tag
+    column is the first header containing CORE, SEASON, TAG or TYPE; the attribute column the first starting ATTRIBUTE."""
+    xl = pd.ExcelFile(io.BytesIO(data))
+    for sh in xl.sheet_names:
+        head = xl.parse(sh, header=None, nrows=10)
+        hdr = next((i for i in range(len(head)) if any(str(v).strip().upper() == "DEPARTMENT" for v in head.iloc[i])), None)
+        if hdr is None:
+            continue
+        df = xl.parse(sh, header=hdr)
+        up = {str(c).strip().upper(): c for c in df.columns}
+        tc = next((c for k, c in up.items() if any(w in k for w in ("CORE", "SEASON", "TAG", "TYPE"))), None)
+        ac = next((c for k, c in up.items() if k.startswith("ATTRIBUTE")), None)
+        if tc is None and ac is None:
+            continue
+        f = pd.DataFrame({"department": df[up["DEPARTMENT"]].astype(str).str.strip(),
+                          "tag": df[tc].map(_tag) if tc is not None else None,
+                          "attribute": df[ac].map(lambda v: str(v).strip().upper() if pd.notna(v) and str(v).strip() else None) if ac is not None else None})
+        f = f[f.department.ne("") & f.department.str.upper().ne("NAN")]
+        bad = int((df[tc].notna() & f.tag.isna()).sum()) if tc is not None else 0
+        notes = [f"sheet {sh}: {len(f)} departments", f"tag from \"{tc}\"" if tc is not None else "no tag column",
+                 f"attribute from \"{ac}\"" if ac is not None else "no attribute column"] + ([f"{bad} tag values not Core / Seasonal - left blank"] if bad else [])
+        return f.drop_duplicates("department", keep="last").reset_index(drop=True), notes
+    raise ValueError("No sheet with a DEPARTMENT column and a Core / Seasonal (TAG) or ATTRIBUTE column.")
+
+
+def save_tags(frame, user, source):
+    """upsert department tags; a blank tag / attribute in an upload keeps the stored one, an edit sets exactly what is sent"""
+    keep = source != "edit"
+    with SessionLocal() as s:
+        for r in frame.itertuples():
+            tag = r.tag if isinstance(r.tag, str) and r.tag in TAGS else None
+            att = r.attribute if isinstance(r.attribute, str) and r.attribute.strip() else None
+            s.execute(text(f"""INSERT INTO planning_inputs.str_dept_tags (department, tag, attribute, source, updated_by)
+                               VALUES (:d, :t, :a, :s, :u)
+                               ON CONFLICT (department) DO UPDATE SET
+                                 tag = {"coalesce(EXCLUDED.tag, str_dept_tags.tag)" if keep else "EXCLUDED.tag"},
+                                 attribute = {"coalesce(EXCLUDED.attribute, str_dept_tags.attribute)" if keep else "EXCLUDED.attribute"},
+                                 source = EXCLUDED.source, updated_by = EXCLUDED.updated_by, updated_at = now()"""),
+                      {"d": str(r.department).strip().upper(), "t": tag, "a": att, "s": source[:200], "u": user})
+        s.commit()
+    return len(frame)
+
+
+def tags():
+    """department -> {tag, attribute, attribute_master, source, updated_by, updated_at}; attribute = own else the master's"""
+    with SessionLocal() as s:
+        t = _frame(s, "SELECT department, tag, attribute, source, updated_by, updated_at FROM planning_inputs.str_dept_tags")
+        try:
+            am = _frame(s, "SELECT upper(trim(department)) AS d, attribute1 FROM masterdata.attribute_master WHERE attribute1 IS NOT NULL")
+        except Exception:  # noqa: BLE001 - the shared master is optional
+            s.rollback()
+            am = pd.DataFrame(columns=["d", "attribute1"])
+    master = dict(zip(am.d, am.attribute1))
+    t = t.astype(object).where(t.notna(), None)   # an empty tag / attribute is None, not a truthy NaN
+    out = {str(r.department).upper(): {"tag": r.tag, "attribute": r.attribute, "source": r.source, "updated_by": r.updated_by,
+                          "updated_at": r.updated_at} for r in t.itertuples()}
+    return out, master
+
+
 def apply_inputs(df, edits):
     """fixtures / qty per fixture / MDQ after edits. Qty per fixture = the file's MDQ / fixtures; where the file has no
     MDQ, the department's median; a department density edit replaces it for every store and month."""
@@ -304,19 +391,19 @@ def build():
         fu, pu = active_upload(s, "fixture"), active_upload(s, "sales_plan")
         if not fu:
             return None, {"fixture": None, "sales_plan": pu}
-        fx = pd.DataFrame(s.execute(text("SELECT month, store, division, department, fixtures, mdq FROM planning_inputs.str_fixture_rows WHERE upload_id = :i"),
-                                    {"i": fu["id"]}).mappings().all())
-        pl = pd.DataFrame(s.execute(text("SELECT month, store, division, department, plan_rs, plan_qty AS plan_qty_file FROM planning_inputs.str_plan_rows WHERE upload_id = :i"),
-                                    {"i": pu["id"]}).mappings().all()) if pu else pd.DataFrame()
-        ed = pd.DataFrame(s.execute(text("""SELECT DISTINCT ON (field, department, month, store) field, department, month, store, value
-                                            FROM planning_inputs.str_edits ORDER BY field, department, month, store, edited_at DESC, id DESC""")).mappings().all())
+        fx = _frame(s, "SELECT month, store, division, department, fixtures, mdq FROM planning_inputs.str_fixture_rows WHERE upload_id = :i",
+                    {"i": fu["id"]}, key=("fx", fu["id"]))
+        pl = _frame(s, "SELECT month, store, division, department, plan_rs, plan_qty AS plan_qty_file FROM planning_inputs.str_plan_rows WHERE upload_id = :i",
+                    {"i": pu["id"]}, key=("pl", pu["id"])) if pu else pd.DataFrame()
+        ed = _frame(s, """SELECT DISTINCT ON (field, department, month, store) field, department, month, store, value
+                          FROM planning_inputs.str_edits ORDER BY field, department, month, store, edited_at DESC, id DESC""")
         fx["month"] = _period(fx.month)
         months = sorted(fx.month.unique())
-        lys = pd.DataFrame(s.execute(text("""SELECT month, store, department, plan_division AS division, sum(sl_v) AS sl_v,
-                                                    sum(sl_q) AS sl_q FROM calendar.sales_fact
-                                             WHERE kind = 'actual' AND calendar_id = 0 AND month = ANY(CAST(:m AS date[]))
-                                               AND plan_division = ANY(:d) GROUP BY 1, 2, 3, 4"""),
-                                        {"m": [f"{m - 12}-01" for m in months], "d": list(DIVS)}).mappings().all())
+        lys = _frame(s, """SELECT month, store, department, plan_division AS division, sum(sl_v) AS sl_v,
+                                  sum(sl_q) AS sl_q FROM calendar.sales_fact
+                           WHERE kind = 'actual' AND calendar_id = 0 AND month = ANY(CAST(:m AS date[]))
+                             AND plan_division = ANY(:d) GROUP BY 1, 2, 3, 4""",
+                     {"m": [f"{m - 12}-01" for m in months], "d": list(DIVS)}, key=("ly", tuple(map(str, months)), date.today()))
     common = {}
     if len(pl):
         pl["month"] = _period(pl.month)
@@ -324,11 +411,23 @@ def build():
     if len(pl) == 0 and pu:
         common = {"month_mismatch": True}   # the plan's months miss the fixture months: show the fixture view and say why
     if len(pl):
+        # user, 9 Oct: "map and match the stores ... so that the comparison is apple to apple" and "the stores which have
+        # their plan and fixtures only qualify those. All months should be present in both sales and fixtures" - a store
+        # is compared only when every forecast month is in the fixture plan AND in the sales plan
         fs, ps = set(fx.store), set(pl.store)
-        both_ = fs & ps                    # user, 9 Oct: "map and match the stores ... so that the comparison is apple to apple"
-        common = {"stores_both": len(both_),
-                  "fixture_only": sorted(fs - ps), "fixture_only_mdq": float(fx.loc[~fx.store.isin(both_), "mdq"].sum()),
-                  "plan_only": sorted(ps - fs), "plan_only_rs": float(pl.loc[~pl.store.isin(both_), "plan_rs"].sum())}
+        nf, np_ = fx.groupby("store").month.nunique(), pl.groupby("store").month.nunique()
+        both_ = set(nf[nf == len(months)].index) & set(np_[np_ == len(months)].index)
+
+        def gaps(f, st):
+            have = set(f.month[f.store == st])
+            return ", ".join(m.strftime("%b'%y") for m in months if m not in have)
+        part = []
+        for st in sorted((fs & ps) - both_):
+            a, b = gaps(fx, st), gaps(pl, st)
+            part.append(f"{st} (" + "; ".join(x for x in ((a and "no fixtures " + a), (b and "no plan " + b)) if x) + ")")
+        common = {"stores_both": len(both_), "fixture_only": sorted(fs - ps), "plan_only": sorted(ps - fs), "part_months": part,
+                  "left_out_mdq": float(fx.loc[~fx.store.isin(both_), "mdq"].sum()),
+                  "left_out_rs": float(pl.loc[~pl.store.isin(both_), "plan_rs"].sum())}
         fx, pl = fx[fx.store.isin(both_)], pl[pl.store.isin(both_)]
         df = fx.merge(pl, on=KEY, how="outer", suffixes=("", "_p"))
         df["division"] = df["division"].fillna(df.pop("division_p"))
@@ -381,28 +480,44 @@ def str_band(days):
 def rollup(df, by, months, has_plan=True):
     """rows grouped by `by`, each with per-month and total qty / MDQ / STR / LY STR (sum first, then the ratio);
     no sales plan loaded -> forecast STR None (never a false 0%). Biggest MDQ first within the first key."""
-    def cell(g, ms):
-        # forecast: rows with both a plan and fixtures (plan with no fixtures = 100%, fixtures with no plan = 0% - both
-        # reported apart in info, never inside a total); no plan loaded -> MDQ shown, STR None (never a false 0%)
-        both = (g.mdq > 0) & (g.plan_qty > 0)
-        q, md = (g.plan_qty[both].sum(), g.mdq[both].sum()) if has_plan else (0.0, g.mdq.sum())
-        # LY: store-months that sold last year, in departments with LY sales under their name (else not open / renamed)
-        lyv = g.ly_known & (g.ly_q > 0)
-        lq, lmd = g.ly_q[lyv].sum(), g.mdq_base[lyv].sum()
+    # summed per group x month in one groupby, the ratios after (user, 9 Oct: "reduce toggle delay") - same figures as
+    # a per-group loop. Forecast: rows with both a plan and fixtures (plan with no fixtures = 100%, fixtures with no plan
+    # = 0% - both reported apart in info, never inside a total); no plan loaded -> MDQ shown, STR None (never a false 0%).
+    # LY: store-months that sold last year, in departments with LY sales under their name (else not open / renamed).
+    both = ((df.mdq > 0) & (df.plan_qty > 0)) if has_plan else pd.Series(False, index=df.index)
+    lyv = df.ly_known.astype(bool) & (df.ly_q > 0)
+    a = pd.DataFrame({k: df[k].values for k in by})
+    a["mi"] = pd.Index(months).get_indexer(df.month)
+    a["q"], a["md"] = np.where(both, df.plan_qty, 0.0), (np.where(both, df.mdq, 0.0) if has_plan else df.mdq.values)
+    a["nb"], a["lq"], a["lmd"], a["nl"] = both.values.astype(int), np.where(lyv, df.ly_q, 0.0), np.where(lyv, df.mdq_base, 0.0), lyv.values.astype(int)
+    a["fixtures"], a["plan_rs"], a["ed"] = df.fixtures.values, df.plan_rs.values, (df.edited != "").values.astype(int)
+    a = a[a.mi >= 0]
+    V = ["q", "md", "nb", "lq", "lmd", "nl", "fixtures", "plan_rs", "ed"]
+    g = a.groupby(by + ["mi"], dropna=False, sort=True)[V].sum()
+    dim = [m.days_in_month for m in months]
+    ldim = [(m - 12).days_in_month for m in months]
+
+    def cell(s, nd, nm, lnd, lnm):
         # days: over the months that have matched rows (days in those months; LY = the same months a year earlier)
-        pm = sorted(set(g.month[both])) if has_plan else []
-        lm = sorted(set(g.month[lyv]))
-        days = days_of(q, md, sum(m.days_in_month for m in pm), len(pm)) if pm else None
-        ly_days = days_of(lq, lmd, sum((m - 12).days_in_month for m in lm), len(lm)) if lm else None
-        return {"qty": float(q), "mdq": float(md), "str": float(str_of(q, md)) if has_plan and both.any() else None,
+        days = days_of(s[0], s[1], nd, nm) if nm else None
+        ly_days = days_of(s[3], s[4], lnd, lnm) if lnm else None
+        return {"qty": float(s[0]), "mdq": float(s[1]), "str": float(str_of(s[0], s[1])) if s[2] else None,
                 "days": days, "ly_days": ly_days, "band": str_band(days), "ly_band": str_band(ly_days),
-                "ly_qty": float(lq), "ly_str": float(str_of(lq, lmd)) if lyv.any() else None,
-                "fixtures": float(g.fixtures.sum()), "plan_rs": float(g.plan_rs.sum())}
+                "ly_qty": float(s[3]), "ly_mdq": float(s[4]), "ly_str": float(str_of(s[3], s[4])) if s[5] else None,
+                "fixtures": float(s[6]), "plan_rs": float(s[7]), "rows": int(s[2]), "ly_rows": int(s[5]),
+                "n_days": nd if nm else 0, "n_months": nm, "ly_n_days": lnd if lnm else 0, "ly_n_months": lnm}
+    acc = {}
+    for t in g.itertuples():
+        keys, mi = t[0][:-1], t[0][-1]
+        acc.setdefault(keys, [[0.0] * len(V) for _ in months])[mi] = list(t[1:])
     out = []
-    for keys, g in df.groupby(by, dropna=False, sort=True):
-        keys = keys if isinstance(keys, tuple) else (keys,)
+    for keys, ms in acc.items():
         row = dict(zip(by, keys))
-        row.update(months=[cell(g[g.month == m], [m]) for m in months], total=cell(g, months), edited=bool((g.edited != "").any()))
+        cells = [cell(s, dim[i], 1 if s[2] else 0, ldim[i], 1 if s[5] else 0) for i, s in enumerate(ms)]
+        tot = [sum(s[j] for s in ms) for j in range(len(V))]
+        pm, lm = [i for i, s in enumerate(ms) if s[2]], [i for i, s in enumerate(ms) if s[5]]
+        row.update(months=cells, total=cell(tot, sum(dim[i] for i in pm), len(pm), sum(ldim[i] for i in lm), len(lm)),
+                   edited=bool(tot[8]))
         out.append(row)
     if len(by) > 1:   # department view: divisions together, biggest departments first
         out.sort(key=lambda r: (str(r[by[0]]), -r["total"]["mdq"]))
@@ -442,4 +557,5 @@ if __name__ == "__main__":   # self-check of the maths on tiny frames (no DB)
     assert abs(t["days"] - 150 / (30 / 31)) < 1e-9 and abs(t["ly_days"] - 200 / (10 / 31)) < 1e-9   # Mar'27 / Mar'26: 31 days
     assert [str_band(x) for x in (20, 54, 75, 104, 105, 250, None)] == [60, 60, 90, 90, 120, 180, None]
     assert t["band"] == 150 and t["ly_band"] == 180          # 155 days -> 150; 620 days -> capped at 180
+    assert (_tag(" core"), _tag("Seasonal"), _tag("x"), _tag(None)) == ("CORE", "SEASONAL", None, None)
     print("str_engine self-check: OK")

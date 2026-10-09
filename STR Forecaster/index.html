@@ -28,6 +28,10 @@ td,th,.num{font-variant-numeric:tabular-nums}
 .home{margin-left:auto;white-space:nowrap;font-size:12.5px;font-weight:700;color:#fff;text-decoration:none;padding:6px 13px;border-radius:999px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18)}
 .wrap{max-width:1360px;margin:0 auto;padding:20px 28px;display:flex;flex-direction:column;gap:16px}
 @media (max-width:640px){.wrap,.topbar-inner{padding-left:16px;padding-right:16px}.brand p{display:none}}
+.tabs{display:flex;gap:6px}
+.tab{border:1px solid var(--input);background:var(--card);border-radius:999px;padding:6px 15px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;color:var(--foreground)}
+.tab.on{background:var(--chrome);border-color:var(--chrome);color:#fff}
+.panel{display:flex;flex-direction:column;gap:16px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:calc(var(--radius) + 2px)}
 .card-h{padding:16px 20px 0;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .card-h h2{margin:0;font-size:15px;font-weight:800}
@@ -51,26 +55,43 @@ td,th,.num{font-variant-numeric:tabular-nums}
 .chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .chip{border:1px solid var(--input);background:#fff;border-radius:999px;padding:4px 11px;font:inherit;font-size:12.5px;cursor:pointer}
 .chip.on{background:var(--btn);border-color:var(--btn);color:var(--btn-t);font-weight:700}
-select,input[type=search],input[type=number]{border:1px solid var(--input);border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;background:#fff;color:var(--foreground)}
+select,input[type=search],input[type=number],input[type=text]{border:1px solid var(--input);border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;background:#fff;color:var(--foreground)}
 .tw{overflow:auto;max-height:62vh;border:1px solid var(--border);border-radius:var(--radius)}
 table{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
 th,td{padding:5px 9px;border-bottom:1px solid var(--border);white-space:nowrap;text-align:right}
-th{position:sticky;background:var(--muted);font-weight:700;z-index:1}
-thead tr:first-child th{top:0}thead tr:nth-child(2) th{top:28px}
+th{position:sticky;background:var(--muted);font-weight:700;z-index:1;line-height:18px}
+thead tr:first-child th{top:0}thead tr:nth-child(2) th{top:29px}
 th.grp{text-align:center;border-left:1px solid var(--border)}
+th.sh{cursor:pointer;user-select:none}th.sh:hover{color:var(--primary)}
+.hf{border:0;background:none;cursor:pointer;padding:0 2px;margin-left:2px;color:var(--muted-foreground);font-size:11px;line-height:1}
+.hf.on{color:#fff;background:var(--primary);border-radius:4px}
 td.l,th.l{text-align:left}
 td.l1,th.l1{text-align:left;position:sticky;left:0;background:#fff}
 th.l1{background:var(--muted);z-index:2}
 td.b,th.b{border-left:1px solid var(--border)}
-td.str{font-weight:800}
 td.band{font-weight:800;color:var(--primary)}
 td.ly{color:var(--muted-foreground)}
+td.c{cursor:pointer}td.c:hover{text-decoration:underline dotted;background:#EEF4F0}
 tr.r{cursor:pointer}tr.r:hover td{background:var(--muted)}tr.sel td{background:#EEF4F0}
-tr.tot td{font-weight:800;border-top:2px solid var(--input)}
+tr.tot td{font-weight:800;border-top:2px solid var(--input);position:sticky;bottom:0;background:#FBFAF6}
 td input[type=number]{width:72px;text-align:right;padding:3px 6px}
+td input[type=text]{width:150px;padding:3px 6px;text-transform:uppercase}
+td select{padding:3px 6px}
 td.ed,td.ed input{background:#FFF8E6}
+.dot{color:var(--warn)}
+.tg{display:inline-block;border-radius:999px;padding:0 8px;font-size:11.5px;font-weight:700}
+.tg.core{background:#E3EEF9;color:#1D4F86}.tg.seasonal{background:#FBEFD9;color:#8A5300}
 .note{font-size:12px;color:var(--muted-foreground)}
 .empty{padding:22px;text-align:center;color:var(--muted-foreground)}
+.pop{position:fixed;z-index:50;background:#fff;border:1px solid var(--input);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.16);padding:10px 12px;max-width:min(460px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto;font-size:12.5px}
+.pop th{position:static;background:none;text-align:left;font-weight:600;color:var(--muted-foreground);padding:3px 12px 3px 0;border:0;vertical-align:top}
+.pop td{text-align:left;white-space:normal;padding:3px 0;border:0}
+.pop tr.k td,.pop tr.k th{color:var(--foreground)}
+.calc-h{display:flex;gap:10px;align-items:baseline;margin-bottom:4px}.calc-h b{flex:1}
+.px{border:0;background:none;cursor:pointer;font-size:14px;color:var(--muted-foreground)}
+.pf{display:flex;flex-direction:column;gap:6px;min-width:220px}
+.pf-l{max-height:260px;overflow:auto;display:flex;flex-direction:column;gap:1px}
+.pf-l label{display:flex;gap:6px;align-items:center;cursor:pointer;padding:1px 2px}
 </style>
 </head>
 <body>
@@ -80,9 +101,15 @@ td.ed,td.ed input{background:#FFF8E6}
   <a class="home" href="/">&larr; Landing</a>
 </div></header>
 <main class="wrap">
+  <nav class="tabs" role="tablist" aria-label="Pages">
+    <button class="tab on" role="tab" data-tab="fc" aria-selected="true">Forecast</button>
+    <button class="tab" role="tab" data-tab="tg" aria-selected="false">Department tags</button>
+  </nav>
+
+  <div class="panel" id="p-fc">
   <section class="card">
     <div class="card-h"><div class="grow"><h2>1 &middot; Inputs</h2>
-      <p class="desc">MENS, LADIES and KIDS by store, department and month. Minimum display stock (MDQ) = fixtures × qty per fixture, from the fixture plan; planned qty = planned sales ÷ last year's average selling price. <b>STR in days</b> = MDQ ÷ planned qty per day: 60 days means the minimum display stock lasts 60 days at the plan's selling rate - fewer days, faster sell-through. It is the fastest the plan can turn the stock (stores hold at least MDQ); hover a figure for the same thing as a %. <b>Band</b> = the actual days rounded to the nearest 30, kept between 60 and 180 (54 → 60, 75 → 90, 104 → 90, 250 → 180).</p></div></div>
+      <p class="desc">MENS, LADIES and KIDS by store, department and month. Minimum display stock (MDQ) = fixtures × qty per fixture, from the fixture plan; planned qty = the sales plan's qty (else planned sales ÷ last year's average selling price). <b>STR in days</b> = MDQ ÷ planned qty per day: 60 days means the minimum display stock lasts 60 days at the plan's selling rate - fewer days, faster sell-through. <b>Band</b> = the actual days rounded to the nearest 30, kept between 60 and 180 (54 → 60, 75 → 90, 104 → 90, 250 → 180). Only stores with every month in both files are compared. Click any figure to see how it is worked out.</p></div></div>
     <div class="card-c"><div class="inputs">
       <div class="in" id="in-fixture"></div>
       <div class="in" id="in-sales_plan"></div>
@@ -92,12 +119,13 @@ td.ed,td.ed input{background:#FFF8E6}
   <section class="card" id="fc" hidden>
     <div class="card-h"><div class="grow"><h2>2 &middot; Forecast sell-thru</h2>
       <p class="desc" id="fc-desc"></p></div>
+      <button class="btn ghost sm" id="clr" hidden>Clear sort &amp; filters</button>
       <button class="btn ghost sm" id="dl">&#8595; Excel</button></div>
     <div class="card-c">
       <div class="bar" style="margin-bottom:10px">
         <div class="chips" role="group" aria-label="View by" id="by"></div>
         <select id="f-div" aria-label="Division"><option value="">All divisions</option><option>MENS</option><option>LADIES</option><option>KIDS</option></select>
-        <input type="search" id="f-q" placeholder="Find…" aria-label="Find a row">
+        <span class="note">Click a header to sort; &#9662; filters it.</span>
       </div>
       <div class="tw"><table id="t"></table></div>
       <p class="note" id="t-note"></p>
@@ -113,23 +141,143 @@ td.ed,td.ed input{background:#FFF8E6}
       <p class="note" id="dd-note"></p>
     </div>
   </section>
+  </div>
+
+  <div class="panel" id="p-tg" hidden>
+  <section class="card">
+    <div class="card-h"><div class="grow"><h2>Department tags</h2>
+      <p class="desc">Core or Seasonal and the attribute of each department in the fixture plan. Upload the tag master or set them here; an empty attribute shows the suite's attribute master. Tags show as columns (sortable, filterable) in the Department view of the forecast and in the Excel.</p></div></div>
+    <div class="card-c">
+      <div class="inputs" style="margin-bottom:12px"><div class="in" id="in-tags"></div><div class="in"><h3>Summary</h3><div class="meta" id="tg-sum"></div></div></div>
+      <div class="tw"><table id="tg-t"></table></div>
+      <datalist id="tg-att"></datalist>
+      <p class="note" id="tg-note"></p>
+    </div>
+  </section>
+  </div>
 </main>
+<div class="pop" id="pop" hidden role="dialog"></div>
 <script>
-/* STR Forecaster page (user, 2026-10-09). Everything is computed on the server (str_engine.py); this page only shows it
-   and sends uploads / edits. Relative api/ URLs so it works behind Landing's /str/ prefix. */
+/* STR Forecaster page (user, 2026-10-09). Everything per row is computed on the server (str_engine.py); this page shows
+   it, sorts / filters on the headers, sums the All row from the rows shown, and sends uploads / edits. Relative api/
+   URLs so it works behind Landing's /str/ prefix. */
 const $=s=>document.querySelector(s);
 const h=t=>String(t??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const mon=s=>s?MON[+s.slice(5,7)-1]+"'"+s.slice(2,4):'';
 const pct=v=>v==null?'—':(v*100).toFixed(1)+'%';
 const n0=v=>v==null?'—':Math.round(v).toLocaleString('en-IN');
+const n1=v=>v==null?'—':(+v).toLocaleString('en-IN',{maximumFractionDigits:1});
 const n2=v=>v==null?'—':(+v).toFixed(2);
 const dd=v=>v==null?'—':Math.round(v)+' days';
+const tagLab=t=>t==='CORE'?'Core':t==='SEASONAL'?'Seasonal':'';
 async function api(p,o){const r=await fetch(p,o);const j=(r.headers.get('content-type')||'').includes('json')?await r.json():null;
   if(!r.ok)throw new Error(j?.error||r.statusText);return j;}
-const S={st:null,by:'division',div:'',q:'',dept:null,roll:null,cells:null};
+const post=(p,body)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+const S={st:null,by:'division',div:'',dept:null,roll:null,cells:null,tags:null,cache:{},grid:{},gt:{},vis:{},allAgg:null,pf:null};
 const BY=[['division','Division'],['department','Department'],['store','Store']];
 function addM(s,n){const d=new Date(+s.slice(0,4),+s.slice(5,7)-1+n,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+
+/* ---- the All row: the server's sums, worked out over the rows shown (str_engine.rollup: sum first, then the ratio) */
+const dim=s=>new Date(+s.slice(0,4),+s.slice(5,7),0).getDate();
+const lyDim=s=>new Date(+s.slice(0,4)-1,+s.slice(5,7),0).getDate();
+const band=d=>d==null?null:Math.min(Math.max(Math.floor(d/30+0.5)*30,60),180);
+const daysOf=(q,md,nd,nm)=>q>0&&nd?(md/nm)/(q/nd):null;
+const SUMS=['qty','mdq','ly_qty','ly_mdq','fixtures','plan_rs','rows','ly_rows'];
+function mkCell(t,nd,nm,lnd,lnm){const d=nm?daysOf(t.qty,t.mdq,nd,nm):null,l=lnm?daysOf(t.ly_qty,t.ly_mdq,lnd,lnm):null;
+  return {...t,days:d,ly_days:l,band:band(d),ly_band:band(l),str:t.rows?t.qty/(t.qty+t.mdq):null,ly_str:t.ly_rows?t.ly_qty/(t.ly_qty+t.ly_mdq):null,
+    n_days:nm?nd:0,n_months:nm,ly_n_days:lnm?lnd:0,ly_n_months:lnm};}
+function agg(rows,ms){
+  const per=ms.map((m,i)=>{const t=Object.fromEntries(SUMS.map(f=>[f,0]));rows.forEach(r=>SUMS.forEach(f=>{t[f]+=r.months[i][f]||0}));return t;});
+  const tot=Object.fromEntries(SUMS.map(f=>[f,per.reduce((s,t)=>s+t[f],0)]));
+  const pm=ms.map((m,i)=>i).filter(i=>per[i].rows),lm=ms.map((m,i)=>i).filter(i=>per[i].ly_rows);
+  return {months:per.map((t,i)=>mkCell(t,dim(ms[i]),t.rows?1:0,lyDim(ms[i]),t.ly_rows?1:0)),
+          total:mkCell(tot,pm.reduce((s,i)=>s+dim(ms[i]),0),pm.length,lm.reduce((s,i)=>s+lyDim(ms[i]),0),lm.length)};
+}
+
+/* ---- header sort + filter (user, 9 Oct: "add filters and sort functions on headers remove the find bar") */
+const gstate=n=>S.grid[n]??={sort:null,filt:{}};
+const fv=(c,r)=>{const v=c.get(r);return v==null||v===''?'(blank)':c.fmt?c.fmt(v):String(v);};
+function applyGrid(n,cols,rows){
+  const g=gstate(n);
+  let out=rows.filter(r=>cols.every(c=>!g.filt[c.id]||g.filt[c.id].has(fv(c,r))));
+  const c=g.sort&&cols.find(c=>c.id===g.sort.id);
+  if(c){const d=g.sort.dir;out=[...out].sort((a,b)=>{const x=c.get(a),y=c.get(b);
+    if(x==null||x==='')return y==null||y===''?0:1;if(y==null||y==='')return -1;
+    return (typeof x==='number'&&typeof y==='number'?x-y:String(x).localeCompare(String(y)))*d;});}
+  return out;
+}
+function th(n,c,extra=''){
+  const g=gstate(n),s=g.sort?.id===c.id?(g.sort.dir>0?' ▲':' ▼'):'';
+  return `<th class="sh ${c.cls||''}" data-g="${n}" data-col="${h(c.id)}" ${extra} title="${h((c.title?c.title+' - ':'')+'click to sort')}">${h(c.label)}${s}${c.filt?`<button class="hf${g.filt[c.id]?' on':''}" data-hf aria-label="Filter ${h(c.label)}${c.grp?' '+h(c.grp):''}">&#9662;</button>`:''}</th>`;
+}
+function grid(n,el,cols,rows,o={}){
+  S.gt[n]={cols,rows};
+  const vis=applyGrid(n,cols,rows);S.vis[n]=vis;
+  let head;
+  if(cols.some(c=>c.grp)){let r1='',r2='';
+    for(let j=0;j<cols.length;){const c=cols[j];
+      if(!c.grp){r1+=th(n,c,'rowspan="2"');j++;continue;}
+      let k=j;while(k<cols.length&&cols[k].grp===c.grp)k++;
+      r1+=`<th class="grp" colspan="${k-j}"${c.gtitle?` title="${h(c.gtitle)}"`:''}>${h(c.grp)}</th>`;
+      for(let x=j;x<k;x++)r2+=th(n,cols[x]);j=k;}
+    head=`<tr>${r1}</tr><tr>${r2}</tr>`;}
+  else head=`<tr>${cols.map(c=>th(n,c)).join('')}</tr>`;
+  const td=(c,r)=>`<td class="${c.cls||''}${c.tdc?' '+c.tdc(r):''}${c.m!=null?' c':''}"${c.m!=null?` data-m="${c.m}"`:''}>${c.html?c.html(r):h(c.get(r)??'—')}</td>`;
+  const body=vis.map((r,i)=>`<tr data-k="${i}" ${o.rowAttr?o.rowAttr(r,i):''}>${cols.map(c=>td(c,r)).join('')}</tr>`).join('');
+  el.innerHTML=`<thead>${head}</thead><tbody>${body||`<tr><td class="empty" colspan="${cols.length}">No rows${rows.length?' match the filters':''}.</td></tr>`}${o.tail?o.tail(vis,cols):''}</tbody>`;
+  return vis;
+}
+const RENDER={roll:()=>renderRoll(),cells:()=>renderCells(),tags:()=>renderTags()};
+
+/* ---- popover: header filters and the calculation of a figure */
+function showPop(a,html){const p=$('#pop');p.innerHTML=html;p.hidden=false;const r=a.getBoundingClientRect(),w=p.offsetWidth,hh=p.offsetHeight;
+  let y=r.bottom+4;if(y+hh>innerHeight-8)y=Math.max(8,r.top-hh-4);
+  p.style.left=Math.max(8,Math.min(r.left,innerWidth-w-8))+'px';p.style.top=y+'px';}
+function hidePop(){$('#pop').hidden=true;S.pf=null;}
+function openFilter(n,id,btn){
+  const T=S.gt[n],c=T.cols.find(c=>c.id===id),sel=gstate(n).filt[id];
+  const vals=[...new Set(T.rows.map(r=>fv(c,r)))].sort((a,b)=>{const x=parseFloat(a),y=parseFloat(b);return !isNaN(x)&&!isNaN(y)?x-y:a.localeCompare(b);});
+  showPop(btn,`<div class="pf"><div class="calc-h"><b>${h(c.label)}${c.grp?' · '+h(c.grp):''}</b><button class="px" data-px aria-label="Close">&#x2715;</button></div>
+    <input type="search" class="pf-q" placeholder="Search…" aria-label="Search values">
+    <div><button class="btn ghost sm" data-pf="all">All</button> <button class="btn ghost sm" data-pf="none">None</button></div>
+    <div class="pf-l">${vals.map(v=>`<label><input type="checkbox" value="${h(v)}"${!sel||sel.has(v)?' checked':''}> ${h(v)}</label>`).join('')}</div></div>`);
+  S.pf={n,id};
+}
+function pfApply(){const {n,id}=S.pf,boxes=[...$('#pop').querySelectorAll('.pf-l input')],on=boxes.filter(b=>b.checked).map(b=>b.value),g=gstate(n);
+  if(on.length===boxes.length)delete g.filt[id];else g.filt[id]=new Set(on);RENDER[n]();}
+function calcBox(title,rows,foot=''){return `<div class="calc"><div class="calc-h"><b>${h(title)}</b><button class="px" data-px aria-label="Close">&#x2715;</button></div><table>${rows.join('')}</table>${foot?`<p class="note" style="margin:6px 0 0">${foot}</p>`:''}</div>`;}
+const L=(a,b,k)=>`<tr${k?' class="k"':''}><th>${a}</th><td>${b}</td></tr>`;
+// user, 9 Oct: "every department tile will have the calculation popup once clicked on it"
+function calcAgg(title,c){
+  const R=[];
+  if(!c.rows)R.push(L('STR days','— <span class="note">'+(S.roll.has_plan?'no store rows with both a plan and fixtures':'no sales plan loaded')+'</span>'),L('MDQ',n0(c.mdq)+' pcs'));
+  else{const avg=c.mdq/c.n_months,qpd=c.qty/c.n_days;
+    R.push(L('Plan qty',`${n0(c.qty)} pcs <span class="note">${c.rows} store × department × month rows with a plan and fixtures</span>`),
+      L('MDQ',`${n0(c.mdq)} pcs <span class="note">Σ fixtures × qty per fixture, same rows</span>`));
+    if(c.n_months>1)R.push(L('Average MDQ',`${n0(c.mdq)} ÷ ${c.n_months} months = ${n0(avg)}`));
+    R.push(L('Days',`${c.n_days} <span class="note">${c.n_months>1?'in the '+c.n_months+' months':'in the month'}</span>`),
+      L('Plan qty per day',`${n0(c.qty)} ÷ ${c.n_days} = ${n1(qpd)}`),
+      L('STR days',`${n0(avg)} ÷ ${n1(qpd)} = <b>${n1(c.days)}</b>`,1),
+      L('Band',`${n1(c.days)} → nearest 30, kept 60–180 = <b>${c.band} days</b>`,1),
+      L('As a %',`${n0(c.qty)} ÷ (${n0(c.qty)} + ${n0(c.mdq)}) = ${pct(c.str)}`));}
+  if(c.ly_rows){const la=c.ly_mdq/c.ly_n_months;
+    R.push(L('LY days',`${n0(la)} ÷ (${n0(c.ly_qty)} ÷ ${c.ly_n_days}) = <b>${n1(c.ly_days)}</b> → band ${c.ly_band} <span class="note">LY qty on the file MDQ${c.ly_n_months>1?' (avg of '+c.ly_n_months+' months)':''}, ${c.ly_rows} store-months that sold last year</span>`));}
+  else R.push(L('LY days','— <span class="note">no last-year sales here</span>'));
+  return calcBox(title,R);
+}
+function calcCell(title,c){
+  const R=[L('Fixtures',n2(c.fixtures)+(Math.abs(c.fixtures-c.fixtures_file)>1e-9?` <span class="note">edited - file ${n2(c.fixtures_file)}</span>`:'')),
+    L('Qty per fixture',n2(c.density)+(c.edited.includes('qty per fixture')?' <span class="note">edited</span>':'')),
+    L('MDQ',`${n2(c.fixtures)} × ${n2(c.density)} = <b>${n0(c.mdq)}</b>`),
+    L('Plan qty',c.qty_from==='plan'?`<b>${n0(c.plan_qty)}</b> <span class="note">from the sales plan file (Rs ${n0(c.plan_rs)})</span>`:
+      c.qty_from?`Rs ${n0(c.plan_rs)} ÷ Rs ${n0(c.asp)} <span class="note">LY selling price, ${h(c.asp_from)}</span> = <b>${n0(c.plan_qty)}</b>`:'— <span class="note">no plan</span>')];
+  if(c.days!=null)R.push(L('Days in month',c.n_days),L('STR days',`${n0(c.mdq)} ÷ (${n0(c.plan_qty)} ÷ ${c.n_days}) = <b>${n1(c.days)}</b>`,1),
+    L('Band',`${n1(c.days)} → nearest 30, kept 60–180 = <b>${c.band} days</b>`,1),L('As a %',pct(c.str)));
+  else R.push(L('STR days','— <span class="note">needs both a plan and fixtures</span>'));
+  R.push(L('LY days',c.ly_days!=null?`${n0(c.mdq_base)} ÷ (${n0(c.ly_q)} ÷ ${c.ly_n_days}) = <b>${n1(c.ly_days)}</b> <span class="note">LY qty on the file MDQ</span>`:'— <span class="note">no last-year sales</span>'));
+  return calcBox(title,R);
+}
 
 function inputCard(kind){
   const u=(S.st.info||{})[kind],ed=S.st.can_edit,fx=kind==='fixture';
@@ -138,14 +286,14 @@ function inputCard(kind){
     m=`<div class="meta"><span><b>${h(u.file_name)}</b></span><span>${(+u.rows).toLocaleString('en-IN')} rows</span>
       <span>${sh?`${mon(addM(a,-sh))}–${mon(addM(z,-sh))} used as <b>${mon(a)}–${mon(z)}</b>`:`<b>${mon(a)}–${mon(z)}</b>`}</span>
       <span>${h(u.uploaded_by||'')} · ${h(String(u.uploaded_at).slice(0,16).replace('T',' '))}</span></div>`;}
-  else m=`<div class="status warn">${fx?'Not uploaded yet.':'Not loaded yet - the forecast STR shows once the tentative sales plan is loaded. Until then the page shows the fixture plan, MDQ and last year\'s STR on the same formula.'}</div>`;
+  else m=`<div class="status warn">${fx?'Not uploaded yet.':'Not loaded yet - the forecast STR shows once the tentative sales plan is loaded. Until then the page shows the fixture plan, MDQ and last year&#39;s STR on the same formula.'}</div>`;
   const up=ed?`<label class="note">Months in the file are <select data-shift aria-label="Which months the file is for"><option value="12" selected>for the same months next year (+12)</option><option value="0">the forecast months as they are</option></select></label><label class="drop" data-kind="${kind}" tabindex="0">Drop the workbook here or click to choose<small>${fx?'One sheet per month (STORE, DIVISION, DEPARTMENT, MC_FIX / FINAL FIXTURE, MDQ)':'STORE_NAME, DIVISION, DEPARTMENT and per month "Mar&#39;26 _V" (Rs lakh) / "Mar&#39;26 _Q" (pieces)'}</small><input type="file" accept=".xlsx,.xlsm${fx?'':',.xlsb'}" hidden></label>`:'';
   const rb=ed&&u?`<div><button class="btn ghost sm" data-rb="${kind}">Roll back this upload</button></div>`:'';
   $('#in-'+kind).innerHTML=`<h3>${fx?'Fixture plan (store × department × month)':'Sales plan (month-wise)'}</h3>${m}${up}${rb}`;
 }
 async function load(){
   try{S.st=await api('api/state');}catch(e){$('#job').className='status err';$('#job').textContent='Could not load: '+e.message;return;}
-  inputCard('fixture');inputCard('sales_plan');
+  inputCard('fixture');inputCard('sales_plan');tagCard();
   const j=S.st.job;$('#job').className='status'+(j?.status==='error'?' err':'');
   $('#job').textContent=!j?'':j.status==='running'?`${j.name}: ${j.step}…`:j.status==='error'?`${j.name}: ${j.error}`:
     `${j.name}: loaded ${(j.rows||0).toLocaleString('en-IN')} rows${(j.notes||[]).length?' - '+j.notes.join('; '):''}`;
@@ -154,32 +302,52 @@ async function load(){
   if(!i.fixture)return;
   const cm=i.common||{};
   if(cm.month_mismatch){$('#job').className='status err';$('#job').textContent='The sales plan months do not match the fixture plan months - re-upload it with the other "Months in the file are" choice. Showing the fixture plan only.';}
-  $('#fc-desc').textContent=(cm.stores_both!=null?`${cm.stores_both} stores in both the fixture plan and the sales plan (only these are compared)`:`${i.stores} stores`)+` · ${i.departments} departments · ${i.months.map(mon).join(', ')} · last year = ${i.ly_months.map(mon).join(', ')}`+
+  $('#fc-desc').textContent=(cm.stores_both!=null?`${cm.stores_both} stores with every month in both the fixture plan and the sales plan (only these are compared)`:`${i.stores} stores`)+` · ${i.departments} departments · ${i.months.map(mon).join(', ')} · last year = ${i.ly_months.map(mon).join(', ')}`+
     (i.sales_plan?'':' · no sales plan yet, so forecast STR shows "—"');
-  await loadRoll();if(S.dept)await loadCells();
+  await loadRoll();if(S.dept)await loadCells();if(S.tab==='tg')loadTags();
 }
+function getRoll(by,div){const k=by+'|'+div;
+  if(!S.cache[k]){const p=new URLSearchParams({by});if(div)p.set('division',div);S.cache[k]=api('api/rollup?'+p).catch(e=>{delete S.cache[k];throw e;});}
+  return S.cache[k];}
 async function loadRoll(){
-  const p=new URLSearchParams({by:S.by});if(S.div)p.set('division',S.div);
-  try{S.roll=await api('api/rollup?'+p);}catch(e){$('#t-note').textContent=e.message;return;}
+  try{S.roll=await getRoll(S.by,S.div);}catch(e){$('#t-note').textContent=e.message;return;}
   renderRoll();
+  BY.forEach(([b])=>getRoll(b,S.div).catch(()=>{}));   // the other views load in the background - switching is instant
+}
+const FIG=[['band','Band','actual STR days rounded to the nearest 30, kept between 60 and 180'],
+  ['days','STR days','days the MDQ lasts at the planned selling rate: MDQ ÷ (planned qty ÷ days), over rows with both a plan and fixtures'],
+  ['ly_days','LY days','the same with last year’s sales qty on this fixture plan - store-months that sold last year'],
+  ['qty','Plan qty','planned qty: the sales plan’s own, else planned sales ÷ LY selling price'],['mdq','MDQ','fixtures × qty per fixture']];
+const cellOf=(r,i)=>i==='t'?r.total:r.months[i];
+function rollCols(){
+  const R=S.roll,keys=R.by,lab=k=>k[0].toUpperCase()+k.slice(1);
+  const cols=keys.map((k,j)=>({id:k,label:lab(k),cls:j?'l':'l1',filt:true,get:r=>r[k],
+    html:r=>h(r[k])+(k==='department'&&r.edited?' <span title="has edits" class="dot">&#9679;</span>':'')}));
+  if(keys.includes('department'))cols.push(
+    {id:'tag',label:'Tag',cls:'l',filt:true,get:r=>tagLab(r.tag)||null,html:r=>r.tag?`<span class="tg ${r.tag.toLowerCase()}">${tagLab(r.tag)}</span>`:'<span class="note">—</span>'},
+    {id:'attribute',label:'Attribute',cls:'l',filt:true,get:r=>r.attribute,html:r=>r.attribute?`<span title="from the ${h(r.attribute_from)}">${h(r.attribute)}</span>`:'<span class="note">—</span>'});
+  for(const [i,g] of [...R.months.map((m,i)=>[i,mon(m)]),['t','4-month avg']])for(const [f,l,t] of FIG)
+    cols.push({id:f+':'+i,grp:g,gtitle:i==='t'?'sum over the months, then the days - an average monthly rate':'',label:l,title:t,m:i,
+      cls:f==='band'?'b band':f==='ly_days'?'ly':'',num:true,filt:f==='band',fmt:f==='band'?v=>v+' days':null,
+      get:r=>cellOf(r,i)[f],html:r=>{const v=cellOf(r,i)[f];return f==='qty'||f==='mdq'?n0(v):dd(v);}});
+  return cols;
 }
 function renderRoll(){
   $('#by').innerHTML=BY.map(([k,t])=>`<button class="chip${S.by===k?' on':''}" data-by="${k}" aria-pressed="${S.by===k}">${t}</button>`).join('');
-  const R=S.roll,ms=R.months,keys=R.by,q=S.q.toLowerCase(),isD=keys.includes('department'),cm=S.st.info.common||{};
-  const rows=R.rows.filter(r=>!q||keys.some(k=>String(r[k]).toLowerCase().includes(q)));
-  const lab=k=>k[0].toUpperCase()+k.slice(1);
-  const head1=`<tr>${keys.map((k,i)=>`<th class="${i?'l':'l1'}" rowspan="2">${lab(k)}</th>`).join('')}${ms.map(m=>`<th class="grp" colspan="5">${mon(m)}</th>`).join('')}<th class="grp" colspan="5" title="sum over the months, then the ratio - an average monthly rate, not a season sell-thru">4-month avg</th></tr>`;
-  const sub='<th class="b" title="actual STR days rounded to the nearest 30, kept between 60 and 180">Band</th><th title="days the MDQ lasts at the planned selling rate: MDQ ÷ (planned qty ÷ days), over rows with both a plan and fixtures">STR days</th><th title="the same with last year\'s sales qty on this fixture plan - store-months that sold last year">LY days</th><th title="planned sales ÷ LY average selling price">Plan qty</th><th title="fixtures × qty per fixture">MDQ</th>';
-  const cells=c=>`<td class="b band">${dd(c.band)}</td><td title="${c.str!=null?'STR '+pct(c.str):''}">${dd(c.days)}</td><td class="ly" title="${c.ly_str!=null?'LY STR '+pct(c.ly_str):''}">${dd(c.ly_days)}</td><td>${n0(c.qty)}</td><td>${n0(c.mdq)}</td>`;
-  const body=rows.map(r=>`<tr class="${isD?'r':''}${isD&&r.department===S.dept?' sel':''}"${isD?` data-dept="${h(r.department)}" tabindex="0"`:''}>`+
-    keys.map((k,i)=>`<td class="${i?'l':'l1'}">${h(r[k])}${k==='department'&&r.edited?' <span title="has edits" style="color:var(--warn)">&#9679;</span>':''}</td>`).join('')+
-    r.months.map(cells).join('')+cells(r.total)+'</tr>').join('');
-  const all=R.all?`<tr class="tot"><td class="l1" colspan="${keys.length}">All${S.div?' '+h(S.div):''}</td>${R.all.months.map(cells).join('')}${cells(R.all.total)}</tr>`:'';
-  $('#t').innerHTML=`<thead>${head1}<tr>${ms.map(()=>sub).join('')}${sub}</tr></thead><tbody>${body||`<tr><td class="empty" colspan="${keys.length+5*(ms.length+1)}">No rows.</td></tr>`}${all}</tbody>`;
-  const i=S.st.info;
-  $('#t-note').textContent=(isD?'Click a department to see its stores and edit fixtures. ':'Switch to Department to edit. ')+
-    'Plan qty and MDQ are summed before the days are worked out; the 4-month figure = average MDQ ÷ planned qty per day. LY days = last year\'s sales qty on this same fixture plan (store-months that sold last year).'+
-    (cm.stores_both!=null&&(cm.fixture_only.length||cm.plan_only.length)?` Not compared (store in one file only): fixture plan only ${cm.fixture_only.length} (${cm.fixture_only.join(', ')}; MDQ ${n0(cm.fixture_only_mdq)}), sales plan only ${cm.plan_only.length} (${cm.plan_only.join(', ')}; Rs ${n0(cm.plan_only_rs)}).`:'')+
+  const R=S.roll,isD=R.by.includes('department'),cm=S.st.info.common||{},g=gstate('roll');
+  const vis=grid('roll',$('#t'),rollCols(),R.rows,{
+    rowAttr:r=>isD?`data-dept="${h(r.department)}" tabindex="0" class="r${r.department===S.dept?' sel':''}"`:'',
+    tail:(vis,cols)=>{if(!vis.length)return '';S.allAgg=agg(vis,R.months);const nk=cols.filter(c=>c.m==null).length;
+      return `<tr class="tot" data-k="all"><td class="l1" colspan="${nk}">All${S.div?' '+h(S.div):''}${vis.length<R.rows.length?` <span class="note">(${vis.length} of ${R.rows.length} shown)</span>`:''}</td>`+
+        cols.filter(c=>c.m!=null).map(c=>`<td class="${c.cls} c" data-m="${c.m}">${c.html(S.allAgg)}</td>`).join('')+'</tr>';}});
+  $('#clr').hidden=!g.sort&&!Object.keys(g.filt).length;
+  const i=S.st.info,po=cm.part_months||[];
+  const lo=[cm.fixture_only?.length?`in the fixture plan only ${cm.fixture_only.length} (${cm.fixture_only.join(', ')})`:'',
+    cm.plan_only?.length?`in the sales plan only ${cm.plan_only.length} (${cm.plan_only.join(', ')})`:'',
+    po.length?`a month missing in one file ${po.length} (${po.join(', ')})`:''].filter(Boolean);
+  $('#t-note').textContent=(isD?'Click a department to see its stores and edit fixtures; click a figure for its calculation. ':'Click a figure for its calculation. ')+
+    'The All row adds up the rows shown (after the header filters). Plan qty and MDQ are summed before the days are worked out; the 4-month figure = average MDQ ÷ planned qty per day. LY days = last year’s sales qty on this same fixture plan (store-months that sold last year).'+
+    (lo.length?` Stores not compared: ${lo.join('; ')} - MDQ ${n0(cm.left_out_mdq)}, Rs ${n0(cm.left_out_rs)} left out.`:'')+
     (i.qty_by_price_rows?` ${i.qty_by_price_rows} rows had no plan qty and use Rs ÷ LY selling price.`:'')+
     (i.sales_plan?` Left out of STR days: plan with no fixtures Rs ${n0(i.plan_rs_without_fixtures)}; fixtures with no plan MDQ ${n0(i.mdq_without_plan)}.`:'')+
     ((i.price_from_division||[]).filter(d=>!(i.no_ly_departments||[]).includes(d)).length?` Selling price from the division (no department price): ${i.price_from_division.filter(d=>!(i.no_ly_departments||[]).includes(d)).join(', ')}.`:'')+
@@ -196,50 +364,112 @@ function renderCells(){
   $('#dd-dens').innerHTML=`<span>Qty per fixture (minimum density): <b>${n2(C.density)}</b> <span class="note">${C.density_edited?'(edited, every store)':'(typical store, from the file)'}</span></span>`+
     (ed?` <label class="note">Set one value for every store <input type="number" id="dens" min="0" step="1" placeholder="${C.density!=null?Math.round(C.density):''}" aria-label="Qty per fixture for ${h(C.department)}"></label> <button class="btn sm" id="dens-save">Apply</button>`:'')+
     (ed&&(C.density_edited||C.rows.some(r=>r.months.some(c=>c&&c.edited.includes('fixtures'))))?` <button class="btn ghost sm" id="dd-reset">Reset to file</button>`:'');
-  const head=`<thead><tr><th class="l1" rowspan="2">Store</th>${ms.map(m=>`<th class="grp" colspan="4">${mon(m)}</th>`).join('')}</tr>
-    <tr>${ms.map(()=>'<th class="b">Fixtures</th><th>MDQ</th><th>Plan qty</th><th>Band <span class="note">(actual · LY days)</span></th>').join('')}</tr></thead>`;
-  const body=C.rows.map(r=>`<tr><td class="l1">${h(r.store)}</td>${r.months.map((c,i)=>!c?'<td class="b">—</td><td></td><td></td><td></td>':
-    `<td class="b${c.edited.includes('fixtures')?' ed':''}">${ed?`<input type="number" min="0" step="0.5" value="${+(+c.fixtures).toFixed(2)}" data-store="${h(r.store)}" data-month="${ms[i]}" aria-label="Fixtures ${h(r.store)} ${mon(ms[i])}" title="file: ${n2(c.fixtures_file)}">`:n2(c.fixtures)}</td>`+
-    `<td>${n0(c.mdq)}</td><td title="${c.asp?h('Rs '+n0(c.plan_rs)+' ÷ Rs '+n0(c.asp)+' ('+c.asp_from+')'):''}">${n0(c.plan_qty)}</td><td title="${c.str!=null?'STR '+pct(c.str):''}"><b style="color:var(--primary)">${dd(c.band)}</b> <span class="note">${c.days!=null?Math.round(c.days):'—'} · ${c.ly_days!=null?Math.round(c.ly_days):'—'}</span></td>`).join('')}</tr>`).join('');
-  $('#dt').innerHTML=head+'<tbody>'+body+'</tbody>';
-  $('#dd-note').textContent=ed?'Change a fixture count and press Enter or leave the box - it saves at once (MDQ = fixtures × qty per fixture). Highlighted cells are edited; hover shows the file value. Edits stay when a new fixture file is uploaded - use Reset to file to drop them.':'Read-only: only an admin or a planner can edit.';
+  const cols=[{id:'store',label:'Store',cls:'l1',filt:true,get:r=>r.store}];
+  ms.forEach((m,i)=>{const c=r=>r.months[i],g=mon(m);cols.push(
+    {id:'fx:'+i,grp:g,label:'Fixtures',cls:'b',num:true,get:r=>c(r)?.fixtures,tdc:r=>c(r)?.edited.includes('fixtures')?'ed':'',
+      html:r=>!c(r)?'—':ed?`<input type="number" min="0" step="0.5" value="${+(+c(r).fixtures).toFixed(2)}" data-store="${h(r.store)}" data-month="${m}" aria-label="Fixtures ${h(r.store)} ${g}" title="file: ${n2(c(r).fixtures_file)}">`:n2(c(r).fixtures)},
+    {id:'mdq:'+i,grp:g,label:'MDQ',num:true,m:i,get:r=>c(r)?.mdq,html:r=>c(r)?n0(c(r).mdq):''},
+    {id:'qty:'+i,grp:g,label:'Plan qty',num:true,m:i,get:r=>c(r)?.plan_qty,html:r=>c(r)?n0(c(r).plan_qty):''},
+    {id:'band:'+i,grp:g,label:'Band',title:'band (actual · LY days)',num:true,m:i,filt:true,fmt:v=>v+' days',get:r=>c(r)?.band,
+      html:r=>{const x=c(r);return !x?'':`<b style="color:var(--primary)">${dd(x.band)}</b> <span class="note">${x.days!=null?Math.round(x.days):'—'} · ${x.ly_days!=null?Math.round(x.ly_days):'—'}</span>`;}});});
+  grid('cells',$('#dt'),cols,C.rows);
+  $('#dd-note').textContent=(ed?'Change a fixture count and press Enter or leave the box - it saves at once (MDQ = fixtures × qty per fixture). Highlighted cells are edited; hover shows the file value. Edits stay when a new fixture file is uploaded - use Reset to file to drop them. ':'Read-only: only an admin or a planner can edit. ')+'Click a figure for its calculation.';
 }
-const post=(p,body)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+
+/* ---- department tags (user, 9 Oct: "Add a tab to add Core or Seasonal Tag to the department and Add Attribute to them") */
+function tagCard(){
+  const ed=S.st.can_edit;
+  $('#in-tags').innerHTML=`<h3>Tag master</h3>`+(ed?`<label class="drop" data-kind="tags" tabindex="0">Drop the tag master here or click to choose<small>DEPARTMENT, a Core / Seasonal column (CORE/SEASONAL, TAG or TYPE) and ATTRIBUTE - a blank cell keeps the current value</small><input type="file" accept=".xlsx,.xlsm" hidden></label>`:'<p class="note">Read-only: only an admin or a planner can change tags.</p>')+'<div class="status" id="tg-job"></div>';
+}
+async function loadTags(){try{S.tags=await api('api/tags');}catch(e){$('#tg-note').textContent=e.message;return;}renderTags();}
+function renderTags(){
+  const T=S.tags,ed=S.st.can_edit,cnt=k=>T.rows.filter(r=>(r.tag||'')===k).length;
+  $('#tg-att').innerHTML=T.attributes.map(a=>`<option value="${h(a)}">`).join('');
+  $('#tg-sum').innerHTML=`<span><b>${cnt('CORE')}</b> Core</span><span><b>${cnt('SEASONAL')}</b> Seasonal</span><span><b>${cnt('')}</b> not tagged</span><span><b>${T.rows.filter(r=>r.attribute||r.attribute_master).length}</b> of ${T.rows.length} with an attribute</span>`;
+  const cols=[{id:'division',label:'Division',cls:'l1',filt:true,get:r=>r.division},{id:'department',label:'Department',cls:'l',filt:true,get:r=>r.department},
+    {id:'tag',label:'Core / Seasonal',cls:'l',filt:true,get:r=>tagLab(r.tag)||null,
+      html:r=>ed?`<select data-tg aria-label="Tag ${h(r.department)}"><option value="">—</option>${['CORE','SEASONAL'].map(t=>`<option value="${t}"${r.tag===t?' selected':''}>${tagLab(t)}</option>`).join('')}</select>`:(r.tag?`<span class="tg ${r.tag.toLowerCase()}">${tagLab(r.tag)}</span>`:'—')},
+    {id:'attribute',label:'Attribute',cls:'l',filt:true,get:r=>r.attribute||r.attribute_master,
+      html:r=>ed?`<input type="text" list="tg-att" data-ta value="${h(r.attribute||'')}" placeholder="${h(r.attribute_master||'')}" aria-label="Attribute ${h(r.department)}">`:h(r.attribute||r.attribute_master||'—')},
+    {id:'master',label:'Attribute master',cls:'l',filt:true,get:r=>r.attribute_master},
+    {id:'mdq',label:'MDQ (4 months)',num:true,get:r=>r.mdq,html:r=>n0(r.mdq)},
+    {id:'rs',label:'Plan (Rs lakh)',num:true,get:r=>r.plan_rs,html:r=>n1(r.plan_rs/1e5)},
+    {id:'upd',label:'Updated',cls:'l',get:r=>r.updated_at||null,html:r=>r.updated_at?`<span class="note">${h(r.updated_by||'')} · ${h(String(r.updated_at).slice(0,16).replace('T',' '))} · ${h(r.source||'')}</span>`:''}];
+  grid('tags',$('#tg-t'),cols,T.rows,{rowAttr:r=>`data-dept="${h(r.department)}"`});
+  $('#tg-note').textContent='An attribute typed here overrides the attribute master (shown as the grey hint); clear it to go back to the master.'+
+    (T.not_in_plan.length?` Tagged but not in this fixture plan: ${T.not_in_plan.join(', ')}.`:'');
+}
+function setTab(t){S.tab=t;document.querySelectorAll('.tab').forEach(b=>{b.classList.toggle('on',b.dataset.tab===t);b.setAttribute('aria-selected',b.dataset.tab===t);});
+  $('#p-fc').hidden=t!=='fc';$('#p-tg').hidden=t!=='tg';hidePop();
+  try{history.replaceState(null,'',t==='tg'?'#tags':location.pathname+location.search);}catch(e){}
+  if(t==='tg'&&S.st?.info?.fixture)loadTags();
+  if(t==='fc'&&S.roll&&!S.cache[S.by+'|'+S.div])loadRoll();}
+function dirty(){S.cache={};}
 
 document.addEventListener('click',async e=>{
+  const p=e.target.closest('#pop');
+  if(p){if(e.target.closest('[data-px]'))hidePop();
+    const a=e.target.closest('[data-pf]');if(a&&S.pf){p.querySelectorAll('.pf-l input').forEach(b=>{if(b.parentElement.style.display!=='none')b.checked=a.dataset.pf==='all';});pfApply();}
+    return;}
+  hidePop();
+  const tb=e.target.closest('[data-tab]');if(tb){setTab(tb.dataset.tab);return;}
+  const hf=e.target.closest('[data-hf]');if(hf){const t=hf.closest('th');openFilter(t.dataset.g,t.dataset.col,hf);return;}
+  const sh=e.target.closest('th[data-col]');if(sh){const n=sh.dataset.g,c=S.gt[n].cols.find(c=>c.id===sh.dataset.col),g=gstate(n),first=c.num?-1:1;
+    g.sort=g.sort?.id!==c.id?{id:c.id,dir:first}:g.sort.dir===first?{id:c.id,dir:-first}:null;RENDER[n]();return;}
+  const cc=e.target.closest('td.c');
+  if(cc){const tr=cc.closest('tr'),m=cc.dataset.m,i=m==='t'?'t':+m,tbl=cc.closest('table').id;
+    if(tbl==='t'){const R=S.roll,r=tr.dataset.k==='all'?S.allAgg:S.vis.roll[+tr.dataset.k],ml=i==='t'?'4-month avg':mon(R.months[i]);
+      const who=tr.dataset.k==='all'?'All'+(S.div?' '+S.div:''):R.by.map(k=>r[k]).join(' · ');
+      showPop(cc,calcAgg(`${who} · ${ml}`,cellOf(r,i)));}
+    else if(tbl==='dt'){const r=S.vis.cells[+tr.dataset.k],c=r.months[i];if(c)showPop(cc,calcCell(`${S.cells.department} · ${r.store} · ${mon(S.cells.months[i])}`,c));}
+    return;}
   const b=e.target.closest('[data-by]');if(b){S.by=b.dataset.by;await loadRoll();return;}
-  const r=e.target.closest('tr[data-dept]');if(r){S.dept=r.dataset.dept;renderRoll();await loadCells();$('#dd').scrollIntoView({behavior:'smooth',block:'start'});return;}
+  const r=e.target.closest('#t tr[data-dept]');if(r&&!e.target.closest('input,select,button')){S.dept=r.dataset.dept;renderRoll();await loadCells();$('#dd').scrollIntoView({behavior:'smooth',block:'start'});return;}
   const rb=e.target.closest('[data-rb]');if(rb){if(!confirm('Roll back the latest '+(rb.dataset.rb==='fixture'?'fixture plan':'sales plan')+' upload? The one before it (if any) is used again.'))return;
-    try{await post('api/rollback',{kind:rb.dataset.rb});S.dept=null;$('#dd').hidden=true;await load();}catch(err){alert(err.message);}return;}
+    try{await post('api/rollback',{kind:rb.dataset.rb});dirty();S.dept=null;$('#dd').hidden=true;await load();}catch(err){alert(err.message);}return;}
+  if(e.target.id==='clr'){S.grid.roll={sort:null,filt:{}};renderRoll();return;}
   if(e.target.id==='dd-x'){S.dept=null;$('#dd').hidden=true;renderRoll();return;}
   if(e.target.id==='dd-reset'){if(!confirm(`Reset ${S.dept} to the fixture file? Its edited fixtures and qty per fixture are dropped (the edit history is kept).`))return;
-    try{await post('api/reset',{department:S.dept});await loadRoll();await loadCells();}catch(err){alert(err.message);}return;}
+    try{await post('api/reset',{department:S.dept});dirty();await loadRoll();await loadCells();}catch(err){alert(err.message);}return;}
   if(e.target.id==='dens-save'){const v=$('#dens').value;if(v===''||+v<0)return;
     if(!confirm(`Set qty per fixture = ${v} for every store and month of ${S.dept}? It replaces each store's own value from the file (typical now: ${n2(S.cells.density)}). Reset to file undoes it.`))return;
-    try{await post('api/edit',{field:'density',department:S.dept,value:+v});await loadRoll();await loadCells();}catch(err){alert(err.message);}return;}
+    try{await post('api/edit',{field:'density',department:S.dept,value:+v});dirty();await loadRoll();await loadCells();}catch(err){alert(err.message);}return;}
   if(e.target.id==='dl'){const p=new URLSearchParams();if(S.div)p.set('division',S.div);location.href='api/download?'+p;}
 });
 document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){hidePop();return;}
   const r=e.target.closest&&e.target.closest('tr[data-dept]');if(r&&e.key==='Enter'&&e.target===r){r.click();return;}
   const d=e.target.closest&&e.target.closest('.drop');if(d&&(e.key==='Enter'||e.key===' ')){e.preventDefault();d.querySelector('input').click();}
 });
+document.addEventListener('input',e=>{if(e.target.matches('.pf-q')){const q=e.target.value.toLowerCase();
+  $('#pop').querySelectorAll('.pf-l label').forEach(l=>{l.style.display=l.textContent.toLowerCase().includes(q)?'':'none';});}});
 document.addEventListener('change',async e=>{
   const t=e.target;
+  if(t.closest('#pop .pf-l')){pfApply();return;}
   if(t.id==='f-div'){S.div=t.value;await loadRoll();return;}
   if(t.matches('input[type=file]')){const f=t.files[0];if(f)upload(t.closest('[data-kind]').dataset.kind,f);t.value='';return;}
   if(t.matches('#dt input[type=number]')){const v=t.value;if(v===''||+v<0)return;
-    try{await post('api/edit',{field:'fixtures',department:S.dept,store:t.dataset.store,month:t.dataset.month,value:+v});await loadRoll();await loadCells();}
+    try{await post('api/edit',{field:'fixtures',department:S.dept,store:t.dataset.store,month:t.dataset.month,value:+v});dirty();await loadRoll();await loadCells();}
+    catch(err){alert(err.message);}return;}
+  if(t.matches('#tg-t [data-tg],#tg-t [data-ta]')){const tr=t.closest('tr'),dep=tr.dataset.dept;
+    try{await post('api/tags',{department:dep,tag:tr.querySelector('[data-tg]').value,attribute:tr.querySelector('[data-ta]').value});dirty();await loadTags();}
     catch(err){alert(err.message);}}
 });
-$('#f-q').addEventListener('input',e=>{S.q=e.target.value;renderRoll();});
+addEventListener('scroll',e=>{if(!$('#pop').hidden&&!(e.target.closest&&e.target.closest('#pop')))hidePop();},true);
+addEventListener('resize',hidePop);
 ['dragover','dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>{const d=e.target.closest&&e.target.closest('.drop');if(!d)return;e.preventDefault();
   d.classList.toggle('over',ev==='dragover');if(ev==='drop'&&e.dataTransfer.files[0])upload(d.dataset.kind,e.dataTransfer.files[0]);}));
 async function upload(kind,f){
+  if(kind==='tags'){$('#tg-job').className='status';$('#tg-job').textContent=`${f.name}: reading…`;
+    try{const j=await api('api/upload?kind=tags',{method:'POST',headers:{'X-File-Name':encodeURIComponent(f.name)},body:f});
+      $('#tg-job').textContent=`${f.name}: ${j.rows} departments saved - ${j.notes.join('; ')}`;dirty();await loadTags();}
+    catch(e){$('#tg-job').className='status err';$('#tg-job').textContent=e.message;}return;}
   const sh=document.querySelector('#in-'+kind+' [data-shift]');
   try{await api('api/upload?kind='+kind+(sh?'&shift='+sh.value:''),{method:'POST',headers:{'X-File-Name':encodeURIComponent(f.name)},body:f});}
   catch(e){$('#job').className='status err';$('#job').textContent=e.message;return;}
-  S.dept=null;$('#dd').hidden=true;load();
+  dirty();S.dept=null;$('#dd').hidden=true;load();
 }
+S.tab=location.hash==='#tags'?'tg':'fc';if(S.tab==='tg')setTab('tg');
 load();
 </script>
 </body>
