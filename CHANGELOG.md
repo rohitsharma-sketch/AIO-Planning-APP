@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: every season on the 60-180 band range
+- **Asked (user):** "range for all tags seasonality is 60 -180 remove 90 - 180 range from wherever it was the minimum"
+- Off months were 90-180; now peak, normal and off all band 60-180, so the season no longer moves a band - it stays as a tag (Peak / Peak ✦ / Off) and drives the peak-oriented suggestion. The checkbox is now "Season tags" (shows / hides the tags); page note, popup range and matrix title updated.
+
 ### STR Forecaster: article STR days vary by the article's own performance, capped at the department
 - **Asked (user):** "there can be variation in STR days in Article name ... it can be on the basis of its own performance in a cluster or store ... but yes it should be capping to the original STR decided on Department"
 - An article's fixtures and MDQ now follow its cont % (planned qty) in its AOP cluster that month; its selling rate stays its own store plan. Days = department days x cluster cont / store cont, capped at the department: stock share = min(store cont, cluster cont). An article planned to sell faster in a store than across its cluster holds fewer days; none holds more than the department's days in that store and month (0 of 193,519 rows above; 45% below, median = the department). The articles together hold 93.9% of the department MDQ (the rest is stock the cap does not hand out). Stores without an AOP cluster or without an article plan keep the plain store / chain share. LY is still split by the store share. Excel adds "article cont % in its cluster" and "stock share". In roll-ups an article can sit above its department's average (43 of 2,548 cluster x department x article rows) when it is planned mostly in the stores where the department itself runs slow.

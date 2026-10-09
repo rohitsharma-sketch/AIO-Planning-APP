@@ -131,7 +131,7 @@ tr.lv0 td.l1{font-weight:700}tr.lv1 td,tr.lv3 td{background:#FCFBF8}tr.lv1 td.l1
   <div class="panel" id="p-fc">
   <section class="card">
     <div class="card-h"><div class="grow"><h2>1 &middot; Inputs</h2>
-      <p class="desc">MENS, LADIES and KIDS by store, department and month. Minimum display stock (MDQ) = fixtures × qty per fixture, from the fixture plan; planned qty = the sales plan's qty (else planned sales ÷ last year's average selling price). <b>STR in days</b> = MDQ ÷ planned qty per day: 60 days means the minimum display stock lasts 60 days at the plan's selling rate - fewer days, faster sell-through. <b>Band</b> = the actual days rounded to the nearest 30, kept between 60 and 180; <b>Peak / Off</b> = a month that stands out / lags inside the plan window for that cluster (✦ = festival-driven) (54 → 60, 75 → 90, 104 → 90, 250 → 180); season-aware (default): peak and normal months 60–180, off months 90–180, from the Listing - Delisting Analyser&#39;s seasonality. Only stores with every month in both files are compared. Click any figure to see how it is worked out.</p></div></div>
+      <p class="desc">MENS, LADIES and KIDS by store, department and month. Minimum display stock (MDQ) = fixtures × qty per fixture, from the fixture plan; planned qty = the sales plan's qty (else planned sales ÷ last year's average selling price). <b>STR in days</b> = MDQ ÷ planned qty per day: 60 days means the minimum display stock lasts 60 days at the plan's selling rate - fewer days, faster sell-through. <b>Band</b> = the actual days rounded to the nearest 30, kept between 60 and 180; <b>Peak / Off</b> = a month that stands out / lags inside the plan window for that cluster (✦ = festival-driven) (54 → 60, 75 → 90, 104 → 90, 250 → 180); every season (peak, normal, off) 60–180; seasons from the Listing - Delisting Analyser&#39;s seasonality. Only stores with every month in both files are compared. Click any figure to see how it is worked out.</p></div></div>
     <div class="card-c"><div class="inputs">
       <div class="in" id="in-fixture"></div>
       <div class="in" id="in-sales_plan"></div>
@@ -146,7 +146,7 @@ tr.lv0 td.l1{font-weight:700}tr.lv1 td,tr.lv3 td{background:#FCFBF8}tr.lv1 td.l1
     <div class="card-c">
       <div class="bar" style="margin-bottom:10px">
         <div class="lays" id="lays" role="group" aria-label="Row layers - drag to change the order"></div>
-        <label class="note" title="Peak / off months from each cluster&#39;s own season curve (day-wise sales, festival days left out, as in the Listing - Delisting Analyser): peak and normal band 60-180 days, off 90-180"><input type="checkbox" id="f-season" checked> Season-aware band</label>
+        <label class="note" ><input type="checkbox" id="f-season" checked> Season tags</label>
 
       </div>
       <div class="bar" style="align-items:flex-start;margin-bottom:4px"><div id="mx"></div>
@@ -395,7 +395,7 @@ function compare(c,p,x){
   const row=(k,a,b)=>`<tr><th>${k}</th><td>${a}</td><td>${b}</td></tr>`;
   const pk=(a)=>reg?same:a;
   const pq=reg?x.q:P.qpd*x.nd;
-  const rangeTxt=`${lo}–${hi}`+(S.seasonal&&c.season?` <span class="note">(${c.season}${c.season==='off'?': off months start at 90':''})</span>`:'');
+  const rangeTxt=`${lo}–${hi}`+(S.seasonal&&c.season?` <span class="note">(${c.season})</span>`:'');
   return `<table class="cmp"><thead><tr><th></th><th>Regular</th><th>Peak-oriented</th></tr></thead><tbody>`+
     row('Selling rate',`planned, ${x.per}`,
       !p?no:p.none?'<span class="note">no peak month here in the window - regular</span>':p.ended?`<span class="note">peak ended ${mon(P.last)} - back to regular</span>`:
@@ -569,7 +569,7 @@ async function renderMatrix(){
   const vals=R.rows.map(r=>bandOf(r.total)??null),a=S.mx;
   const bands=[...new Set([60,90,120,150,180,...vals.filter(v=>v!=null)])].sort((x,y)=>x-y).concat(vals.includes(null)?[null]:[]);
   const n=(d,b)=>R.rows.filter(r=>(!d||r.division===d)&&(bandOf(r.total)??null)===b).length;
-  $('#mx').innerHTML=`<table class="mx"><thead><tr><th class="l">Departments by final ${S.seasonal?'season-aware ':''}band (4-month)${lfText()?' · '+h(lfText()):''}</th>${bands.map(b=>`<th>${b?b+' days':'No band'}</th>`).join('')}<th>Total</th></tr></thead><tbody>`+
+  $('#mx').innerHTML=`<table class="mx"><thead><tr><th class="l">Departments by final band (4-month)${lfText()?' · '+h(lfText()):''}</th>${bands.map(b=>`<th>${b?b+' days':'No band'}</th>`).join('')}<th>Total</th></tr></thead><tbody>`+
     ['MENS','LADIES','KIDS',''].map(d=>`<tr${d?'':' class="tot"'}><td class="l"><b>${d||'All'}</b></td>`+bands.map(b=>{const k=n(d,b);
       return `<td>${k?`<button class="mxb${a&&a.d===d&&a.b===b?' on':''}" data-mx="${d}|${b??''}" title="Show the ${k} ${d||''} departments in the ${b?b+'-day':'no'} band">${k}</button>`:'<span class="note">0</span>'}</td>`;}).join('')+
       `<td>${R.rows.filter(r=>!d||r.division===d).length}</td></tr>`).join('')+'</tbody></table>';

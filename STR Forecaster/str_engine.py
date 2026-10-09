@@ -649,11 +649,12 @@ BAND_STEP, BAND_MIN, BAND_MAX = 30, 60, 180
 # festival-free sales rate that month / its 12-month average, 2022-25, per AOP cluster (str_season.py; was the chain curve of
 # the Listing app windows.json until the user asked for cluster curves), peak / off at the
 # Listing app's own in / off season index (1.15 / 0.85). The band keeps the nearest-30 rounding; only its limits move:
-# peak and normal = the base rule (60-180; user, 9 Oct, chose "Peak 60-180, Off 90-180" over a 90 peak cap), off = slower months (90-180). The user's
+# every season = the base rule 60-180 (user, 9 Oct: "range for all tags seasonality is 60 -180 remove 90 - 180 range"; off
+# was 90-180 before). The user's
 # 60-day minimum and 180-day maximum hold for every season (user, 9 Oct: "why is 30 days STR being suggested where min
 # 60 Days - max 180 days is capping" - peak was 30-90 by my default).
 SEASON_FILE = os.path.join(HERE, "season_cluster.json")   # str_season.py (user, 9 Oct: "use each cluster's own season curve")
-SEASON_BANDS = {"peak": (BAND_MIN, BAND_MAX), "normal": (BAND_MIN, BAND_MAX), "off": (90, BAND_MAX)}
+SEASON_BANDS = {"peak": (BAND_MIN, BAND_MAX), "normal": (BAND_MIN, BAND_MAX), "off": (BAND_MIN, BAND_MAX)}
 SEASON_CUT = [1.15, 0.85]
 
 
@@ -700,7 +701,7 @@ def season_of(idx):
 
 def str_band(days, season=None):
     """54 -> 60, 75 -> 90 (half rounds up), 104 -> 90, 105 -> 120, 250 -> 180; None stays None. With a season the
-    limits are that season's (off 90-180; peak and normal 60-180), never outside BAND_MIN-BAND_MAX"""
+    limits are that season's (all 60-180 today), never outside BAND_MIN-BAND_MAX"""
     if days is None or days != days:
         return None
     lo, hi = SEASON_BANDS.get(season, (BAND_MIN, BAND_MAX))
@@ -799,7 +800,7 @@ if __name__ == "__main__":   # self-check of the maths on tiny frames (no DB)
     assert abs(t["days"] - 150 / (30 / 31)) < 1e-9 and abs(t["ly_days"] - 200 / (10 / 31)) < 1e-9   # Mar'27 / Mar'26: 31 days
     assert [str_band(x) for x in (20, 54, 75, 104, 105, 250, None)] == [60, 60, 90, 90, 120, 180, None]
     assert t["band"] == 150 and t["ly_band"] == 180          # 155 days -> 150; 620 days -> capped at 180
-    assert (str_band(45, "peak"), str_band(150, "peak"), str_band(40, "off"), str_band(40, "normal")) == (60, 150, 90, 60)
+    assert (str_band(45, "peak"), str_band(150, "peak"), str_band(40, "off"), str_band(40, "normal")) == (60, 150, 60, 60)
     assert min(str_band(d, s) for d in (1, 20, 44, 400) for s in ("peak", "normal", "off", None)) >= BAND_MIN   # never under 60
     assert (season_of(1.2), season_of(1.0), season_of(0.8), season_of(None)) == ("peak", "normal", "off", None)
     rs = rollup(d.assign(season_idx=1.3), ["division"], [P("2027-03")])[0]["months"][0]
