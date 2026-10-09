@@ -63,3 +63,6 @@ SalesPlan/watchdog.log
 Tentative AOP Forecaster/backend.log
 Tentative AOP Forecaster/output/
 Tentative AOP Forecaster/diff_archive/
+
+# BIS history check (built from sales by ml_assist.py) - business data, never in git
+Buyer's Input Sheet/ml_assist.json

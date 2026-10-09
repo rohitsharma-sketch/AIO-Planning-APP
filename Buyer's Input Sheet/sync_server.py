@@ -490,6 +490,48 @@ def planner_factor_table_save():
     return jsonify({"ok": True, "factor_table": ft})
 
 
+# History check for the factor (user, 2026-10-09: "i want the ml concepts to aid in the factor tuning") - advisory,
+# built by ml_assist.py from calendar.sales_fact into ml_assist.json; never changes a factor by itself.
+ML_ASSIST_JSON = os.path.join(_HERE, "ml_assist.json")
+_mla = {"running": False, "error": None}
+
+
+def _mla_start():
+    """start a rebuild in the background unless one is running; True if started"""
+    with _job_lock:
+        if _mla["running"]:
+            return False
+        _mla.update(running=True, error=None)
+
+    def run():
+        try:
+            import ml_assist
+            ml_assist.build(ML_ASSIST_JSON)
+        except Exception as e:   # the reason goes to this console only (a DB error can name the server)
+            print(f"[ml-assist] rebuild failed: {type(e).__name__}: {e}")
+            _mla["error"] = "History check rebuild failed - see the BIS server window."
+        finally:
+            _mla["running"] = False
+    _threading.Thread(target=run, daemon=True).start()
+    return True
+
+
+@app.route("/api/planner/ml-assist")
+def planner_ml_assist():
+    data = _read_json(ML_ASSIST_JSON, None)
+    if data is None and not _mla["error"]:
+        _mla_start()   # first use: build it once
+    return jsonify({"ok": True, "data": data, "running": _mla["running"], "error": _mla["error"]})
+
+
+@app.route("/api/planner/ml-assist/rebuild", methods=["POST"])
+def planner_ml_assist_rebuild():
+    if not _planner_editor():
+        return jsonify({"ok": False, "error": "Only an admin or a planner can refresh the history check."}), 403
+    started = _mla_start()
+    return jsonify({"ok": True, "running": True, "started": started}), 202
+
+
 @app.route("/api/planner/fill-rate", methods=["POST"])
 def planner_fill_rate_upload():
     """Refresh fill_rate.json from the uploaded PLAN vs FILL RATE workbook (its DIV - SUMMARY pivot) - admin / planner."""

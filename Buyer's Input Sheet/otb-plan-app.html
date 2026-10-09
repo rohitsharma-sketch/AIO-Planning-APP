@@ -450,18 +450,41 @@ td.aop-col-bg input.gi{background:var(--sf)}
 .fm-pick-hd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px;font-weight:600}
 .fm-pick-hd select{margin-left:6px;border:1px solid var(--bm);border-radius:6px;padding:5px 8px;background:var(--sf);color:var(--tx);font:inherit;font-size:12.5px;max-width:260px}
 .fm-pick-hd .fm-note{font-weight:400}
-.fm-cmp{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.fm-mc{border:1px solid var(--bd);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;background:var(--sf);min-width:0}
-.fm-mc.use{border-color:var(--ac);box-shadow:inset 0 0 0 1px var(--ac)}
-.fm-mc.edit{background:var(--s2)}
-.fm-mc-hd{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12.5px;min-height:26px}
+.fm-dt-wrap{overflow-x:auto}
+.fm-dt{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+.fm-dt th,.fm-dt td{padding:6px 10px;border-bottom:1px solid var(--bd);text-align:left;vertical-align:top}
+.fm-dt thead th{font-size:11px;font-weight:700;color:var(--t2);background:var(--s2)}
+.fm-dt thead th.fm-dt-use{background:color-mix(in srgb,var(--ac) 14%,var(--sf));color:var(--tx)}
+.fm-dt tbody th{font-weight:600;white-space:nowrap}
+.fm-dt td{min-width:150px}
+.fm-dt td.fm-dt-v{min-width:90px;color:var(--t2)}
+.fm-dt td.fm-dt-off{color:var(--t3);font-size:11px}
+.fm-dt td.fm-dt-flat b,.fm-dt td.fm-dt-flat span{color:var(--t3);font-weight:400}
+.fm-dt .fm-note{margin-top:2px}
+.fm-dt tr.fm-dt-sum th,.fm-dt tr.fm-dt-sum td{background:var(--s2);font-size:12.5px}
+.fm-dt tfoot td{border-bottom:0}
+.fm-dt tr.fm-dt-why td{font-size:11.5px;line-height:1.45;color:var(--t2)}
+.fm-why-pro{margin-top:4px;color:var(--po)}
+.fm-why-con{margin-top:2px;color:var(--ne)}
+.fm-hist{border:1px solid var(--bd);border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.5}
+.fm-hist h4{margin:0 0 6px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mu)}
+.fm-hist ul{margin:0 0 6px;padding-left:18px}.fm-hist li{margin:3px 0}
+.fm-hist li.fm-warn{color:var(--ne);font-weight:600}
+.fm-hall-wrap{max-height:340px;overflow:auto;border:1px solid var(--bd);border-radius:8px}
+.fm-hall-t td,.fm-hall-t th{white-space:nowrap}
+.fm-hall-t tbody tr[data-dept]{cursor:pointer}
+.fm-hall-t tbody tr[data-dept]:hover{background:var(--s2)}
+.fm-hall-t tbody tr[data-dept]:focus-visible{outline:2px solid var(--ac);outline-offset:-2px}
+.fm-hall-t tbody tr.sel{background:color-mix(in srgb,var(--ac) 12%,var(--sf))}
+.fm-hall-t td.fm-flag{color:var(--ne);white-space:normal;min-width:180px}
+.fm-curve{margin-top:4px}.fm-curve th{text-align:left;white-space:nowrap}
+.fm-curve td.cur{background:color-mix(in srgb,#2563eb 14%,var(--sf));font-weight:700}
+.fm-curve td.best{background:color-mix(in srgb,var(--po) 16%,var(--sf));font-weight:700}
+.fm-advice{padding:10px 12px;border-radius:8px;border-left:3px solid var(--ac);background:color-mix(in srgb,var(--ac) 8%,var(--sf));font-size:12px;line-height:1.5}
+.fm-mc-hd{display:flex;align-items:center;justify-content:space-between;gap:6px;min-height:26px}
 .fm-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--ac);color:var(--sf)}
-.fm-mc-f{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
-.fm-mc-v{font-size:12px;font-variant-numeric:tabular-nums}
-.fm-mc-why{font-size:10.5px;color:var(--t2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.fm-mc-set{all:unset;cursor:pointer;margin-top:4px;font-size:11px;font-weight:600;color:var(--ac)}
+.fm-mc-set{all:unset;cursor:pointer;font-size:11px;font-weight:600;color:var(--ac)}
 .fm-mc-set:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
-@media (max-width:700px){.fm-cmp{grid-template-columns:1fr}}
 .fm-prev{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:11.5px}
 .fm-prev ol{margin:4px 0 0;padding-left:18px}
 .aop-ov{position:fixed;inset:0;background:rgba(var(--st-ink-rgb,30,39,35),.45);z-index:800;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
@@ -5645,6 +5668,7 @@ function openFactorTable(){
     if(_fmFt){_fmFt.mode=_fmFt.mode||'matrix';_fmFt.model=_fmFt.model||_clone(FM_DEFAULT);_fmFt.cont=_fmFt.cont||{...FM_CONT_DEFAULT};}
     _fmTab=_fmFt?.mode==='weighted'?'builder':_fmFt?.mode==='continuous'?'cont':'matrix';_fmPrevCache=null;_fmCutCache=new Map();
     _renderFactorTable();document.getElementById('factorOv').style.display='flex';
+    if(!PLANNER.mla?.data)_fmLoadMla();
   });
 }
 const _h=t=>String(t??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -5666,46 +5690,258 @@ function _renderFactorTable(){
    its division scored the same way, then re-balanced to each month's AOP - as the planner does) and the back-test.
    "Use this" sets the method (Save applies it); "Settings" opens that method's editor below. Drafts count. */
 const FM_METHODS=[['matrix','Matrix','matrix'],['weighted','Weighted builder','builder'],['continuous','Continuous','cont']];
+/* (user, 2026-10-08: "i needed the pop up department on which factor does what and how ill it affect the department.
+   To weigh in my options not to see the ly trends") - one row per factor, one column per method: what the factor
+   multiplies the department by and what that is worth in Rs for its Mar-Jun plan. The Rs split is by log share, so
+   the rows add up exactly to plan - plain AOP share (plan = plain share x factor x division re-balance). */
+const FM_STEP_ROWS=[['st','Sell-thru'],['growth','25V26 growth'],['base','19V26 growth'],['fill','Fill rate'],['combo','Matrix lookup'],
+  ['rules','Rules'],['damp','Small-department damping'],['clamp','Factor limits']];
+// plain-words guide per method (user, 2026-10-08: "add a proper reason in simple terms to aid the user to select the right model")
+const FM_PLAIN={
+  matrix:{how:'Puts the department in a band for sell-thru, growth and fill rate, then reads one factor from a fixed 36-row table.',
+    good:'Simple and easy to explain to a buyer - the same bands always give the same factor.',
+    watch:'Moves in steps: a small change near a band edge can jump the factor.'},
+  weighted:{how:'Scores each factor in slabs you set (Low / Average / High) and blends the scores by the weights you choose.',
+    good:'You decide which factor matters most and by how much.',
+    watch:'Still moves in steps at slab edges, and the slabs need someone to set them well.'},
+  continuous:{how:'Compares the department with the middle department of its own division - a little better gives a little more, smoothly.',
+    good:'No band edges, so similar departments get similar factors; the strengths were tuned on past months.',
+    watch:'Harder to explain as one simple rule.'}};
+// for this department, in words: what each factor adds or cuts, then the division re-balance, then the net
+function _fmDeptWhy(c,x,md,dvNm){
+  const pc=v=>v==null?'n/a':(v*100).toFixed(1)+'%',L=v=>Math.abs(v*100).toFixed(1)+' L',out=[];
+  const nm={st:['Sell-thru','st'],growth:['25V26 growth','gr'],base:['19V26 growth','gb'],fill:['Fill rate','fill']};
+  if(c.k==='matrix'){
+    const o=c.st.combo;
+    out.push(`Its bands (${['st','growth','fill'].map(k=>({st:'sell-thru',growth:'25V26 growth',fill:'fill rate'})[k]+' '+(c.st[k].t||'').replace(/^band /,'')).join(', ')}) point to factor ×${c.res.f.toFixed(2)}`+
+      (o.imp!=null&&Math.abs(o.imp)>=5e-4?` - ${o.imp>0?'adds':'cuts'} ${L(o.imp)}`:'')+'.');
+  } else Object.keys(nm).forEach(k=>{const o=c.st[k];if(!o||o.c==null||!(Math.abs(o.imp)>=5e-4))return;
+    out.push(`${nm[k][0]} ${pc(x[nm[k][1]])} (division ${pc(md[nm[k][1]])}) ${o.imp>0?'adds':'cuts'} ${L(o.imp)}.`);});
+  ['rules','damp','clamp'].forEach(k=>{const o=c.st[k];if(o&&o.c!=null&&Math.abs(o.imp)>=5e-3)
+    out.push(`${k==='rules'?'A rule':k==='damp'?'Small-department damping':'The factor limit'} ${o.imp>0?'adds':'cuts'} ${L(o.imp)}.`);});
+  const b=c.st.bal;
+  if(b&&Math.abs(b.imp)>=5e-4)out.push(b.imp<0?`Other ${dvNm} departments score higher on average, so keeping ${dvNm} on its AOP takes back ${L(b.imp)}.`
+    :`Other ${dvNm} departments score lower on average, so keeping ${dvNm} on its AOP adds ${L(b.imp)}.`);
+  out.push(`Net: ${c.D>=0?'+':'−'}${L(c.D)} against its plain AOP share.`);
+  return out.join(' ');
+}
 let _fmDept=null;
 function _fmSpec(k,ft){return k==='plain'?null:k==='matrix'?'matrix':{mode:k,model:ft.model,cont:ft.cont};}
 function _fmDeptCalc(sec,dv,k,ft){
   const P=_fmPrev().filter(q=>q.dv===dv),spec=_fmSpec(k,ft);
   const fOf=q=>k==='matrix'?_matrixFactor(ft,q.x).f:_fmEval(spec,q.x,dv.id,AOP_MIS,q.ly);
   const F=new Map(P.map(q=>[q.sec.id,fOf(q)])),divAnn=dv.secs.reduce((a,s)=>a+s.ly,0);
-  let val=0,ly=0;
+  let val=0;
   AOP_MIS.forEach(mi=>{const aop=S.aop[dv.id]?.[mi];if(!aop||aop<=0)return;
     let lyTot=0,raw=0,mine=0;const lyM={};
     P.forEach(q=>{lyM[q.sec.id]=_secMonLY(q.sec,dv,mi,divAnn);lyTot+=lyM[q.sec.id];});if(!lyTot)return;
     P.forEach(q=>{const v=aop*lyM[q.sec.id]/lyTot*F.get(q.sec.id);raw+=v;if(q.sec===sec)mine=v;});
-    if(raw>0){val+=mine*aop/raw;ly+=lyM[sec.id]||0;}});
-  const q=P.find(o=>o.sec===sec),x=q?.x;let why='';
-  if(x&&k==='matrix')why=_matrixFactor(ft,x).why;
-  else if(x&&k==='weighted')why=_fmWhy(_weightedFactor(x,_fmResolve(ft.model,dv.id,AOP_MIS),q.ly));
-  else if(x&&k==='continuous')why=_contWhy(_contFactor(x,_fmMedians(dv.id,AOP_MIS),ft.cont,ft.model,q.ly));
-  return {f:F.get(sec.id)??1,val,ly,gr:ly>0?(val/ly-1)*100:null,why};
+    if(raw>0)val+=mine*aop/raw;});
+  const q=P.find(o=>o.sec===sec),x=q?.x;let r=null;
+  if(x&&k==='matrix')r=_matrixFactor(ft,x);
+  else if(x&&k==='weighted')r=_weightedFactor(x,_fmResolve(ft.model,dv.id,AOP_MIS),q.ly);
+  else if(x&&k==='continuous')r=_contFactor(x,_fmMedians(dv.id,AOP_MIS),ft.cont,ft.model,q.ly);
+  return {f:F.get(sec.id)??1,val,r};
+}
+// one method's steps for the department: {row: {c: multiplier or null, t: detail}}
+function _fmSteps(k,res,ft){
+  const r=res.r||{},S2={},pc=v=>(v*100).toFixed(1)+'%';
+  if(k==='matrix'){
+    const tg=r.tags||{},b=ft.bands||{},lb=(key,t)=>t?`band ${t} ${(b[key]||[]).find(z=>z.tag===t)?.label||''}`:'no data';
+    S2.st={t:lb('st',tg.st)};S2.growth={t:lb('growth',tg.growth)};S2.fill={t:lb('fill',tg.fill)};S2.base={t:'not in this method'};
+    S2.combo={c:res.f,t:r.why||'all three bands looked up together'};
+    S2.rules=S2.damp=S2.clamp={t:'not in this method'};
+    return S2;
+  }
+  const parts=r.parts||[],W=parts.reduce((a,q)=>a+(q.w||0),0);
+  ['st','growth','base','fill'].forEach(key=>{const q=parts.find(p=>p.key===key);
+    if(!q){
+      if(k==='weighted'){const d=(ft.model.drivers||[]).find(d=>d.key===key);S2[key]={t:!d?'not in this method':!d.on||!(+d.weight>0)?'off':'no data'};}
+      else S2[key]={t:+ft.cont[key]?'no data':'off (strength 0)'};
+      return;}
+    if(k==='weighted')S2[key]={c:Math.pow(q.mult,q.w/W),t:`${q.slab.label} ×${q.mult.toFixed(2)} at ${Math.round(q.w/W*100)}% weight`};
+    else S2[key]=q.off?{t:'off here - 25V26 and 19V26 disagree'}:{c:q.mult,t:`${q.ratio.toFixed(2)}× its division, strength ${q.s}`};});
+  S2.combo={t:'not in this method'};
+  const rl=(r.rules||[]).map(x=>`${FM_DRIVERS[x.driver]?.short||x.driver} ${x.op==='below'?'below':'at least'} ${pc(x.value)} → ${x.kind==='min'?'at least':'at most'} ${(+x.f).toFixed(2)}`).join('; ');
+  const m=ft.model;
+  S2.rules={c:r.ruled/r.raw,t:rl||'none apply'};
+  S2.damp={c:r.damped/r.ruled,t:+m.shrink_k?`half strength at Rs ${+(m.shrink_k*100).toFixed(2)} L a month`:'off'};
+  S2.clamp={c:r.f/r.damped,t:`between ${m.clamp[0]} and ${m.clamp[1]}`};
+  return S2;
 }
 function _fmPickHtml(ft,ed){
   const P=_fmPrev();if(!P.length)return '';
   if(!P.some(q=>q.sec.id===_fmDept)){const pool=P.filter(q=>!S.divTab||q.dv.id===S.divTab);_fmDept=(pool.length?pool:P).reduce((a,q)=>q.ly>a.ly?q:a).sec.id;}
-  const cur=P.find(q=>q.sec.id===_fmDept),sec=cur.sec,dv=cur.dv,x=cur.x,pc=v=>v==null?'n/a':(v*100).toFixed(1)+'%';
+  const cur=P.find(q=>q.sec.id===_fmDept),sec=cur.sec,dv=cur.dv,x=cur.x,md=_fmMedians(dv.id,AOP_MIS);
+  const pc=v=>v==null?'n/a':(v*100).toFixed(1)+'%',L=v=>(v>=0?'+':'−')+Math.abs(v*100).toFixed(1)+' L',cr=v=>'Rs '+v.toFixed(2)+' Cr';
   const opts=DVDATA.map(d=>{const o=P.filter(q=>q.dv===d).sort((a,b)=>a.sec.nm.localeCompare(b.sec.nm));
     return o.length?`<optgroup label="${_h(d.nm)}">${o.map(q=>`<option value="${_h(q.sec.id)}"${q.sec.id===_fmDept?' selected':''}>${_h(q.sec.nm)}</option>`).join('')}</optgroup>`:'';}).join('');
+  const plain=_fmDeptCalc(sec,dv,'plain',ft).val,saved=PLANNER.ft?.mode||'matrix';
+  const cols=FM_METHODS.map(([k,nm,tab])=>{const res=_fmDeptCalc(sec,dv,k,ft),st=_fmSteps(k,res,ft);
+    st.bal={c:plain>0&&res.f>0?res.val/(plain*res.f):1,t:'the division stays on its AOP'};
+    const cs=Object.values(st).filter(o=>o.c!=null&&o.c>0),LS=cs.reduce((a,o)=>a+Math.log(o.c),0),D=res.val-plain;
+    cs.forEach(o=>{o.imp=Math.abs(LS)>1e-9?D*Math.log(o.c)/LS:plain*Math.log(o.c);});
+    return {k,nm,tab,res,st,D};});
+  const cell=o=>{if(!o)return '<td></td>';
+    if(o.c==null)return `<td class="fm-dt-off">${_h(o.t)}</td>`;
+    const flat=Math.abs(o.imp)<5e-4; // under 0.05 L
+    return `<td${flat?' class="fm-dt-flat"':''}><b>×${o.c.toFixed(Math.abs(o.c-1)<5e-4&&!flat?4:3)}</b> <span class="${flat?'':gCls(o.imp)}">${flat?'no change':L(o.imp)}</span><div class="fm-note">${_h(o.t)}</div></td>`;};
+  const val={st:`${pc(x.st)}<div class="fm-note">division ${pc(md.st)}</div>`,growth:`${pc(x.gr)}<div class="fm-note">division ${pc(md.gr)}</div>`,
+    base:`${pc(x.gb)}<div class="fm-note">division ${pc(md.gb)}</div>`,fill:`${pc(x.fill)}<div class="fm-note">division ${pc(md.fill)}</div>`};
+  const rows=FM_STEP_ROWS.filter(([key])=>key!=='base'||+ft.cont.base).map(([key,lbl])=>
+    `<tr><th scope="row">${lbl}</th><td class="fm-dt-v">${val[key]||''}</td>${cols.map(c=>cell(c.st[key])).join('')}</tr>`).join('');
+  const head=cols.map(c=>{const inUse=ft.mode===c.k;
+    return `<th class="${inUse?'fm-dt-use':''}"><div class="fm-mc-hd"><span>${c.nm}</span>${inUse?`<span class="fm-badge">${saved===c.k?'In use':'Chosen - Save'}</span>`:ed?`<button type="button" class="tbtn" onclick="_fmFt.mode='${c.k}';_fmTab='${c.tab}';_renderFactorTable()">Use this</button>`:''}</div></th>`;}).join('');
+  // which to pick: the method that came closest on past months (short + long back-test, averaged) - one answer for every department
   const bt=k=>{const sp=_fmSpec(k,ft),a=_fmBacktest(sp).wape,b=_fmBacktest(sp,FM_BT_LONG_IN,FM_BT_LONG_OUT).wape;return a!=null&&b!=null?(a+b)/2:null;};
-  const plain=_fmDeptCalc(sec,dv,'plain',ft),btPlain=bt('plain'),cr=v=>'Rs '+v.toFixed(2)+' Cr';
-  const saved=PLANNER.ft?.mode||'matrix',mons=MO[AOP_MIS[0]]+'-'+MO[AOP_MIS[AOP_MIS.length-1]];
-  const card=([k,nm,tab])=>{const r=_fmDeptCalc(sec,dv,k,ft),b=bt(k),inUse=ft.mode===k,d=r.val-plain.val;
-    return `<div class="fm-mc${inUse?' use':''}${_fmTab===tab?' edit':''}">
-      <div class="fm-mc-hd"><b>${nm}</b>${inUse?`<span class="fm-badge">${saved===k?'In use':'Chosen - Save to apply'}</span>`:ed?`<button type="button" class="tbtn" onclick="_fmFt.mode='${k}';_fmTab='${tab}';_renderFactorTable()">Use this</button>`:''}</div>
-      <div class="fm-mc-f">×${r.f.toFixed(2)}</div>
-      <div class="fm-mc-v">${cr(r.val)} <span class="${gCls(r.gr??0)}">${fP(r.gr)}</span> vs LY</div>
-      <div class="fm-note">${d>=0?'+':''}${(d*100).toFixed(1)} L vs plain share · back-test error ${b==null?'-':(b*100).toFixed(2)+'%'}${b!=null&&btPlain!=null?` (${b<=btPlain?'better':'worse'} than plain)`:''}</div>
-      <div class="fm-mc-why" title="${_attr(r.why)}">${_h(r.why)}</div>
-      <button type="button" class="fm-mc-set" onclick="_fmTab='${tab}';_renderFactorTable()" aria-pressed="${_fmTab===tab}">${_fmTab===tab?'Settings shown below':'Settings ›'}</button>
-    </div>`;};
+  cols.forEach(c=>{c.bt=bt(c.k);});
+  const btP=bt('plain'),ranked=cols.filter(c=>c.bt!=null).sort((a,b)=>a.bt-b.bt),best=ranked[0];
+  const vals=cols.map(c=>c.res.val),spread=Math.max(...vals)-Math.min(...vals),e=v=>(v*100).toFixed(2)+'%';
+  const advice=!best?'':`<div class="fm-advice"><b>Suggested: ${best.nm}.</b> ${FM_PLAIN[best.k].good} Tried on past months, its plan came closest to what actually sold - off by ${e(best.bt)}, against ${ranked.slice(1).map(c=>`${c.nm} ${e(c.bt)}`).join(', ')}${btP!=null?` and ${e(btP)} with no factor at all`:''}.
+    ${ft.mode!==best.k?` You are on ${(cols.find(c=>c.k===ft.mode)||{}).nm||ft.mode} now.`:''}
+    For ${_h(sec.nm)} the three choices are ${spread*100<0.5||spread<plain*0.005?'almost the same, so the choice barely matters here':`${L(spread).replace('+','')} apart (${cr(Math.min(...vals))} to ${cr(Math.max(...vals))})`}.</div>`;
   return `<div class="fm-pick">
-    <div class="fm-pick-hd"><label>Preview a department <select onchange="_fmDept=this.value;_renderFactorTable()" aria-label="Department to preview">${opts}</select></label>
-      <span class="fm-note">${_h(dv.nm)} · Sell-thru ${pc(x.st)} · LY growth ${pc(x.gr)} · Fill rate ${pc(x.fill)} · Phase 1, ${mons} · plain AOP share ${cr(plain.val)} (${fP(plain.gr)} vs LY)</span></div>
-    <div class="fm-cmp">${FM_METHODS.map(card).join('')}</div>
+    <div class="fm-pick-hd"><label>Department <select onchange="_fmDept=this.value;_renderFactorTable()" aria-label="Department to preview">${opts}</select></label>
+      <span class="fm-note">${_h(dv.nm)} · what each factor does to this department's ${MO[AOP_MIS[0]]}-${MO[AOP_MIS[AOP_MIS.length-1]]} plan. Starting point: its plain AOP share, <b>${cr(plain)}</b> (factor 1.00).</span></div>
+    ${advice}
+    <div class="fm-dt-wrap"><table class="fm-dt">
+      <thead><tr><th>Factor</th><th>This department</th>${head}</tr></thead>
+      <tbody>${rows}
+        <tr class="fm-dt-sum"><th scope="row">= Factor</th><td></td>${cols.map(c=>`<td><b>×${c.res.f.toFixed(2)}</b></td>`).join('')}</tr>
+        <tr><th scope="row">Division re-balance</th><td class="fm-dt-v"><div class="fm-note">other departments' factors</div></td>${cols.map(c=>cell(c.st.bal)).join('')}</tr>
+        <tr class="fm-dt-sum"><th scope="row">= Department plan</th><td class="fm-dt-v">${cr(plain)}<div class="fm-note">plain share</div></td>${cols.map(c=>`<td><b>${cr(c.res.val)}</b> <span class="${gCls(c.D)}">${L(c.D)}</span></td>`).join('')}</tr>
+        <tr class="fm-dt-why"><th scope="row">For this department</th><td></td>${cols.map(c=>`<td>${_h(_fmDeptWhy(c,x,md,dv.nm))}</td>`).join('')}</tr>
+        <tr class="fm-dt-why"><th scope="row">How it works</th><td></td>${cols.map(c=>{const g=FM_PLAIN[c.k];
+          return `<td>${g.how}<div class="fm-why-pro">+ ${g.good}</div><div class="fm-why-con">− ${g.watch}</div></td>`;}).join('')}</tr>
+      </tbody>
+      <tfoot><tr><td colspan="2"></td>${cols.map(c=>`<td><button type="button" class="fm-mc-set" onclick="_fmTab='${c.tab}';_renderFactorTable()" aria-pressed="${_fmTab===c.tab}">${_fmTab===c.tab?'Settings shown below':'Settings ›'}</button></td>`).join('')}</tr></tfoot>
+    </table></div>
+    ${_fmHistHtml(sec,dv,cols,ft)}
+    ${_fmHistAllHtml(ft)}
+  </div>`;
+}
+/* Every department at once (user, 2026-10-09: "if you can embed something in the front end - factor table"): the
+   factor of the method in use next to what history says, flagged rows first; a row click previews that department. */
+let _fmHistOnlyFlag=true;
+['click','keydown'].forEach(ev=>document.addEventListener(ev,e=>{   // row -> preview that department (mouse or Enter)
+  const tr=e.target.closest&&e.target.closest('.fm-hall-t tr[data-dept]');
+  if(!tr||(ev==='keydown'&&e.key!=='Enter'))return;
+  _fmDept=tr.dataset.dept;_renderFactorTable();document.getElementById('factorBody').scrollTop=0;
+}));
+function _fmHistAllHtml(ft){
+  const M=PLANNER.mla?.data;if(!M||!M.plan.ready)return '';
+  const spec=_fmSpec(ft.mode,ft),meth=(FM_METHODS.find(m=>m[0]===ft.mode)||FM_METHODS[0])[1];
+  const rows=_fmPrev().map(q=>{const d=M.departments[q.dv.nm+'|'+q.sec.nm];if(!d)return null;
+    const f=ft.mode==='matrix'?_matrixFactor(ft,q.x).f:_fmEval(spec,q.x,q.dv.id,AOP_MIS,q.ly);
+    const bg=d.band_g!=null?M.bands_growth[d.band_g]:null,br=d.band_r!=null?M.bands_recent[d.band_r]:null,flags=[];
+    if(d.band_g===0&&f<0.98)flags.push('collapsed last year but cut');
+    if(br&&Math.abs(f-1)>0.02&&Math.abs(br.rel_perf-1)>0.03&&(f-1)*(br.rel_perf-1)<0)flags.push('recent momentum leans the other way');
+    return {q,d,f,bg,br,flags};}).filter(Boolean)
+    .sort((a,b)=>(b.flags.length>0)-(a.flags.length>0)||b.q.ly-a.q.ly);
+  const nf=rows.filter(r=>r.flags.length).length,shown=_fmHistOnlyFlag?rows.filter(r=>r.flags.length):rows,miss=_fmPrev().length-rows.length;
+  const tr=r=>`<tr class="${r.q.sec.id===_fmDept?'sel':''}" data-dept="${_h(r.q.sec.id)}" tabindex="0" title="Preview ${_h(r.q.sec.nm)}">
+      <td>${_h(r.q.sec.nm)}</td><td>${_h(r.q.dv.nm)}</td><td><b>×${r.f.toFixed(2)}</b></td>
+      <td>${_x(r.d.rel_g1)}</td><td>${r.bg?_x(r.bg.rel_perf):'-'}</td><td>${_x(r.d.rel_gr)}</td><td>${r.br?_x(r.br.rel_perf):'-'}</td>
+      <td>${_x(r.d.ml_guarded)}</td><td class="fm-flag">${_h(r.flags.join('; '))}</td></tr>`;
+  return `<div class="fm-hist fm-hall"><h4>History check - all departments (${rows.length})</h4>
+    <div class="fm-row" style="margin:0 0 6px"><span class="fm-note">${nf} flagged where the ${_h(meth)} factor and history point opposite ways - weak evidence, worth a second look. Click a row to preview it above.${miss?` ${miss} department${miss>1?'s have':' has'} no like-for-like history and ${miss>1?'are':'is'} not listed.`:''}</span>
+      <label class="fm-note" style="margin-left:auto"><input type="checkbox"${_fmHistOnlyFlag?' checked':''} onchange="_fmHistOnlyFlag=this.checked;_renderFactorTable()"> Only flagged</label></div>
+    <div class="fm-hall-wrap"><table class="pl-ft fm-hall-t"><thead><tr><th>Department</th><th>Division</th><th>${_h(meth)} factor</th>
+      <th title="25V26 growth vs the division's middle department">25V26 vs div</th><th title="what departments in that growth band averaged next year, vs their plain share">That band next yr</th>
+      <th title="${_h(_mlaMon(M.plan.recent))} vs a year earlier, vs the division">Recent vs div</th><th title="what departments in that recent-momentum band averaged next year">That band next yr</th>
+      <th title="second opinion - ${M.ridge.mean<M.plain.mean-FM_NOISE?'beat no factor on past cycles':'did no better than no factor on past cycles; not for decisions'}">Model</th><th>Flag</th></tr></thead>
+      <tbody>${shown.map(tr).join('')||`<tr><td colspan="9" class="fm-note">No department flagged.</td></tr>`}</tbody></table></div></div>`;
+}
+/* What sales history says (user, 2026-10-09: "i want the ml concepts to aid in the factor tuning") - advisory only,
+   from ml_assist.py: past planning cycles rebuilt from calendar sales (like-for-like stores) and scored the BIS way on
+   cycles not used to fit. It never changes a factor; "Use" only sets the draft strength, Save applies it. */
+const _x=v=>v==null?'-':'×'+(+v).toFixed(2);
+const MON3=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+// '2026-07,2026-08' -> "Jul-Aug'26"; '2022-07' -> "Jul'22"
+const _mlaMon=s=>{if(!s)return '';const m=String(s).split(',').map(t=>MON3[+t.slice(5,7)-1]+"'"+t.slice(2,4));return m.length>1?m[0].split("'")[0]+'-'+m[m.length-1]:m[0];};
+let _mlaTimer=null;
+const _fmMlaRedraw=()=>{if(document.getElementById('factorOv').style.display!=='none')_renderFactorTable();};
+function _fmLoadMla(){
+  clearTimeout(_mlaTimer);   // one polling chain, however often the pop-up is reopened
+  const fail=()=>{if(!PLANNER.mla?.data){PLANNER.mla={error:'History check unavailable - the BIS server did not answer. Reopen the factor table to retry.'};_fmMlaRedraw();}};
+  fetch(SYNC_BASE+'/api/planner/ml-assist').then(r=>r.ok?r.json():null).then(j=>{
+    if(!j)return fail();
+    const had=!!PLANNER.mla?.data;PLANNER.mla=j;
+    if(j.running)_mlaTimer=setTimeout(_fmLoadMla,5000);
+    if(!had&&j.data||j.error)_fmMlaRedraw();
+  }).catch(fail);
+}
+const _fmMlaBtn=()=>PLANNER.canEdit?`<button type="button" class="tbtn" style="margin-left:6px" onclick="_fmMlaRebuild(this)">&#x21BB; Refresh history check</button>`:'';
+function _fmMlaRebuild(b){
+  b.disabled=true;b.textContent='Refreshing…';const was=PLANNER.mla?.data?.built_at;
+  const poll=()=>fetch(SYNC_BASE+'/api/planner/ml-assist').then(r=>r.json()).then(j=>{
+    if(j.running){setTimeout(poll,4000);return;}
+    PLANNER.mla=j;_renderFactorTable();toast(j.error||(j.data?.built_at!==was?'History check refreshed ✓':'History check unchanged'));
+  }).catch(()=>toast('History check - server unreachable'));
+  fetch(SYNC_BASE+'/api/planner/ml-assist/rebuild',{method:'POST'}).then(r=>r.json().then(j=>({ok:r.ok,j}))).then(({ok,j})=>{
+    if(!ok){toast(j.error||'Refresh failed');b.disabled=false;b.textContent='↻ Refresh history check';return;}
+    setTimeout(poll,4000);
+  }).catch(()=>{toast('Refresh failed - server unreachable');b.disabled=false;b.textContent='↻ Refresh history check';});
+}
+function _fmMlaWait(){
+  const m=PLANNER.mla;
+  if(!m)return 'Loading the history check…';
+  if(!m.data)return m.error||'Building the history check from sales history (about a minute)…';
+  return '';   // a failed refresh with an older check on file still shows that check (+ the error note below)
+}
+const _fmMlaErr=()=>PLANNER.mla?.error&&PLANNER.mla?.data?`<div class="fm-note" style="color:var(--ne)">${_h(PLANNER.mla.error)} Showing the last good check.</div>`:'';
+// band result in plain words - descriptive only (past cycles pooled, no error band; a department counts once per cycle)
+const _fmBandTxt=b=>`averaged ${_x(b.rel_perf)} their plain share the next year${b.rel_perf>=1.05?' (more)':b.rel_perf<=0.95?' (less)':' (about level)'}`;
+const FM_NOISE=0.004;   // ~0.4 pt: on this few cycles a smaller gap between two methods is within noise (review, 9 Oct)
+function _fmHistHtml(sec,dv,cols,ft){
+  const wait=_fmMlaWait();
+  if(wait)return `<div class="fm-hist"><h4>What sales history says</h4><div class="fm-note">${_h(wait)}${PLANNER.mla?.error?_fmMlaBtn():''}</div></div>`;
+  const M=PLANNER.mla.data,d=M.departments[dv.nm+'|'+sec.nm],n=M.tests.length,pct=v=>(v*100).toFixed(2)+'%';
+  const foot=`<div class="fm-note">From ${M.cycles.length} past planning cycles (${_mlaMon(M.cycles[0])} to ${_mlaMon(M.cycles[M.cycles.length-1])}), rebuilt from calendar sales on like-for-like stores; sales to ${_mlaMon(M.data_to)}. Each division's actual total is used, so only the split between departments is checked. Advisory - it never changes a factor.</div>`;
+  if(!M.plan.ready)return `<div class="fm-hist"><h4>What sales history says</h4><div class="fm-note">The inputs for the ${_mlaMon(M.plan.cycle)} plan are not complete yet (it needs ${_mlaMon(M.plan.ly.replace('..',','))}).</div>${foot}</div>`;
+  if(!d)return `<div class="fm-hist"><h4>What sales history says - ${_h(sec.nm)}</h4><div class="fm-note">No ${_h(dv.nm)} like-for-like sales for this department in ${_mlaMon(M.plan.ly.replace('..',','))} - nothing to check.</div>${foot}</div>`;
+  const bg=d.band_g!=null?M.bands_growth[d.band_g]:null,br=d.band_r!=null?M.bands_recent[d.band_r]:null,L=[];
+  L.push(`<li><b>25V26 growth</b> ${d.g1==null?'n/a':fP(d.g1*100)}, ${_x(d.rel_g1)} its division's middle department. `+
+    (bg?`Departments in that band (${_x(bg.from)} to ${_x(bg.to)}) ${_fmBandTxt(bg)}.`:'Not enough history for a band.')+
+    (d.band_g===0?' On average collapsed departments recovered - partly just a weak base year bouncing back - so a method that cuts this one may be too harsh.':'')+
+    (d.band_g===M.bands_growth.length-1?' On average surging departments kept some of it.':'')+'</li>');
+  L.push(`<li><b>Recent momentum</b> (${_mlaMon(M.plan.recent)} vs a year earlier) `+
+    (br?`${_x(d.rel_gr)} its division. That band (${_x(br.from)} to ${_x(br.to)}) ${_fmBandTxt(br)}.`:'- not enough sales in both years to compare.')+
+    ' <span class="fm-note">The most consistent pattern in these bands, but not proven to cut error on new cycles; the BIS has no driver for it.</span></li>');
+  const use=cols.find(c=>c.k===ft.mode);
+  if(use&&br){const fd=use.res.f-1,hd=br.rel_perf-1;
+    if(Math.abs(fd)>0.02&&Math.abs(hd)>0.03&&fd*hd<0)
+      L.push(`<li class="fm-warn">${use.nm} ${fd>0?'pushes this department up':'holds this department back'} (×${use.res.f.toFixed(2)}), while departments with similar recent momentum averaged ${_x(br.rel_perf)} - history leans the other way (weak evidence).</li>`);}
+  const r=M.ridge,ok=r.mean<M.plain.mean-FM_NOISE;
+  L.push(`<li><b>Second opinion (model)</b> ${_x(d.ml_guarded)}${d.why.length?` - main reasons (approximate): ${d.why.map(w=>`${_h(w.label)} ${_x(w.mult)}`).join(', ')}`:''}. `+
+    `<span class="fm-note">${ok?`Tried on ${n} past cycles it missed by ${pct(r.mean)} against ${pct(M.plain.mean)} with no factor (better in ${r.wins} of ${n}).`
+      :`On ${n} past cycles it did no better than no factor (${pct(r.mean)} vs ${pct(M.plain.mean)}, better in ${r.wins} of ${n}) - do not use it for decisions; it only shows what the data leans towards.`}</span></li>`);
+  return `<div class="fm-hist"><h4>What sales history says - ${_h(sec.nm)}</h4><ul>${L.join('')}</ul>${foot}${_fmMlaErr()}</div>`;
+}
+// Continuous settings: does history support a growth strength? Honest test = walk-forward (strength picked on earlier
+// cycles only, then scored on the next); the per-strength table is descriptive (its minimum is picked after seeing it)
+function _fmStrHistHtml(ft,ed){
+  const head='<h4>History check of the strengths</h4>',wait=_fmMlaWait();
+  if(wait)return `<div class="fm-sec">${head}<div class="fm-note">${_h(wait)}${PLANNER.mla?.error?_fmMlaBtn():''}</div></div>`;
+  const M=PLANNER.mla.data,n=M.tests.length,p=M.plain.mean,pct=v=>(v*100).toFixed(2)+'%',wg=M.walk_growth,wr=M.walk_recent;
+  const near=(cv,s)=>cv.reduce((a,c)=>Math.abs(c.s-s)<Math.abs(a.s-s)?c:a);
+  const g=+ft.cont.growth||0,cg=near(M.curve_growth,g),pg=M.pick_growth,supported=wg.mean<p-FM_NOISE;
+  const other=['st','fill','base'].filter(k=>+ft.cont[k]).map(k=>({st:'sell-thru',fill:'fill rate',base:'19V26'})[k]);
+  const tbl=(cv,pts,cur)=>{const sel=[...new Set(pts.map(s=>near(cv,s)))].sort((a,b)=>a.s-b.s),cls=c=>cur&&c.s===cur.s?' cur':'';
+    return `<table class="pl-ft fm-curve"><tbody><tr><th>Strength</th>${sel.map(c=>`<td class="${cls(c)}">${c.s}</td>`).join('')}</tr>
+      <tr><th>Error on past cycles</th>${sel.map(c=>`<td class="${cls(c)}">${pct(c.mean)}</td>`).join('')}</tr>
+      <tr><th>Better than no factor</th>${sel.map(c=>`<td class="${cls(c)}">${c.wins} of ${n}</td>`).join('')}</tr></tbody></table>`;};
+  return `<div class="fm-sec">${head}
+    <div class="fm-note">Checks the 25V26-growth part of Continuous on its own (other drivers off, Rs 5 L damping, limits 0.8-1.2) on ${n} past planning cycles. Same formula as the BIS back-test but different windows and stores, so compare the numbers here with each other only. No factor at all: ${pct(p)}. On ${n} cycles, gaps under about 0.4 points are within noise.${other.length?` Your ${other.join(' / ')} strength is not part of this check.`:''}</div>
+    <div class="fm-rule" style="margin-top:8px"><b>Honest test</b> - picking the growth strength each time from earlier cycles only, then scoring the next one: ${pct(wg.mean)}, better than no factor in ${wg.wins} of ${n}.
+      ${supported?`History supports a growth strength; today it would pick ${pg}.`:`That is within noise of no factor, so history does not clearly favour any growth strength - no reason to move yours (${g}).`}
+      ${ed&&supported&&Math.abs(g-pg)>1e-9?`<button type="button" class="tbtn" onclick="_fmFt.cont.growth=${pg};_renderFactorTable()">Use ${pg}</button>`:''}</div>
+    <div class="fm-note" style="margin-top:6px">Every strength on the same ${n} cycles - descriptive only: the lowest number here was found after seeing these cycles, so it looks better than it would on new ones. <b>Blue</b> = yours.</div>
+    ${tbl(M.curve_growth,[-0.2,0,0.1,0.15,0.2,0.25,0.3,0.5,1,g],cg)}
+    <div class="fm-rule" style="margin-top:8px"><b>Recent momentum</b> (not in the BIS): picked the same honest way it scores ${pct(wr.mean)}, better than no factor in ${wr.wins} of ${n} - ${wr.mean<p-FM_NOISE?'worth considering as a new driver':'within noise of no factor, so not worth adding yet'}.</div>
+    ${tbl(M.curve_recent,[0,0.1,0.15,0.2,0.25,0.3,0.5],null)}
+    <div class="fm-note" style="margin-top:6px">Sell-thru and fill rate cannot be checked this way - there is no sell-thru or fill-rate history before 2026. Built ${_h(M.built_at.replace('T',' '))}.
+      ${_fmMlaBtn()}</div>${_fmMlaErr()}
   </div>`;
 }
 function _fmMatrixHtml(ft,ed){
@@ -5826,6 +6062,7 @@ function _fmContHtml(ft,ed){
     ${cards}
     ${agree}
     <div class="fm-sec"><h4>Rules and limits (shared with the Weighted builder tab - edit them there)</h4><div class="fm-note">Rules: ${_h(rl)} · small-department damping at Rs ${+(m.shrink_k*100).toFixed(2)} L a month · factor between ${m.clamp[0]} and ${m.clamp[1]}</div></div>
+    ${_fmStrHistHtml(ft,ed)}
     ${_fmEvalHtml({mode:'continuous',model:m,cont:c})}
   </div>`;
 }

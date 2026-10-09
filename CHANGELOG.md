@@ -5,6 +5,14 @@ Newest first. Each entry names its commit.
 
 ---
 
+## 2026-10-09
+
+### BIS: factor table - department preview, plain-language reasons, history check (reviewed)
+- **Asked (user, 8-9 Oct):** "i want a preview pane to see if i choose matrix, weight builder or Continuous what will be my result before selecting the default factor matrix, simplify the picker as possible"; "i needed the pop up department on which factor does what and how ill it affect the department"; "add a proper reason in simple terms to aid the user to select the right model"; "i want the ml concepts to aid in the factor tuning and i also want a reviewed work"; "if you can embed something in the front end - factor table".
+- Factor table top: pick a department; one table, factors as rows x Matrix / Weighted builder / Continuous as columns - the multiplier each factor applies and its Rs lakh effect on the department's Mar-Jun plan (log-share split, adds up to plan - plain share), "For this department" and "How it works" rows, a Suggested box (lowest back-test error) and Use this / Settings per column (replaces the old view tabs + Planner uses select).
+- History check (advisory, never changes a factor): new `Buyer's Input Sheet/ml_assist.py` rebuilds 12 past planning cycles from calendar.sales_fact (like-for-like stores, BIS timing, COVID excluded) into ml_assist.json (gitignored); BIS server GET /api/planner/ml-assist + planner-only POST .../rebuild. In the factor table: "What sales history says" for the chosen department (growth / recent-momentum bands, a weak-evidence note when the method in use points the other way, a Ridge second opinion labelled not-for-decisions), "History check - all departments" (method factor vs history, flagged first, row click previews; 26 flagged under Matrix today), and in Continuous settings an honest walk-forward check of the growth strength (18.57% vs 18.62% no factor - within noise, so no change suggested; recent momentum 18.54%, also within noise).
+- Reviewed: independent code review (no critical/high; fixed refresh-after-error and polling) and statistics review (fixed a one-month look-ahead, best-strength picked on its own test cycles, ridge record vs advice mismatch, reasons from imputed values, -100% growth, partial month, overclaiming wording); re-verified. Offline study report (Buyer's Input Sheet/ml_study, outside the repo) corrected to 6 unseen cycles: Continuous 0.20 18.47%, plain 18.62%, Ridge / RF / XGBoost 18.91-19.02%.
+
 ## 2026-10-08
 
 ### Suite: Undo / Redo in every app
