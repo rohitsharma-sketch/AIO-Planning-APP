@@ -220,10 +220,15 @@ class H(BaseHTTPRequestHandler):
                 return self._send(400, {"error": "Upload the fixture plan first."})
             months = sorted(df.month.unique())
             if path == "/api/rollup":
-                by = {"division": ["division"], "department": ["division", "department"], "cluster": ["cluster"],
-                      "store": ["cluster", "store"]}.get(q.get("by", ["division"])[0], ["division"])
+                # any layer path, e.g. "division,department,cluster" (user, 9 Oct: "drag and drop function which drills to
+                # any level for STR similar to AOP forecaster output model"); a department carries its one division along
+                by = [k for k in q.get("by", ["division"])[0].split(",") if k in ("division", "department", "cluster", "store")] or ["division"]
+                if "department" in by and "division" not in by:
+                    by.insert(by.index("department"), "division")
                 d, hp = _filter(df, q), bool(info.get("sales_plan"))
                 rows = se.rollup(d, by, months, hp)
+                if len(rows) > 6000:
+                    return self._send(413, {"error": f"{len(rows):,} rows at that level - open rows one at a time instead."})
                 if "department" in by:
                     _tag_cols(rows)
                 return self._send(200, {"months": [str(m) for m in months], "rows": rows, "by": by, "has_plan": hp})

@@ -86,6 +86,14 @@ td.ed,td.ed input{background:#FFF8E6}
 .mxb.on{background:var(--btn);color:var(--btn-t);text-decoration:none}
 .sb{font-size:10.5px;font-weight:700;border-radius:4px;padding:0 4px;margin-left:4px;vertical-align:1px}
 .sb.peak{background:#FDE7D6;color:#9A3412}.sb.off{background:#E5E7EB;color:#374151}
+.lays{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.lay{display:inline-flex;align-items:center;gap:3px;border:1px solid var(--btn);background:var(--btn);color:var(--btn-t);border-radius:999px;padding:3px 10px;font:inherit;font-size:12.5px;font-weight:700;cursor:grab;user-select:none}
+.lay.ghost{background:#fff;border:1px dashed var(--input);color:var(--foreground);font-weight:500;cursor:pointer}
+.lay.over{outline:2px solid var(--primary)}
+.lx{border:0;background:none;cursor:pointer;font-size:13px;color:inherit;padding:0 0 0 2px;line-height:1}
+.tgl{display:inline-block;width:18px;border:0;background:none;cursor:pointer;color:var(--muted-foreground);padding:0;font-size:12px}
+.edb{border:0;background:none;cursor:pointer;color:var(--primary);font-size:12.5px;padding:0 2px}
+tr.lv0 td.l1{font-weight:700}tr.lv1 td,tr.lv3 td{background:#FCFBF8}tr.lv1 td.l1,tr.lv3 td.l1{background:#FCFBF8}
 .tg.core{background:#E3EEF9;color:#1D4F86}.tg.seasonal{background:#FBEFD9;color:#8A5300}
 .note{font-size:12px;color:var(--muted-foreground)}
 .empty{padding:22px;text-align:center;color:var(--muted-foreground)}
@@ -129,11 +137,11 @@ td.ed,td.ed input{background:#FFF8E6}
       <button class="btn ghost sm" id="dl">&#8595; Excel</button></div>
     <div class="card-c">
       <div class="bar" style="margin-bottom:10px">
-        <div class="chips" role="group" aria-label="View by" id="by"></div>
+        <div class="lays" id="lays" role="group" aria-label="Row layers - drag to change the order"></div>
         <select id="f-div" aria-label="Division"><option value="">All divisions</option><option>MENS</option><option>LADIES</option><option>KIDS</option></select>
         <select id="f-cl" aria-label="Cluster"><option value="">All clusters</option></select>
         <label class="note" title="Peak / off months from each cluster&#39;s own season curve (day-wise sales, festival days left out, as in the Listing - Delisting Analyser): peak band 30-90 days, normal 60-180, off 90-180"><input type="checkbox" id="f-season" checked> Season-aware band</label>
-        <span class="note">Click a header to sort; &#9662; filters it.</span>
+
       </div>
       <div class="bar" style="align-items:flex-start;margin-bottom:4px"><div id="mx"></div>
         <button class="btn ghost sm" id="rev" hidden title="Back to the view, filters and sort you had before clicking a count">&#8634; Revert to previous view</button></div>
@@ -184,8 +192,10 @@ const tagLab=t=>t==='CORE'?'Core':t==='SEASONAL'?'Seasonal':'';
 async function api(p,o){const r=await fetch(p,o);const j=(r.headers.get('content-type')||'').includes('json')?await r.json():null;
   if(!r.ok)throw new Error(j?.error||r.statusText);return j;}
 const post=(p,body)=>api(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-const S={cl:'',seasonal:true,st:null,by:'division',div:'',dept:null,roll:null,cells:null,tags:null,cache:{},grid:{},gt:{},vis:{},allAgg:null,pf:null};
-const BY=[['division','Division'],['department','Department'],['cluster','Cluster'],['store','Store']];
+const S={layers:['division','department','cluster','store'],open:new Set(),kids:{},cl:'',seasonal:true,st:null,by:'division',div:'',dept:null,roll:null,cells:null,tags:null,cache:{},grid:{},gt:{},vis:{},allAgg:null,pf:null};
+// row layers (user, 9 Oct: "a similar drag and drop function which drills to any level for STR similar to AOP forecaster
+// output model"): drag to reorder, x to drop a layer, + to add it back; a row opens into the next layer
+const LAYERS={division:'Division',department:'Department',cluster:'Cluster',store:'Store'};
 function addM(s,n){const d=new Date(+s.slice(0,4),+s.slice(5,7)-1+n,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 
 /* ---- the All row: the server's sums, worked out over the rows shown (str_engine.rollup: sum first, then the ratio) */
@@ -215,9 +225,9 @@ function agg(rows,ms){
 /* ---- header sort + filter (user, 9 Oct: "add filters and sort functions on headers remove the find bar") */
 const gstate=n=>S.grid[n]??={sort:null,filt:{}};
 const fv=(c,r)=>{const v=c.get(r);return v==null||v===''?'(blank)':c.fmt?c.fmt(v):String(v);};
-function applyGrid(n,cols,rows){
+function applyGrid(n,cols,rows,sortOnly){
   const g=gstate(n);
-  let out=rows.filter(r=>cols.every(c=>!g.filt[c.id]||g.filt[c.id].has(fv(c,r))));
+  let out=sortOnly?rows:rows.filter(r=>cols.every(c=>!g.filt[c.id]||g.filt[c.id].has(fv(c,r))));
   const c=g.sort&&cols.find(c=>c.id===g.sort.id);
   if(c){const d=g.sort.dir;out=[...out].sort((a,b)=>{const x=c.get(a),y=c.get(b);
     if(x==null||x==='')return y==null||y===''?0:1;if(y==null||y==='')return -1;
@@ -229,8 +239,8 @@ function th(n,c,extra=''){
   return `<th class="sh ${c.cls||''}" data-g="${n}" data-col="${h(c.id)}" ${extra} title="${h((c.title?c.title+' - ':'')+'click to sort')}">${h(c.label)}${s}${c.filt?`<button class="hf${g.filt[c.id]?' on':''}" data-hf aria-label="Filter ${h(c.label)}${c.grp?' '+h(c.grp):''}">&#9662;</button>`:''}</th>`;
 }
 function grid(n,el,cols,rows,o={}){
-  S.gt[n]={cols,rows};
-  const vis=applyGrid(n,cols,rows);S.vis[n]=vis;
+  S.gt[n]={cols,rows:o.base||rows};
+  const vis=o.ordered?rows:applyGrid(n,cols,rows);S.vis[n]=vis;
   let head;
   if(cols.some(c=>c.grp)){let r1='',r2='';
     for(let j=0;j<cols.length;){const c=cols[j];
@@ -329,13 +339,46 @@ async function load(){
   $('#f-cl').innerHTML='<option value="">All clusters</option>'+(i.clusters||[]).map(c=>`<option${c===S.cl?' selected':''}>${h(c)}</option>`).join('');
   await loadRoll();if(S.dept)await loadCells();if(S.tab==='tg')loadTags();
 }
-function getRoll(by,div,cl=S.cl){const k=by+'|'+div+'|'+cl;
-  if(!S.cache[k]){const p=new URLSearchParams({by});if(div)p.set('division',div);if(cl)p.set('cluster',cl);S.cache[k]=api('api/rollup?'+p).catch(e=>{delete S.cache[k];throw e;});}
+const gf=()=>{const f={};if(S.div)f.division=S.div;if(S.cl)f.cluster=S.cl;return f;};
+const pk=p=>p.join('\u0001');
+function getRoll(by,f={}){const p=new URLSearchParams({by,...f}),k=p.toString();
+  if(!S.cache[k])S.cache[k]=api('api/rollup?'+p).catch(e=>{delete S.cache[k];throw e;});
   return S.cache[k];}
+function kidsOf(p){const f=gf();p.forEach((v,i)=>{f[S.layers[i]]=v;});return getRoll(S.layers[p.length],f);}
 async function loadRoll(){
-  try{S.roll=await getRoll(S.by,S.div);}catch(e){$('#t-note').textContent=e.message;return;}
+  const seq=S.seq=(S.seq||0)+1;   // only the latest call draws (layer / filter clicks can overlap)
+  let top;try{top=await getRoll(S.layers[0],gf());}catch(e){$('#t-note').textContent=e.message;return;}
+  const kids={};
+  await Promise.all([...S.open].map(async k=>{const p=k.split('\u0001');if(p.length>=S.layers.length)return;
+    try{kids[k]=(await kidsOf(p)).rows;}catch(e){}}));
+  if(seq!==S.seq)return;
+  S.roll=top;S.open=new Set(Object.keys(kids));Object.assign(S.kids,kids);
   renderRoll();
-  BY.forEach(([b])=>getRoll(b,S.div).catch(()=>{}));   // the other views load in the background - switching is instant
+}
+async function toggle(p){const k=pk(p);
+  if(S.open.has(k)){S.open.delete(k);renderRoll();return;}
+  try{S.kids[k]=(await kidsOf(p)).rows;S.open.add(k);}catch(e){alert(e.message);}
+  renderRoll();}
+async function openTo(n){   // every row down to layer n, one request per layer
+  S.open.clear();
+  for(let d=1;d<n;d++){let res;
+    try{res=await getRoll(S.layers.slice(0,d+1).join(','),gf());}catch(e){alert(e.message);break;}
+    const kids={};for(const r of res.rows)(kids[pk(S.layers.slice(0,d).map(k=>r[k]))]??=[]).push(r);
+    for(const [k,v] of Object.entries(kids)){S.kids[k]=v;S.open.add(k);}}
+  renderRoll();}
+function setLayers(L){S.layers=L;S.open.clear();S.kids={};const g=gstate('roll');delete g.filt.label;if(g.sort?.id==='label')g.sort=null;loadRoll();}
+function renderLayers(){
+  const off=Object.keys(LAYERS).filter(k=>!S.layers.includes(k));
+  $('#lays').innerHTML='<span class="note">Rows:</span> '+S.layers.map((k,i)=>`${i?'<span class="note">›</span>':''}<span class="lay" draggable="true" data-lay="${k}" title="Drag to change the order">${LAYERS[k]}${S.layers.length>1?`<button class="lx" data-lx="${k}" aria-label="Remove the ${LAYERS[k]} layer">&#x2715;</button>`:''}</span>`).join(' ')+
+    off.map(k=>` <button class="lay ghost" draggable="true" data-lay="${k}" data-add="${k}" title="Add ${LAYERS[k]} as the last layer, or drag it into place">+ ${LAYERS[k]}</button>`).join('')+
+    ` <span class="note" style="margin-left:6px">Open to:</span>${S.layers.map((k,i)=>`<button class="chip" data-lv="${i+1}" title="Open every row down to ${LAYERS[k]}">${LAYERS[k]}</button>`).join('')}`;
+}
+function flat(cols){   // the rows on screen: top layer filtered + sorted, open rows followed by their sorted children
+  const L=S.layers,out=[];
+  const walk=(rows,d,path)=>{for(const r of rows){const p=[...path,r[L[d]]];out.push({...r,_d:d,_p:p});
+    if(d<L.length-1&&S.open.has(pk(p))&&S.kids[pk(p)])walk(applyGrid('roll',cols,S.kids[pk(p)],true),d+1,p);}};
+  walk(applyGrid('roll',cols,S.roll.rows),0,[]);
+  return out;
 }
 const FIG=[['band','Band','actual STR days rounded to the nearest 30, kept between 60 and 180'],
   ['days','STR days','days the MDQ lasts at the planned selling rate: MDQ ÷ (planned qty ÷ days), over rows with both a plan and fixtures'],
@@ -343,10 +386,12 @@ const FIG=[['band','Band','actual STR days rounded to the nearest 30, kept betwe
   ['qty','Plan qty','planned qty: the sales plan’s own, else planned sales ÷ LY selling price'],['mdq','MDQ','fixtures × qty per fixture']];
 const cellOf=(r,i)=>i==='t'?r.total:r.months[i];
 function rollCols(){
-  const R=S.roll,keys=R.by,lab=k=>k[0].toUpperCase()+k.slice(1);
-  const cols=keys.map((k,j)=>({id:k,label:lab(k),cls:j?'l':'l1',filt:true,get:r=>r[k],
-    html:r=>h(r[k])+(k==='department'&&r.edited?' <span title="has edits" class="dot">&#9679;</span>':'')}));
-  if(keys.includes('department'))cols.push(
+  const R=S.roll,L=S.layers;
+  const cols=[{id:'label',label:L.map(k=>LAYERS[k]).join(' › '),cls:'l1',filt:true,get:r=>r[L[r._d||0]],
+    html:r=>{const d=r._d||0,k=L[d],last=d>=L.length-1,o=S.open.has(pk(r._p));
+      return `<span style="display:inline-block;width:${d*16}px"></span>`+(last?'<span class="tgl"></span>':`<button class="tgl" data-tog aria-expanded="${o}" aria-label="${o?'Close':'Open'} ${h(r[k])}">${o?'&#9662;':'&#9656;'}</button>`)+
+        h(r[k])+(k==='department'?(r.edited?' <span title="has edits" class="dot">&#9679;</span>':'')+` <button class="edb" data-edit="${h(r.department)}" title="Stores and fixtures of ${h(r.department)} - edit here">&#9998;</button>`:'');}}];
+  if(L.includes('department'))cols.push(
     {id:'tag',label:'Tag',cls:'l',filt:true,get:r=>tagLab(r.tag)||null,html:r=>r.tag?`<span class="tg ${r.tag.toLowerCase()}">${tagLab(r.tag)}</span>`:'<span class="note">—</span>'},
     {id:'attribute',label:'Attribute',cls:'l',filt:true,get:r=>r.attribute,html:r=>r.attribute?`<span title="from the ${h(r.attribute_from)}">${h(r.attribute)}</span>`:'<span class="note">—</span>'});
   for(const [i,g] of [...R.months.map((m,i)=>[i,mon(m)]),['t','4-month avg']])for(const [f,l,t] of FIG)
@@ -357,19 +402,19 @@ function rollCols(){
   return cols;
 }
 function renderRoll(){
-  $('#by').innerHTML=BY.map(([k,t])=>`<button class="chip${S.by===k?' on':''}" data-by="${k}" aria-pressed="${S.by===k}">${t}</button>`).join('');
-  const R=S.roll,isD=R.by.includes('department'),cm=S.st.info.common||{},g=gstate('roll');
-  const vis=grid('roll',$('#t'),rollCols(),R.rows,{
-    rowAttr:r=>isD?`data-dept="${h(r.department)}" tabindex="0" class="r${r.department===S.dept?' sel':''}"`:'',
-    tail:(vis,cols)=>{if(!vis.length)return '';S.allAgg=agg(vis,R.months);const nk=cols.filter(c=>c.m==null).length;
-      return `<tr class="tot" data-k="all"><td class="l1" colspan="${nk}">All${S.div?' '+h(S.div):''}${S.cl?' · '+h(S.cl):''}${vis.length<R.rows.length?` <span class="note">(${vis.length} of ${R.rows.length} shown)</span>`:''}</td>`+
+  renderLayers();
+  const R=S.roll,cm=S.st.info.common||{},g=gstate('roll'),cols=rollCols();
+  const vis=grid('roll',$('#t'),cols,flat(cols),{ordered:true,base:R.rows,
+    rowAttr:r=>`class="lv${r._d}${S.layers[r._d]==='department'&&r.department===S.dept?' sel':''}"`,
+    tail:(vis,cols)=>{const top=vis.filter(r=>r._d===0);if(!top.length)return '';S.allAgg=agg(top,R.months);const nk=cols.filter(c=>c.m==null).length;
+      return `<tr class="tot" data-k="all"><td class="l1" colspan="${nk}">All${S.div?' '+h(S.div):''}${S.cl?' · '+h(S.cl):''}${top.length<R.rows.length?` <span class="note">(${top.length} of ${R.rows.length} shown)</span>`:''}</td>`+
         cols.filter(c=>c.m!=null).map(c=>`<td class="${c.cls} c" data-m="${c.m}">${c.html(S.allAgg)}</td>`).join('')+'</tr>';}});
   $('#clr').hidden=!g.sort&&!Object.keys(g.filt).length;$('#rev').hidden=!S.prev;renderMatrix();
   const i=S.st.info,po=cm.part_months||[];
   const lo=[cm.fixture_only?.length?`in the fixture plan only ${cm.fixture_only.length} (${cm.fixture_only.join(', ')})`:'',
     cm.plan_only?.length?`in the sales plan only ${cm.plan_only.length} (${cm.plan_only.join(', ')})`:'',
     po.length?`a month missing in one file ${po.length} (${po.join(', ')})`:''].filter(Boolean);
-  const tn=(isD?'Click a department to see its stores and edit fixtures; click a figure for its calculation. ':'Click a figure for its calculation. ')+
+  const tn='▸ opens a row into the next layer; drag the layer chips to change the order; ✎ on a department opens its stores to edit fixtures; click a figure for its calculation; click a header to sort, ▾ filters the top layer. '+
     'The All row adds up the rows shown (after the header filters).',dn=
     'Plan qty and MDQ are summed before the days are worked out; the 4-month figure = average MDQ ÷ planned qty per day. LY days = last year’s sales qty on this same fixture plan (store-months that sold last year). Season = each cluster’s own curve from day-wise sales'+(i.season_built?` (built ${String(i.season_built).slice(0,16).replace('T',' ')})`:'')+'.'+
     (lo.length?` Stores not compared: ${lo.join('; ')} - MDQ ${n0(cm.left_out_mdq)}, Rs ${n0(cm.left_out_rs)} left out.`:'')+
@@ -383,7 +428,7 @@ function renderRoll(){
   $('#t-note').innerHTML=h(tn)+`<details><summary>Data notes - how it is worked out, stores left out, splits</summary>${h(dn)}</details>`;
 }
 async function renderMatrix(){
-  let R;try{R=await getRoll('department','',S.cl);}catch(e){return;}
+  let R;try{R=await getRoll('department',S.cl?{cluster:S.cl}:{});}catch(e){return;}
   const vals=R.rows.map(r=>bandOf(r.total)??null),a=S.mx;
   const bands=[...new Set([60,90,120,150,180,...vals.filter(v=>v!=null)])].sort((x,y)=>x-y).concat(vals.includes(null)?[null]:[]);
   const n=(d,b)=>R.rows.filter(r=>(!d||r.division===d)&&(bandOf(r.total)??null)===b).length;
@@ -441,7 +486,7 @@ function setTab(t){S.tab=t;document.querySelectorAll('.tab').forEach(b=>{b.class
   $('#p-fc').hidden=t!=='fc';$('#p-tg').hidden=t!=='tg';hidePop();
   try{history.replaceState(null,'',t==='tg'?'#tags':location.pathname+location.search);}catch(e){}
   if(t==='tg'&&S.st?.info?.fixture)loadTags();
-  if(t==='fc'&&S.roll&&!S.cache[S.by+'|'+S.div])loadRoll();}
+  if(t==='fc'&&S.roll)loadRoll();}
 function dirty(){S.cache={};}
 
 document.addEventListener('click',async e=>{
@@ -457,24 +502,27 @@ document.addEventListener('click',async e=>{
   const cc=e.target.closest('td.c');
   if(cc){const tr=cc.closest('tr'),m=cc.dataset.m,i=m==='t'?'t':+m,tbl=cc.closest('table').id;
     if(tbl==='t'){const R=S.roll,r=tr.dataset.k==='all'?S.allAgg:S.vis.roll[+tr.dataset.k],ml=i==='t'?'4-month avg':mon(R.months[i]);
-      const who=tr.dataset.k==='all'?'All'+(S.div?' '+S.div:''):R.by.map(k=>r[k]).join(' · ');
+      const who=tr.dataset.k==='all'?'All'+(S.div?' '+S.div:'')+(S.cl?' · '+S.cl:''):r._p.join(' · ');
       showPop(cc,calcAgg(`${who} · ${ml}`,cellOf(r,i)));}
     else if(tbl==='dt'){const r=S.vis.cells[+tr.dataset.k],c=r.months[i];if(c)showPop(cc,calcCell(`${S.cells.department} · ${r.store} · ${mon(S.cells.months[i])}`,c,mon(addM(S.cells.months[i],-12))));}
     return;}
-  const b=e.target.closest('[data-by]');if(b){S.by=b.dataset.by;await loadRoll();return;}
-  const r=e.target.closest('#t tr[data-dept]');if(r&&!e.target.closest('input,select,button')){S.dept=r.dataset.dept;renderRoll();await loadCells();$('#dd').scrollIntoView({behavior:'smooth',block:'start'});return;}
+  const tg=e.target.closest('[data-tog]');if(tg){await toggle(S.vis.roll[+tg.closest('tr').dataset.k]._p);return;}
+  const eb=e.target.closest('[data-edit]');if(eb){S.dept=eb.dataset.edit;renderRoll();await loadCells();$('#dd').scrollIntoView({behavior:'smooth',block:'start'});return;}
+  const lx=e.target.closest('[data-lx]');if(lx){setLayers(S.layers.filter(k=>k!==lx.dataset.lx));return;}
+  const ad=e.target.closest('[data-add]');if(ad){setLayers([...S.layers,ad.dataset.add]);return;}
+  const lv=e.target.closest('[data-lv]');if(lv){await openTo(+lv.dataset.lv);return;}
   const rb=e.target.closest('[data-rb]');if(rb){if(!confirm('Roll back the latest '+(rb.dataset.rb==='fixture'?'fixture plan':'sales plan')+' upload? The one before it (if any) is used again.'))return;
     try{await post('api/rollback',{kind:rb.dataset.rb});dirty();S.dept=null;$('#dd').hidden=true;await load();}catch(err){alert(err.message);}return;}
   if(e.target.id==='clr'){S.grid.roll={sort:null,filt:{}};S.mx=null;renderRoll();return;}
   const mx=e.target.closest('[data-mx]');
   if(mx){const [d,b]=mx.dataset.mx.split('|'),g=S.grid.roll;
-    if(!S.prev)S.prev={by:S.by,div:S.div,cl:S.cl,grid:g?{sort:g.sort,filt:{...g.filt}}:null};   // what Revert goes back to
-    S.mx={d,b:b===''?null:+b};S.by='department';S.div='';$('#f-div').value='';
-    const f={'band:t':new Set([b===''?'(blank)':b+' days'])};if(d)f.division=new Set([d]);
-    S.grid.roll={sort:{id:'days:t',dir:-1},filt:f};await loadRoll();
+    if(!S.prev)S.prev={layers:[...S.layers],open:[...S.open],div:S.div,cl:S.cl,grid:g?{sort:g.sort,filt:{...g.filt}}:null};   // what Revert goes back to
+    S.mx={d,b:b===''?null:+b};S.div=d;$('#f-div').value=d;
+    S.grid.roll={sort:{id:'days:t',dir:-1},filt:{'band:t':new Set([b===''?'(blank)':b+' days'])}};
+    setLayers(['department',...S.layers.filter(k=>k!=='department'&&k!=='division')]);
     $('#t').closest('.tw').scrollIntoView({behavior:'smooth',block:'nearest'});return;}
-  if(e.target.id==='rev'&&S.prev){const p=S.prev;S.prev=null;S.mx=null;S.by=p.by;S.div=p.div;$('#f-div').value=p.div;S.cl=p.cl;$('#f-cl').value=p.cl;
-    S.grid.roll=p.grid||{sort:null,filt:{}};await loadRoll();return;}
+  if(e.target.id==='rev'&&S.prev){const p=S.prev;S.prev=null;S.mx=null;S.div=p.div;$('#f-div').value=p.div;S.cl=p.cl;$('#f-cl').value=p.cl;
+    S.layers=p.layers;S.open=new Set(p.open);S.kids={};S.grid.roll=p.grid||{sort:null,filt:{}};await loadRoll();return;}
   if(e.target.id==='dd-x'){S.dept=null;$('#dd').hidden=true;renderRoll();return;}
   if(e.target.id==='dd-reset'){if(!confirm(`Reset ${S.dept} to the fixture file? Its edited fixtures and qty per fixture are dropped (the edit history is kept).`))return;
     try{await post('api/reset',{department:S.dept});dirty();await loadRoll();await loadCells();}catch(err){alert(err.message);}return;}
@@ -485,7 +533,6 @@ document.addEventListener('click',async e=>{
 });
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){hidePop();return;}
-  const r=e.target.closest&&e.target.closest('tr[data-dept]');if(r&&e.key==='Enter'&&e.target===r){r.click();return;}
   const d=e.target.closest&&e.target.closest('.drop');if(d&&(e.key==='Enter'||e.key===' ')){e.preventDefault();d.querySelector('input').click();}
 });
 document.addEventListener('input',e=>{if(e.target.matches('.pf-q')){const q=e.target.value.toLowerCase();
@@ -508,6 +555,18 @@ addEventListener('scroll',e=>{if(!$('#pop').hidden&&!(e.target.closest&&e.target
 addEventListener('resize',hidePop);
 ['dragover','dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>{const d=e.target.closest&&e.target.closest('.drop');if(!d)return;e.preventDefault();
   d.classList.toggle('over',ev==='dragover');if(ev==='drop'&&e.dataTransfer.files[0])upload(d.dataset.kind,e.dataTransfer.files[0]);}));
+document.addEventListener('dragstart',e=>{const l=e.target.closest&&e.target.closest('#lays [data-lay]');if(!l)return;
+  S.drag=l.dataset.lay;e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',S.drag);});
+['dragover','dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>{if(!S.drag||!(e.target.closest&&e.target.closest('#lays')))return;e.preventDefault();
+  const t=e.target.closest('.lay:not(.ghost)');document.querySelectorAll('#lays .over').forEach(x=>x.classList.remove('over'));
+  if(ev==='dragover'){if(t)t.classList.add('over');return;}
+  if(ev!=='drop')return;
+  const k=S.drag;S.drag=null;let L=S.layers.filter(x=>x!==k);
+  if(e.target.closest('.ghost')){if(L.length&&S.layers.includes(k))setLayers(L);return;}   // dropped on a "not shown" chip: remove
+  if(t&&t.dataset.lay!==k){const r=t.getBoundingClientRect(),i=L.indexOf(t.dataset.lay)+(e.clientX>r.left+r.width/2?1:0);L.splice(i,0,k);}
+  else if(!t)L.push(k);else return;
+  setLayers(L);}));
+document.addEventListener('dragend',()=>{S.drag=null;});
 async function upload(kind,f){
   if(kind==='tags'){$('#tg-job').className='status';$('#tg-job').textContent=`${f.name}: reading…`;
     try{const j=await api('api/upload?kind=tags',{method:'POST',headers:{'X-File-Name':encodeURIComponent(f.name)},body:f});

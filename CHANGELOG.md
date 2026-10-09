@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: drag-and-drop row layers that drill to any level
+- **Asked (user):** "instead of the sepearate tab why dont you give a similar drag and drop function which drills to any level for STR similar to AOP forecaster ouput model"
+- The Division / Department / Cluster / Store view buttons are replaced by a "Rows" layer bar like the AOP Output pivot: drag the chips to change the order, x drops a layer, "+ Layer" adds it back (or drag it into place). Each row opens (triangle) into the next layer, e.g. Division > Department > Cluster > Store; "Open to" opens every row down to a layer in one request per layer (guarded at 6,000 rows). Children load on demand and are cached; sorting applies at every level, header filters to the top layer; the All row adds up the top-layer rows shown. A pencil on any department row opens its store-level fixture editor. The band table click puts Department on top for that division and band; Revert restores the layers, open rows, filters and sort.
+- /api/rollup takes any layer path (by=division,department,cluster); a department always carries its division.
+
 ### STR Forecaster: each cluster's own season curve, cluster filter, simpler notes
 - **Asked (user):** "i like this suggestion - Store-level seasonality: use each cluster's own season curve from the day-wise sales, rather than one for the whole chain. Club it with their respective cluster and amalgamate the already present structure for a deeper meaning but simplified version of the app"
 - New str_season.py: the Listing - Delisting Analyser's season method (day-wise data-lake cache, each store's calendar-cluster festival days left out, sales per festival-free open store-day, month vs that year's average, 2022-25 averaged) run per AOP cluster x department and chain-wide; a cluster leans on the chain curve where few of its stores sell the department (w = stores / (stores + 3)). Output season_cluster.json (gitignored), rebuilt by the server when the day-wise cache or the AOP store master is newer (hourly check); 11 s. Every store x department x month now takes its own cluster's season; roll-ups weight by plan qty. Replaces the chain-wide windows.json rates (e.g. KI_AP_JEANS Mar = normal 1.05, Apr-Jun off; NE - (P) R/N T-shirts dip in May).
