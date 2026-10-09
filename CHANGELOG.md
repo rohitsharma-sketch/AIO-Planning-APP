@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: split departments by LY share instead of 50/50
+- **Asked (user):** "split the plan by LY share instead of 50/50"
+- The five old department names are now divided by each new part's share of last year's sales: the same store and month a year earlier, else the chain's that month, else equal. Pieces for plan qty, fixtures and MDQ; value for plan Rs. A store that sold only one part LY gives it the whole row. Old-department totals and the All figures are unchanged (All 54.5 days); e.g. MSE_PYJAMA 75% HSR / 25% TXTL, KB_T-SHIRT H/S 77% R/N / 23% POLO, KB_BERMUDA 42% HSR / 58% TXTL, LW_L_PALAZZO 58% WES / 42% ETH, LW_L_JEGGING 48% DNM / 52% WVN (4-month plan qty). Each pair's forecast and LY days now agree with each other.
+
 ### STR Forecaster: season-aware STR band (Listing - Delisting Analyser seasonality)
 - **Asked (user):** "incorporate the seasonality trends from the Listing - Delisting Analyser App where peak seasons can be differentiated from the normal ones and STR can differ according to it"
 - Season per department x month = its festival-free sales rate that month / its 12-month average (Listing app windows.json, 2022-25, refreshed nightly); peak >= 1.15, off <= 0.85 (the Listing app's own thresholds). Roll-ups take the plan-qty-weighted index. Mar-Jun'27: 366 peak, 58 normal, 28 off department-months.

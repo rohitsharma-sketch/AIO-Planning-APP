@@ -255,15 +255,33 @@ DEPT_SPLITS = {
 }
 
 
-def split_depts(f, cols):
-    """an old department's row -> one row per new department, each with an equal share of `cols` (fixtures, MDQ, plan);
-    a store that already has the new name gets the share added to it"""
+def split_depts(f, cols, ly=None):
+    """an old department's row -> one row per new department; a store that already has the new name gets its part added.
+    cols = {column: "sl_q" | "sl_v"}: each part's share of last year's sales (user, 9 Oct: "split the plan by LY share
+    instead of 50/50") - pieces for qty / fixtures / MDQ, value for Rs - the same store and month a year earlier, else the
+    chain's that month, else equal. `ly` = LY sales with month already +12; none -> equal shares."""
     old = f.department.isin(DEPT_SPLITS)
     if not old.any():
         return f
-    parts = f[old].assign(department=f.department[old].map(DEPT_SPLITS)).explode("department")
-    parts[cols] = parts[cols].div(f.department[old].map(lambda d: len(DEPT_SPLITS[d])).reindex(parts.index), axis=0)
-    f = pd.concat([f[~old], parts], ignore_index=True)
+    parts = f[old].assign(old=f.department[old], department=f.department[old].map(DEPT_SPLITS)).explode("department").reset_index(drop=True)
+    equal = 1.0 / parts.old.map(lambda d: len(DEPT_SPLITS[d]))
+    l = None
+    if ly is not None and len(ly):
+        back = {n: o for o, ns in DEPT_SPLITS.items() for n in ns}
+        l = ly[ly.department.isin(back)].assign(old=lambda x: x.department.map(back))
+        l = l.astype({"sl_q": float, "sl_v": float})
+    for c, w in cols.items():
+        sh = pd.Series(np.nan, index=parts.index)
+        if l is not None and len(l):
+            for keys in (["month", "store"], ["month"]):   # first level with LY sales of the old department wins
+                part = l.groupby(keys + ["old", "department"])[w].sum().clip(lower=0)
+                tot = part.groupby(level=list(range(len(keys) + 1))).sum()
+                num = part.reindex(pd.MultiIndex.from_frame(parts[keys + ["old", "department"]])).fillna(0).values
+                den = tot.reindex(pd.MultiIndex.from_frame(parts[keys + ["old"]])).values
+                sh = sh.fillna(pd.Series(np.where(den > 0, num / np.where(den > 0, den, 1), np.nan), index=parts.index))
+        parts[c] = parts[c] * sh.fillna(equal)
+    f = pd.concat([f[~old], parts.drop(columns="old")], ignore_index=True)
+    cols = list(cols)
     return f.groupby(["month", "store", "division", "department"], as_index=False)[cols].sum(min_count=1)
 
 
@@ -449,11 +467,12 @@ def build():
                      {"m": [f"{m - 12}-01" for m in months], "d": list(DIVS)}, key=("ly", tuple(map(str, months)), date.today()))
     common = {}
     split = sorted((set(fx.department) | (set(pl.department) if len(pl) else set())) & set(DEPT_SPLITS))
-    fx = split_depts(fx.astype({"fixtures": float, "mdq": float}), ["fixtures", "mdq"])
+    ly_sh = lys.assign(month=_period(lys.month) + 12) if len(lys) else None   # LY sales on their forecast month
+    fx = split_depts(fx.astype({"fixtures": float, "mdq": float}), {"fixtures": "sl_q", "mdq": "sl_q"}, ly_sh)
     if len(pl):
         pl["month"] = _period(pl.month)
         pl = pl[pl.month.isin(months)]
-        pl = split_depts(pl.astype({"plan_rs": float, "plan_qty_file": float}), ["plan_rs", "plan_qty_file"])
+        pl = split_depts(pl.astype({"plan_rs": float, "plan_qty_file": float}), {"plan_rs": "sl_v", "plan_qty_file": "sl_q"}, ly_sh)
     if len(pl) == 0 and pu:
         common = {"month_mismatch": True}   # the plan's months miss the fixture months: show the fixture view and say why
     if len(pl):
@@ -657,7 +676,15 @@ if __name__ == "__main__":   # self-check of the maths on tiny frames (no DB)
     assert rs["season"] == "peak" and rs["band"] == 90 and rs["base_band"] == 150   # 155 days: peak cap 90
     assert (_tag(" core"), _tag("Seasonal"), _tag("x"), _tag(None)) == ("CORE", "SEASONAL", None, None)
     sp = split_depts(pd.DataFrame({"month": [P("2027-03")] * 2, "store": ["S1"] * 2, "division": ["MENS"] * 2,
-                                   "department": ["MSE_PYJAMA", "MSE_TXTL PYJAMA"], "plan_rs": [100.0, 10.0], "q": [np.nan, 4.0]}), ["plan_rs", "q"])
+                                   "department": ["MSE_PYJAMA", "MSE_TXTL PYJAMA"], "plan_rs": [100.0, 10.0], "q": [np.nan, 4.0]}), {"plan_rs": "sl_v", "q": "sl_q"})
     assert sp.set_index("department").plan_rs.to_dict() == {"MSE_HSR PYJAMA": 50.0, "MSE_TXTL PYJAMA": 60.0}   # half each, added
     assert np.isnan(sp.set_index("department").q["MSE_HSR PYJAMA"])                                         # no qty stays no qty
+    lyx = pd.DataFrame({"month": [P("2027-03")] * 3, "store": ["S1", "S1", "S2"], "department": ["MSE_HSR PYJAMA", "MSE_TXTL PYJAMA", "MSE_TXTL PYJAMA"],
+                        "sl_q": [30.0, 10.0, 5.0], "sl_v": [600.0, 400.0, 100.0]})
+    f3 = pd.DataFrame({"month": [P("2027-03")] * 3, "store": ["S1", "S2", "S3"], "division": ["MENS"] * 3, "department": ["MSE_PYJAMA"] * 3,
+                       "mdq": [100.0] * 3, "plan_rs": [100.0] * 3})
+    sp = split_depts(f3, {"mdq": "sl_q", "plan_rs": "sl_v"}, lyx).set_index(["store", "department"])
+    assert sp.mdq[("S1", "MSE_HSR PYJAMA")] == 75.0 and sp.plan_rs[("S1", "MSE_HSR PYJAMA")] == 60.0   # S1's own LY: 30 of 40 pcs, 600 of 1000 Rs
+    assert sp.mdq[("S2", "MSE_HSR PYJAMA")] == 0.0 and sp.mdq[("S2", "MSE_TXTL PYJAMA")] == 100.0   # S2 sold only TXTL
+    assert abs(sp.mdq[("S3", "MSE_HSR PYJAMA")] - 100 * 30 / 45) < 1e-9                         # S3 no LY: chain month share
     print("str_engine self-check: OK")
