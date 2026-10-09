@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster fix: article split by each store's planned QTY cont %
+- **Reported (user):** MSE_R/N T-SHIRT H/S Mar'27 - article MDQ shares (19.9 / 46.2 / 31.9 / 2.0%) did not follow the plan (32.8 / 47.1 / 19.2 / 0.9%). "Bifurcate each stores' plan cont % on month and take that cont % to divide the MDQ and Fixtures as per their store x month x dept x art name share"
+- Cause: the split used each article's share of the department's planned sales VALUE (Rs); cheap articles (01-EPP) are a bigger share of pieces than of rupees, so they got too little MDQ. Now fixtures, MDQ and LY are split by the article's share of the department's planned QTY in that store and month (Rs share only where the store-month plan has no qty; chain share where the store has no article plan). In each store x month the MDQ share now equals the qty share exactly; the chain total follows within a fraction of a point (01-EPP 32.78% qty / 32.50% MDQ, 02-ECO 47.12 / 47.27, 03-REGULAR 19.20 / 19.31, 04-PREMIUM 0.91 / 0.91 - the small gaps come from stores having different MDQ per piece). Department totals unchanged.
+
 ### STR Forecaster: Last year column removed from the calculation table
 - **Asked (user):** "remove the last year numbers in the table those are baseless" (the circled Last year column of the info table)
 - The click popup's table is Regular | Peak-oriented only; the "last year: N store-months" note is gone from "Based on". Season, season index, festivals and the rule stay below.

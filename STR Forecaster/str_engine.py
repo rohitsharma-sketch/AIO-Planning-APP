@@ -584,14 +584,16 @@ NO_ART = "(no article plan)"
 
 def article_frame(df, art):
     """the store x department x month frame split to articles (user, 9 Oct: "break the fixture plan as per the sales plan
-    imported and make the fixture plan as per the Cont % of sales plan"): each article's cont % = its planned sales (Rs)
-    / the department's in that store and month (qty share where the plan has no Rs); fixtures, MDQ and last year's sales
+    imported and make the fixture plan as per the Cont % of sales plan"; 9 Oct: "Bifurcate each stores' plan cont % on
+    month and take that cont % to divide the MDQ and Fixtures as per their store x month x dept x art name share"): each
+    article's cont % = its planned QTY / the department's in that store and month (Rs share only where the store-month
+    plan has no qty - the value share gave cheap articles too little MDQ); fixtures, MDQ and last year's sales
     x cont % (no article-level history - last year is apportioned the same way); the article's own planned Rs / qty.
     A store with no article plan that month takes the chain's cont % for the department; no plan at all -> NO_ART."""
     if not len(art):
         return df.assign(article=NO_ART, cont=1.0, cont_from="no article plan")
     a = art.groupby(KEY + ["article"], as_index=False)[["plan_rs", "plan_qty_file"]].sum(min_count=1)
-    a["w"] = a.plan_rs.where(a.groupby(KEY).plan_rs.transform("sum") > 0, a.plan_qty_file.fillna(0.0))
+    a["w"] = a.plan_qty_file.fillna(0.0).where(a.groupby(KEY).plan_qty_file.transform("sum") > 0, a.plan_rs)
     a["cont"] = a.w / a.groupby(KEY).w.transform("sum")
     a = a[a.cont > 0]
     ch = a.groupby(["month", "department", "article"], as_index=False).w.sum()
@@ -809,7 +811,7 @@ if __name__ == "__main__":   # self-check of the maths on tiny frames (no DB)
     ar = pd.DataFrame({"month": [P("2027-03")] * 2, "store": ["S1", "S1"], "department": ["A", "A"], "division": ["MENS"] * 2,
                        "article": ["ECO", "PREM"], "plan_rs": [600.0, 400.0], "plan_qty_file": [8.0, 2.0]})
     af = article_frame(fr, ar).set_index(["store", "article"])
-    assert af.mdq[("S1", "ECO")] == 240.0 and af.plan_qty[("S1", "PREM")] == 2.0     # 60% of Rs -> 60% of MDQ; own qty
-    assert af.mdq[("S2", "ECO")] == 120.0 and af.cont_from[("S2", "ECO")] == "chain plan"   # S2 has no article plan: chain
+    assert af.mdq[("S1", "ECO")] == 320.0 and af.plan_qty[("S1", "PREM")] == 2.0     # 80% of the qty -> 80% of MDQ; own qty
+    assert af.mdq[("S2", "ECO")] == 160.0 and af.cont_from[("S2", "ECO")] == "chain plan"   # S2 has no article plan: chain
     assert abs(af.mdq.sum() - fr.mdq.sum()) < 1e-9 and abs(af.fixtures.sum() - fr.fixtures.sum()) < 1e-9   # adds back
     print("str_engine self-check: OK")
