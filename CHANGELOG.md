@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: Last year column removed from the calculation table
+- **Asked (user):** "remove the last year numbers in the table those are baseless" (the circled Last year column of the info table)
+- The click popup's table is Regular | Peak-oriented only; the "last year: N store-months" note is gone from "Based on". Season, season index, festivals and the rule stay below.
+
 ### STR Forecaster: hover messages removed; detailed calculation table
 - **Asked (user):** "remove the hover message now" and "make the tabular form info as detailed as it can be. Make sure it gives a good detailed view as earlier for all calculations. Donot clutter it though"
 - The hover texts on band cells, Peak / Off badges and the band-table headers are gone (the click popup carries the working).

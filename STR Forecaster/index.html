@@ -387,29 +387,28 @@ function peakSug(cells,c,ms,qd,cur){
   return {qty:q,nd,qpd,days:d,band:bandS(d,'peak'),months:run.map(j=>ms[j]),ahead:cur!=='t'&&run[0]>cur};}
 const span=ms=>ms.length>1?`${mon(ms[0])}–${mon(ms[ms.length-1])}`:mon(ms[0]);
 const r30=d=>d==null?null:Math.floor(d/30+0.5)*30;
-// Regular | Peak-oriented | Last year, one row per step of the working.
-// x = {per, q, nd} for this period; ly = {per, q, nd, mdq, days, str, band} or null
-function compare(c,p,x,ly){
+// Regular | Peak-oriented, one row per step of the working (user, 9 Oct: "remove the last year numbers in the table
+// those are baseless"). x = {per, q, nd} for this period
+function compare(c,p,x){
   const avg=c.mdq/(c.n_months||1),[lo,hi]=S.seasonal?lim(c.season):lim(null),qpd=x.q/x.nd,P=p||{},reg=!p||p.none||p.ended;
   const same='<span class="note">same as regular</span>',no='<span class="note">—</span>';
-  const row=(k,a,b,l)=>`<tr><th>${k}</th><td>${a}</td><td>${b}</td><td>${ly?l:no}</td></tr>`;
-  const pk=(a)=>reg?same:a,L_=ly||{},lavg=ly?L_.mdq:0;
+  const row=(k,a,b)=>`<tr><th>${k}</th><td>${a}</td><td>${b}</td></tr>`;
+  const pk=(a)=>reg?same:a;
   const pq=reg?x.q:P.qpd*x.nd;
   const rangeTxt=`${lo}–${hi}`+(S.seasonal&&c.season?` <span class="note">(${c.season}${c.season==='off'?': off months start at 90':''})</span>`:'');
-  return `<table class="cmp"><thead><tr><th></th><th>Regular</th><th>Peak-oriented</th><th>Last year</th></tr></thead><tbody>`+
+  return `<table class="cmp"><thead><tr><th></th><th>Regular</th><th>Peak-oriented</th></tr></thead><tbody>`+
     row('Selling rate',`planned, ${x.per}`,
       !p?no:p.none?'<span class="note">no peak month here in the window - regular</span>':p.ended?`<span class="note">peak ended ${mon(P.last)} - back to regular</span>`:
-        `planned, ${P.months.length>1?'peak run':'peak month'} ${span(P.months)}${P.ahead?' <span class="note">(planned ahead)</span>':''}`,
-      `actual sales, ${L_.per||''}`)+
-    row('Qty',`${n0(x.q)} pcs in ${x.nd} days`,pk(`${n0(P.qty)} pcs in ${P.nd} days`),`${n0(L_.q)} pcs in ${L_.nd} days`)+
-    row('Qty per day',`${n0(x.q)} ÷ ${x.nd} = <b>${n1(qpd)}</b>`,pk(`${n0(P.qty)} ÷ ${P.nd} = <b>${n1(P.qpd)}</b>`),`${n0(L_.q)} ÷ ${L_.nd} = <b>${n1(L_.q/L_.nd)}</b>`)+
-    row('MDQ',`${n0(avg)}${c.n_months>1?` <span class="note">(${n0(c.mdq)} ÷ ${c.n_months} months)</span>`:''}`,pk(`${n0(avg)}`),`${n0(lavg)} <span class="note">(fixture file)</span>`)+
-    row('STR days',`${n0(avg)} ÷ ${n1(qpd)} = <b>${n1(c.days)}</b>`,pk(`${n0(avg)} ÷ ${n1(P.qpd)} = <b>${n1(P.days)}</b>`),`${n0(lavg)} ÷ ${n1(L_.q/L_.nd)} = <b>${n1(L_.days)}</b>`)+
-    row('Nearest 30',`${r30(c.days)}`,pk(`${r30(P.days)}`),`${r30(L_.days)}`)+
-    row('Range',rangeTxt,pk('60–180'),rangeTxt)+
+        `planned, ${P.months.length>1?'peak run':'peak month'} ${span(P.months)}${P.ahead?' <span class="note">(planned ahead)</span>':''}`)+
+    row('Qty',`${n0(x.q)} pcs in ${x.nd} days`,pk(`${n0(P.qty)} pcs in ${P.nd} days`))+
+    row('Qty per day',`${n0(x.q)} ÷ ${x.nd} = <b>${n1(qpd)}</b>`,pk(`${n0(P.qty)} ÷ ${P.nd} = <b>${n1(P.qpd)}</b>`))+
+    row('MDQ',`${n0(avg)}${c.n_months>1?` <span class="note">(${n0(c.mdq)} ÷ ${c.n_months} months)</span>`:''}`,pk(`${n0(avg)}`))+
+    row('STR days',`${n0(avg)} ÷ ${n1(qpd)} = <b>${n1(c.days)}</b>`,pk(`${n0(avg)} ÷ ${n1(P.qpd)} = <b>${n1(P.days)}</b>`))+
+    row('Nearest 30',`${r30(c.days)}`,pk(`${r30(P.days)}`))+
+    row('Range',rangeTxt,pk('60–180'))+
     row('Suggested band',`<b class="bd">${bandOf(c)} days</b>${S.seasonal&&c.band!==c.base_band?` <span class="note">(${c.base_band} on 60–180)</span>`:''}`,
-      `<b class="bd">${reg?bandOf(c):P.band} days</b>`,`<b class="bd">${L_.band??'—'} days</b>`)+
-    row('Sell-thru at MDQ',`${n0(x.q)} ÷ (${n0(x.q)} + ${n0(c.mdq)}) = ${pct(x.q/(x.q+c.mdq))}`,pk(`${n0(pq)} ÷ (${n0(pq)} + ${n0(c.mdq)}) = ${pct(pq/(pq+c.mdq))}`),pct(L_.str))+
+      `<b class="bd">${reg?bandOf(c):P.band} days</b>`)+
+    row('Sell-thru at MDQ',`${n0(x.q)} ÷ (${n0(x.q)} + ${n0(c.mdq)}) = ${pct(x.q/(x.q+c.mdq))}`,pk(`${n0(pq)} ÷ (${n0(pq)} + ${n0(c.mdq)}) = ${pct(pq/(pq+c.mdq))}`))+
     `</tbody></table>`;}
 // season rows: tag + reason, the two indexes, festivals
 function seasonRows(c,fest,why){
@@ -424,9 +423,8 @@ function seasonRows(c,fest,why){
 }
 function calcAgg(title,c,fest,pk,per,lyPer){
   if(!c.rows)return calcBox(title,[L('STR','— <span class="note">'+(S.roll.has_plan?'no store has both a plan and fixtures here':'no sales plan loaded')+'</span>'),L('MDQ',n0(c.mdq)+' pcs')]);
-  const ly=c.ly_rows?{per:lyPer,q:c.ly_qty,nd:c.ly_n_days,mdq:c.ly_mdq/(c.ly_n_months||1),days:c.ly_days,str:c.ly_str,band:S.seasonal?c.ly_band:c.ly_base_band}:null;
-  return calcBox(title,[L('Based on',`<span class="note">${c.rows} store × department × month rows with both a plan and fixtures${ly?` · last year: ${c.ly_rows} store-months that sold`:''} · MDQ = Σ fixtures × qty per fixture</span>`),
-    `<tr><td colspan="2">${compare(c,pk,{per,q:c.qty,nd:c.n_days},ly)}</td></tr>`,...seasonRows(c,fest)]);
+  return calcBox(title,[L('Based on',`<span class="note">${c.rows} store × department × month rows with both a plan and fixtures · MDQ = Σ fixtures × qty per fixture</span>`),
+    `<tr><td colspan="2">${compare(c,pk,{per,q:c.qty,nd:c.n_days})}</td></tr>`,...seasonRows(c,fest)]);
 }
 function calcCell(title,c,lyMon,pk){
   const R=[L('MDQ',`${n2(c.fixtures)} fixtures × ${n2(c.density)} per fixture = <b>${n0(c.mdq)}</b>`+
@@ -434,8 +432,7 @@ function calcCell(title,c,lyMon,pk){
     L('Planned qty',c.qty_from==='plan'?`<b>${n0(c.plan_qty)}</b> <span class="note">from the sales plan file (Rs ${n0(c.plan_rs)})</span>`:
       c.qty_from?`Rs ${n0(c.plan_rs)} ÷ Rs ${n0(c.asp)} = <b>${n0(c.plan_qty)}</b> <span class="note">at last year's selling price (${h(c.asp_from)})</span>`:'— <span class="note">no plan</span>')];
   if(c.days==null)return calcBox(title,R.concat([L('STR','— <span class="note">needs both a plan and fixtures</span>')]));
-  const ly=c.ly_days!=null&&c.ly_q>0?{per:lyMon,q:c.ly_q,nd:c.ly_n_days,mdq:c.mdq_base,days:c.ly_days,str:c.ly_str,band:S.seasonal?bandS(c.ly_days,c.season):band(c.ly_days)}:null;
-  R.push(`<tr><td colspan="2">${compare({...c,n_months:1},pk,{per:'this month',q:c.plan_qty,nd:c.n_days},ly)}</td></tr>`,
+  R.push(`<tr><td colspan="2">${compare({...c,n_months:1},pk,{per:'this month',q:c.plan_qty,nd:c.n_days})}</td></tr>`,
     ...seasonRows(c,c.fest_days?`${h(c.fest_detail||c.festivals)} <span class="note">(of ${c.n_days} days; each festival's lift learnt from every store that has it; index ${n2(c.season_base)} without festivals → ${n2(c.season_year)})</span>`:'',c.peak_why));
   return calcBox(title,R);
 }
