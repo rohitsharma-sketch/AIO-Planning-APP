@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: peak keeps the 60-180 range; hover text explains every band
+- **Asked (user):** "make ranges fall under 60 to 180 scale" (chose "Peak 60-180, Off 90-180") and "if any reasonable hover message can be there to make others understand of the choice you took based on data"
+- Season band limits: peak 60-180 and normal 60-180 (the base rule), off 90-180. An overstocked peak row now shows its real band (e.g. 169 days -> 180, was capped at 90). Department counts by 4-month band: 60:65, 90:19, 120:9, 150:5, 180:13, no band 4.
+- Hover on any band: the days of cover, the nearest-30 rounding, any limit applied and why (off months start at 90), and the season reason ("this department sells 1.79x its average month here - cluster sales 2022-25, festivals included; peak = 1.15x or more, off = 0.85x or less"). Hover on Peak / Off badges and on the band table headers too.
+
 ### STR Forecaster: season filter, cluster-led STR with Mar-Jun festivals, detailed Excel
 - **Asked (user):** "1.) i also need a peak/ normal / off season filter on the tab. 2.) also i need the cluster to act as a cornerstone for STR allocation, different Clusters can be having different STR for same departments as per their off, normal or in season capping for the department. Take festivals falling in MAMJ into account" and "also make sure the excel gives me a detailed version not just a summary excerpt like what i preview on the front end"
 - Season filter (All / Peak / Normal / Off) beside division and cluster: keeps only the store x department x month rows in that season; table, All row, band table, Revert and Excel follow it.

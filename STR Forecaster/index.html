@@ -124,7 +124,7 @@ tr.lv0 td.l1{font-weight:700}tr.lv1 td,tr.lv3 td{background:#FCFBF8}tr.lv1 td.l1
   <div class="panel" id="p-fc">
   <section class="card">
     <div class="card-h"><div class="grow"><h2>1 &middot; Inputs</h2>
-      <p class="desc">MENS, LADIES and KIDS by store, department and month. Minimum display stock (MDQ) = fixtures × qty per fixture, from the fixture plan; planned qty = the sales plan's qty (else planned sales ÷ last year's average selling price). <b>STR in days</b> = MDQ ÷ planned qty per day: 60 days means the minimum display stock lasts 60 days at the plan's selling rate - fewer days, faster sell-through. <b>Band</b> = the actual days rounded to the nearest 30, kept between 60 and 180 (54 → 60, 75 → 90, 104 → 90, 250 → 180); season-aware (default): peak months 60–90, off months 90–180, from the Listing - Delisting Analyser&#39;s seasonality. Only stores with every month in both files are compared. Click any figure to see how it is worked out.</p></div></div>
+      <p class="desc">MENS, LADIES and KIDS by store, department and month. Minimum display stock (MDQ) = fixtures × qty per fixture, from the fixture plan; planned qty = the sales plan's qty (else planned sales ÷ last year's average selling price). <b>STR in days</b> = MDQ ÷ planned qty per day: 60 days means the minimum display stock lasts 60 days at the plan's selling rate - fewer days, faster sell-through. <b>Band</b> = the actual days rounded to the nearest 30, kept between 60 and 180 (54 → 60, 75 → 90, 104 → 90, 250 → 180); season-aware (default): peak and normal months 60–180, off months 90–180, from the Listing - Delisting Analyser&#39;s seasonality. Only stores with every month in both files are compared. Click any figure to see how it is worked out.</p></div></div>
     <div class="card-c"><div class="inputs">
       <div class="in" id="in-fixture"></div>
       <div class="in" id="in-sales_plan"></div>
@@ -142,7 +142,7 @@ tr.lv0 td.l1{font-weight:700}tr.lv1 td,tr.lv3 td{background:#FCFBF8}tr.lv1 td.l1
         <select id="f-div" aria-label="Division"><option value="">All divisions</option><option>MENS</option><option>LADIES</option><option>KIDS</option></select>
         <select id="f-cl" aria-label="Cluster"><option value="">All clusters</option></select>
         <select id="f-se" aria-label="Season" title="Only the store x department x month rows in this season (each cluster&#39;s own season, festivals included)"><option value="">All seasons</option><option value="peak">Peak</option><option value="normal">Normal</option><option value="off">Off</option></select>
-        <label class="note" title="Peak / off months from each cluster&#39;s own season curve (day-wise sales, festival days left out, as in the Listing - Delisting Analyser): peak band 60-90 days, normal 60-180, off 90-180"><input type="checkbox" id="f-season" checked> Season-aware band</label>
+        <label class="note" title="Peak / off months from each cluster&#39;s own season curve (day-wise sales, festival days left out, as in the Listing - Delisting Analyser): peak and normal band 60-180 days, off 90-180"><input type="checkbox" id="f-season" checked> Season-aware band</label>
 
       </div>
       <div class="bar" style="align-items:flex-start;margin-bottom:4px"><div id="mx"></div>
@@ -211,7 +211,14 @@ const seasonOf=x=>{const c=S.st.info.season_cut||[1.15,.85];return x==null?null:
 const lim=s=>(S.st.info.season_bands||{})[s]||S.st.info.base_band||[60,180];
 const bandS=(d,s)=>{if(d==null)return null;const [lo,hi]=lim(s);return Math.min(Math.max(Math.floor(d/30+0.5)*30,lo),hi);};
 const bandOf=c=>c?(S.seasonal?c.band:c.base_band):null;
-const seaTag=c=>S.seasonal&&c&&c.season&&c.season!=='normal'?`<span class="sb ${c.season}">${c.season==='peak'?'Peak':'Off'}</span>`:'';
+// hover text (user, 9 Oct: "a reasonable hover message ... to make others understand of the choice you took based on data")
+const seaWhy=c=>{if(!c||!c.season)return '';const x=c.season_idx,cut=S.st.info.season_cut||[1.15,.85];
+  return `${c.season[0].toUpperCase()+c.season.slice(1)} month: this department sells ${n2(x)}× its average month here (cluster sales 2022–25, the month's festivals included). Peak = ${cut[0]}× or more, off = ${cut[1]}× or less.`;};
+const bandWhy=c=>{if(!c)return '';const d=c.days;if(d==null)return 'No band: no store has both a plan and fixtures here.';
+  const raw=Math.floor(d/30+0.5)*30,b=bandOf(c),[lo,hi]=S.seasonal?lim(c.season):lim(null);
+  return `${Math.round(d)} days of cover → nearest 30 = ${raw}`+(raw!==b?` → kept within ${lo}–${hi} = ${b}`:'')+'. '+
+    (!S.seasonal||!c.season?'Base rule: 60–180 days.':c.season==='off'?'Off months start the band at 90 - with low sales, stock is expected to sit longer (60–180 otherwise). ':'Peak and normal months use the 60–180 range. ')+(S.seasonal?seaWhy(c):'');};
+const seaTag=c=>S.seasonal&&c&&c.season&&c.season!=='normal'?`<span class="sb ${c.season}" title="${h(seaWhy(c))}">${c.season==='peak'?'Peak':'Off'}</span>`:'';
 function mkCell(t,nd,nm,lnd,lnm){const d=nm?daysOf(t.qty,t.mdq,nd,nm):null,l=lnm?daysOf(t.ly_qty,t.ly_mdq,lnd,lnm):null;
   const sx=t.rows&&t.qty>0?t.sq/t.qty:null,se=seasonOf(sx);
   return {...t,days:d,ly_days:l,band:bandS(d,se),ly_band:bandS(l,se),base_band:band(d),ly_base_band:band(l),season:se,season_idx:sx,str:t.rows?t.qty/(t.qty+t.mdq):null,ly_str:t.ly_rows?t.ly_qty/(t.ly_qty+t.ly_mdq):null,
@@ -400,7 +407,7 @@ function rollCols(){
     cols.push({id:f+':'+i,grp:g,grpHtml:i==='t'?h(g)+' '+tog:null,gtitle:i==='t'?'sum over the months, then the days - an average monthly rate':'',label:l,title:t,m:i,
       cls:f==='band'?'b band':f==='ly_days'?'ly':'',num:true,filt:f==='band',fmt:f==='band'?v=>v+' days':null,
       get:r=>f==='band'?bandOf(cellOf(r,i)):cellOf(r,i)[f],
-      html:r=>{const c=cellOf(r,i),v=c[f];return f==='band'?dd(bandOf(c))+seaTag(c):f==='qty'||f==='mdq'?n0(v):dd(v);}});
+      html:r=>{const c=cellOf(r,i),v=c[f];return f==='band'?`<span title="${h(bandWhy(c))}">${dd(bandOf(c))}</span>`+seaTag(c):f==='qty'||f==='mdq'?n0(v):dd(v);}});
   return cols;
 }
 function renderRoll(){
@@ -435,7 +442,7 @@ async function renderMatrix(){
   const vals=R.rows.map(r=>bandOf(r.total)??null),a=S.mx;
   const bands=[...new Set([60,90,120,150,180,...vals.filter(v=>v!=null)])].sort((x,y)=>x-y).concat(vals.includes(null)?[null]:[]);
   const n=(d,b)=>R.rows.filter(r=>(!d||r.division===d)&&(bandOf(r.total)??null)===b).length;
-  $('#mx').innerHTML=`<table class="mx"><thead><tr><th class="l">Departments by final ${S.seasonal?'season-aware ':''}band (4-month)${S.cl?' · '+h(S.cl):''}${S.se?' · '+S.se+' months':''}</th>${bands.map(b=>`<th>${b?b+' days':'No band'}</th>`).join('')}<th>Total</th></tr></thead><tbody>`+
+  $('#mx').innerHTML=`<table class="mx"><thead><tr><th class="l">Departments by final ${S.seasonal?'season-aware ':''}band (4-month)${S.cl?' · '+h(S.cl):''}${S.se?' · '+S.se+' months':''}</th>${bands.map(b=>`<th title="${b?`Departments whose 4-month STR days round to ${b} (nearest 30, kept within 60–180; off-season rows start at 90). Click a count to list them.`:'No band: no store has both a plan and fixtures.'}">${b?b+' days':'No band'}</th>`).join('')}<th>Total</th></tr></thead><tbody>`+
     ['MENS','LADIES','KIDS',''].map(d=>`<tr${d?'':' class="tot"'}><td class="l"><b>${d||'All'}</b></td>`+bands.map(b=>{const k=n(d,b);
       return `<td>${k?`<button class="mxb${a&&a.d===d&&a.b===b?' on':''}" data-mx="${d}|${b??''}" title="Show the ${k} ${d||''} departments in the ${b?b+'-day':'no'} band">${k}</button>`:'<span class="note">0</span>'}</td>`;}).join('')+
       `<td>${R.rows.filter(r=>!d||r.division===d).length}</td></tr>`).join('')+'</tbody></table>';
@@ -457,7 +464,7 @@ function renderCells(){
     {id:'mdq:'+i,grp:g,label:'MDQ',num:true,m:i,get:r=>c(r)?.mdq,html:r=>c(r)?n0(c(r).mdq):''},
     {id:'qty:'+i,grp:g,label:'Plan qty',num:true,m:i,get:r=>c(r)?.plan_qty,html:r=>c(r)?n0(c(r).plan_qty):''},
     {id:'band:'+i,grp:g,label:'Band',title:'band (actual · LY days)',num:true,m:i,filt:true,fmt:v=>v+' days',get:r=>bandOf(c(r)),
-      html:r=>{const x=c(r);return !x?'':`<b style="color:var(--primary)">${dd(bandOf(x))}</b>${seaTag(x)} <span class="note">${x.days!=null?Math.round(x.days):'—'} · ${x.ly_days!=null?Math.round(x.ly_days):'—'}</span>`;}});});
+      html:r=>{const x=c(r);return !x?'':`<b style="color:var(--primary)" title="${h(bandWhy(x))}">${dd(bandOf(x))}</b>${seaTag(x)} <span class="note">${x.days!=null?Math.round(x.days):'—'} · ${x.ly_days!=null?Math.round(x.ly_days):'—'}</span>`;}});});
   grid('cells',$('#dt'),cols,C.rows);
   $('#dd-note').textContent=(ed?'Change a fixture count and press Enter or leave the box - it saves at once (MDQ = fixtures × qty per fixture). Highlighted cells are edited; hover shows the file value. Edits stay when a new fixture file is uploaded - use Reset to file to drop them. ':'Read-only: only an admin or a planner can edit. ')+'Click a figure for its calculation.';
 }
