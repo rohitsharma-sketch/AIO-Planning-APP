@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: Display type in the department editor
+- **Asked (user):** "add display type to the department editor table too"
+- New Display type column (with its search button and header menu). A store with one display type in the department = one row of that type, editable as before; a store with both = an editable **All** row (fixture edits are saved per store x department) plus read-only TABLE and NON_TABLE rows with their own fixtures, MDQ, plan qty and STR (e.g. MSE_R/N T-SHIRT H/S, ABD Mar: All 22 days, TABLE 26.2, NON_TABLE 12.2).
+
 ### STR Forecaster: Display type (TABLE / NON_TABLE) layer
 - **Asked (user):** "Break it further into table and non-tbale" ... "display type"
 - Both files carry the display type (fixture plan UDF-06, sales plan UDF06); it was summed per store x department. Now kept per row: migration `a3d8e1f5c2b7` adds `display` to str_fixture_rows / str_plan_rows (in the PK); both files re-uploaded as uploads 5 (fixtures) and 6 (sales plan) - totals identical to uploads 1 / 4 (fixtures 221,169, MDQ 26.4M, plan Rs 508.6 Cr, 15.4M pcs); backups in `Backups\planning_inputs_*_before_display_type_20261009_1753.csv`.

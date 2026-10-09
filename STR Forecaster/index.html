@@ -580,14 +580,15 @@ async function loadCells(){
 }
 function renderCells(){
   const C=S.cells,ed=S.st.can_edit,ms=C.months;$('#dd').hidden=false;
-  $('#dd-h').textContent=`3 · ${C.department}`;$('#dd-desc').textContent=`${C.division} · ${C.rows.length} stores`;
+  $('#dd-h').textContent=`3 · ${C.department}`;$('#dd-desc').textContent=`${C.division} · ${new Set(C.rows.map(r=>r.store)).size} stores`;
   $('#dd-dens').innerHTML=`<span>Qty per fixture (minimum density): <b>${n2(C.density)}</b> <span class="note">${C.density_edited?'(edited, every store)':'(typical store, from the file)'}</span></span>`+
     (ed?` <label class="note">Set one value for every store <input type="number" id="dens" min="0" step="1" placeholder="${C.density!=null?Math.round(C.density):''}" aria-label="Qty per fixture for ${h(C.department)}"></label> <button class="btn sm" id="dens-save">Apply</button>`:'')+
     (ed&&(C.density_edited||C.rows.some(r=>r.months.some(c=>c&&c.edited.includes('fixtures'))))?` <button class="btn ghost sm" id="dd-reset">Reset to file</button>`:'');
-  const cols=[{id:'store',label:'Store',cls:'l1',filt:true,get:r=>r.store},{id:'cluster',label:'Cluster',cls:'l',filt:true,get:r=>r.cluster}];
+  const cols=[{id:'store',label:'Store',cls:'l1',filt:true,get:r=>r.store},{id:'cluster',label:'Cluster',cls:'l',filt:true,get:r=>r.cluster},
+    {id:'display',label:'Display type',cls:'l',filt:true,get:r=>r.display,html:r=>r.display==='All'?'<b>All</b>':h(r.display)}];
   ms.forEach((m,i)=>{const c=r=>r.months[i],g=mon(m);cols.push(
     {id:'fx:'+i,grp:g,label:'Fixtures',cls:'b',num:true,get:r=>c(r)?.fixtures,tdc:r=>c(r)?.edited.includes('fixtures')?'ed':'',
-      html:r=>!c(r)?'—':ed?`<input type="number" min="0" step="0.5" value="${+(+c(r).fixtures).toFixed(2)}" data-store="${h(r.store)}" data-month="${m}" aria-label="Fixtures ${h(r.store)} ${g}" title="file: ${n2(c(r).fixtures_file)}">`:n2(c(r).fixtures)},
+      html:r=>!c(r)?'—':ed&&r.edit?`<input type="number" min="0" step="0.5" value="${+(+c(r).fixtures).toFixed(2)}" data-store="${h(r.store)}" data-month="${m}" aria-label="Fixtures ${h(r.store)} ${g}" title="file: ${n2(c(r).fixtures_file)}">`:n2(c(r).fixtures)},
     {id:'mdq:'+i,grp:g,label:'MDQ',num:true,m:i,get:r=>c(r)?.mdq,html:r=>c(r)?n0(c(r).mdq):''},
     {id:'qty:'+i,grp:g,label:'Plan qty',num:true,m:i,get:r=>c(r)?.plan_qty,html:r=>c(r)?n0(c(r).plan_qty):''},
     {id:'band:'+i,grp:g,label:'Band',title:'band (actual STR days)',num:true,m:i,filt:true,fmt:v=>v+' days',get:r=>bandOf(c(r)),
@@ -595,8 +596,8 @@ function renderCells(){
   grid('cells',$('#dt'),cols,C.rows);
   // user, 9 Oct: "add the same search filter to the department editor table" - visible search buttons (same menu as the headers)
   const gc=gstate('cells'),on=k=>gc.filt[k]||gc.cond[k];
-  $('#dd-f').innerHTML=`<span class="note">Search:</span> `+[['store','Store'],['cluster','Cluster']].map(([k,l])=>`<button class="lay ghost${on(k)?' on':''}" data-ef="${k}" title="Search / pick ${l.toLowerCase()}s - type, tick, type again to add">${l} &#9662;${gc.filt[k]?' '+gc.filt[k].size:''}</button>`).join(' ')+
-    ` <span class="note">${S.vis.cells.length} of ${C.rows.length} stores shown · every column header has the same ▾ menu</span>`+
+  $('#dd-f').innerHTML=`<span class="note">Search:</span> `+[['store','Store'],['cluster','Cluster'],['display','Display type']].map(([k,l])=>`<button class="lay ghost${on(k)?' on':''}" data-ef="${k}" title="Search / pick ${l.toLowerCase()}s - type, tick, type again to add">${l} &#9662;${gc.filt[k]?' '+gc.filt[k].size:''}</button>`).join(' ')+
+    ` <span class="note">${S.vis.cells.length} of ${C.rows.length} rows shown · every column header has the same ▾ menu</span>`+
     (Object.keys(gc.filt).length||Object.keys(gc.cond).length?` <button class="btn ghost sm" data-efc>Clear</button>`:'');
   $('#dd-note').textContent=(ed?'Change a fixture count and press Enter or leave the box - it saves at once (MDQ = fixtures × qty per fixture). Highlighted cells are edited; hover shows the file value. Edits stay when a new fixture file is uploaded - use Reset to file to drop them. ':'Read-only: only an admin or a planner can edit. ')+'Click a figure for its calculation.';
 }

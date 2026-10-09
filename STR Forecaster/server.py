@@ -323,10 +323,8 @@ class H(BaseHTTPRequestHandler):
                 if d.empty:
                     return self._send(404, {"error": "No such department in the fixture plan."})
                 mi = {m: i for i, m in enumerate(months)}
-                by_store = {}
-                for r in d.itertuples():
-                    if r.month not in mi:
-                        continue
+
+                def cell(r):
                     dim, ldim = r.month.days_in_month, (r.month - 12).days_in_month
                     c = {"fixtures": r.fixtures, "fixtures_file": r.fixtures_file, "density": r.density, "mdq": r.mdq,
                          "mdq_base": r.mdq_base, "plan_rs": r.plan_rs, "plan_qty": r.plan_qty, "qty_from": r.qty_from,
@@ -340,9 +338,27 @@ class H(BaseHTTPRequestHandler):
                              season_base=r.season_base, fest_days=r.fest_days, festivals=r.festivals, fest_lift=r.fest_lift, fest_detail=r.fest_detail,
                              season_year=r.season_year_idx, fest_share=1.0 if r.fest_days > 0 else 0.0, peak_why=r.peak_why,
                              pk=r.plan_qty if r.peak_ok else 0.0)
-                    by_store.setdefault(r.store, [None] * len(months))[mi[r.month]] = c
+                    return c
+
+                # user, 9 Oct: "add display type to the department editor table too": a store with one display type = one
+                # row (that type, editable); with both = an editable "All" row (fixture edits are per store x department)
+                # and a read-only row per display type with its own STR
+                dv = display_df()
+                dv = dv[dv.department == dept]
+                kinds = dv.groupby("store").display.unique()
+                by = {}
+                for r in d.itertuples():
+                    if r.month in mi:
+                        ks = kinds.get(r.store, [se.NO_DISP])
+                        key = (r.store, ks[0] if len(ks) == 1 else "All")
+                        by.setdefault(key, [None] * len(months))[mi[r.month]] = cell(r)
+                for r in dv.itertuples():
+                    if r.month in mi and len(kinds.get(r.store, [])) > 1:
+                        by.setdefault((r.store, r.display), [None] * len(months))[mi[r.month]] = cell(r)
                 cl = dict(zip(d.store, d.cluster))
-                rows = [{"store": st, "cluster": cl.get(st), "months": by_store[st]} for st in sorted(by_store)]
+                order = {"All": 0, "TABLE": 1, "NON_TABLE": 2}
+                rows = [{"store": st, "display": k, "edit": k == "All" or len(kinds.get(st, [])) <= 1, "cluster": cl.get(st),
+                         "months": by[(st, k)]} for st, k in sorted(by, key=lambda x: (x[0], order.get(x[1], 3)))]
                 dens = d.drop_duplicates("store").density
                 return self._send(200, {"department": dept, "division": d.division.iloc[0], "months": [str(m) for m in months],
                                         "density": float(dens.median()) if len(dens) else None,
