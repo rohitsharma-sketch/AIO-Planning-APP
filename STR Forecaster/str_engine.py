@@ -11,6 +11,7 @@ Roll-ups sum qty and MDQ first, then take the ratio. Uploads, rows and edits liv
 c7e2a4f9b1d3); the newest active upload of each kind is used; edits (append-only) override it, latest wins.
 """
 import io
+import json
 import os
 import re
 import sys
@@ -224,11 +225,15 @@ def version():
         v = tuple(s.execute(text("""SELECT (SELECT coalesce(max(id), 0) FROM planning_inputs.str_uploads),
                                             (SELECT count(*) FROM planning_inputs.str_uploads WHERE active),
                                             (SELECT coalesce(max(id), 0) FROM planning_inputs.str_edits)""")).one())
-    try:
-        import config_store
-        return v + (os.path.getmtime(config_store.CONFIG_FILE),)
-    except Exception:  # noqa: BLE001 - no AOP config: clusters just stay empty
-        return v
+    for f in ("cfg", SEASON_FILE):   # AOP store master (clusters) and the Listing app's seasonality
+        try:
+            if f == "cfg":
+                import config_store
+                f = config_store.CONFIG_FILE
+            v += (os.path.getmtime(f),)
+        except Exception:  # noqa: BLE001 - a missing optional input just leaves its part out
+            v += (None,)
+    return v
 
 
 def store_clusters():
@@ -478,6 +483,10 @@ def build():
     df = df[df.month.isin(months)]          # a plan month with no fixture month cannot get an STR
     df = apply_inputs(df, ed)
     df["cluster"] = df.store.map(store_clusters()).fillna("(no AOP cluster)")
+    sidx = season_index()
+    df["season_idx"] = [sidx.get(k, np.nan) for k in zip(df.department.str.upper(), df.month.dt.month)]
+    no_season = sorted(df.loc[df.season_idx.isna(), "department"].unique().tolist())
+    df["season_idx"] = df.season_idx.fillna(1.0)   # no Listing history under this name: treated as a normal month
     if len(lys):
         lys["month"] = _period(lys.month) + 12   # LY aligned to its forecast month
     df = add_ly(df, lys)
@@ -489,7 +498,9 @@ def build():
             "plan_rs_without_fixtures": float(df.loc[(df.plan_rs > 0) & (df.mdq <= 0), "plan_rs"].sum()),
             "mdq_without_plan": float(df.loc[(df.mdq > 0) & (df.plan_qty <= 0), "mdq"].sum()) if pu else 0.0,
             "price_from_division": sorted(df.loc[df.asp_from.str.startswith("division"), "department"].unique().tolist()),
-            "no_ly_departments": sorted(df.loc[~df.ly_known, "department"].unique().tolist())}
+            "no_ly_departments": sorted(df.loc[~df.ly_known, "department"].unique().tolist()),
+            "no_season_departments": no_season, "season_cut": list(SEASON_CUT), "season_bands": SEASON_BANDS,
+            "base_band": [BAND_MIN, BAND_MAX]}
     return df.reset_index(drop=True), info
 
 
@@ -512,11 +523,47 @@ def days_of(qty, mdq, n_days, n_months=1):
 BAND_STEP, BAND_MIN, BAND_MAX = 30, 60, 180
 
 
-def str_band(days):
-    """54 -> 60, 75 -> 90 (half rounds up), 104 -> 90, 105 -> 120, 250 -> 180; None stays None"""
+# user, 9 Oct: "incorporate the seasonality trends from the Listing - Delisting Analyser App where peak seasons can be
+# differentiated from the normal ones and STR can differ according to it". Season of a department x month = its
+# festival-free sales rate that month / its 12-month average (Listing app windows.json, 2022-25), peak / off at the
+# Listing app's own in / off season index (1.15 / 0.85). The band keeps the nearest-30 rounding; only its limits move:
+# peak = the shelf should turn faster (30-90), normal = the base rule (60-180), off = slower months (90-180).
+SEASON_FILE = os.path.join(ROOT, "Listing Delisting", "app", "windows.json")
+SEASON_BANDS = {"peak": (30, 90), "normal": (BAND_MIN, BAND_MAX), "off": (90, 180)}
+SEASON_CUT = [1.15, 0.85]
+
+
+def season_index():
+    """{(DEPARTMENT, month 1-12): index} from the Listing app; also sets SEASON_CUT from its params"""
+    try:
+        with open(SEASON_FILE, encoding="utf-8") as fh:
+            w = json.load(fh)
+    except Exception:  # noqa: BLE001 - no Listing data: every month is normal
+        return {}
+    p = w.get("params", {})
+    SEASON_CUT[:] = [float(p.get("in_season_index", 1.15)), float(p.get("off_season_index", 0.85))]
+    out = {}
+    for d, v in w.get("departments", {}).items():
+        r = {MON3.index(x["month"][:3].upper()) + 1: float(x.get("rate") or 0) for x in v.get("months", [])}
+        avg = sum(r.values()) / 12
+        if avg > 0:
+            out.update({(d.strip().upper(), m): x / avg for m, x in r.items()})
+    return out
+
+
+def season_of(idx):
+    if idx is None or idx != idx:
+        return None
+    return "peak" if idx >= SEASON_CUT[0] else "off" if idx <= SEASON_CUT[1] else "normal"
+
+
+def str_band(days, season=None):
+    """54 -> 60, 75 -> 90 (half rounds up), 104 -> 90, 105 -> 120, 250 -> 180; None stays None. With a season the
+    limits are that season's (peak 30-90, off 90-180)"""
     if days is None or days != days:
         return None
-    return int(min(max(np.floor(days / BAND_STEP + 0.5) * BAND_STEP, BAND_MIN), BAND_MAX))
+    lo, hi = SEASON_BANDS.get(season, (BAND_MIN, BAND_MAX))
+    return int(min(max(np.floor(days / BAND_STEP + 0.5) * BAND_STEP, lo), hi))
 
 
 def rollup(df, by, months, has_plan=True):
@@ -533,8 +580,10 @@ def rollup(df, by, months, has_plan=True):
     a["q"], a["md"] = np.where(both, df.plan_qty, 0.0), (np.where(both, df.mdq, 0.0) if has_plan else df.mdq.values)
     a["nb"], a["lq"], a["lmd"], a["nl"] = both.values.astype(int), np.where(lyv, df.ly_q, 0.0), np.where(lyv, df.mdq_base, 0.0), lyv.values.astype(int)
     a["fixtures"], a["plan_rs"], a["ed"] = df.fixtures.values, df.plan_rs.values, (df.edited != "").values.astype(int)
+    # season of a group = its departments' season index weighted by planned qty
+    a["sq"] = np.where(both, df.plan_qty * (df["season_idx"] if "season_idx" in df else 1.0), 0.0)
     a = a[a.mi >= 0]
-    V = ["q", "md", "nb", "lq", "lmd", "nl", "fixtures", "plan_rs", "ed"]
+    V = ["q", "md", "nb", "lq", "lmd", "nl", "fixtures", "plan_rs", "ed", "sq"]
     g = a.groupby(by + ["mi"], dropna=False, sort=True)[V].sum()
     dim = [m.days_in_month for m in months]
     ldim = [(m - 12).days_in_month for m in months]
@@ -543,8 +592,11 @@ def rollup(df, by, months, has_plan=True):
         # days: over the months that have matched rows (days in those months; LY = the same months a year earlier)
         days = days_of(s[0], s[1], nd, nm) if nm else None
         ly_days = days_of(s[3], s[4], lnd, lnm) if lnm else None
+        sidx = s[9] / s[0] if s[2] and s[0] > 0 else None
+        sea = season_of(sidx)
         return {"qty": float(s[0]), "mdq": float(s[1]), "str": float(str_of(s[0], s[1])) if s[2] else None,
-                "days": days, "ly_days": ly_days, "band": str_band(days), "ly_band": str_band(ly_days),
+                "days": days, "ly_days": ly_days, "band": str_band(days, sea), "ly_band": str_band(ly_days, sea),
+                "base_band": str_band(days), "ly_base_band": str_band(ly_days), "season": sea, "season_idx": sidx, "sq": float(s[9]),
                 "ly_qty": float(s[3]), "ly_mdq": float(s[4]), "ly_str": float(str_of(s[3], s[4])) if s[5] else None,
                 "fixtures": float(s[6]), "plan_rs": float(s[7]), "rows": int(s[2]), "ly_rows": int(s[5]),
                 "n_days": nd if nm else 0, "n_months": nm, "ly_n_days": lnd if lnm else 0, "ly_n_months": lnm}
@@ -599,6 +651,10 @@ if __name__ == "__main__":   # self-check of the maths on tiny frames (no DB)
     assert abs(t["days"] - 150 / (30 / 31)) < 1e-9 and abs(t["ly_days"] - 200 / (10 / 31)) < 1e-9   # Mar'27 / Mar'26: 31 days
     assert [str_band(x) for x in (20, 54, 75, 104, 105, 250, None)] == [60, 60, 90, 90, 120, 180, None]
     assert t["band"] == 150 and t["ly_band"] == 180          # 155 days -> 150; 620 days -> capped at 180
+    assert (str_band(45, "peak"), str_band(150, "peak"), str_band(40, "off"), str_band(40, "normal")) == (60, 90, 90, 60)
+    assert (season_of(1.2), season_of(1.0), season_of(0.8), season_of(None)) == ("peak", "normal", "off", None)
+    rs = rollup(d.assign(season_idx=1.3), ["division"], [P("2027-03")])[0]["months"][0]
+    assert rs["season"] == "peak" and rs["band"] == 90 and rs["base_band"] == 150   # 155 days: peak cap 90
     assert (_tag(" core"), _tag("Seasonal"), _tag("x"), _tag(None)) == ("CORE", "SEASONAL", None, None)
     sp = split_depts(pd.DataFrame({"month": [P("2027-03")] * 2, "store": ["S1"] * 2, "division": ["MENS"] * 2,
                                    "department": ["MSE_PYJAMA", "MSE_TXTL PYJAMA"], "plan_rs": [100.0, 10.0], "q": [np.nan, 4.0]}), ["plan_rs", "q"])

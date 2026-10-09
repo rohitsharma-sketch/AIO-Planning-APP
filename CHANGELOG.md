@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: season-aware STR band (Listing - Delisting Analyser seasonality)
+- **Asked (user):** "incorporate the seasonality trends from the Listing - Delisting Analyser App where peak seasons can be differentiated from the normal ones and STR can differ according to it"
+- Season per department x month = its festival-free sales rate that month / its 12-month average (Listing app windows.json, 2022-25, refreshed nightly); peak >= 1.15, off <= 0.85 (the Listing app's own thresholds). Roll-ups take the plan-qty-weighted index. Mar-Jun'27: 366 peak, 58 normal, 28 off department-months.
+- Band keeps the nearest-30 rounding; its limits follow the season: peak 30-90, normal 60-180 (base rule), off 90-180 (str_engine.SEASON_BANDS). "Season-aware band" toggle (on by default) switches back to the base 60-180 rule; Peak / Off badges on band cells; the calculation popup shows the season index and limits; the band count table follows the toggle; Excel adds season, season index and base band. Departments with no Listing history (KI_AP_BABA SUIT TXTL H/S, L_EW_SAREE_JAIPURI) count as normal.
+
 ### STR Forecaster: tag master import / export, AOP clusters, Division x band counts
 - **Asked (user):** "1.)give me an import master and export master for department tags 2.) Add Clusters to Stores from AOP forecaster 3.) I need a small table indicating the Division and final STR Band ... when i click on the count of departments falling under that band the list automatically should filter out the specific departments and there should be a revert button"
 - Department tags tab: "Export master" (GET /api/tags/download) = every department with Core / Seasonal, own attribute and the suite attribute master (info), plus a Read me sheet; the same layout imports back ("Import master" drop zone).

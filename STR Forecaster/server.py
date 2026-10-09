@@ -150,7 +150,10 @@ def workbook(df, months, has_plan):
     lyok = df.ly_known & (df.ly_q > 0)
     d["days of cover (plan)"] = np.where(ok, d.mdq / (d.plan_qty.where(d.plan_qty > 0) / dim), np.nan) if has_plan else np.nan
     d["LY days of cover"] = np.where(lyok, d.mdq_base / (d.ly_q.where(d.ly_q > 0) / dly), np.nan)
-    d["STR band (days)"] = d["days of cover (plan)"].map(se.str_band)
+    d["season index"] = df.season_idx
+    d["season"] = df.season_idx.map(se.season_of)
+    d["STR band (days)"] = [se.str_band(x, sea) for x, sea in zip(d["days of cover (plan)"], d["season"])]
+    d["base band (60-180)"] = d["days of cover (plan)"].map(se.str_band)
     d["max STR at MDQ"] = np.where(ok, se.str_of(d.plan_qty, d.mdq), np.nan) if has_plan else np.nan
     d["LY STR (same formula)"] = np.where(lyok, se.str_of(d.ly_q, d.mdq_base), np.nan)
     d = d.rename(columns={"fixtures_file": "fixtures (file)", "density": "qty per fixture", "mdq": "MDQ", "plan_rs": "plan (Rs)",
@@ -170,10 +173,11 @@ def workbook(df, months, has_plan):
                 if "department" in by:
                     base.update(tag=tg[r["department"]]["tag"], attribute=tg[r["department"]]["attribute"])
                 for m, c in zip(months, r["months"]):
-                    rows.append({**base, "month": str(m), "plan qty": c["qty"], "MDQ": c["mdq"], "STR band": c["band"], "days of cover": c["days"],
+                    rows.append({**base, "month": str(m), "plan qty": c["qty"], "MDQ": c["mdq"], "season": c["season"], "STR band": c["band"],
+                                 "base band": c["base_band"], "days of cover": c["days"],
                                  "LY days of cover": c["ly_days"], "max STR at MDQ": c["str"], "LY STR": c["ly_str"]})
                 rows.append({**base, "month": "4-month avg", "plan qty": r["total"]["qty"], "MDQ": r["total"]["mdq"],
-                             "STR band": r["total"]["band"], "days of cover": r["total"]["days"], "LY days of cover": r["total"]["ly_days"],
+                             "season": r["total"]["season"], "STR band": r["total"]["band"], "base band": r["total"]["base_band"], "days of cover": r["total"]["days"], "LY days of cover": r["total"]["ly_days"],
                              "max STR at MDQ": r["total"]["str"], "LY STR": r["total"]["ly_str"]})
             out_df = pd.DataFrame(rows)
             for k in by:
@@ -241,7 +245,8 @@ class H(BaseHTTPRequestHandler):
                          "ly_str": float(se.str_of(r.ly_q, r.mdq_base)) if r.ly_known and r.ly_q > 0 else None,
                          "days": se.days_of(r.plan_qty, r.mdq, dim) if info.get("sales_plan") and r.mdq > 0 else None,
                          "ly_days": se.days_of(r.ly_q, r.mdq_base, ldim) if r.ly_known else None, "edited": r.edited}
-                    c["band"] = se.str_band(c["days"])
+                    sea = se.season_of(r.season_idx)
+                    c.update(season=sea, season_idx=r.season_idx, band=se.str_band(c["days"], sea), base_band=se.str_band(c["days"]))
                     by_store.setdefault(r.store, [None] * len(months))[mi[r.month]] = c
                 cl = dict(zip(d.store, d.cluster))
                 rows = [{"store": st, "cluster": cl.get(st), "months": by_store[st]} for st in sorted(by_store)]
