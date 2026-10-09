@@ -195,7 +195,8 @@ def workbook(df, months, has_plan, layers, info, filters):
     ly_days = np.where(lyok, df.mdq_base / (df.ly_q.where(df.ly_q > 0) / dly), np.nan)
     d = pd.DataFrame({
         "division": df.division, "cluster": df.cluster, "store": df.store, "department": df.department, **({"article": df.article, "article cont % of the department's plan": df.cont,
-                                         "cont % from": df.cont_from} if "article" in df else {}), "tag": df.tag,
+                                         "cont % from": df.cont_from, "article cont % in its cluster": df.cont_cluster,
+                                         "stock share = min(store, cluster cont %)": df.stock_cont} if "article" in df else {}), "tag": df.tag,
         "attribute": df.attribute, "month": df.month.astype(str), "days in month": dim,
         "fixtures (file)": df.fixtures_file, "fixtures": df.fixtures, "qty per fixture": df.density, "MDQ (file)": df.mdq_base,
         "MDQ = fixtures x qty per fixture": df.mdq, "edited": df.edited,

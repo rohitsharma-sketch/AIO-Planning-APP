@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: article STR days vary by the article's own performance, capped at the department
+- **Asked (user):** "there can be variation in STR days in Article name ... it can be on the basis of its own performance in a cluster or store ... but yes it should be capping to the original STR decided on Department"
+- An article's fixtures and MDQ now follow its cont % (planned qty) in its AOP cluster that month; its selling rate stays its own store plan. Days = department days x cluster cont / store cont, capped at the department: stock share = min(store cont, cluster cont). An article planned to sell faster in a store than across its cluster holds fewer days; none holds more than the department's days in that store and month (0 of 193,519 rows above; 45% below, median = the department). The articles together hold 93.9% of the department MDQ (the rest is stock the cap does not hand out). Stores without an AOP cluster or without an article plan keep the plain store / chain share. LY is still split by the store share. Excel adds "article cont % in its cluster" and "stock share". In roll-ups an article can sit above its department's average (43 of 2,548 cluster x department x article rows) when it is planned mostly in the stores where the department itself runs slow.
+
 ### STR Forecaster: LY days column removed from the main table
 - **Asked (user):** "remove the LY days column from the main table too"
 - The forecast table shows Band, STR days, Plan qty and MDQ per period (4-month avg and each month); the department editor's band cell shows the band, season badge and actual STR days only. The Excel still carries the last-year columns.

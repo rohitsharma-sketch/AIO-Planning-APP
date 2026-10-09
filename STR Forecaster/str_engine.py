@@ -578,7 +578,7 @@ def build(articles=False):
     return (df.reset_index(drop=True), info, art) if articles else (df.reset_index(drop=True), info)
 
 
-ART_SHARE = ("fixtures", "fixtures_file", "mdq", "mdq_base", "ly_q", "ly_v")
+ART_STOCK, ART_LY = ("fixtures", "fixtures_file", "mdq", "mdq_base"), ("ly_q", "ly_v")
 NO_ART = "(no article plan)"
 
 
@@ -589,25 +589,37 @@ def article_frame(df, art):
     article's cont % = its planned QTY / the department's in that store and month (Rs share only where the store-month
     plan has no qty - the value share gave cheap articles too little MDQ); fixtures, MDQ and last year's sales
     x cont % (no article-level history - last year is apportioned the same way); the article's own planned Rs / qty.
-    A store with no article plan that month takes the chain's cont % for the department; no plan at all -> NO_ART."""
+    A store with no article plan that month takes the chain's cont % for the department; no plan at all -> NO_ART.
+    Stock (user, 9 Oct: "there can be variation in STR days in Article name ... on the basis of its own performance in a
+    cluster or store ... but it should be capping to the original STR decided on Department"): fixtures and MDQ follow
+    the article's cont % in its AOP cluster that month, its selling rate its own store plan, so its days = the
+    department's days x cluster cont / store cont - an article planned to sell faster in this store than across its
+    cluster holds fewer days, never more than the department: stock share = min(store cont, cluster cont)."""
     if not len(art):
         return df.assign(article=NO_ART, cont=1.0, cont_from="no article plan")
     a = art.groupby(KEY + ["article"], as_index=False)[["plan_rs", "plan_qty_file"]].sum(min_count=1)
     a["w"] = a.plan_qty_file.fillna(0.0).where(a.groupby(KEY).plan_qty_file.transform("sum") > 0, a.plan_rs)
     a["cont"] = a.w / a.groupby(KEY).w.transform("sum")
     a = a[a.cont > 0]
+    cl = a.store.map(df.drop_duplicates("store").set_index("store").cluster) if "cluster" in df else a.store
+    g, gd = [cl, a.month, a.department, a.article], [cl, a.month, a.department]
+    cq = a.plan_qty_file.fillna(0.0)
+    cw = cq.where(cq.groupby(gd).transform("sum") > 0, a.plan_rs.fillna(0.0))   # qty share, Rs where the cluster has no qty
+    a["cont_cluster"] = (cw.groupby(g).transform("sum") / cw.groupby(gd).transform("sum")).where(cl.ne("(no AOP cluster)"), a.cont)
     ch = a.groupby(["month", "department", "article"], as_index=False).w.sum()
     ch["cont"] = ch.w / ch.groupby(["month", "department"]).w.transform("sum")
-    own = df.merge(a[KEY + ["article", "cont", "plan_rs", "plan_qty_file"]].rename(columns={"plan_rs": "a_rs", "plan_qty_file": "a_q"}), on=KEY)
+    own = df.merge(a[KEY + ["article", "cont", "cont_cluster", "plan_rs", "plan_qty_file"]].rename(columns={"plan_rs": "a_rs", "plan_qty_file": "a_q"}), on=KEY)
     own["cont_from"] = "store plan"
     rest = df[~df.set_index(KEY).index.isin(a.set_index(KEY).index.unique())]
     rest = rest.merge(ch[["month", "department", "article", "cont"]], on=["month", "department"], how="left")
     rest["cont_from"] = np.where(rest.article.isna(), "no article plan", "chain plan")
     rest["article"], rest["cont"] = rest.article.fillna(NO_ART), rest.cont.fillna(1.0)
     out = pd.concat([own, rest], ignore_index=True)
-    for c in ART_SHARE:
+    out["cont_cluster"] = out.cont_cluster.fillna(out.cont) if "cont_cluster" in out else out.cont
+    out["stock_cont"] = np.minimum(out.cont, out.cont_cluster)
+    for c in ART_STOCK + ART_LY:
         if c in out:
-            out[c] = out[c] * out.cont
+            out[c] = out[c] * (out.stock_cont if c in ART_STOCK else out.cont)
     out["plan_rs"] = out.a_rs.where(out.a_rs.notna(), out.plan_rs * out.cont) if "a_rs" in out else out.plan_rs * out.cont
     out["plan_qty"] = out.a_q.where(out.a_q.notna(), out.plan_qty * out.cont) if "a_q" in out else out.plan_qty * out.cont
     return out.drop(columns=[c for c in ("a_rs", "a_q") if c in out]).reset_index(drop=True)
@@ -814,4 +826,11 @@ if __name__ == "__main__":   # self-check of the maths on tiny frames (no DB)
     assert af.mdq[("S1", "ECO")] == 320.0 and af.plan_qty[("S1", "PREM")] == 2.0     # 80% of the qty -> 80% of MDQ; own qty
     assert af.mdq[("S2", "ECO")] == 160.0 and af.cont_from[("S2", "ECO")] == "chain plan"   # S2 has no article plan: chain
     assert abs(af.mdq.sum() - fr.mdq.sum()) < 1e-9 and abs(af.fixtures.sum() - fr.fixtures.sum()) < 1e-9   # adds back
+    # two stores of one cluster: S1 sells ECO 80%, S3 20% -> cluster ECO 50%; S1 ECO stock 50% (fewer days), PREM capped
+    f2 = fr.assign(store=["S1", "S3"], cluster=["C1", "C1"], mdq=[400.0, 400.0], plan_qty=[10.0, 10.0])
+    a2 = pd.concat([ar, ar.assign(store="S3", plan_qty_file=[2.0, 8.0])], ignore_index=True)
+    a2 = article_frame(f2, a2).set_index(["store", "article"])
+    assert a2.mdq[("S1", "ECO")] == 200.0 and a2.mdq[("S1", "PREM")] == 80.0   # 25 days (x .5/.8) and 40 = the department's
+    dd = a2.mdq / a2.plan_qty
+    assert (dd <= 400.0 / 10.0 + 1e-9).all() and dd[("S1", "ECO")] < 40.0      # never above the department, some below
     print("str_engine self-check: OK")
