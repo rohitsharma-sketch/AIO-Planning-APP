@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: sales plan with article names; fixture plan split to articles by cont %
+- **Asked (user):** "replace the sales plan sheet with this one it has article names in it" (and: "break the fixture plan as per the sales plan imported and make the fixture plan as per the Cont % of sales plan")
+- The user's new "MAMJ'26 - Sales Plan.xlsx" (ARTICLE NAME per row, e.g. "02-ECO [KB02]"; 279 articles in the compared stores) is the active plan (upload 4, +12 months; uploads 2 and earlier kept for roll-back; backup of str_uploads / str_plan_rows in Backups before the change). Totals equal the previous plan (15,419,386 pcs, Rs 508.6 Cr), so every STR figure is unchanged (All 54.54 days).
+- Migration f7a2c9e4b1d6: str_plan_rows.article (NOT NULL DEFAULT '', part of the primary key). read_sales_plan keeps the article; the department split (old names) keeps it too.
+- New Article layer and search filter: a store x department x month's fixtures, MDQ and last year's sales are split by each article's share of the department's planned sales (Rs) in that store and month (store's own plan, else the chain's; the article's own planned Rs / qty). Adds back exactly to the department (e.g. KB_BABA SUIT DNM H/S MDQ 4,23,300 = ECO 1,01,156 + REGULAR 2,50,986 + PREMIUM 71,158; days 43 / 73 / 88). Excel adds article, cont % and source columns when Article is a layer or filter. The prepared MRP-mapping module str_article.py is removed (articles come with the plan).
+
 ### STR Forecaster: cluster count table on Store mapping; article split prepared
 - **Asked (user):** "add a cluster count table similar to the STR main page" and "I will give an Article name Sheet too so you can break the fixture plan as per the sales plan imported and make the fixture plan as per the Cont % of sales plan. Be ready with other things in the module, keep it handy"
 - Store mapping tab: a Cluster x status count table (Mapped - compared / Month missing / Sales plan only / Fixture plan only / Total, plus All); clicking a count filters the store list to that cluster and status, "Revert" restores the list.

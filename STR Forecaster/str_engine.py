@@ -124,6 +124,9 @@ def read_sales_plan(data, name=""):
             continue
         base = pd.DataFrame({"store": df[sc].astype(str).str.strip().str.upper(), "division": df[up["DIVISION"]].map(plan_division),
                              "department": df[up["DEPARTMENT"]].astype(str).str.strip()})
+        ac = next((c for k, c in up.items() if "ARTICLE" in k), None)
+        if ac is not None:   # ARTICLE NAME, e.g. "02-ECO [KB02]"
+            base["article"] = df[ac].map(lambda v: "" if v is None or v != v else " ".join(str(v).split()))
         for pm, cols in sorted(months.items()):
             v = pd.to_numeric(df[cols["V"]], errors="coerce").fillna(0.0) * LAKH if "V" in cols else 0.0
             q = pd.to_numeric(df[cols["Q"]], errors="coerce").fillna(0.0) if "Q" in cols else np.nan
@@ -135,7 +138,7 @@ def read_sales_plan(data, name=""):
     if len(out):
         notes.append(f"{out.department.nunique()} departments outside MENS / LADIES / KIDS left out")
     f = f[f.division.isin(DIVS) & f.department.ne("") & f.store.ne("")]
-    g = f.groupby(["month", "store", "division", "department"], as_index=False)[["plan_rs", "plan_qty"]].sum(min_count=1)
+    g = f.groupby(["month", "store", "division", "department"] + (["article"] if "article" in f else []), as_index=False)[["plan_rs", "plan_qty"]].sum(min_count=1)
     g = g[(g.plan_rs > 0) | (g.plan_qty > 0)].reset_index(drop=True)
     notes.append(f"value read as Rs lakh: Rs {g.plan_rs.sum() / 1e7:,.1f} Cr, {g.plan_qty.sum():,.0f} pcs over {g.store.nunique()} stores")
     return g, notes
@@ -159,7 +162,7 @@ def _copy(session, table, cols, frame):
 def save_upload(kind, file_name, frame, shift, user):
     """store one upload (forecast month = file month + shift); returns the upload id"""
     table = {"fixture": "planning_inputs.str_fixture_rows", "sales_plan": "planning_inputs.str_plan_rows"}[kind]
-    vals = {"fixture": ["fixtures", "mdq"], "sales_plan": ["plan_rs", "plan_qty"]}[kind]
+    vals = {"fixture": ["fixtures", "mdq"], "sales_plan": ["plan_rs", "plan_qty"] + (["article"] if "article" in frame else [])}[kind]
     fr = frame.copy()
     fr["month"] = [(m + shift).to_timestamp().date() for m in fr["month"]]
     months = ",".join(sorted({str(m)[:7] for m in fr["month"]}))
@@ -283,7 +286,7 @@ def split_depts(f, cols, ly=None):
     parts = parts[(parts[list(cols)].fillna(0) != 0).any(axis=1)]   # a part with no share in this store-month: no row
     f = pd.concat([f[~old], parts.drop(columns="old")], ignore_index=True)
     cols = list(cols)
-    return f.groupby(["month", "store", "division", "department"], as_index=False)[cols].sum(min_count=1)
+    return f.groupby(["month", "store", "division", "department"] + (["article"] if "article" in f else []), as_index=False)[cols].sum(min_count=1)
 
 
 def _period(col):
@@ -447,7 +450,7 @@ def add_ly(df, lys):
     return df.drop(columns=["asp_dm", "asp_d", "asp_vm"])
 
 
-def build():
+def build(articles=False):
     """the full store x department x month frame (None when no fixture plan yet) + info for the page"""
     with SessionLocal() as s:
         fu, pu = active_upload(s, "fixture"), active_upload(s, "sales_plan")
@@ -455,7 +458,7 @@ def build():
             return None, {"fixture": None, "sales_plan": pu}
         fx = _frame(s, "SELECT month, store, division, department, fixtures, mdq FROM planning_inputs.str_fixture_rows WHERE upload_id = :i",
                     {"i": fu["id"]}, key=("fx", fu["id"]))
-        pl = _frame(s, "SELECT month, store, division, department, plan_rs, plan_qty AS plan_qty_file FROM planning_inputs.str_plan_rows WHERE upload_id = :i",
+        pl = _frame(s, "SELECT month, store, division, department, plan_rs, plan_qty AS plan_qty_file, coalesce(article, '') AS article FROM planning_inputs.str_plan_rows WHERE upload_id = :i",
                     {"i": pu["id"]}, key=("pl", pu["id"])) if pu else pd.DataFrame()
         ed = _frame(s, """SELECT DISTINCT ON (field, department, month, store) field, department, month, store, value
                           FROM planning_inputs.str_edits ORDER BY field, department, month, store, edited_at DESC, id DESC""")
@@ -509,10 +512,12 @@ def build():
                   "left_out_mdq": float(fx.loc[~fx.store.isin(both_), "mdq"].sum()),
                   "left_out_rs": float(pl.loc[~pl.store.isin(both_), "plan_rs"].sum())}
         fx, pl = fx[fx.store.isin(both_)], pl[pl.store.isin(both_)]
+        art = pl[pl.article.ne("")] if "article" in pl else pl.iloc[0:0]
+        pl = pl.groupby(KEY + ["division"], as_index=False)[["plan_rs", "plan_qty_file"]].sum(min_count=1)   # department total
         df = fx.merge(pl, on=KEY, how="outer", suffixes=("", "_p"))
         df["division"] = df["division"].fillna(df.pop("division_p"))
     else:
-        df = fx.assign(plan_rs=0.0)
+        df, art = fx.assign(plan_rs=0.0), pd.DataFrame()
     df[["fixtures", "mdq", "plan_rs"]] = df[["fixtures", "mdq", "plan_rs"]].apply(pd.to_numeric, errors="coerce").fillna(0.0)
     df = df[df.month.isin(months)]          # a plan month with no fixture month cannot get an STR
     df = apply_inputs(df, ed)
@@ -554,7 +559,41 @@ def build():
             "no_season_departments": no_season, "season_built": look.built_at, "festivals": fests,
             "clusters": sorted(df.cluster.unique().tolist()), "season_cut": list(SEASON_CUT), "season_bands": SEASON_BANDS,
             "base_band": [BAND_MIN, BAND_MAX]}
-    return df.reset_index(drop=True), info
+    info["articles"] = int(art.article.nunique()) if len(art) else 0
+    return (df.reset_index(drop=True), info, art) if articles else (df.reset_index(drop=True), info)
+
+
+ART_SHARE = ("fixtures", "fixtures_file", "mdq", "mdq_base", "ly_q", "ly_v")
+NO_ART = "(no article plan)"
+
+
+def article_frame(df, art):
+    """the store x department x month frame split to articles (user, 9 Oct: "break the fixture plan as per the sales plan
+    imported and make the fixture plan as per the Cont % of sales plan"): each article's cont % = its planned sales (Rs)
+    / the department's in that store and month (qty share where the plan has no Rs); fixtures, MDQ and last year's sales
+    x cont % (no article-level history - last year is apportioned the same way); the article's own planned Rs / qty.
+    A store with no article plan that month takes the chain's cont % for the department; no plan at all -> NO_ART."""
+    if not len(art):
+        return df.assign(article=NO_ART, cont=1.0, cont_from="no article plan")
+    a = art.groupby(KEY + ["article"], as_index=False)[["plan_rs", "plan_qty_file"]].sum(min_count=1)
+    a["w"] = a.plan_rs.where(a.groupby(KEY).plan_rs.transform("sum") > 0, a.plan_qty_file.fillna(0.0))
+    a["cont"] = a.w / a.groupby(KEY).w.transform("sum")
+    a = a[a.cont > 0]
+    ch = a.groupby(["month", "department", "article"], as_index=False).w.sum()
+    ch["cont"] = ch.w / ch.groupby(["month", "department"]).w.transform("sum")
+    own = df.merge(a[KEY + ["article", "cont", "plan_rs", "plan_qty_file"]].rename(columns={"plan_rs": "a_rs", "plan_qty_file": "a_q"}), on=KEY)
+    own["cont_from"] = "store plan"
+    rest = df[~df.set_index(KEY).index.isin(a.set_index(KEY).index.unique())]
+    rest = rest.merge(ch[["month", "department", "article", "cont"]], on=["month", "department"], how="left")
+    rest["cont_from"] = np.where(rest.article.isna(), "no article plan", "chain plan")
+    rest["article"], rest["cont"] = rest.article.fillna(NO_ART), rest.cont.fillna(1.0)
+    out = pd.concat([own, rest], ignore_index=True)
+    for c in ART_SHARE:
+        if c in out:
+            out[c] = out[c] * out.cont
+    out["plan_rs"] = out.a_rs.where(out.a_rs.notna(), out.plan_rs * out.cont) if "a_rs" in out else out.plan_rs * out.cont
+    out["plan_qty"] = out.a_q.where(out.a_q.notna(), out.plan_qty * out.cont) if "a_q" in out else out.plan_qty * out.cont
+    return out.drop(columns=[c for c in ("a_rs", "a_q") if c in out]).reset_index(drop=True)
 
 
 def str_of(qty, mdq):
@@ -744,4 +783,13 @@ if __name__ == "__main__":   # self-check of the maths on tiny frames (no DB)
     assert sp.mdq[("S1", "MSE_HSR PYJAMA")] == 75.0 and sp.plan_rs[("S1", "MSE_HSR PYJAMA")] == 60.0   # S1's own LY: 30 of 40 pcs, 600 of 1000 Rs
     assert ("S2", "MSE_HSR PYJAMA") not in sp.index and sp.mdq[("S2", "MSE_TXTL PYJAMA")] == 100.0   # S2 sold only TXTL: no HSR row
     assert abs(sp.mdq[("S3", "MSE_HSR PYJAMA")] - 100 * 30 / 45) < 1e-9                         # S3 no LY: chain month share
+    fr = pd.DataFrame({"month": [P("2027-03")] * 2, "store": ["S1", "S2"], "department": ["A", "A"], "division": ["MENS"] * 2,
+                       "fixtures": [4.0, 2.0], "fixtures_file": [4.0, 2.0], "mdq": [400.0, 200.0], "mdq_base": [400.0, 200.0],
+                       "ly_q": [10.0, 0.0], "ly_v": [100.0, 0.0], "plan_rs": [1000.0, 50.0], "plan_qty": [10.0, 1.0]})
+    ar = pd.DataFrame({"month": [P("2027-03")] * 2, "store": ["S1", "S1"], "department": ["A", "A"], "division": ["MENS"] * 2,
+                       "article": ["ECO", "PREM"], "plan_rs": [600.0, 400.0], "plan_qty_file": [8.0, 2.0]})
+    af = article_frame(fr, ar).set_index(["store", "article"])
+    assert af.mdq[("S1", "ECO")] == 240.0 and af.plan_qty[("S1", "PREM")] == 2.0     # 60% of Rs -> 60% of MDQ; own qty
+    assert af.mdq[("S2", "ECO")] == 120.0 and af.cont_from[("S2", "ECO")] == "chain plan"   # S2 has no article plan: chain
+    assert abs(af.mdq.sum() - fr.mdq.sum()) < 1e-9 and abs(af.fixtures.sum() - fr.fixtures.sum()) < 1e-9   # adds back
     print("str_engine self-check: OK")

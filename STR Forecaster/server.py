@@ -63,10 +63,25 @@ def frame():
         with lock:
             if not state["dirty"] and state.get("ver") == ver:
                 return state["df"], state["info"]
-        df, info = se.build()
+        df, info, art = se.build(articles=True)
         with lock:
-            state.update(df=df, info=info, dirty=False, ver=ver)
+            state.update(df=df, info=info, art=art, af=None, dirty=False, ver=ver)
         return df, info
+
+
+def article_df():
+    """the frame split to articles by their cont % of the sales plan (built on first use, kept until the next rebuild)"""
+    frame()
+    with lock:
+        if state.get("af") is None:
+            state["af"] = se.article_frame(state["df"], state["art"])
+        return state["af"]
+
+
+def _base(df, q, keys=()):
+    """the frame a request needs: split to articles when Article is a layer or a filter; tags added when used"""
+    d = article_df() if "article" in keys or q.get("article") else df
+    return _with_tags(d) if any(k in keys or q.get(k) for k in TAG_KEYS) else d
 
 
 def _dirty():
@@ -121,7 +136,7 @@ def _with_tags(df):
 
 
 def _filter(df, q):
-    for k in ("division", "cluster", "department", "store", "season") + TAG_KEYS:
+    for k in ("division", "cluster", "department", "store", "season", "article") + TAG_KEYS:
         v = [x for x in q.get(k, []) if x]   # one or several values (repeated params) - the per-layer search filters
         if v:
             df = df[df[k].isin(v)]
@@ -151,9 +166,9 @@ def _safe(v):
     return "'" + v if isinstance(v, str) and v[:1] in ("=", "+", "-", "@") else v
 
 
-LAYER_KEYS = ("division", "department", "cluster", "store", "tag", "attribute", "season")
+LAYER_KEYS = ("division", "department", "cluster", "store", "tag", "attribute", "season", "article")
 LAYER_LABEL = {"division": "Division", "department": "Department", "cluster": "Cluster", "store": "Store", "tag": "Tag",
-               "attribute": "Attribute", "season": "Season"}
+               "attribute": "Attribute", "season": "Season", "article": "Article"}
 
 
 def _cells_wide(c, pre):
@@ -179,7 +194,8 @@ def workbook(df, months, has_plan, layers, info, filters):
     days = np.where(ok, df.mdq / (df.plan_qty.where(df.plan_qty > 0) / dim), np.nan)
     ly_days = np.where(lyok, df.mdq_base / (df.ly_q.where(df.ly_q > 0) / dly), np.nan)
     d = pd.DataFrame({
-        "division": df.division, "cluster": df.cluster, "store": df.store, "department": df.department, "tag": df.tag,
+        "division": df.division, "cluster": df.cluster, "store": df.store, "department": df.department, **({"article": df.article, "article cont % of the department's plan": df.cont,
+                                         "cont % from": df.cont_from} if "article" in df else {}), "tag": df.tag,
         "attribute": df.attribute, "month": df.month.astype(str), "days in month": dim,
         "fixtures (file)": df.fixtures_file, "fixtures": df.fixtures, "qty per fixture": df.density, "MDQ (file)": df.mdq_base,
         "MDQ = fixtures x qty per fixture": df.mdq, "edited": df.edited,
@@ -207,6 +223,7 @@ def workbook(df, months, has_plan, layers, info, filters):
               ("Season", f"year index = the cluster's festival-free sales curve (day-wise sales 2022-25: the month vs the department's average month of the year) raised by the month's festival days at the cluster x department festival lift; season index = that month vs the same cluster x department's average month of the plan window ({', '.join(str(m) for m in months)}), so a tag shows which months stand out for that cluster; peak >= {se.SEASON_CUT[0]}, off <= {se.SEASON_CUT[1]}; built {info.get('season_built')}"),
               ("Band", f"STR days rounded to the nearest 30, kept inside the season's limits ({bands}); never under {se.BAND_MIN} or over {se.BAND_MAX}"),
               ("Roll-ups", "plan qty and MDQ are summed first, then the days; a group's season = its departments' season index weighted by plan qty"),
+              ("Articles", "with Article as a layer or filter: fixtures, MDQ and last year's sales of a store x department x month are split by each article's share of the department's planned sales (Rs) in that store and month - the store's own plan, else the chain's; planned Rs / qty are the article's own"),
               ("Sheets", "STR detail = every store x department x month; Drill-down = the page's row layers fully opened, 4-month and each month; By month = long format per level")]
     with pd.ExcelWriter(out, engine="xlsxwriter", engine_kwargs={"options": {"strings_to_formulas": False}}) as xw:
         pd.DataFrame(readme, columns=["", "How it is worked out"]).to_excel(xw, sheet_name="Read me", index=False)
@@ -276,10 +293,10 @@ class H(BaseHTTPRequestHandler):
             if path == "/api/rollup":
                 # any layer path, e.g. "division,department,cluster" (user, 9 Oct: "drag and drop function which drills to
                 # any level for STR similar to AOP forecaster output model"); a department carries its one division along
-                by = [k for k in q.get("by", ["division"])[0].split(",") if k in ("division", "department", "cluster", "store", "season") + TAG_KEYS] or ["division"]
+                by = [k for k in q.get("by", ["division"])[0].split(",") if k in LAYER_KEYS] or ["division"]
                 if "department" in by and "division" not in by:
                     by.insert(by.index("department"), "division")
-                d = _with_tags(df) if any(k in by or q.get(k) for k in TAG_KEYS) else df
+                d = _base(df, q, by)
                 d, hp = _filter(d, q), bool(info.get("sales_plan"))
                 rows = se.rollup(d, by, months, hp)
                 if len(rows) > 6000:
@@ -332,7 +349,7 @@ class H(BaseHTTPRequestHandler):
                 k = q.get("key", [""])[0]
                 if k not in LAYER_KEYS:
                     return self._send(400, {"error": "unknown key"})
-                d = _with_tags(df) if k in TAG_KEYS else df
+                d = _base(df, {}, (k,))
                 return self._send(200, {"key": k, "values": sorted(str(x) for x in d[k].dropna().unique())})
             if path == "/api/tags/download":
                 t, master = se.tags()
@@ -372,7 +389,7 @@ class H(BaseHTTPRequestHandler):
                 name = f"STR Forecast - {time.strftime('%d.%m.%y')}.xlsx"
                 lay = [k for k in q.get("layers", ["cluster,department,store"])[0].split(",") if k in LAYER_KEYS] or ["cluster", "department", "store"]
                 fl = "; ".join(f"{k} = {', '.join(q[k])}" for k in ("division", "cluster", "department", "store", "season", "tag", "attribute") if q.get(k))
-                d = _with_tags(df) if any(q.get(k) for k in TAG_KEYS) else df
+                d = _base(df, q, lay)
                 return self._send(200, workbook(_filter(d, q), months, bool(info.get("sales_plan")), lay, info, fl),
                                   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                   {"Content-Disposition": f'attachment; filename="{name}"'})
