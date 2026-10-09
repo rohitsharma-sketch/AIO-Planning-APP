@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-09
 
+### STR Forecaster: STR band (60-180 days)
+- **Asked (user):** "give me STR days according to the nearest round ranging from a store base minimum to 60 till 180 max after the actual STR is calculated."
+- After the actual STR days are worked out, Band = the days rounded to the nearest 30 (half rounds up), kept between 60 and 180 (54 -> 60, 75 -> 90, 104 -> 90, 250 -> 180); per store x department x month and for every roll-up from its own actual days. New Band column (main table and department detail, actual and LY days alongside); Excel "STR band (days)" / "STR band". Step and limits = BAND_STEP / BAND_MIN / BAND_MAX in str_engine.py.
+- Today: every division and month bands at 60 (actual 43-67 days); stores over Mar-Jun: 173 at 60, 15 at 90, 1 at 120.
+
 ### STR Forecaster: STR shown in days
 - **Asked (user):** "STR should be in days like 60 Days, 30 Days etc."
 - STR days = MDQ / (planned qty per day) - how long the minimum display stock lasts at the plan's selling rate (fewer days = faster sell-through; = days in month x (1 / STR - 1)). 4-month figure = average MDQ / planned qty per day over the months with data; LY days the same with LY sales qty (LY month lengths). Shown in the division / department / store table and the department detail; the % stays in the hover; Excel gains "days of cover (plan)" / "LY days of cover".

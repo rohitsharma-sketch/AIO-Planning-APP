@@ -366,6 +366,18 @@ def days_of(qty, mdq, n_days, n_months=1):
     return float((mdq / n_months) / (qty / n_days))
 
 
+# user, 9 Oct: "give me STR days according to the nearest round ranging from a store base minimum to 60 till 180 max
+# after the actual STR is calculated" - actual days rounded to the nearest 30, kept between 60 and 180
+BAND_STEP, BAND_MIN, BAND_MAX = 30, 60, 180
+
+
+def str_band(days):
+    """54 -> 60, 75 -> 90 (half rounds up), 104 -> 90, 105 -> 120, 250 -> 180; None stays None"""
+    if days is None or days != days:
+        return None
+    return int(min(max(np.floor(days / BAND_STEP + 0.5) * BAND_STEP, BAND_MIN), BAND_MAX))
+
+
 def rollup(df, by, months, has_plan=True):
     """rows grouped by `by`, each with per-month and total qty / MDQ / STR / LY STR (sum first, then the ratio);
     no sales plan loaded -> forecast STR None (never a false 0%). Biggest MDQ first within the first key."""
@@ -383,7 +395,7 @@ def rollup(df, by, months, has_plan=True):
         days = days_of(q, md, sum(m.days_in_month for m in pm), len(pm)) if pm else None
         ly_days = days_of(lq, lmd, sum((m - 12).days_in_month for m in lm), len(lm)) if lm else None
         return {"qty": float(q), "mdq": float(md), "str": float(str_of(q, md)) if has_plan and both.any() else None,
-                "days": days, "ly_days": ly_days,
+                "days": days, "ly_days": ly_days, "band": str_band(days), "ly_band": str_band(ly_days),
                 "ly_qty": float(lq), "ly_str": float(str_of(lq, lmd)) if lyv.any() else None,
                 "fixtures": float(g.fixtures.sum()), "plan_rs": float(g.plan_rs.sum())}
     out = []
@@ -428,4 +440,6 @@ if __name__ == "__main__":   # self-check of the maths on tiny frames (no DB)
     assert abs(days_of(30, 150, 31) - 155.0) < 1e-9 and days_of(0, 150, 31) is None   # 150 pcs at 30 a month of 31 days
     t = r["months"][0]
     assert abs(t["days"] - 150 / (30 / 31)) < 1e-9 and abs(t["ly_days"] - 200 / (10 / 31)) < 1e-9   # Mar'27 / Mar'26: 31 days
+    assert [str_band(x) for x in (20, 54, 75, 104, 105, 250, None)] == [60, 60, 90, 90, 120, 180, None]
+    assert t["band"] == 150 and t["ly_band"] == 180          # 155 days -> 150; 620 days -> capped at 180
     print("str_engine self-check: OK")
