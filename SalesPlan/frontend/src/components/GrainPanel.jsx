@@ -23,6 +23,9 @@ export default function GrainPanel({ stage, division, title }) {
   const [expanded, setExpanded] = useState(() => new Set())
   const [q, setQ] = useState('')
   const [measure, setMeasure] = useState('ty')   // ty | ly | gr (division / department)
+  // step 2 (2026-10-12): how the plan is built - today's plan, or a preview of store-built / cluster-built AOP x BIS
+  const [method, setMethod] = useState('ty')      // ty (today) | store_built | cluster_built
+  const [deptList, setDeptList] = useState([])
   const [showAll, setShowAll] = useState(false)
 
   useEffect(() => { if (division && division !== div) { setDiv(division); setDept('') } }, [division])   // eslint-disable-line react-hooks/exhaustive-deps
@@ -31,14 +34,15 @@ export default function GrainPanel({ stage, division, title }) {
     if (!open) return
     let gone = false
     setLoading(true); setErr('')
+    const viaMethods = method !== 'ty' && (stage === 'division' || (stage === 'department' && dept))
     const qs = new URLSearchParams({ grain, division: div, ...(dept ? { dept } : {}) })
-    fetch(`/api/planning/grain/${stage}?${qs}`)
+    fetch(`/api/planning/grain/${viaMethods ? 'methods' : stage}?${qs}`)
       .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`); return j })
-      .then(j => { if (!gone) { setData(j); if (j.dept && j.dept !== dept) setDept(j.dept) } })
+      .then(j => { if (!gone) { setData(j); if (j.departments) setDeptList(j.departments); if (j.dept && j.dept !== dept) setDept(j.dept) } })
       .catch(e => { if (!gone) setErr(e.message) })
       .finally(() => { if (!gone) setLoading(false) })
     return () => { gone = true }
-  }, [open, stage, grain, div, dept])   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, stage, grain, div, dept, method])   // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleOpen = () => setOpen(o => { try { localStorage.setItem('sp.grain.open.' + stage, o ? '0' : '1') } catch { /* ignore */ } return !o })
 
@@ -52,19 +56,22 @@ export default function GrainPanel({ stage, division, title }) {
     ]
     return (data.months || []).map(m => ({
       key: m, label: m,
-      get: r => { const x = r.months?.[m] || {}; return measure === 'gr' ? gr(x.ty, x.ly) : x[measure] ?? 0 },
+      get: r => { const x = r.months?.[m] || {}; const f = method !== 'ty' && 'store_built' in (data.total || {}) ? method : 'ty'
+        return measure === 'gr' ? gr(x[f], x.ly) : x[measure === 'ty' ? f : measure] ?? 0 },
       pct: measure === 'gr',
     }))
-  }, [data, stage, measure])
+  }, [data, stage, measure, method])
 
-  const tot = r => (stage === 'display' ? r?.total?.plan : r?.total?.ty) ?? 0
-  const ctot = r => (stage === 'display' ? r?.cluster_total?.plan : r?.cluster_total?.ty) ?? 0
+  const ly = stage === 'division' || stage === 'department'
+  const alt = method !== 'ty' && ly && !!data && 'store_built' in (data.total || {})
+  const F = alt ? method : 'ty'           // the plan field shown: today's plan or the previewed method
+  const tot = r => (stage === 'display' ? r?.total?.plan : r?.total?.[F]) ?? 0
+  const ctot = r => (stage === 'display' ? r?.cluster_total?.plan : r?.cluster_total?.[F]) ?? 0
   const ql = q.trim().toLowerCase()
   const hit = s => s.toLowerCase().includes(ql)
   const match = r => !ql || hit(`${r.label} ${r.cluster || ''}`) || (r.stores || []).some(s => hit(s.label))
   const rows = (data?.rows || []).filter(match)
   const shown = grain === 'store' && !showAll ? rows.slice(0, STORE_CAP) : rows
-  const ly = stage === 'division' || stage === 'department'
 
   const th = { padding: '7px 10px', fontSize: 10.5, fontWeight: 700, color: theme.textMuted, textAlign: 'right', whiteSpace: 'nowrap',
     background: theme.surfaceUp, borderBottom: `1px solid ${theme.border}`, position: 'sticky', top: 0, zIndex: 1 }
@@ -80,6 +87,9 @@ export default function GrainPanel({ stage, division, title }) {
     <td style={{ ...td, fontWeight: 700 }}>{L(tot(r))}</td>
     {ly && <td style={{ ...td, color: theme.textSecondary }}>{L(r.total?.ly)}</td>}
     {ly && <td style={{ ...td, color: tone(gr(tot(r), r.total?.ly)) }}>{P(gr(tot(r), r.total?.ly))}</td>}
+    {alt && <td style={{ ...td, color: theme.textSecondary }}>{L(r.total?.ty)}</td>}
+    {alt && <td style={{ ...td, color: tone(tot(r) - (r.total?.ty || 0)) }}>{L(tot(r) - (r.total?.ty || 0))}</td>}
+    {alt && stage === 'division' && <td style={{ ...td, color: theme.textSecondary }}>{L(r.total?.aop)}</td>}
   </>)
   const lfl = r => (r.ssg ? <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, color: theme.primary }}>LFL</span> : null)
 
@@ -100,10 +110,19 @@ export default function GrainPanel({ stage, division, title }) {
             {DIVS.filter(d => stage === 'division' || stage === 'display' || d !== 'ALL').map(d => <option key={d} value={d}>{d === 'ALL' ? 'All divisions' : d}</option>)}
           </select>
         )}
-        {open && (stage === 'department' || stage === 'mrp') && data?.departments?.length > 0 && (
+        {open && (stage === 'department' || stage === 'mrp') && deptList.length > 0 && (
           <select value={dept} onChange={e => setDept(e.target.value)} aria-label="Department"
             style={{ padding: '5px 8px', borderRadius: 6, border: `1px solid ${theme.border}`, fontSize: 12, maxWidth: 260 }}>
-            {data.departments.map(d => <option key={d.dept} value={d.dept}>{d.dept}</option>)}
+            {deptList.map(d => <option key={d.dept} value={d.dept}>{d.dept}</option>)}
+          </select>
+        )}
+        {open && ly && (
+          <select value={method} onChange={e => setMethod(e.target.value)} aria-label="How the plan is built"
+            title="Today's plan, or a preview of a plan built from the AOP Forecaster's store forecast x BIS growth - nothing is saved"
+            style={{ padding: '5px 8px', borderRadius: 6, border: `1px solid ${method === 'ty' ? theme.border : theme.warning}`, fontSize: 12, fontWeight: method === 'ty' ? 400 : 700 }}>
+            <option value="ty">Today's plan</option>
+            <option value="store_built">Preview: store-built (AOP × BIS)</option>
+            <option value="cluster_built">Preview: cluster-built (AOP × BIS)</option>
           </select>
         )}
         {open && ly && (
@@ -129,6 +148,16 @@ export default function GrainPanel({ stage, division, title }) {
               {grain === 'cluster' ? ' · click a cluster to see its stores' : ' · each store with its cluster and its share of it'}
               {loading && ' · updating…'}
             </div>
+            {alt && (
+              <div style={{ fontSize: 12, color: theme.textSecondary, background: alpha(theme.warning, '12'), border: `1px solid ${alpha(theme.warning, '40')}`, borderRadius: 8, padding: '8px 10px', marginBottom: 8, lineHeight: 1.5 }}>
+                <b>Preview only - nothing is saved or adopted.</b>{' '}
+                {method === 'store_built'
+                  ? <>Each store's division total = its AOP Forecaster store forecast ({data.aop?.label}, publish {data.aop?.publish}), split over departments by the store's own LY department mix × BIS growth; a store with no LY of its own (a new store) takes its cluster's mix. Clusters are the sum of their stores.</>
+                  : <>Each cluster's division total = the sum of its stores' AOP store forecasts ({data.aop?.label}, publish {data.aop?.publish}), split over departments by the cluster's LY mix × BIS growth, then given to its stores by each store's LY share. <b>Stores with no LY (new stores) get nothing here - their AOP is spread over the cluster's other stores.</b></>}
+                {' '}Months: {(data.months || []).join(', ')} - the months this AOP version has LY for, so both sides cover the same months.
+                {' '}The AOP store forecast includes new / ramp stores, which today's plan gives nothing (no LY) - most of the gap to today's plan is them.
+              </div>
+            )}
             <div style={{ overflow: 'auto', maxHeight: 520, border: `1px solid ${theme.border}`, borderRadius: 8 }}>
               <table style={{ borderCollapse: 'collapse', width: '100%' }}>
                 <thead><tr>
@@ -138,6 +167,9 @@ export default function GrainPanel({ stage, division, title }) {
                   <th style={th}>Plan (total)</th>
                   {ly && <th style={th}>LY (total)</th>}
                   {ly && <th style={th}>Growth</th>}
+                  {alt && <th style={th} title="today's plan (the base plan)">Today's plan</th>}
+                  {alt && <th style={th} title="this method minus today's plan">vs today</th>}
+                  {alt && stage === 'division' && <th style={th} title="the AOP Forecaster's store forecast">AOP</th>}
                   <th style={th} title={grain === 'cluster' ? 'share of the whole plan' : "share of its cluster's plan"}>{grain === 'cluster' ? 'Share' : 'Share of cluster'}</th>
                 </tr></thead>
                 <tbody>
@@ -170,13 +202,16 @@ export default function GrainPanel({ stage, division, title }) {
                   <td style={{ ...foot, textAlign: 'left' }}>Total</td>
                   {grain === 'store' && <td style={foot} />}
                   {cols.map(c => {
-                    if (c.pct) { const x = data.rows.reduce((a, r) => { const m = r.months?.[c.key] || {}; return { ty: a.ty + (m.ty || 0), ly: a.ly + (m.ly || 0) } }, { ty: 0, ly: 0 })
+                    if (c.pct) { const x = data.rows.reduce((a, r) => { const m = r.months?.[c.key] || {}; return { ty: a.ty + (m[F] || 0), ly: a.ly + (m.ly || 0) } }, { ty: 0, ly: 0 })
                       return <td key={c.key} style={{ ...foot, color: tone(gr(x.ty, x.ly)) }}>{P(gr(x.ty, x.ly))}</td> }
                     return <td key={c.key} style={foot}>{L(data.rows.reduce((a, r) => a + (c.get(r) || 0), 0))}</td>
                   })}
                   <td style={foot}>{L(tot(data))}</td>
                   {ly && <td style={foot}>{L(data.total?.ly)}</td>}
-                  {ly && <td style={{ ...foot, color: tone(gr(data.total?.ty, data.total?.ly)) }}>{P(gr(data.total?.ty, data.total?.ly))}</td>}
+                  {ly && <td style={{ ...foot, color: tone(gr(data.total?.[F], data.total?.ly)) }}>{P(gr(data.total?.[F], data.total?.ly))}</td>}
+                  {alt && <td style={foot}>{L(data.total?.ty)}</td>}
+                  {alt && <td style={{ ...foot, color: tone(tot(data) - (data.total?.ty || 0)) }}>{L(tot(data) - (data.total?.ty || 0))}</td>}
+                  {alt && stage === 'division' && <td style={foot}>{L(data.total?.aop)}</td>}
                   <td style={foot}>100%</td>
                 </tr></tfoot>
               </table>

@@ -4,7 +4,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from engines.grain_view import NO_CLUSTER, build_cube, rows  # noqa: E402
+from engines.grain_view import NO_CLUSTER, build_cube, build_methods, rows  # noqa: E402
 
 dep = lambda ly, ty, active=True: {"ly": ly, "ty": ty, "ty_p1": ty * 0.4, "ty_p2": ty * 0.6, "active": active}   # noqa: E731
 plan = {"stores": {
@@ -29,4 +29,21 @@ assert b["cluster"] == "UP 1" and b["cluster_total"] == {"ly": 21, "ty": 25} and
 assert st["total"] == cl["total"] and st["n_stores"] == 3 and cl["n_clusters"] == 2
 z = rows({**per, "W": {"Mar'27": {"ly": 0.0, "ty": 0.0}}}, {**c["stores"], "W": {"cluster": NO_CLUSTER}}, "store", c["months"])
 assert z["n_stores"] == 3 and z["n_empty"] == 1 and z["total"] == st["total"]   # an empty warehouse is counted, not listed
+# step 2: store-built / cluster-built AOP x BIS (2026-10-12)
+aop = {"A": {"MENS": {"Mar'27": 30.0}}, "B": {"MENS": {"Mar'27": 10.0, "Apr'27": 4.0}}, "N": {"MENS": {"Mar'27": 6.0}}}
+growth = {"MENS": {"M_X": {"Mar'27": 1.2}, "M_Y": {"Mar'27": 1.0}}}
+M = build_methods(c, aop, growth, {"N": "UP 1"})
+P = M["plan"]["MENS"]
+sb = lambda s, m: sum(P[d].get(s, {}).get(m, {}).get("store_built", 0) for d in P)   # noqa: E731
+cb = lambda s, m: sum(P[d].get(s, {}).get(m, {}).get("cluster_built", 0) for d in P)   # noqa: E731
+assert abs(sb("A", "Mar'27") - 30) < 1e-9 and abs(sb("B", "Mar'27") - 10) < 1e-9     # each store lands on its AOP
+# A's own mix: M_X 10 x 1.2 = 12, M_Y 5 x 1.0 = 5 -> 30 x 12/17 to M_X
+assert abs(P["M_X"]["A"]["Mar'27"]["store_built"] - 30 * 12 / 17) < 1e-9
+assert abs(sb("N", "Mar'27") - 6) < 1e-9                                               # no LY of its own -> its cluster's mix
+# cluster-built: UP 1 Mar = 30 + 10 + 6 = 46 over the cluster mix (M_X 14 x 1.2, M_Y 5), then by store LY share
+up = sum(cb(s, "Mar'27") for s in ("A", "B", "N"))
+assert abs(up - 46) < 1e-9 and cb("N", "Mar'27") == 0                                  # N has no LY -> nothing
+mx = 46 * 16.8 / 21.8
+assert abs(P["M_X"]["A"]["Mar'27"]["cluster_built"] - mx * 10 / 14) < 1e-9             # A has 10 of M_X's 14 LY
+assert abs(cb("B", "Apr'27") - 4) < 1e-9 and M["unalloc"] == {}
 print("grain view checks passed")

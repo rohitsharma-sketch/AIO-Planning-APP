@@ -141,6 +141,152 @@ def _divs(c: dict, division: str) -> list:
     return [division.upper()]
 
 
+# ── Step 2 (user, 2026-10-12: chose "Both, in two steps", "By each store's LY share", "AOP store forecast x BIS mix") ──
+# Two more ways to build the plan, previewed beside today's plan - nothing here is saved or adopted:
+#   store-built   each store x division x month = its AOP Forecaster store forecast, split over departments by the store's
+#                 own LY department mix x BIS growth (a store with no LY of its own takes its cluster's mix)
+#   cluster-built each cluster x division x month = the sum of its stores' AOP forecasts, split over departments by the
+#                 cluster's LY mix x BIS growth, then down to its stores by each store's LY share (no LY -> no plan)
+# AOP = the publish BIS plans on (division_plan._bis_aop), per store from that AOP session's detail.json; LY = the plan's
+# re-indexed LY (Calendar); BIS growth = the live growth matrix (P1 / P2 averaged; 100 where BIS has no value).
+_mcache = {"key": None, "v": None}
+
+
+def build_methods(cube: dict, aop: dict, growth: dict, aop_clusters: dict | None = None) -> dict:
+    """{div: {dept: {store: {month: {store_built, cluster_built}}}}} plus unallocated AOP per method
+    {"unalloc": {div: {store: {month: {store_built, cluster_built}}}}}. aop = {store: {div: {month: lakh}}};
+    growth = {div: {dept: {month: factor}}} (1.0 = flat); aop_clusters = {store: cluster} for stores the plan does not
+    list yet (new stores in the AOP Forecaster only)."""
+    st, months, ac = cube["stores"], cube["months"], aop_clusters or {}
+    clus = lambda s: st[s]["cluster"] if s in st else (ac.get(s) or NO_CLUSTER)   # noqa: E731
+    out, un = {}, {}
+    for dv in sorted(set(cube["dept"]) | {d for a in aop.values() for d in a}):
+        deps = cube["dept"].get(dv, {})
+        g = lambda dp, m: growth.get(dv, {}).get(dp, {}).get(m, 1.0)   # noqa: E731
+        # weights = LY x growth, per store and per cluster
+        w_s, w_c, ly_c = {}, {}, {}
+        for dp, ss in deps.items():
+            for s, ms in ss.items():
+                for m, (ly, _, _, _) in ms.items():
+                    if ly > 0:
+                        w = ly * g(dp, m)
+                        w_s.setdefault((s, m), {})[dp] = w
+                        w_c.setdefault((clus(s), m), {})
+                        w_c[(clus(s), m)][dp] = w_c[(clus(s), m)].get(dp, 0.0) + w
+                        ly_c.setdefault((clus(s), dp, m), {})[s] = ly
+        put = lambda dp, s, m, k, v: out.setdefault(dv, {}).setdefault(dp, {}).setdefault(s, {}).setdefault(m, {}).__setitem__(k, v)   # noqa: E731
+        miss = lambda s, m, k, v: un.setdefault(dv, {}).setdefault(s, {}).setdefault(m, {}).__setitem__(k, v)   # noqa: E731
+        ct = {}
+        for s, a in aop.items():
+            for m, T in (a.get(dv) or {}).items():
+                if m not in months or not T:
+                    continue
+                ct[(clus(s), m)] = ct.get((clus(s), m), 0.0) + T
+                ws = w_s.get((s, m)) or w_c.get((clus(s), m))      # own mix, else its cluster's
+                if ws and sum(ws.values()) > 0:
+                    for dp, v in split(T, ws).items():
+                        put(dp, s, m, "store_built", v)
+                else:
+                    miss(s, m, "store_built", T)
+        for (cl, m), T in ct.items():
+            wc = w_c.get((cl, m))
+            if not wc or sum(wc.values()) <= 0:
+                for s in [x for x, a in aop.items() if clus(x) == cl and (a.get(dv) or {}).get(m)]:
+                    miss(s, m, "cluster_built", aop[s][dv][m])
+                continue
+            for dp, v in split(T, wc).items():
+                for s, part in split(v, ly_c[(cl, dp, m)]).items():
+                    put(dp, s, m, "cluster_built", part)
+    return {"plan": out, "unalloc": un}
+
+
+def _aop_by_store():
+    """The AOP Forecaster's store x division x month forecast (Rs lakh) of the publish BIS plans on."""
+    from engines.division_plan import _bis_aop
+    pid, label, _, _, _ = _bis_aop()
+    if not pid:
+        return None, None, {}, {}, []
+    from db.base import SessionLocal
+    from sqlalchemy import text
+    with SessionLocal() as db:
+        sid = db.execute(text("SELECT session_id FROM planning_inputs.aop_publish_history WHERE id = :i"), {"i": pid}).scalar()
+    p = os.path.join(_HERE, "..", "..", "..", "Tentative AOP Forecaster", "sessions", str(sid), "detail.json")
+    if not sid or not os.path.exists(p):
+        return pid, label, {}, {}, []
+    aop, cl, base = {}, {}, {}
+    with open(p, encoding="utf-8") as fh:
+        recs = json.load(fh)
+    # only the months that AOP version had LY for (it ran before later months closed - e.g. V2 on 25 Sep has no Sep base,
+    # its Sep figure is new stores only), so the comparison with today's plan is like for like
+    for r in recs:
+        for m in TY_MONTHS:
+            base[m] = base.get(m, 0.0) + float(r.get(f"{m} | Base") or 0.0)
+    covered = {m for m, v in base.items() if v > 0}
+    for r in recs:
+        s, dv = str(r.get("Store") or "").strip().upper(), str(r.get("Division") or "").strip().upper()
+        if s and r.get("Cluster"):
+            cl[s] = str(r["Cluster"]).strip()
+        for m in TY_MONTHS:
+            v = r.get(f"{m} | Forecast")
+            if s and dv and v and m in covered:
+                d = aop.setdefault(s, {}).setdefault(dv, {})
+                d[m] = d.get(m, 0.0) + float(v)
+    return pid, label, aop, cl, sorted(covered, key=TY_MONTHS.index)
+
+
+def _methods():
+    c = _cube()
+    from engines.department_plan import live_growth_matrix
+    gm = live_growth_matrix()
+    pid, label, aop, aop_cl, amonths = _aop_by_store()
+    key = (id(c), pid, json.dumps(gm, sort_keys=True))
+    if _mcache["key"] != key:
+        growth = {dv: {dp: {m: (ps.get(f"{m} P1", 100.0) + ps.get(f"{m} P2", 100.0)) / 200.0 for m in c["months"]}
+                       for dp, ps in deps.items()} for dv, deps in gm.items()}
+        _mcache.update(key=key, v={**build_methods(c, aop, growth, aop_cl), "aop": aop, "aop_clusters": aop_cl,
+                                   "pid": pid, "label": label, "months": [m for m in c["months"] if m in amonths]})
+    return c, _mcache["v"]
+
+
+@router.get("/methods")
+def get_methods(grain: str = "cluster", division: str = "ALL", dept: str = ""):
+    """Today's plan beside the store-built and cluster-built AOP x BIS plans, by cluster or store (preview only).
+    dept = one department (its division), else the division totals with each store's AOP forecast."""
+    g = _grain(grain)
+    c, M = _methods()
+    divs = _divs(c, division) if not dept else [division.upper()]
+    months = M["months"]
+    per = {}
+    for dv in divs:
+        deps = c["dept"].get(dv, {})
+        mp = M["plan"].get(dv, {})
+        names = [dept] if dept else sorted(set(deps) | set(mp))
+        for dp in names:
+            for s, ms in deps.get(dp, {}).items():
+                for m, (ly, ty, _, _) in ms.items():
+                    if m in months:
+                        _add(per.setdefault(s, {}).setdefault(m, {}), {"ly": ly, "ty": ty})
+            for s, ms in mp.get(dp, {}).items():
+                for m, v in ms.items():
+                    _add(per.setdefault(s, {}).setdefault(m, {}), v)
+        if not dept:
+            for s, a in M["aop"].items():
+                for m, v in (a.get(dv) or {}).items():
+                    if m in months:
+                        _add(per.setdefault(s, {}).setdefault(m, {}), {"aop": v})
+            for s, ms in M["unalloc"].get(dv, {}).items():
+                for m, v in ms.items():
+                    _add(per.setdefault(s, {}).setdefault(m, {}), {f"unalloc_{k}": x for k, x in v.items()})
+    for s in per:
+        for m in per[s]:
+            for k in ("ly", "ty", "store_built", "cluster_built"):
+                per[s][m].setdefault(k, 0.0)
+    out = rows(per, {**{s: {"cluster": k} for s, k in M["aop_clusters"].items()}, **c["stores"]}, g, months)
+    return {**out, "fields": ["ly", "ty", "store_built", "cluster_built"] + ([] if dept else ["aop"]),
+            "source": c["source"], "aop": {"publish": M["pid"], "label": M["label"], "stores": len(M["aop"])},
+            "division": division.upper(), "dept": dept or None}
+
+
 @router.get("/meta")
 def get_meta():
     c = _cube()
