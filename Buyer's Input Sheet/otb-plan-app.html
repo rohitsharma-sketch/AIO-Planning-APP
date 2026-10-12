@@ -1904,7 +1904,8 @@ function openNewDeptModal(){
   if(!ND_DIVS.includes(_nd.div))_nd.div='KIDS';
   _ndOv().style.display='flex';_ndRender();
   // through the Planning Suite (signed in) the list comes from Sales Plan and can be saved; else a read-only copy
-  fetch(ND_API).then(r=>{if(!r.ok||r.redirected)throw new Error(r.status);return r.json().then(m=>{_nd.canSave=true;return m;});})
+  // on BIS's own port there is no Sales Plan behind /api/planning (QA 12 Oct: it only logged a 404) - read-only copy straight away
+  (location.port==='5050'?Promise.reject(new Error('own port')):fetch(ND_API)).then(r=>{if(!r.ok||r.redirected)throw new Error(r.status);return r.json().then(m=>{_nd.canSave=true;return m;});})
     .catch(()=>fetch(SYNC_BASE+'/api/planner/new-depts').then(r=>r.ok?r.json():Promise.reject(new Error('bis'))))
     .then(m=>{_nd.rows=_ndRowsOf(m||{});_ndRender();})
     .catch(()=>{_nd.err='Could not read the new-department list.';_ndRender();});
