@@ -55,9 +55,10 @@ The routes themselves are in each engine module (`@router.get/post/...`); 8010's
 - **Frontend:** edit `frontend/src`, then `cd frontend && npm run build` — 8010 serves `frontend/dist/`, so a source
   change is invisible until it is built. Commit the build with `git add -A -f SalesPlan/frontend/dist`
   (`dist/assets` is git-ignored).
-- `npm run dev` (port 5175) proxies `/api` to 8002, i.e. the old standalone `backend/main.py` (not running, no
-  sign-in, and it mounts only some of the `/api/planning` prefixes the pages call) — build + restart 8010 is the
-  reliable loop.
+- **Live dev server:** `cd frontend && npm run dev` → `http://localhost:5175`, with `/api` proxied to 8010 (the real
+  backend and data). Sign in once at `http://localhost:8010/login` first — the session cookie is host-only, so the
+  dev server sends it too. Backend edits still need the 8010 restart. (`backend/main.py`, the old standalone 8002
+  app, is no longer used by anything.)
 
 ## Layout
 
@@ -69,7 +70,7 @@ SalesPlan/
 │   ├── store_master.py       # store master + clusters (Postgres)
 │   ├── apportion.py          # shares that add to exactly 100 / split totals exactly
 │   ├── plan_cache.py
-│   ├── main.py               # old standalone app (8002) - dev only, see above
+│   ├── main.py               # old standalone app (8002) - unused
 │   └── new_dept_mapping.json, final_dept_plan.json, ...
 ├── frontend/                 # React 18 + Vite; src/pages (one per screen), dist/ (served by 8010)
 ├── Attribute Master/         # att master.xlsx (live) + the manual KPI extractor
