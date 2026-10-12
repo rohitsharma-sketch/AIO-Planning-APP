@@ -390,6 +390,13 @@ td.aop-col-bg input.gi{background:var(--sf)}
 .drw-tb td{text-align:right;padding:6px;border-bottom:1px solid var(--bd);color:var(--t2)}
 .drw-tb th:first-child,.drw-tb td:first-child{text-align:left}
 .drw-tb tfoot td{font-weight:700;color:var(--tx);border-bottom:none}
+.drw-tb tr.drw-m{cursor:pointer}.drw-tb tr.drw-m:hover td{background:var(--s2)}
+.drw-tb tr.drw-m:focus-visible{outline:2px solid var(--ac);outline-offset:-2px}
+.drw-tb tr.drw-m.sel td{background:var(--ac-l);color:var(--tx)}
+.drw-hint{margin-top:6px;font-size:11px;color:var(--mu)}
+.drw-steps{margin:0;padding-left:20px;display:grid;gap:7px;font-size:12px;color:var(--t2)}
+.drw-steps li b{display:block;color:var(--tx);font-variant-numeric:tabular-nums}
+.drw-steps li span{display:block;line-height:1.45}
 .drw-ft{padding:12px 18px;border-top:1px solid var(--bd);display:flex;gap:8px;background:var(--s2)}
 
 /* ── MODALS (AOP sync, add dept) ────────────────────────────────────── */
@@ -4227,7 +4234,7 @@ function _renderDrawer(){
   let L=0,T=0;
   const mons=AOP_MIS.map(mi=>{
     const ly=_secMonLY(sec,dv,mi),g=S.inputs[sec.id+'__'+mi],ty=ly*(1+(g??0)/100),p=_plannerRowAgg(row,[mi]);L+=ly;T+=ty;
-    return `<tr><td>${MO[mi]}${S.locked.has(sec.id+'__'+mi)?' &#x1F512;':''}</td><td>${f2(ly)}</td><td class="${gCls(g)}">${fP(g)}</td><td>${f2(ty)}</td><td>${fP(p?.gr)}</td></tr>`;
+    return `<tr class="drw-m${_drw.mi===mi?' sel':''}" tabindex="0" aria-pressed="${_drw.mi===mi}" title="How the planner worked out ${MO[mi]}" onclick="_drwMonth(${mi})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();_drwMonth(${mi})}"><td>${MO[mi]}${S.locked.has(sec.id+'__'+mi)?' &#x1F512;':''}</td><td>${f2(ly)}</td><td class="${gCls(g)}">${fP(g)}</td><td>${f2(ty)}</td><td>${fP(p?.gr)}</td></tr>`;
   }).join('');
   const hb=_lflHdr('base',c).sub,hy=_lflHdr('yoy',c).sub;
   const status=S.divLocked.has(dv.id)?'Division locked':S.buyerSet.has(sec.id)?"Buyer's own growth":'Plain AOP share';
@@ -4241,14 +4248,39 @@ function _renderDrawer(){
         <div><span>Buyer Gr%</span><b class="${gCls(bg)}">${fP(bg)}</b></div><div><span>Planner Gr% · factor ${_plannerFactorAgg(row,AOP_MIS)?.toFixed(2)??'-'}</span><b class="${gCls(pl?.gr)}">${fP(pl?.gr)}</b></div>
       </div></div>
       <div class="drw-sec"><h4>Month by month</h4><table class="drw-tb"><thead><tr><th>Month</th><th>LY Cr</th><th>Buyer Gr%</th><th>Plan Cr</th><th>Planner Gr%</th></tr></thead>
-        <tbody>${mons}</tbody><tfoot><tr><td>Block</td><td>${f2(L)}</td><td>${fP(L>0?(T/L-1)*100:null)}</td><td>${f2(T)}</td><td>${fP(pl?.gr)}</td></tr></tfoot></table></div>
-      <div class="drw-sec"><h4>How the planner's growth is built</h4><div class="drw-why">${_attr(_plannerWhy(row,AOP_MIS))}</div></div>
+        <tbody>${mons}</tbody><tfoot><tr class="drw-m${_drw.mi==null?' sel':''}" tabindex="0" aria-pressed="${_drw.mi==null}" title="The block summary" onclick="_drwMonth(null)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();_drwMonth(null)}"><td>Block</td><td>${f2(L)}</td><td>${fP(L>0?(T/L-1)*100:null)}</td><td>${f2(T)}</td><td>${fP(pl?.gr)}</td></tr></tfoot></table><div class="drw-hint">Click a month to see how its planner growth was worked out, step by step.</div></div>
+      <div class="drw-sec" id="drwHow"><h4>How the planner's growth is built · ${_drw.mi==null?'Block '+_attr(MO[AOP_MIS[0]]+'-'+MO[AOP_MIS[AOP_MIS.length-1]]):MO[_drw.mi]}</h4>${_drw.mi==null?`<div class="drw-why">${_attr(_plannerWhy(row,AOP_MIS))}</div>`:_drwMonthHtml(dv,sec,_drw.mi)}</div>
       <div class="drw-sec"><h4>Context · selected months</h4><div class="drw-kv">
         <div><span>Avg sell-thru</span><b>${v('avg_st')}</b></div><div><span>Contrib %</span><b>${v('contrib')}</b></div>
         <div><span>${_attr(hb)}</span><b>${v('period_lfl_base')}</b></div><div><span>${_attr(hy)}</span><b>${v('period_lfl_yoy')}</b></div>
       </div>${c.length?`<table class="drw-tb" style="margin-top:8px"><thead><tr><th>Sell-thru</th>${c.map(mi=>`<th>${MO[mi]}</th>`).join('')}</tr></thead><tbody><tr><td>ST%</td>${st}</tr></tbody></table>`:''}</div>
     </div>
     <div class="drw-ft"><button type="button" class="fpbtn" onclick="const d=_drw;closeDrawer();openMag(d.secId,d.dvId)">Edit month by month &#x2922;</button></div>`;
+}
+
+// user, 12 Oct: "if i click on any month i want to see the working of how the factor was derived" - the drawer's month
+// rows pick the month; null = the block. Same numbers as _plannerCalc (display only).
+function _drwMonth(mi){
+  if(!_drw)return;_drw.mi=mi;_renderDrawer();
+  const rows=[...document.querySelectorAll('#drw .drw-m')],i=mi==null?rows.length-1:AOP_MIS.indexOf(mi);
+  rows[i]?.focus({preventScroll:true});document.getElementById('drwHow')?.scrollIntoView({block:'nearest',behavior:'smooth'});
+}
+function _drwMonthHtml(dv,sec,mi){
+  const o=_plannerCalc()[dv.id]?.[mi]?.[sec.id],aop=S.aop[dv.id]?.[mi],M=MO[mi];
+  if(!o)return `<div class="drw-why">${M}: no planner value - ${!(aop>0)?'there is no AOP for this month':'the department has no LY sales this month'}.</div>`;
+  const cr=v=>'Rs.'+v.toFixed(3)+' Cr',fc=o.fc,x=fc.inp||{},t=fc.tags||{},pc=v=>v==null?'n/a':(v*100).toFixed(1)+'%';
+  const cont=aop>0?o.share/aop:0,raw=o.scale>0?aop/o.scale:0,bg=S.inputs[sec.id+'__'+mi];
+  const meth=(FM_METHODS.find(m=>m[0]===(PLANNER.ft?.mode||'matrix'))||FM_METHODS[0])[1],blk=_planMode()==='block';
+  const step=(h,b)=>`<li><b>${h}</b><span>${b}</span></li>`;
+  return `<ol class="drw-steps">
+    ${step(`Factor ×${fc.f.toFixed(2)}`,`${_attr(meth)}: ${_attr(fc.why||'-')}. Inputs: sell-thru ${pc(x.st)} (${_attr(t.st||'-')}) · LY growth ${pc(x.gr)} (${_attr(t.growth||'-')}) · fill rate ${pc(x.fill)} (${_attr(t.fill||'-')})${x.ref?' - from '+_attr(x.ref):''}. `+
+      (blk?`Phase 1: one factor for the whole ${MO[AOP_MIS[0]]}-${MO[AOP_MIS[AOP_MIS.length-1]]} block, from the block’s inputs - the same in every month.`:`Phase 2: worked out from ${M}’s own inputs.`))}
+    ${step(`LY ${cr(o.ly)} = ${(cont*100).toFixed(2)}% of ${_attr(dv.nm)}`,`the department’s ${M} last-year sales and its share (LY cont %) of the division’s ${M} LY.`)}
+    ${step(`AOP share ${cr(o.share)}`,`${_attr(dv.nm)}’s ${M} AOP ${cr(aop)} × ${(cont*100).toFixed(2)}% - what it would get with no factor.`)}
+    ${step(`× factor = ${cr(o.v)}`,`${cr(o.share)} × ${fc.f.toFixed(2)}.`)}
+    ${step(`Re-balance ×${o.scale.toFixed(3)} = ${cr(o.val)}`,`every ${_attr(dv.nm)} department gets step 4; together that is ${cr(raw)}. Scaling all of them by ${cr(aop)} ÷ ${cr(raw)} = ×${o.scale.toFixed(3)} puts the division back exactly on its ${M} AOP.`)}
+    ${step(`Planner Gr% ${fP(o.gr)}`,`${cr(o.val)} against LY ${cr(o.ly)}. The buyer’s growth for ${M} is ${fP(bg)}${bg!=null&&o.gr!=null?` (${bg-o.gr>=0?'+':''}${(bg-o.gr).toFixed(1)} pts against the planner)`:''}.`)}
+  </ol>`;
 }
 
 /* ── BUYERS PLAN INPUT ─────────────────────────── */
@@ -5958,9 +5990,13 @@ function _plannerWhy(row,mis){
   const cr=v=>'Rs.'+v.toFixed(2)+' Cr',pc=v=>v==null?'n/a':(v*100).toFixed(1)+'%',fc=os[0].fc,t=fc.tags,x=fc.inp;
   const sum=k=>os.reduce((a,o)=>a+o[k],0),sh=sum('share'),v=sum('v'),val=sum('val'),ly=sum('ly');
   const g=ly>0?(val/ly-1)*100:null;
-  return `${lbl}: factor ${fc.f.toFixed(2)} - ${fc.why}\n`+
-    `Sell-thru ${pc(x.st)} (${t.st||'-'}) · LY growth ${pc(x.gr)} (${t.growth||'-'}) · Fill rate ${pc(x.fill)} (${t.fill||'-'})${x.ref?' - inputs from '+x.ref:''}\n`+
-    `AOP share by LY cont % ${cr(sh)} × ${fc.f.toFixed(2)} = ${cr(v)} → re-balanced ×${(v>0?val/v:0).toFixed(3)} to the division AOP = ${cr(val)}\n`+
+  const fs=mis.filter(mi=>P[mi]?.[row._key]).map(mi=>[mi,P[mi][row._key].fc.f]),same=fs.every(([,f])=>Math.abs(f-fs[0][1])<5e-4),fw=sh>0?v/sh:fc.f;
+  const head=same?`${lbl}: factor ${fc.f.toFixed(2)} - ${fc.why}\n`+
+      `Sell-thru ${pc(x.st)} (${t.st||'-'}) · LY growth ${pc(x.gr)} (${t.growth||'-'}) · Fill rate ${pc(x.fill)} (${t.fill||'-'})${x.ref?' - inputs from '+x.ref:''}\n`
+    :`${lbl}: factor ${fw.toFixed(2)} (the months weighted by AOP share) - Phase 2 gives each month its own: ${fs.map(([mi,f])=>MO[mi]+' ×'+f.toFixed(2)).join(' · ')}\n`+
+      `each month’s inputs and working: click the month in the department details\n`;
+  return head+
+    `AOP share by LY cont % ${cr(sh)} × ${fw.toFixed(2)} = ${cr(v)} → re-balanced ×${(v>0?val/v:0).toFixed(3)} to the division AOP = ${cr(val)}\n`+
     `vs LY ${cr(ly)} = ${fP(g)}`;
 }
 const _attr=t=>String(t).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/\n/g,'&#10;');

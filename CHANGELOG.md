@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-12
 
+### BIS department details: click a month for the planner's working
+- **Asked (user):** "if i click on any month i want to see the working of how the factor was derived".
+- In the department details panel the Month by month rows (and Block) are clickable (mouse, Enter / Space). A month shows its working in six steps: the factor and its inputs (method, sell-thru / LY growth / fill rate and their bands; Phase 1 = one factor for the block, Phase 2 = that month's own), LY and LY cont % of the division, the division's AOP x cont % = AOP share, x factor, the re-balance (every department's step 4 added up, scaled by AOP / total so the division lands exactly on its month AOP), and the Planner Gr% against the buyer's growth. Block shows the summary as before.
+- **Fixed:** in Phase 2 the block text showed the first month's factor (Mar 1.08) as the block factor while the header said 1.04; it now gives the AOP-share-weighted factor (1.04) and each month's own (Mar 1.08 / Apr 1.00 / May 1.02 / Jun 1.08), so the two agree.
+- Display only (same numbers as the planner calculation - checked: the month's departments add up to its AOP exactly). BIS node tests pass; outside copy byte-identical.
+
 ### BIS factor table: ML breakdown tab + plain-words key
 - **Asked (user):** "show the ml factor breakdown visually in the factor table in a separate tab", then "perhaps give a simple explanation legend for terms like error and no error values and other complex graphical values".
 - New third tab **ML breakdown** in the Planner's factor table pop-up (front end only, reads the loaded history check): a card per division (how its factors spread x0.80-x1.20 with a neutral "about level" bar, whether sell-thru / fill rate are used and what twice the division's level does, the history part's error vs no factor on the past cycles); then every department - History part, Sell-thru, Fill rate, Model factor, Damping + limits, Factor used - with a waterfall from x1.00 on one log scale (one coloured lane per step) and its main reasons as chips; division filter, find, sort (biggest move / largest LY / A-Z), Preview > opens that department on the first tab. Shows the same honest note (did no better than no factor on past cycles) and whether the saved factors come from an older check.
