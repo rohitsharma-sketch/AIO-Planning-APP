@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-12
 
+### Sales Plan: Attr / Base Correction off in Cluster view
+- **Asked (user):** "disable attr correction and base correction in cluster view" (screenshot of the sidebar).
+- Both correct the plan store by store, so with the header switch on Cluster: the two sidebar items are greyed with a "store only" tag and a tooltip (not links); the Growth Matrix "what next" pop-up after Generate Base Plan shows them disabled with a one-line reason (Opt out to Final Results still works); opening either page by link shows "... is off in Cluster view" with a **Switch to Store** button (`components/ClusterOff.jsx`; the pages are wrapped, so nothing of theirs runs in Cluster view). PW/W and SOR Deviation are untouched. Store view: everything as before.
+- Checked in the sandbox of the built pages: Cluster -> both items off and both pages gated, PW/W / SOR still on; Switch to Store -> back to normal. The pop-up was not opened (it needs a Generate Base Plan run, which saves the plan). dist rebuilt.
+
 ### Sales Plan: preview of a store-built / cluster-built plan from AOP Forecaster x BIS x Calendar (step 2)
 - **Asked (user):** the same request, step 2 - chose "By each store's LY share" (cluster -> stores) and "AOP store forecast x BIS mix" (anchor).
 - On Division Plan and Growth Matrix the Store / Cluster panel has **How the plan is built: Today's plan | Preview: store-built (AOP x BIS) | Preview: cluster-built (AOP x BIS)** - nothing is saved or adopted; the table adds Today's plan, vs today and (division) AOP columns and a note explaining the method.

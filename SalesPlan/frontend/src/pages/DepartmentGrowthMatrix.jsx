@@ -4,6 +4,7 @@ import { theme, alpha } from '../theme'
 import GrainPanel from '../components/GrainPanel'
 import { ENGINE_META, startPipeline } from '../pipelineState'
 import SearchSlicer from '../components/SearchSlicer'
+import { useGrain } from '../grain'
 
 const DIVISIONS = ['KIDS', 'LADIES', 'MENS', 'GM', 'RETAIL']
 
@@ -55,6 +56,8 @@ export default function DepartmentGrowthMatrix() {
   const [genMsg, setGenMsg]           = useState('')
   const [showPipelineModal, setShowPipelineModal] = useState(false)
   const [pipelineChecked, setPipelineChecked] = useState({ 'attr-correction': false, 'base-correction': false })
+  const [grain] = useGrain()
+  const corrOff = grain === 'cluster'   // Attr / Base Correction are store-level: off in Cluster view (2026-10-12)
   const [genStores, setGenStores] = useState(null)
   const navigate = useNavigate()
 
@@ -162,7 +165,7 @@ export default function DepartmentGrowthMatrix() {
   const handleStartPipeline = (only) => {
     // engines run in the pipeline's own order (Attr -> Base); `only` runs just that one. New departments come from
     // BIS (BIS > New departments) and are already in the base plan (user, 2026-10-12)
-    const queue = only ? [only] : Object.keys(ENGINE_META).filter(k => pipelineChecked[k])
+    const queue = corrOff ? [] : only ? [only] : Object.keys(ENGINE_META).filter(k => pipelineChecked[k])
     if (queue.length === 0) {
       navigate('/department-plan/final-results')
       return
@@ -288,10 +291,11 @@ export default function DepartmentGrowthMatrix() {
               each taking you to the next - or run just one with <b>Only this</b>. Or opt out and go straight to the final results.
             </div>
 
+            {corrOff && <div style={{ fontSize: 12.5, color: theme.warning, marginBottom: 10 }}>You are in Cluster view: Attr and Base Correction work store by store, so they are off here - switch to Store view (top bar) to run them.</div>}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
               {Object.entries(ENGINE_META).map(([key, meta]) => (
-                <label key={key} style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer',
+                <label key={key} title={corrOff ? 'Store-level - switch to Store view (top bar) to run it' : undefined} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 12, cursor: corrOff ? 'not-allowed' : 'pointer', opacity: corrOff ? 0.5 : 1,
                   padding: '10px 14px', borderRadius: 9,
                   background: pipelineChecked[key] ? `${alpha(theme.primary,'12')}` : theme.surfaceAlt,
                   border: `1px solid ${pipelineChecked[key] ? theme.primary : theme.border}`,
@@ -299,7 +303,7 @@ export default function DepartmentGrowthMatrix() {
                 }}>
                   <input
                     type="checkbox"
-                    checked={!!pipelineChecked[key]}
+                    checked={!corrOff && !!pipelineChecked[key]} disabled={corrOff}
                     onChange={e => setPipelineChecked(prev => ({ ...prev, [key]: e.target.checked }))}
                     style={{ marginTop: 2, accentColor: theme.primary }}
                   />
@@ -307,7 +311,7 @@ export default function DepartmentGrowthMatrix() {
                     <div style={{ fontSize: 13, fontWeight: 600, color: theme.textPrimary }}>{meta.label}</div>
                     <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>{meta.desc}</div>
                   </div>
-                  <button type="button" onClick={e => { e.preventDefault(); setShowPipelineModal(false); handleStartPipeline(key) }}
+                  <button type="button" disabled={corrOff} onClick={e => { e.preventDefault(); setShowPipelineModal(false); handleStartPipeline(key) }}
                     style={{ alignSelf: 'center', fontSize: 11.5, fontWeight: 600, padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
                              background: 'none', border: `1px solid ${theme.border}`, color: theme.textSecondary, whiteSpace: 'nowrap' }}>
                     Only this →

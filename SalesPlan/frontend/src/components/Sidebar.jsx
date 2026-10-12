@@ -2,6 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import { theme } from '../theme'
 import Icon from './Icon'
+import { useGrain } from '../grain'
 
 const DIVISION_PLAN_SUB = [
   { label: 'Plan Setup', to: '/division-plan' },
@@ -10,8 +11,8 @@ const DIVISION_PLAN_SUB = [
 const DEPARTMENT_PLAN_SUB = [
   { label: 'Master Setup',    to: '/department-plan' },
   { label: 'Growth Matrix',   to: '/department-plan/growth' },
-  { label: 'Attr Correction', to: '/department-plan/attr-correction', optional: true },
-  { label: 'Base Correction', to: '/department-plan/base-correction', optional: true },
+  { label: 'Attr Correction', to: '/department-plan/attr-correction', optional: true, storeOnly: true },
+  { label: 'Base Correction', to: '/department-plan/base-correction', optional: true, storeOnly: true },
   { label: 'Final Results',   to: '/department-plan/final-results',   final: true },
 ]
 
@@ -143,6 +144,7 @@ const FOLD_KEY = 'sp.nav.collapsed'
 
 export default function Sidebar() {
   const location = useLocation()
+  const [grain] = useGrain()   // Attr / Base Correction are store-level: off in Cluster view (2026-10-12)
   const [collapsed, setCollapsed] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem(FOLD_KEY) || '[]')) } catch { return new Set() }
   })
@@ -224,7 +226,18 @@ export default function Sidebar() {
                   <Icon name={item.icon} />
                   {item.label}
                 </div>
-                {open && item.subItems.map(sub => sub.soon ? (
+                {open && item.subItems.map(sub => sub.storeOnly && grain === 'cluster' ? (
+                  <div key={sub.to} title={`${sub.label} corrects the plan store by store - switch to Store view (top bar) to use it`}
+                    aria-disabled="true" style={{
+                    display: 'flex', alignItems: 'center',
+                    paddingLeft: 44, paddingRight: 18, paddingTop: 6, paddingBottom: 6,
+                    color: 'rgba(255,255,255,0.28)', fontSize: 12.5, cursor: 'not-allowed', userSelect: 'none',
+                    borderLeft: '3px solid transparent',
+                  }}>
+                    <span style={{ flex: 1 }}>{sub.label}</span>
+                    <span style={{ fontSize: 9, background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.35)', borderRadius: 4, padding: '1px 5px', letterSpacing: 0.3, marginLeft: 4 }}>store only</span>
+                  </div>
+                ) : sub.soon ? (
                   <div key={sub.to} style={{
                     display: 'flex', alignItems: 'center',
                     paddingLeft: 36, paddingRight: 20, paddingTop: 7, paddingBottom: 7,
