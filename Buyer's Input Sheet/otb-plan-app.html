@@ -72,7 +72,6 @@ button{font-family:inherit}
 .ni:hover{background:var(--nav3)}
 .ni.act{background:var(--nav-onDark-ac-b);color:var(--nav-onDark-ac);font-weight:700}
 .ni.act::before{content:'';position:absolute;left:-8px;top:7px;bottom:7px;width:3px;border-radius:0 3px 3px 0;background:var(--nav-onDark-ac)}
-.ni .ico{font-size:14px;width:18px;text-align:center}
 .ni .lbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ni .nbdg{font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;background:var(--s3);color:var(--t3)}
 .ni .live-badge{color:var(--st-btn-text,#1F4D3A)}
@@ -128,8 +127,6 @@ button{font-family:inherit}
 
 /* ── CONTROL STRIP ──────────────────────────────────────────────────── */
 .cstrip{height:var(--CH);flex-shrink:0;background:var(--sf);border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px;padding:0 18px;overflow-x:auto}
-.cs-lbl{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--mu);white-space:nowrap;flex-shrink:0}
-.cs-sep{width:1px;height:24px;background:var(--bd);flex-shrink:0}
 .cs-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0}
 .range-badge{background:var(--ac-l);border:1px solid var(--ac-b);border-radius:20px;padding:5px 14px;font-size:11.5px;font-weight:700;color:var(--ac);white-space:nowrap}
 .mpills{display:flex;gap:4px;flex-wrap:wrap}
@@ -138,10 +135,6 @@ button{font-family:inherit}
 .mp.on{background:var(--st-btn,#A8CBB7)!important;color:var(--st-btn-text,#1F4D3A)!important;border-color:var(--st-btn-hover,#95BFA7)!important}
 .sb-mp{padding:5px 2px;border-radius:8px;font-size:10.5px;font-weight:700;cursor:pointer;text-align:center;border:1px solid;transition:.12s;user-select:none}
 .sb-mp:hover{border-color:var(--ac)!important}
-.qbtns{display:flex;gap:4px;flex-shrink:0}
-.qb{height:28px;padding:0 11px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid var(--bd);color:var(--t3);background:transparent;cursor:pointer;transition:.12s;white-space:nowrap;user-select:none}
-.qb:hover{background:var(--ac-l);border-color:var(--ac-b);color:var(--ac)}
-.qb.on{background:var(--ac-l);border-color:var(--ac);color:var(--ac);font-weight:700}
 .vtog{display:flex;border:1px solid var(--bm);border-radius:7px;overflow:hidden;background:var(--s2)}
 .vt{padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;color:var(--t3);background:transparent;border:none;transition:.12s;user-select:none}
 .vt:hover:not(.on){background:var(--s3);color:var(--t2)}
@@ -281,7 +274,6 @@ thead .c0,thead .c1{background:var(--th-bg)!important;color:var(--th-tx);z-index
 .st-mid{color:var(--blk-hist);font-weight:600}
 .st-lo{color:var(--ne);font-weight:600}
 .aop-ref-cell{color:var(--ac)!important;font-weight:600!important}
-.aop-ok{color:var(--po)!important;font-weight:700!important}
 .aop-col-bg{background:color-mix(in srgb,var(--ac) 4%,var(--sf))!important}
 .aop-ov-badge{font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;margin-left:4px}
 .aop-ov-badge.ov{background:var(--ne-b);color:var(--ne)}
@@ -366,7 +358,6 @@ td.aop-col-bg input.gi{background:var(--sf)}
 .cfd-grp-sep{border-top:1px solid var(--bd);margin:3px 0}
 .cfd-sar span{color:var(--ac);font-weight:600}
 .cfd-empty{padding:16px;text-align:center;color:var(--mu);font-size:11.5px}
-.cfd-count{margin-left:auto;font-size:10px;font-weight:600;color:var(--mu);white-space:nowrap}
 
 /* ── FILTER CHIPS (active filters while the panel is closed) ────────── */
 .fchips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
@@ -475,7 +466,6 @@ td.aop-col-bg input.gi{background:var(--sf)}
 .fm-hist{border:1px solid var(--bd);border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.5}
 .fm-hist h4{margin:0 0 6px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mu)}
 .fm-hist ul{margin:0 0 6px;padding-left:18px}.fm-hist li{margin:3px 0}
-.fm-hist li.fm-warn{color:var(--ne);font-weight:600}
 .fm-bar{position:relative;display:inline-block;width:84px;height:8px;margin-right:6px;vertical-align:middle;background:var(--s2);border-radius:4px}
 .fm-bar::after{content:'';position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--t3)}
 .fm-bar i{position:absolute;top:0;bottom:0;border-radius:4px}.fm-bar i.up{background:var(--po)}.fm-bar i.dn{background:var(--ne)}
@@ -516,22 +506,13 @@ td.aop-col-bg input.gi{background:var(--sf)}
 .aop-mtitle{font-size:15px;font-weight:700;color:var(--tx);letter-spacing:-.01em}
 .aop-msub{font-size:11.5px;color:var(--t3);margin-top:4px}
 .aop-mbody{padding:16px 20px;overflow-y:auto;flex:1}
-.aop-hint{font-size:11.5px;color:var(--t3);margin-bottom:14px;line-height:1.6;background:var(--s2);border-radius:8px;padding:10px 12px;border-left:3px solid var(--wa-br)}
-.aop-hint kbd{background:var(--bd);border-radius:3px;padding:1px 5px;font-size:10px;font-weight:700}
 .aop-tbl{border-collapse:collapse;width:100%;font-size:12px}
 .aop-tbl th{background:var(--th-bg);padding:7px 9px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--th-tx);text-align:right;border:1px solid var(--bd);white-space:nowrap}
 .aop-tbl th:first-child{text-align:left;min-width:80px}
 .aop-tbl td{padding:5px 8px;border:1px solid var(--bd);text-align:right;font-variant-numeric:tabular-nums}
 .aop-tbl td:first-child{background:var(--s2);font-weight:700;text-align:left;color:var(--tx);padding:6px 12px;white-space:nowrap}
 .aop-tbl td.aop-rtot{background:var(--ac-l);font-weight:700;color:var(--ac-h);white-space:nowrap}
-.aop-inp{width:64px;padding:4px 6px;text-align:right;border:1px solid var(--bm);border-radius:5px;background:var(--sf);color:var(--tx);font:600 12px/1.4 var(--font);outline:none;-moz-appearance:textfield}
-.aop-inp::-webkit-inner-spin-button,.aop-inp::-webkit-outer-spin-button{-webkit-appearance:none}
-.aop-inp:focus{border-color:var(--ac)}
-.aop-inp.has{border-color:var(--ac-b);background:var(--ac-l);color:var(--ac-h)}
-.aop-inp[readonly]{background:var(--wa-b);border-color:var(--wa-br);color:var(--wa);pointer-events:none}
-.aop-locked-row td:first-child{background:var(--wa-b)!important;color:var(--wa)!important}
 .aop-mft{padding:12px 20px;border-top:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;background:var(--s2)}
-.aop-lock-tag{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;background:var(--wa-b);border:1px solid var(--wa-br);font-size:10.5px;font-weight:700;color:var(--wa);white-space:nowrap;cursor:pointer}
 @keyframes live-pulse{0%,100%{opacity:1}50%{opacity:.25}}
 .live-badge{transition:background .2s}
 .live-badge.flash{animation:live-pulse .5s ease}
@@ -595,15 +576,6 @@ tr:hover .mag-trig{display:inline}
 .vlog-hint{font-size:10.5px;color:var(--mu);font-style:italic;padding:8px 12px;background:var(--s2);border-radius:7px;margin-top:4px;line-height:1.5}
 
 /* ── MISC ───────────────────────────────────────────────────────────── */
-.saved-tag{font-size:10.5px;color:var(--po);font-weight:700;display:flex;align-items:center;gap:4px}
-.saved-tag::before{content:'●';font-size:7px}
-.srch{display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--bm);border-radius:7px;background:var(--sf);color:var(--t2);font-size:12px;min-width:170px;max-width:240px}
-.srch input{border:none;outline:none;background:transparent;color:inherit;font:inherit;width:100%;min-width:0}
-.srch input::placeholder{color:var(--mu)}
-.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:6px;color:var(--mu);padding:40px}
-.empty .eico{font-size:36px;margin-bottom:4px}
-.empty .emsg{font-size:13px;font-weight:700;color:var(--t3)}
-.empty .esub{font-size:11.5px;text-align:center}
 .toast{position:fixed;bottom:20px;right:20px;background:var(--topbar-bg);color:var(--st-surface-2,#FAF9F6);padding:10px 16px;border-radius:9px;font-size:12px;font-weight:600;z-index:9999;opacity:0;transition:opacity .2s;pointer-events:none;box-shadow:var(--shadow-lg)}
 .toast.show{opacity:1}
 ::-webkit-scrollbar{width:8px;height:8px}
@@ -2051,11 +2023,6 @@ function fPct(v){return v==null?'-':v.toFixed(1)+'%'}
 function gCls(v){return v==null?'':v>=0?' gp':' gn'}
 function cols(){return [...S.selM].sort((a,b)=>CAL_ORDER.indexOf(a)-CAL_ORDER.indexOf(b))}
 function monLY(annLY,mi,lyMo){return (lyMo&&lyMo[mi]!=null)?lyMo[mi]:annLY*SEA[mi]}
-function abbrev(arr){
-  if(!arr.length) return '';
-  const a=arr.map(i=>MO[i].slice(0,1));
-  return a.join('');
-}
 
 /* ── MONTH PILLS ───────────────────────────────── */
 const MP_QC=[
@@ -2094,9 +2061,7 @@ function syncRange(){
   const n=c.length;
   const tag=n===0?'None':n===12?'Full FY':n===1?MO[c[0]]:MO[c[0]]+'->'+MO[c[n-1]]+' ('+n+'mo)';
   document.getElementById('rangeBadge').textContent=tag;
-  document.querySelectorAll('.qb').forEach((b,i)=>b.classList.toggle('on',i===S.aqp));
 }
-function qset(arr,idx){S.selM=new Set(arr);S.aqp=idx;buildPills();refresh()}
 
 /* ── FILTER PANEL ──────────────────────────────── */
 function buildFP(){
@@ -2229,12 +2194,6 @@ function _divRescale(dv,mi){
   if(!freeTY)return;
   const f=Math.max(aopMon-lockedTY,0)/freeTY; // never below -100% (audit 2026-10-07)
   free.forEach(({k,ly,ty})=>{S.inputs[k]=(ty*f/ly-1)*100;});
-}
-function _deptAvgST(deptId){
-  const obj=(window._SELLTHRU_LIVE_DEPT||{})[deptId];
-  if(!obj||typeof obj!=='object')return 0;
-  const vals=Object.values(obj).filter(v=>v>0);
-  return vals.length?vals.reduce((a,v)=>a+v,0)/vals.length:0;
 }
 function applyAutoInactive(){
   // Auto-mark depts with no LY sales as inactive — missing ST% alone is not enough (dept may still need planning)
@@ -4969,14 +4928,6 @@ function reapportion(secId,mi){
   if(dv)_divReapp(dv,mi,secId); // pass secId as tempLock so the edited cell anchors the redistribution
 }
 
-/* ── GLOBAL REAPPORTION ────────────────────────── */
-function globalReapportion(){
-  if(!S.aopLocked){toast('Lock AOP first to enable reapportion');return;}
-  const aopMonths=[11,0,1,2];
-  DVDATA.forEach(dv=>aopMonths.forEach(mi=>_divReapp(dv,mi)));
-  refresh();
-  toast('All unlocked AOP months reapportioned ✓');
-}
 
 /* ── REVERT ALL TO LY CONTRIBUTION % ──────────── */
 function revertToLyCont(){
@@ -5008,36 +4959,6 @@ function revertToLyCont(){
   toast('All AOP months reset to LY contribution % ✓');
 }
 
-/* ── SYNC DATA (from local Python sync server) ─── */
-async function syncData(){
-  const btn=document.getElementById('syncbtn');
-  const orig=btn?btn.textContent:'';
-  if(btn){btn.disabled=true;btn.textContent='⟳ Syncing…';}
-  try{
-    const res=await fetch(SYNC_BASE+'/api/sync/sales',
-      {signal:AbortSignal.timeout?AbortSignal.timeout(30000):undefined});
-    if(!res.ok)throw new Error('Server returned '+res.status);
-    const data=await res.json();
-    if(!data.ok)throw new Error(data.error||'Sync failed');
-    if(data.dept_actual_ly){
-      Object.entries(data.dept_actual_ly).forEach(([dv,mos])=>{
-        if(!DEPT_ACTUAL_LY[dv])DEPT_ACTUAL_LY[dv]={};
-        Object.entries(mos).forEach(([mi,val])=>{DEPT_ACTUAL_LY[dv][Number(mi)]=val;});
-      });
-    }
-    refresh();
-    const rows=data.rows_processed!=null?` (${data.rows_processed.toLocaleString()} rows)`:'';
-    toast(`Sales synced ✓ — ${data.source_file||''}${rows}`);
-  }catch(e){
-    const msg=e.name==='TimeoutError'||e.name==='AbortError'
-      ?'Sync server not responding — is sync_server.py running?'
-      :'Sync error: '+(e.message||e);
-    toast(msg);
-    console.error('[syncData]',e);
-  }finally{
-    if(btn){btn.disabled=false;btn.textContent=orig;}
-  }
-}
 
 /* ── REVERT ATTR GROUP TO AOP ──────────────────── */
 function revertToAop(dvId,attr){
@@ -5375,10 +5296,7 @@ function _syncUI(key,status,timeStr){
 
 function _syncTime(){return new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});}
 
-/* ── THEME (light/dark) ──────────────────────────
-   Reuses the existing :root[data-theme=light|dark] token blocks already
-   defined in <style> (see :root / @media(prefers-color-scheme:dark) / the
-   two [data-theme=...] overrides). No stored choice = follow OS setting. */
+/* ── THEME: one theme (2026-09-25); the suite accent drives the derived tints below ── */
 // Chromium has a known invalidation gap: a color-mix() value fed by a JS-mutated
 // custom property doesn't reliably repaint on the 2nd+ change within one page
 // session (it stays pinned to whatever it first resolved to, and can drag other
@@ -5420,17 +5338,6 @@ function _recomputeAccentDerived(){
     document.querySelectorAll('.ni.act').forEach(el=>{el.style.color='';});
     document.querySelectorAll('.live-badge').forEach(el=>{el.style.background='var(--st-btn,#A8CBB7)';});
   }
-}
-function applyTheme(mode){
-  const root=document.documentElement;
-  if(mode==='light'||mode==='dark'){root.setAttribute('data-theme',mode);try{localStorage.setItem('ck_theme',mode);}catch(_){}}
-  else{root.removeAttribute('data-theme');try{localStorage.removeItem('ck_theme');}catch(_){}}
-  const sysDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const effective=mode==='light'||mode==='dark'?mode:(sysDark?'dark':'light');
-  const lb=document.getElementById('mode-light'),db=document.getElementById('mode-dark');
-  if(lb)lb.classList.toggle('on',effective==='light');
-  if(db)db.classList.toggle('on',effective==='dark');
-  _recomputeAccentDerived();
 }
 (function _initTheme(){
   // Single theme (2026-09-25): no dark mode / OS following any more.
@@ -6338,8 +6245,6 @@ function _fmMlaWait(){
   return '';   // a failed refresh with an older check on file still shows that check (+ the error note below)
 }
 const _fmMlaErr=()=>PLANNER.mla?.error&&PLANNER.mla?.data?`<div class="fm-note" style="color:var(--ne)">${_h(PLANNER.mla.error)} Showing the last good check.</div>`:'';
-// band result in plain words - descriptive only (past cycles pooled, no error band; a department counts once per cycle)
-const _fmBandTxt=b=>`averaged ${_x(b.rel_perf)} their plain share the next year${b.rel_perf>=1.05?' (more)':b.rel_perf<=0.95?' (less)':' (about level)'}`;
 const FM_NOISE=0.004;   // ~0.4 pt: on this few cycles a smaller gap between two methods is within noise (review, 9 Oct)
 // user, 12 Oct: "can i visually see ML concept changes in the factor table and ensure that the working is simplified for
 // others to understand similar to the table comparison in factor table" - the history check as a table like the
@@ -6812,47 +6717,6 @@ function buildAopGrid(){
 
   el.innerHTML=srcBanner+selInfo+tblHtml;
 }
-function onAopInput(el){
-  const div=el.dataset.div,mi=parseInt(el.dataset.mi);
-  const raw=parseFloat(el.value)||0;
-  const df=S.aopUnit==='lakhs'?100:1;
-  const inCr=raw>0?raw/df:null; // always store in Crore
-  if(!S.aop[div])S.aop[div]={};
-  S.aop[div][mi]=inCr;
-  el.classList.toggle('has',raw>0);
-  const totCr=CAL_ORDER.reduce((a,m)=>a+(S.aop[div]?.[m]||0),0);
-  const el2=document.getElementById('aop-rtot-'+div);
-  if(el2)el2.textContent=totCr>0?(totCr*df).toFixed(2):'—';
-}
-function onAopPaste(e){
-  e.preventDefault();
-  const text=(e.clipboardData||window.clipboardData).getData('text');
-  const lines=text.trim().split(/\r?\n/).filter(l=>l.trim());
-  if(!lines.length)return;
-  const matrix=lines.map(l=>l.split('\t').map(v=>parseFloat(v.replace(/,/g,''))||0));
-  const divs=AOP_DIVS.map(d=>d.id);
-  const df=S.aopUnit==='lakhs'?100:1;
-  // Try to detect division from first column, else use row order
-  const divMatch={'mens':'mens','ladies':'ladies','kids':'kids',
-    'men':'mens','women':'ladies','girls':'kids','boys':'kids'};
-  const dataRows=matrix.filter(r=>r.length>1);
-  let loaded=0;
-  dataRows.forEach((rowVals,ri)=>{
-    const firstCell=String(rowVals[0]||'').trim().toLowerCase().replace(/,/g,'');
-    const byName=divMatch[firstCell];
-    const div=byName||(ri<AOP_DIVS.length?AOP_DIVS[ri].id:null);
-    if(!div)return;
-    if(!S.aop[div])S.aop[div]={};
-    const start=byName?1:0; // skip name column if matched by name
-    CAL_ORDER.forEach((mi,ci)=>{
-      const raw=parseFloat(String(rowVals[start+ci]||'').replace(/,/g,''))||0;
-      S.aop[div][mi]=raw>0?raw/df:null;
-    });
-    loaded++;
-  });
-  buildAopGrid();
-  toast('Pasted '+loaded+' divisions ✓');
-}
 function syncFromAop(){
   if(!_aopCache||!_aopCache.targets){
     toast('No AOP data available — run AOP Forecaster first');return;
@@ -6896,7 +6760,6 @@ function syncFromAop(){
   refresh();
   toast('AOP synced from Forecaster ✓ ('+applied+' cells)');
 }
-function importAndLockAop(){syncFromAop();}
 
 // Silent version of syncFromAop() — called automatically on every page load.
 // Always applies all MAMJ months regardless of S.selM, never shows a toast.
@@ -7069,32 +6932,6 @@ function syncAopLockStatus(){
   const el=document.getElementById('aopLockStatus');
   if(el)el.textContent=S.aopLocked?'🔒 AOP locked — click Sync AOP to re-sync':'Select MAMJ months then click Sync &amp; Lock';
 }
-function downloadAopTemplate(){
-  const df=S.aopUnit==='lakhs'?100:1;
-  const unitLabel=S.aopUnit==='lakhs'?'Rs. Lakhs':'Rs. Crore';
-  // Calendar order header (Jan→Dec) matching the grid
-  const header='Division ('+unitLabel+'),'+CAL_ORDER.map(mi=>MO[mi]).join(',');
-  const rows=AOP_DIVS.map(dv=>{
-    const vals=CAL_ORDER.map(mi=>{const v=S.aop[dv.id]?.[mi];return v?+(v*df).toFixed(2):'';}).join(',');
-    return dv.nm+','+vals;
-  });
-  const csv=[header,...rows].join('\r\n');
-  const a=document.createElement('a');
-  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
-  a.download='AOP_Template_'+(window.FY_PLAN||'FY').replace(/\s/g,'_')+'.csv';
-  a.click();
-  toast('Template downloaded ✓');
-}
-function importFromFile(input){
-  const file=input.files[0];
-  if(!file)return;
-  const reader=new FileReader();
-  reader.onload=function(e){
-    parseAopCSV(e.target.result,file.name);
-    input.value=''; // reset so same file can be re-selected
-  };
-  reader.readAsText(file);
-}
 /* ── VERSION LOG ────────────────────────────────── */
 const _VL_KEY='bis.plan_versions';
 const _VL_MAX=10;
@@ -7235,69 +7072,6 @@ function loadVersion(idx){
   toast(`Loaded: ${v.label}`);
 }
 
-function parseAopCSV(text,fname){
-  const lines=text.trim().split(/\r?\n/).filter(l=>l.trim());
-  if(!lines.length){toast('File is empty');return;}
-
-  // Detect separator (comma or tab)
-  const sep=lines[0].includes('\t')?'\t':',';
-  // Proper quoted-CSV parser — handles "1,234.56" without breaking on the inner comma
-  const parseRow=l=>{
-    const fields=[];let f='',inQ=false;
-    for(let i=0;i<l.length;i++){
-      const c=l[i];
-      if(c==='"'){if(inQ&&l[i+1]==='"'){f+='"';i++;}else inQ=!inQ;}
-      else if(c===sep&&!inQ){fields.push(f.trim());f='';}
-      else f+=c;
-    }
-    fields.push(f.trim());
-    return fields;
-  };
-  const rows=lines.map(parseRow);
-
-  // Find data rows: first col matches a division name
-  const divMatch={'mens':'mens','ladies':'ladies','kids':'kids',
-    'men':'mens','women':'ladies','girl':'kids','boy':'kids'};
-  const dataRows=rows.filter(r=>divMatch[r[0].toLowerCase()]);
-
-  if(!dataRows.length){
-    // No named rows — assume 3 unnamed data rows (skip header if present)
-    const numericRows=rows.filter(r=>r.slice(1).some(v=>parseFloat(v)>0));
-    if(numericRows.length<3){toast('Could not find division rows (Mens/Ladies/Kids)');return;}
-    dataRows.push(...numericRows.slice(0,3));
-    dataRows.forEach((r,i)=>r.unshift(AOP_DIVS[i].id)); // prepend div id
-  }
-
-  // Detect column order from header row (if any)
-  let colOrder=CAL_ORDER; // default: calendar order Jan→Dec
-  const hdr=rows.find(r=>!divMatch[r[0].toLowerCase()]&&r.length>3);
-  if(hdr){
-    const moMap={};
-    MO.forEach((nm,mi)=>moMap[nm.toLowerCase()]=mi);
-    // Strip year suffix (e.g. "MAR'27" -> "mar") then match first 3 letters
-    const detected=hdr.slice(1).map(h=>{
-      const m=h.toLowerCase().replace(/[^a-z]/g,'').slice(0,3);
-      return moMap.hasOwnProperty(m)?moMap[m]:null;
-    }).filter(v=>v!=null);
-    if(detected.length>0)colOrder=detected; // allow partial month lists
-  }
-
-  const df=S.aopUnit==='lakhs'?100:1;
-  let loaded=0;
-  dataRows.forEach(r=>{
-    const divKey=divMatch[r[0].toLowerCase().replace(/,/g,'')];
-    if(!divKey)return;
-    if(!S.aop[divKey])S.aop[divKey]={};
-    colOrder.forEach((mi,ci)=>{
-      const raw=parseFloat(String(r[ci+1]||'').replace(/,/g,''))||0;
-      S.aop[divKey][mi]=raw>0?raw/df:null; // store in Crore
-    });
-    loaded++;
-  });
-
-  buildAopGrid();
-  toast(`Loaded ${loaded} divisions from "${fname}" ✓`);
-}
 </script>
 <!-- AOP SYNC MODAL -->
 <div class="aop-ov" id="factorOv" style="display:none" onclick="if(event.target===this)this.style.display='none'">
