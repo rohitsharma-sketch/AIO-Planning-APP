@@ -472,8 +472,20 @@ def planner_factor_table_save():
     ft = request.get_json(silent=True) or {}
     err = _factor_table_error(ft)
     mode = ft.get("mode", "matrix")
-    if not err and mode not in ("matrix", "weighted", "continuous"):
-        err = "mode must be matrix, weighted or continuous"
+    if not err and mode not in ("matrix", "weighted", "continuous", "ml"):
+        err = "mode must be matrix, weighted, continuous or ml"
+    ft.pop("ml", None)   # the ML factors are taken from the server's own history check, never from the request
+    if not err and mode == "ml":
+        # user, 2026-10-12: "make the ml suggestion use able like the others" - Ridge regression (ML): its factors are
+        # snapshotted with the factor table, so refreshing the history check never moves the plan until a re-save
+        mla = _read_json(ML_ASSIST_JSON, None)
+        if not mla or not (mla.get("plan") or {}).get("ready"):
+            err = "the history check is not ready - open the factor table and wait for it, then save again"
+        else:
+            ft["ml"] = {"built_at": mla.get("built_at"), "cycle": mla["plan"].get("cycle"),
+                        "test": {"ridge": mla["ridge"]["mean"], "plain": mla["plain"]["mean"], "cycles": len(mla.get("tests", []))},
+                        "factors": {k: {"f": round(float(v["ml_guarded"]), 6), "raw": round(float(v["ml"]), 6),
+                                        "why": v.get("why", [])} for k, v in mla["departments"].items()}}
     if not err and (mode != "matrix" or ft.get("model") is not None):   # continuous uses the model's rules / limits
         err = _model_error(ft.get("model"))
     if not err and (mode == "continuous" or ft.get("cont") is not None):

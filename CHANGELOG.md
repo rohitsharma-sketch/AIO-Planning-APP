@@ -7,6 +7,14 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-12
 
+### BIS: Ridge regression (ML) is a usable 4th method; every method shows its model type
+- **Asked (user):** "make the ml suggestion use able like the others." and "also give it a proper name of the models used"
+- The ML column is now **Ridge regression (ML)** - a weighted ridge regression - with **Use this** and **Settings ›** like Matrix (rule-based lookup table), Weighted builder (weighted scoring model) and Continuous (relative-strength power curve); each column head names its model type.
+- **Use this + Save:** the BIS server (`sync_server.py`) accepts mode `ml` and snapshots the history check's factors (ml_guarded per department, the raw model factor and its reasons, the check's date and test result) into factor_table.json - never from the request. The planner uses that snapshot (`_plannerFactor`), so refreshing the history check does not move the plan until a planner saves again; the settings page says when a newer check is available. Departments without like-for-like history stay neutral 1.00; Phase 2 months use the department's one factor. Divisions still land exactly on the AOP (checked: worst gap 2e-14 L).
+- **Settings tab for it:** what the model is (penalty λ, cycles, damping and limits), its error on the 6 cycles it had not seen vs no factor (19.28% vs 18.62%, better in 1 of 6) and what it learnt (each input's effect for a typical difference, e.g. recent momentum ×1.063, department size ×1.049). Nothing to tune.
+- The Suggested box still ranks the three BIS methods by their back-test (the ML's error comes from a different test) and says so; the "vs ML suggestion" gauge row stays.
+- Checked with a test client on a temporary file: saving `ml` stores 209 factors within 0.8-1.2, a forged `ml` block in the request is ignored, switching back drops it. The live factor table was not changed (still Matrix).
+
 ### BIS: ML suggestion as a 4th column to gauge the three methods
 - **Asked (user):** "i wanted ml to suggest me a 4th way if possible so that i can gauge the 3 existing models too"
 - The Department preview table has a 4th column, **ML suggestion** (advisory badge): the history model's factor for the department (ml_assist.json: learnt from 12 past planning cycles - 25V26 growth, 2-year growth, recent momentum, size - with the BIS damping and 0.8-1.2 limits), worked through the same rows (new "History model (ML)" row, damping, division re-balance, department plan in Rs Cr, "For this department", "How it works" with its back-test: 19.28% vs 18.62% no factor on 6 cycles).
