@@ -43,7 +43,6 @@ router = APIRouter()
 _BASE            = os.path.dirname(__file__)
 ATTR_PLAN_PATH   = os.path.join(_BASE, "..", "attr_corrected_plan.json")
 FINAL_PLAN_PATH  = os.path.join(_BASE, "..", "final_dept_plan.json")
-DEPT_GROWTH_PATH = os.path.join(_BASE, "..", "department_growth.json")
 BASE_PLAN_PATH   = os.path.join(_BASE, "..", "base_corrected_plan.json")
 REVIEW_PATH      = os.path.join(_BASE, "..", "base_correction_review.json")
 
@@ -444,16 +443,6 @@ def apply_base_correction():
         "total_corrected_ty":   round(sum(g["corrected_ty"] for g in gaps), 2),
         "review":               gaps,
     }
-
-
-@router.get("/review")
-def get_review():
-    """Returns the last applied correction review sheet."""
-    if not os.path.exists(REVIEW_PATH):
-        raise HTTPException(status_code=404, detail="No base correction has been applied yet.")
-    with open(REVIEW_PATH) as f:
-        data = json.load(f)
-    return data
 
 
 @router.get("/export")

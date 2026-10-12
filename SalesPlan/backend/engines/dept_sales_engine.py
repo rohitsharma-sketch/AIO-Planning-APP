@@ -38,7 +38,6 @@ router = APIRouter()
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 _BASE     = os.path.dirname(__file__)
-DEPT_GROWTH_PATH   = os.path.join(_BASE, "..", "department_growth.json")
 NEW_DEPT_MAP_PATH  = os.path.join(_BASE, "..", "new_dept_mapping.json")
 FINAL_PLAN_PATH    = os.path.join(_BASE, "..", "final_dept_plan.json")
 
@@ -53,8 +52,6 @@ LY_MONTHS  = ["Mar'26","Apr'26","May'26","Jun'26","Jul'26","Aug'26",
               "Sep'26","Oct'26","Nov'26","Dec'26","Jan'27","Feb'27","Mar'27"]
 MONTH_PAIR = list(zip(TY_MONTHS, LY_MONTHS))
 
-# Keep FY28_MONTHS alias for export compatibility
-FY28_MONTHS = TY_MONTHS
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -687,48 +684,6 @@ def run_plan():
     base = run_dept_plan()
     new_dept_map = _load_new_dept_map()
     return apply_new_dept_adjustments(base, new_dept_map)
-
-
-@router.get("/final-plan")
-def get_final_plan():
-    """
-    Returns the last finalized plan (written by POST /new-depts → Save & Apply).
-    Falls back to live run if not yet finalized.
-    """
-    if os.path.exists(FINAL_PLAN_PATH):
-        with open(FINAL_PLAN_PATH) as f:
-            return json.load(f)
-    # Not yet finalized — compute on the fly
-    base = run_dept_plan()
-    new_dept_map = _load_new_dept_map()
-    return apply_new_dept_adjustments(base, new_dept_map)
-
-
-@router.get("/store/{store_code}/{division}")
-def get_store_division(store_code: str, division: str):
-    """Preview one store × division breakdown."""
-    result = run_dept_plan()
-    store_data = result["stores"].get(store_code.upper())
-    if not store_data:
-        return {"error": f"Store {store_code} not found"}
-    div_data = store_data["divisions"].get(division.upper())
-    if not div_data:
-        return {"error": f"Division {division} not found"}
-    return {
-        "store": store_code.upper(),
-        "division": division.upper(),
-        "is_ssg": store_data["is_ssg"],
-        "ref_store": store_data["ref_store"],
-        "tag": store_data["tag"],
-        **div_data,
-    }
-
-
-@router.get("/meta")
-def get_meta():
-    """Quick health check — returns meta without full calc."""
-    result = run_dept_plan()
-    return result["meta"]
 
 
 @router.get("/export")

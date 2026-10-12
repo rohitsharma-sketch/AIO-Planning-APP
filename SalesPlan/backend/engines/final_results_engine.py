@@ -181,17 +181,6 @@ def _aggregate_plan(plan: dict) -> dict:
     }
 
 
-@router.get("/status")
-def get_pipeline_status():
-    ps = _pipeline_status()
-    return {
-        "pipeline":      {k: ps[k] for k in ("master_setup","buyer_synced","new_depts","attr_correction","base_correction")},
-        "active_source": ps["active_source"],
-        "remark":        ps["remark"],
-        "ready":         ps["active_file"] is not None,
-    }
-
-
 @router.get("/data")
 def get_final_results():
     ps = _pipeline_status()

@@ -410,14 +410,6 @@ def run_phase1(block: str | None = Query(default=None, description="Omit: the bl
     return result
 
 
-@router.get("/phase1-result")
-def get_phase1_result():
-    if os.path.exists(PWW_RESULT_PATH):
-        with open(PWW_RESULT_PATH) as f:
-            return json.load(f)
-    return run_phase1()
-
-
 @router.get("/status")
 def get_status():
     ppo = _load_ppo()

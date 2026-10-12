@@ -222,16 +222,6 @@ class DeptToggle(BaseModel):
     active: bool
 
 
-class DeptContrib(BaseModel):
-    division: str
-    name: str
-    contrib_pct: float
-
-
-class DeptContribBatch(BaseModel):
-    updates: list[DeptContrib]
-
-
 class NewDepartment(BaseModel):
     division: str
     name: str
@@ -285,42 +275,6 @@ def toggle_department(payload: DeptToggle):
     for name in active_names:
         if "contrib_pct" not in dept_states.get(name, {}):
             state[payload.division].setdefault(name, {})["contrib_pct"] = eq[name]
-
-    _save_state(state)
-    return {"ok": True}
-
-
-@router.post("/contrib")
-def update_contrib(payload: DeptContribBatch):
-    state = _load_state()
-    for u in payload.updates:
-        state.setdefault(u.division, {})
-        state[u.division].setdefault(u.name, {})
-        state[u.division][u.name]["contrib_pct"] = u.contrib_pct
-    _save_state(state)
-    config = _get_full_config()
-    summary = {}
-    for div, rows in config.items():
-        active = [r for r in rows if r["active"]]
-        summary[div] = {"contrib_sum": _contrib_sum(rows), "active_depts": len(active)}
-    return {"ok": True, "summary": summary}
-
-
-@router.post("/auto-balance")
-def auto_balance(payload: dict):
-    division = payload.get("division")
-    state = _load_state()
-    master = _build_master()
-
-    divs = [division] if division else list(master.keys())
-    for div in divs:
-        all_rows = master.get(div, [])
-        div_state = state.get(div, {})
-        active_names = [d["name"] for d in all_rows if div_state.get(d["name"], {}).get("active", True)]
-        eq = shares_pct({n: 1.0 for n in active_names})   # equal shares adding to exactly 100
-        state.setdefault(div, {})
-        for name in active_names:
-            state[div].setdefault(name, {})["contrib_pct"] = eq[name]
 
     _save_state(state)
     return {"ok": True}

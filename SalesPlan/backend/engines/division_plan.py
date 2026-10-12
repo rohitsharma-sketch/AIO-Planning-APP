@@ -127,11 +127,6 @@ def get_config():
     }
 
 
-@router.get("/stores")
-def get_stores():
-    return {"stores": _load_store_master()}
-
-
 # ──────────────────────────────────────────────
 # Growth Structure endpoints
 # ──────────────────────────────────────────────

@@ -1,8 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { theme, alpha } from '../theme'
-import PipelineBanner from '../components/PipelineBanner'
-import { currentEngineKey, advancePipeline } from '../pipelineState'
 
 const DIVISIONS = ['KIDS', 'LADIES', 'MENS', 'GM', 'RETAIL']
 
@@ -389,8 +386,6 @@ export default function NewDeptPlan() {
   const [uploading, setUploading]         = useState(false)
   const [uploadMsg, setUploadMsg]         = useState('')
   const [uploadProblems, setUploadProblems] = useState([])
-  const navigate = useNavigate()
-  const inPipeline = currentEngineKey() === 'new-depts'
 
   // New departments from a filled template (user, 2026-10-01 - replaces "Sync from Folder")
   const handleUpload = async (file) => {
@@ -507,10 +502,6 @@ export default function NewDeptPlan() {
       const d = await r.json()
       if (d.ok) {
         setPlanFinalized(d.plan_finalized !== false)
-        if (inPipeline) {
-          navigate(advancePipeline())
-          return
-        }
         setSaveMsg(`Saved & finalized — ${d.saved} entr${d.saved === 1 ? 'y' : 'ies'}`)
         await fetchPreview()
       } else {
@@ -570,7 +561,6 @@ export default function NewDeptPlan() {
 
   return (
     <div style={{ padding: '32px 36px', maxWidth: 1700 }}>
-      {inPipeline && <PipelineBanner currentKey="new-depts" />}
       {/* Header */}
       <div className="sp-sub">
         {/* user, 2026-10-12: new departments flow from BIS (BIS > New departments); this page stays as a config view -
