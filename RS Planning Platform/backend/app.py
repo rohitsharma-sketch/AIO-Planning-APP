@@ -74,6 +74,7 @@ from engines.display_type_engine import router as display_type_router  # noqa: E
 from engines.sync_engine import router as sync_router  # noqa: E402
 from engines.mrp_reapportionment_engine import router as mrp_reapp_router  # noqa: E402
 from engines.reconciliation import router as reconciliation_router  # noqa: E402
+from engines.grain_view import router as grain_router  # noqa: E402
 import store_master as _sm  # noqa: E402
 
 _dep = [Depends(require_login)]
@@ -102,6 +103,8 @@ def _warm_mrp_sales():
 
 # every apportioned total vs its parts, to 8 decimals (2026-09-30)
 app.include_router(reconciliation_router,  prefix="/api/planning/reconciliation",  dependencies=_dep)
+# Store / Cluster view of every stage (user, 2026-10-12) - view only, same numbers
+app.include_router(grain_router,           prefix="/api/planning/grain",           dependencies=_dep)
 
 
 @app.get("/api/planning/store-master", dependencies=_dep)

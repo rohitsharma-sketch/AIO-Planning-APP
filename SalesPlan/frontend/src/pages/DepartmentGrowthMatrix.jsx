@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { theme, alpha } from '../theme'
+import GrainPanel from '../components/GrainPanel'
 import { ENGINE_META, startPipeline } from '../pipelineState'
 import SearchSlicer from '../components/SearchSlicer'
 
@@ -766,6 +767,7 @@ export default function DepartmentGrowthMatrix() {
           </div>
         )}
       </div>
+      <GrainPanel stage="department" division={activeDiv} title={`${activeDiv} department plan`} />
     </div>
   )
 }

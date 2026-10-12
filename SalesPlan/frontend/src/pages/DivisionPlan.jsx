@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { theme } from '../theme'
+import GrainPanel from '../components/GrainPanel'
 
 // Division Plan = the plan BIS shows (user, 2026-09-29): only BIS's months (Mar'27-Jun'27), LY base and plan
 // read from the AOP publish BIS plans on - nothing typed here, nothing past Jun'27. Change the plan in BIS.
@@ -220,6 +221,7 @@ export default function DivisionPlan() {
           </details>
         </>)}
       </div>
+      <GrainPanel stage="division" title="Plan by store / cluster" />
     </div>
   )
 }

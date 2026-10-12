@@ -1,5 +1,6 @@
 import { useLocation } from 'react-router-dom'
 import { theme } from '../theme'
+import { useGrain } from '../grain'
 
 // Title per route - one header for every page (pages used to add their own,
 // and only 3 of 16 did, so the navy frame came and went between pages).
@@ -27,6 +28,7 @@ const TITLES = [
 export default function Header() {
   const { pathname } = useLocation()
   const title = TITLES.find(([p]) => pathname.startsWith(p))?.[1] || 'Home'
+  const [grain, setGrain] = useGrain()   // Store / Cluster for every page (2026-10-12)
   const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
 
   return (
@@ -45,6 +47,16 @@ export default function Header() {
     }}>
       <span style={{ fontSize: 16, fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>{title}</span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div role="group" aria-label="Plan by" title="Show every stage by store or by cluster" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.7)' }}>Plan by</span>
+          <div style={{ display: 'flex', background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 999, padding: 2 }}>
+            {[['store', 'Store'], ['cluster', 'Cluster']].map(([k, t]) => (
+              <button key={k} type="button" aria-pressed={grain === k} onClick={() => setGrain(k)}
+                style={{ border: 'none', cursor: 'pointer', borderRadius: 999, padding: '3px 12px', fontSize: 11.5, fontWeight: 700,
+                  background: grain === k ? '#fff' : 'transparent', color: grain === k ? theme.navy : 'rgba(255,255,255,0.8)' }}>{t}</button>
+            ))}
+          </div>
+        </div>
         <span style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.6)' }}>{today}</span>
         <span style={{
           fontSize: 11.5,

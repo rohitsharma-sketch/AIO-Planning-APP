@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { theme, alpha } from '../theme'
 import SearchSlicer from '../components/SearchSlicer'
+import { useGrain } from '../grain'
 
 const CELL = { fontFamily: theme.fontMono, fontSize: 12, textAlign: 'right', padding: '5px 10px', whiteSpace: 'nowrap' }
 const HDR  = { ...CELL, fontSize: 11, color: theme.textMuted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }
@@ -22,6 +23,8 @@ export default function FinalResults() {
   const [storeFilters, setStoreFilters]   = useState(new Set())
   const [storeTypeFilters, setStoreTypeFilters] = useState(new Set())
   const [viewMode, setViewMode]     = useState('store')  // 'store' | 'dept' | 'dashboard' | 'cluster'
+  const [grain] = useGrain()   // header Store / Cluster switch: the Store and Cluster views follow it (2026-10-12)
+  useEffect(() => { setViewMode(v => (v === 'store' || v === 'cluster' ? grain : v)) }, [grain])
   const [deptDiv, setDeptDiv]         = useState('KIDS')
   const [deptFilters, setDeptFilters] = useState(new Set())
   const [deptStoreFilters, setDeptStoreFilters] = useState(new Set())

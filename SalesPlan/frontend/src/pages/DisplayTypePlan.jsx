@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { theme, alpha } from '../theme'
+import GrainPanel from '../components/GrainPanel'
 
 const API = '/api/planning/display-type'
 
@@ -322,6 +323,7 @@ export default function DisplayTypePlan() {
           {canRun ? 'Click "Run Plan" to compute Display Type plan.' : 'Import contributions above, then run plan.'}
         </div>
       )}
+      <GrainPanel stage="display" title="Display Type plan" />
     </div>
   )
 }

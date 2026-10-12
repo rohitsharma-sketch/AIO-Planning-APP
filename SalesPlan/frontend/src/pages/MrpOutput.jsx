@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { theme, alpha } from '../theme'
+import GrainPanel from '../components/GrainPanel'
 import SearchSlicer from '../components/SearchSlicer'
 
 const DIV_COLOR = {
@@ -510,6 +511,7 @@ export default function MrpOutput() {
           </div>
         </>
       )}
+      <GrainPanel stage="mrp" division={activeDiv || undefined} title={`${activeDiv || ''} MRP plan`.trim()} />
     </div>
   )
 }
