@@ -43,10 +43,22 @@ def _load_store_master():
 PLAN_MONTHS = {202703: "Mar'27", 202704: "Apr'27", 202705: "May'27", 202706: "Jun'27"}
 
 
+def _pick_publish(stamped, hist):
+    """(publish row, stale id): the publish BIS's last Save was stamped with if it is still a saved version's latest,
+    else the live saved version (hist[0]) - user, 12 Oct 2026: "make the division plan fall back to the live AOP
+    version" (BIS was saved on publish 116, then Version 2 was published again as 118, so 116 left the list and the
+    page showed "No AOP published yet"). stale = the stamped id when it fell back, else None."""
+    h = next((x for x in hist if x["id"] == stamped), None) if stamped is not None else None
+    if h is not None or not hist:
+        return h, None
+    return hist[0], stamped
+
+
 def _bis_aop():
     """The AOP publish BIS plans on (user, 29 Sep 2026: "show the plan shown in BIS and not any day further"):
     the one stamped on BIS's last growth push (buyer_department_growth source "buyer_input|aop:<id>"), else the
-    live saved version. Returns (publish id, version label, division_totals, division_base_totals) or Nones."""
+    live saved version (see _pick_publish). Returns (publish id, version label, division_totals,
+    division_base_totals, stale publish id or None) or Nones."""
     from db.base import SessionLocal
     from db.publish_aop_targets import list_aop_history
     from sqlalchemy import text
@@ -55,13 +67,13 @@ def _bis_aop():
             "SELECT source FROM planning_inputs.input_values WHERE lever_key = 'buyer_department_growth' "
             "AND source LIKE '%aop:%' ORDER BY updated_at DESC LIMIT 1")).scalar()
         hist = list_aop_history(db, limit=50)
-        pid = int(src.split("aop:", 1)[1]) if src else (hist[0]["id"] if hist else None)
-        h = next((x for x in hist if x["id"] == pid), None)
+        h, stale = _pick_publish(int(src.split("aop:", 1)[1]) if src else None, hist)
         if h is None:
-            return None, None, {}, {}
+            return None, None, {}, {}, None
+        pid = h["id"]
         bases = db.execute(text("SELECT division_base_totals FROM planning_inputs.aop_publish_history WHERE id = :id"),
                            {"id": pid}).scalar()
-    return pid, h["version_label"], h["division_totals"] or {}, bases or {}
+    return pid, h["version_label"], h["division_totals"] or {}, bases or {}, stale
 
 
 def _plan_rows(totals: dict, bases: dict) -> list:
@@ -112,7 +124,7 @@ def get_compare(publish_id: int):
 @router.get("/config")
 def get_config():
     store_master = _load_store_master()
-    pid, label, totals, bases = _bis_aop()
+    pid, label, totals, bases, stale = _bis_aop()
     divisions = _plan_rows(totals, bases)
     return {
         "divisions": divisions,
@@ -120,7 +132,10 @@ def get_config():
         "n_divisions": len(DIVISIONS),
         "aop_publish_id": pid,
         "version_label": label,
-        "source": f"BIS plan on AOP {label or '-'} (publish {pid})" if pid else "No AOP published yet",
+        "source": ("No AOP published yet" if not pid else
+                   f"Live AOP {label or '-'} (publish {pid}) - BIS was last saved on publish {stale}; Save in BIS to plan on this one"
+                   if stale else f"BIS plan on AOP {label or '-'} (publish {pid})"),
+        "bis_publish_id": stale or pid,
         "total_ly": round(sum(d["ly_mamj"] for d in divisions), 2),
         "total_plan": round(sum(d["plan_mamj"] for d in divisions), 2),
         "versions": _versions(),

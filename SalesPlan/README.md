@@ -15,7 +15,7 @@ imports these routers and serves the built frontend.
 | Input | Source |
 |---|---|
 | LY store × department sales | Calendar app's snapshots in Postgres (`calendar.sales_snapshots`, kinds `trend_shifted_dept` = plan base, `actual_dept`), written by the nightly `calendar_reindex_sync` — no manual import (`actuals_manager.py`) |
-| Division targets | The AOP publish BIS plans on (`division_plan._bis_aop`) |
+| Division targets | The AOP publish BIS was last saved on (`division_plan._bis_aop`); if that version has been published again since, the live saved version - the page says so until BIS is saved again |
 | Department growth | BIS's growth push (`planning_inputs.input_values`, `buyer_department_growth`) |
 | New departments | `backend/new_dept_mapping.json` — edited in BIS › New departments (or the ⚙ New depts config view) |
 | Store master / clusters | Postgres `masterdata.stores` (`store_master.py`) |

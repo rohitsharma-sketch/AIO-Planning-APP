@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-12
 
+### Sales Plan Division Plan falls back to the live AOP version
+- **Asked (user):** "make the division plan fall back to the live AOP version".
+- `division_plan._pick_publish`: the publish stamped on BIS's last Save while it is still a saved version's latest, else the live saved version; the page's source line then reads "Live AOP Version 2 - 25 Sept 2026 (publish 118) - BIS was last saved on publish 116; Save in BIS to plan on this one" and the response carries `bis_publish_id`. Before, BIS's Save of 7 Oct was stamped 116, Version 2 was published again as 118 on 8 Oct, 116 left the version list and the page showed "No AOP published yet" with zeros.
+- Now: KIDS 12,087.67 L LY -> 13,641.52 L (+12.85%), LADIES 11,485.44 -> 12,815.30 (+11.58%), MENS 15,311.21 -> 16,729.96 (+9.27%); total LY 388.8 Cr, plan 431.9 Cr (= the BIS plan). Self-check added to engines/test_division_plan.py; 8010 restarted; README updated.
+- Noticed while comparing: the BIS factor table was saved again at 14:50 today, back to Matrix (version 3) - a user action, left as is. Baseline updated for both.
+
 ### BIS department details: click a month for the planner's working
 - **Asked (user):** "if i click on any month i want to see the working of how the factor was derived".
 - In the department details panel the Month by month rows (and Block) are clickable (mouse, Enter / Space). A month shows its working in six steps: the factor and its inputs (method, sell-thru / LY growth / fill rate and their bands; Phase 1 = one factor for the block, Phase 2 = that month's own), LY and LY cont % of the division, the division's AOP x cont % = AOP share, x factor, the re-balance (every department's step 4 added up, scaled by AOP / total so the division lands exactly on its month AOP), and the Planner Gr% against the buyer's growth. Block shows the summary as before.
