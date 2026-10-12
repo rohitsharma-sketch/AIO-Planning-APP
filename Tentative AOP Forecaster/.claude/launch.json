@@ -5,7 +5,7 @@
       "name": "AOP Frontend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "cwd": "C:\\Users\\A9820\\Documents\\CLaude - New Projects\\Tentative AOP Forecaster\\frontend",
+      "cwd": "C:\\Users\\A9820\\Documents\\CLaude - New Projects\\Ver 2 Developments\\AIO Project\\repos\\RS_planning\\Tentative AOP Forecaster\\frontend",
       "port": 5173
     }
   ]
