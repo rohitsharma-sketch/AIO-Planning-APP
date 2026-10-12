@@ -406,6 +406,12 @@ td.aop-col-bg input.gi{background:var(--sf)}
 .attr-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:9px 14px;margin:0 0 10px;border:1px solid var(--st-line-2,var(--bd));border-radius:8px;background:var(--st-surface-2,var(--sf));font-size:12px;line-height:1.45;color:var(--tx)}
 .attr-bar b{font-weight:800}
 .attr-bar .ab-txt{flex:1 1 320px}
+.attr-bar .ab-mode{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--t2)}
+.ac-sum{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin:0 0 10px;font-size:12px}
+.ac-t{width:100%}.ac-t th,.ac-t td{white-space:nowrap}.ac-t tbody th{text-align:left;font-weight:500}
+.ac-t tr.ac-div th,.ac-t tr.ac-div td{background:var(--s2);font-weight:700}.ac-t tr.ac-attr th,.ac-t tr.ac-attr td{font-weight:600}
+.ac-t tr.ac-warn th,.ac-t tr.ac-warn td{background:var(--ne-b)}.ac-t td.ac-mon{font-size:11px;color:var(--t2);white-space:normal;min-width:150px}
+.ac-foot{display:flex;justify-content:flex-end;gap:8px;padding:10px 20px;border-top:1px solid var(--bd)}
 .attr-bar.editing{border:2px solid var(--ac);background:var(--st-tint,var(--sf))}
 .twrap.attr-editing{outline:2px solid var(--ac);outline-offset:-2px}
 .pl-use:hover{background:var(--st-btn-hover,var(--st-btn))}
@@ -4418,13 +4424,31 @@ function _attrWeightedAvg(dv,attr,mi,getter){
 
 // Sets one Block Growth% for every department in a div+attr group (Uniform cascade),
 // then reapportions sibling ATTRIBUTES in the division to preserve the AOP target.
+// user, 2026-10-12: "preserve the buyer's input and accomodate the attribute changes" - by default an attribute edit
+// scales its departments together (each keeps its gap to the others and its month pattern); "same" = the old uniform set
+const _attrMode=()=>{try{return localStorage.getItem('bis_attr_mix')==='same'?'same':'mix';}catch(_){return 'mix';}};
+function _setAttrMode(m){try{localStorage.setItem('bis_attr_mix',m);}catch(_){}refresh();}
+// the attribute's unlocked cells (all AOP months, or one month) scaled by one factor so the attribute lands on v
+function _attrScale(dv,secs,mis,v){
+  let ly=0,fix=0,free=0;const cells=[];
+  secs.forEach(sec=>mis.forEach(mi=>{const l=_secMonLY(sec,dv,mi),k=sec.id+'__'+mi,ty=l*(1+(S.inputs[k]??0)/100);ly+=l;
+    if(S.locked.has(k))fix+=ty;else if(l>0){free+=ty;cells.push({sec,mi,k,l,ty});}}));
+  const target=ly*(1+v/100);
+  if(!(free>0)||target-fix<0)return null;
+  const f=(target-fix)/free;
+  return cells.map(c=>({...c,g:(c.ty*f/c.l-1)*100}));
+}
 function setAttrBlockGrowth(dvId,attr,val){
   const dv=DVDATA.find(d=>d.id===dvId);
   if(!dv||S.divLocked.has(dv.id))return;
   const v=parseFloat(val);
   const secs=_attrActiveSecs(dv,attr);
+  _attrTouched.add(dv.id+'|'+attr);
   if(!isNaN(v)){
-    secs.forEach(sec=>{AOP_MIS.forEach(mi=>{if(!S.locked.has(sec.id+'__'+mi))S.inputs[sec.id+'__'+mi]=v;});S.buyerSet.add(sec.id);});
+    const sc=_attrMode()==='mix'?_attrScale(dv,secs,AOP_MIS,v):null;
+    if(sc)sc.forEach(c=>{S.inputs[c.k]=c.g;});
+    else secs.forEach(sec=>{AOP_MIS.forEach(mi=>{if(!S.locked.has(sec.id+'__'+mi))S.inputs[sec.id+'__'+mi]=v;});});
+    secs.forEach(sec=>S.buyerSet.add(sec.id));
     const ids=new Set(secs.map(s=>s.id));
     AOP_MIS.forEach(mi=>_divReapp(dv,mi,ids));
   } else {
@@ -4453,6 +4477,7 @@ function setAttrBlockGrowth(dvId,attr,val){
 function toggleAttrLock(dvId,attr,rowKey){
   const dv=DVDATA.find(d=>d.id===dvId);
   if(!dv||S.divLocked.has(dv.id))return;
+  _attrTouched.add(dv.id+'|'+attr);
   const secs=_attrActiveSecs(dv,attr);
   const allLocked=secs.length>0&&secs.every(sec=>AOP_MIS.every(mi=>S.locked.has(sec.id+'__'+mi)));
   if(allLocked){
@@ -4478,27 +4503,44 @@ function _divReapp(dv,mi,tempLock=null){
   // so reapportioned growth% matches the display denominator in buildRows_dept/_blockGrowth
   const activeSecs=dv.secs.filter(s=>!S.hiddenSecs.has(s.id));
   let lockedTY=0;
-  const unlocked=[];
+  const plain=[],buyer=[];
   activeSecs.forEach(sec=>{
     const ly=_secMonLY(sec,dv,mi);
     const k=sec.id+'__'+mi;
     // Locked: explicit 🔒 freeze OR the section(s) being edited / kept (tempLock anchor: an id or a Set)
     const anchor=tempLock instanceof Set?tempLock.has(sec.id):sec.id===tempLock;
     if(S.locked.has(k)||anchor){lockedTY+=ly*(1+(S.inputs[k]??0)/100);}
-    // weight = LY: the buyer's side is the plain AOP share (2026-10-05); the factor lives in the Planner's columns
-    else{unlocked.push({sec,ly,w:ly});}
+    // user, 2026-10-12: "preserve the buyer's input" - a department the buyer typed (S.buyerSet) holds its value; the
+    // ones still on the plain AOP share (weight = LY, factor in the Planner's columns) absorb the difference first
+    else if(S.buyerSet.has(sec.id)&&S.inputs[k]!=null){buyer.push({sec,ly,ty:ly*(1+S.inputs[k]/100)});}
+    else{plain.push({sec,ly,w:ly});}
   });
   const remaining=Math.max(aopMon-lockedTY,0); // audit 2026-10-07: locked cells over AOP drove the rest below -100% (negative sales)
-  const totalUnlockedLY=unlocked.reduce((a,{w})=>a+w,0);
-  if(!totalUnlockedLY)return;
-  unlocked.forEach(({sec,ly,w})=>{
-    const targetTY=remaining*(w/totalUnlockedLY);
-    const newG=ly>0?(targetTY/ly-1)*100:0; // unrounded: a 2 dp growth missed AOP by up to 0.21 L (deep check 2026-09-26)
+  const put=(sec,ly,ty)=>{
+    const newG=ly>0?(ty/ly-1)*100:0; // unrounded: a 2 dp growth missed AOP by up to 0.21 L (deep check 2026-09-26)
     const k=sec.id+'__'+mi;
     S.inputs[k]=newG;
     const inp=document.querySelector(`input[data-key="${k}"]`);
     if(inp){inp.value=+newG.toFixed(2);inp.className='gi'+(newG<0?' neg':' has');}
-  });
+  };
+  const buyerTY=buyer.reduce((a,o)=>a+o.ty,0),plainLY=plain.reduce((a,o)=>a+o.w,0);
+  if(plainLY>0&&remaining-buyerTY>=0){plain.forEach(o=>put(o.sec,o.ly,(remaining-buyerTY)*o.w/plainLY));return;}
+  // not enough room in the plain-share departments: everything unlocked moves together, each keeping its own growth mix
+  const free=plain.map(o=>({sec:o.sec,ly:o.ly,ty:o.ly*(1+(S.inputs[o.sec.id+'__'+mi]??0)/100)})).concat(buyer);
+  const freeTY=free.reduce((a,o)=>a+o.ty,0);
+  if(freeTY>0){const f=remaining/freeTY;free.forEach(o=>put(o.sec,o.ly,o.ty*f));}
+  else if(plainLY>0){plain.forEach(o=>put(o.sec,o.ly,remaining*o.w/plainLY));}
+  else return;
+  if(buyer.length&&Math.abs(remaining-buyerTY)>5e-6)_noteBuyerMoved(buyer.map(o=>o.sec.nm),MO[mi]);
+}
+// one toast after an edit when the AOP could not be met without moving buyer-entered departments
+let _buyerMoved=null;
+function _noteBuyerMoved(names,mon){
+  const first=!_buyerMoved;if(first)_buyerMoved=new Map();
+  names.forEach(n=>{if(!_buyerMoved.has(n))_buyerMoved.set(n,new Set());_buyerMoved.get(n).add(mon);});
+  if(first)setTimeout(()=>{const m=_buyerMoved;_buyerMoved=null;if(!m)return;
+    const L=[...m.entries()].map(([n,ms])=>`${n} (${[...ms].join(', ')})`);
+    toast(`To stay on the AOP these buyer-entered departments had to move too: ${L.slice(0,4).join('; ')}${L.length>4?` and ${L.length-4} more`:''}`);},0);
 }
 
 /* Attribute Summary = a read-only summary of the Buyer's Plan by default - every figure is its departments added up
@@ -4508,21 +4550,112 @@ function _divReapp(dv,mi,tempLock=null){
    planner columns and "Use" as the Buyer's Plan, one row per division x attribute; a change goes to every department
    of that attribute and follows the same rules (AOP held; Phase 2 also holds each department's block total). */
 let _attrEdit=false;
+// user, 2026-10-12: "give it a proper before and after comp" - the plan as it was when the pane opened; Done shows what
+// changed department by department, with Keep or Undo all (back to exactly that state)
+let _attrSnap=null,_attrTouched=new Set();
 function toggleAttrEdit(on){
-  _attrEdit=on??!_attrEdit;refresh();
+  const want=on??!_attrEdit;
+  if(want&&!_attrEdit){_attrSnap={inputs:{...S.inputs},locked:[...S.locked],buyerSet:[...S.buyerSet],at:new Date()};_attrTouched=new Set();}
+  if(!want&&_attrEdit&&_attrSnap&&_attrChanged()){openAttrCompare(true);return;}   // Done: review first
+  _attrEdit=want;if(!want)_attrSnap=null;refresh();
   document.getElementById(_attrEdit?'attr-done':'attr-edit')?.focus({preventScroll:true});
+}
+function _attrChanged(){
+  const P=_attrSnap;if(!P)return false;
+  const ks=new Set([...Object.keys(P.inputs),...Object.keys(S.inputs)]);
+  for(const k of ks)if(Math.abs((S.inputs[k]??0)-(P.inputs[k]??0))>1e-9||(k in S.inputs)!==(k in P.inputs))return true;
+  return P.locked.length!==S.locked.size||P.locked.some(k=>!S.locked.has(k));
+}
+let _acOnly=true;
+function _attrCmpData(){
+  const P=_attrSnap,pre=P.inputs,preB=new Set(P.buyerSet),preL=new Set(P.locked),out=[];
+  const gr=(x,ly)=>ly>0?(x/ly-1)*100:null;
+  DVDATA.forEach(dv=>{
+    const secs=dv.secs.filter(s=>!S.hiddenSecs.has(s.id));if(!secs.length)return;
+    const D={dv,ly:0,b:0,a:0,attrs:[]};
+    [...new Set(secs.map(s=>s.attr||'(Other)'))].forEach(at=>{
+      const A={attr:at,ly:0,b:0,a:0,deps:[],edited:_attrTouched.has(dv.id+'|'+at)};
+      secs.filter(s=>(s.attr||'(Other)')===at).forEach(sec=>{
+        let ly=0,b=0,a=0;let mon=[];const dg=[];
+        AOP_MIS.forEach(mi=>{const l=_secMonLY(sec,dv,mi),k=sec.id+'__'+mi,g0=pre[k]??0,g1=S.inputs[k]??0;
+          ly+=l;b+=l*(1+g0/100);a+=l*(1+g1/100);
+          if(Math.abs(g1-g0)>0.005){mon.push(`${MO[mi]} ${fP(g0)} → ${fP(g1)}`);dg.push(g1-g0);}});
+        // every month moved by about the same: one line instead of four
+        if(dg.length===AOP_MIS.length&&Math.max(...dg)-Math.min(...dg)<0.1){const m=dg.reduce((x,y)=>x+y,0)/dg.length;mon=[`every month ${m>=0?'+':'−'}${Math.abs(m).toFixed(2)} pts`];}
+        const lk0=AOP_MIS.every(mi=>preL.has(sec.id+'__'+mi)),lk1=AOP_MIS.every(mi=>S.locked.has(sec.id+'__'+mi));
+        const ch=Math.abs(a-b)>5e-6||mon.length>0||lk0!==lk1,wasB=preB.has(sec.id);
+        const note=!ch?(lk0?'locked - kept':wasB?'buyer-entered - kept':'unchanged')
+          :A.edited?'edited by attribute':wasB?'buyer-entered - changed':'re-balanced (plain share)';
+        A.deps.push({sec,ly,b,a,mon,ch,note,warn:ch&&wasB&&!A.edited,gb:gr(b,ly),ga:gr(a,ly)});
+        A.ly+=ly;A.b+=b;A.a+=a;
+      });
+      A.ch=A.deps.some(d=>d.ch);D.attrs.push(A);D.ly+=A.ly;D.b+=A.b;D.a+=A.a;
+    });
+    D.ch=D.attrs.some(a=>a.ch);out.push(D);
+  });
+  return out;
+}
+function openAttrCompare(fromDone){
+  if(!_attrSnap)return;
+  let ov=document.getElementById('attrCmpOv');
+  if(!ov){ov=document.createElement('div');ov.id='attrCmpOv';ov.className='aop-ov';ov.style.display='none';
+    ov.onclick=e=>{if(e.target===ov)ov.style.display='none';};document.body.appendChild(ov);}
+  ov.dataset.done=fromDone?'1':'';
+  _renderAttrCompare();ov.style.display='flex';
+}
+function _renderAttrCompare(){
+  const ov=document.getElementById('attrCmpOv');if(!ov)return;
+  const D=_attrCmpData(),gr=(x,ly)=>ly>0?(x/ly-1)*100:null,L=v=>(v>=0?'+':'−')+Math.abs(v*100).toFixed(1)+' L';
+  const pts=(a,b)=>a==null||b==null||Math.abs(b-a)<0.005?'-':`<span class="${gCls(b-a)}">${b-a>=0?'+':'−'}${Math.abs(b-a).toFixed(2)} pts</span>`;
+  const deps=D.flatMap(d=>d.attrs.flatMap(a=>a.deps)),ch=deps.filter(x=>x.ch),warn=ch.filter(x=>x.warn);
+  const nAt=D.reduce((n,d)=>n+d.attrs.filter(a=>a.ch).length,0);
+  const row=(cls,lbl,o,extra,note)=>`<tr class="${cls}"><th scope="row">${lbl}</th><td>${fP(gr(o.b,o.ly))}</td><td>${fP(gr(o.a,o.ly))}</td><td>${pts(gr(o.b,o.ly),gr(o.a,o.ly))}</td>
+    <td>${fCr(o.b)}</td><td>${fCr(o.a)}</td><td class="${Math.abs(o.a-o.b)<5e-6?'':gCls(o.a-o.b)}">${Math.abs(o.a-o.b)<5e-6?'-':L(o.a-o.b)}</td><td class="ac-mon">${extra||''}</td><td>${note||''}</td></tr>`;
+  const body=D.filter(d=>!_acOnly||d.ch).map(d=>row('ac-div',_h(d.dv.nm),d,'',Math.abs(d.a-d.b)<1e-4?'<span class="fm-note">division total held</span>':'')+
+    d.attrs.filter(a=>!_acOnly||a.ch).map(a=>row('ac-attr',`&nbsp;&nbsp;${_h(a.attr)}`,a,'',a.edited?'<b>edited here</b>':'')+
+      a.deps.filter(x=>!_acOnly||x.ch).map(x=>row(x.warn?'ac-warn':'',`&nbsp;&nbsp;&nbsp;&nbsp;${_h(x.sec.nm)}`,x,x.mon.join(' · '),_h(x.note))).join('')).join('')).join('');
+  const done=ov.dataset.done==='1';
+  ov.innerHTML=`<div class="aop-modal" style="width:min(1100px,96vw)">
+    <div class="aop-mhd"><div><div class="aop-mtitle">Attribute edits - before and after</div>
+      <div class="aop-msub">Before = the plan when Edit by attribute was opened (${_attrSnap.at.toLocaleTimeString()}); after = now. Mar-Jun block growth and value per department.</div></div>
+      <div style="display:flex;gap:8px"><button class="tbtn" onclick="document.getElementById('attrCmpOv').style.display='none'">${done?'Back to editing':'&#x2715; Close'}</button></div></div>
+    <div class="aop-mbody" style="overflow:auto">
+      <div class="ac-sum"><span><b>${ch.length}</b> department${ch.length===1?'':'s'} changed in <b>${nAt}</b> attribute${nAt===1?'':'s'}</span>
+        <span class="${warn.length?'gn':''}"><b>${warn.length}</b> buyer-entered department${warn.length===1?'':'s'} changed outside the attributes you edited${warn.length?' - check them':''}</span>
+        <label class="fm-note" style="margin-left:auto"><input type="checkbox"${_acOnly?' checked':''} onchange="_acOnly=this.checked;_renderAttrCompare()"> Only what changed</label></div>
+      <table class="pl-ft ac-t"><thead><tr><th style="text-align:left">Division › attribute › department</th><th>Gr % before</th><th>Gr % after</th><th>Change</th><th>Rs Cr before</th><th>Rs Cr after</th><th>Change</th><th>Months changed</th><th style="text-align:left">Note</th></tr></thead>
+        <tbody>${body||'<tr><td colspan="9" class="fm-note">Nothing changed.</td></tr>'}</tbody></table>
+      <div class="fm-note" style="margin-top:6px">Buyer-entered = a department whose growth a buyer typed (or took with Use). Re-balancing moves departments on the plain AOP share first; a buyer-entered department moves only when the AOP cannot be met otherwise (red rows).</div>
+    </div>
+    <div class="ac-foot"><button class="tbtn dng" onclick="undoAttrEdits()">&#x21B6; Undo all attribute edits</button>
+      <button class="tbtn pri" onclick="keepAttrEdits()">Keep changes${done?' and finish':''}</button></div>
+  </div>`;
+}
+function keepAttrEdits(){
+  const ov=document.getElementById('attrCmpOv'),done=ov?.dataset.done==='1';if(ov)ov.style.display='none';
+  if(done){_attrEdit=false;_attrSnap=null;refresh();toast('Attribute edits kept - Save to store them');}
+}
+function undoAttrEdits(){
+  const P=_attrSnap;if(!P)return;
+  S.inputs={...P.inputs};S.locked=new Set(P.locked);S.buyerSet=new Set(P.buyerSet);
+  const ov=document.getElementById('attrCmpOv'),done=ov?.dataset.done==='1';if(ov)ov.style.display='none';
+  if(done){_attrEdit=false;_attrSnap=null;}else{_attrTouched=new Set();}
+  refresh();toast('Attribute edits undone - the plan is back to how it was when the pane opened');
 }
 function _syncAttrBar(){
   const bar=document.getElementById('attr-bar'),wrap=document.getElementById('twrap');if(!bar)return;
   const on=S.report==='attr';
-  if(!on)_attrEdit=false;
+  if(!on&&_attrEdit&&_attrSnap&&_attrChanged())toast('Left the attribute pane - its edits are kept (Save to store them)');
+  if(!on){_attrEdit=false;_attrSnap=null;}
   bar.style.display=on?'flex':'none';
   bar.classList.toggle('editing',on&&_attrEdit);
   wrap?.classList.toggle('attr-editing',on&&_attrEdit);
   if(!on)return;
   const ph=_planMode()==='month'?'Phase 2 · Month':'Phase 1 · Block';
   bar.innerHTML=_attrEdit
-    ?`<span class="ab-txt"><b>Editing by attribute</b> (${ph}) - a change goes to every department of that attribute and follows the Buyer's Plan rules: locks hold, each month still lands on the division AOP${_planMode()==='month'?', and every department keeps its Phase 1 block total':''}.</span>
+    ?`<span class="ab-txt"><b>Editing by attribute</b> (${ph}) - a change goes to every department of that attribute and follows the Buyer's Plan rules: locks hold, each month still lands on the division AOP${_planMode()==='month'?', and every department keeps its Phase 1 block total':''}; buyer-entered departments elsewhere are held.</span>
+      <label class="ab-mode">A change <select onchange="_setAttrMode(this.value)" aria-label="How an attribute change reaches its departments"><option value="mix"${_attrMode()==='mix'?' selected':''}>keeps each department's mix</option><option value="same"${_attrMode()==='same'?' selected':''}>sets every department the same</option></select></label>
+      <button type="button" class="tbtn" onclick="openAttrCompare(false)">Before / after</button>
       <button type="button" class="tbtn pri" id="attr-done" onclick="toggleAttrEdit(false)">Done</button>`
     :`<span class="ab-txt"><b>Summary of the Buyer's Plan</b> - every figure here is the departments added up by attribute (read-only). Plan in the Buyer's Plan, or edit by attribute here.</span>
       <button type="button" class="tbtn" id="attr-edit" onclick="toggleAttrEdit(true)">&#x270E; Edit by attribute</button>`;
@@ -4530,6 +4663,7 @@ function _syncAttrBar(){
 // Attribute-level "Use": every department of the attribute takes the planner's Gr %, the other attributes re-balance
 function useAttrPlannerGr(dvId,attr){
   const dv=DVDATA.find(d=>d.id===dvId);if(!dv||S.divLocked.has(dv.id))return;
+  _attrTouched.add(dv.id+'|'+attr);
   const secs=_attrActiveSecs(dv,attr),P=_plannerCalc()[dv.id]||{};
   secs.forEach(sec=>{AOP_MIS.forEach(mi=>{const o=P[mi]?.[sec.id],k=sec.id+'__'+mi;if(o&&o.gr!=null&&!S.locked.has(k))S.inputs[k]=o.gr;});S.buyerSet.add(sec.id);});
   const ids=new Set(secs.map(s=>s.id));
@@ -4545,7 +4679,10 @@ function setAttrMonGrowth(dvId,attr,mi,val){
   const dv=DVDATA.find(d=>d.id===dvId);if(!dv||S.divLocked.has(dv.id))return;
   const ids=_attrActiveSecs(dv,attr).map(s=>s.id).filter(id=>!S.locked.has(id+'__'+mi)); // a locked department keeps its month
   if(!ids.length)return;
-  const res=_phase2Edit(ids,mi,v);
+  _attrTouched.add(dv.id+'|'+attr);
+  let vv=v;
+  if(_attrMode()==='mix'){const sc=_attrScale(dv,_attrActiveSecs(dv,attr),[mi],v);if(sc){vv={};sc.forEach(c=>{vv[c.sec.id]=c.g;});}}
+  const res=_phase2Edit(ids,mi,vv);
   document.querySelectorAll('input[data-amkey]').forEach(inp=>{
     if(inp===document.activeElement)return;
     const [rk,m]=inp.dataset.amkey.split('@@'),a=_parseAttrKey(rk),g=_effGrowth({_key:rk,_divId:a.dvId},[+m]);
@@ -4557,6 +4694,7 @@ function setAttrMonGrowth(dvId,attr,mi,val){
 }
 function toggleAttrMonLock(dvId,attr,mi,rowKey){
   const dv=DVDATA.find(d=>d.id===dvId);if(!dv||S.divLocked.has(dv.id))return;
+  _attrTouched.add(dv.id+'|'+attr);
   const ks=_attrActiveSecs(dv,attr).map(s=>s.id+'__'+mi),all=ks.length&&ks.every(k=>S.locked.has(k));
   ks.forEach(k=>{if(all)S.locked.delete(k);else{if(S.inputs[k]==null)S.inputs[k]=0;S.locked.add(k);}});
   _flashLiveBadges();_lkRefresh(rowKey+'@@'+mi);
@@ -4604,8 +4742,9 @@ function _phase2Edit(secIdOrIds,mi,v){
   const dv=DVDATA.find(d=>d.secs.some(s=>s.id===secId));
   if(!dv||S.divLocked.has(dv.id)||!ed.size)return null;
   const months=AOP_MIS.filter(m=>(S.aop[dv.id]?.[m]||0)>0);
+  const vOf=id=>typeof v==='object'?v[id]:v;   // one value, or {secId: value} (attribute pane, keep the mix)
   ed.forEach(id=>S.buyerSet.add(id));
-  if(!months.includes(mi)){ed.forEach(id=>{S.inputs[id+'__'+mi]=v;});return null;}
+  if(!months.includes(mi)){ed.forEach(id=>{S.inputs[id+'__'+mi]=vOf(id);});return null;}
   const secs=dv.secs.filter(s=>!S.hiddenSecs.has(s.id));
   const L=secs.map(s=>months.map(m=>_secMonLY(s,dv,m)));
   const T=secs.map((s,i)=>months.map((m,j)=>L[i][j]*(1+(S.inputs[s.id+'__'+m]??0)/100)));
@@ -4613,18 +4752,33 @@ function _phase2Edit(secIdOrIds,mi,v){
   const C=months.map(m=>S.aop[dv.id][m]);
   const mj=months.indexOf(mi),eis=secs.map((s,i)=>ed.has(s.id)?i:-1).filter(i=>i>=0);
   if(!eis.length)return null;
-  eis.forEach(i=>{S.inputs[secs[i].id+'__'+mi]=v;T[i][mj]=L[i][mj]*(1+v/100);});
-  const fixed=secs.map((s,i)=>months.map((m,j)=>(ed.has(s.id)&&j===mj)||S.locked.has(s.id+'__'+m)||!(L[i][j]>0)));
-  secs.forEach((s,i)=>months.forEach((m,j)=>{if(!fixed[i][j]&&!(T[i][j]>0))T[i][j]=L[i][j]*0.01;})); // a zero can't scale
-  const fit=(cells,target)=>{let fx=0,fr=0;cells.forEach(([i,j])=>{if(fixed[i][j])fx+=T[i][j];else fr+=T[i][j];});
-    if(fr<=0)return 0;const f=Math.max(target-fx,0)/fr;cells.forEach(([i,j])=>{if(!fixed[i][j])T[i][j]*=f;});return Math.abs(fr*f-fr);};
+  eis.forEach(i=>{const vv=vOf(secs[i].id);S.inputs[secs[i].id+'__'+mi]=vv;T[i][mj]=L[i][mj]*(1+vv/100);});
+  const base=secs.map((s,i)=>months.map((m,j)=>(ed.has(s.id)&&j===mj)||S.locked.has(s.id+'__'+m)||!(L[i][j]>0)));
   const rowCells=secs.map((s,i)=>months.map((m,j)=>[i,j])),colCells=months.map((m,j)=>secs.map((s,i)=>[i,j]));
-  for(let it=0;it<500;it++){
-    let err=0;
-    rowCells.forEach((c,i)=>{err=Math.max(err,fit(c,R[i]));});
-    colCells.forEach((c,j)=>{err=Math.max(err,fit(c,C[j]));}); // columns last: AOP per month always exact
-    if(err<1e-9)break;
+  const solve=fx0=>{const X=T.map(r=>r.slice());
+    secs.forEach((s,i)=>months.forEach((m,j)=>{if(!fx0[i][j]&&!(X[i][j]>0))X[i][j]=L[i][j]*0.01;})); // a zero can't scale
+    const fit=(cells,target)=>{let fx=0,fr=0;cells.forEach(([i,j])=>{if(fx0[i][j])fx+=X[i][j];else fr+=X[i][j];});
+      if(fr<=0)return 0;const f=Math.max(target-fx,0)/fr;cells.forEach(([i,j])=>{if(!fx0[i][j])X[i][j]*=f;});return Math.abs(fr*f-fr);};
+    for(let it=0;it<500;it++){
+      let err=0;
+      rowCells.forEach((c,i)=>{err=Math.max(err,fit(c,R[i]));});
+      colCells.forEach((c,j)=>{err=Math.max(err,fit(c,C[j]));}); // columns last: AOP per month always exact
+      if(err<1e-9)break;
+    }
+    const rd=X.map((r,i)=>Math.abs(r.reduce((a,b)=>a+b,0)-R[i])),cd=months.map((m,j)=>Math.abs(X.reduce((a,r)=>a+r[j],0)-C[j]));
+    return {X,fixed:fx0,rd,cd};};
+  // user, 2026-10-12: "preserve the buyer's input" - first try with the buyer-entered departments' months held too
+  const holdM=secs.map((s,i)=>months.map((m,j)=>base[i][j]||(!ed.has(s.id)&&S.buyerSet.has(s.id)&&S.inputs[s.id+'__'+m]!=null)));
+  const b0=solve(base),tol=1e-6*Math.max(1,...C);
+  let res=b0;
+  if(holdM.some((r,i)=>r.some((x,j)=>x&&!base[i][j]))){
+    const h=solve(holdM),ok=h.cd.every(x=>x<=tol)&&h.rd.every((x,i)=>ed.has(secs[i].id)?x<=b0.rd[i]+tol:x<=tol);
+    if(ok)res=h;
+    else{const mv=secs.filter((s,i)=>!ed.has(s.id)&&S.buyerSet.has(s.id)&&months.some((m,j)=>!base[i][j]&&Math.abs(b0.X[i][j]-T[i][j])>5e-6)).map(s=>s.nm);
+      if(mv.length)_noteBuyerMoved(mv,MO[mi]+' (Phase 2)');}
   }
+  const fixed=res.fixed;
+  res.X.forEach((r,i)=>r.forEach((x,j)=>{T[i][j]=x;}));
   secs.forEach((s,i)=>months.forEach((m,j)=>{
     if(fixed[i][j])return;
     const k=s.id+'__'+m,g=(T[i][j]/L[i][j]-1)*100;S.inputs[k]=g;
