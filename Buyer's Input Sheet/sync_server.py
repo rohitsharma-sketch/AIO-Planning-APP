@@ -545,6 +545,66 @@ def planner_ml_assist_rebuild():
     return jsonify({"ok": True, "running": True, "started": started}), 202
 
 
+# Excel export (user, 2026-10-12: "add the before and after comparison to the excel export too"): the page sends its
+# sheets (the current view, the before / after comparison) and gets one .xlsx back. Values only - text is never a formula.
+_XL_FMT = {"pct": "0.00", "cr": "#,##0.00", "l": "#,##0.0", "num": "#,##0.00"}
+
+
+@app.route("/api/export/xlsx", methods=["POST"])
+def export_xlsx():
+    import io
+    import re
+    import xlsxwriter
+    from flask import send_file
+    j = request.get_json(silent=True) or {}
+    sheets = j.get("sheets") or []
+    if not isinstance(sheets, list) or not 0 < len(sheets) <= 10 or sum(len(s.get("rows") or []) for s in sheets) > 200000:
+        return jsonify({"ok": False, "error": "nothing to export (or too much)"}), 400
+    name = re.sub(r"[^A-Za-z0-9 _.-]", "", str(j.get("file") or "BIS export"))[:80] or "BIS export"
+    buf = io.BytesIO()
+    wb = xlsxwriter.Workbook(buf, {"in_memory": True, "strings_to_formulas": False, "strings_to_urls": False})
+    head = wb.add_format({"bold": True, "bg_color": "#EEF1F6", "border": 1, "text_wrap": True, "valign": "top"})
+    fmts = {k: wb.add_format({"num_format": v}) for k, v in _XL_FMT.items()}
+    bold = {k: wb.add_format({"num_format": v, "bold": True}) for k, v in _XL_FMT.items()}
+    bold_t, warn_t = wb.add_format({"bold": True}), wb.add_format({"font_color": "#B42318", "bold": True})
+    used = set()
+    for sh in sheets:
+        title = re.sub(r"[\\/*?:\[\]]", "", str(sh.get("name") or "Sheet"))[:31] or "Sheet"
+        while title in used:
+            title = title[:28] + str(len(used))
+        used.add(title)
+        ws = wb.add_worksheet(title)
+        cols, kinds = sh.get("columns") or [], sh.get("kinds") or []
+        strong, warn = set(sh.get("bold_rows") or []), set(sh.get("warn_rows") or [])
+        r0 = 0
+        for line in sh.get("notes") or []:          # a few lines of explanation above the table
+            ws.write_string(r0, 0, str(line))
+            r0 += 1
+        if r0:
+            r0 += 1
+        for c, h in enumerate(cols):
+            ws.write_string(r0, c, str(h), head)
+            ws.set_column(c, c, 30 if c < int(sh.get("wide") or 1) else 14)
+        rows = sh.get("rows") or []
+        for i, row in enumerate(rows):
+            st, wr = i in strong, i in warn
+            for c, v in enumerate(row):
+                k = kinds[c] if c < len(kinds) else ""
+                if isinstance(v, bool) or v is None or v == "":
+                    continue
+                if isinstance(v, (int, float)):
+                    ws.write_number(r0 + 1 + i, c, v, (bold if st else fmts).get(k))
+                else:
+                    ws.write_string(r0 + 1 + i, c, str(v), warn_t if wr and c == len(row) - 1 else bold_t if st else None)
+        ws.freeze_panes(r0 + 1, int(sh.get("freeze") or 1))
+        if cols and rows:
+            ws.autofilter(r0, 0, r0 + len(rows), len(cols) - 1)
+    wb.close()
+    buf.seek(0)
+    return send_file(buf, as_attachment=True, download_name=name + ".xlsx",
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
 @app.route("/api/planner/fill-rate", methods=["POST"])
 def planner_fill_rate_upload():
     """Refresh fill_rate.json from the uploaded PLAN vs FILL RATE workbook (its DIV - SUMMARY pivot) - admin / planner."""

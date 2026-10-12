@@ -717,7 +717,8 @@ tr:hover .blk-lock,.blk-lock:focus-visible{opacity:1}
             </div>
             <div class="tmenu-sep"></div>
             <button class="tmenu-item" onclick="closeMenus();openVersionLog()" id="history-btn">Plan history<small>Saved versions - load an earlier one</small></button>
-            <button class="tmenu-item" onclick="closeMenus();exportCSV()">Export<small>The current view as a spreadsheet (CSV)</small></button>
+            <button class="tmenu-item" onclick="closeMenus();exportXlsx()">Export to Excel<small>The current view + before / after since the last save (one workbook)</small></button>
+            <button class="tmenu-item" onclick="closeMenus();exportCSV()">Export CSV<small>The current view only</small></button>
           </div>
         </div>
         <div class="tbtn" onclick="openMainCompare()" title="What changed since the last save, department by department - with Undo">Before / after</div>
@@ -4658,7 +4659,7 @@ function _renderAttrCompare(){
         <tbody>${body||'<tr><td colspan="9" class="fm-note">Nothing changed.</td></tr>'}</tbody></table>
       <div class="fm-note" style="margin-top:6px">Buyer-entered = a department whose growth a buyer typed (or took with Use). Re-balancing moves departments on the plain AOP share first; a buyer-entered department moves only when the AOP cannot be met otherwise (red rows).</div>
     </div>
-    <div class="ac-foot">${main?'<button class="tbtn dng" onclick="undoMainEdits()">&#x21B6; Undo all changes since last save</button>'
+    <div class="ac-foot"><button class="tbtn" style="margin-right:auto" onclick="exportXlsx('${main?'main':'attr'}')">&#x2193; Export to Excel</button>${main?'<button class="tbtn dng" onclick="undoMainEdits()">&#x21B6; Undo all changes since last save</button>'
       :'<button class="tbtn dng" onclick="undoAttrEdits()">&#x21B6; Undo all attribute edits</button>'}
       <button class="tbtn pri" onclick="${main?"document.getElementById('attrCmpOv').style.display='none'":'keepAttrEdits()'}">Keep changes${!main&&done?' and finish':''}</button></div>
   </div>`;
@@ -5147,6 +5148,49 @@ function loadState(){
     if(!p.deptSplit)_deptMigrated=_migrateDeptIds(S); // once: saved state is stamped deptSplit from then on
     _applyCustomDepts();
   }catch(e){}
+}
+// user, 2026-10-12: "add the before and after comparison to the excel export too" - Export = one Excel workbook:
+// the current view, the main sheet's before / after (since the last save), and the attribute pane's while it is open
+function _cmpSheet(kind,title){
+  const keep=_cmpKind;_cmpKind=kind;
+  const P=_cmpSnap();if(!P){_cmpKind=keep;return null;}
+  const D=_attrCmpData();_cmpKind=keep;
+  const gr=(x,ly)=>ly>0?(x/ly-1)*100:null,r4=v=>v==null?'':Math.round(v*1e4)/1e4;
+  const rows=[],bold=[],warn=[];
+  const add=(lvl,dv,at,dep,o,mon,note,w)=>{const gb=o.gb!==undefined?o.gb:gr(o.b,o.ly),ga=o.ga!==undefined?o.ga:gr(o.a,o.ly);
+    if(lvl!=='Department')bold.push(rows.length);if(w)warn.push(rows.length);
+    rows.push([lvl,dv,at,dep,r4(gb),r4(ga),gb==null||ga==null?'':r4(ga-gb),r4(o.b),r4(o.a),r4((o.a-o.b)*100),mon,note]);};
+  D.forEach(d=>{add('Division',d.dv.nm,'','',d,'',Math.abs(d.a-d.b)<1e-4?'division total held':'');
+    d.attrs.forEach(a=>{add('Attribute',d.dv.nm,a.attr,'',a,'',a.edited?'edited by attribute':'');
+      a.deps.forEach(x=>add('Department',d.dv.nm,a.attr,x.sec.nm,x,x.mon.join('; '),x.note,x.warn));});});
+  const t=P.at.toLocaleString();
+  return {name:title,wide:4,freeze:4,bold_rows:bold,warn_rows:warn,
+    notes:[kind==='main'?`Before = the plan ${P.how==='saved'?'as last saved':'as it was when the page opened'} (${t}); after = when exported (${new Date().toLocaleString()}).`
+      :`Before = the plan when Edit by attribute was opened (${t}); after = when exported (${new Date().toLocaleString()}).`,
+      'Gr % = Mar-Jun block growth vs LY; Rs Cr = the Mar-Jun plan; change in Rs lakh. Every department is listed - filter the Level or Note column.'+(kind==='main'&&_planEvents.length?' Plan tools used since: '+_planEvents.join(', ')+'.':'')],
+    columns:['Level','Division','Attribute','Department','Gr % before','Gr % after','Change (pts)','Rs Cr before','Rs Cr after','Change (Rs L)','Months changed','Note'],
+    kinds:['','','','','pct','pct','pct','cr','cr','l','',''],rows};
+}
+function _viewSheet(){
+  const defs=buildColDefs(),rows=getRows();
+  const num=v=>{const t=String(v).replace(/[,%+\s]/g,'').replace(/^−/,'-');return /^-?\d+(\.\d+)?$/.test(t)?+t:v;};
+  const out=[];
+  rows.forEach(r=>{if(r._isGrpHd||r._isTot||r._isGrand)return;
+    out.push([r._d2||'',r._name,...defs.map(d=>num(cellVal(r,d).replace(/<[^>]+>/g,'').replace(/Rs.|Cr/g,'').trim()))]);});
+  return {name:'Plan',wide:2,freeze:2,columns:['Division','Section',...defs.map(d=>d.sub)],kinds:['','',...defs.map(()=>'num')],rows:out};
+}
+function exportXlsx(onlyCompare){
+  if(!_mainSnap)_mainSnapTake('opened');
+  const sheets=[];
+  if(!onlyCompare)sheets.push(_viewSheet());
+  const kinds=onlyCompare?[onlyCompare]:['main'].concat(_attrEdit&&_attrSnap?['attr']:[]);
+  kinds.forEach(k=>{const sh=_cmpSheet(k,k==='main'?'Before and after':'Attribute edits');if(sh)sheets.push(sh);});
+  const file='CityKart BIS '+new Date().toISOString().slice(0,10)+(onlyCompare?' - before and after':'');
+  fetch(SYNC_BASE+'/api/export/xlsx',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file,sheets})})
+    .then(r=>{if(!r.ok)throw new Error(r.status);return r.blob();})
+    .then(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=file+'.xlsx';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+      toast('Excel exported ✓ ('+sheets.map(s=>s.name).join(', ')+')');})
+    .catch(()=>{toast('Excel export needs the BIS server - exported the current view as CSV instead');if(!onlyCompare)exportCSV();});
 }
 function exportCSV(){
   const defs=buildColDefs();

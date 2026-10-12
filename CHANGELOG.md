@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-12
 
+### BIS: Excel export with the before / after comparison
+- **Asked (user):** "add the before and after comparison to the excel export too"
+- Data › **Export to Excel** now downloads one workbook (.xlsx): **Plan** (the current view, as the CSV had it, numbers as numbers), **Before and after** (every department since the last save - Level / Division / Attribute / Department, Gr % before / after / change, Rs Cr before / after, change in Rs lakh, months changed, note; division and attribute rows in bold, buyer-entered departments moved without an edit in red; two explanation lines on top; frozen headers and filters) and, while Edit by attribute is open, **Attribute edits** (the pane's own before / after). The comparison pop-up has its own "Export to Excel" (that comparison only). Export CSV is still there (current view only), and is the fallback if the BIS server cannot be reached.
+- Written by the BIS server (`POST /api/export/xlsx`, xlsxwriter, values only - text is never a formula; max 10 sheets / 200k rows). Checked: server test client (formats, "=..." text kept as text, empty request refused) and from the page (Plan 198 rows + Before and after 222 rows -> 33 KB workbook in 1.2 s).
+
 ### BIS: before / after comparison for the main Buyer's Plan
 - **Asked (user):** "add the same before and after comparison to the main bis"
 - New **Before / after** button next to Save. Before = the plan as last saved in this browser (or as the page opened if not saved yet; every Save starts it again); after = now. Same table as the attribute pane - division › attribute › department, Mar-Jun Gr % and Rs Cr before / after / change, months changed, and a note: edited here (typed in the main sheet, Use, lock, magnified editor), edited by attribute, changed by <plan tool> (Reset to AOP share, Re-apportion by LY Cont%, Clear all inputs, Re-seed from AOP, Load a saved version, Revert to AOP - also listed in the header), re-balanced (plain share), made active / inactive, buyer-entered - changed (red, a buyer department moved without being edited). **Undo all changes since last save** puts inputs, locks, buyer-entered flags and active / inactive departments back exactly.
