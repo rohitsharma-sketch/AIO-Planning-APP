@@ -7,6 +7,26 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-12
 
+### BIS: Iteration 1 = the buyer input sheet, exact as typed (data, no code change)
+- **Asked (user):** "I have given you a buyer's input sheet which is used in the current plan replicate the buyer's input on block and make an iteration according to it". The user chose "Exact as typed".
+- Source: `MAMJ'27 DEPARTMENT - AOP (NEW APPROACH) - FOR BUYERS INPUT - UPDATED.xlsx`, sheet DEPT INPUT, column "BUYERS INPUT AT MAMJ".
+- **How it was built:** on the database's Original (25 Sep). The user's list moved into the DB at 17:20, and the user then removed its other iterations.
+  - Each matched department gets the sheet's % as a flat Mar-Jun block growth, set as buyer-entered. 135 departments are set.
+  - Old names reach BIS's split parts (`DEPT_SPLITS`): MSE_PYJAMA, KB_BERMUDA, KB_T-SHIRT H/S, LW_L_PALAZZO, LW_L_JEGGING, L_IN_BRA.
+  - IN-ACTIVE rows that are still live in BIS get -100.
+  - All three divisions are locked, so nothing re-balances back to AOP.
+  - 63 departments have no row in the sheet (mostly winter, tiny MAMJ LY) and keep the Original's value. Months outside Mar-Jun are untouched.
+- **Result on BIS's LY:**
+
+  | Division | Iteration 1 | AOP |
+  |---|---|---|
+  | MENS | Rs 171.79 Cr | 167.30 |
+  | LADIES | Rs 129.19 Cr | 128.15 |
+  | KIDS | Rs 133.41 Cr | 136.42 |
+
+  Stored as Iteration 1, with 135 buyer entries, 3 locked divisions and a note naming the sheet. Not pushed to Sales Plan: Load it, then Save, to send it.
+- The build script is in the session scratchpad (`bis_buyer_iteration.js`); it was dry-run twice before the post.
+
 ### Sales Plan Division Plan: store / cluster breakup right under the division table
 - **Asked (user):** "can i have a cluster/store breakup based on the toggle ?" (screenshot of Division Plan).
 - The breakup panel was already on the page but sat at the very bottom, under the collapsed charts. It is now directly under "Division Plan (as in BIS)", titled **Division plan · by store / by cluster**. It follows the header's Plan by Store | Cluster toggle and its own Store | Cluster buttons. Clusters expand to their stores; a store row shows its cluster's total.
