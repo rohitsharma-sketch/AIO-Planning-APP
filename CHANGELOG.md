@@ -7,6 +7,20 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-12
 
+### BIS: Plan tools -> Re-calibrate to AOP (keeps the buyer's mix)
+- **Asked (user):** "I want to re-calibrate so where is the operation for doing that" (screenshot: Iteration 1 loaded, MENS / LADIES / KIDS off AOP, 236 locked, 135 buyer-set).
+- There was no such action. The chip pointed to Plan tools, but only Reset to AOP share (which clears the buyer entries) and Re-apportion by LY Cont% were there.
+- **New, Plan tools -> Re-calibrate to AOP:** for the division on the open tab, or all three on ALL:
+  - the division lock is removed (only the locks it added; departments the buyer locked stay fixed);
+  - every Mar-Jun month is scaled together onto its AOP (`_divRescale`, the same re-balance BIS runs when it opens);
+  - the buyer's mix and the buyer entries are kept.
+  - It asks first, showing each division's total -> AOP, and says if your own locks hold more than the AOP. Nothing is sent until Save.
+- **Checked in BIS on 5050 with Iteration 1:**
+  - MENS 171.79 -> 167.30, LADIES 129.19 -> 128.15, KIDS 133.41 -> 136.42 (= AOP); chips "= AOP"; 135 buyer entries kept.
+  - ML_JEANS vs M_IN_BRIEF ratio identical every month; block growth now ML_JEANS +11.86%, M_IN_BRIEF +7.14%.
+  - The test browser's state was restored afterwards.
+- **Slip:** my first edit put real line breaks inside a JS string. BIS failed to load for about 2 minutes (5050 and /buyer) until it was fixed; the script was then checked with `node --check`.
+
 ### BIS: Iteration 1 = the buyer input sheet, exact as typed (data, no code change)
 - **Asked (user):** "I have given you a buyer's input sheet which is used in the current plan replicate the buyer's input on block and make an iteration according to it". The user chose "Exact as typed".
 - Source: `MAMJ'27 DEPARTMENT - AOP (NEW APPROACH) - FOR BUYERS INPUT - UPDATED.xlsx`, sheet DEPT INPUT, column "BUYERS INPUT AT MAMJ".

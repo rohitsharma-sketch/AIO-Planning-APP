@@ -733,6 +733,7 @@ tr:hover .blk-lock,.blk-lock:focus-visible{opacity:1}
         <div class="tmenu" id="planMenu">
           <div class="tbtn" onclick="toggleMenu('planMenu',event)">Plan tools <span class="caret">&#x25BE;</span></div>
           <div class="tmenu-pop">
+            <button class="tmenu-item" onclick="closeMenus();recalibrateToAop()">Re-calibrate to AOP<small>Put the division(s) back on their AOP keeping the buyer's mix - every department scaled together; your own locks stay fixed</small></button>
             <button class="tmenu-item" onclick="closeMenus();resetPlanToAop()">Reset to AOP share<small>Every unlocked division back to the plain AOP share; its locks and buyer entries cleared</small></button>
             <button class="tmenu-item" onclick="closeMenus();revertToLyCont()">Re-apportion by LY Cont%<small>Split each division's AOP by LY contribution</small></button>
             <button class="tmenu-item" onclick="closeMenus();toggleLockAllMAMJ()"><span id="lockallbtn">&#x1F512; Lock All</span><small>Lock / unlock every buyer input in the MAMJ block</small></button>
@@ -2247,6 +2248,29 @@ function _afterVisChange(dvs){
   _syncInactiveBadge();
   saveState();
   renderTable();
+}
+// user, 2026-10-12: "I want to re-calibrate so where is the operation" (Iteration 1 = the buyer sheet as typed, divisions
+// locked, off AOP). Puts the division on the open tab (or all three on ALL) back on its AOP and keeps the buyer's mix:
+// the division lock goes (only the locks it added - a department the buyer locked stays fixed), then each AOP month is
+// scaled together (_divRescale, the re-balance opening BIS uses). Buyer entries stay buyer entries; Save sends it.
+function recalibrateToAop(){
+  if(!S.aopLocked){toast('Sync & lock the AOP first - there is no AOP target to re-calibrate to');return;}
+  const dvs=DVDATA.filter(dv=>AOP_DIVS.some(d=>d.id===dv.id)&&(S.divTab==null||S.divTab===dv.id));
+  const tot=dv=>AOP_MIS.reduce((a,mi)=>a+dv.secs.reduce((b,s)=>S.hiddenSecs.has(s.id)?b:b+_secMonLY(s,dv,mi)*(1+(S.inputs[s.id+'__'+mi]??0)/100),0),0);
+  const aop=dv=>AOP_MIS.reduce((a,mi)=>a+(S.aop[dv.id]?.[mi]||0),0);
+  const off=dvs.filter(dv=>Math.abs(tot(dv)-aop(dv))>0.005);
+  if(!off.length){toast(`${dvs.map(d=>d.nm).join(', ')} already on AOP`);return;}
+  const L=off.map(dv=>`${dv.nm}: Rs.${tot(dv).toFixed(2)} Cr -> AOP Rs.${aop(dv).toFixed(2)} Cr${S.divLocked.has(dv.id)?' (division lock removed)':''}`);
+  if(!confirm(`Re-calibrate to AOP?\n\n${L.join('\n')}\n\nEvery department of the division is scaled by the same factor each month, so the buyer's mix is kept; departments you locked yourself stay as they are. Nothing is sent until you Save.`))return;
+  _planEvent('Re-calibrate to AOP');
+  const before=Object.fromEntries(off.map(dv=>[dv.id,tot(dv)]));
+  off.forEach(dv=>{
+    if(S.divLocked.has(dv.id)){S.divLocked.delete(dv.id);(S.divLockAdded[dv.id]||[]).forEach(k=>S.locked.delete(k));delete S.divLockAdded[dv.id];}
+    AOP_MIS.forEach(mi=>_divRescale(dv,mi));
+  });
+  refresh();
+  const still=off.filter(dv=>Math.abs(tot(dv)-aop(dv))>0.005);
+  toast(off.map(dv=>`${dv.nm} Rs.${before[dv.id].toFixed(1)} -> ${tot(dv).toFixed(1)} Cr`).join(' · ')+(still.length?` - ${still.map(d=>d.nm).join(', ')} still off AOP: your own locks hold more than its AOP`:' - on AOP. Save to keep it.'));
 }
 function _divRescale(dv,mi){
   if(S.divLocked.has(dv.id))return;
