@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-12
 
+### BIS: ML suggestion as a 4th column to gauge the three methods
+- **Asked (user):** "i wanted ml to suggest me a 4th way if possible so that i can gauge the 3 existing models too"
+- The Department preview table has a 4th column, **ML suggestion** (advisory badge): the history model's factor for the department (ml_assist.json: learnt from 12 past planning cycles - 25V26 growth, 2-year growth, recent momentum, size - with the BIS damping and 0.8-1.2 limits), worked through the same rows (new "History model (ML)" row, damping, division re-balance, department plan in Rs Cr, "For this department", "How it works" with its back-test: 19.28% vs 18.62% no factor on 6 cycles).
+- New **vs ML suggestion** row under the three methods: this department (same way / other way / about level, and Rs L above or below the ML plan) and all departments (same direction where both move, average gap). Today: Matrix 20 of 76 (26%), Weighted builder 17 of 49 (35%), Continuous 46 of 71 (65%).
+- Not selectable (no "Use this") and left out of the Suggested ranking - it has not beaten no factor on past cycles. Pop-up widened to fit four columns (min(1140px, 96vw)); the tabs bar no longer lets rows show above it.
+
 ### BIS: factor table moved to its own tab in the pop-up
 - **Asked (user):** "move the factor table in a secondary tab in the same pop up" (the bands + 36-row Sell-Thru x LY Growth x Fill Rate table)
 - The Planner's factor table pop-up has two tabs: **Department preview** (opens first - the department comparison, history check, all-departments table) and **Factor table & settings** (fill-rate line + Refresh, a Method switch Matrix / Weighted builder / Continuous with "(in use)", and that method's table / settings). "Settings ›" under each method in the preview opens the second tab on that method. Nothing about the factors changed; Save works from either tab.
