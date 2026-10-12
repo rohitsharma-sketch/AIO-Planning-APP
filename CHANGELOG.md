@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-12
 
+### QA: STR Forecaster
+- **Asked (user):** "run the qa on str forecaster too"
+- Server 8085 up (Landing /str behind sign-in); str_engine self-check OK; uploads in use 5 (fixtures) / 6 (plan), 180 stores, 115 departments, displays TABLE / NON_TABLE, 279 articles, every season 60-180.
+- API: rollups by division / department / cluster x department / department x display / department x display x article / season / tag x attribute - no band below 60 or above 180; values (display, season), editor cells 540 rows (All / TABLE / NON_TABLE, 180 editable), tags, Excel downloads (stores, tags, detailed 1.36 MB in 7 s); edit without sign-in refused (403); unknown layer refused.
+- Rules on the live data: display split adds back (MDQ, fixtures, plan qty, plan Rs); article days never above the department's (every store-month); article stock never above its display type; peak only with a reason; every compared store has all 4 months; band rule 60-180 nearest 30, off floor 60. Articles hold 89.2% of MDQ (the cap).
+- Page: table and layers (Display type, Article offered and added), no LY days column, figure columns Band / STR days / Plan qty / MDQ, Season tags toggle, no 90-180 text; editor Display type column with All / TABLE / NON_TABLE; calculation pop-up Regular | Peak-oriented (no Last year). Console only the expected sign-in 401. Nothing to fix.
+
 ### QA: Sales Plan + BIS (today's changes)
 - **Asked (user):** "run the qa on sales plan and bis"
 - Servers 7800 / 8000 / 8010 / 5050 up; Sales Plan, AOP, Calendar builds fresh; Sales Plan bundle has the New depts config button + banner and no optional New Depts step; Sales Plan new-dept routes present behind sign-in (401 unsigned).
