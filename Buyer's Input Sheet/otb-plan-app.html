@@ -31,7 +31,7 @@
   --wa:#B45309;--wa-b:#FFF7E8;--wa-br:#F5D39A;
   --cy:var(--st-accent,#4F7A66);--cy-b:var(--st-tint,#EAF3EE);--cy-br:var(--st-tint-b,#CBE2D5);
   /* table block hues */
-  --blk-st:#C2410C;--blk-hist:#3D5AD6;--blk-plan:var(--st-accent,#4F7A66);
+  --blk-st:#C2410C;--blk-hist:#3D5AD6;--blk-plan:var(--st-accent,#4F7A66);--blk-guard:#9333EA;
   /* navigation — dark navy, matching --topbar-bg, so sidebar+topbar read as one
      chrome frame around the light working area (2026-09-25: was a white sidebar
      under a navy topbar, two disconnected tones; this is the "not a whole white
@@ -6407,7 +6407,7 @@ function _fmMlHtml(ft,ed){
 // BIS small-department damping and 0.8-1.2 limits = the factor used. One waterfall per department on a log scale
 // around x1.00 (lanes top to bottom in that order), the top reasons, and a summary card per division.
 let _fmMbDiv='all',_fmMbSort='move',_fmMbQ='';
-const FM_MB_STEPS=[['history','History part','var(--blk-hist)'],['st','Sell-thru','var(--blk-st)'],['fill','Fill rate','var(--blk-plan)'],['guard','Damping + limits','var(--t3)']];
+const FM_MB_STEPS=[['history','History part','var(--blk-hist)'],['st','Sell-thru','var(--blk-st)'],['fill','Fill rate','var(--blk-plan)'],['guard','Damping + limits','var(--blk-guard)']];
 const FM_MB_LO=0.7,FM_MB_HI=1.4;
 const _fmMbX=v=>Math.min(Math.max((Math.log(Math.max(v,1e-6))-Math.log(FM_MB_LO))/(Math.log(FM_MB_HI)-Math.log(FM_MB_LO)),0),1)*100;
 function _fmMbRows(M){
@@ -6436,7 +6436,7 @@ function _fmMbHelp(open){
     ['No factor','The plain split - every department simply keeps its last-year share. It is the benchmark: a method is only worth using if its error is lower than this.'],
     ['Better in 2 of 6','Out of the 6 past seasons tested, the method’s split was closer to what sold than no factor in 2 of them.'],
     ['Twice the division’s sell-thru ×1.31','A department selling through twice as fast as the division’s typical department gets 31% more plan from that part (below ×1.00 = less).'],
-    ['Waterfall',`Start at the grey ×1.00 line; each lane is one step, top to bottom: ${sw('var(--blk-hist)')}history, ${sw('var(--blk-st)')}sell-thru, ${sw('var(--blk-plan)')}fill rate, ${sw('var(--t3)')}damping + limits. Right = more plan, left = less. The tall tick ${sw('var(--po)')}/${sw('var(--ne)')} = the factor used.`],
+    ['Waterfall',`Start at the grey ×1.00 line; each lane is one step, top to bottom: ${sw('var(--blk-hist)')}history, ${sw('var(--blk-st)')}sell-thru, ${sw('var(--blk-plan)')}fill rate, ${sw('var(--blk-guard)')}damping + limits. Right = more plan, left = less. The tall tick ${sw('var(--po)')}/${sw('var(--ne)')} = the factor used.`],
     ['Division bars','How many departments get each size of factor, ×0.80 to ×1.20: green = raised, red = cut, grey middle bar = about level (within 2%).'],
     ['Main reasons','The inputs that moved the history part most for that department: green raises it, red lowers it.']];
   return `<details class="fm-mb-help"${open?' open':''} ontoggle="_fmMbHelpOpen=this.open"><summary>How to read this - plain words</summary><dl>${T.map(([a,b])=>`<dt>${_h(a)}</dt><dd>${b}</dd>`).join('')}</dl></details>`;
