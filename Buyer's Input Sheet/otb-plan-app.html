@@ -720,6 +720,7 @@ tr:hover .blk-lock,.blk-lock:focus-visible{opacity:1}
             <button class="tmenu-item" onclick="closeMenus();exportCSV()">Export<small>The current view as a spreadsheet (CSV)</small></button>
           </div>
         </div>
+        <div class="tbtn" onclick="openMainCompare()" title="What changed since the last save, department by department - with Undo">Before / after</div>
         <div class="tbtn pri" onclick="saveState(true)">Save</div>
       </div>
     </div>
@@ -2055,6 +2056,7 @@ function clearFilters(){
   _cfdType=null;
 }
 function toggleSecVis(id){
+  _touchDept(id);
   if(S.hiddenSecs.has(id)){
     S.hiddenSecs.delete(id);
     S.manualInactive.delete(id);
@@ -2375,7 +2377,7 @@ function magCommit(mi,inp){
   const k=_magSec.id+'__'+mi;
   const gr=parseFloat(inp.value);
   if(_planMode()==='month'&&S.aopLocked&&AOP_MIS.includes(mi)){ // Phase 2: the same rule as the grid
-    if(!isNaN(gr)){const res=_phase2Edit(_magSec.id,mi,gr);if(res&&res.stuck)toast(`${res.name}: no other unlocked month - its block total moved ${fCr(res.moved)} Cr`);}
+    if(!isNaN(gr)){_touchDept(_magSec.id);const res=_phase2Edit(_magSec.id,mi,gr);if(res&&res.stuck)toast(`${res.name}: no other unlocked month - its block total moved ${fCr(res.moved)} Cr`);}
   } else {
     if(!isNaN(gr)){S.inputs[k]=gr;S.locked.add(k);S.buyerSet.add(_magSec.id);}else{delete S.inputs[k];S.locked.delete(k);}
     reapportion(_magSec.id,mi);
@@ -4137,6 +4139,7 @@ function _flashLiveBadges(){
 }
 function setGrowth(key,mi,val){
   const k=key+'__'+mi, v=parseFloat(val);
+  _touchDept(key);
   if(_planMode()==='month'&&S.aopLocked&&AOP_MIS.includes(mi)){ // Phase 2: same lock rules as Phase 1, no auto-lock
     if(isNaN(v))return; // a cleared cell keeps its value (blur redraws it)
     const res=_phase2Edit(key,mi,v);
@@ -4176,6 +4179,7 @@ function _blockGrowth(sec,dv){
 function setBlockGrowth(secKey,val){
   const dv=DVDATA.find(d=>d.secs.some(s=>s.id===secKey));
   if(!dv||S.divLocked.has(dv.id))return;
+  _touchDept(secKey);
   const v=parseFloat(val);
   if(!isNaN(v)){
     AOP_MIS.forEach(mi=>{S.inputs[secKey+'__'+mi]=v;});
@@ -4207,6 +4211,7 @@ function setBlockGrowth(secKey,val){
 // audit 2026-10-07: cleared only S.inputs - locks stayed (frozen at 0%) and old buyer entries were "kept" at the next
 // re-seed, so the rest absorbed the whole AOP; a locked division was wiped too
 function clearAllInputs(){
+  _planEvent('Clear all inputs');
   DVDATA.forEach(dv=>{
     if(S.divLocked.has(dv.id))return;
     dv.secs.forEach(sec=>{S.buyerSet.delete(sec.id);for(let mi=0;mi<12;mi++){delete S.inputs[sec.id+'__'+mi];S.locked.delete(sec.id+'__'+mi);}});
@@ -4267,6 +4272,7 @@ function _lkRefresh(key){
 function toggleSecLock(secKey){
   const dv=DVDATA.find(d=>d.secs.some(s=>s.id===secKey));
   if(!dv||S.divLocked.has(dv.id))return;
+  _touchDept(secKey);
   const allLocked=AOP_MIS.every(mi=>S.locked.has(secKey+'__'+mi));
   if(allLocked){
     AOP_MIS.forEach(mi=>S.locked.delete(secKey+'__'+mi));
@@ -4443,7 +4449,7 @@ function setAttrBlockGrowth(dvId,attr,val){
   if(!dv||S.divLocked.has(dv.id))return;
   const v=parseFloat(val);
   const secs=_attrActiveSecs(dv,attr);
-  _attrTouched.add(dv.id+'|'+attr);
+  _attrTouch(dv.id+'|'+attr);
   if(!isNaN(v)){
     const sc=_attrMode()==='mix'?_attrScale(dv,secs,AOP_MIS,v):null;
     if(sc)sc.forEach(c=>{S.inputs[c.k]=c.g;});
@@ -4477,7 +4483,7 @@ function setAttrBlockGrowth(dvId,attr,val){
 function toggleAttrLock(dvId,attr,rowKey){
   const dv=DVDATA.find(d=>d.id===dvId);
   if(!dv||S.divLocked.has(dv.id))return;
-  _attrTouched.add(dv.id+'|'+attr);
+  _attrTouch(dv.id+'|'+attr);
   const secs=_attrActiveSecs(dv,attr);
   const allLocked=secs.length>0&&secs.every(sec=>AOP_MIS.every(mi=>S.locked.has(sec.id+'__'+mi)));
   if(allLocked){
@@ -4555,38 +4561,58 @@ let _attrEdit=false;
 let _attrSnap=null,_attrTouched=new Set();
 function toggleAttrEdit(on){
   const want=on??!_attrEdit;
-  if(want&&!_attrEdit){_attrSnap={inputs:{...S.inputs},locked:[...S.locked],buyerSet:[...S.buyerSet],at:new Date()};_attrTouched=new Set();}
+  if(want&&!_attrEdit){_attrSnap=_snapOf();_attrTouched=new Set();}
   if(!want&&_attrEdit&&_attrSnap&&_attrChanged()){openAttrCompare(true);return;}   // Done: review first
   _attrEdit=want;if(!want)_attrSnap=null;refresh();
   document.getElementById(_attrEdit?'attr-done':'attr-edit')?.focus({preventScroll:true});
 }
-function _attrChanged(){
-  const P=_attrSnap;if(!P)return false;
+// user, 2026-10-12: "add the same before and after comparison to the main bis" - one comparison for both: the attribute
+// pane (before = when the pane opened) and the main sheet (before = the plan as last saved in this browser)
+const _snapOf=()=>({inputs:{...S.inputs},locked:[...S.locked],buyerSet:[...S.buyerSet],hidden:[...S.hiddenSecs],
+  manual:[...(S.manualInactive||[])],at:new Date()});
+let _mainSnap=null,_deptTouched=new Set(),_planEvents=[],_attrTouchedAll=new Set();
+function _mainSnapTake(how){_mainSnap={..._snapOf(),how};_deptTouched=new Set();_planEvents=[];_attrTouchedAll=new Set();}
+function _attrTouch(k){_attrTouched.add(k);_attrTouchedAll.add(k);}
+const _touchDept=id=>{[].concat(id).forEach(x=>_deptTouched.add(x));};
+const _planEvent=t=>{if(!_planEvents.includes(t))_planEvents.push(t);};
+function _snapRestore(P){
+  S.inputs={...P.inputs};S.locked=new Set(P.locked);S.buyerSet=new Set(P.buyerSet);S.hiddenSecs=new Set(P.hidden);
+  if(S.manualInactive)S.manualInactive=new Set(P.manual);
+}
+function _snapChanged(P){
+  if(!P)return false;
   const ks=new Set([...Object.keys(P.inputs),...Object.keys(S.inputs)]);
   for(const k of ks)if(Math.abs((S.inputs[k]??0)-(P.inputs[k]??0))>1e-9||(k in S.inputs)!==(k in P.inputs))return true;
+  if(P.hidden.length!==S.hiddenSecs.size||P.hidden.some(k=>!S.hiddenSecs.has(k)))return true;
   return P.locked.length!==S.locked.size||P.locked.some(k=>!S.locked.has(k));
 }
-let _acOnly=true;
+function _attrChanged(){return _snapChanged(_attrSnap);}
+let _acOnly=true,_cmpKind='attr';
+function _cmpSnap(){return _cmpKind==='main'?_mainSnap:_attrSnap;}
 function _attrCmpData(){
-  const P=_attrSnap,pre=P.inputs,preB=new Set(P.buyerSet),preL=new Set(P.locked),out=[];
-  const gr=(x,ly)=>ly>0?(x/ly-1)*100:null;
+  const P=_cmpSnap(),pre=P.inputs,preB=new Set(P.buyerSet),preL=new Set(P.locked),preH=new Set(P.hidden),out=[];
+  const gr=(x,ly)=>ly>0?(x/ly-1)*100:null,main=_cmpKind==='main',AT=main?_attrTouchedAll:_attrTouched;
+  const tool=main&&_planEvents.length?'changed by '+_planEvents.join(' / '):'';
   DVDATA.forEach(dv=>{
-    const secs=dv.secs.filter(s=>!S.hiddenSecs.has(s.id));if(!secs.length)return;
+    const secs=dv.secs.filter(s=>!S.hiddenSecs.has(s.id)||!preH.has(s.id));if(!secs.length)return;
     const D={dv,ly:0,b:0,a:0,attrs:[]};
     [...new Set(secs.map(s=>s.attr||'(Other)'))].forEach(at=>{
-      const A={attr:at,ly:0,b:0,a:0,deps:[],edited:_attrTouched.has(dv.id+'|'+at)};
+      const A={attr:at,ly:0,b:0,a:0,deps:[],edited:AT.has(dv.id+'|'+at)};
       secs.filter(s=>(s.attr||'(Other)')===at).forEach(sec=>{
+        const h0=preH.has(sec.id),h1=S.hiddenSecs.has(sec.id);
         let ly=0,b=0,a=0;let mon=[];const dg=[];
         AOP_MIS.forEach(mi=>{const l=_secMonLY(sec,dv,mi),k=sec.id+'__'+mi,g0=pre[k]??0,g1=S.inputs[k]??0;
-          ly+=l;b+=l*(1+g0/100);a+=l*(1+g1/100);
-          if(Math.abs(g1-g0)>0.005){mon.push(`${MO[mi]} ${fP(g0)} → ${fP(g1)}`);dg.push(g1-g0);}});
+          ly+=l;b+=h0?0:l*(1+g0/100);a+=h1?0:l*(1+g1/100);
+          if(!h0&&!h1&&Math.abs(g1-g0)>0.005){mon.push(`${MO[mi]} ${fP(g0)} → ${fP(g1)}`);dg.push(g1-g0);}});
         // every month moved by about the same: one line instead of four
         if(dg.length===AOP_MIS.length&&Math.max(...dg)-Math.min(...dg)<0.1){const m=dg.reduce((x,y)=>x+y,0)/dg.length;mon=[`every month ${m>=0?'+':'−'}${Math.abs(m).toFixed(2)} pts`];}
         const lk0=AOP_MIS.every(mi=>preL.has(sec.id+'__'+mi)),lk1=AOP_MIS.every(mi=>S.locked.has(sec.id+'__'+mi));
-        const ch=Math.abs(a-b)>5e-6||mon.length>0||lk0!==lk1,wasB=preB.has(sec.id);
-        const note=!ch?(lk0?'locked - kept':wasB?'buyer-entered - kept':'unchanged')
-          :A.edited?'edited by attribute':wasB?'buyer-entered - changed':'re-balanced (plain share)';
-        A.deps.push({sec,ly,b,a,mon,ch,note,warn:ch&&wasB&&!A.edited,gb:gr(b,ly),ga:gr(a,ly)});
+        const ch=Math.abs(a-b)>5e-6||mon.length>0||lk0!==lk1||h0!==h1,wasB=preB.has(sec.id),mine=main&&_deptTouched.has(sec.id);
+        const note=h0!==h1?(h1?'made inactive':'made active')
+          :!ch?(lk0?'locked - kept':wasB?'buyer-entered - kept':'unchanged')
+          :A.edited?'edited by attribute':mine?'edited here':tool||(wasB?'buyer-entered - changed':'re-balanced (plain share)');
+        const warn=ch&&wasB&&!A.edited&&!mine&&!tool&&h0===h1;
+        A.deps.push({sec,ly,b,a,mon,ch,note,warn,gb:h0?null:gr(b,ly),ga:h1?null:gr(a,ly)});
         A.ly+=ly;A.b+=b;A.a+=a;
       });
       A.ch=A.deps.some(d=>d.ch);D.attrs.push(A);D.ly+=A.ly;D.b+=A.b;D.a+=A.a;
@@ -4595,8 +4621,9 @@ function _attrCmpData(){
   });
   return out;
 }
-function openAttrCompare(fromDone){
-  if(!_attrSnap)return;
+function openAttrCompare(fromDone){if(!_attrSnap)return;_cmpKind='attr';_openCompare(fromDone);}
+function openMainCompare(){if(!_mainSnap)_mainSnapTake('opened');_cmpKind='main';_openCompare(false);}
+function _openCompare(fromDone){
   let ov=document.getElementById('attrCmpOv');
   if(!ov){ov=document.createElement('div');ov.id='attrCmpOv';ov.className='aop-ov';ov.style.display='none';
     ov.onclick=e=>{if(e.target===ov)ov.style.display='none';};document.body.appendChild(ov);}
@@ -4605,31 +4632,44 @@ function openAttrCompare(fromDone){
 }
 function _renderAttrCompare(){
   const ov=document.getElementById('attrCmpOv');if(!ov)return;
+  const main=_cmpKind==='main',P=_cmpSnap();
   const D=_attrCmpData(),gr=(x,ly)=>ly>0?(x/ly-1)*100:null,L=v=>(v>=0?'+':'−')+Math.abs(v*100).toFixed(1)+' L';
   const pts=(a,b)=>a==null||b==null||Math.abs(b-a)<0.005?'-':`<span class="${gCls(b-a)}">${b-a>=0?'+':'−'}${Math.abs(b-a).toFixed(2)} pts</span>`;
   const deps=D.flatMap(d=>d.attrs.flatMap(a=>a.deps)),ch=deps.filter(x=>x.ch),warn=ch.filter(x=>x.warn);
   const nAt=D.reduce((n,d)=>n+d.attrs.filter(a=>a.ch).length,0);
-  const row=(cls,lbl,o,extra,note)=>`<tr class="${cls}"><th scope="row">${lbl}</th><td>${fP(gr(o.b,o.ly))}</td><td>${fP(gr(o.a,o.ly))}</td><td>${pts(gr(o.b,o.ly),gr(o.a,o.ly))}</td>
+  const gB=o=>o.gb!==undefined?o.gb:gr(o.b,o.ly),gA=o=>o.ga!==undefined?o.ga:gr(o.a,o.ly);
+  const row=(cls,lbl,o,extra,note)=>`<tr class="${cls}"><th scope="row">${lbl}</th><td>${fP(gB(o))}</td><td>${fP(gA(o))}</td><td>${pts(gB(o),gA(o))}</td>
     <td>${fCr(o.b)}</td><td>${fCr(o.a)}</td><td class="${Math.abs(o.a-o.b)<5e-6?'':gCls(o.a-o.b)}">${Math.abs(o.a-o.b)<5e-6?'-':L(o.a-o.b)}</td><td class="ac-mon">${extra||''}</td><td>${note||''}</td></tr>`;
   const body=D.filter(d=>!_acOnly||d.ch).map(d=>row('ac-div',_h(d.dv.nm),d,'',Math.abs(d.a-d.b)<1e-4?'<span class="fm-note">division total held</span>':'')+
-    d.attrs.filter(a=>!_acOnly||a.ch).map(a=>row('ac-attr',`&nbsp;&nbsp;${_h(a.attr)}`,a,'',a.edited?'<b>edited here</b>':'')+
+    d.attrs.filter(a=>!_acOnly||a.ch).map(a=>row('ac-attr',`&nbsp;&nbsp;${_h(a.attr)}`,a,'',a.edited?'<b>edited by attribute</b>':'')+
       a.deps.filter(x=>!_acOnly||x.ch).map(x=>row(x.warn?'ac-warn':'',`&nbsp;&nbsp;&nbsp;&nbsp;${_h(x.sec.nm)}`,x,x.mon.join(' · '),_h(x.note))).join('')).join('')).join('');
-  const done=ov.dataset.done==='1';
+  const done=ov.dataset.done==='1',t=P.at.toLocaleString([],{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+  const sub=main?`Before = the plan ${P.how==='saved'?'as last saved':'as it was when this page opened'} (${t}); after = now. Mar-Jun block growth and value per department.${_planEvents.length?` Plan tools used since: ${_h(_planEvents.join(', '))}.`:''}`
+    :`Before = the plan when Edit by attribute was opened (${t}); after = now. Mar-Jun block growth and value per department.`;
   ov.innerHTML=`<div class="aop-modal" style="width:min(1100px,96vw)">
-    <div class="aop-mhd"><div><div class="aop-mtitle">Attribute edits - before and after</div>
-      <div class="aop-msub">Before = the plan when Edit by attribute was opened (${_attrSnap.at.toLocaleTimeString()}); after = now. Mar-Jun block growth and value per department.</div></div>
+    <div class="aop-mhd"><div><div class="aop-mtitle">${main?'Changes since last save - before and after':'Attribute edits - before and after'}</div>
+      <div class="aop-msub">${sub}</div></div>
       <div style="display:flex;gap:8px"><button class="tbtn" onclick="document.getElementById('attrCmpOv').style.display='none'">${done?'Back to editing':'&#x2715; Close'}</button></div></div>
     <div class="aop-mbody" style="overflow:auto">
       <div class="ac-sum"><span><b>${ch.length}</b> department${ch.length===1?'':'s'} changed in <b>${nAt}</b> attribute${nAt===1?'':'s'}</span>
-        <span class="${warn.length?'gn':''}"><b>${warn.length}</b> buyer-entered department${warn.length===1?'':'s'} changed outside the attributes you edited${warn.length?' - check them':''}</span>
+        <span class="${warn.length?'gn':''}"><b>${warn.length}</b> buyer-entered department${warn.length===1?'':'s'} changed without being edited${warn.length?' - check them':''}</span>
         <label class="fm-note" style="margin-left:auto"><input type="checkbox"${_acOnly?' checked':''} onchange="_acOnly=this.checked;_renderAttrCompare()"> Only what changed</label></div>
       <table class="pl-ft ac-t"><thead><tr><th style="text-align:left">Division › attribute › department</th><th>Gr % before</th><th>Gr % after</th><th>Change</th><th>Rs Cr before</th><th>Rs Cr after</th><th>Change</th><th>Months changed</th><th style="text-align:left">Note</th></tr></thead>
         <tbody>${body||'<tr><td colspan="9" class="fm-note">Nothing changed.</td></tr>'}</tbody></table>
       <div class="fm-note" style="margin-top:6px">Buyer-entered = a department whose growth a buyer typed (or took with Use). Re-balancing moves departments on the plain AOP share first; a buyer-entered department moves only when the AOP cannot be met otherwise (red rows).</div>
     </div>
-    <div class="ac-foot"><button class="tbtn dng" onclick="undoAttrEdits()">&#x21B6; Undo all attribute edits</button>
-      <button class="tbtn pri" onclick="keepAttrEdits()">Keep changes${done?' and finish':''}</button></div>
+    <div class="ac-foot">${main?'<button class="tbtn dng" onclick="undoMainEdits()">&#x21B6; Undo all changes since last save</button>'
+      :'<button class="tbtn dng" onclick="undoAttrEdits()">&#x21B6; Undo all attribute edits</button>'}
+      <button class="tbtn pri" onclick="${main?"document.getElementById('attrCmpOv').style.display='none'":'keepAttrEdits()'}">Keep changes${!main&&done?' and finish':''}</button></div>
   </div>`;
+}
+function undoMainEdits(){
+  const P=_mainSnap;if(!P)return;
+  if(!confirm('Put the plan back to how it was '+(P.how==='saved'?'when last saved':'when this page opened')+'?'))return;
+  _snapRestore(P);_deptTouched=new Set();_planEvents=[];_attrTouchedAll=new Set();
+  if(_attrEdit){_attrEdit=false;_attrSnap=null;}
+  document.getElementById('attrCmpOv').style.display='none';
+  refresh();toast('Plan is back to how it was '+(P.how==='saved'?'when last saved':'when this page opened')+' - Save to keep it that way');
 }
 function keepAttrEdits(){
   const ov=document.getElementById('attrCmpOv'),done=ov?.dataset.done==='1';if(ov)ov.style.display='none';
@@ -4637,7 +4677,7 @@ function keepAttrEdits(){
 }
 function undoAttrEdits(){
   const P=_attrSnap;if(!P)return;
-  S.inputs={...P.inputs};S.locked=new Set(P.locked);S.buyerSet=new Set(P.buyerSet);
+  _snapRestore(P);
   const ov=document.getElementById('attrCmpOv'),done=ov?.dataset.done==='1';if(ov)ov.style.display='none';
   if(done){_attrEdit=false;_attrSnap=null;}else{_attrTouched=new Set();}
   refresh();toast('Attribute edits undone - the plan is back to how it was when the pane opened');
@@ -4663,7 +4703,7 @@ function _syncAttrBar(){
 // Attribute-level "Use": every department of the attribute takes the planner's Gr %, the other attributes re-balance
 function useAttrPlannerGr(dvId,attr){
   const dv=DVDATA.find(d=>d.id===dvId);if(!dv||S.divLocked.has(dv.id))return;
-  _attrTouched.add(dv.id+'|'+attr);
+  _attrTouch(dv.id+'|'+attr);
   const secs=_attrActiveSecs(dv,attr),P=_plannerCalc()[dv.id]||{};
   secs.forEach(sec=>{AOP_MIS.forEach(mi=>{const o=P[mi]?.[sec.id],k=sec.id+'__'+mi;if(o&&o.gr!=null&&!S.locked.has(k))S.inputs[k]=o.gr;});S.buyerSet.add(sec.id);});
   const ids=new Set(secs.map(s=>s.id));
@@ -4679,7 +4719,7 @@ function setAttrMonGrowth(dvId,attr,mi,val){
   const dv=DVDATA.find(d=>d.id===dvId);if(!dv||S.divLocked.has(dv.id))return;
   const ids=_attrActiveSecs(dv,attr).map(s=>s.id).filter(id=>!S.locked.has(id+'__'+mi)); // a locked department keeps its month
   if(!ids.length)return;
-  _attrTouched.add(dv.id+'|'+attr);
+  _attrTouch(dv.id+'|'+attr);
   let vv=v;
   if(_attrMode()==='mix'){const sc=_attrScale(dv,_attrActiveSecs(dv,attr),[mi],v);if(sc){vv={};sc.forEach(c=>{vv[c.sec.id]=c.g;});}}
   const res=_phase2Edit(ids,mi,vv);
@@ -4694,7 +4734,7 @@ function setAttrMonGrowth(dvId,attr,mi,val){
 }
 function toggleAttrMonLock(dvId,attr,mi,rowKey){
   const dv=DVDATA.find(d=>d.id===dvId);if(!dv||S.divLocked.has(dv.id))return;
-  _attrTouched.add(dv.id+'|'+attr);
+  _attrTouch(dv.id+'|'+attr);
   const ks=_attrActiveSecs(dv,attr).map(s=>s.id+'__'+mi),all=ks.length&&ks.every(k=>S.locked.has(k));
   ks.forEach(k=>{if(all)S.locked.delete(k);else{if(S.inputs[k]==null)S.inputs[k]=0;S.locked.add(k);}});
   _flashLiveBadges();_lkRefresh(rowKey+'@@'+mi);
@@ -4808,6 +4848,7 @@ function globalReapportion(){
 
 /* ── REVERT ALL TO LY CONTRIBUTION % ──────────── */
 function revertToLyCont(){
+  _planEvent('Re-apportion by LY Cont%');
   if(!S.aopLocked){toast('Lock AOP first to use this');return;}
   const aopMonths=[11,0,1,2];
   DVDATA.forEach(dv=>{
@@ -4868,6 +4909,7 @@ async function syncData(){
 
 /* ── REVERT ATTR GROUP TO AOP ──────────────────── */
 function revertToAop(dvId,attr){
+  _planEvent('Revert to AOP');
   const dv=DVDATA.find(d=>d.id===dvId);
   if(!dv)return;
   if(S.divLocked.has(dv.id)){toast(dv.nm+' is locked - unlock it first');return;}
@@ -4899,6 +4941,7 @@ function revertToAop(dvId,attr){
 // and is unaffected by this — it already targets the AOP total, just splits it via LY
 // contribution % instead of AOP's own growth%; nothing here changes it.
 function resetPlanToAop(){
+  _planEvent('Reset to AOP share');
   if(!Object.keys(S.aopSeeds).length){
     // No AOP has been seeded this session (or it wasn't restored — S.aopSeeds isn't persisted
     // to localStorage, see saveState()) — fall back to the old LFL-based default rather than
@@ -4932,6 +4975,7 @@ function saveState(logVersion=false){
   try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopVersionId:S.aopVersionId,aopUnit:S.aopUnit,locked:[...S.locked],buyerSet:[...S.buyerSet],divLocked:[...S.divLocked],divLockAdded:S.divLockAdded,aopSeeds:S.aopSeeds,aopSeededFrom:S.aopSeededFrom,aopSeedFp:S.aopSeedFp,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],customDepts:S.customDepts,deptSplit:1,at:now.toISOString()}))}catch(e){}
   _updateSaveLabel(now);
   if(logVersion)_maybeSaveVersion(now);
+  _mainSnapTake('saved');   // the main sheet's before / after starts again from what was just saved
   toast('State saved ✓');
   // Sales Plan gets the buyer growth ONLY from the Save button (user, 2026-10-05: "push only on Save") - seeding,
   // version loads, dept moves and auto-saves used to push too, so opening BIS in a fresh browser overwrote the live
@@ -5805,6 +5849,7 @@ function _plannerRowAgg(row,mis){
 // "use" - the department's buyer growth goes back to the planner's Gr % (month by month), the rest re-balance
 function usePlannerGr(secId){
   const dv=DVDATA.find(d=>d.secs.some(s=>s.id===secId));if(!dv||S.divLocked.has(dv.id))return;
+  _touchDept(secId);
   AOP_MIS.forEach(mi=>{const o=_plannerCalc()[dv.id]?.[mi]?.[secId];if(o&&o.gr!=null)S.inputs[secId+'__'+mi]=o.gr;});
   S.buyerSet.add(secId); // taking the planner's Gr % is the buyer's choice - a re-seed keeps it
   AOP_MIS.forEach(mi=>_divReapp(dv,mi,secId));
@@ -6452,6 +6497,7 @@ function saveFactorTable(){
 }
 
 loadState();
+_mainSnapTake('opened');
 // Populate auto-saved label from persisted timestamp
 (function(){try{const p=JSON.parse(localStorage.getItem('ck_otb_state')||'{}');if(p.at)_updateSaveLabel(new Date(p.at));}catch(_){}})();
 _loadLayout();
@@ -6787,6 +6833,7 @@ function _aopSeedFp(){return JSON.stringify([S.aop,S.aopBase,_lyHash(),'z3']);} 
 // are re-balanced so each division x month still equals AOP. Without it (the "Re-seed plan" button) every cell
 // is reset to AOP and its lock cleared (it used to keep the lock flag on a value it had overwritten).
 function seedPlanFromAop(keepLocked=false){
+  _planEvent('Re-seed from AOP');
   if(!S.aopLocked){toast('Lock AOP first');return;}
   let seeded=0;
   S.aopSeeds={};
@@ -6988,6 +7035,7 @@ function _renderVersionLog(){
   }).join('')+'<div class="vlog-hint">Loading a version replaces your current plan inputs. Save first if you want to preserve the current state.</div>';
 }
 function loadVersion(idx){
+  _planEvent('Load a saved version');
   const vers=_vlLoad();
   if(idx<0||idx>=vers.length)return;
   const v=vers[idx];
