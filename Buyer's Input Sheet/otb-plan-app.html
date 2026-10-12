@@ -471,6 +471,47 @@ td.aop-col-bg input.gi{background:var(--sf)}
 .fm-bar i{position:absolute;top:0;bottom:0;border-radius:4px}.fm-bar i.up{background:var(--po)}.fm-bar i.dn{background:var(--ne)}
 .fm-ht td{min-width:0}.fm-ht tbody th{white-space:normal;min-width:150px}.fm-ht td:nth-child(4){white-space:nowrap;min-width:190px}
 .fm-bar.sm{width:44px;height:6px;margin-right:4px}.fm-ht-how{font-weight:400;max-width:240px}
+/* ML breakdown tab (12 Oct): waterfall of history x sell-thru x fill x damping on one log scale around x1.00 */
+.fm-mb-legend{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;font-size:11px;color:var(--t2);margin:6px 0 10px}
+.fm-mb-legend i{display:inline-block;width:14px;height:6px;border-radius:3px;margin-right:5px;vertical-align:middle}
+.fm-mb-divs{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-bottom:10px}
+.fm-mb-dc{border:1px solid var(--bd);border-radius:9px;padding:9px 11px;font-size:11px;color:var(--t2);display:grid;gap:5px}
+.fm-mb-dc b.n{font-size:13px;color:var(--tx)}
+.fm-mb-hist{display:flex;align-items:flex-end;gap:2px;height:34px;border-bottom:1px solid var(--bd)}
+.fm-mb-hist span{flex:1;background:var(--bd);border-radius:2px 2px 0 0;min-height:1px}
+.fm-mb-hist span.up{background:var(--po)}.fm-mb-hist span.dn{background:var(--ne)}
+.fm-mb-axis{display:flex;justify-content:space-between;font-size:9.5px;color:var(--mu)}
+.fm-mb-ctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 8px}
+.fm-mb-ctl input[type=search]{border:1px solid var(--bm);border-radius:6px;padding:5px 8px;font:inherit;font-size:12px;background:var(--sf);color:var(--tx);min-width:180px}
+.fm-mb-ctl select{border:1px solid var(--bm);border-radius:6px;padding:4px 6px;font:inherit;font-size:12px;background:var(--sf);color:var(--tx)}
+.fm-mb-wrap{max-height:56vh;overflow:auto;border:1px solid var(--bd);border-radius:8px}
+.fm-mb-t{width:100%;border-collapse:collapse;font-size:11.5px}
+.fm-mb-t th{position:sticky;top:0;background:var(--s2);z-index:1;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--mu);text-align:right;padding:6px 8px;border-bottom:1px solid var(--bd);white-space:nowrap}
+.fm-mb-t td{padding:5px 8px;border-bottom:1px solid var(--bd);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.fm-mb-t th:first-child,.fm-mb-t td:first-child,.fm-mb-t td.why,.fm-mb-t th.why{text-align:left}
+.fm-mb-t td.why{white-space:normal;min-width:200px}
+.fm-mb-t td .dv{display:block;font-size:9.5px;color:var(--mu)}
+.fm-mb-t td.f b{font-size:12.5px}.fm-mb-t td.f b.up{color:var(--po)}.fm-mb-t td.f b.dn{color:var(--ne)}
+.fm-mb-t td.nc{color:var(--mu)}
+.fm-mb-track{position:relative;display:block;width:190px;height:32px;background:var(--s2);border-radius:5px}
+.fm-mb-track b{position:absolute;top:0;bottom:0;width:1px;background:var(--t3)}
+.fm-mb-track i{position:absolute;height:5px;border-radius:3px}
+.fm-mb-track em{position:absolute;top:-2px;bottom:-2px;width:3px;margin-left:-1px;border-radius:2px}
+.fm-mb-track em.up{background:var(--po)}.fm-mb-track em.dn{background:var(--ne)}
+.fm-mb-scale{position:relative;display:block;width:190px;height:12px;font-size:9px;font-weight:600;color:var(--mu);text-transform:none;letter-spacing:0}
+.fm-mb-scale span{position:absolute;transform:translateX(-50%)}
+.fm-mb-chip{display:inline-block;margin:1px 3px 1px 0;padding:1px 6px;border-radius:9px;font-size:10.5px;background:var(--s2);color:var(--t2)}
+.fm-mb-chip.up{background:color-mix(in srgb,var(--po) 14%,var(--sf));color:var(--po)}
+.fm-mb-chip.dn{background:color-mix(in srgb,var(--ne) 14%,var(--sf));color:var(--ne)}
+.fm-mb-open{all:unset;cursor:pointer;font-size:10.5px;font-weight:600;color:var(--ac)}
+.fm-mb-open:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.fm-mb-help{border:1px solid var(--bd);border-radius:9px;background:var(--s2);margin:8px 0 10px;font-size:11.5px;color:var(--t2)}
+.fm-mb-help summary{cursor:pointer;padding:8px 12px;font-weight:700;color:var(--tx)}
+.fm-mb-help summary:focus-visible{outline:2px solid var(--ac);outline-offset:-2px}
+.fm-mb-help dl{display:grid;grid-template-columns:minmax(120px,170px) 1fr;gap:6px 14px;margin:0;padding:2px 12px 12px}
+.fm-mb-help dt{font-weight:700;color:var(--tx)}.fm-mb-help dd{margin:0;line-height:1.5}
+.fm-mb-help i.sw{display:inline-block;width:12px;height:6px;border-radius:3px;vertical-align:middle;margin:0 3px}
+@media (max-width:640px){.fm-mb-help dl{grid-template-columns:1fr}.fm-mb-help dd{margin-bottom:6px}}
 .fm-ag-y{color:var(--po);font-weight:600}.fm-ag-x{color:var(--ne);font-weight:600}.fm-ag-n{color:var(--t2)}
 .fm-hall-wrap{max-height:340px;overflow:auto;border:1px solid var(--bd);border-radius:8px}
 .fm-hall-t td,.fm-hall-t th{white-space:nowrap}
@@ -5982,8 +6023,9 @@ function _renderFactorTable(){
   // user, 12 Oct: "move the factor table in a secondary tab in the same pop up" - Preview (department + history) first,
   // the factor table / method settings on their own tab
   const tab=(v,t)=>`<button type="button" role="tab" class="fm-vtab${_fmView===v?' on':''}" aria-selected="${_fmView===v}" onclick="_fmView='${v}';_renderFactorTable();document.getElementById('factorBody').scrollTop=0">${t}</button>`;
-  const tabs=`<div class="fm-vtabs" role="tablist">${tab('preview','Department preview')}${tab('table','Factor table &amp; settings')}</div>`;
+  const tabs=`<div class="fm-vtabs" role="tablist">${tab('preview','Department preview')}${tab('table','Factor table &amp; settings')}${tab('mlbreak','ML breakdown')}</div>`;
   if(_fmView==='preview'){el.innerHTML=tabs+_fmPickHtml(ft,ed);return;}
+  if(_fmView==='mlbreak'){el.innerHTML=tabs+_fmMlBreakHtml(ft);return;}
   const meth=FM_METHODS.map(([k,nm,t])=>`<button type="button" class="fm-vtab sm${_fmTab===t?' on':''}" aria-pressed="${_fmTab===t}" onclick="_fmTab='${t}';_renderFactorTable()">${nm}${ft.mode===k?' <span class="fm-note">(in use)</span>':''}</button>`).join('');
   el.innerHTML=tabs+`<div class="fm-vtabs sub"><span class="fm-note">Method:</span>${meth}</div>
     <div class="fm-fill">${PLANNER.fill?`Fill rates: <b>${Object.keys(PLANNER.fill.departments||{}).length}</b> departments from ${_h(PLANNER.fill.source)} (${_h(PLANNER.fill.column)}) · ${_h(PLANNER.fill.imported_at)}`:'<span style="color:var(--ne)">Fill-rate file not loaded yet.</span>'}
@@ -6343,6 +6385,7 @@ function _fmMlHtml(ft,ed){
     <div class="fm-rule"><b>Ridge regression (ML)</b> - one weighted ridge regression <b>per division</b>: MENS, LADIES and KIDS each have their own model, learnt only from that division's departments, and every clue compares a department with the middle department of its own division - nothing is borrowed from another division. A ridge regression is a linear model of how much a department beat or missed its plain share the next year, with a penalty (λ, picked per division on its own earlier cycle) that keeps the factors small. Learnt from ${M.cycles.length} past planning cycles (${_mlaMon(M.cycles[0])} to ${_mlaMon(M.cycles[M.cycles.length-1])}) on like-for-like stores; sell-thru and fill rate are added from the 2026 months; then the BIS small-department damping and 0.8-1.2 limits. Nothing to tune - it is learnt from the data.</div>
     <div class="fm-note" style="margin-top:6px">${saved?`In use: the factors saved ${_h(String(PLANNER.ft.updated_at||'').replace('T',' '))} from the history check of ${_h(String(saved.built_at).replace('T',' '))}.${saved.built_at!==M.built_at?` The history check has since been rebuilt (${_h(M.built_at.replace('T',' '))}) - Save to take its new factors.`:''}`
       :`Use this + Save stores the current factors (history check of ${_h(M.built_at.replace('T',' '))}) with the factor table, so a later refresh of the check does not move the plan until a planner saves again.`}</div>
+    ${_fmMbHelp(false)}
     <h4 style="margin:12px 0 4px">History part - tried on ${cyc.length} past cycles it had not seen, each division on its own</h4>
     <table class="pl-ft fm-curve"><thead><tr><th>Division</th><th>Ridge regression (ML) error</th><th>No factor error</th><th>Better than no factor</th></tr></thead><tbody>
       ${FM_DIVS.map(dn=>{const b=R.by_division?.[dn];return b?`<tr><th>${dn}</th><td class="${b.mean<b.plain-FM_NOISE?'gp':''}">${pct(b.mean)}</td><td>${pct(b.plain)}</td><td>${b.wins} of ${cyc.length} cycles</td></tr>`:'';}).join('')}
@@ -6357,6 +6400,104 @@ function _fmMlHtml(ft,ed){
     <table class="pl-ft fm-curve"><thead><tr><th>Input (vs its own division)</th>${FM_DIVS.map(dn=>`<th>${dn}</th>`).join('')}</tr></thead><tbody>${feats.map(f=>
       `<tr><th>${_h(FM_ML_LBL[f]||f)}</th>${FM_DIVS.map(dn=>eff(R.coef[dn]?.[f])).join('')}</tr>`).join('')}</tbody></table>
     <div class="fm-note" style="margin-top:4px">Effect of a typical difference (one standard deviation of that input among the division's departments): above ×1.00 = more of it, a little more plan. ${_fmMlaBtn()}</div>${_fmMlaErr()}
+  </div>`;
+}
+// user, 12 Oct: "show the ml factor breakdown visually in the factor table in a separate tab" - every department's
+// Ridge regression (ML) factor built step by step: history part x sell-thru x fill rate = the model's factor, then the
+// BIS small-department damping and 0.8-1.2 limits = the factor used. One waterfall per department on a log scale
+// around x1.00 (lanes top to bottom in that order), the top reasons, and a summary card per division.
+let _fmMbDiv='all',_fmMbSort='move',_fmMbQ='';
+const FM_MB_STEPS=[['history','History part','var(--blk-hist)'],['st','Sell-thru','var(--blk-st)'],['fill','Fill rate','var(--blk-plan)'],['guard','Damping + limits','var(--t3)']];
+const FM_MB_LO=0.7,FM_MB_HI=1.4;
+const _fmMbX=v=>Math.min(Math.max((Math.log(Math.max(v,1e-6))-Math.log(FM_MB_LO))/(Math.log(FM_MB_HI)-Math.log(FM_MB_LO)),0),1)*100;
+function _fmMbRows(M){
+  return _fmPrev().map(q=>{const d=M.departments[q.dv.nm+'|'+q.sec.nm];if(!d)return null;
+    const P=d.parts||{history:d.ml,st:1,fill:1},h=+P.history||1,st=+P.st||1,fi=+P.fill||1,ml=h*st*fi,g=+(d.ml_guarded??1);
+    return {q,d,h,st,fi,ml,g,guard:ml>0?g/ml:1,v:[1,h,h*st,ml,g]};}).filter(Boolean);
+}
+function _fmMbTrack(r){
+  const segs=FM_MB_STEPS.map(([k,nm,col],i)=>{const a=r.v[i],b=r.v[i+1],xa=_fmMbX(a),xb=_fmMbX(b),moved=Math.abs(b/a-1)>1e-4;
+    return moved?`<i style="left:${Math.min(xa,xb)}%;width:${Math.max(Math.abs(xb-xa),0.8)}%;top:${3+i*7}px;background:${col}" title="${nm} ×${(b/a).toFixed(3)}"></i>`:'';}).join('');
+  return `<span class="fm-mb-track" aria-hidden="true"><b style="left:${_fmMbX(1)}%"></b>${segs}<em class="${r.g>=1?'up':'dn'}" style="left:${_fmMbX(r.g)}%" title="Factor used ×${r.g.toFixed(3)}"></em></span>`;
+}
+// user, 12 Oct: "give a simple explanation legend for terms like error and no error values and other complex graphical
+// values" - one plain-words key, open on the ML breakdown tab, folded on the ML settings view
+let _fmMbHelpOpen=true;
+function _fmMbHelp(open){
+  const sw=c=>`<i class="sw" style="background:${c}"></i>`;
+  const T=[['×1.00','The department keeps its normal share of its division (its last-year share). ×1.10 = 10% more plan than that share, ×0.90 = 10% less.'],
+    ['History part','What past years say: departments with a similar pattern (growth, recent momentum, size - each against its own division) did better or worse than their share the next year.'],
+    ['Sell-thru / Fill rate','An extra nudge from this season’s sell-thru and fill rate compared with the division’s typical department. Grey ×1.000 = not used in that division (it did not help there) or no data for the department.'],
+    ['Model factor','History part × sell-thru × fill rate, before the BIS safety rules.'],
+    ['Damping + limits','The BIS safety rules: small departments are pulled towards ×1.00, and no factor goes below ×0.80 or above ×1.20. A big number here (say ×3.1) only means the ×0.80 floor lifted a very low model factor back up.'],
+    ['Factor used','What the plan would apply. The division total still equals its AOP afterwards - the factors only move plan between departments.'],
+    ['Error','How far the department split was from what actually sold, on past seasons, as a % of sales. Lower is better: 16% means about 16 of every 100 rupees were planned in the wrong department.'],
+    ['No factor','The plain split - every department simply keeps its last-year share. It is the benchmark: a method is only worth using if its error is lower than this.'],
+    ['Better in 2 of 6','Out of the 6 past seasons tested, the method’s split was closer to what sold than no factor in 2 of them.'],
+    ['Twice the division’s sell-thru ×1.31','A department selling through twice as fast as the division’s typical department gets 31% more plan from that part (below ×1.00 = less).'],
+    ['Waterfall',`Start at the grey ×1.00 line; each lane is one step, top to bottom: ${sw('var(--blk-hist)')}history, ${sw('var(--blk-st)')}sell-thru, ${sw('var(--blk-plan)')}fill rate, ${sw('var(--t3)')}damping + limits. Right = more plan, left = less. The tall tick ${sw('var(--po)')}/${sw('var(--ne)')} = the factor used.`],
+    ['Division bars','How many departments get each size of factor, ×0.80 to ×1.20: green = raised, red = cut, grey middle bar = about level (within 2%).'],
+    ['Main reasons','The inputs that moved the history part most for that department: green raises it, red lowers it.']];
+  return `<details class="fm-mb-help"${open?' open':''} ontoggle="_fmMbHelpOpen=this.open"><summary>How to read this - plain words</summary><dl>${T.map(([a,b])=>`<dt>${_h(a)}</dt><dd>${b}</dd>`).join('')}</dl></details>`;
+}
+function _fmMbFind(v){
+  _fmMbQ=v;const q=v.trim().toLowerCase();let n=0;
+  document.querySelectorAll('.fm-mb-t tbody tr[data-n]').forEach(tr=>{const hit=!q||tr.dataset.n.includes(q);tr.hidden=!hit;if(hit)n++;});
+  const c=document.getElementById('fm-mb-count');if(c)c.textContent=n;
+}
+function _fmMbOpen(b){_fmDept=b.closest('tr').dataset.dept;_fmView='preview';_renderFactorTable();document.getElementById('factorBody').scrollTop=0;}
+function _fmMlBreakHtml(ft){
+  const wait=_fmMlaWait();
+  if(wait)return `<div class="fm-sec" style="margin-top:10px"><div class="fm-note">${_h(wait)}${PLANNER.mla?.error?_fmMlaBtn():''}</div></div>`;
+  const M=_fmMl();
+  if(!M)return `<div class="fm-sec" style="margin-top:10px"><div class="fm-note">The history check has no coming plan yet. ${_fmMlaBtn()}</div></div>`;
+  const R=M.ridge||{},SF=M.st_fill?.by_division||{},cyc=Object.keys(R.walk_forward||{}).length,saved=PLANNER.ft?.mode==='ml'?PLANNER.ft.ml:null;
+  const all=_fmMbRows(M),x3=v=>'×'+(+v).toFixed(3),cls=v=>v>1.0005?'up':v<0.9995?'dn':'';
+  const pc=v=>(v*100).toFixed(1)+'%';
+  // one card per division: how its factors spread, whether sell-thru / fill rate are used, its history track record
+  const BINS=[0.8,0.85,0.9,0.95,0.98,1.02,1.05,1.1,1.15,1.2];   // middle bin = about level (within 2%)
+  const card=dn=>{const rs=all.filter(r=>r.q.dv.nm===dn);if(!rs.length)return '';
+    const up=rs.filter(r=>r.g>1.02).length,dnn=rs.filter(r=>r.g<0.98).length,cnt=BINS.slice(0,-1).map(()=>0);
+    rs.forEach(r=>{let k=BINS.findIndex((b,i)=>i<BINS.length-1&&r.g<BINS[i+1]);if(k<0)k=cnt.length-1;cnt[k]++;});
+    const mx=Math.max(...cnt,1),o=SF[dn]||{},b=R.by_division?.[dn];
+    return `<div class="fm-mb-dc"><div><b class="n">${_h(dn)}</b> · ${rs.length} departments · <span class="gp">${up} up</span> · <span class="gn">${dnn} down</span> · ${rs.length-up-dnn} about level</div>
+      <div class="fm-mb-hist" title="How many departments land in each factor range (×0.80 to ×1.20)">${cnt.map((c,i)=>`<span class="${BINS[i]>=1.02?'up':BINS[i+1]<=0.98?'dn':''}" style="height:${c/mx*100}%" title="×${BINS[i].toFixed(2)}-${BINS[i+1].toFixed(2)}: ${c}"></span>`).join('')}</div>
+      <div class="fm-mb-axis"><span>×0.80</span><span>×1.00</span><span>×1.20</span></div>
+      <div>Sell-thru and fill rate: ${o.on?`<b>used</b> - twice the division's sell-thru ${x3(Math.pow(2,o.beta_st||0))}, twice its fill rate ${x3(Math.pow(2,o.beta_fill||0))}`:'<b>not used</b> - they did not help here'}</div>
+      ${b?`<div>History part on ${cyc} past cycles: ${pc(b.mean)} error vs ${pc(b.plain)} with no factor (better in ${b.wins} of ${cyc})</div>`:''}</div>`;};
+  const rows=all.filter(r=>_fmMbDiv==='all'||r.q.dv.nm===_fmMbDiv)
+    .sort(_fmMbSort==='size'?(a,b)=>b.q.ly-a.q.ly:_fmMbSort==='name'?(a,b)=>a.q.sec.nm.localeCompare(b.q.sec.nm):(a,b)=>Math.abs(Math.log(b.g))-Math.abs(Math.log(a.g)));
+  const q=_fmMbQ.trim().toLowerCase();
+  const cell=(v,nc)=>nc?`<td class="nc" title="${_h(nc)}">×1.000</td>`:`<td class="${cls(v)==='up'?'gp':cls(v)==='dn'?'gn':''}">${x3(v)}</td>`;
+  const tr=r=>{const d=r.d,o=SF[r.q.dv.nm]||{},n=(r.q.sec.nm+' '+r.q.dv.nm).toLowerCase();
+    const why=(d.why||[]).map(w=>`<span class="fm-mb-chip ${cls(+w.mult)}">${_h(w.label)} ${_x(w.mult)}</span>`).join('')||'<span class="fm-note">-</span>';
+    return `<tr data-n="${_h(n)}" data-dept="${_h(r.q.sec.id)}"${q&&!n.includes(q)?' hidden':''}>
+      <td>${_h(r.q.sec.nm)}<span class="dv">${_h(r.q.dv.nm)}</span></td>${cell(r.h)}
+      ${cell(r.st,!o.on?'sell-thru not used in this division':d.st==null?'no sell-thru for this department - neutral':'')}
+      ${cell(r.fi,!o.on?'fill rate not used in this division':d.fill==null?'no fill rate for this department - neutral':'')}
+      <td class="nc">${x3(r.ml)}</td>${cell(r.guard)}<td class="f"><b class="${cls(r.g)}">${x3(r.g)}</b></td>
+      <td>${_fmMbTrack(r)}</td><td class="why">${why}</td>
+      <td><button type="button" class="fm-mb-open" onclick="_fmMbOpen(this)" aria-label="Preview ${_h(r.q.sec.nm)}">Preview ›</button></td></tr>`;};
+  const miss=_fmPrev().filter(p=>p.dv&&(_fmMbDiv==='all'||p.dv.nm===_fmMbDiv)).length-rows.length;
+  const pill=(v,t)=>`<button type="button" class="fm-vtab sm${_fmMbDiv===v?' on':''}" aria-pressed="${_fmMbDiv===v}" onclick="_fmMbDiv='${v}';_renderFactorTable()">${t}</button>`;
+  const ticks=[0.8,1,1.2].map(t=>`<span style="left:${_fmMbX(t)}%">×${t.toFixed(2)}</span>`).join('');
+  const shown=rows.filter(r=>!q||(r.q.sec.nm+' '+r.q.dv.nm).toLowerCase().includes(q)).length;
+  return `<div class="fm-sec" style="margin-top:10px">
+    <div class="fm-rule"><b>How each department's Ridge regression (ML) factor is built</b> - the history part (what sales history learnt, one model per division) × sell-thru × fill rate = the model's factor; then the BIS small-department damping and 0.8-1.2 limits give the factor the plan would use. Every part compares a department with its own division, so ×1.00 = the division's average department.</div>
+    <div class="fm-mb-legend">${FM_MB_STEPS.map(([k,nm,col])=>`<span><i style="background:${col}"></i>${nm}</span>`).join('')}<span><i style="background:var(--po);width:3px"></i>factor used (up)</span><span><i style="background:var(--ne);width:3px"></i>(down)</span>
+      <span class="fm-note">Waterfall lanes run top to bottom in that order, from ×1.00 (the grey line); log scale ×${FM_MB_LO}-×${FM_MB_HI}.</span></div>${_fmMbHelp(_fmMbHelpOpen)}
+    <div class="fm-mb-divs">${FM_DIVS.map(card).join('')}</div>
+    <div class="fm-note" style="margin-bottom:6px">${R.mean<M.plain.mean-FM_NOISE?'':`On past cycles the history part did no better than no factor (${pc(R.mean)} vs ${pc(M.plain.mean)}, better in ${R.wins} of ${cyc}) - read this as a second opinion, not for decisions. `}${saved?`In use: the factors saved ${_h(String(PLANNER.ft.updated_at||'').replace('T',' '))}${saved.built_at!==M.built_at?' from an older history check - this tab shows the latest one':''}.`:'Not the method in use - shown for comparison.'} History check built ${_h(String(M.built_at||'').replace('T',' '))}.</div>
+    <div class="fm-mb-ctl"><span class="fm-note">Division:</span>${pill('all','All')}${FM_DIVS.map(dn=>pill(dn,dn)).join('')}
+      <input type="search" id="fm-mb-q" placeholder="Find a department" value="${_h(_fmMbQ)}" oninput="_fmMbFind(this.value)" aria-label="Find a department">
+      <label class="fm-note">Sort <select id="fm-mb-sort" onchange="_fmMbSort=this.value;_renderFactorTable()" aria-label="Sort departments">
+        <option value="move"${_fmMbSort==='move'?' selected':''}>Biggest move first</option><option value="size"${_fmMbSort==='size'?' selected':''}>Largest LY first</option><option value="name"${_fmMbSort==='name'?' selected':''}>A-Z</option></select></label>
+      <span class="fm-note" style="margin-left:auto"><b id="fm-mb-count">${shown}</b> departments${miss>0?` · ${miss} with no like-for-like history stay at ×1.00`:''}</span></div>
+    <div class="fm-mb-wrap"><table class="fm-mb-t"><thead><tr><th>Department</th><th title="what sales history learnt (one model per division)">History part</th><th>Sell-thru</th><th>Fill rate</th>
+      <th title="history × sell-thru × fill rate, before the BIS guardrails">Model factor</th><th title="small-department damping and the 0.8-1.2 limits">Damping + limits</th><th>Factor used</th>
+      <th><span class="fm-mb-scale">${ticks}</span></th><th class="why">Main reasons</th><th></th></tr></thead>
+      <tbody>${rows.map(tr).join('')||'<tr><td colspan="10" class="fm-note">No departments.</td></tr>'}</tbody></table></div>
+    <div class="fm-note" style="margin-top:6px">Main reasons = the inputs that moved the history part most for this department (each against its own division). ${_fmMlaBtn()}</div>${_fmMlaErr()}
   </div>`;
 }
 function _fmMatrixHtml(ft,ed){
