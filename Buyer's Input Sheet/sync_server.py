@@ -485,7 +485,7 @@ def planner_factor_table_save():
             ft["ml"] = {"built_at": mla.get("built_at"), "cycle": mla["plan"].get("cycle"),
                         "test": {"ridge": mla["ridge"]["mean"], "plain": mla["plain"]["mean"], "cycles": len(mla.get("tests", []))},
                         "factors": {k: {"f": round(float(v["ml_guarded"]), 6), "raw": round(float(v["ml"]), 6),
-                                        "why": v.get("why", [])} for k, v in mla["departments"].items()}}
+                                        "why": v.get("why", []), "parts": v.get("parts")} for k, v in mla["departments"].items()}}
     if not err and (mode != "matrix" or ft.get("model") is not None):   # continuous uses the model's rules / limits
         err = _model_error(ft.get("model"))
     if not err and (mode == "continuous" or ft.get("cont") is not None):
@@ -518,7 +518,8 @@ def _mla_start():
     def run():
         try:
             import ml_assist
-            ml_assist.build(ML_ASSIST_JSON)
+            src = get_latest_file(SELLTHRU_DIR, ("*.parquet",))   # the same sell-thru file and weeks the BIS uses
+            ml_assist.build(ML_ASSIST_JSON, st=(src, WEEK_STR_TO_MI) if src else None)
         except Exception as e:   # the reason goes to this console only (a DB error can name the server)
             print(f"[ml-assist] rebuild failed: {type(e).__name__}: {e}")
             _mla["error"] = "History check rebuild failed - see the BIS server window."

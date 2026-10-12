@@ -15,7 +15,15 @@ Writes ml_assist.json with:
   ridge       a linear model (numpy, exact additive reasons) of next-year relative performance, its walk-forward
               track record, and for the coming MAMJ plan each department's predicted multiplier + top reasons
   departments the coming MAMJ plan's inputs per department (growth vs division, recent momentum, bands)
-Sell-thru and fill rate have no history before 2026, so they cannot be checked here.
+Within its division only (user, 2026-10-12: "make sure the performance is measured in their respective division and
+no cross division referencing is there in the ml concept"): every clue compares a department with its own division,
+one ridge model is learnt per division from that division's departments only, the bands are per division, and the
+error is scored division by division (summed only to report one number).
+Sell-thru and fill rate (user, 2026-10-12: "add sell-thru and fill rate as clues in the ml"; chose the hybrid): they have
+no history before 2026, so they are learnt on the one window that has them - the BIS Mar-Jun'26 sell-thru (same
+definition as the BIS) and the fill-rate file against the months after it (Jul'26 to the last closed month), per
+division, on top of the history model (its own view of those months taken out first), strength picked by leave-one-
+department-out. Weak evidence on one window; shrinks to no effect when it does not help.
 
 Run: python ml_assist.py            (rebuild + self-check); the BIS server runs build() on a planner's Refresh.
 """
@@ -37,13 +45,14 @@ G_GRID = [round(x, 2) for x in np.arange(-0.5, 1.001, 0.05)]
 R_GRID = [round(x, 2) for x in np.arange(-0.25, 0.751, 0.05)]
 LAMBDA = 30.0                     # ridge penalty when there is no earlier cycle to choose it on
 LAMS = [0.3, 3.0, 30.0, 300.0]    # chosen on the last training cycle, as in the study
-FEATS = ["rel_g1", "rel_g2", "rel_gr", "rel_g1_div", "accel", "log_size", "share_ly",
-         "miss_g1", "miss_g2", "miss_gr", "season_MAMJ", "season_JASO", "div_MENS", "div_LADIES"]
+FEATS = ["rel_g1", "rel_g2", "rel_gr", "rel_g1_div", "accel", "rel_size", "share_ly",
+         "miss_g1", "miss_g2", "miss_gr", "season_MAMJ", "season_JASO"]   # no division labels: one model per division
 LABEL = {"rel_g1": "25V26 growth vs division", "rel_g2": "2-year growth vs division", "rel_gr": "recent momentum",
-         "rel_g1_div": "growth vs division total", "accel": "growth speeding up / slowing", "log_size": "department size",
+         "rel_g1_div": "growth vs division total", "accel": "growth speeding up / slowing", "rel_size": "department size",
          "share_ly": "department size", "miss_g1": "no 25V26 history", "miss_g2": "no 2-year history",
-         "miss_gr": "no recent history", "season_MAMJ": "season", "season_JASO": "season", "div_MENS": "division",
-         "div_LADIES": "division"}
+         "miss_gr": "no recent history", "season_MAMJ": "season", "season_JASO": "season"}
+DIVS = ("MENS", "LADIES", "KIDS")
+LAMS_SF = [1.0, 3.0, 10.0, 30.0, 100.0, 300.0, 1e9]   # sell-thru / fill-rate penalty; 1e9 = no effect
 
 
 def _db_url():
@@ -147,11 +156,10 @@ def _features(df):
         df[f"miss_{g}"] = df[f"rel_{g}"].isna().astype(float)
     df["rel_g1_div"] = np.log((1 + df.g1) / (1 + df.g1_div)).clip(-1.5, 1.5)
     df["accel"] = (np.log1p(df.g1.clip(lower=-0.95)) - 0.5 * np.log1p(df.g2.clip(lower=-0.95))).clip(-1.5, 1.5)
-    df["log_size"] = np.log(df.lypm_cr.clip(lower=1e-4))
+    size = np.log(df.lypm_cr.clip(lower=1e-4))
+    df["rel_size"] = size - size.groupby(grp).transform("median")   # vs its own division's middle department
     for s in ("MAMJ", "JASO"):
         df[f"season_{s}"] = (df.season == s).astype(float)
-    for d in ("MENS", "LADIES"):
-        df[f"div_{d}"] = (df.division == d).astype(float)
     return df
 
 
@@ -160,16 +168,23 @@ def guard(f, lypm):
     return np.clip(1 + (f - 1) * lypm / (lypm + K_DAMP), *CLAMP)
 
 
-def wape(sub, f):
-    """BIS back-test WAPE for one cycle, divisions pooled"""
-    err = act = 0.0
+def wape_parts(sub, f):
+    """{division: (abs error, actual)} - each division's own plan split (its actual total x its departments' LY x f)"""
+    out = {}
     for d in sub.division.unique():
         m = (sub.division == d).to_numpy()
         b, a, ff = sub.b.to_numpy()[m], sub.a.to_numpy()[m], f[m]
         A = a.sum()
-        err += np.abs(A * b * ff / (b * ff).sum() - a).sum()
-        act += A
-    return err / act
+        out[d] = (float(np.abs(A * b * ff / (b * ff).sum() - a).sum()), float(A))
+    return out
+
+
+def wape(sub, f, div=None):
+    """BIS back-test WAPE for one cycle: one division, or the divisions' errors summed (each scored within itself)"""
+    p = wape_parts(sub, f)
+    if div is not None:
+        return p[div][0] / p[div][1] if div in p and p[div][1] else float("nan")
+    return sum(e for e, _ in p.values()) / sum(a for _, a in p.values())
 
 
 class RidgeNP:
@@ -196,11 +211,121 @@ def _xy(df):
     x = np.nan_to_num(df[FEATS].to_numpy(dtype=float), nan=0.0)   # missing = division median (rel 0); miss_* flag it
     y = np.log(((df.a / df.groupby([df.cycle, df.division]).a.transform("sum")) / df.share_ly).clip(0.1, 10).to_numpy())
     w = (df.b / df.groupby(df.cycle).b.transform("sum")).to_numpy()   # each cycle weighs the same; within it, by LY
+    assert df.division.nunique() <= 1, "one division at a time - no cross-division learning"
     return x, y, w * len(w) / w.sum()
 
 
-def build(out_path=OUT_JSON, raw=None):
+def zs_raw(st, r):
+    v = st.get(f"{r.division}|{str(r.department).upper()}")
+    return None if v is None else float(v)
+
+
+def _sf_inputs(rows, st, fill):
+    """log(sell-thru / its division's middle department), log(fill / division middle); missing = 0 (neutral)"""
+    s = np.array([np.nan if (v := zs_raw(st, r)) is None or v <= 0 else v for r in rows.itertuples()], dtype=float)
+    f = np.array([np.nan if (v := fill.get(str(r.department).upper())) is None or v <= 0 else v for r in rows.itertuples()], dtype=float)
+    out = []
+    for x in (s, f):
+        z = np.zeros(len(rows))
+        for dn in rows.division.unique():
+            k = (rows.division == dn).to_numpy() & np.isfinite(x)
+            if k.sum() >= 3:
+                z[k] = np.log(x[k] / np.median(x[k]))
+        out.append(z)
+    return out[0], out[1]
+
+
+def _st_fill_terms(cube, models, ridge_pred, st, fill):
+    """learn, per division, how much sell-thru and fill rate add to the history model on the months after Mar-Jun'26:
+    y = log(Jul'26.. actual share / Jul'25.. share) - the history model's own centred view for the Jul cycle;
+    weighted ridge on the two inputs, penalty by leave-one-department-out (1e9 = no effect)"""
+    res = {"window": "", "by_division": {}}
+    if not st and not fill:
+        return res
+    y0 = 2026
+    W = [m for m in pd.period_range(f"{y0}-07", f"{y0}-10", freq="M") if m <= cube.last]
+    if not W or not cube.ok(W + [m - 12 for m in W]):
+        return res
+    res["window"] = f"{W[0]}..{W[-1]}"
+    rows = _features(pd.DataFrame(_rows(cube, pd.Period(f"{y0}-07", freq="M"), with_target=False)))
+    if not len(rows):
+        return res
+    smask = cube.trading(W + [m - 12 for m in W])
+    a_all, b_all = cube.sales(W, smask), cube.sales([m - 12 for m in W], smask)
+    key = {(dv, dp): i for i, (dv, dp) in enumerate(zip(cube.keys.division, cube.keys.department))}
+    idx = np.array([key[(r.division, r.department)] for r in rows.itertuples()])
+    rows = rows.assign(a=a_all[idx], b=b_all[idx])
+    rows = rows[(rows.b > 0) & (rows.a >= 0)].reset_index(drop=True)
+    off = ridge_pred(models, rows)                       # the history model's view, centred in each division
+    zs, zf = _sf_inputs(rows, st, fill)
+    for dn in DIVS:
+        k = (rows.division == dn).to_numpy()
+        n = int(k.sum())
+        if n < 10:
+            res["by_division"][dn] = {"n": n, "on": False, "why": "too few departments"}
+            continue
+        sub = rows[k]
+        A, bb, aa = sub.a.sum(), sub.b.to_numpy(), sub.a.to_numpy()
+        y = np.log(((aa / A) / (bb / bb.sum())).clip(0.1, 10)) - off[k]
+        w = bb / bb.sum() * n
+        x = np.column_stack([zs[k], zf[k]])
+
+        def loo(lam):   # leave one department out: its term from the others only
+            p = np.zeros(n)
+            for i in range(n):
+                o = np.ones(n, bool)
+                o[i] = False
+                m = RidgeNP().fit(x[o], y[o], w[o], lam)
+                p[i] = m.predict(x[i:i + 1])[0] - m.b0
+            return p
+
+        def err(p):     # the BIS split error on the window: history factor alone vs with the term
+            f = np.exp(off[k] + p)
+            return float(np.abs(A * bb * f / (bb * f).sum() - aa).sum() / A)
+        best = min(LAMS_SF, key=lambda lam: err(loo(lam)))
+        e0, e1 = err(np.zeros(n)), err(loo(best))
+        m = RidgeNP().fit(x, y, w, best)
+        on = best < 1e8 and e1 < e0
+        res["by_division"][dn] = {"n": n, "lam": best, "on": bool(on), "err_without": e0, "err_with": e1,
+                                  "beta_st": float(m.beta[0] / m.sd[0]) if on else 0.0,     # per unit of log(ST / division middle)
+                                  "beta_fill": float(m.beta[1] / m.sd[1]) if on else 0.0,
+                                  "typ_st": float(np.exp(m.beta[0])) if on else 1.0,         # one typical difference
+                                  "typ_fill": float(np.exp(m.beta[1])) if on else 1.0,
+                                  "n_st": int((zs[k] != 0).sum()), "n_fill": int((zf[k] != 0).sum())}
+    return res
+
+
+def load_st(src, week_to_mi):
+    """{DIVISION|DEPARTMENT: Mar-Jun'26 sell-thru (0-1)} the BIS way (sync_server monthly_st_dept -> _plannerInputs):
+    store rows, season '26, active stores, weeks 9-26; per week sum qty -> ST%; per month the mean of the non-zero weeks;
+    the department's input = the mean over the months with data"""
+    import pyarrow.parquet as pq
+    d = pq.read_table(src, columns=["DIVISION", "DEPARTMENT", "WEEK", "SL_Q", "CLS_STK_Q", "LOCATION", "SEASON", "STORE_STATUS"]).to_pandas()
+    d = d[(d.LOCATION.astype(str).str.upper() == "STORE") & d.SEASON.astype(str).str.contains("26", na=False)
+          & (d.STORE_STATUS.astype(str).str.upper() == "ACTIVE") & d.WEEK.isin(set(week_to_mi))]
+    d["k"] = d.DIVISION.astype(str).str.strip().str.upper() + "|" + d.DEPARTMENT.astype(str).str.strip().str.upper()
+    w = d.groupby(["k", "WEEK"])[["SL_Q", "CLS_STK_Q"]].sum().reset_index()
+    w["mi"] = w.WEEK.map(week_to_mi)
+    den = w.SL_Q + w.CLS_STK_Q
+    w["p"] = np.where(den > 0, w.SL_Q / den.where(den > 0, 1), 0.0)
+    m = w[w.p > 0].groupby(["k", "mi"]).p.mean()
+    return m.groupby(level=0).mean().to_dict()
+
+
+def load_fill():
+    """{DEPARTMENT: fill rate 0-1} from fill_rate.json (the BIS's PLAN vs FILL RATE import)"""
+    p = os.path.join(_HERE, "fill_rate.json")
+    j = json.load(open(p, encoding="utf-8")) if os.path.exists(p) else {}
+    return {" ".join(str(k).split()).upper(): float(v) for k, v in (j.get("departments") or {}).items() if v is not None}
+
+
+def build(out_path=OUT_JSON, raw=None, st=None, fill=None):
+    """st = (sell-thru parquet path, {"WK-09": mi, ...}) or a ready {DIV|DEPT: 0-1} dict; None = no sell-thru term"""
     raw = load_sales() if raw is None else raw
+    if isinstance(st, tuple):
+        st = load_st(*st)
+    st = st or {}
+    fill = load_fill() if fill is None else fill
     # calendar.sales_fact should hold closed months only; never let the running month in even if it does (review 9 Oct)
     raw = raw[raw["month"] < datetime.now().strftime("%Y-%m")]
     cube = Cube(raw)
@@ -243,44 +368,65 @@ def build(out_path=OUT_JSON, raw=None):
     cg, wfg, now_g = summary(SC["g"])
     cr, wfr, now_r = summary(SC["r"])
 
-    # Ridge: the same centred, guarded factor in its track record and in its advice; lambda picked on an earlier cycle
-    def ridge_factor(m, sub):
-        pred = m.predict(np.nan_to_num(sub[FEATS].to_numpy(dtype=float)))
+    # Ridge, one model per division learnt from that division's departments only; the same centred, guarded factor in
+    # its track record and in its advice; each division's lambda picked on its own earlier cycle
+    def ridge_pred(models, sub):
+        pred = np.zeros(len(sub))
         for dname in sub.division.unique():
             k = (sub.division == dname).to_numpy()
+            if dname in models:
+                pred[k] = models[dname].predict(np.nan_to_num(sub[k][FEATS].to_numpy(dtype=float)))
             pred[k] -= np.average(pred[k], weights=sub.b.to_numpy()[k])   # vs the division's average department
+        return pred
+
+    def ridge_factor(models, sub):
+        pred = ridge_pred(models, sub)
         return pred, guard(np.exp(pred), sub.lypm_cr.to_numpy())
 
-    def fit(cs, lam):
-        x, y, w = _xy(df[df.cycle.isin(cs)])
+    def fit1(cs, lam, dname):
+        sub = df[df.cycle.isin(cs) & (df.division == dname)]
+        if len(sub) < len(FEATS) + 5:
+            return None
+        x, y, w = _xy(sub)
         return RidgeNP().fit(x, y, w, lam)
 
-    def choose_lam(cs):
+    def choose_lam(cs, dname):
         val, inner = cs[-1], eligible(cs[-1])
         if not inner:
             return LAMBDA
-        return min(LAMS, key=lambda lam: wape(by[val], ridge_factor(fit(inner, lam), by[val])[1]))
 
-    wf = {}
+        def err(lam):
+            m = fit1(inner, lam, dname)
+            return wape(by[val], ridge_factor({dname: m} if m else {}, by[val])[1], dname)
+        return min(LAMS, key=err)
+
+    def fit_all(cs):
+        lams = {dn: choose_lam(cs, dn) for dn in DIVS}
+        return {dn: m for dn in DIVS if (m := fit1(cs, lams[dn], dn)) is not None}, lams
+
+    wf, wf_div = {}, {dn: {} for dn in DIVS}
+    plain_div = {dn: {c: wape(by[c], np.ones(len(by[c])), dn) for c in tests} for dn in DIVS}
     for c in tests:
-        tr = eligible(c)
-        wf[c] = float(wape(by[c], ridge_factor(fit(tr, choose_lam(tr)), by[c])[1]))
-    lam_now = choose_lam(allc)
-    model = fit(allc, lam_now)
+        models_c, _ = fit_all(eligible(c))
+        f_c = ridge_factor(models_c, by[c])[1]
+        wf[c] = float(wape(by[c], f_c))
+        for dn in DIVS:
+            wf_div[dn][c] = float(wape(by[c], f_c, dn))
+    models, lam_now = fit_all(allc)
 
     # bands (descriptive, all cycles; a department counts once per cycle): next-year actual share / plain share
     df["rel_perf"] = (df.a / df.groupby([df.cycle, df.division]).a.transform("sum")) / df.share_ly
 
-    def bands(col, q):
-        d = df.dropna(subset=[col])
+    def bands(col, q, dname):
+        d = df[df.division == dname].dropna(subset=[col])   # departments of the same division only
         edges = np.unique(np.quantile(d[col], np.linspace(0, 1, q + 1)))
         d = d.assign(bin=np.clip(np.searchsorted(edges, d[col], side="right") - 1, 0, len(edges) - 2))
         return [{"from": float(np.exp(edges[i])), "to": float(np.exp(edges[i + 1])),
                  "rel_perf": float(np.average(g.rel_perf.clip(0, 5), weights=g.b)), "n": int(len(g))}
                 for i, g in d.groupby("bin")], edges
 
-    bg, eg = bands("rel_g1", 10)
-    br, er = bands("rel_gr", 5)
+    BG = {dn: bands("rel_g1", 6, dn) for dn in DIVS}   # fewer bands than pooled: each division has a third of the rows
+    BR = {dn: bands("rel_gr", 4, dn) for dn in DIVS}
 
     def band(v, e):
         return None if v != v else int(np.clip(np.searchsorted(e, v, side="right") - 1, 0, len(e) - 2))
@@ -288,15 +434,29 @@ def build(out_path=OUT_JSON, raw=None):
     # the coming MAMJ plan (the BIS plans MAMJ): inputs + the model's view per department
     nxt = pd.Period(f"{cube.last.year + (1 if cube.last.month >= 3 else 0)}-03", freq="M")
     cur = _features(pd.DataFrame(_rows(cube, nxt, with_target=False)))
+    sf = _st_fill_terms(cube, models, ridge_pred, st, fill)
     deps = {}
     if len(cur):
-        pred, f_g = ridge_factor(model, cur)
-        xc = np.nan_to_num(cur[FEATS].to_numpy(dtype=float))
-        con = model.contrib(xc)
+        pred_h = ridge_pred(models, cur)
         dv_ = cur.division.to_numpy()
         bw = cur.b.to_numpy()
-        mean_by = {d: np.average(con[dv_ == d], axis=0, weights=bw[dv_ == d]) for d in np.unique(dv_)}
-        con = con - np.vstack([mean_by[d] for d in dv_])   # each reason vs the division's average department too
+        zs, zf = _sf_inputs(cur, st, fill)
+        t_st, t_fi = np.zeros(len(cur)), np.zeros(len(cur))
+        for dn, o in sf["by_division"].items():
+            k = dv_ == dn
+            if o.get("on") and k.any():
+                t_st[k], t_fi[k] = o["beta_st"] * zs[k], o["beta_fill"] * zf[k]
+                t_st[k] -= np.average(t_st[k], weights=bw[k])     # each term vs the division's average department
+                t_fi[k] -= np.average(t_fi[k], weights=bw[k])
+        pred = pred_h + t_st + t_fi
+        f_g = guard(np.exp(pred), cur.lypm_cr.to_numpy())
+        xc = np.nan_to_num(cur[FEATS].to_numpy(dtype=float))
+        con = np.zeros((len(cur), len(FEATS)))
+        for dn, m in models.items():
+            k = dv_ == dn
+            if k.any():
+                con[k] = m.contrib(xc[k])
+                con[k] -= np.average(con[k], axis=0, weights=bw[k])   # each reason vs the division's average department too
         nan_of = {"rel_g1": "g1", "rel_g1_div": "g1", "accel": "g1", "rel_g2": "g2", "rel_gr": "gr"}
         for i, r in enumerate(cur.itertuples()):
             agg = {}
@@ -310,12 +470,19 @@ def build(out_path=OUT_JSON, raw=None):
                 if ft == "accel" and r.g2 != r.g2:
                     continue
                 agg[LABEL[ft]] = agg.get(LABEL[ft], 0.0) + con[i, j]
+            if t_st[i]:
+                agg["sell-thru vs division"] = t_st[i]
+            if t_fi[i]:
+                agg["fill rate vs division"] = t_fi[i]
             top = sorted(agg.items(), key=lambda kv: -abs(kv[1]))[:3]
+            bgd, brd = BG.get(r.division), BR.get(r.division)
             deps[f"{r.division}|{r.department}"] = {
                 "g1": None if r.g1 != r.g1 else float(r.g1), "rel_g1": None if r.raw_g1 != r.raw_g1 else float(np.exp(r.raw_g1)),
                 "rel_gr": None if r.raw_gr != r.raw_gr else float(np.exp(r.raw_gr)),
-                "band_g": band(r.rel_g1, eg), "band_r": band(r.rel_gr, er),
+                "band_g": band(r.rel_g1, bgd[1]) if bgd else None, "band_r": band(r.rel_gr, brd[1]) if brd else None,
                 "ml": float(np.exp(pred[i])), "ml_guarded": float(f_g[i]),
+                "parts": {"history": float(np.exp(pred_h[i])), "st": float(np.exp(t_st[i])), "fill": float(np.exp(t_fi[i]))},
+                "st": zs_raw(st, r), "fill": fill.get(str(r.department).upper()),
                 "why": [{"label": k, "mult": float(np.exp(v))} for k, v in top]}
     ptest = float(np.mean([plain[c] for c in tests]))
     out = {"built_at": datetime.now().isoformat(timespec="seconds"), "data_to": str(cube.last),
@@ -323,9 +490,13 @@ def build(out_path=OUT_JSON, raw=None):
            "curve_growth": cg, "walk_growth": wfg, "pick_growth": now_g,
            "curve_recent": cr, "walk_recent": wfr, "pick_recent": now_r,
            "ridge": {"walk_forward": wf, "mean": float(np.mean(list(wf.values()))), "lambda": lam_now,
-                     "wins": int(sum(wf[c] < plain[c] - 1e-12 for c in tests)),
-                     "coef": {f: float(b) for f, b in zip(FEATS, model.beta)}},
-           "bands_growth": bg, "bands_recent": br,
+                     "wins": int(sum(wf[c] < plain[c] - 1e-12 for c in tests)), "per_division": True,
+                     "coef": {dn: {f: float(b) for f, b in zip(FEATS, m.beta)} for dn, m in models.items()},
+                     "by_division": {dn: {"walk_forward": wf_div[dn], "mean": float(np.mean(list(wf_div[dn].values()))),
+                                          "plain": float(np.mean(list(plain_div[dn].values()))),
+                                          "wins": int(sum(wf_div[dn][c] < plain_div[dn][c] - 1e-12 for c in tests))} for dn in DIVS}},
+           "st_fill": sf,
+           "bands_growth": {dn: v[0] for dn, v in BG.items()}, "bands_recent": {dn: v[0] for dn, v in BR.items()},
            "plan": {"cycle": str(nxt), "ly": f"{nxt - 12}..{nxt - 9}", "recent": cur.recent.iloc[0] if len(cur) else "",
                     "ready": bool(len(cur))},
            "departments": deps}
@@ -336,7 +507,12 @@ def build(out_path=OUT_JSON, raw=None):
 
 
 if __name__ == "__main__":   # rebuild + self-check
-    o = build()
+    import sys
+    sys.path.insert(0, _HERE)
+    import sync_server as _ss   # the BIS server's own sell-thru source and week -> month map
+    _src = _ss.get_latest_file(_ss.SELLTHRU_DIR, ("*.parquet",))
+    ST_ARGS = load_st(_src, _ss.WEEK_STR_TO_MI) if _src else {}
+    o = build(st=ST_ARGS)
     g20 = next(c for c in o["curve_growth"] if abs(c["s"] - 0.2) < 1e-9)
     print("cycles", o["cycles"], "tests", o["tests"])
     print(f"plain {o['plain']['mean']*100:.2f} | growth 0.20 {g20['mean']*100:.2f} | growth walk-forward {o['walk_growth']['mean']*100:.2f} "
@@ -349,4 +525,25 @@ if __name__ == "__main__":   # rebuild + self-check
            if (w["label"] == "no 25V26 history" and v["g1"] is not None) or (w["label"] == "25V26 growth vs division" and v["g1"] is None)]
     assert not bad, bad[:5]
     assert all(0.8 - 1e-9 <= v["ml_guarded"] <= 1.2 + 1e-9 for v in o["departments"].values())
+    for k, v in o["departments"].items():   # the parts multiply to the model factor
+        p = v["parts"]
+        assert abs(p["history"] * p["st"] * p["fill"] - v["ml"]) < 1e-6 * v["ml"], k
+    print("st_fill", {dn: {x: o["st_fill"]["by_division"][dn].get(x) for x in ("n", "lam", "on", "err_without", "err_with", "typ_st", "typ_fill")}
+                      for dn in o["st_fill"]["by_division"]}, o["st_fill"]["window"])
+    print("ridge by division", {dn: (round(v["mean"] * 100, 2), round(v["plain"] * 100, 2), v["wins"]) for dn, v in o["ridge"]["by_division"].items()})
     print("self-check: OK")
+    if "--isolation" in sys.argv:   # no cross-division learning: change LADIES' sales, MENS / KIDS must not move
+        raw = load_sales()
+        raw2 = raw.copy()
+        lad = raw2.division == "LADIES"
+        raw2.loc[lad, "sl_v"] = raw2.loc[lad, "sl_v"] * np.random.default_rng(1).uniform(0.5, 1.5, lad.sum())
+        a = build(out_path=OUT_JSON + ".iso_a", raw=raw, st=ST_ARGS, fill=load_fill())
+        b = build(out_path=OUT_JSON + ".iso_b", raw=raw2, st=ST_ARGS, fill=load_fill())
+        moved = [k for k in a["departments"] if not k.startswith("LADIES|") and k in b["departments"]
+                 and abs(a["departments"][k]["ml_guarded"] - b["departments"][k]["ml_guarded"]) > 1e-9]
+        changed = sum(1 for k in a["departments"] if k.startswith("LADIES|") and k in b["departments"]
+                      and abs(a["departments"][k]["ml_guarded"] - b["departments"][k]["ml_guarded"]) > 1e-9)
+        for f in (OUT_JSON + ".iso_a", OUT_JSON + ".iso_b"):
+            os.remove(f)
+        assert not moved, moved[:5]
+        print(f"isolation: OK (LADIES changed {changed} departments, MENS / KIDS moved 0)")

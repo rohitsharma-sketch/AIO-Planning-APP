@@ -5727,7 +5727,7 @@ const FM_STEP_ROWS=[['st','Sell-thru'],['growth','25V26 growth'],['base','19V26 
   ['rules','Rules'],['damp','Small-department damping'],['clamp','Factor limits']];
 // plain-words guide per method (user, 2026-10-08: "add a proper reason in simple terms to aid the user to select the right model")
 const _fmPlainMl=M=>{const pct=v=>(v*100).toFixed(2)+'%',ok=M.ridge.mean<M.plain.mean-FM_NOISE;
-  return {how:`A weighted ridge regression (a linear model whose penalty keeps the factors small) learns from ${M.cycles.length} past planning cycles which departments beat their plain share the next year - from 25V26 growth, 2-year growth, recent momentum and size - then applies the BIS damping and 0.8-1.2 limits.`,
+  return {how:`One weighted ridge regression per division (a linear model whose penalty keeps the factors small), each learnt only from its own division's departments over ${M.cycles.length} past planning cycles: which departments beat their plain share the next year, from 25V26 growth, 2-year growth, recent momentum and size - each vs its own division. Sell-thru and fill rate are added from the 2026 months, per division. Then the BIS damping and 0.8-1.2 limits.`,
     good:'Built only from what actually sold, independent of the three methods - a yardstick for them.',
     watch:ok?`On ${M.tests.length} past cycles it missed by ${pct(M.ridge.mean)} against ${pct(M.plain.mean)} with no factor.`
       :`On ${M.tests.length} past cycles it missed by ${pct(M.ridge.mean)} against ${pct(M.plain.mean)} with no factor - not yet better than doing nothing; use it knowing that.`};};
@@ -5746,7 +5746,7 @@ function _fmDeptWhy(c,x,md,dvNm){
   const pc=v=>v==null?'n/a':(v*100).toFixed(1)+'%',L=v=>Math.abs(v*100).toFixed(1)+' L',out=[];
   const nm={st:['Sell-thru','st'],growth:['25V26 growth','gr'],base:['19V26 growth','gb'],fill:['Fill rate','fill']};
   if(c.k==='ml'){const d=c.res.r;
-    out.push(d?`Learnt from past cycles, the model gives ×${(+d.ml).toFixed(2)}${d.why.length?` (${d.why.map(w=>w.label).join(', ')})`:''}; damping and limits make it ×${c.res.f.toFixed(2)}.`
+    out.push(d?`Learnt from ${_h(dvNm)} departments only, the model gives ×${(+d.ml).toFixed(2)}${d.why.length?` (${d.why.map(w=>w.label).join(', ')})`:''}; damping and limits make it ×${c.res.f.toFixed(2)}.`
       :'No like-for-like history - neutral ×1.00.');
   } else if(c.k==='matrix'){
     const o=c.st.combo;
@@ -5791,7 +5791,7 @@ function _fmDeptCalc(sec,dv,k,ft){
     P.forEach(q=>{const v=aop*lyM[q.sec.id]/lyTot*F.get(q.sec.id);raw+=v;if(q.sec===sec)mine=v;});
     if(raw>0)val+=mine*aop/raw;});
   const q=P.find(o=>o.sec===sec),x=q?.x;let r=null;
-  if(k==='ml')r=_mlRec(dv,sec);
+  if(k==='ml'){r=_mlRec(dv,sec);if(r)r={...r,_div:dv.nm};}
   else if(x&&k==='matrix')r=_matrixFactor(ft,x);
   else if(x&&k==='weighted')r=_weightedFactor(x,_fmResolve(ft.model,dv.id,AOP_MIS),q.ly);
   else if(x&&k==='continuous')r=_contFactor(x,_fmMedians(dv.id,AOP_MIS),ft.cont,ft.model,q.ly);
@@ -5800,10 +5800,14 @@ function _fmDeptCalc(sec,dv,k,ft){
 // one method's steps for the department: {row: {c: multiplier or null, t: detail}}
 function _fmSteps(k,res,ft){
   const r=res.r||{},S2={},pc=v=>(v*100).toFixed(1)+'%';
-  if(k==='ml'){const d=res.r;
-    S2.st={t:'not used - no sell-thru history before 2026'};S2.fill={t:'not used - no fill-rate history before 2026'};
-    S2.growth={t:'inside the model (row below)'};S2.base={t:'not used'};S2.combo={t:'not in this method'};S2.rules={t:'none'};
-    S2.model=d?{c:d.ml,t:d.why.length?'main reasons: '+d.why.map(w=>`${w.label} ×${(+w.mult).toFixed(2)}`).join(', '):'learnt from past cycles'}
+  if(k==='ml'){const d=res.r,P=d?.parts,M=_fmMl(),sf=M?.st_fill?.by_division?.[d?._div]||{},win=_mlaMon((M?.st_fill?.window||'').replace('..',','));
+    const term=(key,raw,nm)=>{if(!d)return {t:'-'};if(raw==null)return {t:`no ${nm} for this department - neutral`};
+      if(!sf.on)return {t:`${pc(raw)} - not used in ${d._div}: it did not help on ${win||'the 2026 months'}`};
+      return {c:P?.[key]??1,t:`${pc(raw)} vs its division, learnt on ${win} (${d._div} only)`};};
+    S2.st=term('st',d?.st,'sell-thru');S2.fill=term('fill',d?.fill,'fill rate');
+    S2.growth={t:'inside the history model (row below)'};S2.base={t:'not used'};S2.combo={t:'not in this method'};S2.rules={t:'none'};
+    const hw=(d?.why||[]).filter(w=>!/sell-thru|fill rate/.test(w.label));
+    S2.model=d?{c:P?P.history:d.ml,t:`learnt from ${d._div} only`+(hw.length?' - main reasons: '+hw.map(w=>`${w.label} ×${(+w.mult).toFixed(2)}`).join(', '):'')}
       :{t:'no like-for-like history - neutral 1.00'};
     S2.damp=d&&d.ml>0?{c:d.ml_guarded/d.ml,t:'the BIS small-department damping and 0.8-1.2 limits'}:{t:'-'};
     S2.clamp={t:'in the row above'};
@@ -5902,7 +5906,7 @@ function _fmHistAllHtml(ft){
   const spec=_fmSpec(ft.mode,ft),meth=(FM_METHODS.find(m=>m[0]===ft.mode)||FM_METHODS[0])[1];
   const rows=_fmPrev().map(q=>{const d=M.departments[q.dv.nm+'|'+q.sec.nm];if(!d)return null;
     const f=ft.mode==='ml'?_mlF(q.dv,q.sec):ft.mode==='matrix'?_matrixFactor(ft,q.x).f:_fmEval(spec,q.x,q.dv.id,AOP_MIS,q.ly);
-    const bg=d.band_g!=null?M.bands_growth[d.band_g]:null,br=d.band_r!=null?M.bands_recent[d.band_r]:null,flags=[];
+    const bg=d.band_g!=null?_bandsOf(M,'bands_growth',q.dv.nm)[d.band_g]:null,br=d.band_r!=null?_bandsOf(M,'bands_recent',q.dv.nm)[d.band_r]:null,flags=[];
     if(d.band_g===0&&f<0.98)flags.push('collapsed last year but cut');
     if(br&&Math.abs(f-1)>0.02&&Math.abs(br.rel_perf-1)>0.03&&(f-1)*(br.rel_perf-1)<0)flags.push('recent momentum leans the other way');
     return {q,d,f,bg,br,flags};}).filter(Boolean)
@@ -5925,6 +5929,7 @@ function _fmHistAllHtml(ft){
    from ml_assist.py: past planning cycles rebuilt from calendar sales (like-for-like stores) and scored the BIS way on
    cycles not used to fit. It never changes a factor; "Use" only sets the draft strength, Save applies it. */
 const _x=v=>v==null?'-':'×'+(+v).toFixed(2);
+const _bandsOf=(M,key,div)=>Array.isArray(M[key])?M[key]:(M[key]?.[div]||[]);   // per division (older checks: one list)
 const MON3=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 // '2026-07,2026-08' -> "Jul-Aug'26"; '2022-07' -> "Jul'22"
 const _mlaMon=s=>{if(!s)return '';const m=String(s).split(',').map(t=>MON3[+t.slice(5,7)-1]+"'"+t.slice(2,4));return m.length>1?m[0].split("'")[0]+'-'+m[m.length-1]:m[0];};
@@ -5986,13 +5991,13 @@ function _fmHistHtml(sec,dv,cols,ft){
   const Lk=v=>(v>=0?'+':'−')+Math.abs(v*100).toFixed(1)+' L';
   const says=m=>m==null?'<span class="fm-note">not enough history</span>'
     :`${_fmBar(m)}<b>${_x(m)}</b> <span class="${gCls(plain*(m-1))}">≈ ${Lk(plain*(m-1))}</span>`;
-  const bg=d.band_g!=null?M.bands_growth[d.band_g]:null,br=d.band_r!=null?M.bands_recent[d.band_r]:null;
-  const band=b=>b?`those at ${_x(b.from)}–${_x(b.to)} vs their division`:'-';
+  const BGd=_bandsOf(M,'bands_growth',dv.nm),bg=d.band_g!=null?BGd[d.band_g]:null,br=d.band_r!=null?_bandsOf(M,'bands_recent',dv.nm)[d.band_r]:null;
+  const band=b=>b?`${_h(dv.nm)} departments at ${_x(b.from)}–${_x(b.to)} vs their division`:'-';
   const r=M.ridge,ok=r.mean<M.plain.mean-FM_NOISE;
   const rows=[
     ['25V26 growth','Did departments that grew like this one last year keep it the next year?',
       `${d.g1==null?'n/a':fP(d.g1*100)}<div class="fm-note">${_x(d.rel_g1)} its division's middle department</div>`,
-      band(bg)+(d.band_g===0?'<div class="fm-note">collapsed last year - many bounced back off a weak base</div>':d.band_g===M.bands_growth.length-1?'<div class="fm-note">surged last year - most kept some of it</div>':''),
+      band(bg)+(d.band_g===0?'<div class="fm-note">collapsed last year - many bounced back off a weak base</div>':d.band_g===BGd.length-1?'<div class="fm-note">surged last year - most kept some of it</div>':''),
       bg?.rel_perf],
     ['Recent momentum',`${_mlaMon(M.plan.recent)} vs a year earlier - the most consistent pattern, but the BIS has no driver for it.`,
       d.rel_gr==null?'n/a':`${_x(d.rel_gr)}<div class="fm-note">vs its division</div>`,band(br),br?.rel_perf],
@@ -6042,28 +6047,37 @@ function _fmStrHistHtml(ft,ed){
   </div>`;
 }
 const FM_ML_LBL={rel_g1:'25V26 growth vs its division',rel_g2:'2-year growth vs its division',rel_gr:'recent momentum vs its division',
-  rel_g1_div:'division growth gap',accel:'speeding up (this year vs 2 years)',log_size:'department size',share_ly:'its share of the division',
-  miss_g1:'no 25V26 history',miss_g2:'no 2-year history',miss_gr:'no recent-month history',season_MAMJ:'Mar-Jun season',season_JASO:'Jul-Oct season',
-  div_MENS:'MENS',div_LADIES:'LADIES'};
+  rel_g1_div:'growth vs the division total',accel:'speeding up (this year vs 2 years)',rel_size:'size vs its division',log_size:'department size',
+  share_ly:'its share of the division',miss_g1:'no 25V26 history',miss_g2:'no 2-year history',miss_gr:'no recent-month history',
+  season_MAMJ:'Mar-Jun season',season_JASO:'Jul-Oct season',div_MENS:'MENS',div_LADIES:'LADIES'};
+const FM_DIVS=['MENS','LADIES','KIDS'];
 function _fmMlHtml(ft,ed){
   const wait=_fmMlaWait(),pct=v=>(v*100).toFixed(2)+'%';
   if(wait)return `<div class="fm-sec"><div class="fm-note">${_h(wait)}${PLANNER.mla?.error?_fmMlaBtn():''}</div></div>`;
   const M=PLANNER.mla.data,R=M.ridge,saved=PLANNER.ft?.mode==='ml'?PLANNER.ft.ml:null;
-  const coef=Object.entries(R.coef||{}).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
-  const cyc=Object.keys(R.walk_forward||{}).sort();
+  if(!R.per_division)return `<div class="fm-sec"><div class="fm-note">This history check is from before the per-division model. ${_fmMlaBtn()||'Ask a planner to refresh the history check.'}</div></div>`;
+  const cyc=Object.keys(R.walk_forward||{}).sort(),SF=M.st_fill||{by_division:{}},win=_mlaMon((SF.window||'').replace('..',','));
+  const strength=f=>Math.max(...FM_DIVS.map(dn=>Math.abs(R.coef[dn]?.[f]??0)));
+  const feats=[...new Set(FM_DIVS.flatMap(dn=>Object.keys(R.coef[dn]||{})))].sort((a,b)=>strength(b)-strength(a));
+  const eff=v=>{if(v==null)return '<td class="fm-note">-</td>';const m=Math.exp(v);return `<td>${_fmBar(m,1)}×${m.toFixed(3)}</td>`;};
   return `<div class="fm-sec">
-    <div class="fm-rule"><b>Ridge regression (ML)</b> - a weighted ridge regression: a linear model of how much a department beat or missed its plain share the next year, with a penalty (λ ${R.lambda}) that keeps the factors small. Learnt from ${M.cycles.length} past planning cycles (${_mlaMon(M.cycles[0])} to ${_mlaMon(M.cycles[M.cycles.length-1])}) on like-for-like stores; then the BIS small-department damping and 0.8-1.2 limits. Nothing to tune here - it is learnt from the data.</div>
+    <div class="fm-rule"><b>Ridge regression (ML)</b> - one weighted ridge regression <b>per division</b>: MENS, LADIES and KIDS each have their own model, learnt only from that division's departments, and every clue compares a department with the middle department of its own division - nothing is borrowed from another division. A ridge regression is a linear model of how much a department beat or missed its plain share the next year, with a penalty (λ, picked per division on its own earlier cycle) that keeps the factors small. Learnt from ${M.cycles.length} past planning cycles (${_mlaMon(M.cycles[0])} to ${_mlaMon(M.cycles[M.cycles.length-1])}) on like-for-like stores; sell-thru and fill rate are added from the 2026 months; then the BIS small-department damping and 0.8-1.2 limits. Nothing to tune - it is learnt from the data.</div>
     <div class="fm-note" style="margin-top:6px">${saved?`In use: the factors saved ${_h(String(PLANNER.ft.updated_at||'').replace('T',' '))} from the history check of ${_h(String(saved.built_at).replace('T',' '))}.${saved.built_at!==M.built_at?` The history check has since been rebuilt (${_h(M.built_at.replace('T',' '))}) - Save to take its new factors.`:''}`
       :`Use this + Save stores the current factors (history check of ${_h(M.built_at.replace('T',' '))}) with the factor table, so a later refresh of the check does not move the plan until a planner saves again.`}</div>
-    <h4 style="margin:12px 0 4px">Tried on past cycles it had not seen</h4>
-    <table class="pl-ft fm-curve"><tbody><tr><th>Cycle</th>${cyc.map(c=>`<td>${_mlaMon(c)}</td>`).join('')}<td><b>Average</b></td></tr>
-      <tr><th>Ridge regression (ML) error</th>${cyc.map(c=>`<td class="${R.walk_forward[c]<M.plain.by_cycle[c]?'gp':''}">${pct(R.walk_forward[c])}</td>`).join('')}<td><b>${pct(R.mean)}</b></td></tr>
-      <tr><th>No factor error</th>${cyc.map(c=>`<td>${pct(M.plain.by_cycle[c])}</td>`).join('')}<td><b>${pct(M.plain.mean)}</b></td></tr></tbody></table>
-    <div class="fm-note" style="margin-top:4px">Error = how far the department split was from what actually sold (lower is better; green = beat no factor that cycle). Better than no factor in ${R.wins} of ${cyc.length} cycles.${R.mean<M.plain.mean-FM_NOISE?'':' On average it is not better than no factor yet.'}</div>
-    <h4 style="margin:12px 0 4px">What it learnt</h4>
-    <table class="pl-ft fm-curve"><thead><tr><th>Input</th><th>Effect of a typical difference</th><th></th></tr></thead><tbody>${coef.map(([k,v])=>{const m=Math.exp(v);
-      return `<tr><th>${_h(FM_ML_LBL[k]||k)}</th><td>${_fmBar(m,1)}×${m.toFixed(3)}</td><td class="fm-note">${Math.abs(v)<0.005?'barely matters':v>0?'more of it - a little more plan':'more of it - a little less plan'}</td></tr>`;}).join('')}</tbody></table>
-    <div class="fm-note" style="margin-top:4px">"Typical difference" = one standard deviation of that input across departments. Sell-thru and fill rate are not in the model - there is no history of them before 2026. ${_fmMlaBtn()}</div>${_fmMlaErr()}
+    <h4 style="margin:12px 0 4px">History part - tried on ${cyc.length} past cycles it had not seen, each division on its own</h4>
+    <table class="pl-ft fm-curve"><thead><tr><th>Division</th><th>Ridge regression (ML) error</th><th>No factor error</th><th>Better than no factor</th></tr></thead><tbody>
+      ${FM_DIVS.map(dn=>{const b=R.by_division?.[dn];return b?`<tr><th>${dn}</th><td class="${b.mean<b.plain-FM_NOISE?'gp':''}">${pct(b.mean)}</td><td>${pct(b.plain)}</td><td>${b.wins} of ${cyc.length} cycles</td></tr>`:'';}).join('')}
+      <tr><th>All three (errors added up)</th><td><b>${pct(R.mean)}</b></td><td><b>${pct(M.plain.mean)}</b></td><td>${R.wins} of ${cyc.length} cycles</td></tr></tbody></table>
+    <div class="fm-note" style="margin-top:4px">Error = how far each division's department split was from what actually sold (lower is better). Each division is scored on its own; the bottom row only adds the three up.${R.mean<M.plain.mean-FM_NOISE?'':' On average the history part is not better than no factor yet.'}</div>
+    <h4 style="margin:12px 0 4px">Sell-thru and fill rate - learnt on ${win||'the 2026 months'}, each division on its own</h4>
+    <table class="pl-ft fm-curve"><thead><tr><th>Division</th><th>Departments</th><th>Error, history part only</th><th>Error with sell-thru + fill rate</th><th>Higher sell-thru</th><th>Higher fill rate</th><th>Used</th></tr></thead><tbody>
+      ${FM_DIVS.map(dn=>{const o=SF.by_division?.[dn];if(!o)return '';const t=v=>v==null||!o.on?'<td class="fm-note">-</td>':`<td>${_fmBar(v,1)}×${(+v).toFixed(3)}</td>`;
+        return `<tr><th>${dn}</th><td>${o.n}${o.n_st!=null?`<div class="fm-note">${o.n_st} with sell-thru, ${o.n_fill} with fill rate</div>`:''}</td><td>${o.err_without!=null?pct(o.err_without):'-'}</td><td class="${o.on?'gp':''}">${o.err_with!=null?pct(o.err_with):'-'}</td>${t(o.typ_st)}${t(o.typ_fill)}<td>${o.on?'yes':`no - ${_h(o.why||'it did not help')}`}</td></tr>`;}).join('')}</tbody></table>
+    <div class="fm-note" style="margin-top:4px">Sell-thru = the BIS Mar-Jun'26 average weekly sell-thru; fill rate = the fill-rate file. There is no history of either before 2026, so they are learnt on one window - the months after Mar-Jun'26 - on top of the history part (its own view taken out first), and each department's error is from a fit without that department. Weak evidence; it switches off in a division where it does not help.</div>
+    <h4 style="margin:12px 0 4px">What the history part learnt - per division</h4>
+    <table class="pl-ft fm-curve"><thead><tr><th>Input (vs its own division)</th>${FM_DIVS.map(dn=>`<th>${dn}</th>`).join('')}</tr></thead><tbody>${feats.map(f=>
+      `<tr><th>${_h(FM_ML_LBL[f]||f)}</th>${FM_DIVS.map(dn=>eff(R.coef[dn]?.[f])).join('')}</tr>`).join('')}</tbody></table>
+    <div class="fm-note" style="margin-top:4px">Effect of a typical difference (one standard deviation of that input among the division's departments): above ×1.00 = more of it, a little more plan. ${_fmMlaBtn()}</div>${_fmMlaErr()}
   </div>`;
 }
 function _fmMatrixHtml(ft,ed){
