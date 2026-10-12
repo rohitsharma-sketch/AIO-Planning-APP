@@ -80,19 +80,15 @@ export const putAppState = (payload) => jsonPost('/app-state', payload, 'PUT')
 
 // festival-changelog
 export const getFestivalChangelog = (rangeKey) => fetchJson(`/festival-changelog${rangeKey ? `?range_key=${encodeURIComponent(rangeKey)}` : ''}`)
-export const putFestivalChangelog = (payload) => jsonPost('/festival-changelog', payload, 'PUT')
 
 // salesdata-link-selection
 export const getSalesdataLinkSelection = (sourceType) => fetchJson(`/salesdata-link-selection/${sourceType}`)
 export const putSalesdataLinkSelection = (sourceType, payload) => jsonPost(`/salesdata-link-selection/${sourceType}`, payload, 'PUT')
 
 // scan endpoints
-export const getSalesdataLink = (refresh) => fetchJson(`/salesdata/link${refresh ? '?refresh=1' : ''}`)
-export const getSalesdataLinkDaywise = (refresh) => fetchJson(`/salesdata/link-daywise${refresh ? '?refresh=1' : ''}`)
 export const startLinkScan = (sourceType, refresh) =>
   fetchJson(`/salesdata/link/start?source_type=${sourceType}${refresh ? '&refresh=1' : ''}`, { method: 'POST' })
 export const pollLinkScan = (jobId) => fetchJson(`/salesdata/link/poll/${jobId}`)
-export const runReindex = (payload) => jsonPost('/salesdata/reindex', payload)
 export const startReindex = (payload) => jsonPost('/salesdata/reindex/start', payload)
 export const getSalesSnapshotSummary = (source) => fetchJson(`/salesdata/snapshot-summary?source=${source}`)
 // A completed job's result now streams straight off disk (see

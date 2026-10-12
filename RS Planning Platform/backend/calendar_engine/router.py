@@ -13,7 +13,7 @@ from sqlalchemy import delete, func, select, text, update
 from auth.deps import require_login, require_role
 from calendar_engine.cluster_names import resolve_cluster_name
 from calendar_engine.scans import (
-    get_salesdata_link, get_salesdata_link_daywise, run_reindex,
+    run_reindex,
     start_reindex_job, poll_reindex_job, get_reindex_result_stream_path,
     get_reindex_csv_path,
     start_link_scan_job, poll_link_scan_job,
@@ -855,16 +855,6 @@ def put_salesdata_link_selection(source_type: str, body: dict = Body(...), actor
         session.close()
 
 
-@router.get("/salesdata/link")
-def salesdata_link(refresh: bool = False, user: dict = Depends(require_login)):
-    return get_salesdata_link(force_refresh=refresh)
-
-
-@router.get("/salesdata/link-daywise")
-def salesdata_link_daywise(refresh: bool = False, user: dict = Depends(require_login)):
-    return get_salesdata_link_daywise(force_refresh=refresh)
-
-
 @router.post("/salesdata/link/start")
 def salesdata_link_start(source_type: str, refresh: bool = False, user: dict = Depends(require_login)):
     """Background variant of /salesdata/link[-daywise] - returns a job id
@@ -985,31 +975,6 @@ def salesdata_reindex_cache_status(payload: dict = Body(...), user: dict = Depen
     for cluster, ref_date, fut_date in pairs:
         day_map.setdefault(cluster, []).append([ref_date.isoformat(), fut_date.isoformat()])
     return reindex_month_cache_status(source, months, day_map, extra_dims, metric, store_cluster)
-
-
-@router.get("/salesdata/snapshot/{source_type}/{kind}")
-def salesdata_snapshot(source_type: str, kind: str, user: dict = Depends(require_login)):
-    """The last successful Run Reindex output for this source, saved by
-    run_reindex() - 'actual' (real sales on their own date) or 'trend_shifted'
-    (calendar-shifted). Read by other apps (e.g. SalesPlan's Sales Sync) so
-    they stay in step with Calendar Engine's own DB instead of re-parsing
-    sales themselves."""
-    from db.models.calendar import SalesSnapshot
-
-    if source_type not in ("mw", "dw") or kind not in ("actual", "trend_shifted"):
-        raise HTTPException(404, "source_type must be 'mw'/'dw', kind must be 'actual'/'trend_shifted'")
-    session = SessionLocal()
-    try:
-        row = session.get(SalesSnapshot, (source_type, kind))
-        if row is None:
-            return {"ok": False, "computedAt": None}
-        return {
-            "ok": True, "source": row.source_type, "kind": row.kind, "grain": row.grain, "metric": row.metric,
-            "columns": row.columns, "rows": row.rows, "rowsRead": row.rows_read, "rowsMapped": row.rows_mapped,
-            "computedAt": row.computed_at.isoformat(),
-        }
-    finally:
-        session.close()
 
 
 @router.get("/salesdata/snapshot-summary")

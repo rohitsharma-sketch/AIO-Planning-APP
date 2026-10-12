@@ -8,14 +8,6 @@ from collections import Counter
 from urllib.parse import urlsplit, parse_qs
 
 DB_DIR = os.path.join(os.path.dirname(__file__), "Local DB")
-DB_PATH = os.path.join(DB_DIR, "festival_changelog.json")
-DEFAULT_TEMPLATE = os.path.join(DB_DIR, "Default Template.xlsx")
-STORE_MAP_PATH = os.path.join(DB_DIR, "store_cluster_map.json")
-STORE_LOG_PATH = os.path.join(DB_DIR, "store_cluster_log.json")
-
-# Named state stores persisted as Local DB/<key>.json via /api/state/<key>
-STATE_KEYS = {"period_log", "app_state", "calendar_library", "store_cluster_map", "store_cluster_log",
-              "salesdata_link_selection", "salesdata_link_selection_daywise"}
 
 # ─── Sales data lake link (read-only; no data is imported/processed in this step) ─
 PARQUET_DIR = (r"\\10.0.1.85\Users\Citykart\Desktop\AI_WORK\INVENTORY AUTOMATION"

@@ -27,9 +27,8 @@ import sys
 # any of them get a chance to run their own.
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-# Same list as app.py's DB_SYNC_JOBS - kept as a literal copy, not an import,
-# so this script has no dependency on app.py (which pulls in the full FastAPI
-# app just to read one constant) and can run standalone.
+# The one sync job list (app.py's db-sync and the daily task both run this
+# script), so it has no dependency on app.py and can run standalone.
 DB_SYNC_JOBS = [
     ("site_master", "data_lake_site_master"),
     ("store_master_xlsx", "store_master_xlsx"),

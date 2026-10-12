@@ -39,7 +39,7 @@ os.makedirs(SESSIONS_DIR, exist_ok=True)
 
 def _session_dir(session_id: str) -> str:
     # a session id is a UUID (session-from-db / upload) - anything else ("..", "..\\") could reach outside sessions/
-    # and DELETE /api/sessions/{id} would rmtree it (readiness review 2026-10-05)
+    # and a session folder is copied / removed by that path (readiness review 2026-10-05)
     try:
         sid = str(uuid.UUID(session_id))
     except (ValueError, AttributeError, TypeError):
@@ -283,18 +283,6 @@ def get_data(session_id: str):
         return json.load(f)
 
 
-@router.get("/api/palettes")
-def list_palettes():
-    labels = {
-        "classic": "Classic Navy",
-        "emerald": "Slate & Emerald",
-        "amber":   "Midnight & Amber",
-        "coral":   "Deep Purple & Coral",
-        "forest":  "Forest & Gold",
-    }
-    return [{"id": k, "label": labels.get(k, k), **v} for k, v in EXCEL_PALETTES.items()]
-
-
 @router.get("/api/download/{session_id}")
 def download(session_id: str):
     out = _output_path(session_id)
@@ -305,13 +293,6 @@ def download(session_id: str):
         filename="AOP_Forecast.xlsx",
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
-
-
-@router.delete("/api/sessions/{session_id}")
-def delete_session(session_id: str):
-    shutil.rmtree(_session_dir(session_id), ignore_errors=True)
-    return {"ok": True}
-
 
 
 @router.post("/api/config/session-from-db")
@@ -734,25 +715,6 @@ def aop_lock_status():
         db.close()
 
 
-DB_SYNC_JOBS = [
-    ("site_master", "data_lake_site_master"),
-    ("store_master_xlsx", "store_master_xlsx"),
-    ("day_shift", "data_lake_day_shift"),
-    ("store_actuals", "data_lake_sales"),
-    # Cluster x day sales from the day-wise export - weights the festival
-    # shift by real day sales (db/calendar_shift.py, option b 2026-09-25).
-    ("day_weights", "data_lake_day_weights"),
-    # Runs Calendar Engine's own month-wise reindex (with ATTRIBUTE1) as a
-    # subprocess and saves it to calendar.sales_snapshots - keeps the
-    # "Calendar Engine Reindex" actuals-source toggle (ReviewStep.jsx) and
-    # the Q1 attribute filter fed without a separate manual trip to the
-    # Calendar Engine tab. Runs on every sync, same as the jobs above - see
-    # sync/calendar_reindex_sync.py's docstring for why (confirmed with the
-    # user, not a staleness-check).
-    ("calendar_reindex", "calendar_reindex"),
-]
-
-
 @router.post("/api/config/db-sync")
 def db_sync_all():
     """Spawns sync/run_all.py as a detached subprocess and returns immediately.
@@ -1059,29 +1021,6 @@ def get_store_division_mix(store_ids: str):
         total = totals[store_id] or 1.0
         result[store_id] = {"totalLakhs": round(total, 2), "mix": {d: round(100 * v / total, 1) for d, v in divs.items()}}
     return {"stores": result}
-
-
-@router.delete("/api/config/store-master/untagged")
-def delete_untagged_stores():
-    """Remove all active store rows that have no tag (closed / unused system records)."""
-    from sqlalchemy import select
-    from db.base import SessionLocal
-    from db.models.masterdata import Store
-    from datetime import datetime, timezone
-
-    with SessionLocal() as session:
-        rows = session.execute(
-            select(Store).where(
-                Store.valid_to.is_(None),
-                (Store.tag.is_(None) | (Store.tag == ""))
-            )
-        ).scalars().all()
-        now = datetime.now(timezone.utc)
-        for store in rows:
-            store.valid_to = now
-        session.commit()
-        _invalidate_salesplan_store_cache()
-        return {"deleted": len(rows)}
 
 
 @router.get("/api/config/division-aop-summary")

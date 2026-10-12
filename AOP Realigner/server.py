@@ -344,15 +344,6 @@ class Workspace:
                 try:
                     with open(self.path("original.pkl"), "rb") as fh:
                         saved = pickle.load(fh)
-                    if isinstance(saved, tuple):  # cache written by the previous version: (df, months, meta)
-                        df, months, meta = saved
-                        for c in (STORE, DEPT, engine.DIV, engine.DISP):  # the old reader kept double spaces; today's importer collapses them
-                            df[c] = df[c].astype(str).str.replace(r"\s+", " ", regex=True).str.strip()
-                        saved = {"df": df, "months": months, "report": [], "info": {
-                            "name": urllib.parse.unquote(meta.get("name", "original plan")), "loaded_at": meta.get("loaded_at"),
-                            "rows": len(df), "stores": int(df[STORE].nunique()), "departments": int(df[DEPT].nunique()),
-                            "divisions": sorted(df[engine.DIV].unique().tolist()), "months": months,
-                            "colmap": {c: c for c in df.columns}, "sheets": [], "parse_secs": None}}
                     self.state.update(orig=saved["df"], months=saved["months"], orig_info=saved["info"], orig_report=saved["report"])
                 except Exception:
                     traceback.print_exc()

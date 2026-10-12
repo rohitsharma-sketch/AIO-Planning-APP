@@ -15,7 +15,7 @@ Proxy routing (first match wins):
   /listing/*                     → http://127.0.0.1:8123  (Listing / Delisting Analyser, prefix stripped)
   /growth/*                      → http://127.0.0.1:8075  (Growth vs LY, prefix stripped)
   /str/*                         → http://127.0.0.1:8085  (STR Forecaster, prefix stripped)
-  /api/otb/*, /api/status,
+  /api/status,
     /api/config/aop-div-targets  → http://127.0.0.1:5050  (BIS API, same path)
   /api/config/db-sync*           → http://127.0.0.1:8000  (AOP standalone, no auth)
   /calendar/, /aop/, /planning/,
@@ -107,7 +107,6 @@ PROXY_ROUTES = [
     ('/growth',                          'http://127.0.0.1:8075', '/growth'),
     ('/str',                             'http://127.0.0.1:8085', '/str'),
     # BIS API routes — same path at 5050
-    ('/api/otb/',                        'http://127.0.0.1:5050', ''),
     ('/api/status',                      'http://127.0.0.1:5050', ''),
     # AOP standalone — sync endpoints and division targets (no auth required)
     ('/api/config/aop-division-targets', 'http://127.0.0.1:8000', ''),
