@@ -135,6 +135,9 @@ export default function DivisionPlan() {
               </table>
             </div>
           </div>
+          {/* user, 2026-10-12: "can i have a cluster/store breakup based on the toggle" - right under the division table
+              (it sat at the page foot, under the charts), following the header's Plan by Store / Cluster */}
+          <GrainPanel stage="division" title="Division plan" />
 
           {cmp && (() => {
             const bis = Object.fromEntries(cfg.divisions.map(d => [d.division_name, d]))
@@ -221,7 +224,6 @@ export default function DivisionPlan() {
           </details>
         </>)}
       </div>
-      <GrainPanel stage="division" title="Plan by store / cluster" />
     </div>
   )
 }

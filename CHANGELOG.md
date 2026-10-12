@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-12
 
+### Sales Plan Division Plan: store / cluster breakup right under the division table
+- **Asked (user):** "can i have a cluster/store breakup based on the toggle ?" (screenshot of Division Plan).
+- The breakup panel was already on the page but sat at the very bottom, under the collapsed charts. It is now directly under "Division Plan (as in BIS)", titled **Division plan · by store / by cluster**. It follows the header's Plan by Store | Cluster toggle and its own Store | Cluster buttons. Clusters expand to their stores; a store row shows its cluster's total.
+- Checked in the sandbox of the built pages: table, then breakup, then charts; switching to Cluster shows 9 clusters / 207 stores. dist rebuilt; 8010 serves it from disk (a tab opened earlier needs a refresh).
+
 ### BIS: top-bar overlap fixed, iteration remover, versions keep buyer entries + division locks
 - **Asked (user):** "rectify this overlap. Also, give me a iteration remover in the selection pane" (screenshot: the "Buyer's Input Sheet" title under the AOP chip).
 - **Overlap:** the action buttons were allowed to shrink, so when they didn't fit they slid left over the centred title. Now they never shrink, and the title takes the space left: centred while there is room, shortened with "…" when there isn't. Checked at 1630 / 1400 / 1200 px: no overlap, title not cut.
