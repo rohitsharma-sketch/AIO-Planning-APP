@@ -474,6 +474,8 @@ td.aop-col-bg input.gi{background:var(--sf)}
 /* ML breakdown tab (12 Oct): waterfall of history x sell-thru x fill x damping on one log scale around x1.00 */
 .fm-mb-legend{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;font-size:11px;color:var(--t2);margin:6px 0 10px}
 .fm-mb-legend i{display:inline-block;width:14px;height:6px;border-radius:3px;margin-right:5px;vertical-align:middle}
+.fm-mb-nc{display:inline-flex;flex-direction:column;align-items:flex-end;padding:2px 7px;margin-right:6px;border:1px dashed var(--bd);border-radius:6px;color:var(--mu);font-size:11px;line-height:1.25;vertical-align:middle}
+.fm-mb-nc small{font-size:9.5px}
 .fm-mb-divs{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-bottom:10px}
 .fm-mb-dc{border:1px solid var(--bd);border-radius:9px;padding:9px 11px;font-size:11px;color:var(--t2);display:grid;gap:5px}
 .fm-mb-dc b.n{font-size:13px;color:var(--tx)}
@@ -6486,7 +6488,10 @@ function _fmMlBreakHtml(ft){
   return `<div class="fm-sec" style="margin-top:10px">
     <div class="fm-rule"><b>How each department's Ridge regression (ML) factor is built</b> - the history part (what sales history learnt, one model per division) × sell-thru × fill rate = the model's factor; then the BIS small-department damping and 0.8-1.2 limits give the factor the plan would use. Every part compares a department with its own division, so ×1.00 = the division's average department.</div>
     <div class="fm-mb-legend">${FM_MB_STEPS.map(([k,nm,col])=>`<span><i style="background:${col}"></i>${nm}</span>`).join('')}<span><i style="background:var(--po);width:3px"></i>factor used (up)</span><span><i style="background:var(--ne);width:3px"></i>(down)</span>
-      <span class="fm-note">Waterfall lanes run top to bottom in that order, from ×1.00 (the grey line); log scale ×${FM_MB_LO}-×${FM_MB_HI}.</span></div>${_fmMbHelp(_fmMbHelpOpen)}
+      <span class="fm-note">Waterfall lanes run top to bottom in that order, from ×1.00 (the grey line); log scale ×${FM_MB_LO}-×${FM_MB_HI}.</span></div>
+    <div class="fm-mb-legend"><span class="fm-note">“No effect” in the Sell-thru / Fill rate columns:</span>
+      <span><span class="fm-mb-nc">No effect<small>${FM_DIVS.filter(dn=>SF[dn]&&!SF[dn].on).join(' / ')||'a division'} doesn’t use it</small></span>switched off in that division - it did not make that division’s plan more accurate</span>
+      <span><span class="fm-mb-nc">No effect<small>no sell-thru figure</small></span>this department has no figure, so it counts as average for its division (same for fill rate)</span></div>${_fmMbHelp(_fmMbHelpOpen)}
     <div class="fm-mb-divs">${FM_DIVS.map(card).join('')}</div>
     <div class="fm-note" style="margin-bottom:6px">${R.mean<M.plain.mean-FM_NOISE?'':`On past cycles the history part did no better than no factor (${pc(R.mean)} vs ${pc(M.plain.mean)}, better in ${R.wins} of ${cyc}) - read this as a second opinion, not for decisions. `}${saved?`In use: the factors saved ${_h(String(PLANNER.ft.updated_at||'').replace('T',' '))}${saved.built_at!==M.built_at?' from an older history check - this tab shows the latest one':''}.`:'Not the method in use - shown for comparison.'} History check built ${_h(String(M.built_at||'').replace('T',' '))}.</div>
     <div class="fm-mb-ctl"><span class="fm-note">Division:</span>${pill('all','All')}${FM_DIVS.map(dn=>pill(dn,dn)).join('')}
