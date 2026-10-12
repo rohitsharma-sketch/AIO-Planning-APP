@@ -6427,7 +6427,8 @@ function _fmMbHelp(open){
   const sw=c=>`<i class="sw" style="background:${c}"></i>`;
   const T=[['×1.00','The department keeps its normal share of its division (its last-year share). ×1.10 = 10% more plan than that share, ×0.90 = 10% less.'],
     ['History part','What past years say: departments with a similar pattern (growth, recent momentum, size - each against its own division) did better or worse than their share the next year.'],
-    ['Sell-thru / Fill rate','An extra nudge from this season’s sell-thru and fill rate compared with the division’s typical department. Grey ×1.000 = not used in that division (it did not help there) or no data for the department.'],
+    ['Sell-thru / Fill rate','A small push up or down from this season’s sell-thru and fill rate, compared with the division’s typical department.'],
+    ['No effect','Shown in the Sell-thru or Fill rate column when that figure did not change the department’s plan at all. The line under it says why: <b>“KIDS doesn’t use it”</b> - in that division the figure did not make the plan more accurate, so it is switched off for every department there; <b>“no sell-thru figure” / “no fill-rate figure”</b> - this department has no figure, so it is treated as average for its division.'],
     ['Model factor','History part × sell-thru × fill rate, before the BIS safety rules.'],
     ['Damping + limits','The BIS safety rules: small departments are pulled towards ×1.00, and no factor goes below ×0.80 or above ×1.20. A big number here (say ×3.1) only means the ×0.80 floor lifted a very low model factor back up.'],
     ['Factor used','What the plan would apply. The division total still equals its AOP afterwards - the factors only move plan between departments.'],
@@ -6468,13 +6469,13 @@ function _fmMlBreakHtml(ft){
   const rows=all.filter(r=>_fmMbDiv==='all'||r.q.dv.nm===_fmMbDiv)
     .sort(_fmMbSort==='size'?(a,b)=>b.q.ly-a.q.ly:_fmMbSort==='name'?(a,b)=>a.q.sec.nm.localeCompare(b.q.sec.nm):(a,b)=>Math.abs(Math.log(b.g))-Math.abs(Math.log(a.g)));
   const q=_fmMbQ.trim().toLowerCase();
-  const cell=(v,nc)=>nc?`<td class="nc" title="${_h(nc)}">×1.000</td>`:`<td class="${cls(v)==='up'?'gp':cls(v)==='dn'?'gn':''}">${x3(v)}</td>`;
+  const cell=(v,nc)=>nc?`<td class="nc" title="${_h(nc[1])}">No effect<span class="dv">${_h(nc[0])}</span></td>`:`<td class="${cls(v)==='up'?'gp':cls(v)==='dn'?'gn':''}">${x3(v)}</td>`;
   const tr=r=>{const d=r.d,o=SF[r.q.dv.nm]||{},n=(r.q.sec.nm+' '+r.q.dv.nm).toLowerCase();
     const why=(d.why||[]).map(w=>`<span class="fm-mb-chip ${cls(+w.mult)}">${_h(w.label)} ${_x(w.mult)}</span>`).join('')||'<span class="fm-note">-</span>';
     return `<tr data-n="${_h(n)}" data-dept="${_h(r.q.sec.id)}"${q&&!n.includes(q)?' hidden':''}>
       <td>${_h(r.q.sec.nm)}<span class="dv">${_h(r.q.dv.nm)}</span></td>${cell(r.h)}
-      ${cell(r.st,!o.on?'sell-thru not used in this division':d.st==null?'no sell-thru for this department - neutral':'')}
-      ${cell(r.fi,!o.on?'fill rate not used in this division':d.fill==null?'no fill rate for this department - neutral':'')}
+      ${cell(r.st,!o.on?[`${r.q.dv.nm} doesn’t use it`,`Sell-thru is switched off in ${r.q.dv.nm}: adding it did not make the ${r.q.dv.nm} plan any more accurate`]:d.st==null?['no sell-thru figure','There is no sell-thru figure for this department, so it counts as average for its division']:null)}
+      ${cell(r.fi,!o.on?[`${r.q.dv.nm} doesn’t use it`,`Fill rate is switched off in ${r.q.dv.nm}: adding it did not make the ${r.q.dv.nm} plan any more accurate`]:d.fill==null?['no fill-rate figure','There is no fill-rate figure for this department, so it counts as average for its division']:null)}
       <td class="nc">${x3(r.ml)}</td>${cell(r.guard)}<td class="f"><b class="${cls(r.g)}">${x3(r.g)}</b></td>
       <td>${_fmMbTrack(r)}</td><td class="why">${why}</td>
       <td><button type="button" class="fm-mb-open" onclick="_fmMbOpen(this)" aria-label="Preview ${_h(r.q.sec.nm)}">Preview ›</button></td></tr>`;};
