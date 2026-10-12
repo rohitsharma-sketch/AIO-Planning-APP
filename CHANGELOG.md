@@ -7,6 +7,26 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-12
 
+### BIS: plan versions moved to the database
+- **Asked (user):** "move the BIS versions to the database".
+- **Where they live:** the Original + iterations are now in Postgres, `planning_inputs.bis_plan_versions` (`id`, `data` JSONB = the BIS entry as before, `last_modified_at`), so every machine sees the same list. This is the same approach as AOP's own `plan_versions`.
+  - Backend: `Tentative AOP Forecaster/db/bis_plan_versions.py` (self-check `db/test_bis_plan_versions.py`).
+  - Routes: `GET`/`POST /api/config/bis-plan-versions` on AOP 8000, reached through the BIS server (5050 proxy, and `/buyer/...` behind Landing). No Landing change and no Landing restart.
+- **The server numbers every new version,** so two machines can't both make an Original or reuse an iteration number:
+  - with no Original yet, a new version becomes the Original; otherwise it becomes the next iteration;
+  - an existing version keeps its number;
+  - the Original is never overwritten;
+  - the cap keeps the Original plus the newest iterations (10 in all).
+- **First move:** the first BIS that opens with an empty table copies its own browser list in as it is, keeping its Original and numbers. After that, every browser follows the database list.
+- **When the server can't be reached:** the browser copy stays. A version saved meanwhile is marked "not in the database yet" and is sent the next time BIS opens or the list is pulled.
+- **Fixed from `19577b9`:** on page load the selector ran before the version-log setup and always showed "No saved version yet" until the first Save. It now runs at the end of the script.
+- **Checked:**
+  - `test_bis_plan_versions` OK.
+  - Save and import ran against the real DB inside a transaction that was rolled back: Original, then Iteration 1; Original kept; second import refused; table empty afterwards.
+  - The BIS page on 5050 was tested against an in-memory stand-in for the server: first save, a save while down (pending), reconnect (sent), another machine's iteration showing up, first-move import.
+  - The real table is still empty: your browser's list moves in the first time you open BIS.
+  - 8000 and 5050 restarted.
+
 ### BIS: version selector - one Original, the rest iterations
 - **Asked (user):** "give me a version selector just like AOP forecaster in BIS so that there is 1 original version where the others are iterations".
 - A **version selector** in the top bar (next to Before / after and Save) lists **Original**, then **Iteration 1, 2, ...** with each one's save time. The version the plan on screen came from is selected; picking another loads it (asks first, as Plan history's Load does).

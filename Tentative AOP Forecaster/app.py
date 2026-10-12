@@ -592,6 +592,35 @@ def get_buyer_department_growth(division: str | None = None):
         db.close()
 
 
+@router.get("/api/config/bis-plan-versions")
+def get_bis_plan_versions():
+    """BIS plan versions, newest first - the shared Original + iterations (db/bis_plan_versions.py)."""
+    from db.base import SessionLocal
+    from db.bis_plan_versions import list_versions
+    with SessionLocal() as db:
+        return list_versions(db)
+
+
+@router.post("/api/config/bis-plan-versions")
+def post_bis_plan_version(body: dict = Body(...)):
+    """One saved BIS version ({id, snapshot, ...}) -> {version, dropped}; the server numbers it. Or
+    {"import": [...]}: the first browser's own list, accepted only while the table is empty (409 after)."""
+    from db.base import SessionLocal
+    from db.bis_plan_versions import save_version, import_versions
+    with SessionLocal() as db:
+        if "import" in body:
+            out = import_versions(db, body["import"] or [])
+            if out is None:
+                raise HTTPException(409, "BIS versions are already in the database")
+            db.commit()
+            return {"versions": out}
+        if "id" not in body:
+            raise HTTPException(400, "id required")
+        out = save_version(db, body)
+        db.commit()
+        return out
+
+
 @router.post("/api/promote-aop-targets")
 def promote_aop_targets_endpoint(session_id: str | None = None):
     """Lock AOP targets for the Planning Engine: the saved version of

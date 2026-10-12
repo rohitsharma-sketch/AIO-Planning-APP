@@ -753,8 +753,8 @@ tr:hover .blk-lock,.blk-lock:focus-visible{opacity:1}
             <button class="tmenu-item" onclick="closeMenus();exportCSV()">Export CSV<small>The current view only</small></button>
           </div>
         </div>
-        <select class="tbtn ver-sel" id="verSel" onchange="onVerSelChange(this.value)" aria-label="Plan version"
-          title="Plan version - the Original is your first saved plan and never changes; every changed save after it is a new iteration. Pick one to load it."></select>
+        <select class="tbtn ver-sel" id="verSel" onchange="onVerSelChange(this.value)" onmousedown="_vlPull()" aria-label="Plan version"
+          title="Plan version (shared - kept in the database, so every machine sees the same list). The Original is the first saved plan and never changes; every changed save after it is a new iteration. Pick one to load it."></select>
         <div class="tbtn" onclick="openMainCompare()" title="What changed since the last save, department by department - with Undo">Before / after</div>
         <div class="tbtn pri" onclick="saveState(true)">Save</div>
       </div>
@@ -6789,7 +6789,6 @@ loadState();
 _mainSnapTake('opened');
 // Populate auto-saved label from persisted timestamp
 (function(){try{const p=JSON.parse(localStorage.getItem('ck_otb_state')||'{}');if(p.at)_updateSaveLabel(new Date(p.at));}catch(_){}})();
-_renderVerSel();
 _loadLayout();
 _loadNavOrder();
 _buildPaletteSwatches();
@@ -7176,6 +7175,45 @@ function _renderVerSel(){
   el.innerHTML=(list.some(v=>v.id===act)?'':'<option value="" selected disabled>Pick a version</option>')
     +list.map(v=>`<option value="${v.id}"${v.id===act?' selected':''}>${_vlName(v)} · ${_vlShort(v.savedAt)}</option>`).join('');
 }
+// 2026-10-12 (user): "move the BIS versions to the database" - the list lives in Postgres (AOP Forecaster,
+// planning_inputs.bis_plan_versions, via /api/config/bis-plan-versions) so every machine sees the same Original and
+// iterations. localStorage stays as this browser's copy: instant reads, and the fallback when the server can't be
+// reached (a version saved then is marked _pending and goes up on the next pull). The server numbers new versions
+// and never overwrites the Original. First pull with an empty DB: this browser's list goes in as it is.
+const _VL_API=SYNC_BASE+'/api/config/bis-plan-versions';   // /buyer -> 5050 -> AOP 8000 (as the planner calls)
+let _vlDbOk=null;
+async function _vlPost(body){
+  const r=await fetch(_VL_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  return r.json();
+}
+async function _vlGet(){
+  const r=await fetch(_VL_API,{cache:'no-store'});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  return r.json();
+}
+async function _vlPull(){
+  try{
+    let list=await _vlGet();
+    const local=_vlLoad();
+    if(!list.length&&local.length){
+      try{list=(await _vlPost({import:[...local].sort((a,b)=>a.id-b.id)})).versions;}
+      catch(e){list=await _vlGet();}   // 409: another browser moved its list in first - follow that one
+    }else{
+      const pend=local.filter(v=>v._pending).sort((a,b)=>a.id-b.id);   // oldest first, so the server numbers them in order
+      for(const v of pend)await _vlPost(v);
+      if(pend.length)list=await _vlGet();
+    }
+    _vlSave(list);
+    _vlDbOk=true;
+  }catch(e){_vlDbOk=false;}   // keep this browser's copy
+  _renderVerSel();
+  return _vlDbOk;
+}
+async function _vlPush(v){
+  try{await _vlPost(v);await _vlPull();}
+  catch(e){_vlDbOk=false;toast('Version kept in this browser only - the database could not be reached. It goes up the next time BIS opens.');}
+}
 function onVerSelChange(id){
   loadVersion(_vlLoad().findIndex(v=>v.id===Number(id)));   // asks first
   _renderVerSel();                                          // cancelled -> back to the version on screen
@@ -7244,23 +7282,26 @@ function _maybeSaveVersion(now){
   }else if(vers.length&&Math.abs(curSum-_vlTotalSum(vers[i].divisionTotals))<=0.5){
     // same plan (minor drift) - refresh that version in place and make it the latest
     const [v]=vers.splice(i,1);
-    Object.assign(v,{savedAt:now.toISOString(),divisionTotals:cur,snapshot:snap});
+    Object.assign(v,{savedAt:now.toISOString(),divisionTotals:cur,snapshot:snap,_pending:true});
     vers.unshift(v);
     _vlSave(vers);
     _vlSetActive(v.id);
+    _vlPush(v);
     return;
   }
   // new version - store summary totals + full state snapshot for Load
   const id=Date.now();
   const v=vers.length?{id,kind:'iteration',iter:Math.max(0,...vers.map(x=>x.iter||0))+1}:{id,kind:'original'};
-  Object.assign(v,{label:`${_vlName(v)} — ${_vlFmtDate(now)}`,savedAt:now.toISOString(),divisionTotals:cur,snapshot:snap});
+  Object.assign(v,{label:`${_vlName(v)} — ${_vlFmtDate(now)}`,savedAt:now.toISOString(),divisionTotals:cur,snapshot:snap,_pending:true});
   vers.unshift(v);
   while(vers.length>_VL_MAX)vers.splice(vers.map(x=>x.kind).lastIndexOf('iteration'),1);   // the cap drops the oldest iteration, never the Original
   _vlSave(vers);
   _vlSetActive(id);
+  _vlPush(v);
 }
 function openVersionLog(){
   _renderVersionLog();
+  _vlPull().then(_renderVersionLog);
   document.getElementById('vlogOverlay').classList.add('vis');
 }
 function closeVersionLog(){
@@ -7287,11 +7328,11 @@ function _renderVersionLog(){
         <span class="vlog-div">KIDS: ${fCrV(t.KIDS||0)}</span>
       </div>
       <div class="vlog-row-ft">
-        <span style="font-size:10px;color:var(--mu)">Total: ${fCrV((t.MENS||0)+(t.LADIES||0)+(t.KIDS||0))}</span>
+        <span style="font-size:10px;color:var(--mu)">Total: ${fCrV((t.MENS||0)+(t.LADIES||0)+(t.KIDS||0))}${v._pending?' · <b style="color:var(--wa)" title="Saved in this browser; goes to the database the next time it can be reached">not in the database yet</b>':''}</span>
         ${hasSnap?`<button class="vlog-load" onclick="loadVersion(${i})">&#x21A9; Load</button>`:'<span style="font-size:10px;color:var(--mu);font-style:italic">No snapshot</span>'}
       </div>
     </div>`;
-  }).join('')+'<div class="vlog-hint">Loading a version replaces your current plan inputs. Save first if you want to preserve the current state. The Original never changes - saving a changed plan made from it creates the next iteration.</div>';
+  }).join('')+'<div class="vlog-hint">Loading a version replaces your current plan inputs. Save first if you want to preserve the current state. The Original never changes - saving a changed plan made from it creates the next iteration. '+(_vlDbOk===false?'<b>The database could not be reached - showing this browser\'s copy.</b>':'The list is shared: it is kept in the database, so every machine sees the same versions.')+'</div>';
 }
 function loadVersion(idx){
   _planEvent('Load a saved version');
@@ -7319,6 +7360,8 @@ function loadVersion(idx){
   _renderVerSel();
   toast(`Loaded: ${_vlName(v)}`);
 }
+// page load: this browser's copy at once, then the shared list (here, after the version-log consts exist)
+_renderVerSel();_vlPull();
 
 </script>
 <!-- AOP SYNC MODAL -->

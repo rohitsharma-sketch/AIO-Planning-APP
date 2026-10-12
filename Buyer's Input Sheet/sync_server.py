@@ -637,23 +637,28 @@ def planner_fill_rate_upload():
 
 
 @app.route("/api/config/buyer-department-growth", methods=["GET", "POST"])
+@app.route("/api/config/bis-plan-versions", methods=["GET", "POST"])   # BIS versions in the DB (2026-10-12)
 def buyer_department_growth():
     """Proxy to AOP Forecaster (port 8000) — same shape/reasoning as
     /api/config/aop-division-targets above. POST pushes this browser's
     department growth % live after every save; GET is only used by
     SalesPlan's own backend directly (bypasses this proxy), kept here too
-    for parity/debugging via the BIS origin."""
+    for parity/debugging via the BIS origin. Also carries the BIS plan
+    versions (GET the list, POST one saved version)."""
     import urllib.request as _ur
+    import urllib.error as _ue
     from flask import request as _req, Response
-    target = "http://127.0.0.1:8000/api/config/buyer-department-growth"
+    target = "http://127.0.0.1:8000" + _req.path
     try:
         if _req.method == "POST":
             req = _ur.Request(target, data=_req.get_data(), method="POST",
                                headers={"Content-Type": "application/json"})
         else:
             req = _ur.Request(target)
-        with _ur.urlopen(req, timeout=5) as r:
+        with _ur.urlopen(req, timeout=10) as r:
             return Response(r.read(), status=r.status, content_type="application/json")
+    except _ue.HTTPError as e:   # AOP's own answer (e.g. 409) goes back as it is
+        return Response(e.read(), status=e.code, content_type="application/json")
     except Exception as e:
         return jsonify({"ok": False, "note": f"AOP Forecaster unreachable: {e}"}), 502
 
