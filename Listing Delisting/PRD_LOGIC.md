@@ -60,6 +60,9 @@ is unchanged and documented there).
   this scale, but if the apparel scope list ever changes, all 3 need updating together.
 
 ### Delisting-risk score (`scripts/build_risk_scores.py`) — fixed in-season windows (2026-09-21 rework)
+> **Superseded 26 Sep 2026** by `scripts/build_suggestions.py` (festival- and season-aware delist / relist / held,
+> rule v4.0 in `app/rules.js`, shown on the Suggestions and Rules tabs). `build_risk_scores.py` and `risk.json`
+> no longer exist; this section is kept as the rule history.
 Business question: *which currently-Listed store×department combos look at risk of being
 delisted soon?* Built as a static `app/risk.json`, same pattern as `sales.json` — no backend.
 **Run this script AFTER `build_season_category.py`/`build_seasonality.py`** — it reads

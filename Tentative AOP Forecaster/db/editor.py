@@ -5,7 +5,7 @@ Backs the /api/config/growth, /api/config/nso, /api/config/aop-overrides
 endpoints in app.py — the replacement for the removed LeverEditor.jsx, now
 writing directly to Postgres instead of levers.json.
 
-Conventions match db/to_workbook.py and db/migrate_manual_levers.py exactly:
+Conventions match db/to_workbook.py (and the one-time levers migration) exactly:
 month labels are "Mon'YY" (e.g. "Apr'27"), growth rate is a plain percent
 number (6.0 means 6%, not 0.06), row_key/store_id/division_code use '' as
 the "not applicable" sentinel (never NULL — see db/models/planning_inputs.py

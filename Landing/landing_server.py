@@ -15,9 +15,10 @@ Proxy routing (first match wins):
   /listing/*                     → http://127.0.0.1:8123  (Listing / Delisting Analyser, prefix stripped)
   /growth/*                      → http://127.0.0.1:8075  (Growth vs LY, prefix stripped)
   /str/*                         → http://127.0.0.1:8085  (STR Forecaster, prefix stripped)
-  /api/status,
-    /api/config/aop-div-targets  → http://127.0.0.1:5050  (BIS API, same path)
-  /api/config/db-sync*           → http://127.0.0.1:8000  (AOP standalone, no auth)
+  /api/status                    → http://127.0.0.1:5050  (BIS status, same path)
+  /api/config/aop-division-targets, /api/config/aop-versions,
+    /api/config/buyer-department-growth,
+    /api/config/db-sync*         → http://127.0.0.1:8000  (AOP standalone, no auth; BIS fetches these absolute)
   /calendar/, /aop/, /planning/,
     /plan-cycles, /auth/, /api/,
     /docs, /openapi.json         → http://127.0.0.1:8010  (unified platform)
@@ -69,12 +70,10 @@ APPS = [
     {"name": "RS Planning Platform", "port": 8010,
      "cmd": [sys.executable, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", "8010"],
      "cwd": os.path.join(_REPO_ROOT, "RS Planning Platform", "backend")},
-    # Linked directly (not proxied): its xlsx export outruns the 60s proxy timeout.
+    # Proxied at /realigner (streaming, 600 s idle timeout, so its xlsx export passes).
     {"name": "Sales Plan Re-Aligner", "port": 8070,
      "cmd": [sys.executable, "server.py"],
      "cwd": os.path.join(_REPO_ROOT, "AOP Realigner")},
-    # Additional app (joined 2026-09-26): static site over its app/*.json, rebuilt by the
-    # daily data-lake sync (sync/listing_delisting_sync.py). Linked directly on the LAN like 8060/8070.
     # Additional app: was started by its own "NSO Distributor Server" scheduled task
     # (local copy); now one start of Landing covers it too (2026-09-26).
     {"name": "NSO Plan Distributor", "port": 8060,

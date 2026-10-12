@@ -166,7 +166,7 @@ export const FESTIVAL_DB = [
 // Ported verbatim from `Calendar Engine/calendar_engine.html` lines 1160-1206
 // (the table body is byte-identical to the source; only `export` was added).
 // Dates for 2026/2027 match FESTIVAL_DB ref/fut. 2025/2028 are best estimates.
-// Users can override per year-pair - stored in Local DB/festival_changelog.json.
+// Per year-pair overrides live in Postgres (calendar.festival_changelog, read via /festival-changelog).
 // 2020-2024 are historical actuals; 2025-2028 as before. Years outside this
 // range fall back to same month/day estimates - flagged in the sync indicator.
 export const FESTIVAL_DATES = {

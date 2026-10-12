@@ -63,7 +63,7 @@ def adopt_cluster_spelling(session, names):
             session.execute(text(f"UPDATE calendar.{table} o SET {col} = :n WHERE {old}"), {"n": n})
 
 
-# ─── Store / Cluster template parsing (ported verbatim from Calendar Engine/local_server.py) ──
+# ─── Store / Cluster template parsing (ported verbatim from the old standalone local_server.py) ──
 def _pick_columns(header):
     """Return (store_idx, cluster_idx) from a header row; falls back to first two columns."""
     norm = [str(h or "").strip().lower() for h in header]

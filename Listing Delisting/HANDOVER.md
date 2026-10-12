@@ -1,5 +1,10 @@
 # Listing/Delisting Impact Analysis — Handover
 
+> **Status (12 Oct 2026):** this records the original extraction work (21 Sep 2026). Today the raw reports
+> live in `RS_planning/data/listing/RAW/<year>/`, the yearly workbooks in `data/listing/Directories/`, and the
+> scripts in `Listing Delisting/scripts/` (`extract_one.py` kept; `consolidate.py` was removed in the 12 Oct
+> declutter — its code is kept below for reference). The app itself is described in `README.md`.
+
 ## Project
 Building year-wise "Directory Listing" files (one row per **Store × Department × Month**) from raw MC allocation reports, matching the format of the 2026 reference file.
 
@@ -31,7 +36,7 @@ Extraction script handles all 3 automatically (case-insensitive sheet name match
 These 3 files (`Display Wise MC_Wise_Allocation_Report_of_31-Jan-23.xlsb`, `28-Feb-23`, `31-Mar-23`) have **no `MC_LISTING` column anywhere** — verified 3 ways: (1) all 4 tabs' content checked, (2) raw zip inspection confirms only 4 worksheet parts exist (no hidden 5th sheet), (3) header row is contiguous columns 0-46/47 with no gap (46/47 cols vs 49 in months that have it). User touched these files on 2026-09-21 (timestamps changed) but re-check showed the column is still absent — likely just unhid the tab in Excel, which doesn't add data. **2023 output currently covers Apr-Dec only (9 months).** If real Q1'23 listing data is found, re-run extraction for those 3 files and re-merge.
 
 ## Scripts
-Both scripts are saved at `C:\Users\A9820\Downloads\New folder\scripts\` (copies embedded below too, for reference).
+Both scripts were first saved at `C:\Users\A9820\Downloads\New folder\scripts\` (now an archive); `extract_one.py` lives in `Listing Delisting/scripts/`, `consolidate.py` only as the copy below.
 
 ### Extraction script
 `extract_one.py` — usage: `python extract_one.py "<input.xlsb>" "<output.csv>"`

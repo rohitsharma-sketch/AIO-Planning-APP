@@ -58,6 +58,11 @@ This means those sibling folders are **not** separately deployable — they are 
 | SalesPlan/Planning | `/planning/` | ~~8002~~ | No — same reasoning as Calendar Engine |
 | Buyer's Input Sheet | n/a (always standalone) | 5050 | Yes, its only mode |
 
+**One address:** every app — core and additional — is a path on Landing `http://10.0.1.131:7800` behind the one sign-in:
+`/calendar/ /aop/ /planning/` (8010), `/buyer/` (5050), `/nso/` (8060), `/realigner/` (8070), `/growth/` (8075),
+`/str/` (8085), `/listing/` (8123). Only 7800 binds `0.0.0.0`; every app binds `127.0.0.1` and is launched and
+watched by Landing's `APPS` list (30 s watchdog). See §3.9 for the additional tools.
+
 ---
 
 ## 3. App-by-app notes
@@ -68,7 +73,7 @@ Port **7800**. Plain static HTML page + `landing_server.py` (Python's built-in `
 - Shows cards linking to every other app.
 - A "Master Switch" button POSTs to `/api/launch-all` / `/api/shutdown-all`, which shells out to each app's own run command to start/stop everything in one click.
 - `APPS` list inside `landing_server.py` defines exactly what Master Switch launches — **keep this in sync** whenever an app gets unified onto 8010 or un-unified; a stale entry silently launches a duplicate process against a different data store with no visible UI difference (this happened for real — see §7).
-- Auto-start: `Landing/install_autostart.ps1` installs a Windows Startup-folder shortcut so it survives reboots/logins (installed 2026-08-26; wasn't there before, causing silent "connection refused" on the bookmark after every reboot). If the user reports the bookmark not working, check `curl localhost:7800` reachability first — a session open from before this fix may still need Landing started manually once.
+- Auto-start: the scheduled task **"RS Planning - Keep Alive"** (`Landing/install_keep_alive.ps1` → `keep_alive.py`, at sign-in + every 2 min) starts Landing whenever 7800 is down; Landing then launches every `APPS` entry. The older Startup-folder shortcut (`Landing/install_autostart.ps1` → `start.bat`, 2026-08-26) is redundant but harmless. If the bookmark doesn't answer, check `curl --noproxy '*' localhost:7800` first.
 - The purple "L" favicon in Chrome is just Chrome's auto-generated fallback (no real favicon/manifest exists) — cosmetic, not a bug.
 
 ### 3.2 RS Planning Platform (`RS Planning Platform/`)
@@ -77,30 +82,38 @@ Port **8010**. The unified FastAPI backend (`backend/app.py`) serving Calendar E
 Frontends are served from **pre-built `dist/` folders**, not a live dev server (`app.mount(".../assets", StaticFiles(...))` + a catch-all `FileResponse(dist/index.html)`). This is critical — see §6.2, it has bitten this project before.
 
 ### 3.3 Calendar Engine (`Calendar Engine/`)
-Frontend source at `Calendar Engine/frontend/src/`; also has a legacy standalone `local_server.py` (not used in production anymore — see §2's port table). Business logic lives in `RS Planning Platform/backend/calendar_engine/` (backend) and `Calendar Engine/frontend/src/lib/engine.js` (client-side mapping algorithm). This is the module the previous session worked on most deeply — full business-rule detail in **§8**, a dedicated deep-dive section below. Skim §8 before touching anything here.
+Frontend source at `Calendar Engine/frontend/src/` (built into `frontend/dist/`, served by 8010 at `/calendar/`). The old standalone `local_server.py` and its `Local DB/*.json` store are gone (the JSON files were removed with the one-time import script in the 12 Oct 2026 declutter). Business logic lives in `RS Planning Platform/backend/calendar_engine/` (backend) and `Calendar Engine/frontend/src/lib/engine.js` (client-side mapping algorithm). This is the module the previous session worked on most deeply — full business-rule detail in **§8**, a dedicated deep-dive section below. Skim §8 before touching anything here.
 
 ### 3.4 Tentative AOP Forecaster (`Tentative AOP Forecaster/`)
 Annual Operating Plan forecasting engine. Core logic in `engine_v3.py`. Also owns the **shared DB layer** (`db/` — `SessionLocal`, models) that the whole unified platform depends on (see §2). Full business-rule detail in **§9**.
 
 - `.env` here holds the shared Postgres connection string used by AOP, Calendar Engine, and SalesPlan alike.
-- `.claude/launch.json` in this folder has a stale `cwd` — a known but unfixed cosmetic issue, harmless unless something starts depending on it.
+- `.claude/launch.json` in this folder (the AOP frontend dev preview) points at this repo's `frontend/` (fixed 12 Oct 2026; it used to point at the old pre-database copy outside the repo, which is now archived).
 - Has its own standalone launch on port 8000 (intentionally kept, see §2 table) — `Tentative AOP Forecaster/frontend/dist` is also git-tracked (force-added, same as Calendar Engine).
 
 ### 3.5 SalesPlan (`SalesPlan/`)
-Frontend served under `/planning/` on 8010; backend code lives at `SalesPlan/backend/` and is imported into the unified process (see §2). Has the only substantive `README.md` in this repo (`SalesPlan/README.md`) — worth reading if working here. Also has its own Windows service/watchdog installers (`install_service.ps1`, `install_watchdog.ps1`) following the same PowerShell scheduled-task pattern as AOP's auto-sync (§9.2) — pinned interpreter `C:\Users\A9820\AppData\Local\Python\pythoncore-3.14-64\python.exe`, `-WindowStyle Hidden`, `-MultipleInstances IgnoreNew`.
+Frontend served under `/planning/` on 8010; backend code lives at `SalesPlan/backend/` and is imported into the unified process (see §2). `SalesPlan/README.md` has the engines, screens, API prefixes and where each input comes from — read it before working here. The old standalone port 8002 and its start.bat / service / watchdog / firewall scripts were retired in the 12 Oct 2026 declutter (`uninstall_service.ps1` stays to remove the old tasks if a PC still has them).
 
-- **Known open bug (found, not yet fixed)**: a broken `STORE_MASTER_PATH` reference somewhere in SalesPlan's backend — flagged by a survey agent during the previous session but never chased down or fixed. Worth grepping for and confirming before it causes a real failure.
-- **Known open item**: an orphaned `mrp_reapportionment_engine.py` router — appears unmounted/unused. Confirm whether it's dead code or just not wired up yet before deleting.
+- Store master comes from Postgres (`masterdata.stores`, `store_master.py`) since 2026-09-21 — the old `STORE_MASTER_PATH` Excel reference is gone.
+- `mrp_reapportionment_engine.py`'s router is mounted on 8010 (`/api/planning/mrp-reapportionment`, 2026-09-29).
+- Three engines read workbooks **outside the repo** (`...\CLaude - New Projects\SalesPlan\{MRP Cont %, PW-W Deviation, SOR Deviation}`) and MRP re-apportionment reads `...\MRP Merging Engine\Sales Reapportionment` — never move those folders.
 - Its `dist/` folder is now **force-tracked in git like Calendar Engine's and AOP's** (user's standing rule: commit the dists with `git add -A -f`; `dist/` is in `.gitignore`, so a plain `git add` silently skips the new bundle and `dist/index.html` ends up pointing at a missing file).
 
 ### 3.6 Buyer's Input Sheet (`Buyer's Input Sheet/`)
-Always standalone, port **5050** — never unified onto 8010. Linked from Landing's card grid.
+Always standalone, port **5050** — never unified onto 8010; opened through Landing at `/buyer/`. Edit the repo copy of `otb-plan-app.html` and keep the outside working copy (`...\CLaude - New Projects\Buyer's Input Sheet\otb-plan-app.html`) byte-identical. The NSO Plan Distributor (8060) also lives in this folder (`nso_distributor.py/.html`).
 
 ### 3.7 Store Master (`Store Master/`)
-Store master-data management tool. `Store Master.xlsx` synced from here is the real source AOP Forecaster's `ref_store` assignment reads from (specifically the "Ref Name - Merch" column — confirmed with the user this is the only ref-name column that matters, see §9.1).
+Not a tool — the folder holds only `Store Master.xlsx`. The daily sync (`sync/store_master_xlsx_sync.py`, path stored in `sync.sources['store_master_xlsx']`) loads it into `masterdata.stores`; AOP Forecaster's `ref_store` assignment reads its "Ref Name - Merch" column (confirmed with the user this is the only ref-name column that matters, see §8).
 
 ### 3.8 `data/` (top-level, not an app)
-Shared data files referenced by multiple apps — not a standalone project.
+Git-ignored source data: `data/listing/` (the Listing app's yearly workbooks in `Directories/`, the raw allocation reports in `RAW/`, and the day-wise cache `cache/daily.parquet`, also read by the STR Forecaster).
+
+### 3.9 Additional tools (each its own small server, launched by Landing)
+- **NSO Plan Distributor** — `Buyer's Input Sheet/nso_distributor.py`, port 8060, `/nso/`.
+- **Sales Plan Re-Aligner** — `AOP Realigner/` (`server.py`, `engine.py`, `importer.py`), port 8070, `/realigner/`. Per-user workspaces in `.cache/users/<account id>/`, seeded from `.cache/original.pkl`. Reads the Listing app's `kb.json` / `sales.json`; rules in `docs/business-rules/REPHASE_DEPARTMENT_MONTHS.md`.
+- **Growth vs LY** — `GR Plan Converter/` (`server.py`, `gr_engine.py`), port 8075, `/growth/`. Imports the Re-Aligner's `importer` / `engine`; LY cache `.cache/ly_<hash>.pkl` per lake file, last result `.cache/last.pkl`.
+- **STR Forecaster** — `STR Forecaster/` (`server.py`, `str_engine.py`, `str_season.py`), port 8085, `/str/`. Tables `planning_inputs.str_*`; store clusters from AOP's `config/levers.json` via `config_store`; season curves `season_cluster.json` (rebuilt hourly when stale).
+- **Listing / Delisting Analyser** — `Listing Delisting/` (`serve.py`, static `app/`), port 8123, `/listing/`. `app/*.json` rebuilt by the daily sync (`sync/listing_delisting_sync.py`); see `Listing Delisting/README.md`.
 
 ---
 
@@ -310,10 +323,10 @@ A Windows Scheduled Task **"RS Planning - Actuals Auto Sync"** runs daily at 05:
 
 ## 9. Known open items to be aware of (not yet fixed as of last session)
 
-1. **SalesPlan**: a broken `STORE_MASTER_PATH` reference somewhere in the backend — flagged by survey, never chased down.
-2. **SalesPlan**: an orphaned `mrp_reapportionment_engine.py` router that appears unmounted — confirm dead vs. not-yet-wired before touching.
+1. ~~**SalesPlan**: broken `STORE_MASTER_PATH`~~ — resolved: the store master reads Postgres since 2026-09-21.
+2. ~~**SalesPlan**: unmounted `mrp_reapportionment_engine.py` router~~ — resolved: mounted on 8010 on 2026-09-29.
 3. ~~**SalesPlan**: `dist/` untracked~~ — resolved: all three React dists (Calendar, AOP, Sales Plan) are force-tracked; always `git add -A -f` the rebuilt `dist/`.
-4. **AOP Forecaster**: `.claude/launch.json` has a stale `cwd`.
+4. ~~**AOP Forecaster**: `.claude/launch.json` stale `cwd`~~ — fixed 2026-10-12.
 5. **AOP Forecaster**: `db/base.py` has a stale "not wired in yet" docstring comment on some auth pieces that no longer reflects reality — don't trust it, verify actual behavior.
 6. **AOP Forecaster**: override-cell highlighting in results tables requested but not built.
 7. **AOP Forecaster**: `ATTRIBUTE1`/Q1 attribute filter built but deliberately disabled (`Q1_ALLOWED_VALUES = set()`) pending confirmation of real column values against live network data.

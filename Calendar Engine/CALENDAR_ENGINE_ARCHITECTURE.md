@@ -11,7 +11,7 @@ Structure, deployment, and ops facts for Calendar Engine specifically. Business/
 - **Frontend**: `Calendar Engine/frontend/` (React + Vite). `app.py` serves the **pre-built `dist/`**, not a live dev server — there is no separate CI/build pipeline, so `dist/` is force-added to git despite the repo's blanket `dist/` `.gitignore` rule (`git add -f` once per new build-output filename, then plain `git add dist` works).
   - **Every frontend source change**: edit → `npm run build` in `Calendar Engine/frontend/` → commit + push BOTH source and rebuilt `dist/` together → restart the 8010 backend process (a pure frontend change still needs the process restarted so it serves the new static files — Windows file-serving under uvicorn doesn't hot-reload `dist/`).
   - Old vite chunk-size warning (>500kB after minify) is expected and not a real issue at current scale.
-- **Route**: `/calendar/` on unified 8010. No standalone port — a legacy standalone `local_server.py` exists but is unused (persists to local JSON under `Calendar Engine/Local DB/`, a completely separate store from Postgres; do not launch it, it was previously a stale entry in Landing's Master Switch and has been removed from there).
+- **Route**: `/calendar/` on unified 8010. No standalone port — the old standalone `local_server.py` and its local JSON store (`Calendar Engine/Local DB/`) are gone; the JSON files and the one-time import script went in the 12 Oct 2026 declutter. Everything lives in Postgres.
 - **Auth**: requires an 8010 session (Landing/8010 login), unlike AOP's standalone 8000 or BIS's 5050.
 
 ## Restarting after a backend or frontend change

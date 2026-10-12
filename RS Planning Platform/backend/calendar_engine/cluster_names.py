@@ -17,10 +17,9 @@ here and applied on WRITE instead, so store_calendar_clusters.cluster_name
 always matches a real cluster_profiles.name and no consumer has to duplicate
 the normalization.
 
-This module deliberately has no dependencies beyond `re`: it is imported both
-by router.py (FastAPI request path) and by migrate_from_json.py (standalone
-script), and the latter must not have to drag in fastapi/auth/scans just to
-resolve a cluster name.
+This module deliberately has no dependencies beyond `re`: router.py imports it,
+and it was also used by the one-time JSON import script (removed 12 Oct 2026),
+which must not have had to drag in fastapi/auth/scans just to resolve a name.
 """
 import re
 

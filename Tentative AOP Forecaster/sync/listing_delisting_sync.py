@@ -2,11 +2,12 @@
 (`Listing Delisting/app/*.json`) - an ADDITIONAL app, joined to the daily data-lake sync
 on 2026-09-26 (user: "unified network for data and analysis").
 
-Rebuilds, in the order the app's PRD_LOGIC requires (each step feeds the next):
-listing KB (yearly workbooks in data/listing) -> sales (data-lake parquet, same
-sync.sources path as data_lake_sales) -> seasonality -> season category -> risk
-scores -> store master (planning DB, AOP's LfL rule). Each script runs as its own
-process (the sales pass reads the full parquet; separate processes free that memory).
+Rebuilds, in STEPS order (each step feeds the next): listing KB (yearly workbooks
+in data/listing) -> sales (data-lake parquet, same sync.sources path as
+data_lake_sales) -> seasonality -> season category -> store master (planning DB,
+AOP's LfL rule) -> day-wise cache -> suggestions (festival / season windows,
+delist / relist / held). Each script runs as its own process (the sales pass reads
+the full parquet; separate processes free that memory).
 A data-lake outage is recorded as 'offline' like every other source - the app keeps
 its last files.
 

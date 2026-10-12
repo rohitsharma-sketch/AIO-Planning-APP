@@ -11,7 +11,21 @@ the Change Log at the bottom of this file, not just a code diff.
 Build a new frontend, simple layout, for comparing sales across departments across stores,
 with their previous listing histories tagged, using simplistic graphical notions.
 
-## Current Architecture (Phase 2, v1)
+## Current state (12 Oct 2026)
+- **Served by** `serve.py` (static `app/`, `Cache-Control: no-cache`) on 127.0.0.1:8123, launched and watched by
+  Landing and opened at `/listing/`. The `python -m http.server` + `serve_silent.vbs` / "Listing-Delisting App
+  Server" task and `Start App.bat` described in the Phase 2 section below are no longer used.
+- **Tabs:** Overview, Suggestions (delist / relist / held — replaced the Delisting Risk tab on 26 Sep), By
+  Department, By Store, and under More: Change Events, Seasonality, Data & checks, Rules (rule version log in
+  `app/rules.js`).
+- **Data files** (all generated, git-ignored, rebuilt daily by `Tentative AOP Forecaster/sync/listing_delisting_sync.py`):
+  `kb.json` (build_knowledge_base), `sales.json` (build_sales), `seasonality.json` (build_seasonality +
+  build_season_category), `stores.json` (build_stores), `windows.json`, `suggestions.json`, `festival_trend.json`
+  + `festival_trend/` (build_suggestions, using build_daily's `data/listing/cache/daily.parquet`). `risk.json` /
+  `build_risk_scores.py` no longer exist.
+- The Re-Aligner reads `kb.json` and `sales.json`; the STR Forecaster reads build_daily's cache.
+
+## Architecture as first built (Phase 2, v1, 21 Sep 2026 — history; see Current state above)
 
 - **Stack:** static HTML/CSS/vanilla JS in `app/` — no build step, no framework. Data is a
   pre-built static JSON file (`app/kb.json`) fetched client-side. Chosen because the dataset

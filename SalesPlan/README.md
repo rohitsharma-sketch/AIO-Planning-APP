@@ -1,138 +1,78 @@
 # Sales Plan — CityKart
 
-Full-stack merchandise sales-planning tool: a **FastAPI** backend (Python 3.14) that runs the planning
-engines and serves a pre-built **React 18 + Vite** frontend as a single-page app.
+The Planning Engine of the RS Planning suite: Python engines (FastAPI routers) plus a React 18 + Vite frontend.
+It is **not a server of its own any more** — the unified platform (`RS Planning Platform/backend/app.py`, port 8010)
+imports these routers and serves the built frontend.
 
-Everything runs from **one server on port 8002** — `http://localhost:8002` (LAN: `http://CKHO-L-A9820:8002`).
+- **Open it:** `http://10.0.1.131:7800/planning/` (Landing, behind the suite sign-in) — or `http://localhost:8010/planning/` on this PC.
+- **API:** every engine under `/api/planning/<engine>` on 8010, all behind sign-in (`require_login`).
+- **Started by:** Landing (7800) — its launch list and 30 s watchdog keep 8010 up; nothing here needs installing.
+  The old standalone port 8002, its start.bat, desktop shortcut, service/watchdog tasks and firewall rule were retired
+  (declutter 12 Oct 2026); `uninstall_service.ps1` stays only to remove those old tasks if a PC still has them.
 
-## Quick start (normal use)
+## Where the data comes from
 
-Double-click **`start.bat`** (or the *Sales Plan* desktop shortcut). It:
-
-1. Kills any stale server listening on port 8002.
-2. Starts `uvicorn main:app --host 0.0.0.0 --port 8002` from `backend/`.
-3. Waits until the port is actually listening, then opens the app in your default browser.
-
-Closing the console window stops the server.
-
-### One-time setup scripts (right-click → *Run with PowerShell*)
-
-| Script | Purpose |
+| Input | Source |
 |---|---|
-| `install_shortcut.ps1` | Creates a *Sales Plan* desktop shortcut pointing at `start.bat` (uses `icon.ico`). |
-| `install_service.ps1` | Registers a scheduled task that auto-starts the server at login (hidden, auto-restart ×3). |
-| `install_watchdog.ps1` | Registers a scheduled task that health-checks the server every 3 minutes and force-restarts it if it's down or hung (`watchdog.ps1`, logs to `watchdog.log`). Recommended alongside `install_service.ps1`. |
-| `install_firewall.ps1` | **Run as Administrator** — opens inbound TCP 8002 so other devices on the LAN can use the app. |
-| `uninstall_service.ps1` | Removes both the server and watchdog scheduled tasks. |
-| `make_icon.ps1` | Regenerates `icon.ico`. |
+| LY store × department sales | Calendar app's snapshots in Postgres (`calendar.sales_snapshots`, kinds `trend_shifted_dept` = plan base, `actual_dept`), written by the nightly `calendar_reindex_sync` — no manual import (`actuals_manager.py`) |
+| Division targets | The AOP publish BIS plans on (`division_plan._bis_aop`) |
+| Department growth | BIS's growth push (`planning_inputs.input_values`, `buyer_department_growth`) |
+| New departments | `backend/new_dept_mapping.json` — edited in BIS › New departments (or the ⚙ New depts config view) |
+| Store master / clusters | Postgres `masterdata.stores` (`store_master.py`) |
+| Attribute master | `SalesPlan/Attribute Master/att master.xlsx` (also read by AOP and the Re-Aligner) |
+| MRP Cont %, PW-W, SOR workbooks | **Outside the repo:** `C:\Users\A9820\Documents\CLaude - New Projects\SalesPlan\{MRP Cont %, PW-W Deviation, SOR Deviation}` (hard-coded in the three engines). The repo's `MRP Cont %/` and `PW-W Deviation/` copies are versioned backups only. |
+| MRP re-apportionment master + outputs | Outside the repo: `...\CLaude - New Projects\MRP Merging Engine\Sales Reapportionment\{MRP Mapping, Output}` |
 
-## Developer setup
-
-### Backend
-
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn main:app --reload --host 0.0.0.0 --port 8002
-```
-
-Dependencies: fastapi, uvicorn, pandas, numpy, pydantic, python-multipart, openpyxl
-(pinned in `backend/requirements.txt`). Interactive API docs at `http://localhost:8002/docs`.
-
-### Frontend
-
-The backend serves `frontend/dist/` if it exists, so for normal use **no Node is required**.
-Only rebuild when you change the UI:
-
-```bash
-cd frontend
-npm install
-npm run dev      # Vite dev server on http://localhost:5175, proxies /api → :8002
-npm run build    # writes frontend/dist — restart the backend to pick it up
-```
-
-## Project layout
-
-```
-SalesPlan/
-├── start.bat                 # launcher (server + browser)
-├── install_*.ps1             # shortcut / startup task / firewall helpers
-├── backend/
-│   ├── main.py               # FastAPI app, mounts all engine routers + SPA
-│   ├── store_master.py       # store master + cluster lookup
-│   ├── actuals_manager.py    # actual-sales import & month locking
-│   ├── engines/              # one module per planning engine (see below)
-│   ├── data/                 # sync config, sales cache, sync status
-│   └── *.json                # persisted engine state / results
-├── frontend/
-│   ├── src/pages/            # one page per screen (16)
-│   ├── src/components/       # Sidebar, TopBar, Header, EngineCard, PipelineBanner, SearchSlicer
-│   ├── src/pipelineState.js  # cross-page pipeline status
-│   └── dist/                 # built bundle served by the backend
-├── Actual Sales/             # Actual Sales Value - <period>.xlsx
-├── Attribute Master/         # att master.xlsx + extracted KPI/contribution JSON
-├── MRP Cont %/               # MRP contribution workbook
-├── New Departments/          # NEW Departments.xlsx
-├── PW-W Deviation/           # PPO Cont %.xlsx
-├── SOR Deviation/            # SOR inputs
-└── UDF Cont % + ASP/         # display-type contribution + ASP workbook
-```
-
-The Excel folders above are the **engine inputs** — the import/sync endpoints read them directly.
-The Sync engine additionally pulls raw sales parquet files from the network share configured in
-`backend/data/sync_config.json`.
+Engine state and results are JSON files in `backend/` and `backend/engines/` (`department_state.json`,
+`department_custom.json`, `mrp_plan.json`, `final_dept_plan.json`, ...).
 
 ## Engines, screens and API prefixes
 
-All engines are active. Every router is mounted under `/api/...` in `backend/main.py`.
-
-| Engine (module) | UI route(s) | API prefix |
+| Engine (module) | Screen(s) under /planning | API prefix (8010) |
 |---|---|---|
-| Division Plan (`division_plan.py`) | `/division-plan`, `/division-plan/growth` | `/api/division-plan` |
-| Department Plan (`department_plan.py`) | `/department-plan`, `/department-plan/growth`, `/department-plan/new-depts` | `/api/department-plan` |
-| Dept Sales / Base Plan (`dept_sales_engine.py`) | `/department-plan/new-depts` (+ actuals, cluster plan) | `/api/dept-sales` |
-| Attribute Correction (`attribute_correction_engine.py`) | `/department-plan/attr-correction` | `/api/attr-correction` |
-| Base Correction (`base_correction_engine.py`) | `/department-plan/base-correction` | `/api/base-correction` |
-| Final Results (`final_results_engine.py`) | `/department-plan/final-results` | `/api/final-results` |
-| MRP / Article Plan (`mrp_plan_engine.py`) | `/mrp-plan/import`, `/mrp-plan/output` | `/api/mrp-plan` |
-| MRP Reapportionment (`mrp_reapportionment_engine.py`) | `/mrp-plan/reapportionment` | `/api/mrp-plan` |
-| PW-W Deviation (`pww_deviation_engine.py`) | `/deviation/pww` | `/api/deviation/pww` |
-| SOR Deviation (`sor_deviation_engine.py`) | `/deviation/sor` | `/api/deviation/sor` |
-| Display Type Plan (`display_type_engine.py`) | `/display-type` | `/api/display-type` |
-| Sync Engine (`sync_engine.py`) | `/sync` | `/api/sync` |
-| Store Master (`store_master.py`) | — | `/api/store-master`, `POST /api/store-master/reload` |
+| Division Plan (`division_plan.py`) | `/division-plan` (`/division-plan/growth` exists but has no menu link) | `/api/planning/division-plan` |
+| Department Plan (`department_plan.py`) | `/department-plan`, `/department-plan/growth` | `/api/planning/department-plan` |
+| Dept Sales / Base Plan (`dept_sales_engine.py`) | Growth Matrix → Generate base plan, `/department-plan/new-depts` (config view) | `/api/planning/dept-sales` |
+| Attribute Correction (`attribute_correction_engine.py`) | `/department-plan/attr-correction` | `/api/planning/attr-correction` |
+| Base Correction (`base_correction_engine.py`) | `/department-plan/base-correction` | `/api/planning/base-correction` |
+| Final Results (`final_results_engine.py`) | `/department-plan/final-results` | `/api/planning/final-results` |
+| MRP Plan (`mrp_plan_engine.py`) | `/mrp-plan/import`, `/mrp-plan/output` | `/api/planning/mrp-plan` |
+| MRP Re-apportionment (`mrp_reapportionment_engine.py`) | `/mrp-plan/reapportionment` | `/api/planning/mrp-reapportionment` |
+| PW-W Deviation (`pww_deviation_engine.py`) | `/deviation/pww` | `/api/planning/deviation/pww` |
+| SOR Deviation (`sor_deviation_engine.py`) | `/deviation/sor` | `/api/planning/deviation/sor` |
+| Display Type Plan (`display_type_engine.py`) | `/display-type` | `/api/planning/display-type` |
+| Sales Sync (`sync_engine.py`, read-only view of the Calendar snapshots) | `/sync` | `/api/planning/sync` |
+| Reconciliation (`reconciliation.py`) | `/reconciliation` | `/api/planning/reconciliation` |
+| Store Master (`store_master.py`) | — | `/api/planning/store-master` (+ `POST .../reload`) |
 
-### Key endpoints
+The routes themselves are in each engine module (`@router.get/post/...`); 8010's `/docs` lists them all after sign-in.
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/division-plan/config` · `/stores` · `/growth-structure` | Division plan inputs |
-| POST | `/api/division-plan/calculate` | Calculate monthly division plan |
-| GET | `/api/division-plan/export` | Download CSV |
-| GET/POST | `/api/department-plan/growth-matrix[/{division}]` | Department growth matrix (import/reset/export) |
-| POST | `/api/department-plan/calculate` · `/auto-balance` · `/sync-from-buyer` | Department plan |
-| GET | `/api/dept-sales/run` · `/plan-summary` · `/final-plan` · `/cluster-plan` | Store×department base plan |
-| POST | `/api/dept-sales/actuals/import-from-dir` | Import actuals from `Actual Sales/` (month locking via `/actuals/*`) |
-| GET/POST | `/api/attr-correction/preview` · `/comparison` · `/save` | Attribute-level correction |
-| GET/POST | `/api/base-correction/check` · `/review` · `/apply` · `/export` | Base correction review |
-| GET | `/api/final-results/dashboard` · `/data` · `/status` | Final consolidated results |
-| POST | `/api/mrp-plan/sync` | Import MRP contribution workbook; `GET /data`, `/export`, `DELETE /clear` |
-| POST | `/api/mrp-plan/run` | MRP reapportionment; `GET /template`, `/download` |
-| GET | `/api/deviation/pww/run-phase1` · `/run-phase2` · `/reapportion` | PW-W deviation phases |
-| POST | `/api/deviation/sor/import/sales-plan` · `/import/stock-ppo` | SOR inputs; `GET /run-avg`, `/reapportion`, `/export` |
-| POST | `/api/display-type/import/contributions` · `/import/asp` | Display-type inputs; `GET /run-plan`, `/run-qty`, `/export` |
-| GET/POST | `/api/sync/status` · `/config` · `/sync` · `/data` | Raw sales sync from the network share |
+## Changing it
 
-Full, always-current list: `http://localhost:8002/docs`.
+- **Backend:** edit `backend/` or `backend/engines/`, then restart 8010 (stop the process on 8010 — Landing's watchdog
+  starts it again from `RS Planning Platform/backend`). Self-checks: `python test_actuals_manager.py` and
+  `python engines/test_*.py` from `backend/` (plain assert scripts, no DB).
+- **Frontend:** edit `frontend/src`, then `cd frontend && npm run build` — 8010 serves `frontend/dist/`, so a source
+  change is invisible until it is built. Commit the build with `git add -A -f SalesPlan/frontend/dist`
+  (`dist/assets` is git-ignored).
+- `npm run dev` (port 5175) proxies `/api` to 8002, i.e. the old standalone `backend/main.py` (not running, no
+  sign-in, and it mounts only some of the `/api/planning` prefixes the pages call) — build + restart 8010 is the
+  reliable loop.
 
-## Troubleshooting
+## Layout
 
-- **Port 8002 already in use** — `start.bat` kills the old listener automatically; otherwise
-  `netstat -ano | findstr ":8002 .*LISTENING"` and `taskkill /PID <pid> /F`.
-- **Python not found** — `start.bat` expects `C:\Users\A9820\AppData\Local\Python\pythoncore-3.14-64\python.exe`
-  and falls back to `python` on PATH. `install_service.ps1` has the same pinned path.
-- **UI shows old version** — rebuild with `npm run build` and restart the server.
-- **LAN users can't connect** — run `install_firewall.ps1` as Administrator.
-- **App loads but clicks/pages hang** — the server process can stay alive without actually listening on
-  8002. If `install_watchdog.ps1` is registered it self-heals within ~3 minutes (check `watchdog.log`);
-  otherwise just re-run `start.bat`.
+```
+SalesPlan/
+├── backend/
+│   ├── engines/              # one module per engine + their JSON state + test_*.py
+│   ├── actuals_manager.py    # LY sales from the Calendar snapshots
+│   ├── store_master.py       # store master + clusters (Postgres)
+│   ├── apportion.py          # shares that add to exactly 100 / split totals exactly
+│   ├── plan_cache.py
+│   ├── main.py               # old standalone app (8002) - dev only, see above
+│   └── new_dept_mapping.json, final_dept_plan.json, ...
+├── frontend/                 # React 18 + Vite; src/pages (one per screen), dist/ (served by 8010)
+├── Attribute Master/         # att master.xlsx (live) + the manual KPI extractor
+├── MRP Cont %/, PW-W Deviation/   # backup copies of the outside-repo workbooks
+└── uninstall_service.ps1     # removes the retired 8002 tasks if present
+```
