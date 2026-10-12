@@ -53,7 +53,7 @@ export default function DepartmentGrowthMatrix() {
   const [generating, setGenerating]   = useState(false)
   const [genMsg, setGenMsg]           = useState('')
   const [showPipelineModal, setShowPipelineModal] = useState(false)
-  const [pipelineChecked, setPipelineChecked] = useState({ 'new-depts': false, 'attr-correction': false, 'base-correction': false })
+  const [pipelineChecked, setPipelineChecked] = useState({ 'attr-correction': false, 'base-correction': false })
   const [genStores, setGenStores] = useState(null)
   const navigate = useNavigate()
 
@@ -159,7 +159,8 @@ export default function DepartmentGrowthMatrix() {
   }
 
   const handleStartPipeline = (only) => {
-    // engines run in the pipeline's own order (New Depts -> Attr -> Base); `only` runs just that one
+    // engines run in the pipeline's own order (Attr -> Base); `only` runs just that one. New departments come from
+    // BIS (BIS > New departments) and are already in the base plan (user, 2026-10-12)
     const queue = only ? [only] : Object.keys(ENGINE_META).filter(k => pipelineChecked[k])
     if (queue.length === 0) {
       navigate('/department-plan/final-results')
@@ -282,8 +283,8 @@ export default function DepartmentGrowthMatrix() {
               Base plan ready{genStores ? ` — ${genStores} stores` : ''}. What next?
             </div>
             <div style={{ fontSize: 13, color: theme.textMuted, marginBottom: 22 }}>
-              Tick one or more optional engines - they run in this order, each taking you to the next - or run just one
-              with <b>Only this</b>. Or opt out and go straight to the final results.
+              New departments from BIS are already in this plan. Tick one or more optional engines - they run in this order,
+              each taking you to the next - or run just one with <b>Only this</b>. Or opt out and go straight to the final results.
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
@@ -398,6 +399,13 @@ export default function DepartmentGrowthMatrix() {
             placeholder="Search department…"
             width={170}
           />
+
+          <button
+            onClick={() => navigate('/department-plan/new-depts')}
+            title="New departments flow from BIS - check or change their reference department and % here and see the result"
+            style={{ padding: '6px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer', background: 'none',
+                     border: `1px solid ${theme.border}`, color: theme.textSecondary, fontWeight: 600 }}
+          >⚙ New depts config</button>
 
           <button
             onClick={handleGenerateBase}

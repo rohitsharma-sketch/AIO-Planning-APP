@@ -2,7 +2,6 @@ const KEY = 'sp_pipeline'
 
 // route → sidebar label → description
 export const ENGINE_META = {
-  'new-depts':        { label: 'New Depts',        desc: 'Add new departments introduced in TY', route: '/department-plan/new-depts' },
   'attr-correction':  { label: 'Attr Correction',   desc: 'Adjust attribute-level weights',       route: '/department-plan/attr-correction' },
   'base-correction':  { label: 'Base Correction',   desc: 'Fill zero-TY gaps via peer benchmark', route: '/department-plan/base-correction' },
 }

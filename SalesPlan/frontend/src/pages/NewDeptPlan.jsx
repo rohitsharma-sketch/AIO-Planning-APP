@@ -573,7 +573,11 @@ export default function NewDeptPlan() {
       {inPipeline && <PipelineBanner currentKey="new-depts" />}
       {/* Header */}
       <div className="sp-sub">
-        Define new depts (MCs) introduced in TY, link each to a reference dept, and set the reallocation percentages independently. Results flow into Post New MCs AOP.
+        {/* user, 2026-10-12: new departments flow from BIS (BIS > New departments); this page stays as a config view -
+            "if the user wants to change the ref or cont % for the new department already flowing from the BIS so that
+            they can see the results from their end". One list for both: a change here shows in BIS too. */}
+        These new departments flow from <b>BIS &rsaquo; New departments</b> - the same list. Change a reference or a % here
+        to see the result in Sales Plan; BIS shows the change too. Save &amp; Apply regenerates the department plan.
       </div>
 
       {/* New departments template panel (replaces Sync from Folder, 2026-10-01) */}

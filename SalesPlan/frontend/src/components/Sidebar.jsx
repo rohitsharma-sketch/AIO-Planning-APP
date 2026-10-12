@@ -10,7 +10,6 @@ const DIVISION_PLAN_SUB = [
 const DEPARTMENT_PLAN_SUB = [
   { label: 'Master Setup',    to: '/department-plan' },
   { label: 'Growth Matrix',   to: '/department-plan/growth' },
-  { label: 'New Depts',       to: '/department-plan/new-depts',       optional: true },
   { label: 'Attr Correction', to: '/department-plan/attr-correction', optional: true },
   { label: 'Base Correction', to: '/department-plan/base-correction', optional: true },
   { label: 'Final Results',   to: '/department-plan/final-results',   final: true },

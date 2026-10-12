@@ -496,6 +496,10 @@ td.aop-col-bg input.gi{background:var(--sf)}
 .fm-mc-hd{display:flex;align-items:center;justify-content:space-between;gap:6px;min-height:26px}
 .fm-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--ac);color:var(--sf)}
 .fm-mc-set{all:unset;cursor:pointer;font-size:11px;font-weight:600;color:var(--ac)}
+.nd-t{width:100%}.nd-t th,.nd-t td{white-space:nowrap;vertical-align:middle}.nd-t td.nd-n{text-align:right;font-variant-numeric:tabular-nums}
+.nd-t tr.nd-new td{border-top:1px solid var(--bd)}.nd-t tr.nd-ref td{background:var(--s2);font-size:11.5px;color:var(--t2)}
+.nd-t select,.nd-t input.nd-nm{padding:5px 8px;border-radius:6px;border:1px solid var(--bm);background:var(--sf);color:var(--tx);font:inherit;font-size:12px;min-width:200px}
+.nd-t input.gi{width:64px}.nd-tag{display:inline-block;margin-right:6px;padding:1px 6px;border-radius:4px;font-size:9.5px;font-weight:800;background:var(--po-b);color:var(--po)}
 .fm-model{font-weight:400;font-style:italic;margin-top:1px}
 .fm-dt tr.fm-dt-gauge td,.fm-dt tr.fm-dt-gauge th{background:color-mix(in srgb,var(--ac) 6%,var(--sf));font-size:11.5px}
 .fm-vtabs{display:flex;align-items:center;gap:4px;padding:8px 14px 0;border-bottom:1px solid var(--bd);position:sticky;top:-16px;margin-top:-16px;z-index:2;background:var(--sf)}
@@ -661,8 +665,8 @@ tr:hover .blk-lock,.blk-lock:focus-visible{opacity:1}
     </div>
     </div>
 
-    <div class="ni add-dept-ni" onclick="openAddDeptModal()" title="Add a new department to the plan">
-      <span style="font-size:14px;line-height:1;margin-right:6px;opacity:.8">+</span><span class="lbl">Add Department</span>
+    <div class="ni add-dept-ni" onclick="openNewDeptModal()" title="New departments: their reference department and %s - Sales Plan applies them">
+      <span style="font-size:14px;line-height:1;margin-right:6px;opacity:.8">+</span><span class="lbl">New departments</span>
     </div>
 
     <div class="snav-foot">
@@ -1874,6 +1878,132 @@ function deleteCustomDept(i){
   _renderCustomDeptList();
   saveState();refresh();
   toast('Department removed');
+}
+
+/* ── NEW DEPARTMENTS (user, 2026-10-12: "link new departments in sales plan engine from the new department induction
+   of the BIS. keep the rest of the information such as cont % or reference department true to the BIS table. Remove this
+   from the optional section of the planning engine, as all the info will flow from BIS now") ──────────────────────
+   The one list (SalesPlan/backend/new_dept_mapping.json: {DIV: {NEW: {ref_dept, new_dept_pct, ref_reduction_pct}}}) is
+   edited here and saved through Sales Plan's own endpoint, which checks it and regenerates its plan; Sales Plan applies
+   it to every store and month (new = ref plan x New dept %, ref keeps 100 - Ref dept %). Cont % and the month values
+   here are the BIS plan with the same carve, in the same order as the Sales Plan engine. */
+const ND_API='/api/planning/dept-sales/new-depts',ND_DIVS=['KIDS','LADIES','MENS'];
+let _nd=null;
+function _ndOv(){
+  let ov=document.getElementById('ndOv');
+  if(!ov){ov=document.createElement('div');ov.id='ndOv';ov.className='aop-ov';ov.style.display='none';
+    ov.onclick=e=>{if(e.target===ov)closeNewDeptModal();};document.body.appendChild(ov);}
+  return ov;
+}
+function closeNewDeptModal(){
+  if(_nd?.dirty&&!confirm('Close without saving the new-department changes?'))return;
+  _ndOv().style.display='none';
+}
+function openNewDeptModal(){
+  _nd={div:(S.divTab||'kids').toUpperCase(),rows:null,dirty:false,canSave:false,err:'',busy:false};
+  if(!ND_DIVS.includes(_nd.div))_nd.div='KIDS';
+  _ndOv().style.display='flex';_ndRender();
+  // through the Planning Suite (signed in) the list comes from Sales Plan and can be saved; else a read-only copy
+  fetch(ND_API).then(r=>{if(!r.ok||r.redirected)throw new Error(r.status);return r.json().then(m=>{_nd.canSave=true;return m;});})
+    .catch(()=>fetch(SYNC_BASE+'/api/planner/new-depts').then(r=>r.ok?r.json():Promise.reject(new Error('bis'))))
+    .then(m=>{_nd.rows=_ndRowsOf(m||{});_ndRender();})
+    .catch(()=>{_nd.err='Could not read the new-department list.';_ndRender();});
+}
+function _ndRowsOf(m){
+  const out={};
+  Object.entries(m).forEach(([dv,e])=>{out[dv]=Object.entries(e||{}).map(([nm,c])=>{const leg=+(c.alloc_pct??0);
+    return {nm,ref:c.ref_dept||'',np:+(c.new_dept_pct??leg),rp:+(c.ref_reduction_pct??leg)};});});
+  ND_DIVS.forEach(dv=>{if(!out[dv])out[dv]=[];});
+  return out;
+}
+const _ndDv=div=>DVDATA.find(d=>d.id===String(div).toLowerCase());
+// the BIS plan of a division, month by month, with the new departments carved out of their reference (as the engine)
+function _ndSim(div){
+  const dv=_ndDv(div),res={};if(!dv)return null;
+  AOP_MIS.forEach(mi=>{
+    const ty={};dv.secs.filter(s=>!S.hiddenSecs.has(s.id)).forEach(s=>{ty[s.nm.toUpperCase()]=_secMonLY(s,dv,mi)*(1+(S.inputs[s.id+'__'+mi]??0)/100);});
+    const pre={...ty};
+    (_nd.rows[div]||[]).forEach(r=>{const R=String(r.ref||'').toUpperCase(),N=String(r.nm||'').trim().toUpperCase();
+      if(!N||!(R in ty))return;const t=ty[R],np=(+r.np||0)/100,rp=(+r.rp||0)/100;if(!np&&!rp)return;
+      ty[R]=t*(1-rp);ty[N]=(ty[N]||0)+t*np;});
+    res[mi]={ty,pre,tot:Object.values(ty).reduce((a,b)=>a+b,0)};});
+  return res;
+}
+function _ndRender(){
+  const ov=_ndOv(),N=_nd;if(!N)return;
+  const head=`<div class="aop-mhd"><div><div class="aop-mtitle">New departments</div>
+      <div class="aop-msub">A new department's plan = its reference department's plan × <b>New dept %</b>; the reference keeps 100 − <b>Ref dept %</b>. Sales Plan applies this list to every store and month (its New depts config shows and changes the same list).</div></div>
+      <div style="display:flex;gap:8px;align-items:center">${N.canSave&&N.rows?`<a class="tbtn" href="${ND_API}/template" download>&#x2193; Download template</a>
+        <label class="tbtn" style="cursor:pointer">&#x2191; Upload filled template<input type="file" accept=".xlsx,.xls" style="display:none" onchange="_ndUpload(this)"></label>
+        <button class="tbtn pri" onclick="_ndSave()"${N.busy?' disabled':''}>${N.busy?'Saving…':'Save &amp; apply'}</button>`:''}
+        <button class="tbtn" onclick="closeNewDeptModal()">&#x2715; Close</button></div></div>`;
+  if(!N.rows){ov.innerHTML=`<div class="aop-modal" style="width:min(1180px,96vw)">${head}<div class="aop-mbody"><div class="fm-note">${_h(N.err||'Loading…')}</div></div></div>`;return;}
+  const divs=[...new Set([...ND_DIVS,...Object.keys(N.rows)])];
+  const tabs=divs.map(dv=>`<button type="button" class="fm-vtab sm${N.div===dv?' on':''}" onclick="_nd.div='${dv}';_ndRender()">${dv} <span class="fm-note">${(N.rows[dv]||[]).length}</span></button>`).join('');
+  const dv=_ndDv(N.div),sim=_ndSim(N.div),names=dv?dv.secs.map(s=>s.nm.toUpperCase()).sort():[];
+  const L=v=>(v*100).toFixed(2),cont=k=>{if(!sim)return '-';let a=0,t=0;AOP_MIS.forEach(mi=>{a+=sim[mi].ty[k]||0;t+=sim[mi].tot;});return t>0?(a/t*100).toFixed(2)+'%':'-';};
+  const mons=k=>AOP_MIS.map(mi=>`<td class="nd-n">${sim&&k in sim[mi].ty?L(sim[mi].ty[k]):'-'}</td>`).join('');
+  const dash=AOP_MIS.map(()=>'<td class="nd-n">-</td>').join('');
+  const inactive=new Set(dv?dv.secs.filter(s=>S.hiddenSecs.has(s.id)).map(s=>s.nm.toUpperCase()):[]);
+  const ed=N.canSave?'':' disabled';
+  const rows=(N.rows[N.div]||[]).map((r,i)=>{
+    const R=String(r.ref||'').toUpperCase(),Nm=String(r.nm||'').trim().toUpperCase();
+    const refOk=!!(sim&&R&&R in sim[AOP_MIS[0]].ty),opts=[...new Set([...(R?[R]:[]),...names])];
+    const refCell=dv?`<select onchange="_ndSet(${i},'ref',this.value)"${ed} aria-label="Reference department for ${_h(Nm)}"><option value="">- pick -</option>${opts.map(n=>`<option${n===R?' selected':''}>${_h(n)}</option>`).join('')}</select>`
+      :`<input type="text" class="nd-nm" value="${_h(r.ref)}" onchange="_ndSet(${i},'ref',this.value)"${ed} aria-label="Reference department">`;
+    const own=sim&&Nm&&Nm!==R?AOP_MIS.reduce((a,mi)=>a+(sim[mi].pre[Nm]||0),0):0;
+    const warn=!R?'pick its reference department':!dv?'':inactive.has(R)?'reference is inactive in BIS - nothing to carve':!refOk?'reference not in this BIS division':R===Nm?'same as its reference - it only scales itself':'';
+    return `<tr class="nd-new"><td><span class="nd-tag">NEW</span><input type="text" class="nd-nm" value="${_h(r.nm)}" placeholder="NEW DEPARTMENT" onchange="_ndSet(${i},'nm',this.value)"${ed} aria-label="New department name">${own>0?`<div class="fm-note">already planned in BIS (Rs ${L(own)} L Mar-Jun) - the carve is added to it</div>`:''}</td>
+      <td>${refCell}${warn?`<div class="fm-note" style="color:var(--wa)">${_h(warn)}</div>`:''}</td>
+      <td class="nd-n"><input type="number" class="gi" step="1" value="${+r.np}" onchange="_ndSet(${i},'np',this.value)"${ed} aria-label="New dept %"> %</td>
+      <td class="nd-n"><input type="number" class="gi" step="1" value="${+r.rp}" onchange="_ndSet(${i},'rp',this.value)"${ed} aria-label="Ref dept %"> %</td>
+      <td class="nd-n"><b>${Nm?cont(Nm):'-'}</b></td>${Nm?mons(Nm):dash}
+      <td>${N.canSave?`<button type="button" class="fm-x" onclick="_ndDel(${i})" aria-label="Remove ${_h(Nm)}">&#x2715;</button>`:''}</td></tr>
+      <tr class="nd-ref"><td>&#x2191; ref <span class="fm-note">${_h(R||'-')}</span></td><td class="fm-note"><i>adjusted</i></td><td></td>
+      <td class="nd-n gn">${R&&R!==Nm?'−'+(+r.rp)+'%':''}</td><td class="nd-n">${refOk&&R!==Nm?cont(R):'-'}</td>${refOk&&R!==Nm?mons(R):dash}<td></td></tr>`;}).join('');
+  ov.innerHTML=`<div class="aop-modal" style="width:min(1180px,96vw)">${head}
+    <div class="aop-mbody" style="overflow:auto">
+      <div class="fm-vtabs sub" style="padding:0 0 10px">${tabs}${N.dirty?'<span class="fm-note" style="margin-left:auto;color:var(--wa)">Unsaved changes</span>':''}</div>
+      ${N.canSave?'':`<div class="fm-note" style="margin-bottom:8px;color:var(--wa)">Read-only here - open BIS from the Planning Suite and sign in to change the list.</div>`}
+      <table class="pl-ft nd-t"><thead><tr><th style="text-align:left">New department</th><th style="text-align:left">Reference department</th><th>New dept %</th><th>Ref dept %</th><th>Cont %</th>${AOP_MIS.map(mi=>`<th>${MO[mi]} <span class="fm-note">Rs L</span></th>`).join('')}<th></th></tr></thead>
+        <tbody>${rows||`<tr><td colspan="${6+AOP_MIS.length}" class="fm-note">No new departments in ${_h(N.div)}.</td></tr>`}</tbody></table>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:10px">${N.canSave?`<button class="tbtn" onclick="_ndAdd()">+ Add new department</button>`:''}
+        <span class="fm-note">Cont % = the department's share of ${_h(N.div)}'s Mar-Jun plan in BIS after the carve; months in Rs lakh. Several new departments may share a reference (applied in this order, as Sales Plan does).</span>
+        <button class="tbtn" style="margin-left:auto" onclick="openAddDeptModal()" title="A department for BIS planning only (not sent to Sales Plan)">BIS-only department ›</button></div>
+    </div></div>`;
+}
+function _ndSet(i,k,v){const r=_nd.rows[_nd.div][i];r[k]=k==='np'||k==='rp'?(parseFloat(v)||0):String(v).trim().toUpperCase();_nd.dirty=true;_ndRender();}
+function _ndAdd(){_nd.rows[_nd.div].push({nm:'',ref:'',np:0,rp:0});_nd.dirty=true;_ndRender();}
+function _ndDel(i){const r=_nd.rows[_nd.div][i];if(r.nm&&!confirm('Remove '+r.nm+' from the new departments?'))return;_nd.rows[_nd.div].splice(i,1);_nd.dirty=true;_ndRender();}
+function _ndSave(){
+  const body={},bad=[];
+  Object.entries(_nd.rows).forEach(([dv,rs])=>{const seen=new Set();rs.forEach(r=>{
+    const nm=String(r.nm||'').trim().toUpperCase(),ref=String(r.ref||'').trim().toUpperCase();
+    if(!nm&&!ref)return;
+    if(!nm||!ref)bad.push(`${dv}: ${nm||'(no name)'} needs a name and a reference department`);
+    else if(seen.has(nm))bad.push(`${dv}: ${nm} is listed twice`);
+    else if(!isFinite(r.np)||!isFinite(r.rp))bad.push(`${dv}: ${nm} needs both %`);
+    else{seen.add(nm);(body[dv]=body[dv]||{})[nm]={ref_dept:ref,new_dept_pct:+r.np,ref_reduction_pct:+r.rp};}});});
+  if(bad.length){toast(bad.slice(0,3).join('; '));return;}
+  if(!confirm('Save the new departments? Sales Plan regenerates its department plan with them (its Attr / Base corrections, if run, are cleared to be run again).'))return;
+  _nd.busy=true;_ndRender();
+  fetch(ND_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(r=>r.json().then(j=>({ok:r.ok&&!r.redirected,status:r.status,j})))
+    .then(({ok,status,j})=>{_nd.busy=false;
+      if(!ok){_ndRender();toast('New departments NOT saved - '+(status===401?'sign in again':status===403?'no access':(j.detail||status)));return;}
+      _nd.dirty=false;_nd.rows=_ndRowsOf(body);_ndRender();
+      toast(`New departments saved ✓ - ${j.saved} in Sales Plan, its plan regenerated`);
+      loadPlannerConfig().then(()=>refresh());})   // the planner's reference departments follow the same list
+    .catch(()=>{_nd.busy=false;_ndRender();toast('New departments NOT saved - sign in through the Planning Suite and try again');});
+}
+function _ndUpload(inp){
+  const f=inp.files[0];if(!f)return;const fd=new FormData();fd.append('file',f);inp.value='';
+  _nd.busy=true;_ndRender();
+  fetch(ND_API+'/upload',{method:'POST',body:fd}).then(r=>r.json().then(j=>({ok:r.ok,j}))).then(({ok,j})=>{_nd.busy=false;
+    if(!ok){_ndRender();const d=j.detail||{};toast('Template NOT applied - '+(d.message||d)+(d.problems?': '+d.problems.slice(0,2).join('; '):''));return;}
+    toast(`Template applied ✓ - ${j.total_entries} new departments, Sales Plan regenerated`);_nd.dirty=false;
+    fetch(ND_API).then(r=>r.json()).then(m=>{_nd.rows=_ndRowsOf(m);_ndRender();loadPlannerConfig().then(()=>refresh());});})
+    .catch(()=>{_nd.busy=false;_ndRender();toast('Upload failed - sign in through the Planning Suite and try again');});
 }
 
 /* ── HELPERS ───────────────────────────────────── */

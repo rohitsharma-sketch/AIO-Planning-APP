@@ -349,6 +349,15 @@ def _read_json(path, default):
         return default
 
 
+@app.route("/api/planner/new-depts")
+def planner_new_depts():
+    """read-only copy of the new-department list for a BIS opened on its own port (Landing users read and save it
+    through Sales Plan's /api/planning/dept-sales/new-depts, which checks it and regenerates the plan)"""
+    from flask import Response
+    # file order kept (jsonify sorts keys): new departments sharing a reference are carved in this order
+    return Response(json.dumps(_read_json(NEW_DEPT_MAP_JSON, {}) or {}), content_type="application/json")
+
+
 @app.route("/api/planner/config")
 def planner_config():
     refs = {}

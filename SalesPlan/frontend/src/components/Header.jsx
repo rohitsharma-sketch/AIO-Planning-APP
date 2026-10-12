@@ -7,7 +7,7 @@ const TITLES = [
   ['/division-plan/growth', 'Division Plan · Growth Structure'],
   ['/division-plan', 'Division Plan · Plan Setup'],
   ['/department-plan/growth', 'Department Plan · Growth Matrix'],
-  ['/department-plan/new-depts', 'Department Plan · New Depts'],
+  ['/department-plan/new-depts', 'Department Plan · New Depts config (from BIS)'],
   ['/department-plan/attr-correction', 'Department Plan · Attribute Correction'],
   ['/department-plan/base-correction', 'Department Plan · Base Correction'],
   ['/department-plan/final-results', 'Department Plan · Final Results'],

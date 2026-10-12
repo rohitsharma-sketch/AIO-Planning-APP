@@ -74,7 +74,7 @@ export default function FinalResults() {
       <div style={{ padding: 32, background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`, textAlign: 'center' }}>
         <div style={{ fontSize: 28, marginBottom: 10 }}>📂</div>
         <div style={{ fontSize: 14, color: theme.danger, fontWeight: 600, marginBottom: 6 }}>{err}</div>
-        <div style={{ fontSize: 12, color: theme.textMuted }}>Run the Department Plan → New Depts engine first to generate a plan.</div>
+        <div style={{ fontSize: 12, color: theme.textMuted }}>Generate the base plan in Department Plan → Growth Matrix first (new departments from BIS are applied there).</div>
       </div>
     </div>
   )
@@ -148,7 +148,7 @@ export default function FinalResults() {
           ✓ Master Setup <span style={{ fontWeight: 400, fontSize: 11 }}>({buyerSynced ? 'Buyer\'s Input ↑' : 'No MRP sync'})</span>
         </span>
         {[
-          ['New Depts',       pipeline.new_depts,       'final_dept_plan.json'],
+          ['Base plan + new depts (BIS)', pipeline.new_depts, 'final_dept_plan.json'],
           ['Attr Correction', pipeline.attr_correction, 'attr_corrected_plan.json'],
           ['Base Correction', pipeline.base_correction, 'base_corrected_plan.json'],
         ].map(([label, done, src]) => (
