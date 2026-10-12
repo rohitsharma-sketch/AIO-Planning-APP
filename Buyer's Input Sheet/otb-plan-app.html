@@ -367,6 +367,9 @@ td.aop-col-bg input.gi{background:var(--sf)}
 
 /* ── DEPARTMENT DRAWER (everything about one department, 2026-10-07) ── */
 .rn-btn{all:unset;cursor:pointer;border-radius:3px}
+.row-rvt{all:unset;cursor:pointer;display:inline-block;width:18px;height:18px;line-height:18px;text-align:center;margin-right:5px;border:1px solid var(--bd);border-radius:4px;color:var(--ac);font-size:12px;vertical-align:middle}
+.row-rvt:hover{background:var(--ac-l);border-color:var(--ac-b)}.row-rvt:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
+.row-rvt.off{opacity:.35}.row-rvt.off:hover{background:none;border-color:var(--bd)}
 .rn-btn:hover{text-decoration:underline;text-underline-offset:3px;color:var(--ac)}
 .rn-btn:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 .drw-ov{position:fixed;inset:0;z-index:900;display:none;justify-content:flex-end;background:rgba(var(--st-ink-rgb,30,39,35),.18)}
@@ -4196,7 +4199,10 @@ function renderTable(){
       const togLbl=isInact?(phase==='p2'?'Inactive':'No Data'):'Active';
       const togCls=isInact?(phase==='p2'?' p2':' p1'):' on';
       const togBtn=(r._key&&!_parseAttrKey(r._key))?`<button class="row-act-btn${togCls}" onclick="event.stopPropagation();toggleSecVis('${r._key}')" title="${phase==='p1'?'Auto-inactive: no LY data found':phase==='p2'?'Manually deactivated — click to re-activate':''}">${togLbl}</button>`:'';
-      tbody+=`<tr class="${inactive&&S.report!=='inactive'?'row-inactive':''}"${r._key?` data-rk="${r._key}"`:''}><td class="c0 l">${togBtn}${nmHtml}${magBtn}</td>${noC1?'':'<td class="c1 d2">'+(r._d2||'')+'</td>'}`;
+      const canRvt=r._key&&r._divId&&!_parseAttrKey(r._key)&&!isInact&&S.report!=='inactive';
+      const rvWhy=canRvt?_deptRevertWhy(r._divId,r._key):'',rvNm=_attr(String(r._name).replace(/<[^>]+>/g,''));
+      const rvtBtn=canRvt?`<button type="button" class="row-rvt${rvWhy?' off':''}" onclick="event.stopPropagation();revertDeptToAop('${r._divId}','${r._key}')" title="${rvWhy?_attr(rvWhy):'Revert '+rvNm+' to its AOP share - the rest of its division re-balance onto AOP'}" aria-label="Revert ${rvNm} to its AOP share${rvWhy?' ('+_attr(rvWhy)+')':''}">&#x21BA;</button>`:'';
+      tbody+=`<tr class="${inactive&&S.report!=='inactive'?'row-inactive':''}"${r._key?` data-rk="${r._key}"`:''}><td class="c0 l">${rvtBtn}${togBtn}${nmHtml}${magBtn}</td>${noC1?'':'<td class="c1 d2">'+(r._d2||'')+'</td>'}`;
       defs.forEach((d,di)=>{tbody+=`<td class="${d.sum?'sc':''}${sep(di)}${d.hasAop?' aop-col-bg':''}">${cellVal(r,d)}</td>`;});
       tbody+='</tr>';
     }
@@ -5036,14 +5042,15 @@ function revertToLyCont(){
 
 
 /* ── REVERT ATTR GROUP TO AOP ──────────────────── */
-function revertToAop(dvId,attr){
+function revertToAop(dvId,attr,secId){
   _planEvent('Revert to AOP');
   const dv=DVDATA.find(d=>d.id===dvId);
   if(!dv)return;
   if(S.divLocked.has(dv.id)){toast(dv.nm+' is locked - unlock it first');return;}
   const c=cols();
-  // Only revert active (non-hidden) sections
-  const secs=(attr?dv.secs.filter(s=>s.attr===attr):dv.secs).filter(s=>!S.hiddenSecs.has(s.id));
+  // Only revert active (non-hidden) sections; secId = one department (its row's ↺, 12 Oct 2026)
+  const secs=(secId?dv.secs.filter(s=>s.id===secId):attr?dv.secs.filter(s=>s.attr===attr):dv.secs).filter(s=>!S.hiddenSecs.has(s.id));
+  if(secId)_touchDept(secId);
   secs.forEach(sec=>{
     S.buyerSet.delete(sec.id);
     c.forEach(mi=>{
@@ -5057,7 +5064,21 @@ function revertToAop(dvId,attr){
   const ids=new Set(secs.map(s=>s.id));
   AOP_MIS.forEach(mi=>{_divReapp(dv,mi,ids);_divRescale(dv,mi);});
   refresh();
-  toast((attr||dv.nm)+' reverted to AOP ✓');
+  toast((secId?(secs[0]?.nm||secId):attr||dv.nm)+' reverted to AOP ✓');
+}
+// user, 12 Oct: "add a revert button in front of every department in every BIS tab" -> its AOP share (the same as the
+// attribute ↺ Revert, for one department; the rest of its division re-balance onto AOP). '' = can revert, else why not.
+function _deptRevertWhy(dvId,secId){
+  if(!Object.keys(S.aopSeeds).length)return 'No AOP synced yet - there is no AOP share to go back to';
+  if(S.divLocked.has(dvId))return 'Its division is locked - unlock it first';
+  const off=S.buyerSet.has(secId)||cols().some(mi=>{const k=secId+'__'+mi;
+    return S.locked.has(k)||Math.abs((S.inputs[k]??0)-(S.aopSeeds[k]??0))>0.005;});
+  return off?'':'Already on its AOP share';
+}
+function revertDeptToAop(dvId,secId){
+  const why=_deptRevertWhy(dvId,secId);
+  if(why){toast(why);return;}
+  revertToAop(dvId,null,secId);
 }
 
 /* ── GLOBAL RESET — reverts to the selected/seeded AOP, not LY/LFL defaults ── */

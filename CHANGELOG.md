@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-12
 
+### BIS: a revert button in front of every department
+- **Asked (user):** "add a revert button in front of every department in every BIS tab" -> chose "Its AOP share".
+- A small ↺ before each active department's name on the tabs that list departments (Buyer's Plan, Department Summary; Division / Attribute Summary list divisions / attributes and keep their own ↺ Revert, the Inactive tab uses Reactivate). It does what the attribute ↺ Revert does, for one department: back to its AOP-seeded growth for the selected months, its locks and "buyer's own growth" flag cleared, the rest of its division re-balanced onto AOP (`revertToAop(dv, null, secId)`; `revertDeptToAop`). Faded with the reason in its tooltip - and a toast if clicked - when already on its AOP share, the division is locked, or no AOP is synced. Counts in the before / after comparison as an edit of that department. Nothing reaches Sales Plan until Save.
+- Checked: M_IN_BRIEF Apr set to +25% -> ↺ -> +10.0% (its AOP seed), flag cleared, MENS Apr back on its AOP; 198 buttons on Buyer's Plan and Department Summary; BIS node tests pass; outside copy byte-identical.
+
 ### Sales Plan Division Plan falls back to the live AOP version
 - **Asked (user):** "make the division plan fall back to the live AOP version".
 - `division_plan._pick_publish`: the publish stamped on BIS's last Save while it is still a saved version's latest, else the live saved version; the page's source line then reads "Live AOP Version 2 - 25 Sept 2026 (publish 118) - BIS was last saved on publish 116; Save in BIS to plan on this one" and the response carries `bis_publish_id`. Before, BIS's Save of 7 Oct was stamped 116, Version 2 was published again as 118 on 8 Oct, 116 left the version list and the page showed "No AOP published yet" with zeros.
