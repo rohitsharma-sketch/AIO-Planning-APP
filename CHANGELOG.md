@@ -5,6 +5,13 @@ Newest first. Each entry names its commit.
 
 ---
 
+## 2026-10-12
+
+### BIS: factor table - history check as a comparison table with bars
+- **Asked (user):** "can i visually see ML concept changes in the factor table and ensure that the working is simplified for others to understand similar to the table comparison in factor table ?"
+- "What sales history says" is now a table like the department table above it: the method in use first (its factor and Rs effect after the division re-balance = the yardstick), then one row per history signal - 25V26 growth, Recent momentum, Model (all signals together) - with what the signal means in one line, this department's value, the band of similar departments in past cycles, what they got the next year (a bar around ×1.00, green up / red down, ≈ Rs effect on its own) and "Agrees with <method>?" (✓ same way / ⚠ other way - weak evidence / about level). A "= Verdict" row sums it up in one sentence. The all-departments table shows the same small bars on the method factor, both "next year" columns and the model.
+- Advisory only, as before - nothing here changes a factor. Example (L_EW_KURTI, Matrix ×1.08 +25.1 L): recent momentum ×0.92 leans the other way; 25V26 growth and the model are about level.
+
 ## 2026-10-09
 
 ### STR Forecaster: Display type in the department editor
