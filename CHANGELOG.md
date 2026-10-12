@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-12
 
+### BIS: factor table moved to its own tab in the pop-up
+- **Asked (user):** "move the factor table in a secondary tab in the same pop up" (the bands + 36-row Sell-Thru x LY Growth x Fill Rate table)
+- The Planner's factor table pop-up has two tabs: **Department preview** (opens first - the department comparison, history check, all-departments table) and **Factor table & settings** (fill-rate line + Refresh, a Method switch Matrix / Weighted builder / Continuous with "(in use)", and that method's table / settings). "Settings ›" under each method in the preview opens the second tab on that method. Nothing about the factors changed; Save works from either tab.
+
 ### BIS: factor table - history check as a comparison table with bars
 - **Asked (user):** "can i visually see ML concept changes in the factor table and ensure that the working is simplified for others to understand similar to the table comparison in factor table ?"
 - "What sales history says" is now a table like the department table above it: the method in use first (its factor and Rs effect after the division re-balance = the yardstick), then one row per history signal - 25V26 growth, Recent momentum, Model (all signals together) - with what the signal means in one line, this department's value, the band of similar departments in past cycles, what they got the next year (a bar around ×1.00, green up / red down, ≈ Rs effect on its own) and "Agrees with <method>?" (✓ same way / ⚠ other way - weak evidence / about level). A "= Verdict" row sums it up in one sentence. The all-departments table shows the same small bars on the method factor, both "next year" columns and the model.

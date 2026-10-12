@@ -490,6 +490,11 @@ td.aop-col-bg input.gi{background:var(--sf)}
 .fm-mc-hd{display:flex;align-items:center;justify-content:space-between;gap:6px;min-height:26px}
 .fm-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--ac);color:var(--sf)}
 .fm-mc-set{all:unset;cursor:pointer;font-size:11px;font-weight:600;color:var(--ac)}
+.fm-vtabs{display:flex;align-items:center;gap:4px;padding:8px 14px 0;border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:2;background:var(--sf)}
+.fm-vtabs.sub{position:static;border-bottom:0;padding:10px 14px 2px;gap:6px}
+.fm-vtab{all:unset;cursor:pointer;padding:7px 12px;font-size:12px;font-weight:600;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px}
+.fm-vtab.on{color:var(--tx);border-bottom-color:var(--ac)}.fm-vtab:focus-visible{outline:2px solid var(--ac);outline-offset:-2px}
+.fm-vtab.sm{padding:4px 10px;font-size:11.5px;border:1px solid var(--bd);border-radius:999px;margin:0}.fm-vtab.sm.on{border-color:var(--ac);background:color-mix(in srgb,var(--ac) 12%,var(--sf))}
 .fm-mc-set:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
 .fm-prev{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:11.5px}
 .fm-prev ol{margin:4px 0 0;padding-left:18px}
@@ -5665,14 +5670,14 @@ const FM_DEFAULT={drivers:[
   {key:'fill',on:true,weight:25,slabs:[{from:null,label:'Low',mult:1.05},{from:0.5,label:'Avg',mult:1},{from:0.7,label:'Good',mult:0.97}]}],
   rules:[{driver:'fill',op:'below',value:0.5,kind:'min',f:0.95}],shrink_k:0.05,clamp:[0.8,1.2]};
 const FM_CONT_DEFAULT={st:0.25,growth:0.2,base:0,fill:0,agree:false}; // from the 7 Oct back-tests: gentle sell-thru, modest momentum, no fill driver
-let _fmFt=null,_fmTab='matrix',_fmPrevCache=null;
+let _fmFt=null,_fmTab='matrix',_fmPrevCache=null,_fmView='preview';   // _fmView: 'preview' | 'table' (pop-up tabs)
 const _clone=o=>JSON.parse(JSON.stringify(o));
 function openFactorTable(){
   fetch('/api/auth/me').then(r=>r.ok?r.json():null).catch(()=>null).then(me=>{
     PLANNER.canEdit=!!(me&&(me.is_admin||me.role==='admin'||me.role==='planner'));
     _fmFt=PLANNER.ft?_clone(PLANNER.ft):null;
     if(_fmFt){_fmFt.mode=_fmFt.mode||'matrix';_fmFt.model=_fmFt.model||_clone(FM_DEFAULT);_fmFt.cont=_fmFt.cont||{...FM_CONT_DEFAULT};}
-    _fmTab=_fmFt?.mode==='weighted'?'builder':_fmFt?.mode==='continuous'?'cont':'matrix';_fmPrevCache=null;_fmCutCache=new Map();
+    _fmTab=_fmFt?.mode==='weighted'?'builder':_fmFt?.mode==='continuous'?'cont':'matrix';_fmPrevCache=null;_fmCutCache=new Map();_fmView='preview';
     _renderFactorTable();document.getElementById('factorOv').style.display='flex';
     if(!PLANNER.mla?.data)_fmLoadMla();
   });
@@ -5683,7 +5688,13 @@ function _renderFactorTable(){
   document.getElementById('factorSave').style.display=ed?'':'none';
   document.getElementById('factorWho').textContent=ed?'You can change the factors (admin / planner).':'Read-only - only an admin or a planner can change the factors.';
   if(!ft){el.innerHTML='<p style="padding:14px">No factor table on the server yet.</p>';return;}
-  el.innerHTML=_fmPickHtml(ft,ed)+`
+  // user, 12 Oct: "move the factor table in a secondary tab in the same pop up" - Preview (department + history) first,
+  // the factor table / method settings on their own tab
+  const tab=(v,t)=>`<button type="button" role="tab" class="fm-vtab${_fmView===v?' on':''}" aria-selected="${_fmView===v}" onclick="_fmView='${v}';_renderFactorTable();document.getElementById('factorBody').scrollTop=0">${t}</button>`;
+  const tabs=`<div class="fm-vtabs" role="tablist">${tab('preview','Department preview')}${tab('table','Factor table &amp; settings')}</div>`;
+  if(_fmView==='preview'){el.innerHTML=tabs+_fmPickHtml(ft,ed);return;}
+  const meth=FM_METHODS.map(([k,nm,t])=>`<button type="button" class="fm-vtab sm${_fmTab===t?' on':''}" aria-pressed="${_fmTab===t}" onclick="_fmTab='${t}';_renderFactorTable()">${nm}${ft.mode===k?' <span class="fm-note">(in use)</span>':''}</button>`).join('');
+  el.innerHTML=tabs+`<div class="fm-vtabs sub"><span class="fm-note">Method:</span>${meth}</div>
     <div class="fm-fill">${PLANNER.fill?`Fill rates: <b>${Object.keys(PLANNER.fill.departments||{}).length}</b> departments from ${_h(PLANNER.fill.source)} (${_h(PLANNER.fill.column)}) · ${_h(PLANNER.fill.imported_at)}`:'<span style="color:var(--ne)">Fill-rate file not loaded yet.</span>'}
       ${PLANNER.canEdit?`<label class="tbtn" style="margin-left:8px;cursor:pointer">&#x2191; Refresh fill rates<input type="file" accept=".xlsb,.xlsx,.xlsm" style="display:none" onchange="uploadFillRate(this)"></label>`:''}</div>`+
     (_fmTab==='builder'?_fmBuilderHtml(ft.model,ed):_fmTab==='cont'?_fmContHtml(ft,ed):_fmMatrixHtml(ft,ed))+
@@ -5820,7 +5831,7 @@ function _fmPickHtml(ft,ed){
         <tr class="fm-dt-why"><th scope="row">How it works</th><td></td>${cols.map(c=>{const g=FM_PLAIN[c.k];
           return `<td>${g.how}<div class="fm-why-pro">+ ${g.good}</div><div class="fm-why-con">− ${g.watch}</div></td>`;}).join('')}</tr>
       </tbody>
-      <tfoot><tr><td colspan="2"></td>${cols.map(c=>`<td><button type="button" class="fm-mc-set" onclick="_fmTab='${c.tab}';_renderFactorTable()" aria-pressed="${_fmTab===c.tab}">${_fmTab===c.tab?'Settings shown below':'Settings ›'}</button></td>`).join('')}</tr></tfoot>
+      <tfoot><tr><td colspan="2"></td>${cols.map(c=>`<td><button type="button" class="fm-mc-set" onclick="_fmTab='${c.tab}';_fmView='table';_renderFactorTable();document.getElementById('factorBody').scrollTop=0">Settings ›</button></td>`).join('')}</tr></tfoot>
     </table></div>
     ${_fmHistHtml(sec,dv,cols,ft)}
     ${_fmHistAllHtml(ft)}
