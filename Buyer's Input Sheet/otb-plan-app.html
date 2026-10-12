@@ -626,6 +626,9 @@ tr:hover .mag-trig{display:inline}
 .vlog-load{padding:5px 14px;border-radius:7px;border:1px solid var(--ac-b);background:var(--ac-l);color:var(--ac);font-size:11.5px;font-weight:700;cursor:pointer}
 .vlog-load:hover{background:var(--st-btn,#A8CBB7);color:var(--st-btn-text,#1F4D3A);border-color:var(--st-btn-hover,#95BFA7)}
 .vlog-row-ft{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ver-sel{max-width:240px;padding:0 8px}
+.ver-sel option{color:#1E2723;background:#fff}
+.vlog-orig{font-size:9px;font-weight:800;padding:1px 7px;border-radius:10px;background:var(--s3);color:var(--t2);border:1px solid var(--bd);vertical-align:middle;letter-spacing:.04em;margin-left:6px}
 .vlog-hint{font-size:10.5px;color:var(--mu);font-style:italic;padding:8px 12px;background:var(--s2);border-radius:7px;margin-top:4px;line-height:1.5}
 
 /* ── MISC ───────────────────────────────────────────────────────────── */
@@ -750,6 +753,8 @@ tr:hover .blk-lock,.blk-lock:focus-visible{opacity:1}
             <button class="tmenu-item" onclick="closeMenus();exportCSV()">Export CSV<small>The current view only</small></button>
           </div>
         </div>
+        <select class="tbtn ver-sel" id="verSel" onchange="onVerSelChange(this.value)" aria-label="Plan version"
+          title="Plan version - the Original is your first saved plan and never changes; every changed save after it is a new iteration. Pick one to load it."></select>
         <div class="tbtn" onclick="openMainCompare()" title="What changed since the last save, department by department - with Undo">Before / after</div>
         <div class="tbtn pri" onclick="saveState(true)">Save</div>
       </div>
@@ -5123,7 +5128,7 @@ function saveState(logVersion=false){
   const now=new Date();
   try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopVersionId:S.aopVersionId,aopUnit:S.aopUnit,locked:[...S.locked],buyerSet:[...S.buyerSet],divLocked:[...S.divLocked],divLockAdded:S.divLockAdded,aopSeeds:S.aopSeeds,aopSeededFrom:S.aopSeededFrom,aopSeedFp:S.aopSeedFp,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],customDepts:S.customDepts,deptSplit:1,at:now.toISOString()}))}catch(e){}
   _updateSaveLabel(now);
-  if(logVersion)_maybeSaveVersion(now);
+  if(logVersion){_maybeSaveVersion(now);_renderVerSel();}
   _mainSnapTake('saved');   // the main sheet's before / after starts again from what was just saved
   toast('State saved ✓');
   // Sales Plan gets the buyer growth ONLY from the Save button (user, 2026-10-05: "push only on Save") - seeding,
@@ -6784,6 +6789,7 @@ loadState();
 _mainSnapTake('opened');
 // Populate auto-saved label from persisted timestamp
 (function(){try{const p=JSON.parse(localStorage.getItem('ck_otb_state')||'{}');if(p.at)_updateSaveLabel(new Date(p.at));}catch(_){}})();
+_renderVerSel();
 _loadLayout();
 _loadNavOrder();
 _buildPaletteSwatches();
@@ -7139,7 +7145,41 @@ function syncAopLockStatus(){
 /* ── VERSION LOG ────────────────────────────────── */
 const _VL_KEY='bis.plan_versions';
 const _VL_MAX=10;
-function _vlLoad(){try{return JSON.parse(localStorage.getItem(_VL_KEY)||'[]');}catch(e){return [];}}
+function _vlLoad(){let v;try{v=JSON.parse(localStorage.getItem(_VL_KEY)||'[]');}catch(e){v=[];}return _vlTag(v);}
+// 2026-10-12 (user): "a version selector just like AOP forecaster ... 1 original version where the others are
+// iterations". The first saved plan is the Original: never changed in place and never dropped by the cap - a changed
+// save made from it is a new iteration. Every later version is Iteration 1, 2, ... (numbers never move). Lists saved
+// before this: the oldest one left becomes the Original, the rest are numbered by age.
+function _vlTag(vers){
+  const byAge=[...vers].sort((a,b)=>a.id-b.id);
+  if(byAge.length&&!byAge.some(v=>v.kind==='original'))byAge[0].kind='original';
+  let n=Math.max(0,...vers.map(v=>v.iter||0));
+  byAge.forEach(v=>{if(v.kind!=='original'&&!v.iter){v.kind='iteration';v.iter=++n;}});
+  return vers;
+}
+function _vlName(v){return v.kind==='original'?'Original':'Iteration '+v.iter;}
+function _vlShort(iso){return new Date(iso).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'numeric',minute:'2-digit'});}
+// same plan inputs (growth %, locks, hidden departments) - rounded so a re-save's float noise is not a change
+function _vlSame(a,b){
+  const k=s=>JSON.stringify([Object.entries(s?.inputs||{}).filter(([,x])=>x!=null).map(([c,x])=>[c,+(+x).toFixed(4)]).sort((x,y)=>x[0]<y[0]?-1:1),
+    [...(s?.locked||[])].sort(),[...(s?.hiddenSecs||[])].sort()]);
+  return k(a)===k(b);
+}
+// the toolbar selector: Original first, then the iterations in order; the version on screen is selected
+function _renderVerSel(){
+  const el=document.getElementById('verSel');
+  if(!el)return;
+  const vers=_vlLoad(),act=_vlActiveId();
+  if(!vers.length){el.innerHTML='<option>No saved version yet</option>';el.disabled=true;return;}
+  el.disabled=false;
+  const list=[...vers].sort((a,b)=>(a.kind==='original'?-1:b.kind==='original'?1:a.iter-b.iter));
+  el.innerHTML=(list.some(v=>v.id===act)?'':'<option value="" selected disabled>Pick a version</option>')
+    +list.map(v=>`<option value="${v.id}"${v.id===act?' selected':''}>${_vlName(v)} · ${_vlShort(v.savedAt)}</option>`).join('');
+}
+function onVerSelChange(id){
+  loadVersion(_vlLoad().findIndex(v=>v.id===Number(id)));   // asks first
+  _renderVerSel();                                          // cancelled -> back to the version on screen
+}
 function _vlSave(arr){try{localStorage.setItem(_VL_KEY,JSON.stringify(arr));}catch(e){}}
 // The version the plan on screen came from (last Load, or last new version) - a
 // save with no real change updates THAT one, not a new "Version N+1" (2026-09-25).
@@ -7198,21 +7238,24 @@ function _maybeSaveVersion(now){
   // "Version 3/4" copy whenever Version 2 wasn't the newest entry.
   const ai=vers.findIndex(v=>v.id===_vlActiveId());
   const i=ai>=0?ai:0;
-  if(vers.length&&Math.abs(curSum-_vlTotalSum(vers[i].divisionTotals))<=0.5){
+  const snap=_vlSnapshot();
+  if(vers[i]?.kind==='original'){
+    if(_vlSame(vers[i].snapshot,snap))return;   // unchanged Original - nothing to save; any change is a new iteration
+  }else if(vers.length&&Math.abs(curSum-_vlTotalSum(vers[i].divisionTotals))<=0.5){
     // same plan (minor drift) - refresh that version in place and make it the latest
     const [v]=vers.splice(i,1);
-    Object.assign(v,{savedAt:now.toISOString(),divisionTotals:cur,snapshot:_vlSnapshot()});
+    Object.assign(v,{savedAt:now.toISOString(),divisionTotals:cur,snapshot:snap});
     vers.unshift(v);
     _vlSave(vers);
     _vlSetActive(v.id);
     return;
   }
   // new version - store summary totals + full state snapshot for Load
-  const n=vers.length+1;
-  const label=`Version ${n} — ${_vlFmtDate(now)}`;
   const id=Date.now();
-  vers.unshift({id,label,savedAt:now.toISOString(),divisionTotals:cur,snapshot:_vlSnapshot()});
-  if(vers.length>_VL_MAX)vers.length=_VL_MAX;
+  const v=vers.length?{id,kind:'iteration',iter:Math.max(0,...vers.map(x=>x.iter||0))+1}:{id,kind:'original'};
+  Object.assign(v,{label:`${_vlName(v)} — ${_vlFmtDate(now)}`,savedAt:now.toISOString(),divisionTotals:cur,snapshot:snap});
+  vers.unshift(v);
+  while(vers.length>_VL_MAX)vers.splice(vers.map(x=>x.kind).lastIndexOf('iteration'),1);   // the cap drops the oldest iteration, never the Original
   _vlSave(vers);
   _vlSetActive(id);
 }
@@ -7234,10 +7277,10 @@ function _renderVersionLog(){
   const fCrV=v=>'Rs. '+v.toFixed(1)+' Cr';
   body.innerHTML=vers.map((v,i)=>{
     const t=v.divisionTotals||{};
-    const isLatest=i===0;
+    const isLatest=i===0,isOrig=v.kind==='original';
     const hasSnap=!!v.snapshot;
     return `<div class="vlog-entry">
-      <div class="vlog-label">${v.label||'Version '+(vers.length-i)}${isLatest?' <span style="font-size:9px;font-weight:800;padding:1px 7px;border-radius:10px;background:var(--st-btn,#A8CBB7);color:var(--st-btn-text,#1F4D3A);vertical-align:middle;letter-spacing:.04em;margin-left:6px">LATEST</span>':''}</div>
+      <div class="vlog-label">${_vlName(v)} <span style="font-size:10.5px;font-weight:500;color:var(--mu)">${_vlShort(v.savedAt)}</span>${isOrig?' <span class="vlog-orig" title="Your first saved plan - it never changes; changed saves become new iterations">ORIGINAL</span>':''}${v.id===_vlActiveId()?' <span class="vlog-orig" title="The version the plan on screen came from">ON SCREEN</span>':''}${isLatest?' <span style="font-size:9px;font-weight:800;padding:1px 7px;border-radius:10px;background:var(--st-btn,#A8CBB7);color:var(--st-btn-text,#1F4D3A);vertical-align:middle;letter-spacing:.04em;margin-left:6px">LATEST</span>':''}</div>
       <div class="vlog-divs">
         <span class="vlog-div">MENS: ${fCrV(t.MENS||0)}</span>
         <span class="vlog-div">LADIES: ${fCrV(t.LADIES||0)}</span>
@@ -7248,7 +7291,7 @@ function _renderVersionLog(){
         ${hasSnap?`<button class="vlog-load" onclick="loadVersion(${i})">&#x21A9; Load</button>`:'<span style="font-size:10px;color:var(--mu);font-style:italic">No snapshot</span>'}
       </div>
     </div>`;
-  }).join('')+'<div class="vlog-hint">Loading a version replaces your current plan inputs. Save first if you want to preserve the current state.</div>';
+  }).join('')+'<div class="vlog-hint">Loading a version replaces your current plan inputs. Save first if you want to preserve the current state. The Original never changes - saving a changed plan made from it creates the next iteration.</div>';
 }
 function loadVersion(idx){
   _planEvent('Load a saved version');
@@ -7256,7 +7299,7 @@ function loadVersion(idx){
   if(idx<0||idx>=vers.length)return;
   const v=vers[idx];
   if(!v.snapshot){toast('No snapshot stored for this version');return;}
-  if(!confirm(`Load "${v.label}"?\n\nThis will replace ALL current plan inputs, locks, and AOP data.\nYou cannot undo this unless you save first.`))return;
+  if(!confirm(`Load "${_vlName(v)} — ${_vlShort(v.savedAt)}"?\n\nThis will replace ALL current plan inputs, locks, and AOP data.\nYou cannot undo this unless you save first.`))return;
   const snap=v.snapshot;
   S.inputs=snap.inputs||{};
   S.locked=new Set(snap.locked||[]);
@@ -7273,7 +7316,8 @@ function loadVersion(idx){
   refresh();
   syncAopLockUI();
   closeVersionLog();
-  toast(`Loaded: ${v.label}`);
+  _renderVerSel();
+  toast(`Loaded: ${_vlName(v)}`);
 }
 
 </script>

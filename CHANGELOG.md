@@ -7,6 +7,14 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-12
 
+### BIS: version selector - one Original, the rest iterations
+- **Asked (user):** "give me a version selector just like AOP forecaster in BIS so that there is 1 original version where the others are iterations".
+- A **version selector** in the top bar (next to Before / after and Save) lists **Original**, then **Iteration 1, 2, ...** with each one's save time. The version the plan on screen came from is selected; picking another loads it (asks first, as Plan history's Load does).
+- **The Original is your first saved plan and never changes.** Saving an unchanged plan while on it does nothing. Saving a changed plan creates the next iteration. Iterations keep the old rule: a save whose division totals move by no more than Rs 0.5 Cr refreshes that iteration in place; a bigger change creates a new one. The 10-version cap now drops the oldest iteration, never the Original. Iteration numbers never move.
+- Plan history shows the same names with ORIGINAL / ON SCREEN tags. For versions saved before this change, the oldest one left becomes the Original and the rest are numbered by age.
+- Versions are still kept in this browser only (`bis.plan_versions`), as before.
+- **Checked in the in-app browser on 5050:** I called the save-version function directly rather than pressing Save, because Save would also push growth to Sales Plan. The browser's own version list was restored afterwards. Results: an empty list shows "No saved version yet". The first save creates the Original, and an unchanged re-save changes nothing. A changed save from the Original creates Iteration 1 and leaves the Original's snapshot identical. After 12 more changed saves the list holds the Original plus Iterations 4-12. An old list of 3 versions converts to Original, Iteration 1, Iteration 2.
+
 ### Sales Plan: Attr / Base Correction off in Cluster view
 - **Asked (user):** "disable attr correction and base correction in cluster view" (screenshot of the sidebar).
 - Both correct the plan store by store, so with the header switch on Cluster: the two sidebar items are greyed with a "store only" tag and a tooltip (not links); the Growth Matrix "what next" pop-up after Generate Base Plan shows them disabled with a one-line reason (Opt out to Final Results still works); opening either page by link shows "... is off in Cluster view" with a **Switch to Store** button (`components/ClusterOff.jsx`; the pages are wrapped, so nothing of theirs runs in Cluster view). PW/W and SOR Deviation are untouched. Store view: everything as before.
