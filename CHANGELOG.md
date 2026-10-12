@@ -7,6 +7,21 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-12
 
+### BIS: top-bar overlap fixed, iteration remover, versions keep buyer entries + division locks
+- **Asked (user):** "rectify this overlap. Also, give me a iteration remover in the selection pane" (screenshot: the "Buyer's Input Sheet" title under the AOP chip).
+- **Overlap:** the action buttons were allowed to shrink, so when they didn't fit they slid left over the centred title. Now they never shrink, and the title takes the space left: centred while there is room, shortened with "…" when there isn't. Checked at 1630 / 1400 / 1200 px: no overlap, title not cut.
+- **Remover:**
+  - The selector's last entry is **"✕ Remove an iteration…"**. It opens Plan history, where every iteration has **✕ Remove** (asks first).
+  - The Original can't be removed (the server refuses it too), and the other iterations keep their numbers.
+  - The removal applies to the shared list; the plan on screen is not changed.
+  - Backend: `POST /api/config/bis-plan-versions {"remove": id}` (404 for an unknown id or the Original).
+- **Versions now also keep** the buyer-entered departments and the division locks (`buyerSet`, `divLocked`, `divLockAdded`). Loading a version therefore re-balances the way it did when saved. Versions saved before this have neither, and Load leaves those as they are.
+- **Safety:** if a browser's own versions would be replaced by the database list, they are first kept once under `bis.plan_versions.before_db`.
+- **Checked:**
+  - In BIS on 5050 against an in-memory stand-in for the server: 4 versions; removing Iteration 2 leaves Original, Iteration 1 and Iteration 3; only the iterations have Remove buttons; a loaded version brings back its buyer entries and division lock.
+  - The real route: removing an unknown id returns 404.
+  - 8000 restarted.
+
 ### BIS: plan versions moved to the database
 - **Asked (user):** "move the BIS versions to the database".
 - **Where they live:** the Original + iterations are now in Postgres, `planning_inputs.bis_plan_versions` (`id`, `data` JSONB = the BIS entry as before, `last_modified_at`), so every machine sees the same list. This is the same approach as AOP's own `plan_versions`.

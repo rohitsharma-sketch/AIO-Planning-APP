@@ -643,6 +643,15 @@ tr:hover .mag-trig{display:inline}
 /* ── Calm look (user, 2026-09-28: minimal and clean, from the alternate design) ── overrides only; logic untouched ── */
 .tbar{box-shadow:none}
 .tbar-wm-app{font-family:var(--st-font-display,Georgia,serif);font-weight:500;font-size:16px;letter-spacing:-.005em}
+/* user, 2026-10-12: "rectify this overlap" - the buttons kept their size and slid over the title; now they never
+   shrink and the title shortens (ellipsis) in the space left, centred while there is room */
+.tbar-actions{flex:0 0 auto}
+.tbar-spacer{flex:1 1 0}
+.tbar-flex-fill{flex:1 1 0;min-width:12px}
+.tbar-wordmark{flex:0 1 auto;min-width:0;overflow:hidden}
+.tbar-wm-app,.tbar-wm-section{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.vlog-rm{padding:5px 10px;border-radius:7px;border:1px solid var(--bd);background:var(--sf);color:var(--t2);font-size:11px;font-weight:600;cursor:pointer;margin-right:6px}
+.vlog-rm:hover{border-color:var(--rd,#b91c1c);color:var(--rd,#b91c1c)}
 .dtbl .hr-sg .hblk-st,.dtbl .hr-sg .hblk-hist,.dtbl .hr-sg .hblk-plan{color:var(--st-ink-2,var(--tx2));background:var(--sf);border-top-color:var(--st-line-2,var(--bm))}
 /* the per-row "Active" switch becomes a quiet dot (still a button; the word stays for screen readers) */
 .row-act-btn.on{position:relative;font-size:0;width:18px;height:18px;padding:0;border:0;background:transparent;margin-right:6px;vertical-align:middle}
@@ -7173,7 +7182,8 @@ function _renderVerSel(){
   el.disabled=false;
   const list=[...vers].sort((a,b)=>(a.kind==='original'?-1:b.kind==='original'?1:a.iter-b.iter));
   el.innerHTML=(list.some(v=>v.id===act)?'':'<option value="" selected disabled>Pick a version</option>')
-    +list.map(v=>`<option value="${v.id}"${v.id===act?' selected':''}>${_vlName(v)} · ${_vlShort(v.savedAt)}</option>`).join('');
+    +list.map(v=>`<option value="${v.id}"${v.id===act?' selected':''}>${_vlName(v)} · ${_vlShort(v.savedAt)}</option>`).join('')
+    +(list.some(v=>v.kind!=='original')?'<option value="__rm">✕ Remove an iteration…</option>':'');
 }
 // 2026-10-12 (user): "move the BIS versions to the database" - the list lives in Postgres (AOP Forecaster,
 // planning_inputs.bis_plan_versions, via /api/config/bis-plan-versions) so every machine sees the same Original and
@@ -7204,6 +7214,8 @@ async function _vlPull(){
       for(const v of pend)await _vlPost(v);
       if(pend.length)list=await _vlGet();
     }
+    if(local.some(v=>!v._pending&&!list.some(x=>String(x.id)===String(v.id))))
+      try{if(!localStorage.getItem('bis.plan_versions.before_db'))localStorage.setItem('bis.plan_versions.before_db',JSON.stringify(local));}catch(_){}
     _vlSave(list);
     _vlDbOk=true;
   }catch(e){_vlDbOk=false;}   // keep this browser's copy
@@ -7215,6 +7227,7 @@ async function _vlPush(v){
   catch(e){_vlDbOk=false;toast('Version kept in this browser only - the database could not be reached. It goes up the next time BIS opens.');}
 }
 function onVerSelChange(id){
+  if(id==='__rm'){_renderVerSel();openVersionLog();return;}
   loadVersion(_vlLoad().findIndex(v=>v.id===Number(id)));   // asks first
   _renderVerSel();                                          // cancelled -> back to the version on screen
 }
@@ -7264,7 +7277,11 @@ function _vlSnapshot(){
     aop:JSON.parse(JSON.stringify(S.aop)),
     aopLocked:S.aopLocked,
     aopUnit:S.aopUnit,
-    aopSeeds:{...S.aopSeeds}
+    aopSeeds:{...S.aopSeeds},
+    // 2026-10-12: kept too, so a loaded version re-balances as it did when saved (buyer entries held, locked divisions frozen)
+    buyerSet:[...S.buyerSet],
+    divLocked:[...S.divLocked],
+    divLockAdded:JSON.parse(JSON.stringify(S.divLockAdded||{}))
   };
 }
 function _maybeSaveVersion(now){
@@ -7329,10 +7346,24 @@ function _renderVersionLog(){
       </div>
       <div class="vlog-row-ft">
         <span style="font-size:10px;color:var(--mu)">Total: ${fCrV((t.MENS||0)+(t.LADIES||0)+(t.KIDS||0))}${v._pending?' · <b style="color:var(--wa)" title="Saved in this browser; goes to the database the next time it can be reached">not in the database yet</b>':''}</span>
-        ${hasSnap?`<button class="vlog-load" onclick="loadVersion(${i})">&#x21A9; Load</button>`:'<span style="font-size:10px;color:var(--mu);font-style:italic">No snapshot</span>'}
+        <span>${isOrig?'':`<button class="vlog-rm" onclick="removeIteration(${v.id})" title="Remove this iteration for everyone (the Original can't be removed)">&#x2715; Remove</button>`}${hasSnap?`<button class="vlog-load" onclick="loadVersion(${i})">&#x21A9; Load</button>`:'<span style="font-size:10px;color:var(--mu);font-style:italic">No snapshot</span>'}</span>
       </div>
     </div>`;
   }).join('')+'<div class="vlog-hint">Loading a version replaces your current plan inputs. Save first if you want to preserve the current state. The Original never changes - saving a changed plan made from it creates the next iteration. '+(_vlDbOk===false?'<b>The database could not be reached - showing this browser\'s copy.</b>':'The list is shared: it is kept in the database, so every machine sees the same versions.')+'</div>';
+}
+// user, 2026-10-12: "give me a iteration remover in the selection pane" - removes it from the shared list (the
+// Original can't be removed; the other iterations keep their numbers); the plan on screen is not changed
+async function removeIteration(id){
+  const v=_vlLoad().find(x=>x.id===id);
+  if(!v||v.kind==='original')return;
+  if(!confirm(`Remove ${_vlName(v)} (${_vlShort(v.savedAt)})?\n\nIt goes for everyone - the version list is shared. The plan on screen is not changed.`))return;
+  try{await _vlPost({remove:id});}
+  catch(e){if(!/404/.test(e.message)){toast('Not removed - the database could not be reached');return;}}   // 404: it never reached the DB
+  _vlSave(_vlLoad().filter(x=>x.id!==id));
+  if(_vlActiveId()===id)try{localStorage.removeItem(_VL_ACTIVE_KEY);}catch(_){}
+  await _vlPull();
+  _renderVersionLog();
+  toast(`${_vlName(v)} removed`);
 }
 function loadVersion(idx){
   _planEvent('Load a saved version');
@@ -7351,6 +7382,8 @@ function loadVersion(idx){
   // The plan inputs ARE restored exactly, so Save right after Load is a no-op.
   if(snap.aopUnit)S.aopUnit=snap.aopUnit;
   if(snap.aopSeeds)S.aopSeeds=snap.aopSeeds;
+  if(snap.buyerSet)S.buyerSet=new Set(snap.buyerSet);   // versions saved before 12 Oct have neither: left as they are
+  if(snap.divLocked){S.divLocked=new Set(snap.divLocked);S.divLockAdded=snap.divLockAdded||{};}
   if(!snap.deptSplit)_migrateDeptIds(S);
   _vlSetActive(v.id);
   saveState();

@@ -77,6 +77,16 @@ def save_version(db, body):
     return {"version": v, "dropped": drop}
 
 
+def remove_version(db, vid):
+    """Remove one iteration (user, 2026-10-12: "give me a iteration remover"). The Original can't be removed; the other
+    iterations keep their numbers. Caller commits. True when a row went."""
+    from sqlalchemy import text
+    _ensure(db)
+    return db.execute(text(
+        "DELETE FROM planning_inputs.bis_plan_versions WHERE id = :id AND data->>'kind' IS DISTINCT FROM 'original' "
+        "RETURNING id"), {"id": str(vid)}).first() is not None
+
+
 def import_versions(db, versions):
     """First move to the DB: one browser's list goes in as it is (its Original and iteration numbers kept), only
     while the table is empty - after that the DB list is the one every browser follows. Caller commits.

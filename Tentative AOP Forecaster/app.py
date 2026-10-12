@@ -604,10 +604,16 @@ def get_bis_plan_versions():
 @router.post("/api/config/bis-plan-versions")
 def post_bis_plan_version(body: dict = Body(...)):
     """One saved BIS version ({id, snapshot, ...}) -> {version, dropped}; the server numbers it. Or
-    {"import": [...]}: the first browser's own list, accepted only while the table is empty (409 after)."""
+    {"import": [...]}: the first browser's own list, accepted only while the table is empty (409 after). Or
+    {"remove": id}: remove one iteration (the Original can't be removed - 404)."""
     from db.base import SessionLocal
-    from db.bis_plan_versions import save_version, import_versions
+    from db.bis_plan_versions import save_version, import_versions, remove_version
     with SessionLocal() as db:
+        if "remove" in body:
+            if not remove_version(db, body["remove"]):
+                raise HTTPException(404, "No such iteration (the Original can't be removed)")
+            db.commit()
+            return {"ok": True}
         if "import" in body:
             out = import_versions(db, body["import"] or [])
             if out is None:
