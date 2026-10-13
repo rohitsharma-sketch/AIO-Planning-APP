@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### Sales Plan Final Results: versions pick up where you left off, in any session
+- **Asked (user):** "if i saved a version here it should stay saved in my next session".
+- Saved versions were already kept on the server (`backend/plan_versions/`, Version 1 saved by Admin 17:14 is there); which version was open lived only in the browser. Now the server keeps, per user, the version open and the one Save writes to (`plan_versions/state.json`; `POST /plan-versions/open`; `me` in the list), and the Hierarchy reopens it with its saved layout on the first load - any browser, any PC. Checked by clearing the browser's storage: the page came back on the version and layout last opened.
+
 ### Sales Plan: Article Name Buyer's Input = Import / Export; Article Name Plan listed before MRP Plan
 - **Asked (user):** "give me an import and export function not this" (the folder sync card), "shift the art name order to precede the mrp plan module".
 - Buyer's Input: **Import** (upload, checked before it replaces the file in use) and **Export** - the file in use exactly as imported (`backend/art_nm_cont_source.xlsx`, gitignored; seeded with the MAMJ file already imported), or before the first import a template in the same layout: every plan department x its LY articles, filled with the chain LY Art Nm cont % (178 departments, each 100%; re-imports cleanly). The folder sync (`/sync`, `/sync-status`) is removed.

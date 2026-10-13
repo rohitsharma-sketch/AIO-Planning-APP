@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { theme, alpha } from '../theme'
 
 // Final Results' saved versions (user, 2026-10-13: "give me a save button and all tools related to version selection,
@@ -113,8 +113,21 @@ export default function PlanVersions({ version, onOpen, view }) {
   const [note, setNote] = useState('')
   const reload = () => call(API).then(setList).catch(e => setErr(e.message))
   useEffect(() => { reload() }, [])
-  // a version this browser had open that is not on this server: back to the live plan
-  useEffect(() => { if (list && version && !list.versions.some(v => v.id === version)) onOpen(null) }, [list])   // eslint-disable-line react-hooks/exhaustive-deps
+  // the first load takes up where this user left off - in any browser (the server remembers, 2026-10-13: "if i saved
+  // a version here it should stay saved in my next session"); a version not on this server: back to the live plan
+  const first = useRef(true)
+  useEffect(() => {
+    if (!list) return
+    const me = list.me || {}
+    const has = id => list.versions.some(v => v.id === id)
+    if (first.current) {
+      first.current = false
+      if (me.current && has(me.current)) keepCur(me.current)
+      if (me.open !== undefined && me.open !== version && (me.open === '' || has(me.open))) { onOpen(list.versions.find(v => v.id === me.open) || null); return }
+    }
+    if (version && !has(version)) onOpen(null)
+  }, [list])   // eslint-disable-line react-hooks/exhaustive-deps
+  const openIt = v => { onOpen(v); call(`${API}/open`, { id: v ? v.id : '' }).catch(() => {}) }
   const keepCur = id => { setCur(id); try { localStorage.setItem(CUR, id) } catch { /* ignore */ } }
   const vs = list?.versions || []
   // what Save writes to: the version open, else the one this browser saved last, else the newest
@@ -166,7 +179,7 @@ export default function PlanVersions({ version, onOpen, view }) {
                 <td style={{ padding: '6px 8px', fontWeight: 700 }}>Live plan</td><td style={{ padding: '6px 8px', color: theme.textMuted }}>updates by itself</td><td /><td />
                 <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: theme.fontMono }}>{L(list?.live.ty)}</td>
                 <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: theme.fontMono }}>{list ? G(list.live) : ''}</td>
-                <td style={{ padding: '6px 8px', textAlign: 'right' }}><button type="button" style={btn(!version)} onClick={() => { onOpen(null); setDlg(null) }}>{!version ? 'Open now' : 'Open'}</button></td>
+                <td style={{ padding: '6px 8px', textAlign: 'right' }}><button type="button" style={btn(!version)} onClick={() => { openIt(null); setDlg(null) }}>{!version ? 'Open now' : 'Open'}</button></td>
               </tr>
               {[...vs].reverse().map(v => (
                 <tr key={v.id} style={{ borderTop: `1px solid ${theme.border}`, background: v.id === version ? alpha(theme.primary, '10') : undefined }}>
@@ -180,7 +193,7 @@ export default function PlanVersions({ version, onOpen, view }) {
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: theme.fontMono }}>{L(v.ty)}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: theme.fontMono }}>{G(v)}</td>
                   <td style={{ padding: '6px 8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                    <button type="button" style={btn(v.id === version)} onClick={() => { keepCur(v.id); onOpen(v); setDlg(null) }}>{v.id === version ? 'Open now' : 'Open'}</button>
+                    <button type="button" style={btn(v.id === version)} onClick={() => { keepCur(v.id); openIt(v); setDlg(null) }}>{v.id === version ? 'Open now' : 'Open'}</button>
                   </td>
                 </tr>
               ))}

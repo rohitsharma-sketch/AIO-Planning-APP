@@ -161,11 +161,42 @@ def changes(base: dict, cur: dict, base_name: str, cur_name: str, base_view=None
 
 # ── endpoints ─────────────────────────────────────────────────────────────────
 
+# per user: the version open and the one Save writes to, so the next session - any browser, any PC - opens where the
+# last one left off (user, 2026-10-13: "if i saved a version here it should stay saved in my next session")
+
+
+def _state() -> dict:
+    try:
+        with open(os.path.join(DIR, "state.json"), encoding="utf-8") as f:   # DIR read at call time (tests repoint it)
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def _remember(user: str, **kw):
+    from plan_cache import save_json
+    s = _state()
+    s[user] = {**s.get(user, {}), **kw}
+    os.makedirs(DIR, exist_ok=True)
+    save_json(os.path.join(DIR, "state.json"), s, indent=1)
+
+
 @router.get("")
-def list_versions():
-    """Every saved version (oldest first) and the live plan's totals."""
+def list_versions(request: Request):
+    """Every saved version (oldest first), the live plan's totals and this user's open / Save-to version."""
     t = totals(live_snapshot()["cube"])
-    return {"versions": _index(), "live": {"ly": t["ly"], "ty": t["ty"]}}
+    return {"versions": _index(), "live": {"ly": t["ly"], "ty": t["ty"]}, "me": _state().get(_user(request), {})}
+
+
+@router.post("/open")
+def open_version(body: dict, request: Request):
+    """{id} ('' = the live plan): remembered for this user's next session."""
+    vid = body.get("id") or ""
+    if vid:
+        _find(_index(), vid)
+    with _lock:
+        _remember(_user(request), open=vid, **({"current": vid} if vid else {}))
+    return {"ok": True}
 
 
 @router.post("/save")
@@ -197,6 +228,7 @@ def save(body: dict, request: Request):
         os.replace(tmp, os.path.join(DIR, f"{r['id']}.json.gz"))
         _write_index(v)
         _snap.pop(r["id"], None)
+        _remember(r["saved_by"], current=r["id"])
     return r
 
 
