@@ -34,14 +34,21 @@ def _active_plan():
     return plan, st["active_source"], datetime.datetime.fromtimestamp(os.path.getmtime(f)).strftime("%d %b %Y %H:%M")
 
 
-def check(plan: dict, mrp_data: dict | None = None):
-    """(summary rows, off rows, not-covered rows). A row is "off" when its difference shows at 8 decimals."""
+ART_LEVEL = "{G} × Dept × Month: department AOP = Σ Article Names"
+
+
+def check(plan: dict, mrp_data: dict | None = None, art: dict | None = None):
+    """(summary rows, off rows, not-covered rows). A row is "off" when its difference shows at 8 decimals.
+    art = the Article Name branch's build (art_nm_engine.built) - checked instead of the MRP bands when the MRP stage
+    runs on the Article Name route (user, 2026-10-13: "think of it as another parallel branch to MRP")."""
+    stage = (ART_LEVEL.format(G="Cluster" if art.get("grain") == "cluster" else "Store") if art is not None
+             else "Division × Dept × Period: department TY = Σ MRP bands")
     levels = {k: {"cells": 0, "off": 0, "largest": 0.0, "where": ""} for k in (
         "Store × Division × Month: division total = Σ departments",
         "Store × Division × Month: P1 / P2 totals = Σ departments",
         "Store × Dept × Month: TY = P1 + P2",
         "Store × Division × Month: Σ contribution % = 100",
-        "Division × Dept × Period: department TY = Σ MRP bands")}
+        stage)}
     off, uncovered = [], []
 
     def rec(level, total, parts, **where):
@@ -73,7 +80,20 @@ def check(plan: dict, mrp_data: dict | None = None):
                         rec("Store × Dept × Month: TY = P1 + P2", v.get("ty", 0.0),
                             v.get("ty_p1", 0.0) + v.get("ty_p2", 0.0), **{**w, "Department": n})
 
-    if mrp_data:
+    if art is not None:
+        miss = {}
+        for r in art["rows"]:
+            for m in art["months"]:
+                t = r["aop"].get(m, 0.0)
+                if t < 0:   # a negative department plan: its articles stay 0 (no negative plan)
+                    k = (r["div"], r["dept"], "negative department plan - articles kept at 0")
+                    miss[k] = miss.get(k, 0.0) + t
+                    continue
+                rec(stage, t, sum(v.get(m, 0.0) for v in r["arts"].values()),
+                    Store=r["g"], Division=r["div"], Department=r["dept"], Month=m)
+        uncovered = [{"Division": d, "Department": n, "Why": why, "TY not split to MRPs (₹ L)": ty}
+                     for (d, n, why), ty in sorted(miss.items())]
+    elif mrp_data:
         periods = mrp_data.get("periods", [])
         covered = {(div, dept) for div, depts in mrp_data.get("data", {}).items() for dept, v in depts.items()
                    if not v.get("no_split")}   # listed without a split: "not covered" below, not a rounding gap
@@ -109,12 +129,22 @@ def _run():
     if plan is None:
         return None
     from engines.mrp_plan_engine import get_mrp_data
-    try:
-        mrp = get_mrp_data()
-    except Exception:  # noqa: BLE001 - no MRP plan yet: skip that level
-        mrp = None
-    summary, off, uncovered = check(plan, mrp if mrp and mrp.get("has_plan") else None)
-    return {"source": source, "generated_at": at, "summary": summary, "off": off, "uncovered": uncovered}
+    from engines import art_nm_engine
+    st = art_nm_engine.get_settings()
+    art = mrp = None
+    if st["route"] == "article":   # the MRP stage runs on the Article Name branch: check that split
+        try:
+            art = art_nm_engine.built(st["grain"])
+        except Exception:  # noqa: BLE001 - no plan / lake: skip that level
+            art = None
+    else:
+        try:
+            mrp = get_mrp_data()
+        except Exception:  # noqa: BLE001 - no MRP plan yet: skip that level
+            mrp = None
+    summary, off, uncovered = check(plan, mrp if mrp and mrp.get("has_plan") else None, art)
+    return {"source": source, "generated_at": at, "summary": summary, "off": off, "uncovered": uncovered,
+            "route": st["route"]}
 
 
 @router.get("")
@@ -122,7 +152,7 @@ def get_reconciliation():
     r = _run()
     if r is None:
         return {"source": None, "summary": [], "off_count": 0, "off": [], "uncovered": []}
-    return {**{k: r[k] for k in ("source", "generated_at", "summary", "uncovered")},
+    return {**{k: r[k] for k in ("source", "generated_at", "summary", "uncovered", "route")},
             "off_count": len(r["off"]), "off": r["off"][:500],
             "uncovered_total": sum(u["TY not split to MRPs (₹ L)"] for u in r["uncovered"])}
 

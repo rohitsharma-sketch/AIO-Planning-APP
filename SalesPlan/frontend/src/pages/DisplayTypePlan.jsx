@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { theme, alpha } from '../theme'
 import GrainPanel from '../components/GrainPanel'
+import { useRoute } from '../components/RouteBar'
 
 const API = '/api/planning/display-type'
 
@@ -70,6 +71,7 @@ function UploadBox({ label, subtitle, endpoint, onDone, imported, rows, date, co
 
 // ── main page ──────────────────────────────────────────────────────────────────
 export default function DisplayTypePlan() {
+  const [route] = useRoute()   // Display Type splits MRP bands - say so when the Sales Plan runs on Article Name
   const [status,   setStatus]   = useState(null)
   const [tab,      setTab]      = useState('plan')   // plan | validate | qty | export
   const [running,  setRunning]  = useState(false)
@@ -172,6 +174,12 @@ export default function DisplayTypePlan() {
 
   return (
     <div style={{ padding: '28px 32px', minHeight: '100vh', background: theme.bg }}>
+      {route?.route === 'article' && (
+        <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 8, fontSize: 12.5, border: `1px solid ${alpha(theme.warning, '55')}`, background: alpha(theme.warning, '10'), color: theme.textPrimary }}>
+          The Sales Plan runs on the <b>Article Name</b> branch. Display Type splits the <b>MRP</b> branch's bands (its Table / Non-Table
+          shares are per store × department × MRP), so this plan follows the MRP split, not the Article Name one.
+        </div>
+      )}
       {/* Header */}
       <div className="sp-sub">
         Store × Dept × MRP × <strong>Table / Non-Table</strong> → ₹L plan and unit quantity

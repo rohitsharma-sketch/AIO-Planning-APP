@@ -38,6 +38,8 @@ router = APIRouter()
 _HERE = os.path.dirname(os.path.abspath(__file__))
 CONT_PATH = os.path.join(_HERE, "..", "art_nm_cont.json")       # the imported buyers' file, parsed
 ROUTE_PATH = os.path.join(_HERE, "..", "mrp_route.json")        # {"route": "mrp" | "article", "grain": ...}
+# the buyers drop their Art Nm Cont % here, as the MRP Cont % (Buyer's Input -> Sync from folder; the newest .xlsx)
+SOURCE_DIR = r"C:\Users\A9820\Documents\CLaude - New Projects\SalesPlan\Art NM Cont %"
 CAP_LO, CAP_HI = 0.5, 1.5
 # the data-lake department split (BIS DEPT_SPLITS, otb-plan-app.html): the buyers' file uses the old names
 DEPT_SPLITS = {
@@ -367,23 +369,63 @@ def set_settings(body: dict):
     return cur
 
 
-@router.post("/import")
-def import_cont(file: UploadFile = File(...)):
-    """The buyers' Art Nm Cont % (.xlsx) - read and checked before it replaces the one in use."""
-    if not (file.filename or "").lower().endswith((".xlsx", ".xls")):
-        raise HTTPException(400, "Import the Art Nm Cont % as an .xlsx file")
+def _source_file():
+    import glob
+    fs = [f for f in glob.glob(os.path.join(SOURCE_DIR, "*.xls*")) if not os.path.basename(f).startswith("~$")]
+    return max(fs, key=os.path.getmtime) if fs else None
+
+
+@router.get("/sync-status")
+def sync_status():
+    """The newest Art Nm Cont % file in the source folder (what Sync would read)."""
+    f = _source_file()
+    if not f:
+        return {"file_found": False, "source_path": SOURCE_DIR}
+    return {"file_found": True, "source_path": SOURCE_DIR, "source_name": os.path.basename(f),
+            "file_date": datetime.datetime.fromtimestamp(os.path.getmtime(f)).strftime("%d %b %Y %H:%M"),
+            "size_kb": round(os.path.getsize(f) / 1024, 1)}
+
+
+@router.post("/sync")
+def sync_cont():
+    """Import the newest Art Nm Cont % file in the source folder (as MRP Plan's Buyer's Input does)."""
+    f = _source_file()
+    if not f:
+        raise HTTPException(404, f"No .xlsx in {SOURCE_DIR} - drop the Art Nm Cont % file there and try again")
+    with open(f, "rb") as fh:
+        return _take(fh.read(), os.path.basename(f))
+
+
+@router.get("/cont")
+def get_cont():
+    """The Art Nm Cont % in use, as imported (Buyer's Input table)."""
+    c = _read(CONT_PATH)
+    if not c:
+        raise HTTPException(404, "No Art Nm Cont % imported yet")
+    return c
+
+
+def _take(data: bytes, name: str) -> dict:
     try:
-        cont = parse_cont(pd.read_excel(io.BytesIO(file.file.read())))
+        cont = parse_cont(pd.read_excel(io.BytesIO(data)))
     except Exception as e:   # noqa: BLE001
         raise HTTPException(400, f"Not a usable Art Nm Cont % file - nothing changed: {e}")
     if not cont["depts"]:
         raise HTTPException(400, "No Department x Article Name rows - nothing changed")
-    cont.update(source_file=os.path.basename(file.filename),
-                imported_at=datetime.datetime.now().strftime("%d %b %Y %H:%M"))
+    cont.update(source_file=name, imported_at=datetime.datetime.now().strftime("%d %b %Y %H:%M"))
     save_json(CONT_PATH, cont)
     tags = collections.Counter(d["tag"] for d in cont["depts"].values())
-    return {"ok": True, "departments": len(cont["depts"]), "articles": sum(len(d["arts"]) for d in cont["depts"].values()),
-            "block": cont["block"], "tags": dict(tags), "warnings": cont["warnings"]}
+    return {"ok": True, "source_file": name, "departments": len(cont["depts"]),
+            "articles": sum(len(d["arts"]) for d in cont["depts"].values()), "block": cont["block"], "tags": dict(tags),
+            "warnings": cont["warnings"]}
+
+
+@router.post("/import")
+def import_cont(file: UploadFile = File(...)):
+    """The buyers' Art Nm Cont % (.xlsx) uploaded - read and checked before it replaces the one in use."""
+    if not (file.filename or "").lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(400, "Import the Art Nm Cont % as an .xlsx file")
+    return _take(file.file.read(), os.path.basename(file.filename))
 
 
 @router.get("/plan")
@@ -408,6 +450,9 @@ def get_plan(grain: str = "cluster", g: str = ""):
         d["methods"][METHOD[r["method"]]] += 1
         for m in months:
             d["aop"][m] += r["aop"].get(m, 0.0)
+            # what the articles must add to: a negative department plan cell gives its articles 0 (no negative plan)
+            d.setdefault("due", dict.fromkeys(months, 0.0))[m] += max(r["aop"].get(m, 0.0), 0.0)
+            d["neg"] = d.get("neg", 0) + (r["aop"].get(m, 0.0) < 0)
         for a, mv in r["arts"].items():
             x = d["arts"].setdefault(a, dict.fromkeys(months, 0.0))
             for m, v in mv.items():
@@ -429,11 +474,12 @@ def get_plan(grain: str = "cluster", g: str = ""):
                              "buyer_pct": d["buyer"].get(a), "plan": pm, "total": sum(pm.values()),
                              "plan_pct": sum(pm.values()) / pt * 100 if pt else 0.0,
                              "dev": inf[1] if inf else None, "cap": inf[2] if inf else None})
-            gap = max(abs(d["plan"][m] - d["aop"][m]) for m in months) if months else 0.0
+            gap = max(abs(d["plan"][m] - d["due"][m]) for m in months) if months else 0.0
             res.setdefault(dv, {})[dp] = {
                 "tag": d["tag"], "method": d["methods"].most_common(1)[0][0], "methods": dict(d["methods"]),
                 "aop": d["aop"], "plan": d["plan"], "aop_total": sum(d["aop"].values()), "plan_total": pt,
-                "diff": pt - sum(d["aop"].values()), "ok": gap <= SHOWN * max(1, len(rows)), "articles": arts}
+                "diff": pt - sum(d["due"].values()), "ok": gap <= SHOWN * max(1, len(rows)), "neg": d.get("neg", 0),
+                "neg_total": sum(d["aop"].values()) - sum(d["due"].values()), "articles": arts}
     return {"grain": grain, "months": months, "groups": sorted({r["g"] for r in b["rows"]}),
             "single_group": one, "divisions": sorted(res), "data": res, "checks": checks(b),
             "cont": {k: b["cont"].get(k) for k in ("source_file", "imported_at", "block")} if b["cont"] else None}
@@ -484,10 +530,10 @@ def export(grain: str = "cluster"):
 
 
 def warm():
-    """Read the LY article sales once at server start when the Article Name route is the one in use."""
+    """Read the LY article sales once at server start when the Article Name branch is in use (route or a file)."""
     try:
         s = get_settings()
-        if s["route"] == "article":
+        if s["route"] == "article" or os.path.exists(CONT_PATH):
             built(s["grain"])
     except Exception as e:   # noqa: BLE001
         print(f"Article Name route warm-up skipped: {e}", flush=True)

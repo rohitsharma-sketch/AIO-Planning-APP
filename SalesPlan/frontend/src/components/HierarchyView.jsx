@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, Fragment } from 'react'
 import { theme, alpha } from '../theme'
 import ExcelFilter from './ExcelFilter'
+import PlanVersions from './PlanVersions'
 
 // user, 2026-10-13: "i need a editable hierarchial system for editing a hierarchy for view" - pick the levels and their
 // order, then drill the plan as a tree (view only). Each branch is fetched when it is opened
@@ -19,11 +20,11 @@ const P = v => (v == null ? '–' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`)
 // in plain words and summarised" - GET /api/planning/grain/explain builds it from the very cells the row adds up, so the
 // parts always add back to the number on the row; what it explains follows the level clicked (division, department,
 // cluster, store, month ...)
-function Explain({ levels, path, filters, onClose }) {
+function Explain({ levels, path, filters, version, onClose }) {
   const [d, setD] = useState(null)
   const [err, setErr] = useState('')
   useEffect(() => {
-    const qs = new URLSearchParams({ levels: levels.join(','), path: JSON.stringify(path), filters: JSON.stringify(filters) })
+    const qs = new URLSearchParams({ levels: levels.join(','), path: JSON.stringify(path), filters: JSON.stringify(filters), version })
     fetch(`/api/planning/grain/explain?${qs}`)
       .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`); return j })
       .then(setD).catch(e => setErr(e.message))
@@ -106,6 +107,8 @@ export default function HierarchyView() {
   const [source, setSource] = useState(null)
   const [filters, setFilters] = useState(loadFilters)   // {level: [values]} - any field, in Rows or not
   const [editing, setEditing] = useState(null)          // {level, anchor} - the filter list open now
+  // the saved version being viewed ('' = the live plan) - PlanVersions (2026-10-13); kept per browser
+  const [version, setVersion] = useState(() => { try { return localStorage.getItem('sp.fr.version') || '' } catch { return '' } })
   const fkey = JSON.stringify(filters)
   const [why, setWhy] = useState(null)            // path of the row whose numbers are being explained
   const back = useRef(null)                       // the ⓘ that opened it - focus goes back there on close
@@ -119,7 +122,7 @@ export default function HierarchyView() {
   const fetchNode = path => {
     const k = JSON.stringify(path)
     setNodes(n => ({ ...n, [k]: 'loading' }))
-    const qs = new URLSearchParams({ levels: levels.join(','), path: k, filters: fkey })
+    const qs = new URLSearchParams({ levels: levels.join(','), path: k, filters: fkey, version })
     fetch(`/api/planning/grain/hierarchy?${qs}`)
       .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`); return j })
       .then(j => { setNodes(n => ({ ...n, [k]: j })); if (j.source) setSource(j.source) })
@@ -128,14 +131,20 @@ export default function HierarchyView() {
 
   // a new hierarchy starts again from the top; new filters keep the open branches open (each re-fetched at once)
   useEffect(() => {
-    try { localStorage.setItem(KEY, JSON.stringify(levels)); localStorage.setItem(FKEY, fkey) } catch { /* ignore */ }
-    const lv = levels.join(','), same = lastLv.current === lv
+    try { localStorage.setItem(KEY, JSON.stringify(levels)); localStorage.setItem(FKEY, fkey); localStorage.setItem('sp.fr.version', version) } catch { /* ignore */ }
+    const lv = levels.join(',') + '|' + version, same = lastLv.current === lv
     lastLv.current = lv
     setNodes({})
     if (!same) setOpen(new Set())
     fetchNode([])
     if (same) open.forEach(k => fetchNode(JSON.parse(k)))
-  }, [levels.join(','), fkey])   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [levels.join(','), fkey, version])   // eslint-disable-line react-hooks/exhaustive-deps
+  // opening a version brings back its plan and the Rows / Filters it was saved with
+  const openVersion = v => {
+    setVersion(v ? v.id : '')
+    if (v?.view?.levels?.length && v.view.levels.every(x => LEVELS[x])) setLevels(v.view.levels)
+    if (v?.view?.filters) setFilters(v.view.filters)
+  }
   const setFilter = (lv, vals) => setFilters(f => { const n = { ...f }; if (vals && vals.length) n[lv] = vals; else delete n[lv]; return n })
 
   const toggle = path => {
@@ -189,6 +198,7 @@ export default function HierarchyView() {
   const caption = lv => (!filters[lv] ? '(All)' : filters[lv].length === 1 ? filters[lv][0] : `(Multiple Items) ${filters[lv].length}`)
   return (
     <div>
+      <PlanVersions version={version} onOpen={openVersion} view={{ levels, filters }} />
       {/* Excel's PivotTable Rows area - view controls, not plan edits: kept out of the suite's Undo */}
       <div data-no-undo style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 12, padding: '10px 16px', marginBottom: 14 }}>
         <div role="list" aria-label="Row fields" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -262,10 +272,10 @@ export default function HierarchyView() {
         </table>
       </div>
       {editing && <ExcelFilter key={editing.level + fkey} title={LEVELS[editing.level]} anchor={editing.anchor} picked={filters[editing.level]}
-        load={() => fetch(`/api/planning/grain/hierarchy-options?${new URLSearchParams({ level: editing.level, filters: fkey })}`)
+        load={() => fetch(`/api/planning/grain/hierarchy-options?${new URLSearchParams({ level: editing.level, filters: fkey, version })}`)
           .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`); return j[editing.level] || [] })}
         onDone={vals => { if (vals !== undefined) setFilter(editing.level, vals); setEditing(null) }} />}
-      {why && <Explain key={JSON.stringify(why) + fkey} levels={levels} path={why} filters={filters} onClose={() => { setWhy(null); back.current?.focus() }} />}
+      {why && <Explain key={JSON.stringify(why) + fkey + version} levels={levels} path={why} filters={filters} version={version} onClose={() => { setWhy(null); back.current?.focus() }} />}
     </div>
   )
 }

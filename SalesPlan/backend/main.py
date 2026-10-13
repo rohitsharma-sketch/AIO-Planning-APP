@@ -16,6 +16,7 @@ from engines.display_type_engine import router as display_type_router
 from engines.sync_engine import router as sync_router
 from engines.mrp_reapportionment_engine import router as mrp_reapp_router
 from engines.art_nm_engine import router as art_nm_router
+from engines.plan_versions import router as plan_versions_router
 from engines.reconciliation import router as reconciliation_router
 
 import store_master as _sm
@@ -57,6 +58,7 @@ app.include_router(display_type_router,    prefix="/api/display-type")
 app.include_router(sync_router,            prefix="/api/sync")
 app.include_router(mrp_reapp_router,       prefix="/api/planning/mrp-reapportionment")
 app.include_router(art_nm_router,          prefix="/api/planning/art-nm")
+app.include_router(plan_versions_router,   prefix="/api/planning/plan-versions")
 app.include_router(reconciliation_router,  prefix="/api/planning/reconciliation")
 
 # Serve the built React frontend — mount after all API routes

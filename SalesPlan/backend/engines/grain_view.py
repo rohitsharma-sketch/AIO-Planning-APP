@@ -633,8 +633,19 @@ def hierarchy_rows(cube: dict, attr_map: dict, levels: list, path: list, filt: d
     return {"level": nxt, "rows": rows, "total": {"ly": round(tl, 4), "ty": round(tt, 4)}}
 
 
+def _view(version: str) -> tuple:
+    """(cube, attribute map, New-departments map) of the live plan, or of a saved version (plan_versions) as saved."""
+    if version:
+        from engines.plan_versions import snapshot
+        s = snapshot(version)
+        return s["cube"], s.get("attr_map") or {}, s.get("nd_map") or {}
+    from engines.final_results_engine import _load_dept_attr_map
+    from engines.dept_sales_engine import _load_new_dept_map
+    return _cube(), _load_dept_attr_map(), _load_new_dept_map()
+
+
 @router.get("/hierarchy")
-def get_hierarchy(levels: str, path: str = "[]", filters: str = "{}"):
+def get_hierarchy(levels: str, path: str = "[]", filters: str = "{}", version: str = ""):
     """?levels=cluster,store,division&path=["BH - (NP)"] -> the children of that node (view only)."""
     lv = [x for x in levels.split(",") if x]
     if not lv or len(set(lv)) != len(lv) or any(x not in HIER_LEVELS for x in lv):
@@ -645,20 +656,18 @@ def get_hierarchy(levels: str, path: str = "[]", filters: str = "{}"):
         raise HTTPException(status_code=422, detail="path must be a JSON list")
     if not isinstance(pth, list) or len(pth) >= len(lv):
         raise HTTPException(status_code=422, detail="path must be shorter than levels")
-    from engines.final_results_engine import _load_dept_attr_map
-    c = _cube()
-    return {**hierarchy_rows(c, _load_dept_attr_map(), lv, [str(p) for p in pth], parse_filters(filters)),
-            "source": c["source"]}
+    c, am, _ = _view(version)
+    return {**hierarchy_rows(c, am, lv, [str(p) for p in pth], parse_filters(filters)), "source": c["source"]}
 
 
 @router.get("/hierarchy-options")
-def get_hierarchy_options(filters: str = "{}", level: str = ""):
+def get_hierarchy_options(filters: str = "{}", level: str = "", version: str = ""):
     """The values each Hierarchy level (or just `level`) can be filtered on - Excel style: inside the other levels'
     filters, so a pick in one column narrows the lists of the others."""
-    from engines.final_results_engine import _load_dept_attr_map
     if level and level not in HIER_LEVELS:
         raise HTTPException(status_code=422, detail=f"level: one of {', '.join(HIER_LEVELS)}")
-    return hierarchy_values(_cube(), _load_dept_attr_map(), parse_filters(filters), [level] if level else None)
+    c, am, _ = _view(version)
+    return hierarchy_values(c, am, parse_filters(filters), [level] if level else None)
 
 
 def warm_hierarchy():
@@ -836,7 +845,7 @@ def explain(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: list, 
 
 
 @router.get("/explain")
-def get_explain(levels: str, path: str = "[]", filters: str = "{}"):
+def get_explain(levels: str, path: str = "[]", filters: str = "{}", version: str = ""):
     """?levels=division,department&path=["MENS","ML_JEANS"] -> how that row's numbers are made (view only)."""
     lv = [x for x in levels.split(",") if x]
     if not lv or len(set(lv)) != len(lv) or any(x not in HIER_LEVELS for x in lv):
@@ -847,9 +856,8 @@ def get_explain(levels: str, path: str = "[]", filters: str = "{}"):
         raise HTTPException(status_code=422, detail="path must be a JSON list")
     if not isinstance(pth, list) or len(pth) > len(lv):
         raise HTTPException(status_code=422, detail="path can't be longer than levels")
-    from engines.final_results_engine import _load_dept_attr_map
-    from engines.dept_sales_engine import _load_new_dept_map
-    return explain(_cube(), _load_dept_attr_map(), _load_new_dept_map(), lv, [str(p) for p in pth], parse_filters(filters))
+    c, am, nd = _view(version)
+    return explain(c, am, nd, lv, [str(p) for p in pth], parse_filters(filters))
 
 
 _register_live_cube()

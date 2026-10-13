@@ -27,6 +27,11 @@ const navItems = [
     { label: 'SOR Deviation',    to: '/deviation/sor',  optional: true },
     { label: 'Plan Output',      to: '/mrp-plan/output', final: true },
   ]},
+  // the MRP branch's counterpart (user, 2026-10-13: "think of it as another parallel branch to MRP")
+  { label: 'Article Name Plan', icon: 'article', to: '/art-plan', subItems: [
+    { label: "Buyer's Input",    to: '/art-plan/import' },
+    { label: 'Plan Output',      to: '/art-plan/output', final: true },
+  ]},
   { label: 'Display Type Plan', icon: 'display', to: '/display-type' },
   { label: 'Sales Sync',        icon: 'sync', to: '/sync' },
   { label: 'Reconciliation',    icon: 'check', to: '/reconciliation' },

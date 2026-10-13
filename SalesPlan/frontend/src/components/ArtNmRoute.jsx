@@ -1,10 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { theme, alpha } from '../theme'
 import { FiltersRow } from './ExcelFilter'
+import RouteBar from './RouteBar'
+import { useGrain } from '../grain'
 
 // The MRP stage's Article Name route (user, 2026-10-13): LY Art Nm mix per Cluster / Store x the buyers' Art Nm Cont %
 // (deviation capped 50-150%), apportioned to 100% within each department and applied to the department plan (its AOP).
 // New and split departments take the buyers' % as it is. Each department shows whether its articles add back to its AOP.
+// Article Name Plan · Plan Output - the MRP branch's counterpart; by store or cluster as the header's Plan by (user,
+// 2026-10-13: "it should follow the current selected toggle"); the file comes from this branch's Buyer's Input.
 const API = '/api/planning/art-nm'
 const DIV_COLOR = { KIDS: '#C85A12', LADIES: '#7420B8', MENS: '#077A4A' }
 const CELL = { fontFamily: theme.fontMono, fontSize: 11, textAlign: 'right', padding: '4px 8px', whiteSpace: 'nowrap' }
@@ -19,7 +24,11 @@ async function readErr(r) {
   try { const j = await r.json(); return j.detail || r.statusText } catch { return r.statusText }
 }
 
-export default function ArtNmRoute({ grain, onGrain }) {
+export default function ArtNmRoute() {
+  const [grain] = useGrain()
+  const nav = useNavigate()
+  // the server keeps the grain last shown, so Reconciliation checks the split the planners look at
+  useEffect(() => { fetch(`${API}/settings`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ grain }) }).catch(() => {}) }, [grain])
   const [data, setData] = useState(null)
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
@@ -27,9 +36,6 @@ export default function ArtNmRoute({ grain, onGrain }) {
   const [af, setAf] = useState({})          // the Filters row: {group | department | tag | method | check: [values]}
   const [open, setOpen] = useState(null)
   const [view, setView] = useState('plan')  // 'plan' (₹ L) | 'pct' (cont %)
-  const [msg, setMsg] = useState(null)
-  const [busy, setBusy] = useState(false)
-  const fileRef = useRef(null)
   const groups = af.group || []
 
   const load = () => {
@@ -40,22 +46,8 @@ export default function ArtNmRoute({ grain, onGrain }) {
       .catch(e => setErr(e.message))
       .finally(() => setLoading(false))
   }
+  useEffect(() => { setAf({}) }, [grain])
   useEffect(load, [grain, groups.join('|')])   // eslint-disable-line react-hooks/exhaustive-deps
-
-  const importFile = async file => {
-    if (!file) return
-    setBusy(true); setMsg(null)
-    try {
-      const fd = new FormData(); fd.append('file', file)
-      const r = await fetch(`${API}/import`, { method: 'POST', body: fd })
-      if (!r.ok) { setMsg({ ok: false, text: await readErr(r) }); return }
-      const d = await r.json()
-      setMsg({ ok: !d.warnings.length, text: `${file.name}: ${d.departments} departments, ${d.articles} articles, block ${d.block || '?'} · `
-        + Object.entries(d.tags).map(([k, v]) => `${v} ${k}`).join(', ') + (d.warnings.length ? ` · ${d.warnings.length} not adding to 100%` : '') })
-      load()
-    } catch (e) { setMsg({ ok: false, text: String(e) }) }
-    finally { setBusy(false); if (fileRef.current) fileRef.current.value = '' }
-  }
 
   const months = data?.months || []
   const dd = (data && div && data.data[div]) || {}
@@ -78,23 +70,21 @@ export default function ArtNmRoute({ grain, onGrain }) {
   )
 
   return (
-    <div style={{ padding: '16px 32px 28px', minHeight: '100vh', background: theme.surfaceAlt }}>
+    <div style={{ padding: '20px 32px 28px', minHeight: '100vh', background: theme.surfaceAlt }}>
+      <RouteBar here="article" />
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
         <div className="sp-sub" style={{ margin: 0, flex: 1, minWidth: 280 }}>
           Department plan split by Article Name: LY Art Nm mix of each {grain} × the buyers' Art Nm Cont % (deviation capped
           50–150%), apportioned to 100% within the department. New and split departments take the buyers' % as it is.
         </div>
-        <span style={{ fontSize: 11, color: theme.textMuted }}>LY mix by</span>
-        {seg([['cluster', 'Cluster'], ['store', 'Store']], grain, g => { setAf({}); onGrain(g) })}
-        <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={e => importFile(e.target.files[0])} />
-        <button style={BTN} disabled={busy} onClick={() => fileRef.current?.click()}>{busy ? 'Importing…' : 'Import Art Nm Cont %'}</button>
+        <span style={{ fontSize: 11.5, color: theme.textMuted }}>LY mix by <b style={{ color: theme.textPrimary }}>{grain}</b> (header's Plan by)</span>
+        <button style={BTN} onClick={() => nav('/art-plan/import')}>Buyer's Input →</button>
         <button style={BTN} disabled={!data} onClick={() => window.open(`${API}/export?grain=${grain}`, '_blank')}>Export Excel ↓</button>
       </div>
       <div style={{ fontSize: 11, color: theme.textMuted, marginBottom: 10 }}>
         {data?.cont ? <>Buyer's file <b style={{ color: theme.textPrimary }}>{data.cont.source_file}</b> · block {data.cont.block || '?'} · imported {data.cont.imported_at}</>
-          : 'No Art Nm Cont % imported yet - every department is on its LY mix until it is.'}
+          : "No Art Nm Cont % imported yet - every department is on its LY mix until it is (Article Name Plan → Buyer's Input)."}
       </div>
-      {msg && <div style={{ fontSize: 12, marginBottom: 10, color: msg.ok ? theme.success : theme.danger }}>{msg.text}</div>}
 
       {loading && !data && <div style={{ color: theme.textMuted, fontSize: 13, padding: 12 }}>Reading LY article sales and the plan… (about 20 s the first time)</div>}
       {err && <div style={{ color: theme.danger, fontSize: 13, padding: 12 }}>{err}</div>}
@@ -167,8 +157,9 @@ export default function ArtNmRoute({ grain, onGrain }) {
                     {months.map(m => <td key={m} style={{ ...CELL, fontWeight: 600 }}>{view === 'plan' ? f2(x.plan[m]) : x.aop[m] ? '100%' : '—'}</td>)}
                     <td style={{ ...CELL, fontWeight: 700, color: theme.accent }}>{f2(x.plan_total)}</td>
                     <td style={CELL}>{x.plan_total ? '100%' : '—'}</td>
-                    <td style={{ ...CELL, fontWeight: 700, color: x.ok ? theme.success : theme.danger }} title={x.ok ? 'Articles add back to the department AOP' : `Articles ${f2(x.plan_total)} vs AOP ${f2(x.aop_total)}`}>
-                      {x.ok ? '✓ = AOP' : `≠ AOP ${x.diff.toFixed(2)}`}
+                    <td style={{ ...CELL, fontWeight: 700, color: x.ok ? theme.success : theme.danger }}
+                      title={x.ok ? (x.neg ? `Articles add back to the department AOP; ${x.neg} store-month cell(s) have a negative department plan (${x.neg_total.toFixed(4)} L, returns in LY) - their articles are 0` : 'Articles add back to the department AOP') : `Articles ${f2(x.plan_total)} vs AOP ${f2(x.aop_total)}`}>
+                      {x.ok ? (x.neg ? '✓ = AOP*' : '✓ = AOP') : `≠ AOP ${x.diff.toFixed(2)}`}
                     </td>
                   </tr>,
                   ...(isOpen ? x.articles.map(a => (

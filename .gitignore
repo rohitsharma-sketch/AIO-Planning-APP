@@ -67,3 +67,6 @@ Tentative AOP Forecaster/diff_archive/
 
 # BIS history check (built from sales by ml_assist.py) - business data, never in git
 Buyer's Input Sheet/ml_assist.json
+
+# Final Results saved plan versions (business data)
+SalesPlan/backend/plan_versions/

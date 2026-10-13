@@ -16,6 +16,8 @@ import BaseCorrection from './pages/BaseCorrection'
 import FinalResults from './pages/FinalResults'
 import MrpImport from './pages/MrpImport'
 import MrpOutput from './pages/MrpOutput'
+import ArtNmImport from './pages/ArtNmImport'
+import ArtNmRoute from './components/ArtNmRoute'
 import PwwDeviation from './pages/PwwDeviation'
 import SorDeviation from './pages/SorDeviation'
 import DisplayTypePlan from './pages/DisplayTypePlan'
@@ -90,6 +92,8 @@ export default function App() {
             <Route path="/department-plan/final-results" element={<FinalResults />} />
             <Route path="/mrp-plan/import" element={<MrpImport />} />
             <Route path="/mrp-plan/output" element={<MrpOutput />} />
+            <Route path="/art-plan/import" element={<ArtNmImport />} />
+            <Route path="/art-plan/output" element={<ArtNmRoute />} />
             <Route path="/deviation/pww" element={<PwwDeviation />} />
             <Route path="/deviation/sor" element={<SorDeviation />} />
             <Route path="/display-type" element={<DisplayTypePlan />} />

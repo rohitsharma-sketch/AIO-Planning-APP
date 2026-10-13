@@ -74,6 +74,7 @@ from engines.display_type_engine import router as display_type_router  # noqa: E
 from engines.sync_engine import router as sync_router  # noqa: E402
 from engines.mrp_reapportionment_engine import router as mrp_reapp_router  # noqa: E402
 from engines.art_nm_engine import router as art_nm_router  # noqa: E402
+from engines.plan_versions import router as plan_versions_router  # noqa: E402
 from engines.reconciliation import router as reconciliation_router  # noqa: E402
 from engines.grain_view import router as grain_router  # noqa: E402
 import store_master as _sm  # noqa: E402
@@ -94,6 +95,8 @@ app.include_router(sync_router,            prefix="/api/planning/sync",         
 app.include_router(mrp_reapp_router,       prefix="/api/planning/mrp-reapportionment", dependencies=_dep)
 # MRP stage, Article Name route (user, 2026-10-13)
 app.include_router(art_nm_router,          prefix="/api/planning/art-nm",          dependencies=_dep)
+# Final Results: saved plan versions (user, 2026-10-13)
+app.include_router(plan_versions_router,   prefix="/api/planning/plan-versions",   dependencies=_dep)
 
 
 @app.on_event("startup")

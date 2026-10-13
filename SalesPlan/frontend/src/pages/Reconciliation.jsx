@@ -90,8 +90,9 @@ export default function Reconciliation() {
       {r && r.uncovered?.length > 0 && (
         <div style={{ ...card, overflow: 'hidden' }}>
           <div style={{ padding: '14px 20px', borderBottom: `1px solid ${theme.border}`, fontSize: 14, fontWeight: 600, color: theme.textPrimary }}>
-            Not split to MRPs — ₹ {L2(r.uncovered_total)} L has no MRP shares
-            <div style={{ fontSize: 12, fontWeight: 400, color: theme.textMuted, marginTop: 3 }}>Not a rounding difference: the MRP plan has no shares for these departments / months. Add them in the MRP plan (Buyer's Input) to split them.</div>
+            {r.route === 'article'
+              ? <>Not split to Article Names — ₹ {L2(r.uncovered_total)} L<div style={{ fontSize: 12, fontWeight: 400, color: theme.textMuted, marginTop: 3 }}>Not a rounding difference: the department plan is negative there (returns in LY), so its articles are kept at 0.</div></>
+              : <>Not split to MRPs — ₹ {L2(r.uncovered_total)} L has no MRP shares<div style={{ fontSize: 12, fontWeight: 400, color: theme.textMuted, marginTop: 3 }}>Not a rounding difference: the MRP plan has no shares for these departments / months. Add them in the MRP plan (Buyer's Input) to split them.</div></>}
           </div>
           <div style={{ overflowX: 'auto', maxHeight: 420 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>

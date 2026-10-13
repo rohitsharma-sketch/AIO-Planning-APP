@@ -16,6 +16,8 @@ const TITLES = [
   ['/mrp-plan/import', "MRP Plan · Buyer's Input"],
   ['/mrp-plan/reapportionment', 'MRP Plan · Re-apportionment'],
   ['/mrp-plan/output', 'MRP Plan · Plan Output'],
+  ['/art-plan/import', "Article Name Plan · Buyer's Input"],
+  ['/art-plan/output', 'Article Name Plan · Plan Output'],
   ['/deviation/pww', 'MRP Plan · PW/W Deviation'],
   ['/deviation/sor', 'MRP Plan · SOR Deviation'],
   ['/display-type', 'Display Type Plan'],
