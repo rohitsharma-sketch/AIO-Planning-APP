@@ -24,7 +24,7 @@ export default function GrainPanel({ stage, division, title }) {
   const [q, setQ] = useState('')
   const [measure, setMeasure] = useState('ty')   // ty | ly | gr (division / department)
   // step 2 (2026-10-12): how the plan is built - today's plan, or a preview of store-built / cluster-built AOP x BIS
-  const [method, setMethod] = useState('ty')      // ty (today) | store_built | cluster_built
+  const [method, setMethod] = useState('ty')      // ty (today) | store_built | cluster_built | cluster_st
   const [deptList, setDeptList] = useState([])
   const [showAll, setShowAll] = useState(false)
 
@@ -123,6 +123,7 @@ export default function GrainPanel({ stage, division, title }) {
             <option value="ty">Today's plan</option>
             <option value="store_built">Preview: store-built (AOP × BIS)</option>
             <option value="cluster_built">Preview: cluster-built (AOP × BIS)</option>
+            <option value="cluster_st">Preview: cluster-built (AOP × sell-thru factor)</option>
           </select>
         )}
         {open && ly && (
@@ -153,9 +154,18 @@ export default function GrainPanel({ stage, division, title }) {
                 <b>Preview only - nothing is saved or adopted.</b>{' '}
                 {method === 'store_built'
                   ? <>Each store's division total = its AOP Forecaster store forecast ({data.aop?.label}, publish {data.aop?.publish}), split over departments by the store's own LY department mix × BIS growth; a store with no LY of its own (a new store) takes its cluster's mix. Clusters are the sum of their stores.</>
-                  : <>Each cluster's division total = the sum of its stores' AOP store forecasts ({data.aop?.label}, publish {data.aop?.publish}), split over departments by the cluster's LY mix × BIS growth, then given to its stores by each store's LY share. <b>Stores with no LY (new stores) get nothing here - their AOP is spread over the cluster's other stores.</b></>}
+                  : <>Each cluster's division total = the sum of its stores' AOP store forecasts ({data.aop?.label}, publish {data.aop?.publish}), split over departments by the cluster's LY mix × {method === 'cluster_st'
+                      ? <>(1 + sell-thru factor): the department's average weekly sell-thru (BIS's sell-thru file, chain level) gives its tag on Mar–Jun'26 (Low / Average / High / Excellent) and each month's deviation from its division; the factor table turns the two into a growth factor (0–30%)</>
+                      : 'BIS growth'}, then given to its stores by each store's LY share. <b>Stores with no LY (new stores) get nothing here - their AOP is spread over the cluster's other stores.</b></>}
                 {' '}Months: {(data.months || []).join(', ')} - the months this AOP version has LY for, so both sides cover the same months.
                 {' '}The AOP store forecast includes new / ramp stores, which today's plan gives nothing (no LY) - most of the gap to today's plan is them.
+                {method === 'cluster_st' && data.sellthru?.error && <> <b>Sell-thru file not readable ({data.sellthru.error}) - every factor is 0 (LY mix only).</b></>}
+                {method === 'cluster_st' && data.sellthru?.tag && (
+                  <div style={{ marginTop: 6 }}>
+                    <b>{data.dept}</b>: tag <b>{data.sellthru.tag}</b> (Mar–Jun'26 avg weekly sell-thru {(data.sellthru.tag_st * 100).toFixed(1)}%) ·{' '}
+                    {Object.entries(data.sellthru.months || {}).map(([m, x]) => `${m}: ${(x.st * 100).toFixed(1)}% vs ${(x.div_st * 100).toFixed(1)}% division = ${x.dev.toFixed(2)} → +${(x.factor * 100).toFixed(0)}%`).join(' · ')}
+                  </div>
+                )}
               </div>
             )}
             <div style={{ overflow: 'auto', maxHeight: 520, border: `1px solid ${theme.border}`, borderRadius: 8 }}>

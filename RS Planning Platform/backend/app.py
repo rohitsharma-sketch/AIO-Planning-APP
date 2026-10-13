@@ -103,6 +103,9 @@ def _warm_mrp_sales():
     # one live plan run for every read-only view, kept current in the background (user, 2026-10-13: latency)
     from engines.dept_sales_engine import warm_plan_views
     threading.Thread(target=warm_plan_views, name="warm-plan-views", daemon=True).start()
+    # the sell-thru factors of the cluster-built (sell-thru) preview: ~30 s from the lake, once per file (2026-10-13)
+    from engines.sellthru_factor import sell_thru
+    threading.Thread(target=sell_thru, name="warm-sellthru-factor", daemon=True).start()
 
 # every apportioned total vs its parts, to 8 decimals (2026-09-30)
 app.include_router(reconciliation_router,  prefix="/api/planning/reconciliation",  dependencies=_dep)

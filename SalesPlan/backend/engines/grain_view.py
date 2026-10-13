@@ -265,12 +265,34 @@ def _methods():
     from engines.department_plan import live_growth_matrix
     gm = live_growth_matrix()
     pid, label, aop, aop_cl, amonths = _aop_by_store()
-    key = (id(c), pid, json.dumps(gm, sort_keys=True))
+    from engines import sellthru_factor as stf
+    try:
+        st = stf.sell_thru()
+    except Exception as e:   # noqa: BLE001 - lake unreachable: the other methods still show; every factor is 0 (flat)
+        st = {**stf.EMPTY, "error": str(e)}
+    key = (id(c), pid, json.dumps(gm, sort_keys=True), st.get("file"))
     if _mcache["key"] != key:
         growth = {dv: {dp: {m: (ps.get(f"{m} P1", 100.0) + ps.get(f"{m} P2", 100.0)) / 200.0 for m in c["months"]}
                        for dp, ps in deps.items()} for dv, deps in gm.items()}
-        _mcache.update(key=key, v={**build_methods(c, aop, growth, aop_cl), "aop": aop, "aop_clusters": aop_cl,
-                                   "pid": pid, "label": label, "months": [m for m in c["months"] if m in amonths]})
+        v = build_methods(c, aop, growth, aop_cl)
+        # user, 2026-10-13 (the MAMJ'27 cluster workbook's working): the same cluster-built split, weighted by LY x
+        # (1 + sell-thru factor) instead of LY x BIS growth - engines/sellthru_factor.py
+        sg, sinfo = stf.growth({dv: list(d) for dv, d in c["dept"].items()}, c["months"], st)
+        alt = build_methods(c, aop, sg, aop_cl)
+        for dv, deps in alt["plan"].items():
+            for dp, ss in deps.items():
+                for s, ms in ss.items():
+                    for m, x in ms.items():
+                        if "cluster_built" in x:
+                            v["plan"].setdefault(dv, {}).setdefault(dp, {}).setdefault(s, {}).setdefault(m, {})["cluster_st"] = x["cluster_built"]
+        for dv, ss in alt["unalloc"].items():
+            for s, ms in ss.items():
+                for m, x in ms.items():
+                    if "cluster_built" in x:
+                        v["unalloc"].setdefault(dv, {}).setdefault(s, {}).setdefault(m, {})["cluster_st"] = x["cluster_built"]
+        _mcache.update(key=key, v={**v, "aop": aop, "aop_clusters": aop_cl, "pid": pid, "label": label,
+                                   "months": [m for m in c["months"] if m in amonths], "st_info": sinfo,
+                                   "st_file": st.get("file"), "st_error": st.get("error")})
     return c, _mcache["v"]
 
 
@@ -305,12 +327,16 @@ def get_methods(grain: str = "cluster", division: str = "ALL", dept: str = ""):
                     _add(per.setdefault(s, {}).setdefault(m, {}), {f"unalloc_{k}": x for k, x in v.items()})
     for s in per:
         for m in per[s]:
-            for k in ("ly", "ty", "store_built", "cluster_built"):
+            for k in ("ly", "ty", "store_built", "cluster_built", "cluster_st"):
                 per[s][m].setdefault(k, 0.0)
     out = rows(per, {**{s: {"cluster": k} for s, k in M["aop_clusters"].items()}, **c["stores"]}, g, months)
-    return {**out, "fields": ["ly", "ty", "store_built", "cluster_built"] + ([] if dept else ["aop"]),
+    si = M["st_info"].get(divs[0], {}).get(dept) if dept else None
+    return {**out, "fields": ["ly", "ty", "store_built", "cluster_built", "cluster_st"] + ([] if dept else ["aop"]),
             "source": c["source"], "aop": {"publish": M["pid"], "label": M["label"], "stores": len(M["aop"])},
-            "division": division.upper(), "dept": dept or None}
+            "division": division.upper(), "dept": dept or None,
+            "sellthru": {"file": M["st_file"], "error": M["st_error"],
+                         **({"tag": si["tag"], "tag_st": si["tag_st"],
+                             "months": {m: si["months"][m] for m in months if m in si["months"]}} if si else {})}}
 
 
 @router.get("/meta")

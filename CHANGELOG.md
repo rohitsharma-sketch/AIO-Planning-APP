@@ -7,6 +7,28 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### Sales Plan: cluster-built plan weighted by sell-thru factors (the MAMJ'27 cluster workbook's working)
+- **Asked (user):** "design a similar working with the components in the Cluster level planning engine for Department output", then "just import the logics ... donot replicate the output just as is, i want the existing apps to flow their respective components as in relation to the present columns". Choices: chain-level sell-thru from the data lake, AOP held per cluster x division, view only.
+- The Store / Cluster panel's "How the plan is built" menu (Division Plan, Department Growth Matrix) has a third preview: **cluster-built (AOP x sell-thru factor)**. It shows in the panel's existing columns (months, Plan, LY, Growth, Today's plan, vs today, AOP). It is the same cluster-built split, weighted by LY x (1 + sell-thru factor) instead of LY x BIS growth.
+- **Where each piece comes from:**
+  - LY comes from the Calendar app (Sales Plan's cube).
+  - Cluster x division AOP comes from the AOP Forecaster.
+  - Average weekly sell-thru comes from BIS's file `rs_weekly_sell_ths_apps` (same filters: SEASON contains 26, ACTIVE stores).
+  - The active departments come from the Department Master (the plan).
+- **The rules** (`SalesPlan/backend/engines/sellthru_factor.py`):
+  - The tag (Low / Average / High / Excellent) comes from the Mar-Jun'26 sell-thru.
+  - Deviation = department / division sell-thru.
+  - The workbook's FACTOR matrix gives 0-30%.
+  - On the workbook's 1,764 rows this logic gives 0 tag differences and 0 factor differences.
+- One department picked: the panel shows its tag and each month's sell-thru, its division's, the deviation and the factor.
+- **Sell-thru is chain level.** The file has no store column, so the factors are the same in every cluster; clusters differ by their own LY mix and AOP. It is read once per file (about 30 s, warmed at 8010 start) and cached in `SalesPlan/backend/sellthru_factor_st.json` (git-ignored).
+- **Checked in-process:**
+  - Every KIDS cluster adds back to its AOP, with nothing unallocated.
+  - BH - (NP) KB_R/N T-SHIRT H/S Mar'27 = 110.8372 L, both from the endpoint and by hand.
+  - Response time is 0.2-0.8 s warm.
+  - `test_grain_view` and the module's self-check pass.
+  - The page sits behind the 8010 sign-in, so it was not opened in the browser. The built bundle carries the new option.
+
 ### STR Forecaster: the Excel export's 4-month figures are averages too
 - **Asked (user):** "put the same averages in the excel export too".
 - In the Drill-down sheet ("4-month avg ..." columns) and the By month sheet ("4-month avg" rows), plan qty, MDQ, LY qty / MDQ, plan Rs, fixtures and store count are now the average month: the months' figures over the months that have one, as on the page. They were 4-month totals.
