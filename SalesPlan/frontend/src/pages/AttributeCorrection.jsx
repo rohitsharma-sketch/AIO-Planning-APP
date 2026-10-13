@@ -6,7 +6,7 @@ import ClusterOff from '../components/ClusterOff'
 import { useGrain } from '../grain'
 import { currentEngineKey, advancePipeline } from '../pipelineState'
 
-const DIVISIONS = ['KIDS', 'LADIES', 'MENS', 'GM', 'RETAIL']
+const DIVISIONS = ['KIDS', 'LADIES', 'MENS']   // GM / RETAIL out of the Sales Plan engine (user, 2026-10-13)
 
 const DIV_COLOR = {
   KIDS: '#C85A12', LADIES: '#7420B8', MENS: '#077A4A', GM: '#1E54C0', RETAIL: '#B22620',

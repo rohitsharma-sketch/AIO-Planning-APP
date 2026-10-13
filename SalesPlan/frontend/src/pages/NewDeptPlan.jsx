@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { theme, alpha } from '../theme'
 
-const DIVISIONS = ['KIDS', 'LADIES', 'MENS', 'GM', 'RETAIL']
+const DIVISIONS = ['KIDS', 'LADIES', 'MENS']   // GM / RETAIL out of the Sales Plan engine (user, 2026-10-13)
 
 const DIV_COLOR = {
   KIDS:   '#C85A12',

@@ -6,7 +6,7 @@ import {
 } from 'recharts'
 import { theme } from '../theme'
 
-const DIVS = ['GM', 'KIDS', 'LADIES', 'MENS', 'RETAIL']
+const DIVS = ['KIDS', 'LADIES', 'MENS']   // GM / RETAIL out of the Sales Plan engine (user, 2026-10-13)
 
 const DIV_COLORS = {
   GM: '#1E54C0',

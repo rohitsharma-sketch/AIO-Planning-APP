@@ -354,7 +354,7 @@ def _save_growth(data: dict):
 
 # 127.0.0.1, not localhost: on Windows 'localhost' tries IPv6 first and each call waited ~10 s (deep check 2026-09-26).
 AOP_FORECASTER_BASE = os.environ.get("AOP_FORECASTER_URL", "http://127.0.0.1:8000")
-BIS_DIVISIONS = ("KIDS", "LADIES", "MENS")   # BIS covers these only; GM / RETAIL growth is entered in Sales Plan
+BIS_DIVISIONS = ("KIDS", "LADIES", "MENS")   # BIS covers these; GM / RETAIL are out of the Sales Plan engine (2026-10-13)
 
 
 def _fetch_buyer_growth_live(division: str, strict: bool = False) -> list[dict]:

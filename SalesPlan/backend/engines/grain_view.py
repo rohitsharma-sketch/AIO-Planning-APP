@@ -26,6 +26,9 @@ _lock = threading.Lock()
 _cache = {"key": None, "cube": None}
 
 
+PLAN_DIVS = {"KIDS", "LADIES", "MENS"}   # = dept_sales_engine.DIVISIONS
+
+
 def build_cube(plan: dict, source: dict) -> dict:
     """The plan reduced to what the views need: per store its cluster; per division x store x month (LY, TY); per
     division x department x store x month (LY, TY, TY P1, TY P2). Active departments only (as MRP Output)."""
@@ -33,6 +36,8 @@ def build_cube(plan: dict, source: dict) -> dict:
     for s, sd in (plan.get("stores") or {}).items():
         stores[s] = {"cluster": sd.get("cluster") or NO_CLUSTER, "ssg": bool(sd.get("is_ssg")), "tag": sd.get("tag")}
         for dv, dd in (sd.get("divisions") or {}).items():
+            if dv not in PLAN_DIVS:   # a plan saved before GM / RETAIL left the engine (2026-10-13)
+                continue
             for m, md in ((dd or {}).get("months") or {}).items():
                 if not isinstance(md, dict):
                     continue

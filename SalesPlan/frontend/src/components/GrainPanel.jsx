@@ -6,7 +6,7 @@ import { useGrain } from '../grain'
 // Department, MRP or Display Type"). View only - the same numbers as the stage, from /api/planning/grain/<stage>.
 // Cluster view: each cluster opens to its stores (the plan flowing down). Store view: each store shows its cluster and
 // its share of it (what it rolls up to). Values are Rs lakh, as in the plan files.
-const DIVS = ['ALL', 'KIDS', 'LADIES', 'MENS', 'GM', 'RETAIL']
+const DIVS = ['ALL', 'KIDS', 'LADIES', 'MENS']   // GM / RETAIL out of the Sales Plan engine (user, 2026-10-13)
 const L = v => v == null || Number.isNaN(v) ? '–' : v.toLocaleString('en-IN', { maximumFractionDigits: 1, minimumFractionDigits: 1 })
 const P = v => v == null || !Number.isFinite(v) ? '–' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
 const gr = (ty, ly) => (ly > 0 ? (ty / ly - 1) * 100 : null)

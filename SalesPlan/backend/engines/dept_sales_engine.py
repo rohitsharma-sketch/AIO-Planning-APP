@@ -43,7 +43,9 @@ FINAL_PLAN_PATH    = os.path.join(_BASE, "..", "final_dept_plan.json")
 
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-DIVISIONS = ["GM", "KIDS", "LADIES", "MENS", "RETAIL"]
+# user, 2026-10-13: "remove divisions - gm and retail from sales plan engine" - the plan is built for these only
+# (the BIS divisions); GM / RETAIL actuals still import (actuals_manager) but are no longer planned or shown
+DIVISIONS = ["KIDS", "LADIES", "MENS"]
 
 # Full plan range: Mar'27 → Mar'28 (13 months) with corresponding LY
 TY_MONTHS  = ["Mar'27","Apr'27","May'27","Jun'27","Jul'27","Aug'27",

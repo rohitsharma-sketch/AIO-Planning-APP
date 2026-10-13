@@ -5,6 +5,30 @@ Newest first. Each entry names its commit.
 
 ---
 
+## 2026-10-13
+
+### Sales Plan: GM and RETAIL removed from the planning engine
+- **Asked (user):** "remove divisions - gm and retail from sales plan engine" (screenshot: the Store / Cluster panel's All divisions).
+- **Engine:** `dept_sales_engine.DIVISIONS` is now KIDS / LADIES / MENS. Every plan build loops over it (base plan, plan summary, department plan, MRP and everything after), so GM and RETAIL are no longer planned or totalled.
+- **Saved plans:** a plan file saved before this still holds them until the next Generate Base Plan. The Store / Cluster views skip them already (`grain_view.PLAN_DIVS`).
+- **Screens:** GM and RETAIL taken out of the division lists on Store / Cluster, Department Plan, Growth Matrix, Attribute Correction, New Departments and Division Growth Structure.
+- **Left as is:**
+  - The actuals import (`actuals_manager`) still maps and stores GM / RETAIL LY, so their data isn't lost.
+  - Final Results' GM / RETAIL special case is inert now.
+  - `department_custom.json` (user config) is untouched.
+- **Checked:**
+  - Self-checks: grain view, actuals manager, division plan.
+  - Baseline compare: the only differences are GM / RETAIL gone from the plan summary (grand LY 71,364 -> 57,926 L), plus today's buyer-growth push and sync timestamps. Calendar and AOP are unchanged.
+  - Sandbox: plan summary, division plan and Store / Cluster all return KIDS / LADIES / MENS only. All divisions total 77,093 L, was 94,283 L with GM / RETAIL. The division dropdown lists All, KIDS, LADIES, MENS.
+  - dist rebuilt; 8010 restarted.
+
+### BIS -> Sales Plan: re-calibrated buyer plan pushed (data)
+- **Asked (user):** "push the re-calibrated plan to sales plan".
+- **What was sent:** Iteration 1 (the buyer sheet), re-calibrated to AOP (MENS 167.30 / LADIES 128.15 / KIDS 136.42 Cr, buyer mix kept), saved and pushed from BIS on 5050 exactly as the Save button does. It became **Iteration 2**.
+- **Sales Plan now holds** 944 rows, Mar-Jun'27, publish 118, sent 13 Oct 08:24 (was 12 Oct 16:54). Examples: M_IN_BRIEF 5.23 / 8.02 / 7.92 / 7.81 %; ML_JEANS 10.01 / 12.93 / 12.83 / 12.71 %.
+- **Backup** of the rows it replaced: `Backups/buyer_growth_before_recalibrated_push_2026-10-13/buyer_department_growth.json`.
+- **Note:** pushed through 5050, the BIS server on this machine. That route skips Landing's per-person "buyer_push" right, which only applies to pushes going through Landing (7800).
+
 ## 2026-10-12
 
 ### BIS: Re-calibrate to AOP does all three divisions in one click (2026-10-13, `a66dbc3`)
