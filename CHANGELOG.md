@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-12
 
+### BIS: Re-calibrate to AOP does all three divisions in one click (2026-10-13, `a66dbc3`)
+- **Asked (user):** "It should recaliberate for ALL divisions once it is clicked not individual division in a single time".
+- Re-calibrate to AOP no longer follows the open division tab: one click always does MENS, LADIES and KIDS together, and the menu text says so.
+- Checked in BIS on 5050 with Iteration 1 loaded on the MENS tab: one click moved MENS 171.79 -> 167.30, LADIES 129.19 -> 128.15, KIDS 133.41 -> 136.42 (all = AOP). All 3 division locks went; 135 buyer entries were kept. The confirm listed all three. `node --check` OK; the test browser was restored.
+
 ### BIS: Plan tools -> Re-calibrate to AOP (keeps the buyer's mix)
 - **Asked (user):** "I want to re-calibrate so where is the operation for doing that" (screenshot: Iteration 1 loaded, MENS / LADIES / KIDS off AOP, 236 locked, 135 buyer-set).
 - There was no such action. The chip pointed to Plan tools, but only Reset to AOP share (which clears the buyer entries) and Re-apportion by LY Cont% were there.
