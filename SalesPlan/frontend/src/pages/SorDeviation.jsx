@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { theme, alpha } from '../theme'
+import { FiltersRow } from '../components/ExcelFilter'
 import { BlockChip } from './PwwDeviation'
 
 const API = '/api/planning/deviation/sor'
@@ -43,8 +44,7 @@ export default function SorDeviation() {
 
   // filters
   const [selMonth, setSelMonth]     = useState(null)
-  const [selAttr, setSelAttr]       = useState('ALL')
-  const [selDept, setSelDept]       = useState('ALL')
+  const [sf, setSf]                 = useState({})   // the Filters row: {attribute | department: [values]} (2026-10-13)
   const [expandedRows, setExpandedRows] = useState(new Set())
 
   async function loadFiles() {
@@ -112,18 +112,14 @@ export default function SorDeviation() {
   const curMonth = selMonth || months[0]
 
   const allRows = activeData?.rows || []
-  const attrs   = ['ALL', ...new Set(allRows.map(r => r.attr).filter(Boolean).map(a => a.toUpperCase()))]
   // Same field, normalized the same way everywhere it's compared/keyed below —
   // a blank/missing dept would otherwise collide with every other blank-dept
   // row under one bucket (JS object keys coerce undefined/'' to equal strings).
   const deptKey = r => r.dept || '—'
-  const depts   = ['ALL', ...new Set(allRows.map(deptKey))]
-
-  const filtered = allRows.filter(r => {
-    if (selAttr !== 'ALL' && r.attr?.toUpperCase() !== selAttr) return false
-    if (selDept !== 'ALL' && deptKey(r) !== selDept) return false
-    return true
-  })
+  const sfVal = (r, k) => (k === 'attribute' ? (r.attr ? r.attr.toUpperCase() : '—') : deptKey(r))
+  const passSf = (r, skip) => Object.entries(sf).every(([k, vals]) => k === skip || vals.includes(sfVal(r, k)))
+  const filtered = allRows.filter(r => passSf(r))
+  const sfValues = k => [...new Set(allRows.filter(r => passSf(r, k)).map(r => sfVal(r, k)))].sort()
 
   // group by dept for display
   const byDept = {}
@@ -269,33 +265,9 @@ export default function SorDeviation() {
 
           {/* Filters row */}
           <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-            {/* Attribute pills */}
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <span style={{ fontSize: 11, color: theme.textMuted, fontWeight: 600 }}>ATTRIBUTE</span>
-              {attrs.map(a => {
-                const c = ATTR_COLOR[a] || theme.accent
-                const active = selAttr === a
-                return (
-                  <button key={a} onClick={() => setSelAttr(a)} style={{
-                    padding: '4px 12px', borderRadius: 6, fontSize: 11, fontWeight: active ? 700 : 400,
-                    border: `1.5px solid ${active ? c : theme.border}`,
-                    background: active ? `${alpha(c,'22')}` : theme.surface,
-                    color: active ? c : theme.textSecondary, cursor: 'pointer',
-                  }}>{a}</button>
-                )
-              })}
-            </div>
-
-            {/* Dept dropdown */}
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 12 }}>
-              <span style={{ fontSize: 11, color: theme.textMuted, fontWeight: 600 }}>DEPT</span>
-              <select value={selDept} onChange={e => setSelDept(e.target.value)} style={{
-                background: theme.surface, color: theme.textPrimary, border: `1px solid ${theme.border}`,
-                borderRadius: 6, padding: '4px 10px', fontSize: 12,
-              }}>
-                {depts.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
-            </div>
+            <FiltersRow fields={[['attribute', 'Attribute'], ['department', 'Department']]} filters={sf} onChange={setSf} values={sfValues}>
+              {Object.keys(sf).length > 0 && <span style={{ fontSize: 11, color: theme.textMuted }}>showing {filtered.length} of {allRows.length} rows</span>}
+            </FiltersRow>
           </div>
 
           {/* Month tabs */}

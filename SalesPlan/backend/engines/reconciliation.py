@@ -75,9 +75,12 @@ def check(plan: dict, mrp_data: dict | None = None):
 
     if mrp_data:
         periods = mrp_data.get("periods", [])
-        covered = {(div, dept) for div, depts in mrp_data.get("data", {}).items() for dept in depts}
+        covered = {(div, dept) for div, depts in mrp_data.get("data", {}).items() for dept, v in depts.items()
+                   if not v.get("no_split")}   # listed without a split: "not covered" below, not a rounding gap
         for div, depts in mrp_data.get("data", {}).items():
             for dept, v in depts.items():
+                if v.get("no_split"):
+                    continue
                 rec("Division × Dept × Period: department TY = Σ MRP bands", v["allocated_ty"] - v["difference"],
                     v["allocated_ty"], Store="(all)", Division=div, Department=dept, Month=f"{periods[0]} – {periods[-1]}" if periods else "")
         # plan TY the MRP file has no shares for: a department not in it, or a month it doesn't cover

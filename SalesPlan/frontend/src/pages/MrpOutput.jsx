@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { theme, alpha } from '../theme'
 import GrainPanel from '../components/GrainPanel'
-import SearchSlicer from '../components/SearchSlicer'
+import ExcelFilter from '../components/ExcelFilter'
 
 const DIV_COLOR = {
   KIDS: '#C85A12', LADIES: '#7420B8', MENS: '#077A4A', GM: '#1E54C0', RETAIL: '#B22620',
@@ -172,8 +172,10 @@ export default function MrpOutput() {
   const [loading, setLoading]         = useState(true)
   const [err, setErr]                 = useState('')
   const [activeDiv, setActiveDiv]     = useState(null)
-  const [deptFilters, setDeptFilters] = useState(new Set())
-  const [showBad, setShowBad]         = useState(false)
+  // the Filters row - one multi-select per field, as Final Results (user, 2026-10-13: "add the same filters row to the
+  // MRP pages"): {field: [values]}; cleared when the division changes
+  const [mf, setMf]                   = useState({})
+  const [mfEdit, setMfEdit]           = useState(null)
   const [viewMode, setViewMode]       = useState('ty')   // 'contrib' | 'ty'
   const [expandedDept, setExpandedDept] = useState(null)
 
@@ -234,11 +236,16 @@ export default function MrpOutput() {
   const allDepts    = Object.keys(divData).sort()
   const badDepts    = allDepts.filter(d => !divData[d].all_ok)
 
-  const visibleDepts = allDepts.filter(d => {
-    if (deptFilters.size > 0 && !deptFilters.has(d)) return false
-    if (showBad && divData[d].all_ok) return false
-    return true
-  })
+  // Check: is the department fully split over its MRP bands?
+  const checkOf = d => (divData[d].no_split ? 'No MRP split' : !divData[d].all_ok ? 'Contrib ≠ 100%' : divData[d].shares_from ? 'Split from reference' : 'OK')
+  const MO_FIELDS = [['department', 'Department'], ['check', 'Check']]
+  const cellVal = (d, c) => (c === 'department' ? d : checkOf(d))
+  const passMf = (d, skip) => Object.entries(mf).every(([c, vals]) => c === skip || vals.includes(cellVal(d, c)))
+  const visibleDepts = allDepts.filter(d => passMf(d))
+  const mfValues = c => [...new Set(allDepts.filter(d => passMf(d, c)).map(d => cellVal(d, c)))].sort()
+  const nMf = Object.keys(mf).length
+  const caption = c => (!mf[c] ? '(All)' : mf[c].length === 1 ? mf[c][0] : `(Multiple Items) ${mf[c].length}`)
+  const noSplit = allDepts.filter(d => divData[d].no_split)
 
   const divTotals = {}
   for (const div of data.divisions) {
@@ -307,7 +314,7 @@ export default function MrpOutput() {
           const tot = divTotals[div]
           const isActive = activeDiv === div
           return (
-            <button key={div} onClick={() => { setActiveDiv(div); setDeptFilters(new Set()); setShowBad(false); setExpandedDept(null) }} style={{
+            <button key={div} onClick={() => { setActiveDiv(div); setMf({}); setMfEdit(null); setExpandedDept(null) }} style={{
               padding: '8px 18px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
               border: `2px solid ${isActive ? DIV_COLOR[div] : theme.border}`,
               background: isActive ? `${alpha(DIV_COLOR[div],'18')}` : theme.surface,
@@ -325,15 +332,24 @@ export default function MrpOutput() {
         <>
           {/* Toolbar */}
           <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-            <SearchSlicer
-              items={allDepts}
-              selected={deptFilters}
-              onChange={setDeptFilters}
-              label="All Departments"
-              placeholder="Search department…"
-              width={180}
-              accentColor={DIV_COLOR[activeDiv]}
-            />
+            <span style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.6 }}>Filters</span>
+            {MO_FIELDS.map(([c, label]) => (
+              <button key={c} type="button" data-no-undo aria-haspopup="dialog" onClick={e => { const el = e.currentTarget; setMfEdit(x => (x && x.col === c ? null : { col: c, title: label, anchor: el })) }}
+                title={mf[c] ? mf[c].join(', ') : `All ${label.toLowerCase()}`}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px', borderRadius: 4, fontSize: 12, cursor: 'pointer', maxWidth: 260,
+                         border: `1px solid ${mf[c] ? theme.primary : theme.border}`, background: mf[c] ? alpha(theme.primary, '12') : theme.surface, color: theme.textPrimary }}>
+                <span style={{ color: theme.textMuted }}>{label}</span>
+                <b style={{ fontWeight: mf[c] ? 700 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{caption(c)}</b>
+                <span aria-hidden="true" style={{ color: theme.textMuted, fontSize: 10 }}>▾</span>
+              </button>
+            ))}
+            {nMf > 0 && <button type="button" onClick={() => setMf({})} style={{ all: 'unset', cursor: 'pointer', fontSize: 12, color: theme.textMuted, textDecoration: 'underline' }}>Clear all</button>}
+            {mfEdit && <ExcelFilter key={mfEdit.col + JSON.stringify(mf)} title={mfEdit.title} anchor={mfEdit.anchor} picked={mf[mfEdit.col]}
+              load={() => mfValues(mfEdit.col)}
+              onDone={vals => {
+                if (vals !== undefined) setMf(f => { const n = { ...f }; if (vals.length) n[mfEdit.col] = vals; else delete n[mfEdit.col]; return n })
+                setMfEdit(null)
+              }} />}
 
             <div style={{ display: 'flex', borderRadius: 7, overflow: 'hidden', border: `1px solid ${theme.border}` }}>
               {[['contrib', 'Contrib %'], ['ty', 'TY Split (₹L)']].map(([mode, label]) => (
@@ -345,17 +361,11 @@ export default function MrpOutput() {
               ))}
             </div>
 
-            {badDepts.length > 0 && (
-              <button onClick={() => setShowBad(v => !v)} style={{
-                padding: '5px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                background: showBad ? `${alpha(theme.danger,'22')}` : 'transparent',
-                color: showBad ? theme.danger : theme.textMuted,
-                border: `1.5px solid ${showBad ? theme.danger : theme.border}`,
-                display: 'flex', alignItems: 'center', gap: 6,
-              }}>
-                ⚠ Contrib ≠ 100%
-                <span style={{ fontSize: 10, background: theme.danger, color: '#fff', borderRadius: 10, padding: '1px 6px', fontWeight: 700 }}>{badDepts.length}</span>
-              </button>
+            {(badDepts.length > 0 || noSplit.length > 0) && (
+              <span style={{ fontSize: 11, color: theme.danger, fontWeight: 600 }}>
+                {badDepts.length > 0 && `⚠ ${badDepts.length} with contrib ≠ 100%`}{badDepts.length > 0 && noSplit.length > 0 && ' · '}
+                {noSplit.length > 0 && `${noSplit.length} with no MRP split (₹ ${noSplit.reduce((s, d) => s + divData[d].dept_total_ty, 0).toFixed(1)} L not split) - pick Check to see them`}
+              </span>
             )}
 
             <span style={{ fontSize: 11, color: theme.textMuted, marginLeft: 4 }}>
@@ -430,6 +440,8 @@ export default function MrpOutput() {
                           <span style={{ fontSize: 11, color: theme.textMuted, fontWeight: 400 }}>{isExpanded ? '▾' : '▸'}</span>
                           {dept}
                           {isBad && <span style={{ fontSize: 10, color: theme.danger, fontWeight: 600, background: `${alpha(theme.danger,'18')}`, borderRadius: 4, padding: '1px 5px' }}>⚠</span>}
+                          {d.no_split && <span title="No MRP shares for this department in the MRP Cont % file - its plan is not split into price bands" style={{ fontSize: 10, color: theme.danger, fontWeight: 700, border: `1px solid ${alpha(theme.danger, '55')}`, borderRadius: 4, padding: '1px 5px' }}>NO MRP SPLIT</span>}
+                          {d.shares_from && <span title={`A new department: split over MRP bands as its reference department ${d.shares_from} is`} style={{ fontSize: 10, color: theme.textSecondary, fontWeight: 600, border: `1px solid ${theme.border}`, borderRadius: 4, padding: '1px 5px' }}>split as {d.shares_from}</span>}
                           <span style={{ fontSize: 10, color: theme.textMuted, fontWeight: 400, marginLeft: 'auto' }}>{d.bands.length} bands</span>
                         </td>
                         <td style={{ ...CELL, fontWeight: 700, color: theme.primary, borderRight: `2px solid ${theme.border}` }}>

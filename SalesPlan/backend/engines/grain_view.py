@@ -432,9 +432,9 @@ def get_mrp(grain: str = "cluster", division: str = "MENS", dept: str = ""):
     MRP shares (the same chain-level shares as MRP Output, so the stores add back to its totals)."""
     c, g = _cube(), _grain(grain)
     dv = _divs(c, division)[0]
+    from engines.mrp_plan_engine import effective_shares   # new departments on their reference's split (2026-10-13)
     try:
-        with open(MRP_PLAN, encoding="utf-8") as fh:
-            mrp = json.load(fh).get(dv, {})
+        mrp = effective_shares()[0].get(dv, {})
     except (OSError, ValueError):
         mrp = {}
     deps = {d: st for d, st in c["dept"].get(dv, {}).items() if d in mrp}

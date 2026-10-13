@@ -99,3 +99,36 @@ export function FilterButton({ active, sorted, onClick, label, title }) {
     </button>
   )
 }
+
+
+// The Filters row (user, 2026-10-13: "multi selection filters are required"): one multi-select dropdown per field,
+// captioned (All) / the value / (Multiple Items) n, and Clear all. fields = [[key, label]]; filters = {key: [values]};
+// values(key) = that field's values inside the OTHER filters. `children` sit at the end (e.g. "showing x of y").
+export function FiltersRow({ fields, filters, onChange, values, children, style }) {
+  const [edit, setEdit] = useState(null)   // {key, label, anchor}
+  const n = Object.keys(filters).length
+  const caption = k => (!filters[k] ? '(All)' : filters[k].length === 1 ? filters[k][0] : `(Multiple Items) ${filters[k].length}`)
+  return (
+    <div data-no-undo style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', ...style }}>
+      <span style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.6, marginRight: 4 }}>Filters</span>
+      {fields.map(([k, label]) => (
+        <button key={k} type="button" aria-haspopup="dialog" onClick={e => { const el = e.currentTarget; setEdit(x => (x && x.key === k ? null : { key: k, label, anchor: el })) }}
+          title={filters[k] ? filters[k].join(', ') : `All ${label.toLowerCase()}`}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px', borderRadius: 4, fontSize: 12, cursor: 'pointer', maxWidth: 260,
+                   border: `1px solid ${filters[k] ? theme.primary : theme.border}`, background: filters[k] ? alpha(theme.primary, '12') : theme.surface, color: theme.textPrimary }}>
+          <span style={{ color: theme.textMuted }}>{label}</span>
+          <b style={{ fontWeight: filters[k] ? 700 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{caption(k)}</b>
+          <span aria-hidden="true" style={{ color: theme.textMuted, fontSize: 10 }}>▾</span>
+        </button>
+      ))}
+      {n > 0 && <button type="button" onClick={() => onChange({})} style={{ all: 'unset', cursor: 'pointer', fontSize: 12, color: theme.textMuted, textDecoration: 'underline' }}>Clear all</button>}
+      {children}
+      {edit && <ExcelFilter key={edit.key + JSON.stringify(filters)} title={edit.label} anchor={edit.anchor} picked={filters[edit.key]}
+        load={() => values(edit.key)}
+        onDone={vals => {
+          if (vals !== undefined) { const f = { ...filters }; if (vals.length) f[edit.key] = vals; else delete f[edit.key]; onChange(f) }
+          setEdit(null)
+        }} />}
+    </div>
+  )
+}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { theme, alpha } from '../theme'
+import { FiltersRow } from '../components/ExcelFilter'
 
 const mono = { fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }
 
@@ -248,7 +249,7 @@ export default function MrpReapportionment() {
   const [groups, setGroups]       = useState(null)
   const [groupsErr, setGroupsErr] = useState('')
   const [activeTab, setActiveTab] = useState('groups')
-  const [filter, setFilter]       = useState('')
+  const [gf, setGf]               = useState({})   // the Filters row: {dept | display: [values]} (2026-10-13)
 
   const [running, setRunning]     = useState(false)
   const [result, setResult]       = useState(null)
@@ -347,14 +348,9 @@ export default function MrpReapportionment() {
     }
   }
 
-  const filteredGroups = useMemo(() => {
-    if (!groups?.groups) return []
-    if (!filter.trim()) return groups.groups
-    const q = filter.trim().toUpperCase()
-    return groups.groups.filter(g =>
-      g.dept.includes(q) || g.display.includes(q)
-    )
-  }, [groups, filter])
+  const passGf = (g, skip) => Object.entries(gf).every(([k, vals]) => k === skip || vals.includes(g[k]))
+  const filteredGroups = useMemo(() => (groups?.groups || []).filter(g => passGf(g)), [groups, gf])   // eslint-disable-line react-hooks/exhaustive-deps
+  const gfValues = k => [...new Set((groups?.groups || []).filter(g => passGf(g, k)).map(g => g[k]))].sort()
 
   const salesOk = !!(salesInfo?.file_found && salesInfo.check?.pass)
   const checksFail = !checks || checks.some(c => c.status === 'fail')   // a red pre-run check stops Run
@@ -595,28 +591,17 @@ export default function MrpReapportionment() {
                 )}
                 {groups && (
                   <>
-                    <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'center' }}>
-                      <input
-                        placeholder="Filter by dept / display…"
-                        value={filter}
-                        onChange={e => setFilter(e.target.value)}
-                        style={{
-                          flex: 1, padding: '7px 12px', borderRadius: 7,
-                          background: theme.surfaceAlt, border: `1px solid ${theme.border}`,
-                          color: theme.textPrimary, fontSize: 12, outline: 'none',
-                        }}
-                      />
-                      <div style={{ fontSize: 11, color: theme.textMuted, whiteSpace: 'nowrap' }}>
-                        {filteredGroups.length}/{groups.total_groups}
-                      </div>
-                    </div>
+                    <FiltersRow fields={[['dept', 'Department'], ['display', 'Display']]} filters={gf} onChange={setGf} values={gfValues}
+                      style={{ marginBottom: 14 }}>
+                      <span style={{ fontSize: 11, color: theme.textMuted, whiteSpace: 'nowrap' }}>{filteredGroups.length} of {groups.total_groups} groups</span>
+                    </FiltersRow>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 520, overflowY: 'auto' }}>
                       {filteredGroups.map(g => (
                         <GroupRow key={g.group_key} group={g} />
                       ))}
-                      {filteredGroups.length === 0 && filter && (
+                      {filteredGroups.length === 0 && Object.keys(gf).length > 0 && (
                         <div style={{ textAlign: 'center', color: theme.textMuted, fontSize: 12, padding: 20 }}>
-                          No groups match "{filter}"
+                          No groups inside these filters
                         </div>
                       )}
                     </div>

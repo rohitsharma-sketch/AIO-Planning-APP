@@ -7,6 +7,26 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### Sales Plan: the department plan at the MRP stage; Filters row on the MRP pages
+- **Asked (user):** "add the same filters row to the MRP pages", then "now take the department plan to the MRP stage".
+- **MRP stage:**
+  - MRP Plan Output splits the live department plan (now self-refreshing) over the buyers' MRP shares (`mrp_plan.json`, Mar-Jun'27).
+  - `mrp_plan_engine.effective_shares()`: a NEW department without its own split uses its reference department's split (New departments template). LW_U_CORD SETS, ₹220.7 L, is split as L_EW_KURTI SET over 8 bands; it had vanished from Plan Output.
+  - A department the plan has but no split covers is now listed as "NO MRP SPLIT" with its plan unsplit, instead of being dropped.
+  - Plan Output, the Store / Cluster MRP panel, Display Type and Reconciliation all use the same shares. Reconciliation lists the no-split departments under "not covered", not as rounding gaps.
+- **Result:**
+  - ₹51,464.5 of ₹51,484.1 L (99.96%) split to MRP bands; bands = department to 2e-13 L (Reconciliation MRP check: 176 cells, 0 off).
+  - 4 departments (₹19.6 L) have no shares in the MRP Cont % file: KI_AP_TOP F/S, KB_BABA SUIT DNM F/S, KI_AP_CASUAL SHIRT F/S, LW_U_T-TOP F/S.
+- **Filters row on the MRP pages** (shared `FiltersRow` in `components/ExcelFilter.jsx`):
+  - Plan Output: Department + Check (OK / Contrib ≠ 100% / No MRP split / Split from reference). Replaces the search box and the "Contrib ≠ 100%" toggle.
+  - Re-apportionment: Department + Display on the MRP groups. Replaces the text filter.
+  - SOR Deviation: Attribute + Department, multi-select. Replaces the single-pick pills and select; shown once SOR has data.
+  - Buyer's Input has no table, so nothing to filter.
+- **Checked in the sandbox:**
+  - LADIES Plan Output: CORD SETS split as KURTI SET; Check = No MRP split → LW_U_T-TOP F/S only.
+  - Re-apportionment: Display = NON_TABLE → 237 of 284 groups.
+  - SOR has no files yet, so it could not be checked on data.
+
 ### Sales Plan Master Setup: the same Filters row
 - **Asked (user):** "add the same filters row to Master Setup".
 - **What changed:** the search box and the folded "Filter by attribute" chips are replaced by a **Filters** row of multi-select dropdowns: **Department**, **Attribute**, **Status** (Active / Inactive), **Source** (Master / Custom).

@@ -201,7 +201,8 @@ def _dept_plan():
 @router.get("/run-plan")
 def run_plan():
     fp      = _dept_plan()
-    mrp_raw = _load(MRP_PLAN_PATH)
+    from engines.mrp_plan_engine import effective_shares   # the same MRP split as MRP Output (2026-10-13)
+    mrp_raw = effective_shares()[0] if _load(MRP_PLAN_PATH) else None
     contrib = _load(DT_CONTRIB_PATH)
 
     if not fp:      raise HTTPException(400, "final_dept_plan not found")

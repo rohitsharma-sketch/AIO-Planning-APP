@@ -80,6 +80,28 @@ def _resolve_col(headers: list, key: str) -> str | None:
     return None
 
 
+def effective_shares() -> tuple:
+    """(shares {div: {dept: {mrp: {period: %}}}}, {"DIV|DEPT": reference}) - the buyers' MRP split, plus a NEW department
+    without one of its own taking its reference department's split (New departments template), as its plan is a share
+    of that reference (user, 2026-10-13: "take the department plan to the MRP stage" - LW_U_CORD SETS, 221 L, had no
+    MRP split, so it vanished from MRP Output). Every MRP reader uses this, so they all split the plan the same way."""
+    mrp = _load()
+    out = {dv: dict(d) for dv, d in mrp.items()}
+    inherited = {}
+    try:
+        from engines.dept_sales_engine import _load_new_dept_map
+        nd = _load_new_dept_map() or {}
+    except Exception:   # noqa: BLE001 - no template: the buyers' split only
+        nd = {}
+    for dv, entries in nd.items():
+        for name, cfg in (entries or {}).items():
+            ref = (cfg or {}).get("ref_dept")
+            if name not in out.get(dv, {}) and ref in mrp.get(dv, {}):
+                out.setdefault(dv, {})[name] = mrp[dv][ref]
+                inherited[f"{dv}|{name}"] = ref
+    return out, inherited
+
+
 def _load_dept_plan() -> dict:
     for fname in ["base_corrected_plan.json", "attr_corrected_plan.json", "final_dept_plan.json"]:
         # the plan files live in backend/, one level up, like every other engine reads them (2026-09-30: this looked in
@@ -274,9 +296,9 @@ def get_sync_status():
 
 @router.get("/data")
 def get_mrp_data():
-    mrp = _load()
-    if not mrp:
+    if not _load():
         raise HTTPException(status_code=404, detail="No MRP plan imported yet. Upload a file to get started.")
+    mrp, inherited = effective_shares()
 
     plan = _load_dept_plan()
 
@@ -343,7 +365,17 @@ def get_mrp_data():
                 "bands": band_list,
                 "contrib_ok": contrib_ok,
                 "all_ok": all(contrib_ok.values()),
+                "shares_from": inherited.get(f"{div}|{dept}"),   # a new department on its reference's split
             }
+
+    # a department the plan has but no MRP split covers is listed with its plan unsplit - it used to vanish (2026-10-13)
+    for div, depts in dept_ty_period.items():
+        for dept, period_ty in depts.items():
+            ty_in = sum(period_ty.get(p, 0.0) for p in all_periods)
+            if dept not in result.get(div, {}) and ty_in > 0:
+                result.setdefault(div, {})[dept] = {
+                    "dept_total_ty": sum(period_ty.values()), "allocated_ty": 0.0, "difference": -ty_in,
+                    "bands": [], "contrib_ok": {}, "all_ok": True, "no_split": True, "shares_from": None}
 
     return {
         "divisions": list(result.keys()),
