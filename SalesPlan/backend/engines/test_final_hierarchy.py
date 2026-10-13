@@ -2,7 +2,7 @@
 import os
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from engines.grain_view import build_cube, hierarchy_rows  # noqa: E402
+from engines.grain_view import build_cube, explain, hierarchy_rows  # noqa: E402
 
 
 def d(ly, ty, active=True):
@@ -38,4 +38,23 @@ assert {r["key"]: r["ty"] for r in st["rows"]} == {"SSG": 25.0, "NSO": 6.0}, st
 # a leaf node: totals only
 leaf = hierarchy_rows(cube, attr, ["division", "department"], ["MENS", "KURTA"])
 assert leaf["level"] is None and leaf["rows"] == [] and leaf["total"] == {"ly": 2.0, "ty": 3.0}, leaf
+# "how is this number made" (2026-10-13): parts add back to the row; LFL = LY x BIS growth x the new-dept re-balance
+g = lambda ly, ty, gi: {"ly": ly, "ty": ty, "g_p1": gi, "g_p2": gi}   # noqa: E731
+plan2 = {"stores": {
+    "A": {"cluster": "C1", "is_ssg": True, "divisions": {"LADIES": {"months": {"Mar'27": {"departments": {
+        "DRESS": g(100, 99, 110), "ETHNIC": g(0, 44, 100), "TOP": g(50, 54, 110)}}}}}},
+    "B": {"cluster": "C1", "is_ssg": False, "ref_store": "A", "tag": "NSO", "divisions": {"LADIES": {"months": {"Mar'27": {
+        "departments": {"DRESS": g(20, 22, 110), "ETHNIC": g(0, 22 / 0.9 * 0.4, 110), "TOP": g(10, 11, 110)}}}}}},
+}}
+c2 = build_cube(plan2, {"note": "test"})
+nd = {"LADIES": {"ETHNIC": {"ref_dept": "DRESS", "new_dept_pct": 40, "ref_reduction_pct": 10}}}
+e = explain(c2, {}, nd, ["division", "department"], ["LADIES", "DRESS"])
+assert abs(e["ty"] - 121) < 1e-9 and abs(e["parts"]["lfl"]["ty"] - 99) < 1e-9 and abs(e["parts"]["other"]["ty"] - 22) < 1e-9
+assert abs(e["k"] - 99 / (100 * 1.1 * 0.9)) < 1e-12 and abs(e["cont"] - 121 / (230 + 22 / 0.9 * 0.4) * 100) < 1e-9, e
+n = explain(c2, {}, nd, ["division", "department"], ["LADIES", "ETHNIC"])
+assert abs(n["new_depts"][0]["expected"] - 121 / 0.9 * 0.4) < 1e-9 and abs(n["new_depts"][0]["ty"] - 121 / 0.9 * 0.4) < 1e-9, n
+whole = explain(c2, {}, nd, ["division", "department"], [])
+assert abs(whole["ty"] - (230 + 22 / 0.9 * 0.4)) < 1e-9 and "parent" not in whole and whole["lines"][-1]["h"] == "Check"
+st = explain(c2, {}, nd, ["store"], ["B"])
+assert any("follows A" in x["t"] for x in st["lines"]), st["lines"]
 print("final hierarchy checks passed")

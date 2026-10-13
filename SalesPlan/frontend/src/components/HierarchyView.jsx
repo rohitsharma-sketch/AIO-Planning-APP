@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { theme, alpha } from '../theme'
 
 // user, 2026-10-13: "i need a editable hierarchial system for editing a hierarchy for view" - pick the levels and their
@@ -14,6 +14,75 @@ const L = v => (v ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 1, maxi
 const gr = (ty, ly) => (ly > 0 ? (ty / ly - 1) * 100 : null)
 const P = v => (v == null ? '–' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`)
 
+// user, 2026-10-13: "a pop up of how the respective department or cluster is getting that number ... To validate ...
+// in plain words and summarised" - GET /api/planning/grain/explain builds it from the very cells the row adds up, so the
+// parts always add back to the number on the row; what it explains follows the level clicked (division, department,
+// cluster, store, month ...)
+function Explain({ levels, path, onClose }) {
+  const [d, setD] = useState(null)
+  const [err, setErr] = useState('')
+  useEffect(() => {
+    const qs = new URLSearchParams({ levels: levels.join(','), path: JSON.stringify(path) })
+    fetch(`/api/planning/grain/explain?${qs}`)
+      .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`); return j })
+      .then(setD).catch(e => setErr(e.message))
+    const esc = e => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', esc)
+    return () => document.removeEventListener('keydown', esc)
+  }, [])   // eslint-disable-line react-hooks/exhaustive-deps
+  const tile = { flex: '1 1 110px', background: theme.surfaceAlt, border: `1px solid ${theme.border}`, borderRadius: 8, padding: '8px 10px' }
+  const cap = { fontSize: 10.5, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.4 }
+  const big = { fontSize: 16, fontWeight: 700, fontFamily: theme.fontMono, marginTop: 2 }
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.35)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '6vh 16px', overflow: 'auto' }}>
+      <div role="dialog" aria-modal="true" aria-label="How this number is made" onClick={e => e.stopPropagation()}
+        style={{ width: 'min(720px, 100%)', background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`, boxShadow: '0 20px 50px rgba(0,0,0,.25)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '14px 18px', borderBottom: `1px solid ${theme.border}` }}>
+          <div style={{ flex: 1 }}>
+            <div style={cap}>How this number is made</div>
+            <div style={{ fontSize: 15, fontWeight: 700, marginTop: 3 }}>
+              {path.length ? path.map((v, i) => <span key={i}>{i > 0 && <span style={{ color: theme.textMuted }}> → </span>}{v} <span style={{ fontSize: 10.5, fontWeight: 400, color: theme.textMuted }}>{LEVELS[levels[i]]}</span></span>) : 'Total'}
+            </div>
+          </div>
+          <button type="button" autoFocus onClick={onClose} aria-label="Close" style={{ all: 'unset', cursor: 'pointer', fontSize: 18, color: theme.textMuted, padding: '0 4px' }}>✕</button>
+        </div>
+        <div style={{ padding: '14px 18px 16px' }}>
+          {err && <div style={{ color: theme.danger, fontSize: 13 }}>Could not explain it: {err}</div>}
+          {!d && !err && <div style={{ color: theme.textMuted, fontSize: 13 }}>Working it out…</div>}
+          {d && (<>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+              <div style={tile}><div style={cap}>LY (₹L)</div><div style={big}>{L(d.ly)}</div></div>
+              <div style={tile}><div style={cap}>TY (₹L)</div><div style={big}>{L(d.ty)}</div></div>
+              <div style={tile}><div style={cap}>Growth %</div><div style={{ ...big, color: (d.growth ?? 0) >= 0 ? theme.success : theme.danger }}>{P(d.growth)}</div></div>
+              <div style={tile}><div style={cap}>Cont %</div><div style={big}>{d.cont == null ? (path.length ? '–' : '100%') : `${d.cont.toFixed(1)}%`}</div></div>
+            </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {d.lines.map((x, i) => (
+                <div key={i} style={{ fontSize: 13, lineHeight: 1.5, ...(x.h === 'Check' ? { background: alpha(theme.success, '14'), border: `1px solid ${alpha(theme.success, '40')}`, borderRadius: 8, padding: '8px 10px' } : {}) }}>
+                  <b style={{ color: theme.navy || theme.textPrimary }}>{x.h}</b> — {x.t}
+                </div>
+              ))}
+            </div>
+            {d.months?.length > 1 && (
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12, fontSize: 12 }}>
+                <thead><tr>{['Month', 'LY (₹L)', 'TY (₹L)', 'Growth %'].map((h, i) => <th key={h} style={{ textAlign: i ? 'right' : 'left', padding: '5px 8px', color: theme.textMuted, fontSize: 10.5, borderBottom: `1px solid ${theme.border}` }}>{h}</th>)}</tr></thead>
+                <tbody>{d.months.map(m => (
+                  <tr key={m.month}>
+                    <td style={{ padding: '4px 8px' }}>{m.month}</td>
+                    <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: theme.fontMono }}>{L(m.ly)}</td>
+                    <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: theme.fontMono, fontWeight: 600 }}>{L(m.ty)}</td>
+                    <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: theme.fontMono }}>{P(gr(m.ty, m.ly))}</td>
+                  </tr>))}</tbody>
+              </table>
+            )}
+            {d.source && <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 10 }}>From {d.source} · ₹ lakh · view only</div>}
+          </>)}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function loadLevels() {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) || 'null')
@@ -27,6 +96,12 @@ export default function HierarchyView() {
   const [nodes, setNodes] = useState({})          // JSON(path) -> {rows, total, level} | {err} | 'loading'
   const [open, setOpen] = useState(() => new Set())
   const [source, setSource] = useState(null)
+  const [why, setWhy] = useState(null)            // path of the row whose numbers are being explained
+  const back = useRef(null)                       // the ⓘ that opened it - focus goes back there on close
+  const info = p => (
+    <button type="button" onClick={e => { back.current = e.currentTarget; setWhy(p) }} aria-label={`How ${p.length ? p[p.length - 1] : 'the total'} is made`} title="How is this number made?"
+      style={{ all: 'unset', cursor: 'pointer', marginLeft: 6, fontSize: 12, color: theme.primary, padding: '0 3px' }}>ⓘ</button>
+  )
 
   const fetchNode = path => {
     const k = JSON.stringify(path)
@@ -74,6 +149,7 @@ export default function HierarchyView() {
               )}
               {r.key}
               <span style={{ marginLeft: 8, fontSize: 10.5, color: theme.textMuted, fontWeight: 400 }}>{LEVELS[node.level]}</span>
+              {info(p)}
             </td>
             <td style={{ ...td, color: theme.textSecondary }}>{L(r.ly)}</td>
             <td style={{ ...td, fontWeight: 700 }}>{L(r.ty)}</td>
@@ -113,7 +189,7 @@ export default function HierarchyView() {
           <button type="button" onClick={() => setLevels(DEFAULT)} style={{ ...mini, marginLeft: 'auto', textDecoration: 'underline' }}>Reset</button>
         </div>
         <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 8 }}>
-          View only · ₹ lakh · {levels.includes('month') ? 'by month' : 'all plan months added up'} · Cont % = share of the level above
+          View only · ₹ lakh · {levels.includes('month') ? 'by month' : 'all plan months added up'} · Cont % = share of the level above · ⓘ = how a row's numbers are made
           {source && <> · from {source.note || source.name}</>}
         </div>
       </div>
@@ -127,7 +203,7 @@ export default function HierarchyView() {
             {renderRows([], 0)}
             {root && root !== 'loading' && !root.err && (
               <tr style={{ fontWeight: 700 }}>
-                <td style={{ ...td, textAlign: 'left', fontFamily: 'inherit' }}>Total</td>
+                <td style={{ ...td, textAlign: 'left', fontFamily: 'inherit' }}>Total{info([])}</td>
                 <td style={td}>{L(root.total.ly)}</td><td style={td}>{L(root.total.ty)}</td>
                 <td style={td}>{P(gr(root.total.ty, root.total.ly))}</td><td style={td}>100%</td>
               </tr>
@@ -135,6 +211,7 @@ export default function HierarchyView() {
           </tbody>
         </table>
       </div>
+      {why && <Explain key={JSON.stringify(why)} levels={levels} path={why} onClose={() => { setWhy(null); back.current?.focus() }} />}
     </div>
   )
 }

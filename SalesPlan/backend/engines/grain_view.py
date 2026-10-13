@@ -32,9 +32,10 @@ PLAN_DIVS = {"KIDS", "LADIES", "MENS"}   # = dept_sales_engine.DIVISIONS
 def build_cube(plan: dict, source: dict) -> dict:
     """The plan reduced to what the views need: per store its cluster; per division x store x month (LY, TY); per
     division x department x store x month (LY, TY, TY P1, TY P2). Active departments only (as MRP Output)."""
-    stores, div, dept, months = {}, {}, {}, set()
+    stores, div, dept, months, grow = {}, {}, {}, set(), {}
     for s, sd in (plan.get("stores") or {}).items():
-        stores[s] = {"cluster": sd.get("cluster") or NO_CLUSTER, "ssg": bool(sd.get("is_ssg")), "tag": sd.get("tag")}
+        stores[s] = {"cluster": sd.get("cluster") or NO_CLUSTER, "ssg": bool(sd.get("is_ssg")), "tag": sd.get("tag"),
+                     "ref": sd.get("ref_store") or ""}
         for dv, dd in (sd.get("divisions") or {}).items():
             if dv not in PLAN_DIVS:   # a plan saved before GM / RETAIL left the engine (2026-10-13)
                 continue
@@ -51,9 +52,13 @@ def build_cube(plan: dict, source: dict) -> dict:
                     p2 = float(x.get("ty_p2", ty / 2) or 0.0)
                     tl, tt = tl + ly, tt + ty
                     dept.setdefault(dv, {}).setdefault(dp, {}).setdefault(s, {})[m] = (ly, ty, p1, p2)
+                    # the growth index a like-for-like store's department was planned on (100 = flat) - the same in
+                    # every LFL store; kept for the "how is this number made" pop-up (2026-10-13)
+                    if sd.get("is_ssg") and "g_p1" in x and m not in grow.get(dv, {}).get(dp, {}):
+                        grow.setdefault(dv, {}).setdefault(dp, {})[m] = (float(x["g_p1"]) + float(x.get("g_p2", x["g_p1"]))) / 2
                 div.setdefault(dv, {}).setdefault(s, {})[m] = (tl, tt)
     return {"stores": stores, "div": div, "dept": dept, "months": [m for m in TY_MONTHS if m in months],
-            "source": source}
+            "source": source, "g": grow}
 
 
 LIVE_SOURCE = {"kind": "live", "name": "live base plan",
@@ -444,15 +449,14 @@ def get_display(grain: str = "cluster", division: str = "ALL"):
 HIER_LEVELS = ("cluster", "store", "stype", "division", "attribute", "department", "month")
 
 
-def hierarchy_rows(cube: dict, attr_map: dict, levels: list, path: list) -> dict:
-    """Pure. levels: the order picked (from HIER_LEVELS); path: the values of levels[:len(path)] down to the node.
-    Returns {level, rows: [{key, ly, ty}] (TY high to low; months in calendar order), total: {ly, ty}}."""
-    want = dict(zip(levels, path))
-    nxt = levels[len(path)] if len(path) < len(levels) else None
-    sinfo = {s: {"cluster": x["cluster"], "store": s, "stype": "SSG" if x.get("ssg") else "NSO"}
-             for s, x in cube["stores"].items()}
+def _sinfo(cube: dict) -> dict:
+    return {s: {"cluster": x["cluster"], "store": s, "stype": "SSG" if x.get("ssg") else "NSO"}
+            for s, x in cube["stores"].items()}
+
+
+def _cells(cube: dict, attr_map: dict, want: dict, sinfo: dict):
+    """Every (division, department, attribute, store, month, LY, TY) cell of the node want = {level: value}."""
     ok = {s for s, x in sinfo.items() if all(want.get(k, v) == v for k, v in x.items())}
-    acc, tl, tt = {}, 0.0, 0.0
     for dv, dmap in cube["dept"].items():
         if want.get("division", dv) != dv:
             continue
@@ -461,20 +465,28 @@ def hierarchy_rows(cube: dict, attr_map: dict, levels: list, path: list) -> dict
             at = amap.get(dp) or "-"
             if want.get("department", dp) != dp or want.get("attribute", at) != at:
                 continue
-            fixed = {"division": dv, "department": dp, "attribute": at}
             for s, mm in smap.items():
                 if s not in ok:
                     continue
                 for m, v in mm.items():
-                    if want.get("month", m) != m:
-                        continue
-                    ly, ty = v[0], v[1]
-                    tl, tt = tl + ly, tt + ty
-                    if nxt:
-                        k = m if nxt == "month" else fixed.get(nxt) or sinfo[s][nxt]
-                        a = acc.setdefault(k, [0.0, 0.0])
-                        a[0] += ly
-                        a[1] += ty
+                    if want.get("month", m) == m:
+                        yield dv, dp, at, s, m, v[0], v[1]
+
+
+def hierarchy_rows(cube: dict, attr_map: dict, levels: list, path: list) -> dict:
+    """Pure. levels: the order picked (from HIER_LEVELS); path: the values of levels[:len(path)] down to the node.
+    Returns {level, rows: [{key, ly, ty}] (TY high to low; months in calendar order), total: {ly, ty}}."""
+    want = dict(zip(levels, path))
+    nxt = levels[len(path)] if len(path) < len(levels) else None
+    sinfo = _sinfo(cube)
+    acc, tl, tt = {}, 0.0, 0.0
+    for dv, dp, at, s, m, ly, ty in _cells(cube, attr_map, want, sinfo):
+        tl, tt = tl + ly, tt + ty
+        if nxt:
+            k = m if nxt == "month" else {"division": dv, "department": dp, "attribute": at}.get(nxt) or sinfo[s][nxt]
+            a = acc.setdefault(k, [0.0, 0.0])
+            a[0] += ly
+            a[1] += ty
     # a branch with no data at all (e.g. stores with no cluster and no sales) is not listed (user, 2026-10-13)
     rows = [{"key": k, "ly": round(v[0], 4), "ty": round(v[1], 4)} for k, v in acc.items() if abs(v[0]) > 1e-9 or abs(v[1]) > 1e-9]
     if nxt == "month":
@@ -499,6 +511,166 @@ def get_hierarchy(levels: str, path: str = "[]"):
     from engines.final_results_engine import _load_dept_attr_map
     c = _cube()
     return {**hierarchy_rows(c, _load_dept_attr_map(), lv, [str(p) for p in pth]), "source": c["source"]}
+
+
+def _inr(v: float) -> str:
+    """12345678.9 -> '1,23,45,678.9' (Indian grouping, as the pages show)."""
+    neg, v = v < 0, abs(v)
+    whole, frac = f"{v:.1f}".split(".")
+    head, tail = whole[:-3], whole[-3:]
+    while len(head) > 2:
+        tail, head = head[-2:] + "," + tail, head[:-2]
+    return ("-" if neg else "") + (head + "," + tail if head else tail) + "." + frac
+
+
+def explain(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: list) -> dict:
+    """Pure. How the Hierarchy row at `path` (or the Total row, path = []) gets its LY, TY, Growth % and Cont % - built
+    from the very cells the row adds up, so its parts always add back to the number on screen (user, 2026-10-13: "a pop
+    up of how the respective department or cluster is getting that number ... the number displayed should be the number
+    we are trying to validate"). The plan rules behind each part:
+      like-for-like (SSG) store: its own department LY x the BIS growth of that department and month
+      other store: its division LY x the division's average BIS growth, split by its reference store's department mix
+      new department: New dept % of its reference department's plan (before the reference's own cut)
+      a division with new departments is then scaled by one factor per month back onto its BIS / AOP total."""
+    want = dict(zip(levels, path))
+    sinfo = _sinfo(cube)
+    grow, st = cube.get("g") or {}, cube["stores"]
+    new = {(dv, n): c for dv, e in (nd_map or {}).items() for n, c in (e or {}).items()}
+    pct = lambda c, k: float(c.get(k, c.get("alloc_pct", 0)) or 0) / 100   # noqa: E731
+    keep = {}   # (div, ref) -> share a reference keeps after its cuts
+    for (dv, _), c in new.items():
+        keep[(dv, c["ref_dept"])] = keep.get((dv, c["ref_dept"]), 1.0) * (1 - pct(c, "ref_reduction_pct"))
+    parts = {k: {"ly": 0.0, "ty": 0.0, "exp": 0.0, "stores": set()} for k in ("lfl", "other", "new")}
+    mon, depts, divs, nd_ty = {}, set(), set(), {}
+    for dv, dp, at, s, m, ly, ty in _cells(cube, attr_map, want, sinfo):
+        part = "new" if (dv, dp) in new else "lfl" if st[s].get("ssg") else "other"
+        P = parts[part]
+        P["ly"] += ly
+        P["ty"] += ty
+        P["stores"].add(s)
+        if part == "lfl":
+            P["exp"] += ly * grow.get(dv, {}).get(dp, {}).get(m, 100.0) / 100 * keep.get((dv, dp), 1.0)
+        if part == "new":
+            nd_ty[(dv, dp)] = nd_ty.get((dv, dp), 0.0) + ty
+        a = mon.setdefault(m, [0.0, 0.0])
+        a[0] += ly
+        a[1] += ty
+        depts.add((dv, dp))
+        divs.add(dv)
+    LY = sum(P["ly"] for P in parts.values())
+    TY = sum(P["ty"] for P in parts.values())
+    label = " · ".join(str(x) for x in path) if path else "All"
+    out = {"label": label, "path": [{"level": lv, "value": v} for lv, v in zip(levels, path)],
+           "ly": LY, "ty": TY, "growth": (TY / LY - 1) * 100 if LY else None, "source": (cube.get("source") or {}).get("note")}
+    lines = []   # [{h: heading, t: text}] - plain words, numbers as on screen
+    say = lambda h, t: lines.append({"h": h, "t": t})   # noqa: E731
+    # the row's own three numbers
+    say("The number", f"{label} plans ₹{_inr(TY)} L this year against ₹{_inr(LY)} L last year"
+        + (f", over {len(mon)} months ({', '.join(m for m in TY_MONTHS if m in mon)})." if len(mon) > 1 else
+           f", in {next(iter(mon))}." if mon else "."))
+    if LY:
+        say("Growth %", f"₹{_inr(TY)} ÷ ₹{_inr(LY)} − 1 = {out['growth']:+.1f}%.")
+    if path:
+        pw = dict(zip(levels, path[:-1]))
+        pty = sum(c[6] for c in _cells(cube, attr_map, pw, sinfo))
+        plabel = " · ".join(str(x) for x in path[:-1]) or "the whole plan"
+        out["parent"] = {"label": plabel, "ty": pty}
+        out["cont"] = TY / pty * 100 if pty else None
+        if pty:
+            say("Cont %", f"its share of the level above ({plabel}): ₹{_inr(TY)} ÷ ₹{_inr(pty)} = {out['cont']:.1f}%.")
+    # LY
+    lf, ot, nw = parts["lfl"], parts["other"], parts["new"]
+    bits = []
+    if lf["ly"]:
+        bits.append(f"₹{_inr(lf['ly'])} L is the like-for-like stores' own department sales")
+    if ot["ly"]:
+        bits.append(f"₹{_inr(ot['ly'])} L is the other stores' division sales, shared out by their reference store's "
+                    "department mix")
+    if nw["ly"]:
+        bits.append(f"₹{_inr(nw['ly'])} L is the new departments' own past sales")
+    say("LY", "last year's sales of the same months, moved onto this year's calendar (Calendar app)"
+        + (": " + "; ".join(bits) + "." if bits else "."))
+    # TY, part by part
+    one_dp = len(depts) == 1
+    if lf["ty"]:
+        g = (lf["exp"] / lf["ly"] - 1) * 100 if lf["ly"] else 0.0
+        t = (f"{len(lf['stores'])} like-for-like store{'s' if len(lf['stores']) != 1 else ''}: own LY ₹{_inr(lf['ly'])} × "
+             f"the BIS growth of each department and month ({'that is ' if one_dp else 'on average '}{g:+.1f}%) "
+             f"= ₹{_inr(lf['exp'])}.")
+        k = lf["ty"] / lf["exp"] if lf["exp"] else 1.0
+        if abs(k - 1) > 5e-7:
+            why = ("the division is then scaled by one factor so it stays on its BIS / AOP total after the new "
+                   "departments are carved out" if any(d in nd_map for d in divs) else
+                   "the plan then differs from LY × growth by this factor (a correction step)")
+            t += f" {why[0].upper() + why[1:]}: × {k:.4f} → ₹{_inr(lf['ty'])}."
+        out["k"] = k
+        say("TY · like-for-like stores", t)
+    if ot["ty"] or ot["ly"]:
+        g = (ot["ty"] / ot["ly"] - 1) * 100 if ot["ly"] else None
+        refs = sorted({st[s].get("ref") for s in ot["stores"] if st[s].get("ref")})
+        one = len(ot["stores"]) == 1
+        say("TY · other stores",
+            f"{len(ot['stores'])} store{'s' if not one else ''} without a like-for-like year of their own "
+            f"(new / non-LFL): {'its' if one else 'each store’s'} division LY grows at the division's average BIS growth "
+            f"and is split by {'its' if one else 'its own'} reference store's department mix"
+            + (f" (reference: {refs[0]})" if one and refs else "")
+            + f": LY ₹{_inr(ot['ly'])} → ₹{_inr(ot['ty'])}" + (f" ({g:+.1f}%)" if g is not None else "")
+            + ("; the same division scaling after the new departments applies here too." if any(d in nd_map for d in divs)
+               else "."))
+    for (dv, dp), ty in sorted(nd_ty.items()):
+        c = new[(dv, dp)]
+        rw = {**want, "department": c["ref_dept"]}
+        rw.pop("attribute", None)
+        rty = sum(x[6] for x in _cells(cube, attr_map, rw, sinfo))
+        npct, kp = pct(c, "new_dept_pct"), keep.get((dv, c["ref_dept"]), 1.0)
+        exp = rty / kp * npct if kp else 0.0
+        say(f"TY · new department {dp}",
+            f"no plan of its own: it is {npct * 100:g}% of {c['ref_dept']}'s plan in the same stores and months "
+            f"(₹{_inr(rty / kp if kp else 0.0)}" + (" before its own cut" if kp < 1 else "") + f") = ₹{_inr(exp)}"
+            + (" ✓" if abs(exp - ty) < 0.05 else f" - the plan has ₹{_inr(ty)}: regenerate the base plan, the "
+               "New departments template changed since") + ".")
+        out.setdefault("new_depts", []).append({"dept": dp, "ref": c["ref_dept"], "pct": npct * 100, "ty": ty,
+                                                "ref_ty": rty, "expected": exp})
+    if one_dp:
+        (dv, dp), = depts
+        if (dv, dp) not in new and grow.get(dv, {}).get(dp):
+            gm = grow[dv][dp]
+            say("BIS growth used", ", ".join(f"{m} {gm[m] - 100:+.1f}%" for m in TY_MONTHS if m in gm and m in mon) + ".")
+        for (d2, n), c in new.items():
+            if d2 == dv and c["ref_dept"] == dp:
+                say("Reference department", f"{dp} is the reference of the new department {n} ({pct(c, 'new_dept_pct') * 100:g}% "
+                    f"of its plan)" + (f"; it gives up {pct(c, 'ref_reduction_pct') * 100:g}%." if pct(c, "ref_reduction_pct") else
+                                       "; its own plan is not cut."))
+    if want.get("store"):
+        x = st.get(want["store"], {})
+        say("This store", f"{want['store']} is in {x.get('cluster')}"
+            + (", a like-for-like store." if x.get("ssg") else
+               f", not like-for-like (tag {x.get('tag') or '-'}); its department mix follows {x.get('ref') or 'its own LY'}."))
+    used = [(n, parts[k]["ty"]) for k, n in (("lfl", "like-for-like stores"), ("other", "other stores"),
+                                               ("new", "new departments")) if parts[k]["ty"]]
+    say("Check", " + ".join(f"₹{_inr(v)} ({n})" for n, v in used) + f" = ₹{_inr(TY)} - the number on screen ✓"
+        if len(used) > 1 else f"₹{_inr(TY)} - the number on screen ✓")
+    out["lines"] = lines
+    out["parts"] = {k: {"ly": P["ly"], "ty": P["ty"], "stores": len(P["stores"])} for k, P in parts.items()}
+    out["months"] = [{"month": m, "ly": mon[m][0], "ty": mon[m][1]} for m in TY_MONTHS if m in mon]
+    return out
+
+
+@router.get("/explain")
+def get_explain(levels: str, path: str = "[]"):
+    """?levels=division,department&path=["MENS","ML_JEANS"] -> how that row's numbers are made (view only)."""
+    lv = [x for x in levels.split(",") if x]
+    if not lv or len(set(lv)) != len(lv) or any(x not in HIER_LEVELS for x in lv):
+        raise HTTPException(status_code=422, detail=f"levels: pick from {', '.join(HIER_LEVELS)}, each once")
+    try:
+        pth = json.loads(path)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="path must be a JSON list")
+    if not isinstance(pth, list) or len(pth) > len(lv):
+        raise HTTPException(status_code=422, detail="path can't be longer than levels")
+    from engines.final_results_engine import _load_dept_attr_map
+    from engines.dept_sales_engine import _load_new_dept_map
+    return explain(_cube(), _load_dept_attr_map(), _load_new_dept_map(), lv, [str(p) for p in pth])
 
 
 _register_live_cube()

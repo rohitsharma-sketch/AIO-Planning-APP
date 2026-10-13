@@ -7,6 +7,33 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### Sales Plan Final Results: "how is this number made" pop-up on every Hierarchy row
+- **Asked (user):** "can i have a pop up of how the respective department or cluster is getting that number ? To validate ofcourse, with proper explanations in plain words and summarised manner ... the number displayed should be the number we are trying to validate".
+- Every Hierarchy row, and the Total, has an ⓘ. It opens a pop-up for that row:
+  - the row's own LY, TY, Growth % and Cont %;
+  - plain-language steps;
+  - a month table;
+  - a **Check** line where the parts add back to the number on screen.
+- It is built from the very cells the row adds up (shared `_cells` walk with `hierarchy_rows`), via GET `/api/planning/grain/explain`.
+- **The steps follow the plan's rules:**
+  - Growth % = TY ÷ LY − 1; Cont % = TY ÷ the level above.
+  - LY = last year's sales on this year's calendar.
+  - Like-for-like stores = own LY × the BIS growth of each department and month, then the division re-balance factor where new departments exist.
+  - Other stores = division LY × the division's average BIS growth, split by the reference store's mix.
+  - New departments = New dept % of the reference's plan, with a ✓ check.
+- **What it says follows the level clicked:**
+  - A department lists the BIS growth used per month.
+  - A reference department names its new department.
+  - A store gives its cluster, type and reference store.
+  - A cluster or division gives its store mix.
+- **New in the plan cube:** the growth each LFL department x month was planned on, and each store's reference store.
+- **Checked:**
+  - 321 nodes across 4 hierarchies: the explanation's LY and TY = the row's, 0 mismatches; every new-department check ✓.
+  - MENS ₹30,237.8 L and ML_JEANS ₹3,467.4 L / 11.5% match the screen.
+  - BH - (NP) breaks into ₹18,258.2 LFL + ₹3,939.0 other + ₹292.3 new.
+  - Pop-up checked in the sandbox (opens, Esc closes, focus returns).
+  - test_final_hierarchy (explain cases added) and test_grain_view pass.
+
 ### BIS: Save as, New iteration, Rename + Sales Plan Department pages compare with a BIS iteration
 - **Asked (user):** "yes add it on the department pages. Also, add a save as button for new iteration, a new iteration button to create a new BIS sheet, a rename button to rename existing iterations". This followed the question "why is not showing up in the version selector": the Division Plan's "Compare with" lists AOP Forecaster publishes only. The last BIS save was at 10:56 (Iteration 4); later edits were never saved.
 - **BIS version picker** (bottom of the list, where "Remove an iteration" already was):
