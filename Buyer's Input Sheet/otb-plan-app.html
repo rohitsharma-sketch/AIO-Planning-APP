@@ -733,6 +733,7 @@ tr:hover .blk-lock,.blk-lock:focus-visible{opacity:1}
         <div class="tmenu" id="planMenu">
           <div class="tbtn" onclick="toggleMenu('planMenu',event)">Plan tools <span class="caret">&#x25BE;</span></div>
           <div class="tmenu-pop">
+            <button class="tmenu-item" onclick="closeMenus();openImportGrowth()">Import block growth %<small>Paste DEPARTMENT + growth % from Excel - preview, then set each department's Phase 1 block % (Save keeps it)</small></button>
             <button class="tmenu-item" onclick="closeMenus();recalibrateToAop()">Re-calibrate to AOP<small>Put MENS, LADIES and KIDS back on their AOP in one go, keeping the buyer's mix - every department scaled together; your own locks stay fixed</small></button>
             <button class="tmenu-item" onclick="closeMenus();resetPlanToAop()">Reset to AOP share<small>Every unlocked division back to the plain AOP share; its locks and buyer entries cleared</small></button>
             <button class="tmenu-item" onclick="closeMenus();revertToLyCont()">Re-apportion by LY Cont%<small>Split each division's AOP by LY contribution</small></button>
@@ -2271,6 +2272,109 @@ function recalibrateToAop(){
   refresh();
   const still=off.filter(dv=>Math.abs(tot(dv)-aop(dv))>0.005);
   toast(off.map(dv=>`${dv.nm} Rs.${before[dv.id].toFixed(1)} -> ${tot(dv).toFixed(1)} Cr`).join(' · ')+(still.length?` - ${still.map(d=>d.nm).join(', ')} still off AOP: your own locks hold more than its AOP`:' - on AOP. Save to keep it.'));
+}
+/* Import block growth % (user, 2026-10-13: "if i want to import this type of data for growth % for the block update ...
+   give a provision to import such changes"). Paste DEPARTMENT + growth % from Excel; Preview shows what lands where;
+   Apply sets each matched department's Phase 1 block % (flat over Mar-Jun) as a buyer entry on the plan on screen.
+   - names match BIS by name (or id); a pre-split name goes to its parts (DEPT_SPLITS) and wins over the parts' own
+     rows - in these sheets the parts' rows are the old inactive leftovers (MSE_PYJAMA 13.6% vs MSE_HSR PYJAMA 0.0%)
+   - inactive BIS departments are left alone; departments with no row keep their value
+   - "14.3%", "14.3" and Excel fractions ("0.143", when no value has a % and all are within +-1) are all read as 14.3%
+   - exact: the three divisions are locked (as the buyer-sheet Iteration 1); aop: re-balanced onto AOP keeping the mix
+   Nothing goes to Sales Plan until Save. */
+const _impIdf=n=>String(n).toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+function _impParse(text){
+  const rows=[],skipped=[];
+  String(text||'').split(/\r?\n/).forEach((ln,i)=>{
+    if(!ln.trim())return;
+    const c=ln.split(ln.includes('\t')?'\t':/[,;]/).map(x=>x.trim());
+    const raw=(c[1]||'').replace(/−/g,'-').replace(/[%,\s]/g,'');
+    const v=Number(raw);
+    if(!c[0]||raw===''||!isFinite(v)){skipped.push(i+1);return;}
+    rows.push({dept:c[0],v,pct:(c[1]||'').includes('%')});
+  });
+  const frac=rows.length>0&&rows.every(r=>!r.pct&&Math.abs(r.v)<=1);
+  rows.forEach(r=>{r.g=frac?r.v*100:r.v;});
+  return {rows,skipped,frac};
+}
+function _impMatch(rows){
+  const byNm={},byId={};
+  DVDATA.forEach(dv=>dv.secs.forEach(sec=>{byNm[sec.nm.trim().toUpperCase()]={dv,sec};byId[sec.id]={dv,sec};}));
+  const hit=new Map(),unmatched=[],parents=[];
+  rows.forEach(r=>{
+    const id=_impIdf(r.dept),to=DEPT_SPLITS[id];
+    if(to&&to.some(t=>t!==id)){parents.push({r,to});return;}
+    const h=byNm[r.dept.trim().toUpperCase()]||byId[id];
+    if(h)hit.set(h.sec.id,{...h,g:r.g,from:r.dept});else unmatched.push(r.dept);
+  });
+  parents.forEach(({r,to})=>{let any=false;
+    to.forEach(t=>{const h=byId[t];if(!h)return;any=true;hit.set(t,{...h,g:r.g,from:r.dept+' (split)'});});
+    if(!any)unmatched.push(r.dept);});
+  const apply=[],inactive=[];
+  hit.forEach(x=>(S.hiddenSecs.has(x.sec.id)?inactive:apply).push(x));
+  const noRow=[];DVDATA.forEach(dv=>dv.secs.forEach(sec=>{if(!S.hiddenSecs.has(sec.id)&&!hit.has(sec.id))noRow.push(sec.nm);}));
+  return {apply,inactive,unmatched,noRow};
+}
+function _impApply(m,mode){
+  m.apply.forEach(x=>{AOP_MIS.forEach(mi=>{S.inputs[x.sec.id+'__'+mi]=x.g;});S.buyerSet.add(x.sec.id);});
+  AOP_DIVS.forEach(d=>{const dv=DVDATA.find(x=>x.id===d.id);if(!dv)return;
+    if(mode==='exact'){
+      if(S.divLocked.has(dv.id))return;
+      S.divLocked.add(dv.id);const added=[];
+      AOP_MIS.forEach(mi=>dv.secs.forEach(sec=>{const k=sec.id+'__'+mi;if(!S.locked.has(k)){S.locked.add(k);added.push(k);}}));
+      S.divLockAdded[dv.id]=added;
+    }else{
+      if(S.divLocked.has(dv.id)){S.divLocked.delete(dv.id);(S.divLockAdded[dv.id]||[]).forEach(k=>S.locked.delete(k));delete S.divLockAdded[dv.id];}
+      AOP_MIS.forEach(mi=>_divRescale(dv,mi));
+    }
+  });
+}
+// the plan's division totals after an import, worked out on the real plan and put back
+function _impTry(m,mode){
+  const keep={inputs:{...S.inputs},locked:new Set(S.locked),buyerSet:new Set(S.buyerSet),divLocked:new Set(S.divLocked),divLockAdded:JSON.parse(JSON.stringify(S.divLockAdded||{}))};
+  const before=_vlCurrentTotals();
+  try{_impApply(m,mode);return {before,after:_vlCurrentTotals(),bg:new Map(m.apply.map(x=>[x.sec.id,_blockGrowth(x.sec,x.dv)]))};}
+  finally{Object.assign(S,keep);}
+}
+function openImportGrowth(){
+  document.getElementById('impBody').innerHTML='';
+  document.getElementById('impOv').style.display='flex';setTimeout(()=>document.getElementById('impText').focus(),0);
+}
+function previewImportGrowth(){
+  const p=_impParse(document.getElementById('impText').value),body=document.getElementById('impBody');
+  if(!p.rows.length){body.innerHTML='<div class="vlog-empty">Nothing to import - paste DEPARTMENT and growth % columns.</div>';return;}
+  const mode=document.querySelector('input[name="impMode"]:checked').value,m=_impMatch(p.rows),t=_impTry(m,mode);
+  const fp=v=>(v>=0?'+':'')+v.toFixed(1)+'%',cr=v=>'Rs.'+v.toFixed(2)+' Cr';
+  const aop=d=>AOP_MIS.reduce((a,mi)=>a+(S.aop[d.toLowerCase()]?.[mi]||0),0);
+  const cur=x=>{const v=_blockGrowth(x.sec,x.dv);return v==null?'-':fp(v);};
+  const ch=m.apply.slice().sort((a,b)=>a.dv.id.localeCompare(b.dv.id)||a.sec.nm.localeCompare(b.sec.nm));
+  const odd=ch.filter(x=>Math.abs(x.g)>150&&x.g>-100);
+  body.innerHTML=`<div style="font-size:12.5px;line-height:1.6;margin-bottom:8px">
+      <b>${m.apply.length}</b> departments get the pasted block % · ${m.unmatched.length} names not in BIS (left out) · ${m.inactive.length} inactive in BIS (not changed) · ${m.noRow.length} BIS departments with no row (keep their value)${p.skipped.length?` · ${p.skipped.length} line(s) skipped (header / no number)`:''}${p.frac?' · <b>read as fractions</b> (0.143 = 14.3%)':''}</div>
+    <table class="dtbl" style="width:auto;margin-bottom:10px"><thead><tr><th>Division</th><th>Now</th><th>After import</th><th>AOP</th></tr></thead><tbody>
+      ${['MENS','LADIES','KIDS'].map(d=>`<tr><td class="l">${d}</td><td>${cr(t.before[d]||0)}</td><td><b>${cr(t.after[d]||0)}</b></td><td>${cr(aop(d))}</td></tr>`).join('')}</tbody></table>
+    ${mode==='aop'?`<div style="font-size:12px;color:var(--mu);margin-bottom:8px">Held on AOP: each division's departments are scaled together each month to land on its AOP, so the block % after differs from the pasted % (the mix is kept). Pick <b>Exact as typed</b> to keep the pasted numbers.</div>`:''}
+    ${odd.length?`<div style="font-size:12px;color:var(--wa);margin-bottom:8px">Check: very large growth on ${odd.map(x=>`${_h(x.sec.nm)} ${fp(x.g)}`).join(', ')}</div>`:''}
+    <details open><summary style="cursor:pointer;font-size:12px;font-weight:700;margin-bottom:6px">Departments (${ch.length})</summary>
+    <table class="dtbl" style="width:100%"><thead><tr><th class="l">Department</th><th>Division</th><th>Block % now</th><th>Pasted</th><th>Block % after (${mode==='aop'?'held on AOP':'exact'})</th><th class="l">From row</th></tr></thead><tbody>
+      ${ch.map(x=>`<tr><td class="l">${_h(x.sec.nm)}</td><td>${x.dv.nm}</td><td>${cur(x)}</td><td>${fp(x.g)}</td><td><b>${t.bg.get(x.sec.id)==null?'-':fp(t.bg.get(x.sec.id))}</b></td><td class="l">${_h(x.from)}</td></tr>`).join('')}</tbody></table></details>
+    ${m.unmatched.length?`<div style="font-size:11.5px;color:var(--mu);margin-top:8px"><b>Not in BIS:</b> ${m.unmatched.map(_h).join(', ')}</div>`:''}
+    ${m.inactive.length?`<div style="font-size:11.5px;color:var(--mu);margin-top:4px"><b>Inactive in BIS (not changed):</b> ${m.inactive.map(x=>_h(x.sec.nm)).join(', ')}</div>`:''}`;
+}
+function applyImportGrowth(){
+  // user, 2026-10-13: "apply on the screen doesnt seem to work" - Apply was greyed until Preview (and again after a mode
+  // change); it now reads the pasted rows and the option picked itself, every time
+  const p=_impParse(document.getElementById('impText').value);
+  if(!p.rows.length){toast('Nothing to import - paste DEPARTMENT and growth % columns first');return;}
+  const mode=document.querySelector('input[name="impMode"]:checked').value,m=_impMatch(p.rows);
+  if(!m.apply.length){toast('None of the pasted departments are in BIS - nothing changed');return;}
+  _planEvent('Import block growth %');
+  _impApply(m,mode);
+  const n=m.apply.length;
+  document.getElementById('impOv').style.display='none';
+  refresh();
+  toast(mode==='aop'?`${n} departments set from the import and held on AOP (scaled together, mix kept - pick Exact as typed for the pasted numbers). Save to keep it.`
+    :`${n} departments set exactly as pasted; the three divisions are locked. Save to keep it.`);
 }
 function _divRescale(dv,mi){
   if(S.divLocked.has(dv.id))return;
@@ -7422,6 +7526,21 @@ _renderVerSel();_vlPull();
 
 </script>
 <!-- AOP SYNC MODAL -->
+<div class="aop-ov" id="impOv" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="aop-modal" style="width:min(980px,96vw)">
+    <div class="aop-mhd"><div><div class="aop-mtitle">Import block growth %</div><div class="aop-msub">Paste two columns from Excel - DEPARTMENT and a growth % - one department per row (a header row is skipped)</div></div>
+      <button class="tbtn" onclick="document.getElementById('impOv').style.display='none'">&#x2715; Close</button></div>
+    <div class="aop-mbody" style="overflow:auto">
+      <textarea id="impText" rows="7" spellcheck="false" placeholder="DEPARTMENT&#9;FINAL GROWTH %&#10;KB_BERMUDA&#9;14.3%&#10;KB_JAMAICAN&#9;9.4%" style="width:100%;box-sizing:border-box;font-family:var(--st-font-body,monospace);font-size:12px;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--sf);color:var(--tx)"></textarea>
+      <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin:10px 0;font-size:12.5px">
+        <label><input type="radio" name="impMode" value="exact" checked> Exact as typed <small style="color:var(--mu)">(the three divisions are locked so nothing re-balances them; they can sit off AOP)</small></label>
+        <label><input type="radio" name="impMode" value="aop"> Hold each division on AOP <small style="color:var(--mu)">(keeps the mix, as Re-calibrate)</small></label>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px"><button class="tbtn" onclick="previewImportGrowth()">Preview</button><button class="tbtn pri" id="impApply" onclick="applyImportGrowth()">Apply to the plan on screen</button><span style="font-size:11.5px;color:var(--mu);align-self:center">Preview is optional - Apply uses what is pasted and the option picked</span></div>
+      <div id="impBody"></div>
+    </div>
+  </div>
+</div>
 <div class="aop-ov" id="factorOv" style="display:none" onclick="if(event.target===this)this.style.display='none'">
   <div class="aop-modal" style="width:min(1140px,96vw)">
     <div class="aop-mhd"><div><div class="aop-mtitle">Planner's factor table</div><div class="aop-msub" id="factorWho"></div></div>

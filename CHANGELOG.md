@@ -7,6 +7,23 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### BIS: Plan tools -> Import block growth % (paste from Excel)
+- **Asked (user):** "if i want to import this type of data for growth % for the block update, please update in the iteration 2 and give a provision to import such changes through" (a pasted DEPARTMENT / FINAL GROWTH % table).
+- **Follow-ups:** "apply on the screen doesnt seem to work" (Apply stayed greyed until Preview, and again after a mode change; it now works on its own); "growth numbers seem to be unchanged even after succesful preview" (they had changed, but "Hold each division on AOP" scales them; the preview now shows the result).
+- **New, Plan tools -> Import block growth %:** paste two columns from Excel (DEPARTMENT, growth %; a header row is skipped). Optional Preview, then **Apply to the plan on screen** sets each matched department's Phase 1 block % (flat Mar-Jun) as a buyer entry.
+  - **Name matching:** by BIS name or id. A pre-split name goes to its parts (`DEPT_SPLITS`) and wins over the parts' own rows; in these sheets those rows are the old inactive leftovers, e.g. MSE_PYJAMA 13.6% -> MSE_HSR PYJAMA and MSE_TXTL PYJAMA, not their 0.0%.
+  - Inactive BIS departments aren't touched, and departments with no row keep their value.
+  - "14.3%", "14.3" and Excel fractions ("0.143", when no value has a % sign and all are within +-1) all read as 14.3%.
+  - **Exact as typed:** the pasted numbers, with the three divisions locked so nothing re-balances them (they can sit off AOP).
+  - **Hold each division on AOP:** the departments are scaled together each month onto the AOP, keeping the mix (as Re-calibrate), so the block % differs from the pasted %.
+  - The preview shows, per department: block % now, pasted, block % after for the option picked, and the source row. It also lists division totals now / after / AOP, names not in BIS, inactive ones skipped, and very large growths (e.g. L_EW_SAREE_JAIPURI +229.3%).
+  - Nothing goes to Sales Plan until Save.
+- **Iteration 2:** load it, import, then Save. On AOP the totals barely move, so Save updates Iteration 2 in place; exact-as-typed totals move more than 0.5 Cr, so Save creates the next iteration.
+- **Checked in BIS on 5050 with Iteration 2:**
+  - Apply without Preview -> on AOP (167.30 / 128.15 / 136.41 Cr), mix kept, split parts get the old name's value.
+  - Exact -> ML_JEANS 12.2, M_IN_BRIEF 9.4, MSE_POLO 18.3, L_EW_NIGHTY 31.5, MSE_HSR PYJAMA 13.6; divisions locked.
+  - `node --check` OK; the test browser was restored.
+
 ### Sales Plan: faster views, plan months follow the AOP forecast, Final Results = Hierarchy only, GM / RETAIL fully out
 - **Asked (user):**
   - "population latency for the every view in the planning engine";
