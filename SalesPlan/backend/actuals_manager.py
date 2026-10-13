@@ -168,9 +168,34 @@ def load_store_div_actuals(kind: str = "reindexed") -> dict:
     return out
 
 
+_aop_m = {"t": 0.0, "v": None}
+
+
+def _aop_ty_months():
+    """TY months the live AOP publish has a forecast for, cached a minute; None = can't tell (no filter).
+    user, 2026-10-13: "only populate for which all AOP is being forecasted the rest can be redacted from viewing and
+    populating data or considering for any sales related work at all till the time AOP is being forecasted in for that"
+    (chose: the months AOP has a forecast for). V2 / publish 118 forecasts Mar-Sep'27 (Sep = new stores only; user,
+    2026-10-13: "also populate Sep'26 data everywhere") and nothing from Oct'27, so the plan runs on LY Mar-Sep'26."""
+    import time
+    if time.time() - _aop_m["t"] > 60:
+        try:
+            from engines.grain_view import aop_forecast_months
+            v = aop_forecast_months() or None
+        except Exception:   # noqa: BLE001 - AOP / DB unreachable: plan on every closed month rather than none
+            v = None
+        _aop_m.update(t=time.time(), v=v)
+    return _aop_m["v"]
+
+
 def locked_ly_months() -> list[str]:
-    """LY months the plan can use: closed and present in the reindexed snapshot (name kept for callers). Cached per
-    snapshot and day."""
+    """LY months the plan can use: closed, present in the reindexed snapshot and - since 2026-10-13 - whose TY month the
+    live AOP forecasts (every Sales Plan engine reads its months from here). Cached per snapshot and day."""
+    am = _aop_ty_months()
+    return [m for m in _locked_ly_months() if not am or ly_to_ty_month(m) in am]
+
+
+def _locked_ly_months() -> list[str]:
     at, rows = _snapshot("reindexed")
     key = ("ly", at, _dt.date.today())
     if _built.get("ly", (None,))[0] == key:

@@ -100,6 +100,9 @@ def _warm_mrp_sales():
     import threading
     from engines.mrp_reapportionment_engine import warm_sales
     threading.Thread(target=warm_sales, name="warm-mrp-sales", daemon=True).start()
+    # one live plan run for every read-only view, kept current in the background (user, 2026-10-13: latency)
+    from engines.dept_sales_engine import warm_plan_views
+    threading.Thread(target=warm_plan_views, name="warm-plan-views", daemon=True).start()
 
 # every apportioned total vs its parts, to 8 decimals (2026-09-30)
 app.include_router(reconciliation_router,  prefix="/api/planning/reconciliation",  dependencies=_dep)

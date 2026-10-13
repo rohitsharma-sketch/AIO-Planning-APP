@@ -7,6 +7,35 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### Sales Plan: faster views, plan months follow the AOP forecast, Final Results = Hierarchy only, GM / RETAIL fully out
+- **Asked (user):**
+  - "population latency for the every view in the planning engine";
+  - "remove the GM & retail from the planning engine until further advisememnt";
+  - "if there is no data in the no cluster level just remove it from any view";
+  - "only populate for which all AOP is being forecasted ..." (chose: the months AOP has a forecast for);
+  - "also populate Sep'26 data everywhere";
+  - "remove multiple views just keep the hierarchial view".
+- **Latency:**
+  - The live plan run (~5-10 s) used to run once per view per request. Now one run feeds every read-only view (`dept_sales_engine.plan_views`: plan summary, Cluster View, the Store / Cluster cube) and runs again only when an input changes. The plan itself isn't kept in memory (~1.5 GB); only what the views need.
+  - 8010 keeps it warm in the background (`warm_plan_views`, checks the inputs every minute from start).
+  - The AOP store forecast behind the store-built / cluster-built preview is read once per publish, not on every call.
+  - Measured in-process, before -> after: Cluster View 4.2-4.9 s on every open -> 0.3 s; Store / Cluster panels 0.2 s, with no 8.6 s first open; preview 1.7-3.3 s -> 0.4-1.9 s; Final Results 0.46 s + 1.3 MB -> 0.01 s (pipeline only; the tree loads branch by branch, 0.01-0.8 s).
+  - Callers that change the plan (Generate Base Plan, new-dept map, /run) still take their own fresh run.
+- **Months:**
+  - `actuals_manager.locked_ly_months()`, where every engine gets its months, now keeps only the months the live AOP version has a forecast for (`grain_view.aop_forecast_months`, re-checked every minute).
+  - V2 / publish 118 forecasts Mar-Sep'27 (Sep = new stores only) and nothing from Oct'27, so the plan runs on LY Mar-Sep'26.
+  - Oct'27 onwards stays out until AOP forecasts it. If AOP can't be read, there is no filter (never an empty plan).
+  - The store-built / cluster-built preview still compares on the months AOP has a base for (Mar-Aug'27): Sep'27 there is new stores only, so it isn't like for like.
+- **Final Results:**
+  - Only the Hierarchy view. The Store / Department / Cluster / Dashboard views and their `/final-results/data` + `/dashboard` routes (a 1.3 MB read of the whole plan file, and the GM / RETAIL cards) are removed.
+  - The page reads `/final-results/pipeline` for the banner.
+- **GM / RETAIL:** Master Setup (`department-plan/config`) lists KIDS / LADIES / MENS only. A scan of every planning GET response finds no GM / RETAIL.
+- **No cluster:** a Hierarchy branch with no LY and no TY isn't listed. The Store / Cluster panels already left empty stores out, so their total is unchanged: 9 clusters.
+- **Checked:**
+  - Self-checks: actuals manager, grain view, final hierarchy (with an empty no-cluster store).
+  - Plan summary, Cluster View and Hierarchy by month all give Mar'27-Sep'27. Hierarchy by month TY (L): 13,815 / 12,363 / 12,420 / 12,251 / 7,994 / 10,844 / 7,407.
+  - dist rebuilt; 8010 restarted.
+
 ### Sales Plan Final Results: Hierarchy view (pick the levels and their order)
 - **Asked (user):** "i need a editable hierarchial system for editing a hierarchy for view". The user chose "the hierarchy itself (view only)", with all levels: Cluster, Store, Division, Department, Month, Attribute, Store type.
 - **New view: Final Results -> Hierarchy** (next to Dashboard).

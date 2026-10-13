@@ -22,7 +22,7 @@ Data required in inputs.xlsx:
 
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
-import io, json, os
+import io, json, os, threading, time
 import pandas as pd
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -743,7 +743,40 @@ def export_plan():
     )
 
 
-_summary_cache = {}
+# user, 2026-10-13: "population latency for the every view in the planning engine". The live plan run (~5-10 s) ran
+# once per view per request - Cluster View (4-5 s every open), the sidebar summary, the Store / Cluster panels each ran
+# it. Now ONE run feeds every read-only view, and only when one of its inputs changes. The plan itself is not kept
+# (~1.5 GB in memory) - only what the views need. warm_plan_views() re-checks the inputs every minute from 8010's
+# start, so a page usually finds it ready. Callers that change the plan (Generate Base Plan, new-dept map, /run) still
+# take their own fresh run_dept_plan().
+_views = {"key": None}
+_views_lock = threading.Lock()
+VIEW_BUILDERS = {}   # name -> fn(plan) -> what that view needs; grain_view adds its cube
+
+
+def plan_views() -> dict:
+    """{key, summary, cluster, + each VIEW_BUILDERS entry} for the current plan inputs (built once per change)."""
+    key = _plan_inputs_key()
+    with _views_lock:
+        if _views.get("key") != key or any(n not in _views for n in VIEW_BUILDERS):
+            plan = run_dept_plan()
+            v = {"key": key, "summary": _plan_summary(plan), "cluster": _cluster_plan(plan)}
+            for n, fn in VIEW_BUILDERS.items():
+                v[n] = fn(plan)
+            del plan
+            _views.clear()
+            _views.update(v)
+        return _views
+
+
+def warm_plan_views(every: int = 60):
+    """Background: keep plan_views() current so no page waits for the plan run (8010 starts this at boot)."""
+    while True:
+        try:
+            plan_views()
+        except Exception:   # noqa: BLE001 - a bad input file must not kill the warmer; the page shows the error itself
+            pass
+        time.sleep(every)
 
 
 def _plan_inputs_key() -> str:
@@ -764,16 +797,10 @@ def get_plan_summary():
     Kept until one of the plan's inputs changes (user, 2026-10-07: the full plan run took ~10 s on every page load and
     held up every other request, e.g. Master Setup sat on "Loading department master...").
     """
-    key = _plan_inputs_key()
-    if _summary_cache.get("key") == key:
-        return _summary_cache["data"]
-    out = _plan_summary()
-    _summary_cache.update(key=key, data=out)
-    return out
+    return plan_views()["summary"]
 
 
-def _plan_summary():
-    result = run_dept_plan()
+def _plan_summary(result):
     months = result["meta"]["ty_months_active"]
     divs: dict = {}
 
@@ -828,9 +855,12 @@ def get_cluster_plan():
       {clusters: [...], divisions: [...], months: [...],
        result: {cluster → {division → {month → {dept → {ty, ly, cont_pct}}}}}}
     """
+    return plan_views()["cluster"]   # shared, rebuilt only when an input changes (2026-10-13)
+
+
+def _cluster_plan(plan):
     from store_master import get_store_cluster_map
 
-    plan = run_dept_plan()
     cluster_map = get_store_cluster_map()
 
     # Accumulate: cluster → div → month → dept → {ty, ly}

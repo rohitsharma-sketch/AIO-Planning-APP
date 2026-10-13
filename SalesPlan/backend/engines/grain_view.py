@@ -56,6 +56,15 @@ def build_cube(plan: dict, source: dict) -> dict:
             "source": source}
 
 
+LIVE_SOURCE = {"kind": "live", "name": "live base plan",
+               "note": "the live base plan - not generated yet (Generate Base Plan saves it; corrections apply after)"}
+
+
+def _register_live_cube():
+    from engines import dept_sales_engine as _dse
+    _dse.VIEW_BUILDERS["cube"] = lambda plan: build_cube(plan, LIVE_SOURCE)
+
+
 def _cube() -> dict:
     """The active plan as a cube, cached on the file's mtime, or on the live run's inputs."""
     from engines.final_results_engine import _pipeline_status
@@ -72,13 +81,9 @@ def _cube() -> dict:
             if c["months"]:
                 _cache.update(key=key, cube=c)
                 return c
-        from engines.dept_sales_engine import _plan_inputs_key, run_dept_plan
-        key = ("live", _plan_inputs_key())
-        if _cache["key"] != key:
-            _cache.update(key=key, cube=build_cube(run_dept_plan(), {
-                "kind": "live", "name": "live base plan",
-                "note": "the live base plan - not generated yet (Generate Base Plan saves it; corrections apply after)"}))
-        return _cache["cube"]
+        # the live plan's cube comes with the shared plan views (one plan run for every view, 2026-10-13)
+        from engines.dept_sales_engine import plan_views
+        return plan_views()["cube"]
 
 
 def _add(a: dict, b: dict) -> dict:
@@ -205,6 +210,9 @@ def build_methods(cube: dict, aop: dict, growth: dict, aop_clusters: dict | None
     return {"plan": out, "unalloc": un}
 
 
+_aop_cache = {}
+
+
 def _aop_by_store():
     """The AOP Forecaster's store x division x month forecast (Rs lakh) of the publish BIS plans on."""
     from engines.division_plan import _bis_aop
@@ -218,6 +226,10 @@ def _aop_by_store():
     p = os.path.join(_HERE, "..", "..", "..", "Tentative AOP Forecaster", "sessions", str(sid), "detail.json")
     if not sid or not os.path.exists(p):
         return pid, label, {}, {}, []
+    # read once per publish / file version, not on every preview (latency, 2026-10-13)
+    ck = (pid, p, os.path.getmtime(p))
+    if _aop_cache.get("key") == ck:
+        return _aop_cache["v"]
     aop, cl, base = {}, {}, {}
     with open(p, encoding="utf-8") as fh:
         recs = json.load(fh)
@@ -236,7 +248,16 @@ def _aop_by_store():
             if s and dv and v and m in covered:
                 d = aop.setdefault(s, {}).setdefault(dv, {})
                 d[m] = d.get(m, 0.0) + float(v)
-    return pid, label, aop, cl, sorted(covered, key=TY_MONTHS.index)
+    # months the version has ANY forecast for (Sep'27 = new stores only in V2) - what the plan months follow
+    fc = {m for m in TY_MONTHS if any(float(r.get(f"{m} | Forecast") or 0.0) > 0 for r in recs)}
+    _aop_cache.update(key=ck, v=(pid, label, aop, cl, sorted(covered, key=TY_MONTHS.index)), fc=fc)
+    return _aop_cache["v"]
+
+
+def aop_forecast_months() -> set:
+    """TY months the live AOP version forecasts (any store has a forecast) - Sales Plan plans these only (2026-10-13)."""
+    _aop_by_store()
+    return set(_aop_cache.get("fc") or ())
 
 
 def _methods():
@@ -428,7 +449,8 @@ def hierarchy_rows(cube: dict, attr_map: dict, levels: list, path: list) -> dict
                         a = acc.setdefault(k, [0.0, 0.0])
                         a[0] += ly
                         a[1] += ty
-    rows = [{"key": k, "ly": round(v[0], 4), "ty": round(v[1], 4)} for k, v in acc.items()]
+    # a branch with no data at all (e.g. stores with no cluster and no sales) is not listed (user, 2026-10-13)
+    rows = [{"key": k, "ly": round(v[0], 4), "ty": round(v[1], 4)} for k, v in acc.items() if abs(v[0]) > 1e-9 or abs(v[1]) > 1e-9]
     if nxt == "month":
         rows.sort(key=lambda r: TY_MONTHS.index(r["key"]) if r["key"] in TY_MONTHS else 99)
     else:
@@ -451,3 +473,6 @@ def get_hierarchy(levels: str, path: str = "[]"):
     from engines.final_results_engine import _load_dept_attr_map
     c = _cube()
     return {**hierarchy_rows(c, _load_dept_attr_map(), lv, [str(p) for p in pth]), "source": c["source"]}
+
+
+_register_live_cube()

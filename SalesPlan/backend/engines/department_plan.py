@@ -247,7 +247,8 @@ def _contrib_sum(rows: list) -> float:
 
 @router.get("/config")
 def get_config():
-    config = _get_full_config()
+    # GM / RETAIL are out of the Sales Plan engine until further notice (user, 2026-10-13) - Master Setup lists K/L/M
+    config = {d: r for d, r in _get_full_config().items() if d in BIS_DIVISIONS}
     summary = {}
     for div, rows in config.items():
         active = [r for r in rows if r["active"]]

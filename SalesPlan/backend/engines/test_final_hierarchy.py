@@ -18,6 +18,8 @@ plan = {"stores": {
         "KIDS": {"months": {"Mar'27": {"departments": {"FROCK": d(4, 6)}}}}}},
     "S3": {"cluster": "C2", "is_ssg": True, "divisions": {
         "MENS": {"months": {"Mar'27": {"departments": {"JEANS": d(1, 1)}}}}}},
+    "WH": {"cluster": None, "is_ssg": False, "divisions": {   # no cluster, no sales: never listed
+        "MENS": {"months": {"Mar'27": {"departments": {"JEANS": d(0, 0)}}}}}},
 }}
 cube = build_cube(plan, {})
 attr = {"MENS": {"JEANS": "REGULAR", "KURTA": "SUMMER"}, "KIDS": {"FROCK": "SUMMER"}}
