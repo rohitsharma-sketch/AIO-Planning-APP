@@ -791,7 +791,11 @@ def rollup(df, by, months, has_plan=True):
     a["sy"] = np.where(both, df.plan_qty * (df["season_year_idx"] if "season_year_idx" in df else 1.0), 0.0)
     a["fq"] = np.where(both & (df["fest_days"] > 0 if "fest_days" in df else False), df.plan_qty, 0.0)   # planned qty in festival months
     a["pk"] = np.where(both & (df["peak_ok"] if "peak_ok" in df else True), df.plan_qty, 0.0)   # planned qty with a peak reason
+    # stores with fixtures, per group x month (user, 2026-10-13: "I need Avg Fixtures, Avg Store Count in this view and its
+    # respective month fixture count and store count") - distinct stores, so a store in many departments counts once
+    a["_st"], a["_fx"] = df.store.values, df.fixtures.values > 0
     a = a[a.mi >= 0]
+    sc = a[a._fx].groupby(by + ["mi"], dropna=False, sort=False)["_st"].nunique().to_dict()
     V = ["q", "md", "nb", "lq", "lmd", "nl", "fixtures", "plan_rs", "ed", "sq", "sy", "fq", "pk"]
     g = a.groupby(by + ["mi"], dropna=False, sort=True)[V].sum()
     dim = [m.days_in_month for m in months]
@@ -820,10 +824,15 @@ def rollup(df, by, months, has_plan=True):
     for keys, ms in acc.items():
         row = dict(zip(by, keys))
         cells = [cell(s, dim[i], 1 if s[2] else 0, ldim[i], 1 if s[5] else 0) for i, s in enumerate(ms)]
+        for i, c in enumerate(cells):
+            c["stores"] = int(sc.get(tuple(keys) + (i,), 0))
         tot = [sum(s[j] for s in ms) for j in range(len(V))]
         pm, lm = [i for i, s in enumerate(ms) if s[2]], [i for i, s in enumerate(ms) if s[5]]
-        row.update(months=cells, total=cell(tot, sum(dim[i] for i in pm), len(pm), sum(ldim[i] for i in lm), len(lm)),
-                   edited=bool(tot[8]))
+        tc = cell(tot, sum(dim[i] for i in pm), len(pm), sum(ldim[i] for i in lm), len(lm))
+        fm, sm = [c["fixtures"] for c in cells if c["fixtures"] > 0], [c["stores"] for c in cells if c["stores"]]
+        # the 4-month figures: the average month (over the months that have fixtures / stores)
+        tc["fixtures_avg"], tc["stores"] = (sum(fm) / len(fm) if fm else 0.0), (sum(sm) / len(sm) if sm else 0.0)
+        row.update(months=cells, total=tc, edited=bool(tot[8]))
         out.append(row)
     if len(by) > 1:   # department view: divisions together, biggest departments first
         out.sort(key=lambda r: (str(r[by[0]]), -r["total"]["mdq"]))
@@ -859,6 +868,8 @@ if __name__ == "__main__":   # self-check of the maths on tiny frames (no DB)
     ed2 = ed2.drop_duplicates(["field", "department", "month", "store"], keep="last")
     assert list(apply_inputs(base, ed2).mdq) == [300.0, 100.0, 100.0]   # density reset to the file (100); S1 fixture edit 3 stays
     assert abs(days_of(30, 150, 31) - 155.0) < 1e-9 and days_of(0, 150, 31) is None   # 150 pcs at 30 a month of 31 days
+    assert r["months"][0]["stores"] == 3 and r["months"][0]["fixtures"] == 5.0   # 3 stores with fixtures, 3 + 1 + 1
+    assert r["total"]["stores"] == 3 and r["total"]["fixtures_avg"] == 5.0       # one month: the average is that month
     t = r["months"][0]
     assert abs(t["days"] - 150 / (30 / 31)) < 1e-9 and abs(t["ly_days"] - 200 / (10 / 31)) < 1e-9   # Mar'27 / Mar'26: 31 days
     assert [str_band(x) for x in (20, 54, 75, 104, 105, 250, None)] == [60, 60, 90, 90, 120, 180, None]

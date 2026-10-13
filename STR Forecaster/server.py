@@ -187,7 +187,8 @@ def _cells_wide(c, pre):
             f"{pre} share of plan in festival months": c.get("fest_share"), f"{pre} STR band": c["band"],
             f"{pre} base band (60-180)": c["base_band"], f"{pre} STR days": c["days"], f"{pre} LY days": c["ly_days"],
             f"{pre} plan qty": c["qty"], f"{pre} MDQ": c["mdq"], f"{pre} LY qty": c["ly_qty"], f"{pre} plan Rs": c["plan_rs"],
-            f"{pre} fixtures": c["fixtures"], f"{pre} max STR %": c["str"], f"{pre} LY STR %": c["ly_str"]}
+            f"{pre} fixtures": c["fixtures"], f"{pre} avg fixtures": c.get("fixtures_avg"), f"{pre} stores": c.get("stores"),
+            f"{pre} max STR %": c["str"], f"{pre} LY STR %": c["ly_str"]}
 
 
 def workbook(df, months, has_plan, layers, info, filters):
@@ -316,7 +317,10 @@ class H(BaseHTTPRequestHandler):
                     return self._send(413, {"error": f"{len(rows):,} rows at that level - open rows one at a time instead."})
                 if "department" in by:
                     _tag_cols(rows)
-                return self._send(200, {"months": [str(m) for m in months], "rows": rows, "by": by, "has_plan": hp})
+                # distinct stores with fixtures per month, for the All row (a store under many rows counts once)
+                st = [int(d.loc[(d.month == m) & (d.fixtures > 0), "store"].nunique()) for m in months]
+                return self._send(200, {"months": [str(m) for m in months], "rows": rows, "by": by, "has_plan": hp,
+                                        "all_stores": st})
             if path == "/api/cells":
                 dept = q.get("department", [""])[0]
                 d = df[df.department == dept]

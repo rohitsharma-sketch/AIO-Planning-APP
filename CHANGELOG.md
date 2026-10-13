@@ -7,6 +7,20 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### STR Forecaster: fixture count and store count in the drill-down
+- **Asked (user):** "I need Avg Fixtures, Avg Store Count in this view and its respective month fixture count and store count" (the Department > Cluster > Store view).
+- **4-month avg block:** **Avg fixtures** (fixtures in the average month, over the months with fixtures) and **Avg store count** (stores with fixtures in the average month).
+- **Each month:** **Fixtures** (from the fixture plan, with edits) and **Store count** (stores with fixtures that month). Every column sorts and filters like the others.
+- Store count = distinct stores, so a store under many departments counts once. The **All** row takes it from the server (`/api/rollup` `all_stores`) and shows "-" while a row filter is on, since a filtered set can't be added up.
+- **Code:**
+  - `str_engine.rollup`: per row x month `stores`; on the 4-month cell `fixtures_avg` and `stores`. Self-check extended.
+  - The Excel workbook's drill-down / by-month sheets gain "avg fixtures" and "stores".
+- **Checked on 8085:**
+  - All rows: 180 stores each month, 52,601.8 avg fixtures.
+  - BH - (NP): 15,340 / 15,181 / 15,202 / 15,210 fixtures Mar-Jun -> avg 15,233.3, 52 stores.
+  - KI_AP_BABA SUIT HSR H/S: 621 / 516 / 444 / 381 -> 490.5.
+  - 8085 restarted.
+
 ### BIS: a buyer input of -100% moves the department to Inactive automatically
 - **Asked (user):** "add one additional provisiion if a buyer's inout is -100 it should automatically shift the department to the inactive session".
 - Any active department whose buyer input is -100% in every Mar-Jun month goes to the Inactive departments sheet. That covers a -100 block typed in, an import, a loaded version, or the plan as BIS opens. A single Phase 2 month at -100 doesn't count.
