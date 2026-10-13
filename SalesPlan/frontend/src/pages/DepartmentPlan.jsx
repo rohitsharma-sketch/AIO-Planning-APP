@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { theme, alpha } from '../theme'
 import BisCompare from '../components/BisCompare'
+import ExcelFilter from '../components/ExcelFilter'
 
 const DIVISIONS = ['KIDS', 'LADIES', 'MENS']   // GM / RETAIL out of the Sales Plan engine (user, 2026-10-13)
 
@@ -40,8 +41,10 @@ export default function DepartmentPlan() {
   const [showAdd, setShowAdd] = useState(false)
   const [newDept, setNewDept] = useState({ division: 'KIDS', name: '', attribute: 'REGULAR' })
   const [addError, setAddError] = useState('')
-  const [search, setSearch] = useState('')
-  const [attrFilter, setAttrFilter] = useState(null) // null = All
+  // the Filters row - one multi-select per field, as Final Results (user, 2026-10-13: "add the same filters row to
+  // Master Setup"): {field: [values]}; cleared when the division changes
+  const [mf, setMf] = useState({})
+  const [mfEdit, setMfEdit] = useState(null)   // {col, title, anchor} - the list open now
   const [aopSyncing, setAopSyncing] = useState(false)
   const [aopSyncResult, setAopSyncResult] = useState(null)
   const [aopDivisionAops, setAopDivisionAops] = useState(null)   // [{division, annual_target}] from AOP Forecaster
@@ -153,14 +156,15 @@ export default function DepartmentPlan() {
 
   const rows = config?.[activeDiv] || []
   const activeRows = rows.filter(r => r.active)
-  const filteredRows = rows.filter(r => {
-    const matchSearch = !search || r.name.toLowerCase().includes(search.toLowerCase()) || r.attribute.toLowerCase().includes(search.toLowerCase())
-    const matchAttr = !attrFilter || r.attribute === attrFilter
-    return matchSearch && matchAttr
-  })
-  // Count per attribute for the filter chips
-  const attrCounts = {}
-  rows.forEach(r => { attrCounts[r.attribute] = (attrCounts[r.attribute] || 0) + 1 })
+  const MS_FIELDS = [['department', 'Department'], ['attribute', 'Attribute'], ['status', 'Status'], ['source', 'Source']]
+  const cellVal = (r, c) => (c === 'department' ? r.name : c === 'attribute' ? r.attribute
+    : c === 'status' ? (r.active ? 'Active' : 'Inactive') : (r.source === 'custom' ? 'Custom' : 'Master'))
+  const passMf = (r, skip) => Object.entries(mf).every(([c, vals]) => c === skip || vals.includes(cellVal(r, c)))
+  const filteredRows = rows.filter(r => passMf(r))
+  // a field's list = the values left by the OTHER filters, as Excel does
+  const mfValues = c => [...new Set(rows.filter(r => passMf(r, c)).map(r => cellVal(r, c)))].sort()
+  const nMf = Object.keys(mf).length
+  const caption = c => (!mf[c] ? '(All)' : mf[c].length === 1 ? mf[c][0] : `(Multiple Items) ${mf[c].length}`)
 
   return (
     <div style={{ padding: '28px 32px', minHeight: '100vh' }}>
@@ -296,7 +300,7 @@ export default function DepartmentPlan() {
           const divRows = config?.[div] || []
           const activeCount = divRows.filter(r => r.active).length
           return (
-            <button key={div} onClick={() => { setActiveDiv(div); setSearch(''); setAttrFilter(null) }} style={{
+            <button key={div} onClick={() => { setActiveDiv(div); setMf({}); setMfEdit(null) }} style={{
               padding: '8px 18px', borderRadius: 7, cursor: 'pointer',
               border: activeDiv === div ? `2px solid ${DIV_COLOR[div]}` : '2px solid transparent',
               background: activeDiv === div ? DIV_COLOR[div] : theme.surface,
@@ -341,70 +345,35 @@ export default function DepartmentPlan() {
             {rows.length} departments · {activeRows.length} active
           </span>
 
-          <div style={{ flex: 1 }} />
-
-          {/* Search */}
-          <input
-            placeholder="Search departments…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            style={{
-              padding: '6px 12px', borderRadius: 6, fontSize: 12,
-              border: `1px solid ${theme.border}`, outline: 'none',
-              color: theme.textPrimary, background: theme.surfaceAlt, width: 180,
-            }}
-          />
         </div>
 
-        {/* Attribute filter chips - folded by default; the active filter stays visible as a removable chip */}
-        <div style={{
-          padding: '6px 20px', borderBottom: `1px solid ${theme.border}`,
-          display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap',
+        {/* Filters - one multi-select dropdown per field, as Final Results (user, 2026-10-13) */}
+        <div data-no-undo style={{
+          padding: '10px 20px', borderBottom: `1px solid ${theme.border}`,
+          display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
         }}>
-        {attrFilter && (
-          <span className="sp-chip" style={{ marginTop: 3 }}>
-            {attrFilter}
-            <button onClick={() => setAttrFilter(null)} aria-label={`Clear ${attrFilter} filter`}>×</button>
-          </span>
-        )}
-        <details className="sp-fold">
-          <summary>Filter by attribute</summary>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', padding: '4px 0' }}>
-          {/* All chip */}
-          <button onClick={() => setAttrFilter(null)} style={{
-            padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-            cursor: 'pointer', border: 'none', outline: 'none',
-            background: !attrFilter ? DIV_COLOR[activeDiv] : theme.surfaceAlt,
-            color: !attrFilter ? '#fff' : theme.textSecondary,
-            transition: 'background 0.15s',
-          }}>
-            All <span style={{ opacity: 0.7 }}>({rows.length})</span>
-          </button>
-          {Object.entries(ATTR_STYLE).map(([attr, s]) => {
-            const count = attrCounts[attr] || 0
-            if (count === 0) return null
-            const isActive = attrFilter === attr
-            return (
-              <button key={attr} onClick={() => setAttrFilter(isActive ? null : attr)} style={{
-                padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-                cursor: 'pointer', outline: 'none',
-                border: isActive ? 'none' : `1px solid ${s.bg === '#1E3A5F' ? 'var(--st-ink-2,#37423C)' : theme.border}`,
-                background: isActive ? s.color : s.bg,
-                color: isActive ? (s.bg === '#1E3A5F' ? '#1E3A5F' : '#fff') : s.color,
-                transition: 'all 0.15s',
-              }}>
-                {attr} <span style={{ opacity: 0.7 }}>({count})</span>
-              </button>
-            )
-          })}
+          <span style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.6, marginRight: 4 }}>Filters</span>
+          {MS_FIELDS.map(([c, label]) => (
+            <button key={c} type="button" aria-haspopup="dialog" onClick={e => { const el = e.currentTarget; setMfEdit(x => (x && x.col === c ? null : { col: c, title: label, anchor: el })) }}
+              title={mf[c] ? mf[c].join(', ') : `All ${label.toLowerCase()}`}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px', borderRadius: 4, fontSize: 12, cursor: 'pointer', maxWidth: 260,
+                       border: `1px solid ${mf[c] ? theme.primary : theme.border}`, background: mf[c] ? alpha(theme.primary, '12') : theme.surface, color: theme.textPrimary }}>
+              <span style={{ color: theme.textMuted }}>{label}</span>
+              <b style={{ fontWeight: mf[c] ? 700 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{caption(c)}</b>
+              <span aria-hidden="true" style={{ color: theme.textMuted, fontSize: 10 }}>▾</span>
+            </button>
+          ))}
+          {nMf > 0 && (<>
+            <span style={{ fontSize: 11, color: theme.textMuted, marginLeft: 4 }}>showing {filteredRows.length} of {rows.length}</span>
+            <button type="button" onClick={() => setMf({})} style={{ all: 'unset', cursor: 'pointer', fontSize: 12, color: theme.textMuted, textDecoration: 'underline', marginLeft: 4 }}>Clear all</button>
+          </>)}
         </div>
-        </details>
-          {attrFilter && (
-            <span style={{ fontSize: 11, color: theme.textMuted, marginTop: 5 }}>
-              showing {filteredRows.length} of {rows.length}
-            </span>
-          )}
-        </div>
+        {mfEdit && <ExcelFilter key={mfEdit.col + JSON.stringify(mf)} title={mfEdit.title} anchor={mfEdit.anchor} picked={mf[mfEdit.col]}
+          load={() => mfValues(mfEdit.col)}
+          onDone={vals => {
+            if (vals !== undefined) setMf(f => { const n = { ...f }; if (vals.length) n[mfEdit.col] = vals; else delete n[mfEdit.col]; return n })
+            setMfEdit(null)
+          }} />}
 
         {/* Table */}
         <div style={{ overflowX: 'auto' }}>
@@ -423,7 +392,7 @@ export default function DepartmentPlan() {
                   <td colSpan={4} style={{ padding: '32px 20px', textAlign: 'center', color: theme.textMuted, fontSize: 13 }}>
                     {rows.length === 0
                       ? `No departments defined for ${activeDiv} yet. Add one below.`
-                      : 'No departments match your search.'}
+                      : 'No departments inside these filters.'}
                   </td>
                 </tr>
               )}

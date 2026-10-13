@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### Sales Plan Master Setup: the same Filters row
+- **Asked (user):** "add the same filters row to Master Setup".
+- **What changed:** the search box and the folded "Filter by attribute" chips are replaced by a **Filters** row of multi-select dropdowns: **Department**, **Attribute**, **Status** (Active / Inactive), **Source** (Master / Custom).
+  - Each reads (All), the value, or (Multiple Items) n, with "showing X of Y" and Clear all.
+  - A list shows only the values left by the other filters. Filters clear when the division changes.
+- **Checked in the sandbox (KIDS):** Status = Inactive → 31 of 122 (= 122 − 91 active). Ticking both Sources leaves Source at (All).
+
 ### Sales Plan Growth Matrix: the same Filters row as Final Results
 - **Asked (user):** "add the same filters row to the Growth Matrix".
 - **What changed:**
