@@ -5801,7 +5801,27 @@ function _syncInactiveBadge(){
 }
 
 /* ── MAIN REFRESH ──────────────────────────────── */
+// user, 2026-10-13: "if a buyer's input is -100 it should automatically shift the department to the inactive session".
+// Any active department whose buyer input is -100% in every AOP month (a -100 block, an import, a loaded version or the
+// plan as it opens) goes to the Inactive departments sheet - the same move as making it inactive by hand (manual
+// inactive, division re-balanced to AOP), with its -100 entries cleared so re-activating it does not send it back.
+function _autoInactive100(){
+  const moved=[],dvs=new Set();
+  DVDATA.forEach(dv=>dv.secs.forEach(sec=>{
+    if(S.hiddenSecs.has(sec.id)||_ndOf(sec.id))return;
+    if(!AOP_MIS.every(mi=>{const v=S.inputs[sec.id+'__'+mi];return v!=null&&+v<=-99.9999;}))return;
+    S.hiddenSecs.add(sec.id);if(sec.ly>0)S.manualInactive.add(sec.id);
+    AOP_MIS.forEach(mi=>{delete S.inputs[sec.id+'__'+mi];S.locked.delete(sec.id+'__'+mi);});
+    S.buyerSet.delete(sec.id);moved.push(sec.nm);dvs.add(dv);
+  }));
+  if(!moved.length)return false;
+  if(S.aopLocked)dvs.forEach(dv=>AOP_MIS.forEach(mi=>_divRescale(dv,mi)));
+  _syncDivTabs(document.getElementById('divtabs'));_syncInactiveBadge();saveState();
+  toast(`Moved to Inactive departments (buyer input -100%): ${moved.slice(0,5).join(', ')}${moved.length>5?` and ${moved.length-5} more`:''}`);
+  return true;
+}
 function refresh(){
+  _autoInactive100();
   syncRange();
   // sync divtabs visibility + active button
   const divTabsEl=document.getElementById('divtabs');

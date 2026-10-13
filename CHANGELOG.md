@@ -7,6 +7,14 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### BIS: a buyer input of -100% moves the department to Inactive automatically
+- **Asked (user):** "add one additional provisiion if a buyer's inout is -100 it should automatically shift the department to the inactive session".
+- Any active department whose buyer input is -100% in every Mar-Jun month goes to the Inactive departments sheet. That covers a -100 block typed in, an import, a loaded version, or the plan as BIS opens. A single Phase 2 month at -100 doesn't count.
+- It is the same move as making it inactive by hand (manual inactive, the division re-balanced to AOP), and it's saved in the browser. Its -100 entries are cleared, so re-activating it later doesn't send it straight back. A toast names what moved.
+- It runs at the start of every redraw (`_autoInactive100` in `refresh`), so a typed -100 moves when you leave the cell, not while typing. NEW departments are left alone (their plan comes from the New departments list).
+- Inactive departments go to Sales Plan as 0 (-100), as before.
+- **Checked in BIS on 5050:** ML_JEANS block -100 -> inactive (manual), entries cleared, MENS = AOP each month; one month -100 on M_IN_BRIEF -> stays active. The test browser was restored. `node --check` OK.
+
 ### BIS: a NEW department's growth cells show 0
 - **Asked (user):** "it should be 0 by default if the new tag is there" (screenshot: L_EW_SAREE_JAIPURI NEW, Block Growth 228.64).
 - A department on the New departments list has no buyer growth of its own, so its Block Growth and month cells show **0**, read-only.
