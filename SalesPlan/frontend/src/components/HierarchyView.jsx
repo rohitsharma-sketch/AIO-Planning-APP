@@ -18,11 +18,11 @@ const P = v => (v == null ? '–' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`)
 // in plain words and summarised" - GET /api/planning/grain/explain builds it from the very cells the row adds up, so the
 // parts always add back to the number on the row; what it explains follows the level clicked (division, department,
 // cluster, store, month ...)
-function Explain({ levels, path, onClose }) {
+function Explain({ levels, path, filters, onClose }) {
   const [d, setD] = useState(null)
   const [err, setErr] = useState('')
   useEffect(() => {
-    const qs = new URLSearchParams({ levels: levels.join(','), path: JSON.stringify(path) })
+    const qs = new URLSearchParams({ levels: levels.join(','), path: JSON.stringify(path), filters: JSON.stringify(filters) })
     fetch(`/api/planning/grain/explain?${qs}`)
       .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`); return j })
       .then(setD).catch(e => setErr(e.message))
@@ -83,6 +83,45 @@ function Explain({ levels, path, onClose }) {
   )
 }
 
+// user, 2026-10-13: "filters required" - any level, one or more values; the tree, totals, Cont % and the ⓘ pop-up all
+// count only what is inside them. Kept per browser like the levels.
+const FKEY = 'sp.fr.filters'
+function loadFilters() {
+  try { const v = JSON.parse(localStorage.getItem(FKEY) || '{}'); if (v && typeof v === 'object') return v } catch { /* ignore */ }
+  return {}
+}
+function FilterPicker({ level, options, picked, onDone }) {
+  const [sel, setSel] = useState(() => new Set(picked || []))
+  const [q, setQ] = useState('')
+  const shown = (options || []).filter(o => o.toLowerCase().includes(q.trim().toLowerCase()))
+  const flip = o => setSel(s0 => { const n = new Set(s0); n.has(o) ? n.delete(o) : n.add(o); return n })
+  const btn = { padding: '4px 10px', borderRadius: 6, border: `1px solid ${theme.border}`, background: theme.surface, fontSize: 12, cursor: 'pointer' }
+  return (
+    <div style={{ marginTop: 8, border: `1px solid ${theme.border}`, borderRadius: 8, padding: 10, background: theme.surfaceAlt }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+        <b style={{ fontSize: 12 }}>{LEVELS[level]}</b>
+        <input type="search" autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder={`Find a ${LEVELS[level].toLowerCase()}`} aria-label={`Find a ${LEVELS[level]}`}
+          style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${theme.border}`, fontSize: 12, minWidth: 180 }} />
+        <button type="button" style={btn} onClick={() => setSel(s0 => new Set([...s0, ...shown]))}>Tick {q ? 'found' : 'all'}</button>
+        <button type="button" style={btn} onClick={() => setSel(new Set())}>Clear</button>
+        <span style={{ fontSize: 11.5, color: theme.textMuted }}>{sel.size} ticked</span>
+        <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          <button type="button" style={btn} onClick={() => onDone(null)}>Cancel</button>
+          <button type="button" style={{ ...btn, background: theme.primary, color: '#fff', borderColor: theme.primary, fontWeight: 600 }} onClick={() => onDone([...sel])}>Apply</button>
+        </span>
+      </div>
+      <div style={{ maxHeight: 220, overflow: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '2px 12px' }}>
+        {shown.map(o => (
+          <label key={o} style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
+            <input type="checkbox" checked={sel.has(o)} onChange={() => flip(o)} />{o}
+          </label>
+        ))}
+        {!shown.length && <span style={{ fontSize: 12, color: theme.textMuted }}>Nothing matches.</span>}
+      </div>
+    </div>
+  )
+}
+
 function loadLevels() {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) || 'null')
@@ -96,6 +135,10 @@ export default function HierarchyView() {
   const [nodes, setNodes] = useState({})          // JSON(path) -> {rows, total, level} | {err} | 'loading'
   const [open, setOpen] = useState(() => new Set())
   const [source, setSource] = useState(null)
+  const [filters, setFilters] = useState(loadFilters)   // {level: [values]}
+  const [opts, setOpts] = useState(null)                // {level: [values]} the plan has
+  const [editing, setEditing] = useState(null)          // the level whose values are being picked
+  const fkey = JSON.stringify(filters)
   const [why, setWhy] = useState(null)            // path of the row whose numbers are being explained
   const back = useRef(null)                       // the ⓘ that opened it - focus goes back there on close
   const info = p => (
@@ -106,18 +149,22 @@ export default function HierarchyView() {
   const fetchNode = path => {
     const k = JSON.stringify(path)
     setNodes(n => ({ ...n, [k]: 'loading' }))
-    const qs = new URLSearchParams({ levels: levels.join(','), path: k })
+    const qs = new URLSearchParams({ levels: levels.join(','), path: k, filters: fkey })
     fetch(`/api/planning/grain/hierarchy?${qs}`)
       .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`); return j })
       .then(j => { setNodes(n => ({ ...n, [k]: j })); if (j.source) setSource(j.source) })
       .catch(e => setNodes(n => ({ ...n, [k]: { err: e.message } })))
   }
 
-  // a new hierarchy starts again from the top
+  // a new hierarchy (or new filters) starts again from the top
   useEffect(() => {
-    try { localStorage.setItem(KEY, JSON.stringify(levels)) } catch { /* ignore */ }
+    try { localStorage.setItem(KEY, JSON.stringify(levels)); localStorage.setItem(FKEY, fkey) } catch { /* ignore */ }
     setNodes({}); setOpen(new Set()); fetchNode([])
-  }, [levels.join(',')])   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [levels.join(','), fkey])   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    fetch('/api/planning/grain/hierarchy-options').then(r => (r.ok ? r.json() : null)).then(setOpts).catch(() => setOpts(null))
+  }, [])
+  const setFilter = (lv, vals) => setFilters(f => { const n = { ...f }; if (vals && vals.length) n[lv] = vals; else delete n[lv]; return n })
 
   const toggle = path => {
     const k = JSON.stringify(path)
@@ -165,7 +212,8 @@ export default function HierarchyView() {
   const root = nodes['[]']
   return (
     <div>
-      <div style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 12, padding: '12px 16px', marginBottom: 14 }}>
+      {/* view controls, not plan edits: kept out of the suite's Undo */}
+      <div data-no-undo style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 12, padding: '12px 16px', marginBottom: 14 }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>Hierarchy - pick the levels and their order</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           {levels.map((x, i) => (
@@ -188,6 +236,25 @@ export default function HierarchyView() {
           )}
           <button type="button" onClick={() => setLevels(DEFAULT)} style={{ ...mini, marginLeft: 'auto', textDecoration: 'underline' }}>Reset</button>
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.6, marginRight: 4 }}>Filters</span>
+          {Object.entries(filters).map(([lv, vals]) => (
+            <span key={lv} style={{ ...chip, background: alpha(theme.primary, '12'), borderColor: alpha(theme.primary, '50') }}>
+              <button type="button" onClick={() => setEditing(lv)} style={{ all: 'unset', cursor: 'pointer' }} title="Change">
+                {LEVELS[lv]}: <span style={{ fontWeight: 400 }}>{vals.length > 3 ? `${vals.slice(0, 3).join(', ')} +${vals.length - 3}` : vals.join(', ')}</span>
+              </button>
+              <button type="button" style={mini} onClick={() => setFilter(lv, null)} aria-label={`Remove the ${LEVELS[lv]} filter`} title="Remove this filter">✕</button>
+            </span>
+          ))}
+          <select value="" onChange={e => e.target.value && setEditing(e.target.value)} aria-label="Add a filter" disabled={!opts}
+            style={{ padding: '5px 8px', borderRadius: 8, border: `1px dashed ${theme.border}`, fontSize: 12, background: theme.surface }}>
+            <option value="">{opts ? '+ Filter…' : 'Loading filters…'}</option>
+            {Object.keys(LEVELS).filter(x => !filters[x]).map(x => <option key={x} value={x}>{LEVELS[x]}</option>)}
+          </select>
+          {Object.keys(filters).length > 0 && <button type="button" onClick={() => setFilters({})} style={{ ...mini, textDecoration: 'underline' }}>Clear filters</button>}
+        </div>
+        {editing && opts && <FilterPicker key={editing} level={editing} options={opts[editing]} picked={filters[editing]}
+          onDone={vals => { if (vals) setFilter(editing, vals); setEditing(null) }} />}
         <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 8 }}>
           View only · ₹ lakh · {levels.includes('month') ? 'by month' : 'all plan months added up'} · Cont % = share of the level above · ⓘ = how a row's numbers are made
           {source && <> · from {source.note || source.name}</>}
@@ -211,7 +278,7 @@ export default function HierarchyView() {
           </tbody>
         </table>
       </div>
-      {why && <Explain key={JSON.stringify(why)} levels={levels} path={why} onClose={() => { setWhy(null); back.current?.focus() }} />}
+      {why && <Explain key={JSON.stringify(why) + fkey} levels={levels} path={why} filters={filters} onClose={() => { setWhy(null); back.current?.focus() }} />}
     </div>
   )
 }

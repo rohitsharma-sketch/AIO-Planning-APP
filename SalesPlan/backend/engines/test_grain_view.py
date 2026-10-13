@@ -47,3 +47,9 @@ mx = 46 * 16.8 / 21.8
 assert abs(P["M_X"]["A"]["Mar'27"]["cluster_built"] - mx * 10 / 14) < 1e-9             # A has 10 of M_X's 14 LY
 assert abs(cb("B", "Apr'27") - 4) < 1e-9 and M["unalloc"] == {}
 print("grain view checks passed")
+# only the months planned now (2026-10-13: plan months = BIS's input months)
+from engines.grain_view import only_months  # noqa: E402
+o = only_months(c, ["Apr'27"])
+assert o["months"] == ["Apr'27"] and "Mar'27" not in o["div"]["MENS"]["A"] and o["div"]["MENS"]["B"] == {"Apr'27": (2, 2)}
+assert only_months(c, None) is c and only_months(c, ["Mar'27", "Apr'27", "May'27"]) is c
+print("only_months checks passed")

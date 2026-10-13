@@ -58,3 +58,9 @@ assert abs(whole["ty"] - (230 + 22 / 0.9 * 0.4)) < 1e-9 and "parent" not in whol
 st = explain(c2, {}, nd, ["store"], ["B"])
 assert any("follows A" in x["t"] for x in st["lines"]), st["lines"]
 print("final hierarchy checks passed")
+# filters (2026-10-13): only the chosen values count - rows, totals, Cont % and the explanation alike
+f = hierarchy_rows(cube, attr, ["cluster", "store", "division"], [], {"division": {"MENS"}, "month": {"Mar'27"}})
+assert f["total"] == {"ly": 11.0, "ty": 13.0} and [(r["key"], r["ty"]) for r in f["rows"]] == [("C1", 12.0), ("C2", 1.0)], f
+fe = explain(c2, {}, nd, ["division", "department"], ["LADIES", "DRESS"], {"store": {"A"}})
+assert abs(fe["ty"] - 99) < 1e-9 and abs(fe["parent"]["ty"] - (99 + 44 + 54)) < 1e-9 and fe["lines"][0]["h"] == "Filters on", fe
+print("filter checks passed")

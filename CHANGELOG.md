@@ -7,6 +7,25 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### Sales Plan: plan months = BIS's input months (MAMJ) + Hierarchy filters
+- **Asked (user):** "filters required, also the Plan should be made on auto detect from BIS input months, it should be restricted to that only. So BIS is currently there for MAMJ, so MAMJ should be the plan which is to be pushed in planning engine too".
+- **Plan months follow BIS:**
+  - `actuals_manager.plan_ty_months()` = the TY months BIS has sent growth for (any BIS division), read live and cached a minute. Today that is Mar-Jun'27 for KIDS, LADIES and MENS.
+  - It falls back to the AOP-forecast months only if BIS can't be reached.
+  - `locked_ly_months()`, which every engine reads its months from, follows it, so the plan now runs on LY Mar-Jun'26. A month joins the plan the day BIS starts planning it.
+- **Saved plans show only those months:** grain_view `_cube()` shows a saved plan with just the plan months (`only_months`), so an older Mar-Sep file no longer shows Jul-Sep anywhere.
+- **Base plan regenerated** (same as Generate Base Plan; backup in the scratchpad; no correction files existed):
+  - `final_dept_plan.json` now holds Mar-Jun'27 only, 426 stores.
+  - Mar-Jun is identical to before in all 179 departments (KIDS ₹15,864.9 L, LADIES ₹15,242.0 L, MENS ₹19,784.9 L).
+- **Final Results Hierarchy filters:**
+  - "+ Filter…" on any level (cluster, store, store type, division, attribute, department, month), with a search-and-tick list.
+  - Active filters show as chips; Clear filters removes them; they are kept per browser.
+  - The tree, totals, Cont % and the ⓘ pop-up (which states the filters) count only what is inside them. The API takes `filters=` on `/grain/hierarchy` and `/grain/explain`; `/grain/hierarchy-options` lists the values.
+  - The Hierarchy controls are view controls, kept out of the suite Undo (`data-no-undo`).
+- **Checked:**
+  - test_final_hierarchy (filter cases) and test_grain_view (only_months) pass.
+  - Sandbox: the page shows Mar-Jun (Total ₹50,891.8 L). The ML_JEANS filter gives ₹2,071.4 → ₹2,295.4 L, and the pop-up's parts (₹1,916.4 LFL + ₹379.0 other) add to it.
+
 ### Sales Plan Final Results: "how is this number made" pop-up on every Hierarchy row
 - **Asked (user):** "can i have a pop up of how the respective department or cluster is getting that number ? To validate ofcourse, with proper explanations in plain words and summarised manner ... the number displayed should be the number we are trying to validate".
 - Every Hierarchy row, and the Total, has an ⓘ. It opens a pop-up for that row:

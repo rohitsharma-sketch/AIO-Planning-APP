@@ -188,10 +188,35 @@ def _aop_ty_months():
     return _aop_m["v"]
 
 
+_bis_m = {"t": 0.0, "v": None}
+
+
+def bis_ty_months():
+    """TY months BIS has sent growth for (any of its divisions), cached a minute; None = BIS can't be reached.
+    user, 2026-10-13: "the Plan should be made on auto detect from BIS input months, it should be restricted to that
+    only. So BIS is currently there for MAMJ, so MAMJ should be the plan" - BIS sends only the months it records (AOP
+    seeded or set by a buyer), so a month enters the plan the day BIS starts planning it."""
+    import time
+    if time.time() - _bis_m["t"] > 60:
+        try:
+            from engines.department_plan import BIS_DIVISIONS, _fetch_buyer_growth_live
+            v = {r["month"] for d in BIS_DIVISIONS for r in _fetch_buyer_growth_live(d, strict=True) if r.get("month")} or None
+        except Exception:   # noqa: BLE001 - BIS / AOP unreachable: fall back to the AOP months below
+            v = None
+        _bis_m.update(t=time.time(), v=v)
+    return _bis_m["v"]
+
+
+def plan_ty_months():
+    """The TY months Sales Plan plans and shows: the months BIS has input for; if BIS can't be reached, the months the
+    live AOP forecasts (2026-10-13 rule); None = neither can tell (every closed month)."""
+    return bis_ty_months() or _aop_ty_months()
+
+
 def locked_ly_months() -> list[str]:
-    """LY months the plan can use: closed, present in the reindexed snapshot and - since 2026-10-13 - whose TY month the
-    live AOP forecasts (every Sales Plan engine reads its months from here). Cached per snapshot and day."""
-    am = _aop_ty_months()
+    """LY months the plan can use: closed, present in the reindexed snapshot and whose TY month BIS plans (every Sales
+    Plan engine reads its months from here - plan_ty_months). Cached per snapshot and day."""
+    am = plan_ty_months()
     return [m for m in _locked_ly_months() if not am or ly_to_ty_month(m) in am]
 
 

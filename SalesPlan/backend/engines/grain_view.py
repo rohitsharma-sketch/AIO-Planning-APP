@@ -70,7 +70,33 @@ def _register_live_cube():
     _dse.VIEW_BUILDERS["cube"] = lambda plan: build_cube(plan, LIVE_SOURCE)
 
 
+_only_cache = {"key": None, "cube": None}
+
+
+def only_months(c: dict, keep) -> dict:
+    """The cube with just the months in `keep` (None = all). A plan saved before the plan months changed (e.g. Mar-Sep
+    while BIS plans Mar-Jun) shows only the months planned now - every view reads the cube (2026-10-13)."""
+    if not keep or set(c["months"]) <= set(keep):
+        return c
+    k = set(keep)
+    sub = lambda mm: {m: v for m, v in mm.items() if m in k}   # noqa: E731
+    return {**c, "months": [m for m in c["months"] if m in k],
+            "div": {dv: {s: sub(mm) for s, mm in ss.items()} for dv, ss in c["div"].items()},
+            "dept": {dv: {dp: {s: sub(mm) for s, mm in ss.items()} for dp, ss in dd.items()} for dv, dd in c["dept"].items()},
+            "g": {dv: {dp: sub(mm) for dp, mm in dd.items()} for dv, dd in (c.get("g") or {}).items()}}
+
+
 def _cube() -> dict:
+    """The active plan as a cube - only the months Sales Plan plans now (BIS's input months)."""
+    from actuals_manager import plan_ty_months
+    c, keep = _cube_all(), plan_ty_months()
+    key = (id(c), tuple(sorted(keep or ())))
+    if _only_cache["key"] != key:
+        _only_cache.update(key=key, cube=only_months(c, keep))
+    return _only_cache["cube"]
+
+
+def _cube_all() -> dict:
     """The active plan as a cube, cached on the file's mtime, or on the live run's inputs."""
     from engines.final_results_engine import _pipeline_status
     ps = _pipeline_status()
@@ -454,33 +480,47 @@ def _sinfo(cube: dict) -> dict:
             for s, x in cube["stores"].items()}
 
 
-def _cells(cube: dict, attr_map: dict, want: dict, sinfo: dict):
-    """Every (division, department, attribute, store, month, LY, TY) cell of the node want = {level: value}."""
-    ok = {s for s, x in sinfo.items() if all(want.get(k, v) == v for k, v in x.items())}
+def _cells(cube: dict, attr_map: dict, want: dict, sinfo: dict, filt: dict | None = None):
+    """Every (division, department, attribute, store, month, LY, TY) cell of the node want = {level: value}, inside the
+    filters filt = {level: set of values} (user, 2026-10-13: "filters required")."""
+    f = filt or {}
+    fit = lambda lv, v: want.get(lv, v) == v and (lv not in f or v in f[lv])   # noqa: E731
+    ok = {s for s, x in sinfo.items() if all(fit(k, v) for k, v in x.items())}
     for dv, dmap in cube["dept"].items():
-        if want.get("division", dv) != dv:
+        if not fit("division", dv):
             continue
         amap = attr_map.get(dv, {})
         for dp, smap in dmap.items():
             at = amap.get(dp) or "-"
-            if want.get("department", dp) != dp or want.get("attribute", at) != at:
+            if not fit("department", dp) or not fit("attribute", at):
                 continue
             for s, mm in smap.items():
                 if s not in ok:
                     continue
                 for m, v in mm.items():
-                    if want.get("month", m) == m:
+                    if fit("month", m):
                         yield dv, dp, at, s, m, v[0], v[1]
 
 
-def hierarchy_rows(cube: dict, attr_map: dict, levels: list, path: list) -> dict:
+def parse_filters(raw: str) -> dict:
+    """'{"division": ["MENS"], "month": ["Mar'27"]}' -> {level: set}; unknown levels / empty lists dropped."""
+    try:
+        f = json.loads(raw or "{}")
+    except ValueError:
+        raise HTTPException(status_code=422, detail="filters must be JSON: {level: [values]}")
+    if not isinstance(f, dict):
+        raise HTTPException(status_code=422, detail="filters must be JSON: {level: [values]}")
+    return {k: {str(x) for x in v} for k, v in f.items() if k in HIER_LEVELS and isinstance(v, list) and v}
+
+
+def hierarchy_rows(cube: dict, attr_map: dict, levels: list, path: list, filt: dict | None = None) -> dict:
     """Pure. levels: the order picked (from HIER_LEVELS); path: the values of levels[:len(path)] down to the node.
     Returns {level, rows: [{key, ly, ty}] (TY high to low; months in calendar order), total: {ly, ty}}."""
     want = dict(zip(levels, path))
     nxt = levels[len(path)] if len(path) < len(levels) else None
     sinfo = _sinfo(cube)
     acc, tl, tt = {}, 0.0, 0.0
-    for dv, dp, at, s, m, ly, ty in _cells(cube, attr_map, want, sinfo):
+    for dv, dp, at, s, m, ly, ty in _cells(cube, attr_map, want, sinfo, filt):
         tl, tt = tl + ly, tt + ty
         if nxt:
             k = m if nxt == "month" else {"division": dv, "department": dp, "attribute": at}.get(nxt) or sinfo[s][nxt]
@@ -497,7 +537,7 @@ def hierarchy_rows(cube: dict, attr_map: dict, levels: list, path: list) -> dict
 
 
 @router.get("/hierarchy")
-def get_hierarchy(levels: str, path: str = "[]"):
+def get_hierarchy(levels: str, path: str = "[]", filters: str = "{}"):
     """?levels=cluster,store,division&path=["BH - (NP)"] -> the children of that node (view only)."""
     lv = [x for x in levels.split(",") if x]
     if not lv or len(set(lv)) != len(lv) or any(x not in HIER_LEVELS for x in lv):
@@ -510,7 +550,26 @@ def get_hierarchy(levels: str, path: str = "[]"):
         raise HTTPException(status_code=422, detail="path must be shorter than levels")
     from engines.final_results_engine import _load_dept_attr_map
     c = _cube()
-    return {**hierarchy_rows(c, _load_dept_attr_map(), lv, [str(p) for p in pth]), "source": c["source"]}
+    return {**hierarchy_rows(c, _load_dept_attr_map(), lv, [str(p) for p in pth], parse_filters(filters)),
+            "source": c["source"]}
+
+
+@router.get("/hierarchy-options")
+def get_hierarchy_options():
+    """The values each Hierarchy level can be filtered on (only what the plan has), months in calendar order."""
+    from engines.final_results_engine import _load_dept_attr_map
+    c, am = _cube(), _load_dept_attr_map()
+    sinfo, seen = _sinfo(c), {k: set() for k in HIER_LEVELS}
+    for dv, dp, at, s, m, ly, ty in _cells(c, am, {}, sinfo):
+        if ly or ty:
+            for k, v in (("division", dv), ("department", dp), ("attribute", at), ("month", m),
+                         ("store", s), ("cluster", sinfo[s]["cluster"]), ("stype", sinfo[s]["stype"])):
+                seen[k].add(v)
+    return {k: (sorted(v, key=TY_MONTHS.index) if k == "month" else sorted(v)) for k, v in seen.items()}
+
+
+LEVEL_NAME = {"cluster": "Cluster", "store": "Store", "stype": "Store type", "division": "Division",
+              "attribute": "Attribute", "department": "Department", "month": "Month"}
 
 
 def _inr(v: float) -> str:
@@ -523,7 +582,7 @@ def _inr(v: float) -> str:
     return ("-" if neg else "") + (head + "," + tail if head else tail) + "." + frac
 
 
-def explain(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: list) -> dict:
+def explain(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: list, filt: dict | None = None) -> dict:
     """Pure. How the Hierarchy row at `path` (or the Total row, path = []) gets its LY, TY, Growth % and Cont % - built
     from the very cells the row adds up, so its parts always add back to the number on screen (user, 2026-10-13: "a pop
     up of how the respective department or cluster is getting that number ... the number displayed should be the number
@@ -542,7 +601,7 @@ def explain(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: list) 
         keep[(dv, c["ref_dept"])] = keep.get((dv, c["ref_dept"]), 1.0) * (1 - pct(c, "ref_reduction_pct"))
     parts = {k: {"ly": 0.0, "ty": 0.0, "exp": 0.0, "stores": set()} for k in ("lfl", "other", "new")}
     mon, depts, divs, nd_ty = {}, set(), set(), {}
-    for dv, dp, at, s, m, ly, ty in _cells(cube, attr_map, want, sinfo):
+    for dv, dp, at, s, m, ly, ty in _cells(cube, attr_map, want, sinfo, filt):
         part = "new" if (dv, dp) in new else "lfl" if st[s].get("ssg") else "other"
         P = parts[part]
         P["ly"] += ly
@@ -559,7 +618,7 @@ def explain(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: list) 
         divs.add(dv)
     LY = sum(P["ly"] for P in parts.values())
     TY = sum(P["ty"] for P in parts.values())
-    label = " · ".join(str(x) for x in path) if path else "All"
+    label = " · ".join(str(x) for x in path) if path else "The total"
     out = {"label": label, "path": [{"level": lv, "value": v} for lv, v in zip(levels, path)],
            "ly": LY, "ty": TY, "growth": (TY / LY - 1) * 100 if LY else None, "source": (cube.get("source") or {}).get("note")}
     lines = []   # [{h: heading, t: text}] - plain words, numbers as on screen
@@ -572,7 +631,7 @@ def explain(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: list) 
         say("Growth %", f"₹{_inr(TY)} ÷ ₹{_inr(LY)} − 1 = {out['growth']:+.1f}%.")
     if path:
         pw = dict(zip(levels, path[:-1]))
-        pty = sum(c[6] for c in _cells(cube, attr_map, pw, sinfo))
+        pty = sum(c[6] for c in _cells(cube, attr_map, pw, sinfo, filt))
         plabel = " · ".join(str(x) for x in path[:-1]) or "the whole plan"
         out["parent"] = {"label": plabel, "ty": pty}
         out["cont"] = TY / pty * 100 if pty else None
@@ -621,7 +680,8 @@ def explain(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: list) 
         c = new[(dv, dp)]
         rw = {**want, "department": c["ref_dept"]}
         rw.pop("attribute", None)
-        rty = sum(x[6] for x in _cells(cube, attr_map, rw, sinfo))
+        rf = {k: v for k, v in (filt or {}).items() if k not in ("department", "attribute")}   # the reference itself
+        rty = sum(x[6] for x in _cells(cube, attr_map, rw, sinfo, rf))
         npct, kp = pct(c, "new_dept_pct"), keep.get((dv, c["ref_dept"]), 1.0)
         exp = rty / kp * npct if kp else 0.0
         say(f"TY · new department {dp}",
@@ -650,6 +710,9 @@ def explain(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: list) 
                                                ("new", "new departments")) if parts[k]["ty"]]
     say("Check", " + ".join(f"₹{_inr(v)} ({n})" for n, v in used) + f" = ₹{_inr(TY)} - the number on screen ✓"
         if len(used) > 1 else f"₹{_inr(TY)} - the number on screen ✓")
+    if filt:
+        lines.insert(0, {"h": "Filters on", "t": "; ".join(f"{LEVEL_NAME.get(k, k)}: {', '.join(sorted(v))}"
+                                                          for k, v in filt.items()) + " - every figure here is inside them."})
     out["lines"] = lines
     out["parts"] = {k: {"ly": P["ly"], "ty": P["ty"], "stores": len(P["stores"])} for k, P in parts.items()}
     out["months"] = [{"month": m, "ly": mon[m][0], "ty": mon[m][1]} for m in TY_MONTHS if m in mon]
@@ -657,7 +720,7 @@ def explain(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: list) 
 
 
 @router.get("/explain")
-def get_explain(levels: str, path: str = "[]"):
+def get_explain(levels: str, path: str = "[]", filters: str = "{}"):
     """?levels=division,department&path=["MENS","ML_JEANS"] -> how that row's numbers are made (view only)."""
     lv = [x for x in levels.split(",") if x]
     if not lv or len(set(lv)) != len(lv) or any(x not in HIER_LEVELS for x in lv):
@@ -670,7 +733,7 @@ def get_explain(levels: str, path: str = "[]"):
         raise HTTPException(status_code=422, detail="path can't be longer than levels")
     from engines.final_results_engine import _load_dept_attr_map
     from engines.dept_sales_engine import _load_new_dept_map
-    return explain(_cube(), _load_dept_attr_map(), _load_new_dept_map(), lv, [str(p) for p in pth])
+    return explain(_cube(), _load_dept_attr_map(), _load_new_dept_map(), lv, [str(p) for p in pth], parse_filters(filters))
 
 
 _register_live_cube()
