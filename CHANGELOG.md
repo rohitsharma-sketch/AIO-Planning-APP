@@ -7,6 +7,18 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### Sales Plan Growth Matrix: the same Excel-style column filters
+- **Asked (user):** "add the same Excel filters to the Growth Matrix page".
+- **Where:** a ▾ on the Department and Attribute headings and on every P1 / P2 period heading. Period lists show that column's growth index values, in numeric order (0 = delisted).
+- **How they behave:** search, (Select all) / (Select all search results), OK / Cancel, Clear filter. Each list holds only the values left by the other column filters, as in Excel.
+- **Alongside the existing filters:** they combine with the department search and attribute chips. "showing X of Y" and "Clear column filters (n)" sit in the FILTER row. Filters clear when the division changes.
+- **Column fill:** the ▾ doesn't trigger a period heading's column fill (stopPropagation).
+- **Shared component:** the dropdown is now `components/ExcelFilter.jsx`, used by both the Final Results Hierarchy and the Growth Matrix.
+- **Checked in the sandbox:**
+  - KIDS Attribute = SUMMER → 40 of 122 rows (= the SUMMER chip).
+  - The Mar'27 P1 list then holds exactly the 29 values in those rows.
+  - Opening a period list didn't open the fill prompt.
+
 ### Plan = the AOP Forecaster's MAMJ (+11.1%) in BIS and Sales Plan; Excel-style Hierarchy filters; faster Hierarchy
 - **Asked (user):**
   - "growth should have been 11.1% can you check on that ?"

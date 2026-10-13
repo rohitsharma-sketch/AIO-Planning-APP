@@ -5,6 +5,7 @@ import GrainPanel from '../components/GrainPanel'
 import BisCompare from '../components/BisCompare'
 import { ENGINE_META, startPipeline } from '../pipelineState'
 import SearchSlicer from '../components/SearchSlicer'
+import ExcelFilter from '../components/ExcelFilter'
 import { useGrain } from '../grain'
 
 const DIVISIONS = ['KIDS', 'LADIES', 'MENS']   // GM / RETAIL out of the Sales Plan engine (user, 2026-10-13)
@@ -50,6 +51,11 @@ export default function DepartmentGrowthMatrix() {
   const [loading, setLoading]         = useState(true)
   const [deptFilters, setDeptFilters] = useState(new Set())
   const [attrFilter, setAttrFilter]   = useState(null)
+  // Excel-style column filters (user, 2026-10-13: "add the same Excel filters to the Growth Matrix page"):
+  // {column: [values]} - department, attribute or a period (its growth index); cleared when the division changes
+  const [xf, setXf]                   = useState({})
+  const [xfEdit, setXfEdit]           = useState(null)   // {col, title, anchor} - the list open now
+  useEffect(() => { setXf({}); setXfEdit(null) }, [activeDiv])
   const [activeMonths, setActiveMonths] = useState(new Set())
   const [saving, setSaving]           = useState(false)
   const [lastSaved, setLastSaved]     = useState(null)
@@ -263,11 +269,29 @@ export default function DepartmentGrowthMatrix() {
 
   const deptNames = depts.map(d => d.name)
 
-  const filtered = depts.filter(d => {
+  const base = depts.filter(d => {
     const matchDept = deptFilters.size === 0 || deptFilters.has(d.name)
     const matchAttr = !attrFilter || d.attribute === attrFilter
     return matchDept && matchAttr
   })
+  // a cell as its Excel filter lists it: the name, the attribute, or the period's growth index as shown
+  const cellVal = (d, col) => (col === 'department' ? d.name : col === 'attribute' ? d.attribute : String(+(+(d.periods[col] ?? 100)).toFixed(2)))
+  const passXf = (d, skip) => Object.entries(xf).every(([c, vals]) => c === skip || vals.includes(cellVal(d, c)))
+  const filtered = base.filter(d => passXf(d))
+  // a column's list = the values left by the OTHER columns' filters, as Excel does (numbers in numeric order)
+  const xfValues = col => {
+    const v = [...new Set(base.filter(d => passXf(d, col)).map(d => cellVal(d, col)))]
+    return col === 'department' || col === 'attribute' ? v.sort() : v.sort((a, b) => +a - +b)
+  }
+  const nXf = Object.keys(xf).length
+  const fb = (col, title) => (
+    <button type="button" data-no-undo onClick={e => { e.stopPropagation(); const el = e.currentTarget; setXfEdit(x => (x && x.col === col ? null : { col, title, anchor: el })) }}
+      aria-haspopup="dialog" aria-label={`Filter ${title}${xf[col] ? ` (${xf[col].length} picked)` : ''}`} title={xf[col] ? `Filtered: ${xf[col].join(', ')}` : `Filter ${title}`}
+      style={{ all: 'unset', cursor: 'pointer', marginLeft: 3, padding: '0 3px', borderRadius: 3, fontSize: 10,
+               color: xf[col] ? theme.primary : theme.textMuted, background: xf[col] ? alpha(theme.primary, '18') : 'transparent' }}>
+      {xf[col] ? '▼' : '▾'}
+    </button>
+  )
 
   const divMeta = buyerMeta[activeDiv]
 
@@ -639,10 +663,16 @@ export default function DepartmentGrowthMatrix() {
               </button>
             )
           })}
-          {attrFilter && (
+          {(attrFilter || nXf > 0 || deptFilters.size > 0) && (
             <span style={{ fontSize: 11, color: theme.textMuted, marginLeft: 4 }}>
               showing {filtered.length} of {depts.length}
             </span>
+          )}
+          {nXf > 0 && (
+            <button type="button" onClick={() => setXf({})} title={Object.keys(xf).join(', ')}
+              style={{ all: 'unset', cursor: 'pointer', fontSize: 11, color: theme.primary, textDecoration: 'underline', marginLeft: 6 }}>
+              Clear column filters ({nXf})
+            </button>
           )}
         </div>
 
@@ -660,10 +690,10 @@ export default function DepartmentGrowthMatrix() {
               <thead>
                 <tr style={{ background: theme.surfaceUp }}>
                   <th style={{ ...stickyTh, width: 220, minWidth: 220, borderRight: `2px solid ${theme.border}` }} rowSpan={2}>
-                    Department
+                    Department{fb('department', 'Department')}
                   </th>
                   <th style={{ ...stickyTh, width: 100, minWidth: 100, borderRight: `2px solid ${theme.border}` }} rowSpan={2}>
-                    Attribute
+                    Attribute{fb('attribute', 'Attribute')}
                   </th>
                   {monthGroups.map(mg => (
                     <th key={mg.label} colSpan={2} style={{
@@ -689,7 +719,7 @@ export default function DepartmentGrowthMatrix() {
                         cursor: 'pointer', userSelect: 'none',
                         letterSpacing: 0.3,
                       }}>
-                        {pi === 0 ? 'P1' : 'P2'}
+                        {pi === 0 ? 'P1' : 'P2'}{fb(p, `${p} (growth index)`)}
                       </th>
                     ))
                   ))}
@@ -772,6 +802,12 @@ export default function DepartmentGrowthMatrix() {
           </div>
         )}
       </div>
+      {xfEdit && <ExcelFilter key={xfEdit.col + JSON.stringify(xf)} title={xfEdit.title} anchor={xfEdit.anchor} picked={xf[xfEdit.col]}
+        load={() => xfValues(xfEdit.col)}
+        onDone={vals => {
+          if (vals !== undefined) setXf(f => { const n = { ...f }; if (vals.length) n[xfEdit.col] = vals; else delete n[xfEdit.col]; return n })
+          setXfEdit(null)
+        }} />}
       <BisCompare division={activeDiv} />
       <GrainPanel stage="department" division={activeDiv} title={`${activeDiv} department plan`} />
     </div>
