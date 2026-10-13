@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### BIS: Contrib% no longer changes with the filters
+- **Asked (user):** "check this why is the new cont % as per refernce superseeding the buyer's cont % which has no meaning ?" (screenshot: LADIES filtered to L_EW_SAREE_FNCY + L_EW_SAREE_JAIPURI, Contrib% 92.4% / 7.6%).
+- **Cause:** not the new-department setting. With a department / attribute / section filter on, the department view worked out Contrib% against only the rows left on screen, so any two filtered rows added up to 100%.
+- **Fix:** Contrib% is always the row's share of its whole division's active LY on a division tab, or of every division shown on ALL (`_divLYAll`). Filters only choose which rows are listed.
+- **Checked in BIS on 5050 (LADIES):** filtered and unfiltered both give L_EW_SAREE_FNCY 5.06%, L_EW_SAREE_JAIPURI 0.42% (was 92.4% / 7.6% filtered); ALL tab 1.49% / 0.12%. `node --check` OK.
+
 ### BIS: Plan tools -> Import block growth % (paste from Excel)
 - **Asked (user):** "if i want to import this type of data for growth % for the block update, please update in the iteration 2 and give a provision to import such changes through" (a pasted DEPARTMENT / FINAL GROWTH % table).
 - **Follow-ups:** "apply on the screen doesnt seem to work" (Apply stayed greyed until Preview, and again after a mode change; it now works on its own); "growth numbers seem to be unchanged even after succesful preview" (they had changed, but "Hold each division on AOP" scales them; the preview now shows the result).

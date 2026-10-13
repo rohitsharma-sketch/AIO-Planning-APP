@@ -3501,10 +3501,22 @@ function cellVal(row,def){
   return '-';
 }
 
+// user, 2026-10-13: "why is the new cont % ... superseeding the buyer's cont % which has no meaning" - with a department /
+// attribute / section filter on, Contrib% was each row's share of the FILTERED rows (2 saree rows read 92.4% / 7.6%).
+// It is now always the share of the whole division's active LY (and of every division shown, on ALL); filters only
+// choose which rows are listed.
+function _divLYAll(dv,c){
+  const divAnnual=dv.secs.reduce((a,s)=>a+s.ly,0);
+  return dv.secs.reduce((a,sec)=>{
+    if(S.hiddenSecs.has(sec.id))return a;
+    const slyMo={...(sec.lyMo||{})};AOP_MIS.forEach(mi=>{slyMo[mi]=_secMonLY(sec,dv,mi,divAnnual);});
+    return a+c.reduce((b,mi)=>b+monLY(sec.ly,mi,slyMo),0);
+  },0);
+}
 function buildRows_dept(){
   const c=cols();
   const rows=[];
-  let grandLY=0,grandTY=0,anyGrand=false;
+  let grandLY=0,grandTY=0,anyGrand=false,grandAll=0;
   DVDATA.forEach(dv=>{
     if(S.filters.div.size&&!S.filters.div.has(dv.id))return;
     if(S.divTab&&dv.id!==S.divTab)return;
@@ -3548,8 +3560,9 @@ function buildRows_dept(){
         _contrib:null,_divId:dv.id,_attr:sec.attr,...(inactive?{_inactiveBuyer:true,_phase:phase}:{})});
     });
     grandLY+=dvLY;if(anyDv){anyGrand=true;grandTY+=dvTY;}
-    // compute contrib
-    secRows.forEach(r=>r._contrib=dvLY>0?(r._ly/dvLY*100):null);
+    // compute contrib - against the whole division, not just the rows the filters leave
+    const dvAll=_divLYAll(dv,c);grandAll+=dvAll;
+    secRows.forEach(r=>r._contrib=dvAll>0?(r._ly/dvAll*100):null);
     // compute per-month division totals for div header row
     const dvTYByMon={},dvLYByMon={};
     c.forEach(mi=>{
@@ -3581,8 +3594,8 @@ function buildRows_dept(){
     }
     if(!S.divTab&&secRows.length)rows.push({_isTot:true,_name:'Subtotal',_ly:dvLY,_ty:anyDv?dvTY:null,_filled:0,_tot:0});
   });
-  // grand contrib
-  rows.filter(r=>!r._isGrpHd&&!r._isTot).forEach(r=>r._contrib=grandLY>0?(r._ly/grandLY*100):null);
+  // grand contrib (every division shown, unfiltered departments)
+  rows.filter(r=>!r._isGrpHd&&!r._isTot).forEach(r=>r._contrib=grandAll>0?(r._ly/grandAll*100):null);
   // Build grand _tyByMon and _lyByMon by summing division rows
   const grandTYByMon={},grandLYByMon={};
   rows.filter(r=>r._isGrpHd).forEach(r=>{
