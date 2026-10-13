@@ -7,6 +7,15 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### Sales Plan Final Results: one multi-select filter per field
+- **Asked (user):** "multi selection filters are required not this slop".
+- **Filters row:** a **Filters** row under Rows with one dropdown per field (Cluster, Store, Store type, Division, Attribute, Department, Month), as an Excel PivotTable's report filters.
+  - Each shows **(All)**, the one value, or **(Multiple Items) n**, and opens the tick list (Clear Filter From, Search, (Select All), OK / Cancel).
+  - All filters apply together. **Clear all** is next to them.
+  - A field can be filtered whether it is in Rows or not, and removing it from Rows keeps its filter.
+- **Removed:** the single Row Labels dropdown, its Select field box and its sorting. The table heading names the row fields.
+- **Checked in the sandbox:** Division = MENS + LADIES and Month = Mar + Apr'27 → Grand Total ₹16,402.2 → ₹18,175.6 L, the server's figure for the same filters.
+
 ### Sales Plan: the saved base plan keeps itself current; Hierarchy and Growth Matrix filters as in Excel
 - **Asked (user):** "make it more simplistic and more true to thier excel counterparts", then "still showing stale updates".
 - **Stale plan:**

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, Fragment } from 'react'
 import { theme, alpha } from '../theme'
-import ExcelFilter, { FilterButton } from './ExcelFilter'
+import ExcelFilter from './ExcelFilter'
 
 // user, 2026-10-13: "i need a editable hierarchial system for editing a hierarchy for view" - pick the levels and their
 // order, then drill the plan as a tree (view only). Each branch is fetched when it is opened
@@ -9,7 +9,6 @@ const LEVELS = {
   cluster: 'Cluster', store: 'Store', stype: 'Store type', division: 'Division',
   attribute: 'Attribute', department: 'Department', month: 'Month',
 }
-const MONTHS = ["Mar'27", "Apr'27", "May'27", "Jun'27", "Jul'27", "Aug'27", "Sep'27", "Oct'27", "Nov'27", "Dec'27", "Jan'28", "Feb'28", "Mar'28"]
 const DEFAULT = ['cluster', 'store', 'division', 'department']
 const KEY = 'sp.fr.hierarchy'
 const L = v => (v ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
@@ -105,9 +104,8 @@ export default function HierarchyView() {
   const [nodes, setNodes] = useState({})          // JSON(path) -> {rows, total, level} | {err} | 'loading'
   const [open, setOpen] = useState(() => new Set())
   const [source, setSource] = useState(null)
-  const [filters, setFilters] = useState(loadFilters)   // {level: [values]} - only levels in the Rows bar, as Excel
-  const [sortBy, setSortBy] = useState({})              // {level: 'az' | 'za'} - none = largest TY first (months in order)
-  const [editing, setEditing] = useState(null)          // {level, anchor} - the Row Labels list open now
+  const [filters, setFilters] = useState(loadFilters)   // {level: [values]} - any field, in Rows or not
+  const [editing, setEditing] = useState(null)          // {level, anchor} - the filter list open now
   const fkey = JSON.stringify(filters)
   const [why, setWhy] = useState(null)            // path of the row whose numbers are being explained
   const back = useRef(null)                       // the ⓘ that opened it - focus goes back there on close
@@ -128,12 +126,6 @@ export default function HierarchyView() {
       .catch(e => setNodes(n => ({ ...n, [k]: { err: e.message } })))
   }
 
-  // as in Excel, a field taken out of Rows takes its filter and sort with it
-  useEffect(() => {
-    const keep = o => Object.fromEntries(Object.entries(o).filter(([k]) => levels.includes(k)))
-    if (Object.keys(filters).some(k => !levels.includes(k))) setFilters(keep)
-    if (Object.keys(sortBy).some(k => !levels.includes(k))) setSortBy(keep)
-  }, [levels.join(',')])   // eslint-disable-line react-hooks/exhaustive-deps
   // a new hierarchy starts again from the top; new filters keep the open branches open (each re-fetched at once)
   useEffect(() => {
     try { localStorage.setItem(KEY, JSON.stringify(levels)); localStorage.setItem(FKEY, fkey) } catch { /* ignore */ }
@@ -153,13 +145,6 @@ export default function HierarchyView() {
   }
   const moveTo = (from, to) => setLevels(l => { const n = [...l]; const [x] = n.splice(from, 1); n.splice(to, 0, x); return n })
   const unused = Object.keys(LEVELS).filter(x => !levels.includes(x))
-  const order = (rows, lv) => {
-    const d = sortBy[lv]
-    if (!d) return rows
-    const key = r => (lv === 'month' ? String(MONTHS.indexOf(r.key)).padStart(2, '0') : String(r.key))
-    const out = [...rows].sort((a, b) => key(a).localeCompare(key(b), undefined, { numeric: true }))
-    return d === 'za' ? out.reverse() : out
-  }
 
   const mini = { all: 'unset', cursor: 'pointer', padding: '0 3px', color: theme.textMuted, fontSize: 12 }
   const th = { padding: '8px 12px', fontSize: 11, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.4, textAlign: 'right', borderBottom: `1px solid ${theme.border}`, background: theme.surfaceAlt }
@@ -173,7 +158,7 @@ export default function HierarchyView() {
     if (node.err) return <tr><td colSpan={5} style={{ ...td, textAlign: 'left', paddingLeft: 16 + depth * 22, color: theme.danger }}>{node.err}</td></tr>
     if (!node.rows.length && depth === 0) return <tr><td colSpan={5} style={{ ...td, textAlign: 'left', color: theme.textMuted }}>Nothing inside these filters.</td></tr>
     const parentTy = node.total?.ty || 0
-    return order(node.rows, node.level).map(r => {
+    return node.rows.map(r => {
       const p = [...path, r.key], k = JSON.stringify(p), leaf = p.length >= levels.length, isOpen = open.has(k)
       return (
         <Fragment key={k}>
@@ -200,8 +185,8 @@ export default function HierarchyView() {
 
   const root = nodes['[]']
   const nF = Object.keys(filters).length
-  const fTip = nF ? Object.entries(filters).map(([lv, v]) => `${LEVELS[lv]}: ${v.join(', ')}`).join('\n') : 'Filter and sort the rows'
-  const anySort = levels.map(x => sortBy[x]).find(Boolean)
+  // Excel's report-filter caption: (All), the one value, or (Multiple Items)
+  const caption = lv => (!filters[lv] ? '(All)' : filters[lv].length === 1 ? filters[lv][0] : `(Multiple Items) ${filters[lv].length}`)
   return (
     <div>
       {/* Excel's PivotTable Rows area - view controls, not plan edits: kept out of the suite's Undo */}
@@ -222,7 +207,7 @@ export default function HierarchyView() {
                   if (e.altKey && e.key === 'ArrowRight' && i < levels.length - 1) { e.preventDefault(); moveTo(i, i + 1) }
                 }}>
                 <span aria-hidden="true" style={{ color: theme.textMuted, fontSize: 10 }}>⠿</span>
-                {LEVELS[x]}{filters[x] && <svg width="8" height="8" viewBox="0 0 10 10" aria-label="filtered" style={{ color: theme.primary }}><path d="M0 0h10L6 5v5L4 9V5z" fill="currentColor" /></svg>}
+                {LEVELS[x]}
                 <button type="button" style={mini} disabled={levels.length === 1} onClick={() => setLevels(l => l.filter(y => y !== x))} aria-label={`Remove ${LEVELS[x]}`} title="Remove from Rows">✕</button>
               </span>
             </Fragment>
@@ -235,8 +220,23 @@ export default function HierarchyView() {
             </select>
           )}
           <span style={{ flex: 1 }} />
-          {nF > 0 && <button type="button" onClick={() => setFilters({})} style={{ ...mini, textDecoration: 'underline' }}>Clear filters</button>}
-          <button type="button" onClick={() => { setLevels(DEFAULT); setSortBy({}) }} style={{ ...mini, textDecoration: 'underline' }}>Reset</button>
+          <button type="button" onClick={() => setLevels(DEFAULT)} style={{ ...mini, textDecoration: 'underline' }}>Reset</button>
+        </div>
+        {/* one multi-select filter per field, as an Excel PivotTable's report filters (user, 2026-10-13: "multi selection
+            filters are required") - each ticks any number of values; all of them apply together */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.6, marginRight: 4 }}>Filters</span>
+          {Object.keys(LEVELS).map(lv => (
+            <button key={lv} type="button" aria-haspopup="dialog" onClick={e => { const el = e.currentTarget; setEditing(x => (x && x.level === lv ? null : { level: lv, anchor: el })) }}
+              title={filters[lv] ? filters[lv].join(', ') : `All ${LEVELS[lv].toLowerCase()}s`}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px', borderRadius: 4, fontSize: 12, cursor: 'pointer', maxWidth: 260,
+                       border: `1px solid ${filters[lv] ? theme.primary : theme.border}`, background: filters[lv] ? alpha(theme.primary, '12') : theme.surface, color: theme.textPrimary }}>
+              <span style={{ color: theme.textMuted }}>{LEVELS[lv]}</span>
+              <b style={{ fontWeight: filters[lv] ? 700 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{caption(lv)}</b>
+              <span aria-hidden="true" style={{ color: theme.textMuted, fontSize: 10 }}>▾</span>
+            </button>
+          ))}
+          {nF > 0 && <button type="button" onClick={() => setFilters({})} style={{ ...mini, textDecoration: 'underline' }}>Clear all</button>}
         </div>
         <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 6 }}>
           View only · ₹ lakh · {levels.includes('month') ? 'by month' : 'all plan months added up'} · Cont % = share of the level above · ⓘ = how a row's numbers are made
@@ -246,11 +246,7 @@ export default function HierarchyView() {
       <div style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 12, overflow: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead><tr>
-            <th style={{ ...th, textAlign: 'left' }} title={fTip}>
-              Row Labels
-              <FilterButton active={nF > 0} sorted={anySort} label={`Filter and sort the rows${nF ? ` (${nF} filtered)` : ''}`} title={fTip}
-                onClick={el => setEditing(e => (e ? null : { level: levels.find(x => filters[x]) || levels[0], anchor: el }))} />
-            </th>
+            <th style={{ ...th, textAlign: 'left' }}>{levels.map(x => LEVELS[x]).join(' › ')}</th>
             <th style={th}>LY (₹L)</th><th style={th}>TY (₹L)</th><th style={th}>Growth %</th><th style={th}>Cont %</th>
           </tr></thead>
           <tbody>
@@ -265,9 +261,7 @@ export default function HierarchyView() {
           </tbody>
         </table>
       </div>
-      {editing && <ExcelFilter key={editing.level + fkey + (sortBy[editing.level] || '')} title={LEVELS[editing.level]} anchor={editing.anchor} picked={filters[editing.level]}
-        fields={levels.map(x => ({ value: x, label: LEVELS[x] }))} field={editing.level} onField={lv => setEditing(e => ({ ...e, level: lv }))}
-        sort={sortBy[editing.level] || null} onSort={d => setSortBy(o => { const n = { ...o }; if (d) n[editing.level] = d; else delete n[editing.level]; return n })}
+      {editing && <ExcelFilter key={editing.level + fkey} title={LEVELS[editing.level]} anchor={editing.anchor} picked={filters[editing.level]}
         load={() => fetch(`/api/planning/grain/hierarchy-options?${new URLSearchParams({ level: editing.level, filters: fkey })}`)
           .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`); return j[editing.level] || [] })}
         onDone={vals => { if (vals !== undefined) setFilter(editing.level, vals); setEditing(null) }} />}
