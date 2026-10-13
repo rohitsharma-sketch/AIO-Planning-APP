@@ -83,40 +83,73 @@ function Explain({ levels, path, filters, onClose }) {
   )
 }
 
-// user, 2026-10-13: "filters required" - any level, one or more values; the tree, totals, Cont % and the ⓘ pop-up all
-// count only what is inside them. Kept per browser like the levels.
+// user, 2026-10-13: "filters required" then "the filters should be individual filters - excel styled": every level has
+// its own Excel-style list; the tree, totals, Cont % and the ⓘ pop-up count only what is inside them. Kept per browser.
 const FKEY = 'sp.fr.filters'
 function loadFilters() {
   try { const v = JSON.parse(localStorage.getItem(FKEY) || '{}'); if (v && typeof v === 'object') return v } catch { /* ignore */ }
   return {}
 }
-function FilterPicker({ level, options, picked, onDone }) {
-  const [sel, setSel] = useState(() => new Set(picked || []))
+// One level's Excel-style filter: its values inside the OTHER levels' filters (GET /grain/hierarchy-options?level=),
+// search, (Select all), OK / Cancel. All ticked = no filter. Opens under the heading / chip that was clicked.
+function ExcelFilter({ level, anchor, filters, onDone }) {
+  const [vals, setVals] = useState(null)
+  const [sel, setSel] = useState(() => new Set())
+  const [err, setErr] = useState('')
   const [q, setQ] = useState('')
-  const shown = (options || []).filter(o => o.toLowerCase().includes(q.trim().toLowerCase()))
-  const flip = o => setSel(s0 => { const n = new Set(s0); n.has(o) ? n.delete(o) : n.add(o); return n })
-  const btn = { padding: '4px 10px', borderRadius: 6, border: `1px solid ${theme.border}`, background: theme.surface, fontSize: 12, cursor: 'pointer' }
+  const box = useRef(null)
+  useEffect(() => {
+    const qs = new URLSearchParams({ level, filters: JSON.stringify(filters) })
+    fetch(`/api/planning/grain/hierarchy-options?${qs}`)
+      .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`); return j })
+      .then(j => { const v = j[level] || []; setVals(v); setSel(new Set(filters[level] ? filters[level].filter(x => v.includes(x)) : v)) })
+      .catch(e => setErr(e.message))
+    const out = e => { if (box.current && !box.current.contains(e.target) && !(anchor && anchor.contains(e.target))) onDone(undefined) }
+    const esc = e => { if (e.key === 'Escape') onDone(undefined) }
+    document.addEventListener('mousedown', out)
+    document.addEventListener('keydown', esc)
+    return () => { document.removeEventListener('mousedown', out); document.removeEventListener('keydown', esc) }
+  }, [])   // eslint-disable-line react-hooks/exhaustive-deps
+  const rc = anchor ? anchor.getBoundingClientRect() : { left: 100, bottom: 100 }
+  const left = Math.max(8, Math.min(rc.left, window.innerWidth - 296))
+  const shown = (vals || []).filter(v => v.toLowerCase().includes(q.trim().toLowerCase()))
+  const all = shown.length > 0 && shown.every(v => sel.has(v))
+  const some = shown.some(v => sel.has(v))
+  const flipAll = () => setSel(s0 => { const n = new Set(s0); shown.forEach(v => (all ? n.delete(v) : n.add(v))); return n })
+  const flip = v => setSel(s0 => { const n = new Set(s0); n.has(v) ? n.delete(v) : n.add(v); return n })
+  // Excel: OK while searching keeps just the ticked search results; every value ticked = the filter is off
+  const picked = q ? shown.filter(v => sel.has(v)) : [...sel]
+  const ok = () => onDone(vals && picked.length === vals.length ? [] : picked)
+  const btn = { padding: '4px 12px', borderRadius: 6, border: `1px solid ${theme.border}`, background: theme.surface, fontSize: 12, cursor: 'pointer' }
   return (
-    <div style={{ marginTop: 8, border: `1px solid ${theme.border}`, borderRadius: 8, padding: 10, background: theme.surfaceAlt }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
-        <b style={{ fontSize: 12 }}>{LEVELS[level]}</b>
-        <input type="search" autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder={`Find a ${LEVELS[level].toLowerCase()}`} aria-label={`Find a ${LEVELS[level]}`}
-          style={{ padding: '4px 8px', borderRadius: 6, border: `1px solid ${theme.border}`, fontSize: 12, minWidth: 180 }} />
-        <button type="button" style={btn} onClick={() => setSel(s0 => new Set([...s0, ...shown]))}>Tick {q ? 'found' : 'all'}</button>
-        <button type="button" style={btn} onClick={() => setSel(new Set())}>Clear</button>
-        <span style={{ fontSize: 11.5, color: theme.textMuted }}>{sel.size} ticked</span>
-        <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-          <button type="button" style={btn} onClick={() => onDone(null)}>Cancel</button>
-          <button type="button" style={{ ...btn, background: theme.primary, color: '#fff', borderColor: theme.primary, fontWeight: 600 }} onClick={() => onDone([...sel])}>Apply</button>
-        </span>
+    <div ref={box} data-no-undo role="dialog" aria-label={`Filter ${LEVELS[level]}`}
+      style={{ position: 'fixed', top: rc.bottom + 4, left, width: 280, zIndex: 1000, background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 8, boxShadow: '0 12px 30px rgba(0,0,0,.18)', padding: 10, textTransform: 'none', letterSpacing: 0, fontWeight: 400, color: theme.textPrimary, textAlign: 'left' }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+        <b style={{ fontSize: 12, flex: 1 }}>Filter · {LEVELS[level]}</b>
+        {filters[level] && <button type="button" onClick={() => onDone([])} style={{ all: 'unset', cursor: 'pointer', fontSize: 11.5, color: theme.primary, textDecoration: 'underline' }}>Clear filter</button>}
       </div>
-      <div style={{ maxHeight: 220, overflow: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '2px 12px' }}>
-        {shown.map(o => (
-          <label key={o} style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
-            <input type="checkbox" checked={sel.has(o)} onChange={() => flip(o)} />{o}
+      <input type="search" autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Search" aria-label={`Search ${LEVELS[level]}`}
+        style={{ width: '100%', boxSizing: 'border-box', padding: '5px 8px', borderRadius: 6, border: `1px solid ${theme.border}`, fontSize: 12, marginBottom: 6 }} />
+      {err && <div style={{ color: theme.danger, fontSize: 12 }}>Could not load the list: {err}</div>}
+      {!vals && !err && <div style={{ color: theme.textMuted, fontSize: 12, padding: '6px 2px' }}>Loading…</div>}
+      {vals && (
+        <div style={{ maxHeight: 260, overflow: 'auto', border: `1px solid ${theme.border}`, borderRadius: 6, padding: '4px 6px' }}>
+          <label style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', fontWeight: 600, padding: '2px 0' }}>
+            <input type="checkbox" checked={all} ref={el => { if (el) el.indeterminate = some && !all }} onChange={flipAll} />
+            {q ? '(Select all search results)' : '(Select all)'}
           </label>
-        ))}
-        {!shown.length && <span style={{ fontSize: 12, color: theme.textMuted }}>Nothing matches.</span>}
+          {shown.map(v => (
+            <label key={v} style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', padding: '2px 0' }}>
+              <input type="checkbox" checked={sel.has(v)} onChange={() => flip(v)} />{v}
+            </label>
+          ))}
+          {!shown.length && <div style={{ fontSize: 12, color: theme.textMuted, padding: '4px 0' }}>Nothing matches.</div>}
+        </div>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 8 }}>
+        <button type="button" style={btn} onClick={() => onDone(undefined)}>Cancel</button>
+        <button type="button" disabled={!vals || !picked.length} onClick={ok}
+          style={{ ...btn, background: theme.primary, color: '#fff', borderColor: theme.primary, fontWeight: 600, opacity: !vals || !picked.length ? 0.5 : 1 }}>OK</button>
       </div>
     </div>
   )
@@ -136,11 +169,11 @@ export default function HierarchyView() {
   const [open, setOpen] = useState(() => new Set())
   const [source, setSource] = useState(null)
   const [filters, setFilters] = useState(loadFilters)   // {level: [values]}
-  const [opts, setOpts] = useState(null)                // {level: [values]} the plan has
-  const [editing, setEditing] = useState(null)          // the level whose values are being picked
+  const [editing, setEditing] = useState(null)          // {level, anchor} - the Excel filter open now
   const fkey = JSON.stringify(filters)
   const [why, setWhy] = useState(null)            // path of the row whose numbers are being explained
   const back = useRef(null)                       // the ⓘ that opened it - focus goes back there on close
+  const lastLv = useRef(null)
   const info = p => (
     <button type="button" onClick={e => { back.current = e.currentTarget; setWhy(p) }} aria-label={`How ${p.length ? p[p.length - 1] : 'the total'} is made`} title="How is this number made?"
       style={{ all: 'unset', cursor: 'pointer', marginLeft: 6, fontSize: 12, color: theme.primary, padding: '0 3px' }}>ⓘ</button>
@@ -156,15 +189,18 @@ export default function HierarchyView() {
       .catch(e => setNodes(n => ({ ...n, [k]: { err: e.message } })))
   }
 
-  // a new hierarchy (or new filters) starts again from the top
+  // a new hierarchy starts again from the top; new filters keep the open branches open (each re-fetched at once)
   useEffect(() => {
     try { localStorage.setItem(KEY, JSON.stringify(levels)); localStorage.setItem(FKEY, fkey) } catch { /* ignore */ }
-    setNodes({}); setOpen(new Set()); fetchNode([])
+    const lv = levels.join(','), same = lastLv.current === lv
+    lastLv.current = lv
+    setNodes({})
+    if (!same) setOpen(new Set())
+    fetchNode([])
+    if (same) open.forEach(k => fetchNode(JSON.parse(k)))
   }, [levels.join(','), fkey])   // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    fetch('/api/planning/grain/hierarchy-options').then(r => (r.ok ? r.json() : null)).then(setOpts).catch(() => setOpts(null))
-  }, [])
   const setFilter = (lv, vals) => setFilters(f => { const n = { ...f }; if (vals && vals.length) n[lv] = vals; else delete n[lv]; return n })
+  const openFilter = (lv, el) => setEditing(e => (e && e.level === lv ? null : { level: lv, anchor: el }))
 
   const toggle = path => {
     const k = JSON.stringify(path)
@@ -178,11 +214,13 @@ export default function HierarchyView() {
   const mini = { all: 'unset', cursor: 'pointer', padding: '0 4px', color: theme.textMuted, fontSize: 12 }
   const th = { padding: '8px 12px', fontSize: 11, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.4, textAlign: 'right', borderBottom: `1px solid ${theme.border}`, background: theme.surfaceAlt }
   const td = { padding: '6px 12px', fontSize: 12.5, textAlign: 'right', fontFamily: theme.fontMono, borderBottom: `1px solid ${theme.border}`, whiteSpace: 'nowrap' }
+  const fbtn = lv => ({ all: 'unset', cursor: 'pointer', borderRadius: 4, padding: '1px 4px', color: filters[lv] ? theme.primary : 'inherit', background: filters[lv] ? alpha(theme.primary, '14') : 'transparent' })
 
   const renderRows = (path, depth) => {
     const node = nodes[JSON.stringify(path)]
     if (!node || node === 'loading') return <tr><td colSpan={5} style={{ ...td, textAlign: 'left', paddingLeft: 16 + depth * 22, color: theme.textMuted }}>Loading…</td></tr>
     if (node.err) return <tr><td colSpan={5} style={{ ...td, textAlign: 'left', paddingLeft: 16 + depth * 22, color: theme.danger }}>{node.err}</td></tr>
+    if (!node.rows.length && depth === 0) return <tr><td colSpan={5} style={{ ...td, textAlign: 'left', color: theme.textMuted }}>Nothing inside these filters.</td></tr>
     const parentTy = node.total?.ty || 0
     return node.rows.map(r => {
       const p = [...path, r.key], k = JSON.stringify(p), leaf = p.length >= levels.length, isOpen = open.has(k)
@@ -210,6 +248,7 @@ export default function HierarchyView() {
   }
 
   const root = nodes['[]']
+  const nF = Object.keys(filters).length
   return (
     <div>
       {/* view controls, not plan edits: kept out of the suite's Undo */}
@@ -238,23 +277,24 @@ export default function HierarchyView() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.6, marginRight: 4 }}>Filters</span>
+          {!nF && <span style={{ fontSize: 12, color: theme.textMuted }}>none - click ▾ on a column heading below</span>}
           {Object.entries(filters).map(([lv, vals]) => (
             <span key={lv} style={{ ...chip, background: alpha(theme.primary, '12'), borderColor: alpha(theme.primary, '50') }}>
-              <button type="button" onClick={() => setEditing(lv)} style={{ all: 'unset', cursor: 'pointer' }} title="Change">
+              <button type="button" onClick={e => openFilter(lv, e.currentTarget)} style={{ all: 'unset', cursor: 'pointer' }} title="Change">
                 {LEVELS[lv]}: <span style={{ fontWeight: 400 }}>{vals.length > 3 ? `${vals.slice(0, 3).join(', ')} +${vals.length - 3}` : vals.join(', ')}</span>
               </button>
               <button type="button" style={mini} onClick={() => setFilter(lv, null)} aria-label={`Remove the ${LEVELS[lv]} filter`} title="Remove this filter">✕</button>
             </span>
           ))}
-          <select value="" onChange={e => e.target.value && setEditing(e.target.value)} aria-label="Add a filter" disabled={!opts}
-            style={{ padding: '5px 8px', borderRadius: 8, border: `1px dashed ${theme.border}`, fontSize: 12, background: theme.surface }}>
-            <option value="">{opts ? '+ Filter…' : 'Loading filters…'}</option>
-            {Object.keys(LEVELS).filter(x => !filters[x]).map(x => <option key={x} value={x}>{LEVELS[x]}</option>)}
-          </select>
-          {Object.keys(filters).length > 0 && <button type="button" onClick={() => setFilters({})} style={{ ...mini, textDecoration: 'underline' }}>Clear filters</button>}
+          {unused.filter(x => !filters[x]).length > 0 && (
+            <select value="" onChange={e => { const v = e.target.value; if (v) openFilter(v, e.target) }} aria-label="Filter a level that is not in the hierarchy"
+              style={{ padding: '5px 8px', borderRadius: 8, border: `1px dashed ${theme.border}`, fontSize: 12, background: theme.surface }}>
+              <option value="">+ Other level…</option>
+              {unused.filter(x => !filters[x]).map(x => <option key={x} value={x}>{LEVELS[x]}</option>)}
+            </select>
+          )}
+          {nF > 0 && <button type="button" onClick={() => setFilters({})} style={{ ...mini, textDecoration: 'underline' }}>Clear all filters</button>}
         </div>
-        {editing && opts && <FilterPicker key={editing} level={editing} options={opts[editing]} picked={filters[editing]}
-          onDone={vals => { if (vals) setFilter(editing, vals); setEditing(null) }} />}
         <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 8 }}>
           View only · ₹ lakh · {levels.includes('month') ? 'by month' : 'all plan months added up'} · Cont % = share of the level above · ⓘ = how a row's numbers are made
           {source && <> · from {source.note || source.name}</>}
@@ -263,14 +303,24 @@ export default function HierarchyView() {
       <div style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 12, overflow: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead><tr>
-            <th style={{ ...th, textAlign: 'left' }}>{levels.map(x => LEVELS[x]).join(' → ')}</th>
+            <th style={{ ...th, textAlign: 'left' }} data-no-undo>
+              {levels.map((x, i) => (
+                <Fragment key={x}>
+                  {i > 0 && ' → '}
+                  <button type="button" onClick={e => openFilter(x, e.currentTarget)} style={fbtn(x)} aria-haspopup="dialog"
+                    aria-label={`Filter ${LEVELS[x]}${filters[x] ? ` (${filters[x].length} picked)` : ''}`} title={filters[x] ? `Filtered: ${filters[x].join(', ')}` : `Filter ${LEVELS[x]}`}>
+                    {LEVELS[x]} <span aria-hidden="true">{filters[x] ? '▼' : '▾'}</span>
+                  </button>
+                </Fragment>
+              ))}
+            </th>
             <th style={th}>LY (₹L)</th><th style={th}>TY (₹L)</th><th style={th}>Growth %</th><th style={th}>Cont %</th>
           </tr></thead>
           <tbody>
             {renderRows([], 0)}
             {root && root !== 'loading' && !root.err && (
               <tr style={{ fontWeight: 700 }}>
-                <td style={{ ...td, textAlign: 'left', fontFamily: 'inherit' }}>Total{info([])}</td>
+                <td style={{ ...td, textAlign: 'left', fontFamily: 'inherit' }}>Total{nF ? ' (filtered)' : ''}{info([])}</td>
                 <td style={td}>{L(root.total.ly)}</td><td style={td}>{L(root.total.ty)}</td>
                 <td style={td}>{P(gr(root.total.ty, root.total.ly))}</td><td style={td}>100%</td>
               </tr>
@@ -278,6 +328,8 @@ export default function HierarchyView() {
           </tbody>
         </table>
       </div>
+      {editing && <ExcelFilter key={editing.level + fkey} level={editing.level} anchor={editing.anchor} filters={filters}
+        onDone={vals => { if (vals !== undefined) setFilter(editing.level, vals); setEditing(null) }} />}
       {why && <Explain key={JSON.stringify(why) + fkey} levels={levels} path={why} filters={filters} onClose={() => { setWhy(null); back.current?.focus() }} />}
     </div>
   )

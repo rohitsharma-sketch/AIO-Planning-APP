@@ -3088,8 +3088,10 @@ function renderKPI(rows){
     tLY+=r._ly||0;
     if(r._ty!=null){anyTY=true;tTY+=r._ty;}
   });
+  const offLY=rows.find(r=>r._isGrand)?._offLY||0;   // inactive departments' LY (plan 0), as AOP's base - 2026-10-13
+  tLY+=offLY;
   const gr=anyTY&&tLY>0?((tTY-tLY)/tLY*100):null;
-  let h=`<span>LY <b>${fCr(tLY)} Cr</b></span><span>Plan <b>${anyTY?fCr(tTY)+' Cr':'-'}</b></span>`+
+  let h=`<span title="${offLY?_attr('Includes '+fCr(offLY)+' Cr LY of inactive departments (plan 0), as the AOP base does'):''}">LY <b>${fCr(tLY)} Cr</b></span><span>Plan <b>${anyTY?fCr(tTY)+' Cr':'-'}</b></span>`+
     (gr!=null?`<b class="${gCls(gr)}">${fP(gr)}</b>`:'');
   const chk=_aopCheck();
   if(chk.length){
@@ -3573,13 +3575,14 @@ function _divLYAll(dv,c){
 function buildRows_dept(){
   const c=cols();
   const rows=[];
-  let grandLY=0,grandTY=0,anyGrand=false,grandAll=0;
+  let grandLY=0,grandTY=0,anyGrand=false,grandAll=0,grandOff=0;
   DVDATA.forEach(dv=>{
     if(S.filters.div.size&&!S.filters.div.has(dv.id))return;
     if(S.divTab&&dv.id!==S.divTab)return;
     let dvLY=0,dvTY=0,anyDv=false;
     const secRows=[];
     const divAnnual=dv.secs.reduce((a,s)=>a+s.ly,0);
+    let dvOff=0;   // LY of its inactive departments (plan 0) - see below
     dv.secs.forEach(sec=>{
       if(S.filters.attr.size&&!S.filters.attr.has(sec.attr))return;
       if(S.filters.sec.size&&!(DEPT_TO_SEC[sec.id]&&S.filters.sec.has(DEPT_TO_SEC[sec.id])))return;
@@ -3587,7 +3590,13 @@ function buildRows_dept(){
       const inactive=S.hiddenSecs.has(sec.id);
       // Inactive depts live on the Inactive Depts sheet only (user, 2026-09-29: a manually inactivated dept showed
       // on both sheets) - no greyed ghost row here; re-activate it from that sheet.
-      if(inactive)return;
+      // Its LY still counts in the division's LY, with a plan of 0 - as AOP's base does (user, 2026-10-13: "this should
+      // match the AOP Forecaster's projection for MAMJ which is 11.1%": leaving it out showed 387.7 -> 431.9 = +11.4%).
+      if(inactive){
+        const so={...(sec.lyMo||{})};AOP_MIS.forEach(mi=>{so[mi]=_secMonLY(sec,dv,mi,divAnnual);});
+        c.forEach(mi=>{dvOff+=monLY(sec.ly,mi,so);});
+        return;
+      }
       // Distribute actual division monthly LY proportionally (divAnnual includes all, so each dept gets its real share).
       // Anchor on AOP's own fresh, live LFL base (S.aopBase) when synced -
       // DEPT_ACTUAL_LY is a hardcoded historical snapshot that drifts out of
@@ -3616,6 +3625,7 @@ function buildRows_dept(){
         _key:sec.id,_name:sec.nm,_d2:dv.nm,_filled:inactive?0:filled,_tot:inactive?0:c.length,
         _contrib:null,_divId:dv.id,_attr:sec.attr,...(inactive?{_inactiveBuyer:true,_phase:phase}:{})});
     });
+    dvLY+=dvOff;grandOff+=dvOff;
     grandLY+=dvLY;if(anyDv){anyGrand=true;grandTY+=dvTY;}
     // compute contrib - against the whole division, not just the rows the filters leave
     const dvAll=_divLYAll(dv,c);grandAll+=dvAll;
@@ -3625,7 +3635,7 @@ function buildRows_dept(){
     c.forEach(mi=>{
       let mly=0,mty=0;
       dv.secs.forEach(sec=>{
-        if(S.hiddenSecs.has(sec.id))return; // inactive: excluded from div totals
+        if(S.hiddenSecs.has(sec.id)){mly+=_secMonLY(sec,dv,mi);return;} // inactive: its LY counts, its plan is 0 (2026-10-13)
         const ml=_secMonLY(sec,dv,mi); mly+=ml;
         const g=S.inputs[sec.id+'__'+mi];
         mty+=g!=null?ml*(1+g/100):ml; // default 0% baseline
@@ -3661,7 +3671,7 @@ function buildRows_dept(){
       if(r._tyByMon&&r._tyByMon[mi]!=null)grandTYByMon[mi]=(grandTYByMon[mi]||0)+(r._tyByMon[mi]||0);
     });
   });
-  rows.push({_isGrand:true,_name:'GRAND TOTAL',_ly:grandLY,_ty:anyGrand?grandTY:null,
+  rows.push({_isGrand:true,_name:'GRAND TOTAL',_ly:grandLY,_offLY:grandOff,_ty:anyGrand?grandTY:null,
     _tyByMon:Object.keys(grandTYByMon).length?grandTYByMon:null,
     _lyByMon:grandLYByMon,_filled:0,_tot:0});
   return rows;

@@ -32,7 +32,7 @@ PLAN_DIVS = {"KIDS", "LADIES", "MENS"}   # = dept_sales_engine.DIVISIONS
 def build_cube(plan: dict, source: dict) -> dict:
     """The plan reduced to what the views need: per store its cluster; per division x store x month (LY, TY); per
     division x department x store x month (LY, TY, TY P1, TY P2). Active departments only (as MRP Output)."""
-    stores, div, dept, months, grow = {}, {}, {}, set(), {}
+    stores, div, dept, months, grow, off = {}, {}, {}, set(), {}, {}
     for s, sd in (plan.get("stores") or {}).items():
         stores[s] = {"cluster": sd.get("cluster") or NO_CLUSTER, "ssg": bool(sd.get("is_ssg")), "tag": sd.get("tag"),
                      "ref": sd.get("ref_store") or ""}
@@ -45,7 +45,13 @@ def build_cube(plan: dict, source: dict) -> dict:
                 months.add(m)
                 tl = tt = 0.0
                 for dp, x in (md.get("departments") or {}).items():
-                    if not isinstance(x, dict) or not x.get("active", True):
+                    if not isinstance(x, dict):
+                        continue
+                    if not x.get("active", True):
+                        # its LY counts in Final Results with a plan of 0, as in AOP's base (2026-10-13); the other views
+                        # (MRP, methods) keep planning active departments only
+                        if float(x.get("ly") or 0.0):
+                            off.setdefault(dv, {}).setdefault(dp, {}).setdefault(s, {})[m] = float(x.get("ly") or 0.0)
                         continue
                     ly, ty = float(x.get("ly") or 0.0), float(x.get("ty") or 0.0)
                     p1 = float(x.get("ty_p1", ty / 2) or 0.0)
@@ -58,7 +64,7 @@ def build_cube(plan: dict, source: dict) -> dict:
                         grow.setdefault(dv, {}).setdefault(dp, {})[m] = (float(x["g_p1"]) + float(x.get("g_p2", x["g_p1"]))) / 2
                 div.setdefault(dv, {}).setdefault(s, {})[m] = (tl, tt)
     return {"stores": stores, "div": div, "dept": dept, "months": [m for m in TY_MONTHS if m in months],
-            "source": source, "g": grow}
+            "source": source, "g": grow, "off": off}
 
 
 LIVE_SOURCE = {"kind": "live", "name": "live base plan",
@@ -83,7 +89,8 @@ def only_months(c: dict, keep) -> dict:
     return {**c, "months": [m for m in c["months"] if m in k],
             "div": {dv: {s: sub(mm) for s, mm in ss.items()} for dv, ss in c["div"].items()},
             "dept": {dv: {dp: {s: sub(mm) for s, mm in ss.items()} for dp, ss in dd.items()} for dv, dd in c["dept"].items()},
-            "g": {dv: {dp: sub(mm) for dp, mm in dd.items()} for dv, dd in (c.get("g") or {}).items()}}
+            "g": {dv: {dp: sub(mm) for dp, mm in dd.items()} for dv, dd in (c.get("g") or {}).items()},
+            "off": {dv: {dp: {s: sub(mm) for s, mm in ss.items()} for dp, ss in dd.items()} for dv, dd in (c.get("off") or {}).items()}}
 
 
 def _cube() -> dict:
@@ -261,7 +268,7 @@ def _aop_by_store():
     ck = (pid, p, os.path.getmtime(p))
     if _aop_cache.get("key") == ck:
         return _aop_cache["v"]
-    aop, cl, base = {}, {}, {}
+    aop, cl, base, sbase = {}, {}, {}, {}
     with open(p, encoding="utf-8") as fh:
         recs = json.load(fh)
     # only the months that AOP version had LY for (it ran before later months closed - e.g. V2 on 25 Sep has no Sep base,
@@ -275,14 +282,24 @@ def _aop_by_store():
         if s and r.get("Cluster"):
             cl[s] = str(r["Cluster"]).strip()
         for m in TY_MONTHS:
+            b = r.get(f"{m} | Base")
+            if s and dv and b:   # the LY base AOP's growth is on, per store (Sales Plan's LFL LY anchor, 2026-10-13)
+                x = sbase.setdefault(s, {}).setdefault(dv, {})
+                x[m] = x.get(m, 0.0) + float(b)
             v = r.get(f"{m} | Forecast")
             if s and dv and v and m in covered:
                 d = aop.setdefault(s, {}).setdefault(dv, {})
                 d[m] = d.get(m, 0.0) + float(v)
     # months the version has ANY forecast for (Sep'27 = new stores only in V2) - what the plan months follow
     fc = {m for m in TY_MONTHS if any(float(r.get(f"{m} | Forecast") or 0.0) > 0 for r in recs)}
-    _aop_cache.update(key=ck, v=(pid, label, aop, cl, sorted(covered, key=TY_MONTHS.index)), fc=fc)
+    _aop_cache.update(key=ck, v=(pid, label, aop, cl, sorted(covered, key=TY_MONTHS.index)), fc=fc, base=sbase)
     return _aop_cache["v"]
+
+
+def aop_base_by_store() -> tuple:
+    """(publish id, {STORE: {DIVISION: {TY month: Rs lakh}}}) - the LY base of the AOP publish BIS plans on."""
+    pid = _aop_by_store()[0]
+    return pid, (_aop_cache.get("base") or {}) if pid else {}
 
 
 def aop_forecast_months() -> set:
@@ -500,6 +517,19 @@ def _cells(cube: dict, attr_map: dict, want: dict, sinfo: dict, filt: dict | Non
                 for m, v in mm.items():
                     if fit("month", m):
                         yield dv, dp, at, s, m, v[0], v[1]
+    for dv, dmap in (cube.get("off") or {}).items():   # inactive departments: LY, plan 0
+        if not fit("division", dv):
+            continue
+        amap = attr_map.get(dv, {})
+        for dp, smap in dmap.items():
+            at = amap.get(dp) or "-"
+            if not fit("department", dp) or not fit("attribute", at):
+                continue
+            for s, mm in smap.items():
+                if s in ok:
+                    for m, ly in mm.items():
+                        if fit("month", m):
+                            yield dv, dp, at, s, m, ly, 0.0
 
 
 def parse_filters(raw: str) -> dict:
@@ -513,20 +543,87 @@ def parse_filters(raw: str) -> dict:
     return {k: {str(x) for x in v} for k, v in f.items() if k in HIER_LEVELS and isinstance(v, list) and v}
 
 
+# One column index per cube (user, 2026-10-13: "make sure that the population speed is fast"): every cell once, each
+# level as an integer code, so a branch / a filter list is a mask + a bincount (ms) instead of a walk over every cell
+# (~0.2 s on the 305k cells of the MAMJ plan). Built once per cube and attribute map; 8010 builds it at start.
+_ix = {"key": None, "v": None}
+_ix_lock = threading.Lock()
+
+
+def _index(cube: dict, attr_map: dict) -> dict:
+    import numpy as np
+    key = (id(cube), json.dumps(attr_map, sort_keys=True, default=str))
+    with _ix_lock:
+        if _ix["key"] == key:
+            return _ix["v"]
+        sinfo = _sinfo(cube)
+        names = {lv: [] for lv in HIER_LEVELS}
+        pos = {lv: {} for lv in HIER_LEVELS}
+        cols = {lv: [] for lv in HIER_LEVELS}
+        ly, ty = [], []
+
+        def code(lv, v):
+            c = pos[lv].get(v)
+            if c is None:
+                c = pos[lv][v] = len(names[lv])
+                names[lv].append(v)
+            return c
+        for dv, dp, at, st, m, a, t in _cells(cube, attr_map, {}, sinfo):
+            x = sinfo[st]
+            for lv, v in (("division", dv), ("department", dp), ("attribute", at), ("month", m), ("store", st),
+                          ("cluster", x["cluster"]), ("stype", x["stype"])):
+                cols[lv].append(code(lv, v))
+            ly.append(a)
+            ty.append(t)
+        v = {"names": names, "pos": pos, "c": {lv: np.asarray(c, dtype=np.int32) for lv, c in cols.items()},
+             "ly": np.asarray(ly, dtype=float), "ty": np.asarray(ty, dtype=float)}
+        _ix.update(key=key, v=v)
+        return v
+
+
+def _mask(ix: dict, want: dict, filt: dict | None, skip: str | None = None):
+    """Cells of the node `want` inside the filters (the filter on `skip` left out - Excel's list for that column)."""
+    import numpy as np
+    m = np.ones(len(ix["ly"]), dtype=bool)
+    for lv, v in want.items():
+        c = ix["pos"][lv].get(v)
+        if c is None:
+            return np.zeros(len(ix["ly"]), dtype=bool)
+        m &= ix["c"][lv] == c
+    for lv, vals in (filt or {}).items():
+        if lv != skip:
+            m &= np.isin(ix["c"][lv], [ix["pos"][lv][x] for x in vals if x in ix["pos"][lv]])
+    return m
+
+
+def hierarchy_values(cube: dict, attr_map: dict, filt: dict | None = None, levels=None) -> dict:
+    """{level: [values]} a level can be filtered on, as an Excel filter list: the values with any LY / TY inside the
+    OTHER levels' filters (the level's own filter does not hide its own choices). Months in calendar order."""
+    import numpy as np
+    ix = _index(cube, attr_map)
+    nz = (np.abs(ix["ly"]) > 1e-12) | (np.abs(ix["ty"]) > 1e-12)
+    out = {}
+    for lv in levels or HIER_LEVELS:
+        vals = [ix["names"][lv][i] for i in np.unique(ix["c"][lv][_mask(ix, {}, filt, skip=lv) & nz])]
+        out[lv] = sorted(vals, key=lambda m: TY_MONTHS.index(m) if m in TY_MONTHS else 99) if lv == "month" else sorted(vals)
+    return out
+
+
 def hierarchy_rows(cube: dict, attr_map: dict, levels: list, path: list, filt: dict | None = None) -> dict:
     """Pure. levels: the order picked (from HIER_LEVELS); path: the values of levels[:len(path)] down to the node.
     Returns {level, rows: [{key, ly, ty}] (TY high to low; months in calendar order), total: {ly, ty}}."""
+    import numpy as np
     want = dict(zip(levels, path))
     nxt = levels[len(path)] if len(path) < len(levels) else None
-    sinfo = _sinfo(cube)
-    acc, tl, tt = {}, 0.0, 0.0
-    for dv, dp, at, s, m, ly, ty in _cells(cube, attr_map, want, sinfo, filt):
-        tl, tt = tl + ly, tt + ty
-        if nxt:
-            k = m if nxt == "month" else {"division": dv, "department": dp, "attribute": at}.get(nxt) or sinfo[s][nxt]
-            a = acc.setdefault(k, [0.0, 0.0])
-            a[0] += ly
-            a[1] += ty
+    ix = _index(cube, attr_map)
+    m = _mask(ix, want, filt)
+    lys, tys = ix["ly"][m], ix["ty"][m]
+    tl, tt = float(lys.sum()), float(tys.sum())
+    acc = {}
+    if nxt:
+        g, n = ix["c"][nxt][m], len(ix["names"][nxt])
+        L, T = np.bincount(g, weights=lys, minlength=n), np.bincount(g, weights=tys, minlength=n)
+        acc = {ix["names"][nxt][i]: (float(L[i]), float(T[i])) for i in np.unique(g)}
     # a branch with no data at all (e.g. stores with no cluster and no sales) is not listed (user, 2026-10-13)
     rows = [{"key": k, "ly": round(v[0], 4), "ty": round(v[1], 4)} for k, v in acc.items() if abs(v[0]) > 1e-9 or abs(v[1]) > 1e-9]
     if nxt == "month":
@@ -555,17 +652,22 @@ def get_hierarchy(levels: str, path: str = "[]", filters: str = "{}"):
 
 
 @router.get("/hierarchy-options")
-def get_hierarchy_options():
-    """The values each Hierarchy level can be filtered on (only what the plan has), months in calendar order."""
+def get_hierarchy_options(filters: str = "{}", level: str = ""):
+    """The values each Hierarchy level (or just `level`) can be filtered on - Excel style: inside the other levels'
+    filters, so a pick in one column narrows the lists of the others."""
     from engines.final_results_engine import _load_dept_attr_map
-    c, am = _cube(), _load_dept_attr_map()
-    sinfo, seen = _sinfo(c), {k: set() for k in HIER_LEVELS}
-    for dv, dp, at, s, m, ly, ty in _cells(c, am, {}, sinfo):
-        if ly or ty:
-            for k, v in (("division", dv), ("department", dp), ("attribute", at), ("month", m),
-                         ("store", s), ("cluster", sinfo[s]["cluster"]), ("stype", sinfo[s]["stype"])):
-                seen[k].add(v)
-    return {k: (sorted(v, key=TY_MONTHS.index) if k == "month" else sorted(v)) for k, v in seen.items()}
+    if level and level not in HIER_LEVELS:
+        raise HTTPException(status_code=422, detail=f"level: one of {', '.join(HIER_LEVELS)}")
+    return hierarchy_values(_cube(), _load_dept_attr_map(), parse_filters(filters), [level] if level else None)
+
+
+def warm_hierarchy():
+    """8010 start: load the active plan and build its index, so the first Final Results open doesn't wait for it."""
+    try:
+        from engines.final_results_engine import _load_dept_attr_map
+        _index(_cube(), _load_dept_attr_map())
+    except Exception:   # noqa: BLE001 - the page builds it on first use and shows any error itself
+        pass
 
 
 LEVEL_NAME = {"cluster": "Cluster", "store": "Store", "stype": "Store type", "division": "Division",
@@ -599,10 +701,15 @@ def explain(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: list, 
     keep = {}   # (div, ref) -> share a reference keeps after its cuts
     for (dv, _), c in new.items():
         keep[(dv, c["ref_dept"])] = keep.get((dv, c["ref_dept"]), 1.0) * (1 - pct(c, "ref_reduction_pct"))
-    parts = {k: {"ly": 0.0, "ty": 0.0, "exp": 0.0, "stores": set()} for k in ("lfl", "other", "new")}
+    parts = {k: {"ly": 0.0, "ty": 0.0, "exp": 0.0, "stores": set()} for k in ("lfl", "other", "new", "off")}
+    off = cube.get("off") or {}
+    off_dp = set()
     mon, depts, divs, nd_ty = {}, set(), set(), {}
     for dv, dp, at, s, m, ly, ty in _cells(cube, attr_map, want, sinfo, filt):
-        part = "new" if (dv, dp) in new else "lfl" if st[s].get("ssg") else "other"
+        part = ("off" if s in off.get(dv, {}).get(dp, {}) and m in off[dv][dp][s] and not ty else
+                "new" if (dv, dp) in new else "lfl" if st[s].get("ssg") else "other")
+        if part == "off":
+            off_dp.add((dv, dp))
         P = parts[part]
         P["ly"] += ly
         P["ty"] += ty
@@ -641,13 +748,16 @@ def explain(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: list, 
     lf, ot, nw = parts["lfl"], parts["other"], parts["new"]
     bits = []
     if lf["ly"]:
-        bits.append(f"₹{_inr(lf['ly'])} L is the like-for-like stores' own department sales")
+        bits.append(f"₹{_inr(lf['ly'])} L is the like-for-like stores' LY - the AOP Forecaster's base (the one its "
+                    "growth and BIS's are on), shared over departments by the Calendar's department mix")
     if ot["ly"]:
-        bits.append(f"₹{_inr(ot['ly'])} L is the other stores' division sales, shared out by their reference store's "
-                    "department mix")
+        bits.append(f"₹{_inr(ot['ly'])} L is the other stores' division sales (Calendar app, moved onto this year's "
+                    "calendar), shared out by their reference store's department mix")
     if nw["ly"]:
         bits.append(f"₹{_inr(nw['ly'])} L is the new departments' own past sales")
-    say("LY", "last year's sales of the same months, moved onto this year's calendar (Calendar app)"
+    if parts["off"]["ly"]:
+        bits.append(f"₹{_inr(parts['off']['ly'])} L is departments not planned this year")
+    say("LY", "last year's sales of the same months"
         + (": " + "; ".join(bits) + "." if bits else "."))
     # TY, part by part
     one_dp = len(depts) == 1
@@ -658,9 +768,9 @@ def explain(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: list, 
              f"= ₹{_inr(lf['exp'])}.")
         k = lf["ty"] / lf["exp"] if lf["exp"] else 1.0
         if abs(k - 1) > 5e-7:
-            why = ("the division is then scaled by one factor so it stays on its BIS / AOP total after the new "
-                   "departments are carved out" if any(d in nd_map for d in divs) else
-                   "the plan then differs from LY × growth by this factor (a correction step)")
+            why = ("each division and month is then held on its AOP plan by one factor (BIS spreads it over its own "
+                   "department mix, a little different from the Calendar's)"
+                   + (", and kept there after the new departments are carved out" if any(d in nd_map for d in divs) else ""))
             t += f" {why[0].upper() + why[1:]}: × {k:.4f} → ₹{_inr(lf['ty'])}."
         out["k"] = k
         say("TY · like-for-like stores", t)
@@ -691,6 +801,10 @@ def explain(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: list, 
                "New departments template changed since") + ".")
         out.setdefault("new_depts", []).append({"dept": dp, "ref": c["ref_dept"], "pct": npct * 100, "ty": ty,
                                                 "ref_ty": rty, "expected": exp})
+    if parts["off"]["ly"]:
+        say("Not planned this year", f"{len(off_dp)} department{'s' if len(off_dp) != 1 else ''} inactive / dropped in BIS "
+            f"keep their LY ₹{_inr(parts['off']['ly'])} in the LY with a plan of 0 - as the AOP base does, so the growth "
+            "matches AOP's.")
     if one_dp:
         (dv, dp), = depts
         if (dv, dp) not in new and grow.get(dv, {}).get(dp):
@@ -708,6 +822,8 @@ def explain(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: list, 
                f", not like-for-like (tag {x.get('tag') or '-'}); its department mix follows {x.get('ref') or 'its own LY'}."))
     used = [(n, parts[k]["ty"]) for k, n in (("lfl", "like-for-like stores"), ("other", "other stores"),
                                                ("new", "new departments")) if parts[k]["ty"]]
+    if parts["off"]["ly"]:
+        used.append(("not planned", 0.0))
     say("Check", " + ".join(f"₹{_inr(v)} ({n})" for n, v in used) + f" = ₹{_inr(TY)} - the number on screen ✓"
         if len(used) > 1 else f"₹{_inr(TY)} - the number on screen ✓")
     if filt:

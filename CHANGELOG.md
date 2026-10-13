@@ -7,6 +7,40 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### Plan = the AOP Forecaster's MAMJ (+11.1%) in BIS and Sales Plan; Excel-style Hierarchy filters; faster Hierarchy
+- **Asked (user):**
+  - "growth should have been 11.1% can you check on that ?"
+  - "this should match the AOP Forecster's projection for MAMJ which is 11.1% and then only it hould be pushed to sales plan engine. Check why the difference and rectify"
+  - "the filters should be individual filters - excel styled, also make sure that the population speed is fast"
+- **Why the growth differed.** AOP V2 (publish 118) is LY ₹38,884.3 L → ₹43,186.8 L = +11.06%.
+  - BIS showed ₹387.7 → ₹431.9 Cr = +11.4% because its LY left out the inactive departments' LY (₹1.14 Cr, plan 0); AOP's base counts it.
+  - Sales Plan showed +11.3% for two reasons:
+    - its like-for-like LY came from today's Calendar snapshot. That has Mar'26 festival-shifted, ₹508 L below V2's unshifted March base (Apr-Jun matched to 0.0 L), so BIS's growth landed ₹5.9 Cr short of the AOP plan;
+    - Final Results also left out inactive LY.
+- **BIS** (department view): an inactive department's LY counts in its division's LY and in the header, with a plan of 0. The header shows LY ₹388.8 → ₹431.9 Cr **+11.1%**, MENS +9.3%, LADIES +11.6%, KIDS +12.9% (= AOP). The tooltip says how much inactive LY is included.
+- **Sales Plan** (`run_dept_plan`):
+  - **LY:** a like-for-like store's department LY is scaled so each store x division x month equals the base of the AOP publish BIS plans on; the department mix stays today's (`_aop_lfl_base`, `_base_scale`).
+  - **Hold on AOP:** each division x month of the LFL stores is held on its AOP plan by one factor (≤0.18%, March only), as BIS does, because BIS spreads over its own department mix (`_aop_lfl_targets`; factors in `meta.lfl_hold_on_aop`).
+  - **New departments:** the re-balance is done separately for LFL and other stores, so LFL stays on AOP (over all stores together it moved LADIES' LFL by 2.4 L).
+- **Final Results** counts inactive departments' LY with plan 0. The ⓘ pop-up gains "Not planned this year" and explains the AOP base and the hold factor.
+- **Result (base plan regenerated, backups in the scratchpad):**
+  - LFL LY ₹38,884.31 L vs AOP ₹38,884.32 L.
+  - TY ₹43,186.78 L = AOP exactly: **+11.065% = AOP**, worst division-month gap 0.004 L.
+  - All 426 stores: ₹46,333.9 → ₹51,484.1 L = +11.1%.
+- **Excel-style filters:**
+  - Each hierarchy level's heading has its own ▾ list: search, (Select all) / (Select all search results), ticks, OK / Cancel, Clear filter. A filtered heading shows ▼.
+  - The lists follow the other levels' filters, as in Excel (`/grain/hierarchy-options?level=&filters=`). "+ Other level…" filters a level that is not in the tree.
+  - Open branches stay open when filters change.
+- **Speed:**
+  - A numpy column index of the plan replaces the cell walk: 1.7 ms vs 22 ms a branch, 0 differences on 51 branches; all 7 filter lists take about 6 ms.
+  - The index is built at 8010 start (`warm_hierarchy`).
+  - BIS input months are re-checked in the background instead of blocking a request about every minute (it was ~0.3 s).
+- **Checked:**
+  - test_final_hierarchy (inactive LY, Excel lists), test_grain_view, test_new_dept_template and test_division_plan pass.
+  - Explanation = row on 244 real nodes.
+  - BIS: node --check clean; header +11.1% in the browser.
+  - Sandbox: header filters, search + OK, cascading lists, root in 12 ms.
+
 ### Sales Plan: plan months = BIS's input months (MAMJ) + Hierarchy filters
 - **Asked (user):** "filters required, also the Plan should be made on auto detect from BIS input months, it should be restricted to that only. So BIS is currently there for MAMJ, so MAMJ should be the plan which is to be pushed in planning engine too".
 - **Plan months follow BIS:**

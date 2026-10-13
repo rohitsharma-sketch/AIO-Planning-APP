@@ -111,14 +111,17 @@ def apply_new_dept_adjustments(plan_result: dict, new_dept_map: dict) -> dict:
     # in place: every caller passes a fresh run_dept_plan() (a deep copy of the ~350 MB plan cost ~5 s, 2026-10-01)
     result = plan_result
     tot = lambda depts: sum(v.get("ty", 0.0) for v in depts.values() if v.get("active", True))   # noqa: E731
-    pre, post = {}, {}   # (div, month) -> division total over every store, before / after the carve
+    # (div, month, LFL?) -> total before / after the carve. Like-for-like and other stores are put back on their own
+    # totals, so the LFL stores stay exactly on the AOP plan (2026-10-13: over all stores together LADIES' LFL moved 2.4 L)
+    pre, post = {}, {}
 
     for store, sdata in result["stores"].items():
+        grp = bool(sdata.get("is_ssg"))
         for div, entries in new_dept_map.items():
             div_data = sdata["divisions"].get(div, {})
             for ty_month, month_data in div_data.get("months", {}).items():
                 depts = month_data["departments"]
-                pre[(div, ty_month)] = pre.get((div, ty_month), 0.0) + tot(depts)
+                pre[(div, ty_month, grp)] = pre.get((div, ty_month, grp), 0.0) + tot(depts)
                 for new_dept, cfg in entries.items():
                     ref_dept = cfg["ref_dept"]
                     # Support both old alloc_pct and new split fields
@@ -148,14 +151,15 @@ def apply_new_dept_adjustments(plan_result: dict, new_dept_map: dict) -> dict:
                             "new_dept_pct": cfg.get("new_dept_pct", legacy),
                             "ref_reduction_pct": cfg.get("ref_reduction_pct", legacy),
                         }
-                post[(div, ty_month)] = post.get((div, ty_month), 0.0) + tot(depts)
+                post[(div, ty_month, grp)] = post.get((div, ty_month, grp), 0.0) + tot(depts)
 
     # one factor per division x month for every store: back on the pre-carve total, mix (and new / ref) kept exactly
     f = {k: (pre[k] / post[k]) if post.get(k) else 1.0 for k in pre}
     for store, sdata in result["stores"].items():
+        grp = bool(sdata.get("is_ssg"))
         for div in new_dept_map:
             for ty_month, month_data in sdata["divisions"].get(div, {}).get("months", {}).items():
-                depts, k = month_data["departments"], f.get((div, ty_month), 1.0)
+                depts, k = month_data["departments"], f.get((div, ty_month, grp), 1.0)
                 act = {d: v for d, v in depts.items() if v.get("active", True)}
                 for v in act.values():
                     for fld in ("ty", "ty_p1", "ty_p2"):
@@ -214,6 +218,36 @@ def _avg_division_growth(growth_matrix, div, ty_month):
         if p1 + p2 > 0:
             vals.append((p1 + p2) / 2.0)
     return sum(vals) / len(vals) if vals else 100.0
+
+
+def _aop_lfl_base():
+    """(publish id, {STORE: {DIVISION: {TY month: L}}}) - the LY base of the AOP publish BIS plans on; (None, {}) when
+    it can't be read (the plan then runs on today's Calendar LY, as before)."""
+    try:
+        from engines.grain_view import aop_base_by_store
+        return aop_base_by_store()
+    except Exception:   # noqa: BLE001 - AOP / DB unreachable
+        return None, {}
+
+
+def _aop_lfl_targets() -> dict:
+    """{DIVISION: {TY month: L}} - the AOP plan BIS spreads each division onto (division_plan._bis_aop); {} if unread."""
+    try:
+        from engines.division_plan import _bis_aop, PLAN_MONTHS
+        pid, _, totals, _, _ = _bis_aop()
+        return {dv: {PLAN_MONTHS[int(p)]: float(v) for p, v in (pm or {}).items() if int(p) in PLAN_MONTHS and v}
+                for dv, pm in (totals or {}).items() if dv in DIVISIONS} if pid else {}
+    except Exception:   # noqa: BLE001 - AOP / DB unreachable: no hold
+        return {}
+
+
+def _base_scale(aop_base, store, div, ty_month, ly_month, store_dept_data) -> float:
+    """The factor that puts a store x division x month's department LY (all departments) onto the AOP base."""
+    b = (aop_base.get(str(store).strip().upper()) or {}).get(div, {}).get(ty_month)
+    if not b:
+        return 1.0
+    snap = sum(v.get(ly_month, 0.0) for v in store_dept_data.values() if isinstance(v, dict))
+    return b / snap if snap > 0 else 1.0
 
 
 # ── Core Calculation ──────────────────────────────────────────────────────────
@@ -290,6 +324,12 @@ def run_dept_plan():
 
     ssg_stores = {s for s, info in store_info.items() if _is_ssg(info.get("Tag", ""), s)}
     missing_ref = []
+    # The like-for-like LY is the AOP publish's base (user, 2026-10-13: "this should match the AOP Forecaster's
+    # projection for MAMJ which is 11.1% and then only it should be pushed to sales plan engine"): the Calendar snapshot
+    # moved Mar'26 since Version 2 was published (V2 keeps its unshifted Mar base - user's choice, 26 Sep), so BIS's
+    # growth on today's LY fell ~5.9 Cr short of the AOP plan. Each store x division x month is scaled onto that base;
+    # the department mix inside it stays today's. A store / month the publish has no base for keeps today's LY.
+    aop_pid, aop_base = _aop_lfl_base()
 
     results_ssg = {}
 
@@ -303,9 +343,10 @@ def run_dept_plan():
             for ty_month, ly_month in active_pairs:   # only locked months
                 store_dept_data = dept_actuals.get(store, {}).get(div, {})
                 dept_vals = {}
+                k_base = _base_scale(aop_base, store, div, ty_month, ly_month, store_dept_data)
 
                 for dept in active:
-                    ly_val = store_dept_data.get(dept, {}).get(ly_month, 0.0)
+                    ly_val = store_dept_data.get(dept, {}).get(ly_month, 0.0) * k_base
                     g_p1, g_p2 = _growth_p1_p2(growth_matrix, div, dept, ty_month)
                     g = (g_p1 + g_p2) / 2.0
                     ly_half = ly_val / 2.0
@@ -323,7 +364,7 @@ def run_dept_plan():
                 # Add inactive depts (zero, not in total)
                 all_depts = {r["name"] for r in dept_config.get(div, [])}
                 for dept in all_depts - active:
-                    ly_val = store_dept_data.get(dept, {}).get(ly_month, 0.0)
+                    ly_val = store_dept_data.get(dept, {}).get(ly_month, 0.0) * k_base
                     dept_vals[dept] = {
                         "ly": ly_val, "ly_p1": ly_val / 2.0, "ly_p2": ly_val / 2.0,
                         "ty": 0.0, "ty_p1": 0.0, "ty_p2": 0.0,
@@ -348,6 +389,27 @@ def run_dept_plan():
                 }
 
             results_ssg[store][div] = {"months": months_out}
+
+    # ── Step 1b: like-for-like stores held on the AOP plan ─────────────────────
+    # BIS holds every division x month exactly on its AOP plan over its own department mix; Sales Plan's mix (Calendar)
+    # differs a little, so the same growth % landed ~10 L off (-0.024%, mostly Mar). One factor per division x month
+    # over the LFL stores puts them back on it, the mix kept (2026-10-13, "should match the AOP ... 11.1%").
+    hold = {}
+    for div, months in _aop_lfl_targets().items():
+        for ty_month, T in months.items():
+            mds = [st[div]["months"][ty_month] for st in results_ssg.values() if ty_month in st.get(div, {}).get("months", {})]
+            cur = sum(v["ty"] for md in mds for v in md["departments"].values() if v["active"])
+            if not (T and cur > 0):
+                continue
+            f = hold.setdefault(div, {})[ty_month] = T / cur
+            for md in mds:
+                for v in md["departments"].values():
+                    if v["active"]:
+                        v["ty"], v["ty_p1"], v["ty_p2"] = v["ty"] * f, v["ty_p1"] * f, v["ty_p2"] * f
+                act = [v for v in md["departments"].values() if v["active"]]
+                md["div_total_ty"] = sum(v["ty"] for v in act)
+                md["div_total_p1"] = sum(v["ty_p1"] for v in act)
+                md["div_total_p2"] = sum(v["ty_p2"] for v in act)
 
     # ── Step 2: Non-SSG stores ────────────────────────────────────────────────
     results_non_ssg = {}
@@ -450,6 +512,8 @@ def run_dept_plan():
             "missing_ref_stores": list(set(missing_ref)),
             "ly_months_locked": ly_locked,
             "ty_months_active": active_ty_months,
+            "lfl_ly_base": f"AOP publish {aop_pid}" if aop_base else "Calendar snapshot",
+            "lfl_hold_on_aop": hold,
         },
     }
 
@@ -799,7 +863,7 @@ def _plan_inputs_key() -> str:
     from engines.department_plan import _load_state
     import datetime as _dt
     return json.dumps([_load_growth_matrix(), _load_dept_config(), _load_state(), locked_ly_months(),
-                       _snapshot("reindexed")[0], _dt.date.today(), list(_load_store_master())],
+                       _snapshot("reindexed")[0], _dt.date.today(), list(_load_store_master()), _aop_lfl_base()[0]],
                       sort_keys=True, default=str)
 
 

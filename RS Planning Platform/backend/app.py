@@ -106,6 +106,9 @@ def _warm_mrp_sales():
     # the sell-thru factors of the cluster-built (sell-thru) preview: ~30 s from the lake, once per file (2026-10-13)
     from engines.sellthru_factor import sell_thru
     threading.Thread(target=sell_thru, name="warm-sellthru-factor", daemon=True).start()
+    # Final Results' Hierarchy: the active plan and its column index, so its first open is instant (2026-10-13)
+    from engines.grain_view import warm_hierarchy
+    threading.Thread(target=warm_hierarchy, name="warm-hierarchy", daemon=True).start()
 
 # every apportioned total vs its parts, to 8 decimals (2026-09-30)
 app.include_router(reconciliation_router,  prefix="/api/planning/reconciliation",  dependencies=_dep)

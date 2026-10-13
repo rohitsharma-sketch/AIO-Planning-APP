@@ -25,8 +25,8 @@ cube = build_cube(plan, {})
 attr = {"MENS": {"JEANS": "REGULAR", "KURTA": "SUMMER"}, "KIDS": {"FROCK": "SUMMER"}}
 
 top = hierarchy_rows(cube, attr, ["cluster", "store", "division"], [])
-# GM and inactive departments are left out; totals add up
-assert top["total"] == {"ly": 25.0, "ty": 31.0}, top
+# GM is left out; an inactive department keeps its LY with a plan of 0 (as AOP's base, 2026-10-13); totals add up
+assert top["total"] == {"ly": 30.0, "ty": 31.0}, top
 assert [(r["key"], r["ty"]) for r in top["rows"]] == [("C1", 30.0), ("C2", 1.0)], top
 kids = hierarchy_rows(cube, attr, ["cluster", "store", "division"], ["C1"])
 assert [(r["key"], r["ty"]) for r in kids["rows"]] == [("S1", 24.0), ("S2", 6.0)] and kids["level"] == "store", kids
@@ -64,3 +64,9 @@ assert f["total"] == {"ly": 11.0, "ty": 13.0} and [(r["key"], r["ty"]) for r in 
 fe = explain(c2, {}, nd, ["division", "department"], ["LADIES", "DRESS"], {"store": {"A"}})
 assert abs(fe["ty"] - 99) < 1e-9 and abs(fe["parent"]["ty"] - (99 + 44 + 54)) < 1e-9 and fe["lines"][0]["h"] == "Filters on", fe
 print("filter checks passed")
+# Excel-style lists (2026-10-13): a level's list sits inside the OTHER filters, never its own
+from engines.grain_view import hierarchy_values  # noqa: E402
+hv = hierarchy_values(cube, attr, {"division": {"KIDS"}})
+assert hv["division"] == ["KIDS", "MENS"] and hv["department"] == ["FROCK"] and hv["store"] == ["S2"], hv
+assert hierarchy_values(cube, attr, {}, ["month"]) == {"month": ["Mar'27", "Apr'27"]}
+print("excel filter checks passed")

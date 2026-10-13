@@ -196,14 +196,22 @@ def bis_ty_months():
     user, 2026-10-13: "the Plan should be made on auto detect from BIS input months, it should be restricted to that
     only. So BIS is currently there for MAMJ, so MAMJ should be the plan" - BIS sends only the months it records (AOP
     seeded or set by a buyer), so a month enters the plan the day BIS starts planning it."""
+    import threading
     import time
-    if time.time() - _bis_m["t"] > 60:
+
+    def load():
         try:
             from engines.department_plan import BIS_DIVISIONS, _fetch_buyer_growth_live
             v = {r["month"] for d in BIS_DIVISIONS for r in _fetch_buyer_growth_live(d, strict=True) if r.get("month")} or None
         except Exception:   # noqa: BLE001 - BIS / AOP unreachable: fall back to the AOP months below
             v = None
-        _bis_m.update(t=time.time(), v=v)
+        _bis_m.update(t=time.time(), v=v, busy=False)
+    if not _bis_m["t"]:
+        load()   # the first call waits for the answer
+    elif time.time() - _bis_m["t"] > 60 and not _bis_m.get("busy"):
+        # later: answer at once from the last check and re-check behind it (a page never waits ~0.3 s for AOP, 2026-10-13)
+        _bis_m["busy"] = True
+        threading.Thread(target=load, name="bis-months", daemon=True).start()
     return _bis_m["v"]
 
 
