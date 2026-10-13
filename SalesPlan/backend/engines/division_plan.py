@@ -139,7 +139,13 @@ def get_config():
         "total_ly": round(sum(d["ly_mamj"] for d in divisions), 2),
         "total_plan": round(sum(d["plan_mamj"] for d in divisions), 2),
         "versions": _versions(),
+        "bis_saved_at": _bis_saved_at(),
     }
+
+
+def _bis_saved_at():
+    from engines.final_results_engine import _bis_saved_at as f
+    return f()
 
 
 # ──────────────────────────────────────────────

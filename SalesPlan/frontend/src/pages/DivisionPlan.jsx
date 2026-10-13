@@ -69,7 +69,7 @@ export default function DivisionPlan() {
           <div style={{ ...card, padding: '12px 18px', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 13 }}>
             <span style={{ flex: 1, color: theme.textPrimary }}>
               <strong>{cfg.source}</strong> · Mar'27 – Jun'27 · like-for-like stores, as in BIS · {cfg.n_divisions} divisions (KLM)
-              <span style={{ color: theme.textMuted, marginLeft: 8 }}>· LY base and plan are fixed by the AOP publish; change the plan in BIS</span>
+              <span style={{ color: theme.textMuted, marginLeft: 8 }}>· LY base and plan are fixed by the AOP publish; change the plan in BIS{cfg.bis_saved_at ? ` · BIS last saved ${cfg.bis_saved_at} - every division is held on its AOP, so a BIS save changes departments (Growth Matrix, Final Results), not these totals` : ''}</span>
             </span>
             {cfg.versions?.some(v => v.id !== cfg.aop_publish_id) && (
               <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: theme.textSecondary, fontWeight: 600 }}>

@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef, Fragment } from 'react'
 import { theme, alpha } from '../theme'
-import ExcelFilter from './ExcelFilter'
+import ExcelFilter, { FilterButton } from './ExcelFilter'
 
 // user, 2026-10-13: "i need a editable hierarchial system for editing a hierarchy for view" - pick the levels and their
 // order, then drill the plan as a tree (view only). Each branch is fetched when it is opened
 // (GET /api/planning/grain/hierarchy, from the same plan the Store / Cluster panels use). The order is kept per browser.
 const LEVELS = {
-  cluster: 'Cluster', store: 'Store', stype: 'Store type (SSG / NSO)', division: 'Division',
+  cluster: 'Cluster', store: 'Store', stype: 'Store type', division: 'Division',
   attribute: 'Attribute', department: 'Department', month: 'Month',
 }
+const MONTHS = ["Mar'27", "Apr'27", "May'27", "Jun'27", "Jul'27", "Aug'27", "Sep'27", "Oct'27", "Nov'27", "Dec'27", "Jan'28", "Feb'28", "Mar'28"]
 const DEFAULT = ['cluster', 'store', 'division', 'department']
 const KEY = 'sp.fr.hierarchy'
 const L = v => (v ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
@@ -104,12 +105,14 @@ export default function HierarchyView() {
   const [nodes, setNodes] = useState({})          // JSON(path) -> {rows, total, level} | {err} | 'loading'
   const [open, setOpen] = useState(() => new Set())
   const [source, setSource] = useState(null)
-  const [filters, setFilters] = useState(loadFilters)   // {level: [values]}
-  const [editing, setEditing] = useState(null)          // {level, anchor} - the Excel filter open now
+  const [filters, setFilters] = useState(loadFilters)   // {level: [values]} - only levels in the Rows bar, as Excel
+  const [sortBy, setSortBy] = useState({})              // {level: 'az' | 'za'} - none = largest TY first (months in order)
+  const [editing, setEditing] = useState(null)          // {level, anchor} - the Row Labels list open now
   const fkey = JSON.stringify(filters)
   const [why, setWhy] = useState(null)            // path of the row whose numbers are being explained
   const back = useRef(null)                       // the ⓘ that opened it - focus goes back there on close
   const lastLv = useRef(null)
+  const drag = useRef(null)                       // index of the field being dragged in the Rows bar
   const info = p => (
     <button type="button" onClick={e => { back.current = e.currentTarget; setWhy(p) }} aria-label={`How ${p.length ? p[p.length - 1] : 'the total'} is made`} title="How is this number made?"
       style={{ all: 'unset', cursor: 'pointer', marginLeft: 6, fontSize: 12, color: theme.primary, padding: '0 3px' }}>ⓘ</button>
@@ -125,6 +128,12 @@ export default function HierarchyView() {
       .catch(e => setNodes(n => ({ ...n, [k]: { err: e.message } })))
   }
 
+  // as in Excel, a field taken out of Rows takes its filter and sort with it
+  useEffect(() => {
+    const keep = o => Object.fromEntries(Object.entries(o).filter(([k]) => levels.includes(k)))
+    if (Object.keys(filters).some(k => !levels.includes(k))) setFilters(keep)
+    if (Object.keys(sortBy).some(k => !levels.includes(k))) setSortBy(keep)
+  }, [levels.join(',')])   // eslint-disable-line react-hooks/exhaustive-deps
   // a new hierarchy starts again from the top; new filters keep the open branches open (each re-fetched at once)
   useEffect(() => {
     try { localStorage.setItem(KEY, JSON.stringify(levels)); localStorage.setItem(FKEY, fkey) } catch { /* ignore */ }
@@ -136,21 +145,27 @@ export default function HierarchyView() {
     if (same) open.forEach(k => fetchNode(JSON.parse(k)))
   }, [levels.join(','), fkey])   // eslint-disable-line react-hooks/exhaustive-deps
   const setFilter = (lv, vals) => setFilters(f => { const n = { ...f }; if (vals && vals.length) n[lv] = vals; else delete n[lv]; return n })
-  const openFilter = (lv, el) => setEditing(e => (e && e.level === lv ? null : { level: lv, anchor: el }))
 
   const toggle = path => {
     const k = JSON.stringify(path)
     setOpen(o => { const n = new Set(o); n.has(k) ? n.delete(k) : n.add(k); return n })
     if (!nodes[k]) fetchNode(path)
   }
-  const move = (i, d) => setLevels(l => { const n = [...l]; [n[i], n[i + d]] = [n[i + d], n[i]]; return n })
+  const moveTo = (from, to) => setLevels(l => { const n = [...l]; const [x] = n.splice(from, 1); n.splice(to, 0, x); return n })
   const unused = Object.keys(LEVELS).filter(x => !levels.includes(x))
+  const order = (rows, lv) => {
+    const d = sortBy[lv]
+    if (!d) return rows
+    const key = r => (lv === 'month' ? String(MONTHS.indexOf(r.key)).padStart(2, '0') : String(r.key))
+    const out = [...rows].sort((a, b) => key(a).localeCompare(key(b), undefined, { numeric: true }))
+    return d === 'za' ? out.reverse() : out
+  }
 
-  const chip = { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 6px 4px 10px', borderRadius: 8, border: `1px solid ${theme.border}`, background: theme.surface, fontSize: 12, fontWeight: 600, color: theme.textPrimary }
-  const mini = { all: 'unset', cursor: 'pointer', padding: '0 4px', color: theme.textMuted, fontSize: 12 }
+  const mini = { all: 'unset', cursor: 'pointer', padding: '0 3px', color: theme.textMuted, fontSize: 12 }
   const th = { padding: '8px 12px', fontSize: 11, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.4, textAlign: 'right', borderBottom: `1px solid ${theme.border}`, background: theme.surfaceAlt }
   const td = { padding: '6px 12px', fontSize: 12.5, textAlign: 'right', fontFamily: theme.fontMono, borderBottom: `1px solid ${theme.border}`, whiteSpace: 'nowrap' }
-  const fbtn = lv => ({ all: 'unset', cursor: 'pointer', borderRadius: 4, padding: '1px 4px', color: filters[lv] ? theme.primary : 'inherit', background: filters[lv] ? alpha(theme.primary, '14') : 'transparent' })
+  const field = { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 4px 3px 8px', borderRadius: 4, border: `1px solid ${theme.border}`,
+    background: theme.surface, fontSize: 12, fontWeight: 600, color: theme.textPrimary, cursor: 'grab', userSelect: 'none' }
 
   const renderRows = (path, depth) => {
     const node = nodes[JSON.stringify(path)]
@@ -158,7 +173,7 @@ export default function HierarchyView() {
     if (node.err) return <tr><td colSpan={5} style={{ ...td, textAlign: 'left', paddingLeft: 16 + depth * 22, color: theme.danger }}>{node.err}</td></tr>
     if (!node.rows.length && depth === 0) return <tr><td colSpan={5} style={{ ...td, textAlign: 'left', color: theme.textMuted }}>Nothing inside these filters.</td></tr>
     const parentTy = node.total?.ty || 0
-    return node.rows.map(r => {
+    return order(node.rows, node.level).map(r => {
       const p = [...path, r.key], k = JSON.stringify(p), leaf = p.length >= levels.length, isOpen = open.has(k)
       return (
         <Fragment key={k}>
@@ -185,53 +200,45 @@ export default function HierarchyView() {
 
   const root = nodes['[]']
   const nF = Object.keys(filters).length
+  const fTip = nF ? Object.entries(filters).map(([lv, v]) => `${LEVELS[lv]}: ${v.join(', ')}`).join('\n') : 'Filter and sort the rows'
+  const anySort = levels.map(x => sortBy[x]).find(Boolean)
   return (
     <div>
-      {/* view controls, not plan edits: kept out of the suite's Undo */}
-      <div data-no-undo style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 12, padding: '12px 16px', marginBottom: 14 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>Hierarchy - pick the levels and their order</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+      {/* Excel's PivotTable Rows area - view controls, not plan edits: kept out of the suite's Undo */}
+      <div data-no-undo style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 12, padding: '10px 16px', marginBottom: 14 }}>
+        <div role="list" aria-label="Row fields" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.6, marginRight: 4 }}>Rows</span>
           {levels.map((x, i) => (
             <Fragment key={x}>
-              {i > 0 && <span style={{ color: theme.textMuted }}>→</span>}
-              <span style={chip}>
-                {LEVELS[x]}
-                <button type="button" style={mini} disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move ${LEVELS[x]} up`} title="Move up a level">◀</button>
-                <button type="button" style={mini} disabled={i === levels.length - 1} onClick={() => move(i, 1)} aria-label={`Move ${LEVELS[x]} down`} title="Move down a level">▶</button>
-                <button type="button" style={mini} disabled={levels.length === 1} onClick={() => setLevels(l => l.filter(y => y !== x))} aria-label={`Remove ${LEVELS[x]}`} title="Remove this level">✕</button>
+              {i > 0 && <span aria-hidden="true" style={{ color: theme.textMuted, fontSize: 11 }}>›</span>}
+              <span style={field} draggable tabIndex={0} role="listitem"
+                aria-label={`${LEVELS[x]}, row field ${i + 1} of ${levels.length}. Alt+Left or Alt+Right to move`}
+                title="Drag to change the order (Alt+← / Alt+→)"
+                onDragStart={e => { drag.current = i; e.dataTransfer.effectAllowed = 'move' }}
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => { e.preventDefault(); const f = drag.current; drag.current = null; if (f != null && f !== i) moveTo(f, i) }}
+                onKeyDown={e => {
+                  if (e.altKey && e.key === 'ArrowLeft' && i > 0) { e.preventDefault(); moveTo(i, i - 1) }
+                  if (e.altKey && e.key === 'ArrowRight' && i < levels.length - 1) { e.preventDefault(); moveTo(i, i + 1) }
+                }}>
+                <span aria-hidden="true" style={{ color: theme.textMuted, fontSize: 10 }}>⠿</span>
+                {LEVELS[x]}{filters[x] && <svg width="8" height="8" viewBox="0 0 10 10" aria-label="filtered" style={{ color: theme.primary }}><path d="M0 0h10L6 5v5L4 9V5z" fill="currentColor" /></svg>}
+                <button type="button" style={mini} disabled={levels.length === 1} onClick={() => setLevels(l => l.filter(y => y !== x))} aria-label={`Remove ${LEVELS[x]}`} title="Remove from Rows">✕</button>
               </span>
             </Fragment>
           ))}
           {unused.length > 0 && (
-            <select value="" onChange={e => e.target.value && setLevels(l => [...l, e.target.value])} aria-label="Add a level"
-              style={{ padding: '5px 8px', borderRadius: 8, border: `1px dashed ${theme.border}`, fontSize: 12, background: theme.surface }}>
-              <option value="">+ Add level…</option>
+            <select value="" onChange={e => e.target.value && setLevels(l => [...l, e.target.value])} aria-label="Add a field to Rows"
+              style={{ padding: '3px 6px', borderRadius: 4, border: `1px dashed ${theme.border}`, fontSize: 12, background: theme.surface }}>
+              <option value="">+ Add field</option>
               {unused.map(x => <option key={x} value={x}>{LEVELS[x]}</option>)}
             </select>
           )}
-          <button type="button" onClick={() => setLevels(DEFAULT)} style={{ ...mini, marginLeft: 'auto', textDecoration: 'underline' }}>Reset</button>
+          <span style={{ flex: 1 }} />
+          {nF > 0 && <button type="button" onClick={() => setFilters({})} style={{ ...mini, textDecoration: 'underline' }}>Clear filters</button>}
+          <button type="button" onClick={() => { setLevels(DEFAULT); setSortBy({}) }} style={{ ...mini, textDecoration: 'underline' }}>Reset</button>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.6, marginRight: 4 }}>Filters</span>
-          {!nF && <span style={{ fontSize: 12, color: theme.textMuted }}>none - click ▾ on a column heading below</span>}
-          {Object.entries(filters).map(([lv, vals]) => (
-            <span key={lv} style={{ ...chip, background: alpha(theme.primary, '12'), borderColor: alpha(theme.primary, '50') }}>
-              <button type="button" onClick={e => openFilter(lv, e.currentTarget)} style={{ all: 'unset', cursor: 'pointer' }} title="Change">
-                {LEVELS[lv]}: <span style={{ fontWeight: 400 }}>{vals.length > 3 ? `${vals.slice(0, 3).join(', ')} +${vals.length - 3}` : vals.join(', ')}</span>
-              </button>
-              <button type="button" style={mini} onClick={() => setFilter(lv, null)} aria-label={`Remove the ${LEVELS[lv]} filter`} title="Remove this filter">✕</button>
-            </span>
-          ))}
-          {unused.filter(x => !filters[x]).length > 0 && (
-            <select value="" onChange={e => { const v = e.target.value; if (v) openFilter(v, e.target) }} aria-label="Filter a level that is not in the hierarchy"
-              style={{ padding: '5px 8px', borderRadius: 8, border: `1px dashed ${theme.border}`, fontSize: 12, background: theme.surface }}>
-              <option value="">+ Other level…</option>
-              {unused.filter(x => !filters[x]).map(x => <option key={x} value={x}>{LEVELS[x]}</option>)}
-            </select>
-          )}
-          {nF > 0 && <button type="button" onClick={() => setFilters({})} style={{ ...mini, textDecoration: 'underline' }}>Clear all filters</button>}
-        </div>
-        <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 8 }}>
+        <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 6 }}>
           View only · ₹ lakh · {levels.includes('month') ? 'by month' : 'all plan months added up'} · Cont % = share of the level above · ⓘ = how a row's numbers are made
           {source && <> · from {source.note || source.name}</>}
         </div>
@@ -239,16 +246,10 @@ export default function HierarchyView() {
       <div style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 12, overflow: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead><tr>
-            <th style={{ ...th, textAlign: 'left' }} data-no-undo>
-              {levels.map((x, i) => (
-                <Fragment key={x}>
-                  {i > 0 && ' → '}
-                  <button type="button" onClick={e => openFilter(x, e.currentTarget)} style={fbtn(x)} aria-haspopup="dialog"
-                    aria-label={`Filter ${LEVELS[x]}${filters[x] ? ` (${filters[x].length} picked)` : ''}`} title={filters[x] ? `Filtered: ${filters[x].join(', ')}` : `Filter ${LEVELS[x]}`}>
-                    {LEVELS[x]} <span aria-hidden="true">{filters[x] ? '▼' : '▾'}</span>
-                  </button>
-                </Fragment>
-              ))}
+            <th style={{ ...th, textAlign: 'left' }} title={fTip}>
+              Row Labels
+              <FilterButton active={nF > 0} sorted={anySort} label={`Filter and sort the rows${nF ? ` (${nF} filtered)` : ''}`} title={fTip}
+                onClick={el => setEditing(e => (e ? null : { level: levels.find(x => filters[x]) || levels[0], anchor: el }))} />
             </th>
             <th style={th}>LY (₹L)</th><th style={th}>TY (₹L)</th><th style={th}>Growth %</th><th style={th}>Cont %</th>
           </tr></thead>
@@ -256,7 +257,7 @@ export default function HierarchyView() {
             {renderRows([], 0)}
             {root && root !== 'loading' && !root.err && (
               <tr style={{ fontWeight: 700 }}>
-                <td style={{ ...td, textAlign: 'left', fontFamily: 'inherit' }}>Total{nF ? ' (filtered)' : ''}{info([])}</td>
+                <td style={{ ...td, textAlign: 'left', fontFamily: 'inherit' }}>Grand Total{info([])}</td>
                 <td style={td}>{L(root.total.ly)}</td><td style={td}>{L(root.total.ty)}</td>
                 <td style={td}>{P(gr(root.total.ty, root.total.ly))}</td><td style={td}>100%</td>
               </tr>
@@ -264,7 +265,9 @@ export default function HierarchyView() {
           </tbody>
         </table>
       </div>
-      {editing && <ExcelFilter key={editing.level + fkey} title={LEVELS[editing.level]} anchor={editing.anchor} picked={filters[editing.level]}
+      {editing && <ExcelFilter key={editing.level + fkey + (sortBy[editing.level] || '')} title={LEVELS[editing.level]} anchor={editing.anchor} picked={filters[editing.level]}
+        fields={levels.map(x => ({ value: x, label: LEVELS[x] }))} field={editing.level} onField={lv => setEditing(e => ({ ...e, level: lv }))}
+        sort={sortBy[editing.level] || null} onSort={d => setSortBy(o => { const n = { ...o }; if (d) n[editing.level] = d; else delete n[editing.level]; return n })}
         load={() => fetch(`/api/planning/grain/hierarchy-options?${new URLSearchParams({ level: editing.level, filters: fkey })}`)
           .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`); return j[editing.level] || [] })}
         onDone={vals => { if (vals !== undefined) setFilter(editing.level, vals); setEditing(null) }} />}

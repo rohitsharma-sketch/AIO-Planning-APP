@@ -41,7 +41,8 @@ export default function FinalResults() {
               {!done && <span style={{ fontSize: 11 }}> (not run)</span>}
             </span>
           ))}
-          <span style={{ marginLeft: 'auto' }}>Active source: <b style={{ fontFamily: theme.fontMono, fontSize: 11 }}>{ps.active_source || '-'}</b></span>
+          <span style={{ marginLeft: 'auto' }}>Active source: <b style={{ fontFamily: theme.fontMono, fontSize: 11 }}>{ps.active_source || '-'}</b>
+            {ps.base_plan_at && <span style={{ fontSize: 11, color: theme.textMuted }} title="The base plan remakes itself within a minute of a BIS save or an AOP publish (not after a correction step has run)"> · made {ps.base_plan_at}{ps.bis_saved_at ? ` · BIS saved ${ps.bis_saved_at}` : ''}</span>}</span>
           <span style={{ flexBasis: '100%', fontSize: 12 }}><span style={{ color: theme.accent, fontWeight: 600 }}>Engines run: </span>{ps.remark}</span>
         </div>
       )}

@@ -7,6 +7,26 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### Sales Plan: the saved base plan keeps itself current; Hierarchy and Growth Matrix filters as in Excel
+- **Asked (user):** "make it more simplistic and more true to thier excel counterparts", then "still showing stale updates".
+- **Stale plan:**
+  - Final Results, MRP and every later engine read the saved base plan (`final_dept_plan.json`), which changed only on a manual Generate Base Plan, so it lagged behind a BIS save (14:46) or an AOP publish.
+  - `dept_sales_engine.refresh_saved_plan()` now runs in the 60-second background loop. It remakes the plan when its inputs change: BIS growth, AOP publish, Department Master, plan months or LY (a hash of `_plan_inputs_key`, kept in `final_dept_plan.inputs.json`, git-ignored).
+  - It never runs once a correction step has been used, because a new base plan would wipe it.
+  - Final Results shows "made <time> · BIS saved <time>". Division Plan shows "BIS last saved …" and notes that its division totals are held on AOP, so a BIS save shows in departments.
+  - **Checked:** the first refresh remade the plan (12.8 s) and the second was a no-op (0.1 s). LFL is still = AOP (43,186.78 L). The 14:46 save changed no department against the plan made before it.
+- **Hierarchy as an Excel PivotTable:**
+  - A **Rows** bar of fields you drag to reorder (Alt+← / Alt+→), with ✕ and "+ Add field". The ◀ ▶ buttons and the separate FILTERS / "+ Other level…" row are gone.
+  - One **Row Labels ▾** heading, whose list starts with **Select field:**, then Sort A to Z / Z to A, Clear Filter From "…", Search, (Select All), values, OK / Cancel.
+  - The button shows a funnel when filtered and an arrow when sorted. "Total" is "Grand Total".
+  - A field removed from Rows takes its filter and sort with it, as in Excel. "Store type (SSG / NSO)" is now "Store type".
+- **Growth Matrix:** the same list with sorting (Sort Smallest to Largest / Largest to Smallest on period columns), one column sorted at a time, and the same funnel / arrow buttons. The shared `ExcelFilter` gains `FilterButton`, `fields`, `sort` and `numeric`.
+- **Checked in the sandbox:**
+  - An old filter on a field not in Rows was dropped.
+  - Sort A to Z, Select field → Month (Mar-Jun only), and Month = Mar'27 → Grand Total ₹12,683.4 → ₹14,442.0 L.
+  - Alt+→ moved Department behind Division.
+  - Growth Matrix: Mar'27 P1 sorted Largest to Smallest (129.2 first).
+
 ### Sales Plan Growth Matrix: the same Excel-style column filters
 - **Asked (user):** "add the same Excel filters to the Growth Matrix page".
 - **Where:** a ▾ on the Department and Attribute headings and on every P1 / P2 period heading. Period lists show that column's growth index values, in numeric order (0 = delisted).

@@ -5,7 +5,7 @@ import GrainPanel from '../components/GrainPanel'
 import BisCompare from '../components/BisCompare'
 import { ENGINE_META, startPipeline } from '../pipelineState'
 import SearchSlicer from '../components/SearchSlicer'
-import ExcelFilter from '../components/ExcelFilter'
+import ExcelFilter, { FilterButton } from '../components/ExcelFilter'
 import { useGrain } from '../grain'
 
 const DIVISIONS = ['KIDS', 'LADIES', 'MENS']   // GM / RETAIL out of the Sales Plan engine (user, 2026-10-13)
@@ -55,7 +55,8 @@ export default function DepartmentGrowthMatrix() {
   // {column: [values]} - department, attribute or a period (its growth index); cleared when the division changes
   const [xf, setXf]                   = useState({})
   const [xfEdit, setXfEdit]           = useState(null)   // {col, title, anchor} - the list open now
-  useEffect(() => { setXf({}); setXfEdit(null) }, [activeDiv])
+  const [xs, setXs]                   = useState(null)   // {col, dir: 'az' | 'za'} - Excel's Sort, one column at a time
+  useEffect(() => { setXf({}); setXfEdit(null); setXs(null) }, [activeDiv])
   const [activeMonths, setActiveMonths] = useState(new Set())
   const [saving, setSaving]           = useState(false)
   const [lastSaved, setLastSaved]     = useState(null)
@@ -277,7 +278,12 @@ export default function DepartmentGrowthMatrix() {
   // a cell as its Excel filter lists it: the name, the attribute, or the period's growth index as shown
   const cellVal = (d, col) => (col === 'department' ? d.name : col === 'attribute' ? d.attribute : String(+(+(d.periods[col] ?? 100)).toFixed(2)))
   const passXf = (d, skip) => Object.entries(xf).every(([c, vals]) => c === skip || vals.includes(cellVal(d, c)))
+  const isNum = col => col !== 'department' && col !== 'attribute'
   const filtered = base.filter(d => passXf(d))
+  if (xs) {   // Excel's Sort A to Z / Smallest to Largest on that column (view only)
+    const k = d => cellVal(d, xs.col)
+    filtered.sort((a, b) => (isNum(xs.col) ? +k(a) - +k(b) : k(a).localeCompare(k(b))) * (xs.dir === 'za' ? -1 : 1))
+  }
   // a column's list = the values left by the OTHER columns' filters, as Excel does (numbers in numeric order)
   const xfValues = col => {
     const v = [...new Set(base.filter(d => passXf(d, col)).map(d => cellVal(d, col)))]
@@ -285,12 +291,9 @@ export default function DepartmentGrowthMatrix() {
   }
   const nXf = Object.keys(xf).length
   const fb = (col, title) => (
-    <button type="button" data-no-undo onClick={e => { e.stopPropagation(); const el = e.currentTarget; setXfEdit(x => (x && x.col === col ? null : { col, title, anchor: el })) }}
-      aria-haspopup="dialog" aria-label={`Filter ${title}${xf[col] ? ` (${xf[col].length} picked)` : ''}`} title={xf[col] ? `Filtered: ${xf[col].join(', ')}` : `Filter ${title}`}
-      style={{ all: 'unset', cursor: 'pointer', marginLeft: 3, padding: '0 3px', borderRadius: 3, fontSize: 10,
-               color: xf[col] ? theme.primary : theme.textMuted, background: xf[col] ? alpha(theme.primary, '18') : 'transparent' }}>
-      {xf[col] ? '▼' : '▾'}
-    </button>
+    <FilterButton active={!!xf[col]} sorted={xs && xs.col === col ? xs.dir : null}
+      label={`Filter ${title}${xf[col] ? ` (${xf[col].length} picked)` : ''}`} title={xf[col] ? `Filtered: ${xf[col].join(', ')}` : `Filter / sort ${title}`}
+      onClick={el => setXfEdit(x => (x && x.col === col ? null : { col, title, anchor: el }))} />
   )
 
   const divMeta = buyerMeta[activeDiv]
@@ -802,8 +805,9 @@ export default function DepartmentGrowthMatrix() {
           </div>
         )}
       </div>
-      {xfEdit && <ExcelFilter key={xfEdit.col + JSON.stringify(xf)} title={xfEdit.title} anchor={xfEdit.anchor} picked={xf[xfEdit.col]}
-        load={() => xfValues(xfEdit.col)}
+      {xfEdit && <ExcelFilter key={xfEdit.col + JSON.stringify(xf) + JSON.stringify(xs)} title={xfEdit.title} anchor={xfEdit.anchor} picked={xf[xfEdit.col]}
+        load={() => xfValues(xfEdit.col)} numeric={isNum(xfEdit.col)}
+        sort={xs && xs.col === xfEdit.col ? xs.dir : null} onSort={dir => setXs(dir ? { col: xfEdit.col, dir } : null)}
         onDone={vals => {
           if (vals !== undefined) setXf(f => { const n = { ...f }; if (vals.length) n[xfEdit.col] = vals; else delete n[xfEdit.col]; return n })
           setXfEdit(null)

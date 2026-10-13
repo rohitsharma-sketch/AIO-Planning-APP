@@ -71,8 +71,29 @@ def get_pipeline():
     view (user, 2026-10-13: "remove multiple views just keep the hierarchial view"; the Store / Department / Cluster /
     Dashboard views and their /data + /dashboard routes - a 1.3 MB read of the whole plan file - are gone)."""
     ps = _pipeline_status()
+    stamp = os.path.join(os.path.dirname(__file__), "..", "final_dept_plan.inputs.json")
+    try:
+        with open(stamp, encoding="utf-8") as fh:
+            made = json.load(fh).get("at")
+    except (OSError, ValueError):
+        made = None
     return {"pipeline": {k: ps[k] for k in ("master_setup", "buyer_synced", "new_depts", "attr_correction", "base_correction")},
-            "active_source": ps["active_source"], "remark": ps["remark"]}
+            "active_source": ps["active_source"], "remark": ps["remark"],
+            # when the base plan was made - it remakes itself within a minute of a BIS save / AOP publish (2026-10-13)
+            "base_plan_at": made, "bis_saved_at": _bis_saved_at()}
+
+
+def _bis_saved_at():
+    """When BIS last saved (its last growth push), or None."""
+    try:
+        from db.base import SessionLocal
+        from sqlalchemy import text
+        with SessionLocal() as db:
+            t = db.execute(text("SELECT max(updated_at) FROM planning_inputs.input_values "
+                                "WHERE lever_key = 'buyer_department_growth'")).scalar()
+        return t.strftime("%d %b %Y, %H:%M") if t else None
+    except Exception:   # noqa: BLE001 - DB unreachable: just not shown
+        return None
 
 
 

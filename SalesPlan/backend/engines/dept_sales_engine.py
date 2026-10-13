@@ -743,11 +743,13 @@ def generate_base_plan():
     Attr Correction and Base Correction know they need to re-run.
     """
     _BASE_DIR = os.path.join(_BASE, "..")
+    key = _inputs_stamp()   # the inputs this plan is made from - before the run, so a change during it shows next time
     plan = run_dept_plan()
     # Apply new-dept mapping if one exists (empty mapping = no change)
     new_dept_map = _load_new_dept_map()
     final = apply_new_dept_adjustments(plan, new_dept_map)
     save_json(FINAL_PLAN_PATH, final)
+    save_json(FINAL_STAMP_PATH, {"inputs": key, "at": time.strftime("%Y-%m-%d %H:%M:%S")})
     # Invalidate downstream optional engines
     stale_cleared = []
     for fname in ("attr_corrected_plan.json", "base_corrected_plan.json"):
@@ -847,13 +849,45 @@ def plan_views() -> dict:
         return _views
 
 
+FINAL_STAMP_PATH = os.path.join(_BASE, "..", "final_dept_plan.inputs.json")   # git-ignored (SalesPlan/backend/*.json)
+_CORRECTED = ("attr_corrected_plan.json", "base_corrected_plan.json")
+
+
+def _inputs_stamp() -> str:
+    import hashlib
+    return hashlib.sha1(_plan_inputs_key().encode()).hexdigest()
+
+
+def refresh_saved_plan() -> bool:
+    """Keep the saved base plan (final_dept_plan.json - what Final Results, MRP and every later engine read) on its
+    current inputs (user, 2026-10-13: "still showing stale updates" - BIS saved at 14:46 but the saved plan was from
+    before, so it only caught up on a manual Generate Base Plan). Regenerates when BIS's growth, the AOP publish, the
+    Department Master, the plan months or the LY change - unless a correction step has been run on it, which a new
+    base plan would wipe (that stays the user's Generate Base Plan). True when it regenerated."""
+    if not os.path.exists(FINAL_PLAN_PATH):
+        return False
+    if any(os.path.exists(os.path.join(_BASE, "..", f)) for f in _CORRECTED):
+        return False
+    try:
+        with open(FINAL_STAMP_PATH, encoding="utf-8") as fh:
+            old = json.load(fh).get("inputs")
+    except (OSError, ValueError):
+        old = None
+    if old == _inputs_stamp():
+        return False
+    generate_base_plan()
+    return True
+
+
 def warm_plan_views(every: int = 60):
-    """Background: keep plan_views() current so no page waits for the plan run (8010 starts this at boot)."""
+    """Background: keep plan_views() current so no page waits for the plan run, and the saved base plan on its inputs
+    (refresh_saved_plan) - 8010 starts this at boot."""
     while True:
-        try:
-            plan_views()
-        except Exception:   # noqa: BLE001 - a bad input file must not kill the warmer; the page shows the error itself
-            pass
+        for job in (plan_views, refresh_saved_plan):
+            try:
+                job()
+            except Exception:   # noqa: BLE001 - a bad input file must not kill the warmer; the page shows the error itself
+                pass
         time.sleep(every)
 
 
