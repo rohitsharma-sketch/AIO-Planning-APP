@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### STR Forecaster: the 4-month block shows averages for Plan qty and MDQ
+- **Asked (user):** "in the averge columns only average should be there for Plan Qty,MDQ".
+- The 4-month avg block showed the 4-month *totals* of plan qty and MDQ (All 1,41,18,535 / 2,52,48,122). It now shows the average month, the monthly figures over the months that have one: **Avg plan qty** / **Avg MDQ** (All 35,29,634 / 63,12,030; BH - (NP) 10,21,779 plan qty).
+- Sorting and filters use the average too.
+- STR days and Band are unchanged; they were already worked out from the average month. The months keep their own figures.
+- Checked on 8085.
+
 ### STR Forecaster: fixture count and store count in the drill-down
 - **Asked (user):** "I need Avg Fixtures, Avg Store Count in this view and its respective month fixture count and store count" (the Department > Cluster > Store view).
 - **4-month avg block:** **Avg fixtures** (fixtures in the average month, over the months with fixtures) and **Avg store count** (stores with fixtures in the average month).

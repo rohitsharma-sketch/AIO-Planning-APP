@@ -522,6 +522,7 @@ const FIG=[['band','Band','actual STR days rounded to the nearest 30, kept betwe
   ['days','STR days','days the MDQ lasts at the planned selling rate: MDQ ÷ (planned qty ÷ days), over rows with both a plan and fixtures'],
   ['qty','Plan qty','planned qty: the sales plan’s own, else planned sales ÷ LY selling price'],['mdq','MDQ','fixtures × qty per fixture']];
 const cellOf=(r,i)=>i==='t'?r.total:r.months[i];
+const avgOf=(r,f)=>{const v=(r.months||[]).map(c=>c?.[f]||0).filter(x=>x>0);return v.length?v.reduce((a,b)=>a+b,0)/v.length:0;};   // the average month
 function rollCols(){
   const R=S.roll,L=S.layers;
   const cols=[{id:'label',label:L.map(k=>LAYERS[k]).join(' › '),cls:'l1',filt:false,get:r=>r[L[r._d||0]],
@@ -532,10 +533,14 @@ function rollCols(){
   // 4-month average comes first; the months fold behind the toggle on its header (remembered per browser)
   const ml=R.months.map(mon),tog=`<button class="mtog" data-mtog aria-expanded="${S.months}" title="${S.months?'Hide':'Show'} the months">${S.months?'&#9666; hide months':'&#9656; '+h(ml[0]+'–'+ml[ml.length-1])}</button>`;
   for(const [i,g] of [['t','4-month avg'],...(S.months?R.months.map((m,i)=>[i,ml[i]]):[])])for(const [f,l,t] of FIG)
-    cols.push({id:f+':'+i,grp:g,grpHtml:i==='t'?h(g)+' '+tog:null,gtitle:i==='t'?'sum over the months, then the days - an average monthly rate':'',label:l,title:t,m:i,
+    {// user, 2026-10-13: "in the averge columns only average should be there for Plan Qty,MDQ" - the 4-month block shows the
+     // average month (the months' figures / the months that have one), not the 4-month total
+     const avg=i==='t'&&(f==='qty'||f==='mdq');
+     cols.push({id:f+':'+i,grp:g,grpHtml:i==='t'?h(g)+' '+tog:null,gtitle:i==='t'?'the average month: plan qty and MDQ averaged over the months, the days from them':'',
+      label:avg?'Avg '+(f==='qty'?'plan qty':'MDQ'):l,title:avg?t+' - average month':t,m:i,
       cls:f==='band'?'b band':f==='ly_days'?'ly':'',num:true,filt:true,fmt:f==='band'?v=>v+' days':null,
-      get:r=>f==='band'?bandOf(cellOf(r,i)):cellOf(r,i)[f],
-      html:r=>{const c=cellOf(r,i),v=c[f];return f==='band'?dd(bandOf(c))+seaTag(c):f==='qty'||f==='mdq'?n0(v):dd(v);}});
+      get:r=>f==='band'?bandOf(cellOf(r,i)):avg?avgOf(r,f):cellOf(r,i)[f],
+      html:r=>{const c=cellOf(r,i),v=avg?avgOf(r,f):c[f];return f==='band'?dd(bandOf(c))+seaTag(c):f==='qty'||f==='mdq'?n0(v):dd(v);}});}
   // user, 2026-10-13: "I need Avg Fixtures, Avg Store Count in this view and its respective month fixture count and store
   // count" - from the fixture plan; stores = distinct stores with fixtures (a store under many rows counts once)
   const fxCols=[];
