@@ -9,10 +9,10 @@ import { FiltersRow } from '../components/ExcelFilter'
 const API = '/api/planning/art-nm'
 const DIV_COLOR = { KIDS: '#C85A12', LADIES: '#7420B8', MENS: '#077A4A' }
 const TAG_NOTE = {
-  'EXISTING ACTIVE MC': 'LY mix x your % (deviation capped 50-150%)',
+  'EXISTING ACTIVE MC': 'LY cont % x your % deviation (capped 50-150%); a new article name: your % as it is',
   'NEW ACTIVE MC': 'your % as it is',
   'NEW SPLIT MC': 'your % as it is, on each split part by article tier',
-  'IN-ACTIVE MC': 'LY mix x your % (deviation capped 50-150%)',
+  'IN-ACTIVE MC': 'taken as 0% - every deviation at the 50% floor, so the LY mix',
 }
 const card = { background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 12, padding: '16px 20px' }
 const btn = primary => ({ padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
@@ -118,7 +118,8 @@ export default function ArtNmImport() {
                     </tr>,
                     ...(open === r.dept ? Object.entries(r.arts).map(([a, v]) => (
                       <tr key={r.dept + a}><td style={{ ...td, paddingLeft: 30, fontFamily: theme.fontMono }} colSpan={5}>{a}</td>
-                        <td style={{ ...td, textAlign: 'right', fontFamily: theme.fontMono }}>{v.toFixed(1)}%</td><td style={td} /></tr>)) : []),
+                        <td style={{ ...td, textAlign: 'right', fontFamily: theme.fontMono }}>{v.toFixed(1)}%</td>
+                        <td style={{ ...td, color: theme.warning }}>{r.given?.[a] != null ? `in-active MC: file had ${r.given[a].toFixed(1)}%, taken as 0%` : ''}</td></tr>)) : []),
                   ])}</tbody>
                 </table>
               </div>

@@ -532,7 +532,7 @@ def _cells(cube: dict, attr_map: dict, want: dict, sinfo: dict, filt: dict | Non
                             yield dv, dp, at, s, m, ly, 0.0
 
 
-def parse_filters(raw: str) -> dict:
+def parse_filters(raw: str, allowed=HIER_LEVELS) -> dict:
     """'{"division": ["MENS"], "month": ["Mar'27"]}' -> {level: set}; unknown levels / empty lists dropped."""
     try:
         f = json.loads(raw or "{}")
@@ -540,7 +540,29 @@ def parse_filters(raw: str) -> dict:
         raise HTTPException(status_code=422, detail="filters must be JSON: {level: [values]}")
     if not isinstance(f, dict):
         raise HTTPException(status_code=422, detail="filters must be JSON: {level: [values]}")
-    return {k: {str(x) for x in v} for k, v in f.items() if k in HIER_LEVELS and isinstance(v, list) and v}
+    return {k: {str(x) for x in v} for k, v in f.items() if k in allowed and isinstance(v, list) and v}
+
+
+def make_index(cells, levels) -> dict:
+    """The column index the Hierarchy reads, from any cells: iterable of ({level: value}, ly, ty). Shared by the
+    department plan (below) and the Article Name plan (art_nm_engine), so both trees behave the same."""
+    import numpy as np
+    names = {lv: [] for lv in levels}
+    pos = {lv: {} for lv in levels}
+    cols = {lv: [] for lv in levels}
+    ly, ty = [], []
+    for key, a, t in cells:
+        for lv in levels:
+            v = key[lv]
+            c = pos[lv].get(v)
+            if c is None:
+                c = pos[lv][v] = len(names[lv])
+                names[lv].append(v)
+            cols[lv].append(c)
+        ly.append(a)
+        ty.append(t)
+    return {"names": names, "pos": pos, "c": {lv: np.asarray(c, dtype=np.int32) for lv, c in cols.items()},
+            "ly": np.asarray(ly, dtype=float), "ty": np.asarray(ty, dtype=float)}
 
 
 # One column index per cube (user, 2026-10-13: "make sure that the population speed is fast"): every cell once, each
@@ -557,26 +579,9 @@ def _index(cube: dict, attr_map: dict) -> dict:
         if _ix["key"] == key:
             return _ix["v"]
         sinfo = _sinfo(cube)
-        names = {lv: [] for lv in HIER_LEVELS}
-        pos = {lv: {} for lv in HIER_LEVELS}
-        cols = {lv: [] for lv in HIER_LEVELS}
-        ly, ty = [], []
-
-        def code(lv, v):
-            c = pos[lv].get(v)
-            if c is None:
-                c = pos[lv][v] = len(names[lv])
-                names[lv].append(v)
-            return c
-        for dv, dp, at, st, m, a, t in _cells(cube, attr_map, {}, sinfo):
-            x = sinfo[st]
-            for lv, v in (("division", dv), ("department", dp), ("attribute", at), ("month", m), ("store", st),
-                          ("cluster", x["cluster"]), ("stype", x["stype"])):
-                cols[lv].append(code(lv, v))
-            ly.append(a)
-            ty.append(t)
-        v = {"names": names, "pos": pos, "c": {lv: np.asarray(c, dtype=np.int32) for lv, c in cols.items()},
-             "ly": np.asarray(ly, dtype=float), "ty": np.asarray(ty, dtype=float)}
+        v = make_index((({"division": dv, "department": dp, "attribute": at, "month": m, "store": st,
+                          "cluster": sinfo[st]["cluster"], "stype": sinfo[st]["stype"]}, a, t)
+                        for dv, dp, at, st, m, a, t in _cells(cube, attr_map, {}, sinfo)), HIER_LEVELS)
         _ix.update(key=key, v=v)
         return v
 
@@ -599,11 +604,15 @@ def _mask(ix: dict, want: dict, filt: dict | None, skip: str | None = None):
 def hierarchy_values(cube: dict, attr_map: dict, filt: dict | None = None, levels=None) -> dict:
     """{level: [values]} a level can be filtered on, as an Excel filter list: the values with any LY / TY inside the
     OTHER levels' filters (the level's own filter does not hide its own choices). Months in calendar order."""
+    return values_of(_index(cube, attr_map), filt, levels or HIER_LEVELS)
+
+
+def values_of(ix: dict, filt: dict | None, levels) -> dict:
+    """hierarchy_values on any index (make_index)."""
     import numpy as np
-    ix = _index(cube, attr_map)
     nz = (np.abs(ix["ly"]) > 1e-12) | (np.abs(ix["ty"]) > 1e-12)
     out = {}
-    for lv in levels or HIER_LEVELS:
+    for lv in levels:
         vals = [ix["names"][lv][i] for i in np.unique(ix["c"][lv][_mask(ix, {}, filt, skip=lv) & nz])]
         out[lv] = sorted(vals, key=lambda m: TY_MONTHS.index(m) if m in TY_MONTHS else 99) if lv == "month" else sorted(vals)
     return out
@@ -612,10 +621,14 @@ def hierarchy_values(cube: dict, attr_map: dict, filt: dict | None = None, level
 def hierarchy_rows(cube: dict, attr_map: dict, levels: list, path: list, filt: dict | None = None) -> dict:
     """Pure. levels: the order picked (from HIER_LEVELS); path: the values of levels[:len(path)] down to the node.
     Returns {level, rows: [{key, ly, ty}] (TY high to low; months in calendar order), total: {ly, ty}}."""
+    return rows_of(_index(cube, attr_map), levels, path, filt)
+
+
+def rows_of(ix: dict, levels: list, path: list, filt: dict | None = None) -> dict:
+    """hierarchy_rows on any index (make_index)."""
     import numpy as np
     want = dict(zip(levels, path))
     nxt = levels[len(path)] if len(path) < len(levels) else None
-    ix = _index(cube, attr_map)
     m = _mask(ix, want, filt)
     lys, tys = ix["ly"][m], ix["ty"][m]
     tl, tt = float(lys.sum()), float(tys.sum())

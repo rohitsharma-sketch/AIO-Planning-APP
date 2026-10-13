@@ -2,13 +2,19 @@
 Article Name route of the MRP stage (user, 2026-10-13: "Add a provision toggle if the user wants to go Article Name or
 MRP route. Follow the MRP route as is"). The department plan is split over Article Names instead of MRP bands:
 
-  1. LY sales per Cluster (or Store - the toggle) x Department x Article Name x month, from the sales engine (data lake,
-     LY = the plan month a year back). Negative LY counts as 0 (no negative base).
-  2. The buyers' Art Nm Cont % (imported, one % per Department x Article Name for the block, e.g. MAMJ) against the
-     cluster's own LY Art Nm cont % of the block: deviation = buyer % / cluster LY %, capped to 50%..150%.
-  3. New base = LY x capped deviation (never negative), month by month; within each Cluster x Department x month the
-     new base is apportioned to 100% and the department's plan (its AOP in the Sales Plan) is split by it - the
-     articles add back to the department exactly, and a check says where they don't.
+  (user, 2026-10-13, the steps as set out: "Department selection ... the ly sales data on cluster/store x dep x art name
+  should be pitted against the input file cont % and deviation should be taken out ... below 50% cap it to 50% and max
+  to 150% ... for every month the base ly sales cont % should be multiplied with the deviation ... Resultant should be
+  apportioned to 100% ... and finally multiplied with the AOP resultant of the department engine")
+  1. LY sales per Cluster (or Store - the header's Plan by) x Department x Article Name x month, from the sales engine
+     (data lake, LY = the plan month a year back). Negative LY counts as 0 (no negative base).
+  2. LY cont % = the article's share of its department, per Cluster/Store x month.
+  3. Deviation = the buyers' Art Nm Cont % (imported, one % per Department x Article Name for the block, e.g. MAMJ) /
+     that month's LY cont %, capped to 50%..150%. An IN-ACTIVE MC (MC TAG, or the article's MC STATUS) counts as 0%.
+  4. Resultant = LY cont % x capped deviation, per Cluster/Store x Department x Article x month.
+  5. Within each Cluster/Store x Department x month the resultant is apportioned to 100% and multiplied by the
+     department's plan (its AOP in the department engine) - the articles add back to the department exactly, and a
+     check says where they don't.
   New and split departments (the file's MC TAG "NEW ACTIVE MC" / "NEW SPLIT MC") take the buyers' Art Nm Cont % as it
   is, no deviation (user, 2026-10-13: "for new departments and split departments use the imported buyer's cont % at
   art nm"). The file names a split department by its OLD name (KB_BERMUDA ...); its parts' articles carry new codes
@@ -51,6 +57,7 @@ DEPT_SPLITS = {
 DIRECT_TAGS = {"NEW ACTIVE MC": "new", "NEW SPLIT MC": "split"}
 METHOD = {
     "deviation":  "LY mix x buyer deviation (capped 50-150%)",
+    "inactive":   "In-active MC: input 0% (deviation at the 50% floor - LY mix)",
     "buyer":      "Buyer's Art Nm Cont %",
     "ly":         "LY mix (no buyer Art Nm Cont %)",
     "buyer_noly": "Buyer's Art Nm Cont % (no LY here)",
@@ -85,6 +92,7 @@ def parse_cont(df: pd.DataFrame) -> dict:
     c_dept, c_div = pick("DEPARTMENT", "DEPT"), pick("DIVISION", "DIV")
     c_art = pick("NEW ARTICLE_NAME", "ARTICLE_NAME", "ARTICLE NAME", "ART_NM", "ART NM")
     c_tag = pick("MC TAG", "DEPT TAG", "TAG")
+    c_st = pick("MC STATUS", "STATUS")
     c_val = next((cols[k] for k in cols if k.startswith("BUYERS INPUT") or k.startswith("BUYER INPUT")
                   or "CONT %" in k or k.endswith("CONT%")), None)
     miss = [n for n, c in (("DEPARTMENT", c_dept), ("ARTICLE NAME", c_art), ("BUYERS INPUT AT <block>", c_val)) if c is None]
@@ -104,11 +112,17 @@ def parse_cont(df: pd.DataFrame) -> dict:
                                     "tag": str(r[c_tag]).strip().upper() if c_tag else "", "arts": {}})
         if art in d["arts"]:
             raise ValueError(f"{dept} / {art} is listed twice")
-        d["arts"][art] = float(v[i]) * scale if pd.notna(v[i]) else 0.0
+        pct = float(v[i]) * scale if pd.notna(v[i]) else 0.0
+        # an IN-ACTIVE MC counts as 0% (user, 2026-10-13: "if the input file has an inactive mc then it should be
+        # considered 0%") - the department's MC TAG, or the article's MC STATUS; what the file said is kept as "given"
+        off = "IN-ACTIVE" in d["tag"] or (c_st is not None and "IN-ACTIVE" in str(r[c_st]).upper())
+        if off and pct:
+            d.setdefault("given", {})[art] = pct
+        d["arts"][art] = 0.0 if off else pct
     for dept, d in depts.items():
         t = sum(d["arts"].values())
         if t > 0 and abs(t - 100) > 0.5:
-            warn.append(f"{dept}: Art Nm Cont % adds to {t:.1f}%")
+            warn.append(f"{dept}: Art Nm Cont % adds to {t:.1f}%" + (" (in-active articles at 0%)" if d.get("given") else ""))
     return {"block": m.group(1) if m else "", "depts": depts, "warnings": warn}
 
 
@@ -185,9 +199,12 @@ def _plan_months(plan: dict) -> list:
     return sorted((m for m in have if not want or m in want), key=lambda m: datetime.datetime.strptime(m, "%b'%y"))
 
 
-def shares_for(tag, bmix, lyg, months):
-    """One Cluster/Store x Department: ({month: {article: weight}} or None, method, {article: (ly %, deviation,
-    capped)}). lyg = {article: {month: lakh}} of this group (already summed for a cluster)."""
+def shares_for(tag, bmix, lyg, months, new_arts=None):
+    """One Cluster/Store x Department: ({month: {article: resultant}} or None, method, working). lyg = {article:
+    {month: lakh}} of this group (already summed for a cluster). working = {article: {month: (LY base, LY cont %,
+    buyer %, deviation, capped, resultant)}} - month by month: LY cont % = the article's share of the department's LY;
+    deviation = buyer % / LY cont %, capped 50-150%; resultant = LY cont % x capped. A month with no LY of its own uses
+    the block's LY cont %. Articles with no LY here get no resultant."""
     base = {a: {m: max(float(v.get(m, 0.0)), 0.0) for m in months} for a, v in (lyg or {}).items()}
     blk = {a: sum(v.values()) for a, v in base.items()}
     tot = sum(blk.values())
@@ -196,21 +213,34 @@ def shares_for(tag, bmix, lyg, months):
         return {m: dict(bmix) for m in months}, "buyer", {}
     if tot <= 0:
         return ({m: dict(bmix) for m in months}, "buyer_noly", {}) if bsum > 0 else (None, "none", {})
-    if bsum <= 0:
-        cap, how = {a: 1.0 for a in base}, "ly"
-    else:
-        cap, how = {}, "deviation"
+    how = "deviation" if bsum > 0 else "inactive" if tag == "inactive" else "ly"
+    w, info = {}, {}
+    for m in months:
+        mb = {a: base[a][m] for a in base}
+        t = sum(mb.values())
+        if t <= 0:
+            mb, t = blk, tot
+        w[m] = {}
         for a in base:
-            lyp = blk[a] / tot * 100.0
-            cap[a] = min(max((bmix.get(a, 0.0) / lyp) if lyp > 0 else 0.0, CAP_LO), CAP_HI)
-    nb = {m: {a: base[a][m] * cap[a] for a in base} for m in months}
-    blk_nb = {a: blk[a] * cap[a] for a in base}
-    for m in months:   # a month with no LY of its own takes the block's new base
-        if sum(nb[m].values()) <= 0:
-            nb[m] = dict(blk_nb)
-    info = {a: (blk[a] / tot * 100.0, (bmix.get(a, 0.0) / (blk[a] / tot * 100.0)) if bsum > 0 and blk[a] > 0 else None,
-                cap[a]) for a in base}
-    return nb, how, info
+            lyp = mb[a] / t * 100.0
+            b = float(bmix.get(a, 0.0))
+            dev = b / lyp if lyp > 0 else None
+            cap = min(max(dev, CAP_LO), CAP_HI) if dev is not None else None
+            res = lyp * cap if cap is not None else 0.0
+            w[m][a] = res
+            info.setdefault(a, {})[m] = (base[a][m], lyp, b, dev, cap, res)
+    # a NEW article name (in the file, never sold in the chain) takes the imported % as it is (user, 2026-10-13: "new
+    # departments introduced, new article name introduced, and split department introduced should be taken as per the
+    # cont % imported"); the other articles share the rest by their resultants
+    new = {a: p for a, p in (new_arts or {}).items() if p > 0 and a not in base}
+    if new:
+        keep = max(100.0 - sum(new.values()), 0.0)
+        for m in months:
+            t = sum(w[m].values())
+            w[m] = {**({a: v / t * keep for a, v in w[m].items()} if t > 0 else {}), **new}
+            for a, p in new.items():
+                info.setdefault(a, {})[m] = (0.0, None, p, None, None, None)
+    return w, how, info
 
 
 def build(grain: str, plan: dict, cont: dict | None, ly: dict, check: dict, months: list) -> dict:
@@ -249,18 +279,19 @@ def build(grain: str, plan: dict, cont: dict | None, ly: dict, check: dict, mont
     rows, cl_cache, ch_cache = [], {}, {}
     for (g, dv, dp), mv in groups.items():
         tag, bmix = bm.get(dp, ("none", {}))
+        new_arts = {a: p for a, p in bmix.items() if p > 0 and a not in lake_arts.get(dp, ())}   # never sold: new
         lyg = summed([(s, dp) for s in members[g]]) if grain == "cluster" else ly.get((g, dp))
-        w, how, info = shares_for(tag, bmix, lyg, months)
+        w, how, info = shares_for(tag, bmix, lyg, months, new_arts)
         if grain == "store" and how in ("none", "buyer_noly"):   # a store with no LY: its cluster's mix first
             c = clus[g]
             if (c, dp) not in cl_cache:
-                cl_cache[(c, dp)] = shares_for(tag, bmix, summed([(s, dp) for s in members[c]]), months)
+                cl_cache[(c, dp)] = shares_for(tag, bmix, summed([(s, dp) for s in members[c]]), months, new_arts)
             cw, chow, cinfo = cl_cache[(c, dp)]
             if cw is not None and chow not in ("none", "buyer_noly"):
                 w, how, info = cw, "cluster", cinfo
         if how == "none":   # no LY here and no buyer %: the chain's LY mix of the department
             if dp not in ch_cache:
-                ch_cache[dp] = shares_for(tag, bmix, summed([(s, dp) for s in plan["stores"]]), months)
+                ch_cache[dp] = shares_for(tag, bmix, summed([(s, dp) for s in plan["stores"]]), months, new_arts)
             if ch_cache[dp][0] is not None:
                 w, how, info = ch_cache[dp][0], "chain", ch_cache[dp][2]
         arts = {}
@@ -269,7 +300,10 @@ def build(grain: str, plan: dict, cont: dict | None, ly: dict, check: dict, mont
                 arts.setdefault(a, {})[m] = v
         lyb = {a: sum(max(float(x), 0.0) for x in mvs.values()) for a, mvs in (lyg or {}).items()}
         rows.append({"g": g, "cluster": clus[g] if grain == "store" else g, "div": dv, "dept": dp, "tag": tag,
-                     "method": how, "aop": dict(mv), "arts": arts, "ly": lyb, "info": info, "buyer": bmix})
+                     "method": how, "aop": dict(mv), "arts": arts, "ly": lyb, "info": info, "buyer": bmix,
+                     "lym": {a: {m: float(x.get(m, 0.0)) for m in months} for a, x in (lyg or {}).items()},
+                     "new_arts": sorted(new_arts),
+                     "stype": ("SSG" if plan["stores"][g].get("is_ssg") else "NSO") if grain == "store" else ""})
     return {"grain": grain, "months": months, "rows": rows, "check": check, "cont": cont,
             "bm_depts": len(bm), "plan_depts": len(plan_depts)}
 
@@ -322,7 +356,7 @@ def checks(b: dict) -> list:
     out.append(c("tie", "LY article sales tie to the Calendar department sales", bool(ch.get("pass")),
                  f"{ch.get('cells', 0):,} store x dept x month cells, max diff {ch.get('max_diff_lakh')} L",
                  "Wait for the nightly sales sync (or Sync now on Landing), then reopen."))
-    caps = [x[2] for r in rows for x in r["info"].values()]
+    caps = [x[4] for r in rows for am in r["info"].values() for x in am.values() if x[4] is not None]
     neg = sum(1 for r in rows for mv in r["arts"].values() for v in mv.values() if v < -SHOWN)
     out.append(c("caps", "Deviation capped 50-150%, no negative base or plan",
                  all(CAP_LO - 1e-12 <= x <= CAP_HI + 1e-12 for x in caps) and neg == 0,
@@ -614,90 +648,243 @@ def import_cont(file: UploadFile = File(...)):
     return _take(file.file.read(), os.path.basename(file.filename))
 
 
-@router.get("/plan")
-def get_plan(grain: str = "cluster", g: str = ""):
-    """Per division x department (all groups, or the groups in g, '|'-separated): AOP, article plan, method, check,
-    and its articles (LY cont %, buyer cont %, plan cont %, plan per month)."""
+# ── the output page: a Hierarchy, as the department plan's Final Results ──────────────────────────────────────────
+# user, 2026-10-13: "Mimic the working pop up for every entry and make similar output page as the department with all
+# features similarly" - the same tree (Rows picked and ordered, one multi-select filter per field, Grand Total, Cont %,
+# the ⓘ pop-up) over the Article Name plan: TY = the article plan, LY = the article's LY sales (sales engine). The
+# Department filter comes first - the department selection.
+ART_LEVELS_ALL = ("department", "article", "cluster", "store", "stype", "division", "attribute", "month")
+
+
+def art_levels(grain: str) -> tuple:
+    """The fields the tree offers: by cluster there is no store (and no store type)."""
+    return ART_LEVELS_ALL if grain == "store" else tuple(x for x in ART_LEVELS_ALL if x not in ("store", "stype"))
+
+
+def art_cells(b: dict, attr: dict):
+    """Every (fields, row, article, month, LY, plan) of build `b`."""
+    for r in b["rows"]:
+        at = (attr.get(r["div"]) or {}).get(r["dept"]) or "-"
+        for a in set(r["arts"]) | set(r["lym"]):
+            pm, lm = r["arts"].get(a, {}), r["lym"].get(a, {})
+            for m in b["months"]:
+                key = {"department": r["dept"], "article": a, "cluster": r["cluster"], "store": r["g"], "stype": r["stype"],
+                       "division": r["div"], "attribute": at, "month": m}
+                yield key, r, a, m, lm.get(m, 0.0), pm.get(m, 0.0)
+
+
+_HIX: dict = {}
+
+
+def _hindex(grain: str) -> tuple:
+    import json
+    from engines.final_results_engine import _load_dept_attr_map
+    from engines.grain_view import make_index
+    b = built(grain)
+    attr = _load_dept_attr_map()
+    key = (id(b), json.dumps(attr, sort_keys=True, default=str))
+    if _HIX.get(grain, {}).get("key") != key:
+        _HIX[grain] = {"key": key, "attr": attr,
+                       "ix": make_index(((k, ly, ty) for k, _r, _a, _m, ly, ty in art_cells(b, attr)), art_levels(grain))}
+    return b, _HIX[grain]
+
+
+def _levels_path(levels: str, path: str, grain: str, longest: int = 0) -> tuple:
+    import json
+    lv = [x for x in levels.split(",") if x]
+    ok = art_levels(grain)
+    if not lv or len(set(lv)) != len(lv) or any(x not in ok for x in lv):
+        raise HTTPException(422, f"levels: pick from {', '.join(ok)}, each once")
+    try:
+        pth = json.loads(path)
+    except ValueError:
+        raise HTTPException(422, "path must be a JSON list")
+    if not isinstance(pth, list) or len(pth) > len(lv) - longest:
+        raise HTTPException(422, "path is too long for these levels")
+    return lv, [str(p) for p in pth]
+
+
+@router.get("/hierarchy")
+def get_hierarchy(levels: str, path: str = "[]", filters: str = "{}", grain: str = "cluster"):
+    """The children of one node of the Article Name plan tree (as /api/planning/grain/hierarchy)."""
+    from engines.grain_view import parse_filters, rows_of
+    lv, pth = _levels_path(levels, path, grain, longest=1)
+    _, h = _hindex(grain)
+    return {**rows_of(h["ix"], lv, pth, parse_filters(filters, art_levels(grain))),
+            "source": {"kind": "article", "name": "Article Name plan", "note": f"the Article Name plan by {grain}"}}
+
+
+@router.get("/hierarchy-options")
+def get_hierarchy_options(filters: str = "{}", level: str = "", grain: str = "cluster"):
+    from engines.grain_view import parse_filters, values_of
+    if level and level not in art_levels(grain):
+        raise HTTPException(422, f"level: one of {', '.join(art_levels(grain))}")
+    _, h = _hindex(grain)
+    return values_of(h["ix"], parse_filters(filters, art_levels(grain)), [level] if level else art_levels(grain))
+
+
+ART_LEVEL_NAME = {"department": "Department", "article": "Article Name", "cluster": "Cluster", "store": "Store",
+                  "stype": "Store type", "division": "Division", "attribute": "Attribute", "month": "Month"}
+
+
+def explain_art(b: dict, attr: dict, levels: list, path: list, filt: dict | None, grain: str) -> dict:
+    """Pure. How the Article Name tree's row at `path` (or the Total, path = []) gets its numbers - from the very cells
+    the row adds up, month by month: LY sales, LY cont %, input %, deviation, capped, resultant, share, department AOP,
+    plan (user, 2026-10-13: "Mimic the working pop up for every entry")."""
+    from engines.grain_view import _inr
+    want = dict(zip(levels, path))
+    f = filt or {}
+    fit = lambda k, w: all(k[x] == v for x, v in w.items()) and all(k[x] in s for x, s in f.items())   # noqa: E731
+    G = "cluster" if grain == "cluster" else "store"
+    sel = [c for c in art_cells(b, attr) if fit(c[0], want)]
+    LY, TY = sum(c[4] for c in sel), sum(c[5] for c in sel)
+    label = " · ".join(path) if path else "The total"
+    mon = {}
+    for c in sel:
+        x = mon.setdefault(c[3], [0.0, 0.0])
+        x[0] += c[4]
+        x[1] += c[5]
+    out = {"label": label, "path": [{"level": lv, "value": v} for lv, v in zip(levels, path)], "ly": LY, "ty": TY,
+           "growth": (TY / LY - 1) * 100 if LY else None, "source": f"the Article Name plan by {grain}"}
+    lines = []
+    say = lambda h, t: lines.append({"h": h, "t": t})   # noqa: E731
+    ms = [m for m in b["months"] if m in mon]
+    say("The number", f"{label}: ₹{_inr(TY)} L of article plan against ₹{_inr(LY)} L LY sales of the same articles "
+        f"(sales engine){', over ' + ', '.join(ms) if len(ms) > 1 else ', in ' + ms[0] if ms else ''}.")
+    if LY:
+        say("Growth %", f"₹{_inr(TY)} ÷ ₹{_inr(LY)} − 1 = {out['growth']:+.1f}%.")
+    if path:
+        pw = dict(zip(levels, path[:-1]))
+        pty = sum(c[5] for c in art_cells(b, attr) if fit(c[0], pw))
+        out["parent"] = {"label": " · ".join(path[:-1]) or "the whole plan", "ty": pty}
+        out["cont"] = TY / pty * 100 if pty else None
+        if pty:
+            say("Cont %", f"its share of the level above ({out['parent']['label']}): ₹{_inr(TY)} ÷ ₹{_inr(pty)} = {out['cont']:.1f}%.")
+    # the department AOP these cells split: each group x department x month once
+    seen, aop, by_how, depts, groups = set(), 0.0, collections.defaultdict(float), set(), set()
+    for k, r, a, m, ly, ty in sel:
+        if (id(r), m) not in seen:
+            seen.add((id(r), m))
+            aop += max(r["aop"].get(m, 0.0), 0.0)
+        by_how[r["method"]] += ty
+        depts.add(r["dept"])
+        groups.add(r["g"])
+    at_article = "article" in want or "article" in f
+    if not at_article:
+        ok = abs(TY - aop) <= 1e-6
+        say("Department AOP", f"₹{_inr(aop)} L is the plan of {len(depts)} department{'s' if len(depts) != 1 else ''} × "
+            f"{len(groups)} {G}{'s' if len(groups) != 1 else ''} × {len(ms)} month{'s' if len(ms) != 1 else ''} from the "
+            f"department engine; its Article Names add back to it" + (" ✓" if ok else f" - ₹{_inr(TY)} L (a negative "
+                                                                      "department plan month keeps its articles at 0)") + ".")
+    elif aop:
+        say("Share of the department AOP", f"these articles take ₹{_inr(TY)} of their department's ₹{_inr(aop)} L "
+            f"({TY / aop * 100:.1f}%) in the {len(groups)} {G}{'s' if len(groups) != 1 else ''} × months inside this row.")
+    if by_how:
+        say("How it is split", "; ".join(f"{METHOD[k]}: ₹{_inr(v)} L" for k, v in sorted(by_how.items(), key=lambda x: -x[1])) + ".")
+    if set(by_how) & {"deviation", "inactive", "ly", "cluster", "chain"}:
+        say("The steps", f"(1) LY sales of each {G} × department × Article Name × month (below 0 counts as 0); (2) LY cont % "
+            "= the article's share of its department's LY that month; (3) deviation = the input Art Nm Cont % ÷ LY cont %, "
+            f"capped to 50%–150% (an in-active MC is 0%); (4) resultant = LY cont % × capped deviation; (5) the resultants "
+            f"are apportioned to 100% within the {G} × department × month and × the department AOP.")
+    # the working, cell by cell, for one department and one article
+    arts = {(c[1]["dept"], c[2]) for c in sel}
+    if len(arts) == 1 and sel:
+        many = len(groups) > 6
+        cols = ["Month"] + ([] if many or len(groups) == 1 else [G.title()]) + [
+            "LY ₹L", "LY cont %", "Input %", "Deviation", "Capped", "Resultant", "Share %", "Dept AOP ₹L", "Plan ₹L"]
+        trows, agg = [], {}
+        p = lambda v: "–" if v is None else f"{v:.1f}%"   # noqa: E731
+        for k, r, a, m, ly, ty in sorted(sel, key=lambda c: (b["months"].index(c[3]), c[1]["g"])):
+            w = (r["info"].get(a) or {}).get(m)
+            dep_aop = max(r["aop"].get(m, 0.0), 0.0)
+            if many:
+                g = agg.setdefault(m, {"ly": 0.0, "dly": 0.0, "aop": 0.0, "ty": 0.0, "dev": [], "cap": [], "b": None})
+                g["ly"] += max(ly, 0.0)
+                g["dly"] += sum(((r["info"].get(x) or {}).get(m) or (0.0,))[0] for x in r["info"])
+                g["aop"] += dep_aop
+                g["ty"] += ty
+                if w:
+                    g["b"] = w[2]
+                    if w[3] is not None:
+                        g["dev"].append(w[3])
+                        g["cap"].append(w[4])
+                elif a in r["buyer"]:
+                    g["b"] = r["buyer"][a]
+                continue
+            trows.append([m] + ([] if len(groups) == 1 else [r["g"]]) + [
+                _inr(ly), p(w[1]) if w else "–", p(w[2] if w else r["buyer"].get(a)),
+                "new article - input % as is" if a in r.get("new_arts", ()) else f"{w[3] * 100:.0f}%" if w and w[3] is not None else "–",
+                f"{w[4] * 100:.0f}%" if w and w[4] is not None else "–", f"{w[5]:.2f}" if w and w[5] is not None else "–", p(ty / dep_aop * 100 if dep_aop else None), _inr(dep_aop), _inr(ty)])
+        for m, g in agg.items():
+            rng = lambda v: "–" if not v else f"{min(v) * 100:.0f}%" if abs(max(v) - min(v)) < 1e-9 else f"{min(v) * 100:.0f}–{max(v) * 100:.0f}%"   # noqa: E731
+            trows.append([m, _inr(g["ly"]), p(g["ly"] / g["dly"] * 100 if g["dly"] else None), p(g["b"]), rng(g["dev"]),
+                          rng(g["cap"]), "–", p(g["ty"] / g["aop"] * 100 if g["aop"] else None), _inr(g["aop"]), _inr(g["ty"])])
+        out["table"] = {"title": "The working, month by month" + (f" (all {len(groups)} {G}s added up; deviation as a range)" if many else ""),
+                        "cols": cols, "rows": trows}
+        (dp, a), = arts
+        if any(c[1]["method"] == "deviation" for c in sel):
+            say("Read it as", f"in each {G} and month, {a}'s LY cont % × its capped deviation is its resultant; its share is its "
+                "resultant ÷ the sum of all its department's resultants that month; × the department AOP = its plan.")
+    say("Check", f"₹{_inr(TY)} - the number on screen ✓")
+    if f:
+        lines.insert(0, {"h": "Filters on", "t": "; ".join(f"{ART_LEVEL_NAME.get(k, k)}: {', '.join(sorted(v))}"
+                                                          for k, v in f.items()) + " - every figure here is inside them."})
+    out["lines"] = lines
+    out["months"] = [{"month": m, "ly": mon[m][0], "ty": mon[m][1]} for m in ms]
+    return out
+
+
+@router.get("/explain")
+def get_explain(levels: str, path: str = "[]", filters: str = "{}", grain: str = "cluster"):
+    """?levels=department,article&path=["ML_JEANS","01-EPP [ML04]"] -> how that row's numbers are made."""
+    from engines.grain_view import parse_filters
+    lv, pth = _levels_path(levels, path, grain)
+    b, h = _hindex(grain)
+    return explain_art(b, h["attr"], lv, pth, parse_filters(filters, art_levels(grain)), grain)
+
+
+@router.get("/summary")
+def get_summary(grain: str = "cluster"):
+    """The checks, the file in use and the totals of the Article Name plan by `grain`."""
     try:
         b = built(grain)
     except HTTPException:
         raise
     except Exception as e:   # noqa: BLE001
-        raise HTTPException(500, f"Article Name route: {e}")
-    months = b["months"]
-    want = set(filter(None, g.split("|")))
-    rows = [r for r in b["rows"] if not want or r["g"] in want]
-    one = len({r["g"] for r in rows}) == 1
-    out = {}
-    for r in rows:
-        d = out.setdefault(r["div"], {}).setdefault(r["dept"], {
-            "tag": r["tag"], "methods": collections.Counter(), "aop": dict.fromkeys(months, 0.0),
-            "plan": dict.fromkeys(months, 0.0), "arts": {}, "ly": collections.defaultdict(float), "buyer": r["buyer"]})
-        d["methods"][METHOD[r["method"]]] += 1
-        for m in months:
-            d["aop"][m] += r["aop"].get(m, 0.0)
-            # what the articles must add to: a negative department plan cell gives its articles 0 (no negative plan)
-            d.setdefault("due", dict.fromkeys(months, 0.0))[m] += max(r["aop"].get(m, 0.0), 0.0)
-            d["neg"] = d.get("neg", 0) + (r["aop"].get(m, 0.0) < 0)
-        for a, mv in r["arts"].items():
-            x = d["arts"].setdefault(a, dict.fromkeys(months, 0.0))
-            for m, v in mv.items():
-                x[m] += v
-                d["plan"][m] += v
-        for a, v in r["ly"].items():
-            d["ly"][a] += v
-        if one:
-            d["info"] = r["info"]
-    res = {}
-    for dv, depts in out.items():
-        for dp, d in depts.items():
-            lyt, pt = sum(d["ly"].values()), sum(d["plan"].values())
-            arts = []
-            for a in sorted(set(d["arts"]) | set(d["ly"]) | set(d["buyer"])):
-                pm = d["arts"].get(a, dict.fromkeys(months, 0.0))
-                inf = (d.get("info") or {}).get(a)
-                arts.append({"article": a, "ly_pct": d["ly"].get(a, 0.0) / lyt * 100 if lyt else None,
-                             "buyer_pct": d["buyer"].get(a), "plan": pm, "total": sum(pm.values()),
-                             "plan_pct": sum(pm.values()) / pt * 100 if pt else 0.0,
-                             "dev": inf[1] if inf else None, "cap": inf[2] if inf else None})
-            gap = max(abs(d["plan"][m] - d["due"][m]) for m in months) if months else 0.0
-            res.setdefault(dv, {})[dp] = {
-                "tag": d["tag"], "method": d["methods"].most_common(1)[0][0], "methods": dict(d["methods"]),
-                "aop": d["aop"], "plan": d["plan"], "aop_total": sum(d["aop"].values()), "plan_total": pt,
-                "diff": pt - sum(d["due"].values()), "ok": gap <= SHOWN * max(1, len(rows)), "neg": d.get("neg", 0),
-                "neg_total": sum(d["aop"].values()) - sum(d["due"].values()), "articles": arts}
-    return {"grain": grain, "months": months, "groups": sorted({r["g"] for r in b["rows"]}),
-            "single_group": one, "divisions": sorted(res), "data": res, "checks": checks(b),
+        raise HTTPException(500, f"Article Name plan: {e}")
+    return {"grain": grain, "months": b["months"], "checks": checks(b),
+            "plan": sum(v for r in b["rows"] for mv in r["arts"].values() for v in mv.values()),
+            "aop": sum(sum(r["aop"].values()) for r in b["rows"]),
             "cont": {k: b["cont"].get(k) for k in ("source_file", "imported_at", "block")} if b["cont"] else None}
 
 
-@router.get("/export")
-def export(grain: str = "cluster"):
-    """Every group x department x article: tag, method, LY, LY %, buyer %, deviation, capped, per month cont % and plan;
-    a Department Check sheet (AOP vs articles per month) and the Checks."""
+@router.get("/plan-export")
+def plan_export(grain: str = "cluster"):
+    """Every group x department x article x month with its working: LY, LY cont %, input %, deviation, capped, resultant,
+    share and plan; a Department Check sheet (AOP vs articles per month) and the Checks."""
     b = built(grain)
     months, recs, chk = b["months"], [], []
     G = "CLUSTER" if grain == "cluster" else "STORE"
     for r in sorted(b["rows"], key=lambda r: (r["div"], r["dept"], r["g"])):
-        lyt = sum(r["ly"].values())
-        for a in sorted(set(r["arts"]) | set(r["ly"])):
-            pm, inf = r["arts"].get(a, {}), r["info"].get(a)
-            rec = {G: r["g"], **({"IN CLUSTER": r["cluster"]} if grain == "store" else {}), "DIVISION": r["div"],
-                   "DEPARTMENT": r["dept"], "ARTICLE NAME": a, "TAG": r["tag"], "METHOD": METHOD[r["method"]],
-                   "LY (L)": r["ly"].get(a, 0.0), "LY CONT %": r["ly"].get(a, 0.0) / lyt * 100 if lyt else None,
-                   "BUYER CONT %": r["buyer"].get(a), "DEVIATION": inf[1] if inf else None,
-                   "CAPPED": inf[2] if inf else None}
+        tot = {m: sum(((r["info"].get(x) or {}).get(m) or (0, 0, 0, 0, 0, 0.0))[5] or 0.0 for x in r["info"]) for m in months}
+        for a in sorted(set(r["arts"]) | set(r["lym"])):
             for m in months:
-                tm = r["aop"].get(m, 0.0)
-                rec[f"{m} CONT %"] = pm.get(m, 0.0) / tm * 100 if tm else None
-                rec[f"{m} PLAN (L)"] = pm.get(m, 0.0)
-            rec["PLAN TOTAL (L)"] = sum(pm.values())
-            recs.append(rec)
+                w = (r["info"].get(a) or {}).get(m)
+                ty, dep = r["arts"].get(a, {}).get(m, 0.0), r["aop"].get(m, 0.0)
+                recs.append({G: r["g"], **({"IN CLUSTER": r["cluster"]} if grain == "store" else {}), "DIVISION": r["div"],
+                             "DEPARTMENT": r["dept"], "ARTICLE NAME": a, "MONTH": m, "TAG": r["tag"], "METHOD": METHOD[r["method"]],
+                             "LY (L)": r["lym"].get(a, {}).get(m, 0.0), "LY CONT %": w[1] if w else None,
+                             "INPUT %": w[2] if w else r["buyer"].get(a), "DEVIATION": w[3] if w else None,
+                             "CAPPED": w[4] if w else None, "RESULTANT": w[5] if w else None,
+                             "NEW ARTICLE": "yes" if a in r.get("new_arts", ()) else "",
+                             "SHARE %": (w[5] / tot[m] * 100 if tot[m] else None) if w and w[5] is not None else (ty / dep * 100 if dep > 0 else None),
+                             "DEPT AOP (L)": dep, "PLAN (L)": ty})
         for m in months:
             s = sum(mv.get(m, 0.0) for mv in r["arts"].values())
+            t = r["aop"].get(m, 0.0)
             chk.append({G: r["g"], "DIVISION": r["div"], "DEPARTMENT": r["dept"], "MONTH": m, "METHOD": METHOD[r["method"]],
-                        "DEPT AOP (L)": r["aop"].get(m, 0.0), "ARTICLE PLAN (L)": s, "DIFF (L)": s - r["aop"].get(m, 0.0),
-                        "CHECK": "OK" if abs(s - r["aop"].get(m, 0.0)) <= SHOWN else "NOT = AOP"})
+                        "DEPT AOP (L)": t, "ARTICLE PLAN (L)": s, "DIFF (L)": s - max(t, 0.0),
+                        "CHECK": "OK" if abs(s - max(t, 0.0)) <= SHOWN else "NOT = AOP"})
     if len(recs) > 1_000_000:
         raise HTTPException(413, f"{len(recs):,} rows - over Excel's limit; export by cluster")
     buf = io.BytesIO()
@@ -708,11 +895,10 @@ def export(grain: str = "cluster"):
             ws = xw.sheets[name]
             ws.freeze_panes(1, 0)
             ws.autofilter(0, 0, max(len(df), 1), max(len(df.columns) - 1, 0))
-            ws.set_column(0, max(len(df.columns) - 1, 0), 16)
+            ws.set_column(0, max(len(df.columns) - 1, 0), 15)
     buf.seek(0)
     name = f"Article Name plan by {grain} {datetime.datetime.now():%d%b%Y_%H%M}.xlsx"
-    return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                             headers={"Content-Disposition": f'attachment; filename="{name}"'})
+    return StreamingResponse(buf, media_type=XLSX, headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 def warm():
