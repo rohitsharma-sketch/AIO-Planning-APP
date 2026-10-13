@@ -38,8 +38,9 @@ router = APIRouter()
 _HERE = os.path.dirname(os.path.abspath(__file__))
 CONT_PATH = os.path.join(_HERE, "..", "art_nm_cont.json")       # the imported buyers' file, parsed
 ROUTE_PATH = os.path.join(_HERE, "..", "mrp_route.json")        # {"route": "mrp" | "article", "grain": ...}
-# the buyers drop their Art Nm Cont % here, as the MRP Cont % (Buyer's Input -> Sync from folder; the newest .xlsx)
-SOURCE_DIR = r"C:\Users\A9820\Documents\CLaude - New Projects\SalesPlan\Art NM Cont %"
+# the imported file exactly as uploaded - what Export gives back (gitignored with the other backend data files)
+SOURCE_COPY = os.path.join(_HERE, "..", "art_nm_cont_source.xlsx")
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 CAP_LO, CAP_HI = 0.5, 1.5
 # the data-lake department split (BIS DEPT_SPLITS, otb-plan-app.html): the buyers' file uses the old names
 DEPT_SPLITS = {
@@ -531,31 +532,50 @@ def set_settings(body: dict):
     return cur
 
 
-def _source_file():
-    import glob
-    fs = [f for f in glob.glob(os.path.join(SOURCE_DIR, "*.xls*")) if not os.path.basename(f).startswith("~$")]
-    return max(fs, key=os.path.getmtime) if fs else None
-
-
-@router.get("/sync-status")
-def sync_status():
-    """The newest Art Nm Cont % file in the source folder (what Sync would read)."""
-    f = _source_file()
-    if not f:
-        return {"file_found": False, "source_path": SOURCE_DIR}
-    return {"file_found": True, "source_path": SOURCE_DIR, "source_name": os.path.basename(f),
-            "file_date": datetime.datetime.fromtimestamp(os.path.getmtime(f)).strftime("%d %b %Y %H:%M"),
-            "size_kb": round(os.path.getsize(f) / 1024, 1)}
-
-
-@router.post("/sync")
-def sync_cont():
-    """Import the newest Art Nm Cont % file in the source folder (as MRP Plan's Buyer's Input does)."""
-    f = _source_file()
-    if not f:
-        raise HTTPException(404, f"No .xlsx in {SOURCE_DIR} - drop the Art Nm Cont % file there and try again")
-    with open(f, "rb") as fh:
-        return _take(fh.read(), os.path.basename(f))
+@router.get("/export")
+def export_cont():
+    """The Art Nm Cont % in use, exactly as it was imported - edit it and Import it back. Nothing imported yet: a
+    template in the same layout, one row per plan department x LY article, filled with the chain's LY Art Nm cont %
+    of the block (user, 2026-10-13: "give me an import and export function")."""
+    c = _read(CONT_PATH)
+    if c and os.path.exists(SOURCE_COPY):
+        from fastapi.responses import FileResponse
+        return FileResponse(SOURCE_COPY, media_type=XLSX, filename=c.get("source_file") or "Art Nm Cont %.xlsx")
+    from engines.mrp_plan_engine import _load_dept_plan
+    plan = _load_dept_plan()
+    months = _plan_months(plan)
+    ly, _ = ly_sales(months)
+    depts = {}
+    for sd in (plan.get("stores") or {}).values():
+        for dv, dd in (sd.get("divisions") or {}).items():
+            for md in ((dd or {}).get("months") or {}).values():
+                for dp, x in ((md or {}).get("departments") or {}).items():
+                    if isinstance(x, dict) and x.get("active", True) and x.get("ty"):
+                        depts[dp] = dv
+    arts = collections.defaultdict(lambda: collections.defaultdict(float))
+    for (s, d), am in ly.items():
+        if d in depts:
+            for a, mm in am.items():
+                arts[d][a] += sum(max(v, 0.0) for v in mm.values())
+    block = "".join(m[0] for m in months)
+    col = f"BUYERS INPUT\nAT {block}"
+    rows = []
+    for d in sorted(depts, key=lambda d: (depts[d], d)):
+        tot = sum(arts[d].values())
+        for a in sorted(arts[d]) or [""]:
+            rows.append({"DIVISION": depts[d], "DEPARTMENT": d, "NEW ARTICLE_NAME": a,
+                         col: arts[d][a] / tot if tot else 0.0, "MC TAG": "EXISTING ACTIVE MC"})
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as xw:
+        pd.DataFrame(rows).to_excel(xw, sheet_name="Sheet1", index=False)
+        ws = xw.sheets["Sheet1"]
+        ws.set_column(0, 2, 26)
+        ws.set_column(3, 3, 16, xw.book.add_format({"num_format": "0.0%"}))
+        ws.set_column(4, 4, 20)
+        ws.freeze_panes(1, 0)
+    buf.seek(0)
+    return StreamingResponse(buf, media_type=XLSX,
+                             headers={"Content-Disposition": f'attachment; filename="Art Nm Cont % template {block}.xlsx"'})
 
 
 @router.get("/cont")
@@ -575,6 +595,10 @@ def _take(data: bytes, name: str) -> dict:
     if not cont["depts"]:
         raise HTTPException(400, "No Department x Article Name rows - nothing changed")
     cont.update(source_file=name, imported_at=datetime.datetime.now().strftime("%d %b %Y %H:%M"))
+    tmp = SOURCE_COPY + ".tmp"
+    with open(tmp, "wb") as f:
+        f.write(data)
+    os.replace(tmp, SOURCE_COPY)
     save_json(CONT_PATH, cont)
     tags = collections.Counter(d["tag"] for d in cont["depts"].values())
     return {"ok": True, "source_file": name, "departments": len(cont["depts"]),

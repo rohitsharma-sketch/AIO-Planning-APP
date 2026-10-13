@@ -20,17 +20,18 @@ const navItems = [
   { label: 'Home', icon: 'home', to: '/' },
   { label: 'Division Plan',    icon: 'division', to: '/division-plan',   subItems: DIVISION_PLAN_SUB },
   { label: 'Department Plan',  icon: 'dept', to: '/department-plan', subItems: DEPARTMENT_PLAN_SUB },
+  // the MRP branch's counterpart (user, 2026-10-13: "think of it as another parallel branch to MRP"), listed before it
+  // ("shift the art name order to precede the mrp plan module")
+  { label: 'Article Name Plan', icon: 'article', to: '/art-plan', subItems: [
+    { label: "Buyer's Input",    to: '/art-plan/import' },
+    { label: 'Plan Output',      to: '/art-plan/output', final: true },
+  ]},
   { label: 'MRP Plan', icon: 'mrp', to: '/mrp-plan', subItems: [
     { label: 'Buyer\'s Input',   to: '/mrp-plan/import' },
     { label: 'Re-apportionment', to: '/mrp-plan/reapportionment' },
     { label: 'PW/W Deviation',   to: '/deviation/pww',  optional: true },
     { label: 'SOR Deviation',    to: '/deviation/sor',  optional: true },
     { label: 'Plan Output',      to: '/mrp-plan/output', final: true },
-  ]},
-  // the MRP branch's counterpart (user, 2026-10-13: "think of it as another parallel branch to MRP")
-  { label: 'Article Name Plan', icon: 'article', to: '/art-plan', subItems: [
-    { label: "Buyer's Input",    to: '/art-plan/import' },
-    { label: 'Plan Output',      to: '/art-plan/output', final: true },
   ]},
   { label: 'Display Type Plan', icon: 'display', to: '/display-type' },
   { label: 'Sales Sync',        icon: 'sync', to: '/sync' },

@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### Sales Plan: Article Name Buyer's Input = Import / Export; Article Name Plan listed before MRP Plan
+- **Asked (user):** "give me an import and export function not this" (the folder sync card), "shift the art name order to precede the mrp plan module".
+- Buyer's Input: **Import** (upload, checked before it replaces the file in use) and **Export** - the file in use exactly as imported (`backend/art_nm_cont_source.xlsx`, gitignored; seeded with the MAMJ file already imported), or before the first import a template in the same layout: every plan department x its LY articles, filled with the chain LY Art Nm cont % (178 departments, each 100%; re-imports cleanly). The folder sync (`/sync`, `/sync-status`) is removed.
+- A "Not signed in" message instead of an empty page when the 8010 session has ended.
+- Sidebar: Article Name Plan now sits above MRP Plan.
+
 ### Sales Plan: promote the Article Name plan to the MRP stage
 - **Asked (user):** "also give a provision if the art nm plan has to be promoted to mrp planning stage" -> chose "Split it into MRP bands".
 - **Promote to MRP stage** (Article Name Plan -> Plan Output; `POST /api/planning/art-nm/promote`): each store / cluster x department x article plan is split over MRP bands by that group's LY (MAMJ) article x MRP mix; old MRPs move to the new structure by the Re-apportionment master's rule (listed -> new MRP; discontinued -> nearest listed below / above, Summer 60/40, others 40/60; not in the master -> as sold). Fallback: the chain's article mix, then the department's. Summed over the groups it is saved as the MRP stage's split (`backend/mrp_promoted.json`, division x department x MRP x P1/P2 %) and sets the route to Article Name.

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { theme, alpha } from '../theme'
+import { theme } from '../theme'
 import { FiltersRow } from '../components/ExcelFilter'
 
 // Article Name Plan · Buyer's Input - the counterpart of MRP Plan's (user, 2026-10-13: "the article name should be a MRP
 // counterpart ... think of it as another parallel branch to MRP"): the buyers' Art Nm Cont % (one % per Department x
-// Article Name for the block, with each department's MC TAG) synced from its folder, or uploaded, and shown as read.
+// Article Name for the block, with each department's MC TAG). Import / Export only (user, 2026-10-13: "give me an import
+// and export function not this" - the folder sync is gone): Export gives the file in use as imported, or a template.
 const API = '/api/planning/art-nm'
 const DIV_COLOR = { KIDS: '#C85A12', LADIES: '#7420B8', MENS: '#077A4A' }
 const TAG_NOTE = {
@@ -17,10 +18,12 @@ const card = { background: theme.surface, border: `1px solid ${theme.border}`, b
 const btn = primary => ({ padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
   border: `1px solid ${primary ? theme.primary : theme.border}`, background: primary ? theme.primary : theme.surface, color: primary ? '#fff' : theme.textPrimary })
 
-async function readErr(r) { try { return (await r.json()).detail || r.statusText } catch { return r.statusText } }
+async function readErr(r) {
+  if (r.status === 401) return 'Not signed in - sign in again on Landing, then come back'
+  try { return (await r.json()).detail || r.statusText } catch { return r.statusText }
+}
 
 export default function ArtNmImport() {
-  const [info, setInfo] = useState(null)     // the source folder's file
   const [cont, setCont] = useState(null)     // the file in use, as read
   const [msg, setMsg] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -29,24 +32,25 @@ export default function ArtNmImport() {
   const fileRef = useRef(null)
 
   const reload = () => {
-    fetch(`${API}/sync-status`).then(r => (r.ok ? r.json() : null)).then(setInfo).catch(() => setInfo(null))
-    fetch(`${API}/cont`).then(r => (r.ok ? r.json() : null)).then(setCont).catch(() => setCont(null))
+    fetch(`${API}/cont`)
+      .then(async r => { if (r.status === 401) throw new Error(await readErr(r)); return r.ok ? r.json() : null })
+      .then(setCont).catch(e => { setCont(null); setMsg({ ok: false, text: e.message }) })
   }
   useEffect(reload, [])
 
-  const take = async (req, label) => {
+  const upload = async file => {
+    if (!file) return
     setBusy(true); setMsg(null)
     try {
-      const r = await req()
+      const fd = new FormData(); fd.append('file', file)
+      const r = await fetch(`${API}/import`, { method: 'POST', body: fd })
       if (!r.ok) { setMsg({ ok: false, text: await readErr(r) }); return }
       const d = await r.json()
-      setMsg({ ok: !d.warnings.length, text: `${label} ${d.source_file}: ${d.departments} departments, ${d.articles} articles, block ${d.block || '?'} · `
+      setMsg({ ok: !d.warnings.length, text: `Imported ${d.source_file}: ${d.departments} departments, ${d.articles} articles, block ${d.block || '?'} · `
         + Object.entries(d.tags).map(([k, v]) => `${v} ${k}`).join(', ') + (d.warnings.length ? ` · ${d.warnings.length} not adding to 100%` : ' · every department adds to 100%') })
       reload()
     } catch (e) { setMsg({ ok: false, text: String(e) }) } finally { setBusy(false); if (fileRef.current) fileRef.current.value = '' }
   }
-  const sync = () => take(() => fetch(`${API}/sync`, { method: 'POST' }), 'Synced')
-  const upload = file => file && take(() => { const fd = new FormData(); fd.append('file', file); return fetch(`${API}/import`, { method: 'POST', body: fd }) }, 'Imported')
 
   const rows = Object.entries(cont?.depts || {}).map(([dept, d]) => {
     const sum = Object.values(d.arts).reduce((s, v) => s + v, 0)
@@ -72,23 +76,17 @@ export default function ArtNmImport() {
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(260px, 1fr)', gap: 16, alignItems: 'start' }}>
         <div style={{ display: 'grid', gap: 16 }}>
           <div style={card}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>Source file</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 10, marginBottom: 12,
-              border: `1px solid ${info?.file_found ? alpha(theme.success, '44') : alpha(theme.danger, '44')}`, background: info?.file_found ? alpha(theme.success, '0c') : alpha(theme.danger, '08') }}>
-              <div style={{ flex: 1, fontSize: 13 }}>
-                {info?.file_found
-                  ? <><b>{info.source_name}</b> <span style={{ color: theme.textMuted }}>· {info.file_date} · {info.size_kb} KB</span></>
-                  : <b style={{ color: theme.danger }}>No file in the folder</b>}
-                <div style={{ fontSize: 11, color: theme.textMuted, marginTop: 3, wordBreak: 'break-all' }}>{info?.source_path}</div>
-              </div>
-              <button type="button" onClick={reload} style={{ ...btn(false), padding: '5px 12px', fontSize: 12 }}>↺ Refresh</button>
-            </div>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <button type="button" disabled={busy || !info?.file_found} onClick={sync} style={{ ...btn(true), flex: 1, opacity: busy || !info?.file_found ? 0.6 : 1 }}>
-                {busy ? 'Reading…' : '⟳ Sync from Folder'}
-              </button>
+            <div style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>Art Nm Cont %</div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
               <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={e => upload(e.target.files[0])} />
-              <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} style={btn(false)}>Upload a file…</button>
+              <button type="button" disabled={busy} onClick={() => fileRef.current?.click()} style={{ ...btn(true), minWidth: 150 }}>{busy ? 'Reading…' : '⬆ Import'}</button>
+              <button type="button" disabled={busy} onClick={() => window.open(`${API}/export`, '_blank')} style={{ ...btn(false), minWidth: 150 }}
+                title={cont ? 'The file in use, exactly as imported - edit it and Import it back' : 'A template: every plan department and its LY articles, filled with the chain LY Art Nm cont %'}>
+                ⬇ Export {cont ? 'file in use' : 'template'}
+              </button>
+              <span style={{ fontSize: 12, color: theme.textMuted }}>
+                {cont ? <>In use: <b style={{ color: theme.textPrimary }}>{cont.source_file}</b> · imported {cont.imported_at} · block {cont.block || '?'}</> : 'Nothing imported yet'}
+              </span>
             </div>
             {msg && <div style={{ fontSize: 12.5, marginTop: 10, color: msg.ok ? theme.success : theme.danger }}>{msg.text}</div>}
           </div>
@@ -97,8 +95,7 @@ export default function ArtNmImport() {
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
               <b style={{ fontSize: 14 }}>In use</b>
               <span style={{ fontSize: 12, color: theme.textMuted }}>
-                {cont ? `${cont.source_file} · imported ${cont.imported_at} · block ${cont.block || '?'} · ${rows.length} departments`
-                  : 'Nothing imported yet - until it is, every department is split on its LY mix.'}
+                {cont ? `${rows.length} departments` : 'Nothing imported yet - until it is, every department is split on its LY mix.'}
               </span>
             </div>
             {cont && (<>
@@ -131,9 +128,9 @@ export default function ArtNmImport() {
 
         <div style={card}>
           <div style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>How it works</div>
-          {[['Drop the file', 'Put the buyers\' Art Nm Cont % (.xlsx) in the source folder - the newest file there is the one read.'],
-            ['Sync', 'Sync from Folder reads it (or Upload a file). It is checked first; a bad file changes nothing.'],
-            ['Plan Output', 'Article Name Plan → Plan Output splits the department plan over Article Names, by store or cluster as the header\'s Plan by.']].map(([h, t]) => (
+          {[['Export', 'Export gives the file in use exactly as imported - or, before the first import, a template with every plan department and its LY articles.'],
+            ['Import', 'Edit it and Import it back. It is checked first; a bad file changes nothing.'],
+            ['Plan Output', "Article Name Plan → Plan Output splits the department plan over Article Names, by store or cluster as the header's Plan by."]].map(([h, t]) => (
             <div key={h} style={{ marginBottom: 12 }}><b style={{ fontSize: 13 }}>{h}</b><div style={{ fontSize: 12.5, color: theme.textMuted, marginTop: 2 }}>{t}</div></div>
           ))}
           <div style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 10, fontSize: 12.5, color: theme.textMuted, lineHeight: 1.6 }}>
