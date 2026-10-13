@@ -73,6 +73,7 @@ from engines.sor_deviation_engine import router as sor_deviation_router  # noqa:
 from engines.display_type_engine import router as display_type_router  # noqa: E402
 from engines.sync_engine import router as sync_router  # noqa: E402
 from engines.mrp_reapportionment_engine import router as mrp_reapp_router  # noqa: E402
+from engines.art_nm_engine import router as art_nm_router  # noqa: E402
 from engines.reconciliation import router as reconciliation_router  # noqa: E402
 from engines.grain_view import router as grain_router  # noqa: E402
 import store_master as _sm  # noqa: E402
@@ -91,6 +92,8 @@ app.include_router(display_type_router,    prefix="/api/planning/display-type", 
 app.include_router(sync_router,            prefix="/api/planning/sync",            dependencies=_dep)
 # MRP Re-apportionment page (/mrp-plan/reapportionment) - its router was never mounted, so the page 404ed (2026-09-29)
 app.include_router(mrp_reapp_router,       prefix="/api/planning/mrp-reapportionment", dependencies=_dep)
+# MRP stage, Article Name route (user, 2026-10-13)
+app.include_router(art_nm_router,          prefix="/api/planning/art-nm",          dependencies=_dep)
 
 
 @app.on_event("startup")
@@ -107,6 +110,8 @@ def _warm_mrp_sales():
     from engines.sellthru_factor import sell_thru
     threading.Thread(target=sell_thru, name="warm-sellthru-factor", daemon=True).start()
     # Final Results' Hierarchy: the active plan and its column index, so its first open is instant (2026-10-13)
+    from engines.art_nm_engine import warm as warm_art_nm   # the Article Name route's LY, when it is the route in use
+    threading.Thread(target=warm_art_nm, name="warm-art-nm", daemon=True).start()
     from engines.grain_view import warm_hierarchy
     threading.Thread(target=warm_hierarchy, name="warm-hierarchy", daemon=True).start()
 

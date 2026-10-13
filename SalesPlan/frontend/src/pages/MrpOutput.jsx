@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { theme, alpha } from '../theme'
 import GrainPanel from '../components/GrainPanel'
 import ExcelFilter from '../components/ExcelFilter'
+import ArtNmRoute from '../components/ArtNmRoute'
 
 const DIV_COLOR = {
   KIDS: '#C85A12', LADIES: '#7420B8', MENS: '#077A4A', GM: '#1E54C0', RETAIL: '#B22620',
@@ -167,7 +168,42 @@ function DeviationPrompt({ pwwDone, sorDone, onProceed }) {
   )
 }
 
+// The MRP stage's route (user, 2026-10-13: "Add a provision toggle if the user wants to go Article Name or MRP route.
+// Follow the MRP route as is"): saved on the server, so everyone opens the route last picked.
 export default function MrpOutput() {
+  const [st, setSt] = useState(null)   // {route: 'mrp' | 'article', grain: 'cluster' | 'store'}
+  useEffect(() => {
+    fetch('/api/planning/art-nm/settings').then(r => (r.ok ? r.json() : null)).catch(() => null)
+      .then(d => setSt(d || { route: 'mrp', grain: 'cluster' }))
+  }, [])
+  const save = patch => {
+    setSt(s => ({ ...s, ...patch }))
+    fetch('/api/planning/art-nm/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) }).catch(() => {})
+  }
+  if (!st) return null
+  return (
+    <>
+      {/* above the MRP route's deviation prompt (zIndex 200), so the route can be switched with it open */}
+      <div style={{ padding: '18px 32px 0', background: theme.surfaceAlt, display: 'flex', alignItems: 'center', gap: 10, position: 'relative', zIndex: 201 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.6 }}>Route</span>
+        <div role="radiogroup" aria-label="MRP stage route" style={{ display: 'flex', borderRadius: 7, overflow: 'hidden', border: `1px solid ${theme.border}` }}>
+          {[['mrp', 'MRP'], ['article', 'Article Name']].map(([k, label]) => (
+            <button key={k} role="radio" aria-checked={st.route === k} onClick={() => save({ route: k })} style={{
+              padding: '6px 16px', fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none',
+              background: st.route === k ? 'var(--st-btn,#A8CBB7)' : theme.surface,
+              color: st.route === k ? 'var(--st-btn-text,#1F4D3A)' : theme.textMuted }}>{label}</button>
+          ))}
+        </div>
+        <span style={{ fontSize: 11, color: theme.textMuted }}>
+          {st.route === 'mrp' ? 'Department plan split by MRP band (buyer MRP Cont %)' : 'Department plan split by Article Name (LY mix x buyer Art Nm Cont %)'}
+        </span>
+      </div>
+      {st.route === 'article' ? <ArtNmRoute grain={st.grain} onGrain={g => save({ grain: g })} /> : <MrpRoute />}
+    </>
+  )
+}
+
+function MrpRoute() {
   const [data, setData]               = useState(null)
   const [loading, setLoading]         = useState(true)
   const [err, setErr]                 = useState('')

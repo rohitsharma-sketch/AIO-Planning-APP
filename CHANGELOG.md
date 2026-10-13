@@ -7,6 +7,18 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### Sales Plan: MRP stage - Article Name route beside the MRP route
+- **Asked (user):** "Add A provision toggle if the user wants to go Article Name or MRP route. Follow the MRP route as is", with the Article Name route's rules; then "for new departments and split departments use the imported buyer's cont % at art nm", and the buyers' file `art nm cont % mamj.xlsx` (MC TAG per department).
+- **Toggle:** MRP Plan → Plan Output has a Route switch (MRP / Article Name), saved on the server (`backend/mrp_route.json`, default MRP). The MRP route is unchanged.
+- **Article Name route** (`engines/art_nm_engine.py`, `/api/planning/art-nm`; page `components/ArtNmRoute.jsx`):
+  - LY sales per Cluster or Store (switch) x Department x Article Name x month from the sales engine (lake, LY Mar-Jun 2026); ties to the Calendar department sales (0.0 L).
+  - Import the buyers' Art Nm Cont % (one MAMJ % per Department x Article Name; fractions read as %). Deviation = buyer % / the cluster's own LY % of the block, capped 50-150%; new base = LY x capped (LY below 0 counts as 0); apportioned to 100% per Cluster x Department x month and applied to the department plan, adding back exactly.
+  - NEW ACTIVE MC and NEW SPLIT MC departments take the buyers' % as it is; a split department is named by its old name in the file, so each part takes it by article tier (EPP, ECO, ...) over its own articles.
+  - Fallbacks, each shown as the department's method: no buyer % -> LY mix; store with no LY -> its cluster's mix; no LY here -> buyer %, else the chain LY mix.
+  - Checks on the page: file and block vs plan months, 100% per department, LY tie, caps / no negatives, article plan = department AOP per group x department x month, AOP traced to the department plan. Filters row: Cluster/Store, Department, Tag, Method, Check. Excel export: Article Plan, Department Check, Checks.
+- **Result (MAMJ, by cluster):** ₹51,484.13 L split over 1,561 cluster x department rows; 6,242 of 6,244 month cells = department AOP; the 2 others are negative department plans (-0.007 L, returns in LY) kept at 0. By store: 123,203 of 123,220.
+- Test: `engines/test_art_nm.py`.
+
 ### Sales Plan: the department plan at the MRP stage; Filters row on the MRP pages
 - **Asked (user):** "add the same filters row to the MRP pages", then "now take the department plan to the MRP stage".
 - **MRP stage:**
