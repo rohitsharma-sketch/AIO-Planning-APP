@@ -765,7 +765,7 @@ tr:hover .blk-lock,.blk-lock:focus-visible{opacity:1}
           </div>
         </div>
         <select class="tbtn ver-sel" id="verSel" onchange="onVerSelChange(this.value)" onmousedown="_vlPull()" aria-label="Plan version"
-          title="Plan version (shared - kept in the database, so every machine sees the same list). The Original is the first saved plan and never changes; every changed save after it is a new iteration. Pick one to load it."></select>
+          title="Plan version (shared - kept in the database, so every machine sees the same list). The Original is the first saved plan and never changes; every changed save after it is a new iteration. Pick one to load it - or, at the bottom: New iteration (a fresh sheet), Save as new iteration, Rename, Remove."></select>
         <div class="tbtn" onclick="openMainCompare()" title="What changed since the last save, department by department - with Undo">Before / after</div>
         <div class="tbtn pri" onclick="saveState(true)">Save</div>
       </div>
@@ -5338,7 +5338,7 @@ function saveState(logVersion=false){
   const now=new Date();
   try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopVersionId:S.aopVersionId,aopUnit:S.aopUnit,locked:[...S.locked],buyerSet:[...S.buyerSet],divLocked:[...S.divLocked],divLockAdded:S.divLockAdded,aopSeeds:S.aopSeeds,aopSeededFrom:S.aopSeededFrom,aopSeedFp:S.aopSeedFp,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],customDepts:S.customDepts,deptSplit:1,at:now.toISOString()}))}catch(e){}
   _updateSaveLabel(now);
-  if(logVersion){_maybeSaveVersion(now);_renderVerSel();}
+  if(logVersion){_maybeSaveVersion(now,_vlNext);_vlNext=null;_renderVerSel();}
   _mainSnapTake('saved');   // the main sheet's before / after starts again from what was just saved
   toast('State saved ✓');
   // Sales Plan gets the buyer growth ONLY from the Save button (user, 2026-10-05: "push only on Save") - seeding,
@@ -7386,7 +7386,8 @@ function _vlTag(vers){
   byAge.forEach(v=>{if(v.kind!=='original'&&!v.iter){v.kind='iteration';v.iter=++n;}});
   return vers;
 }
-function _vlName(v){return v.kind==='original'?'Original':'Iteration '+v.iter;}
+function _vlBase(v){return v.kind==='original'?'Original':'Iteration '+v.iter;}
+function _vlName(v){return v.name?`${v.name} (${_vlBase(v)})`:_vlBase(v);}   // own name (2026-10-13), the number kept
 function _vlShort(iso){return new Date(iso).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'numeric',minute:'2-digit'});}
 // same plan inputs (growth %, locks, hidden departments) - rounded so a re-save's float noise is not a change
 function _vlSame(a,b){
@@ -7404,6 +7405,12 @@ function _renderVerSel(){
   const list=[...vers].sort((a,b)=>(a.kind==='original'?-1:b.kind==='original'?1:a.iter-b.iter));
   el.innerHTML=(list.some(v=>v.id===act)?'':'<option value="" selected disabled>Pick a version</option>')
     +list.map(v=>`<option value="${v.id}"${v.id===act?' selected':''}>${_vlName(v)} · ${_vlShort(v.savedAt)}</option>`).join('')
+    // user, 2026-10-13: "add a save as button for new iteration, a new iteration button to create a new BIS sheet, a
+    // rename button to rename existing iterations" - here, as the remover is: the toolbar has no room left at 1366 px
+    +'<option disabled>──────────</option>'
+    +'<option value="__new">＋ New iteration (fresh sheet)…</option>'
+    +'<option value="__saveas">⧉ Save as new iteration…</option>'
+    +`<option value="__rename">✎ Rename ${list.some(v=>v.id===act)?'this version':'a version'}…</option>`
     +(list.some(v=>v.kind!=='original')?'<option value="__rm">✕ Remove an iteration…</option>':'');
 }
 // 2026-10-12 (user): "move the BIS versions to the database" - the list lives in Postgres (AOP Forecaster,
@@ -7449,6 +7456,9 @@ async function _vlPush(v){
 }
 function onVerSelChange(id){
   if(id==='__rm'){_renderVerSel();openVersionLog();return;}
+  const act={__new:newIteration,__saveas:saveAsIteration,   // no version on screen: pick one in the list (each has Rename)
+    __rename:()=>_vlLoad().some(v=>v.id===_vlActiveId())?renameVersion(_vlActiveId()):openVersionLog()}[id];
+  if(act){_renderVerSel();act();return;}
   loadVersion(_vlLoad().findIndex(v=>v.id===Number(id)));   // asks first
   _renderVerSel();                                          // cancelled -> back to the version on screen
 }
@@ -7505,7 +7515,8 @@ function _vlSnapshot(){
     divLockAdded:JSON.parse(JSON.stringify(S.divLockAdded||{}))
   };
 }
-function _maybeSaveVersion(now){
+let _vlNext=null;   // {name} = the next save is a new iteration whatever changed (Save as / New iteration, 2026-10-13)
+function _maybeSaveVersion(now,force=null){
   const vers=_vlLoad();
   const cur=_vlCurrentTotals();
   const curSum=_vlTotalSum(cur);
@@ -7515,7 +7526,8 @@ function _maybeSaveVersion(now){
   const ai=vers.findIndex(v=>v.id===_vlActiveId());
   const i=ai>=0?ai:0;
   const snap=_vlSnapshot();
-  if(vers[i]?.kind==='original'){
+  if(force){/* Save as / New iteration: always a new one */}
+  else if(vers[i]?.kind==='original'){
     if(_vlSame(vers[i].snapshot,snap))return;   // unchanged Original - nothing to save; any change is a new iteration
   }else if(vers.length&&Math.abs(curSum-_vlTotalSum(vers[i].divisionTotals))<=0.5){
     // same plan (minor drift) - refresh that version in place and make it the latest
@@ -7531,6 +7543,7 @@ function _maybeSaveVersion(now){
   const id=Date.now();
   const v=vers.length?{id,kind:'iteration',iter:Math.max(0,...vers.map(x=>x.iter||0))+1}:{id,kind:'original'};
   Object.assign(v,{label:`${_vlName(v)} — ${_vlFmtDate(now)}`,savedAt:now.toISOString(),divisionTotals:cur,snapshot:snap,_pending:true});
+  if(force?.name)v.name=force.name;
   vers.unshift(v);
   while(vers.length>_VL_MAX)vers.splice(vers.map(x=>x.kind).lastIndexOf('iteration'),1);   // the cap drops the oldest iteration, never the Original
   _vlSave(vers);
@@ -7567,7 +7580,7 @@ function _renderVersionLog(){
       </div>
       <div class="vlog-row-ft">
         <span style="font-size:10px;color:var(--mu)">Total: ${fCrV((t.MENS||0)+(t.LADIES||0)+(t.KIDS||0))}${v._pending?' · <b style="color:var(--wa)" title="Saved in this browser; goes to the database the next time it can be reached">not in the database yet</b>':''}</span>
-        <span>${isOrig?'':`<button class="vlog-rm" onclick="removeIteration(${v.id})" title="Remove this iteration for everyone (the Original can't be removed)">&#x2715; Remove</button>`}${hasSnap?`<button class="vlog-load" onclick="loadVersion(${i})">&#x21A9; Load</button>`:'<span style="font-size:10px;color:var(--mu);font-style:italic">No snapshot</span>'}</span>
+        <span><button class="vlog-load" onclick="renameVersion(${v.id})" title="Give it its own name - for everyone">&#x270E; Rename</button>${isOrig?'':`<button class="vlog-rm" onclick="removeIteration(${v.id})" title="Remove this iteration for everyone (the Original can't be removed)">&#x2715; Remove</button>`}${hasSnap?`<button class="vlog-load" onclick="loadVersion(${i})">&#x21A9; Load</button>`:'<span style="font-size:10px;color:var(--mu);font-style:italic">No snapshot</span>'}</span>
       </div>
     </div>`;
   }).join('')+'<div class="vlog-hint">Loading a version replaces your current plan inputs. Save first if you want to preserve the current state. The Original never changes - saving a changed plan made from it creates the next iteration. '+(_vlDbOk===false?'<b>The database could not be reached - showing this browser\'s copy.</b>':'The list is shared: it is kept in the database, so every machine sees the same versions.')+'</div>';
@@ -7585,6 +7598,49 @@ async function removeIteration(id){
   await _vlPull();
   _renderVersionLog();
   toast(`${_vlName(v)} removed`);
+}
+function _vlAskName(what){
+  const n=prompt(what+'\n\nName (optional - leave empty for just the iteration number):','');
+  return n===null?null:n.trim().replace(/\s+/g,' ').slice(0,60);
+}
+// Save as: the plan on screen as the next iteration, whatever changed - a full Save (Sales Plan follows it)
+function saveAsIteration(){
+  const name=_vlAskName('Save the plan on screen as a new iteration. It is also sent to Sales Plan, as Save does.');
+  if(name===null)return;
+  _planEvent('Save as a new iteration');
+  _vlNext={name};
+  saveState(true);
+}
+// New iteration = a new BIS sheet: every unlocked division back to the plain AOP share (Plan tools > Reset to AOP
+// share), kept as the next iteration and loaded on screen. Saved in the version list only - Sales Plan keeps the last
+// Save until Save is pressed on this one.
+function newIteration(){
+  if(!confirm('Start a new BIS sheet?\n\nEvery division goes back to the plain AOP share (buyer entries and locks cleared; a locked division keeps its inputs) and is kept as the next iteration.\n\nThe plan on screen is replaced - use Save or Save as first if you want to keep it. Sales Plan does not change until you press Save.'))return;
+  const name=_vlAskName('Name the new iteration.');
+  if(name===null)return;
+  _planEvent('New iteration (fresh sheet)');
+  resetPlanToAop();
+  saveState(false);
+  _maybeSaveVersion(new Date(),{name});
+  _renderVerSel();
+  _mainSnapTake('saved');
+  toast('New iteration started - the AOP share. Press Save to send it to Sales Plan');
+}
+async function renameVersion(id){
+  const v=_vlLoad().find(x=>x.id===id);
+  if(!v){toast('Pick a saved version first');return;}
+  const n=prompt(`Rename ${_vlName(v)} (${_vlShort(v.savedAt)}) - for everyone.\n\nNew name (empty = just "${_vlBase(v)}"):`,v.name||'');
+  if(n===null)return;
+  const name=n.trim().replace(/\s+/g,' ').slice(0,60);
+  try{await _vlPost({rename:id,name});}
+  catch(e){
+    if(!/404/.test(e.message)){toast('Not renamed - the database could not be reached');return;}
+    // 404: not in the database yet (saved offline) - named here, it goes up with the version
+  }
+  _vlSave(_vlLoad().map(x=>{if(x.id!==id)return x;const y={...x};if(name)y.name=name;else delete y.name;return y;}));
+  await _vlPull();
+  _renderVersionLog();
+  toast(name?`Renamed: ${name}`:`Name cleared - ${_vlBase(v)}`);
 }
 function loadVersion(idx){
   _planEvent('Load a saved version');

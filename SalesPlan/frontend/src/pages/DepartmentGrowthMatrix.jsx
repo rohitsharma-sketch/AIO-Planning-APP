@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { theme, alpha } from '../theme'
 import GrainPanel from '../components/GrainPanel'
+import BisCompare from '../components/BisCompare'
 import { ENGINE_META, startPipeline } from '../pipelineState'
 import SearchSlicer from '../components/SearchSlicer'
 import { useGrain } from '../grain'
@@ -771,6 +772,7 @@ export default function DepartmentGrowthMatrix() {
           </div>
         )}
       </div>
+      <BisCompare division={activeDiv} />
       <GrainPanel stage="department" division={activeDiv} title={`${activeDiv} department plan`} />
     </div>
   )

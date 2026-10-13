@@ -8,7 +8,8 @@ The server owns the numbering, so two machines can't both make an Original or th
   - a new version is the Original when there is none, else the next iteration (numbers never move);
   - a known version keeps its kind / number, and the Original is never overwritten;
   - the cap keeps the Original and the newest iterations (10 versions in all).
-`data` is the BIS entry as-is: {id, kind, iter, label, savedAt, divisionTotals, snapshot}."""
+`data` is the BIS entry as-is: {id, kind, iter, label, savedAt, divisionTotals, snapshot, name?} - name = the user's own
+name for it (user, 2026-10-13: "a rename button to rename existing iterations"); label stays "Original" / "Iteration N"."""
 import json
 
 MAX_VERSIONS = 10
@@ -24,6 +25,8 @@ def apply_save(rows, body):
     v = {k: x for k, x in body.items() if not k.startswith("_")}
     if old:
         v["kind"], v["iter"] = old.get("kind"), old.get("iter")
+        if "name" not in v and old.get("name"):   # a re-save from a browser that hadn't seen the rename keeps it
+            v["name"] = old["name"]
     elif not any(r.get("kind") == "original" for r in rows):
         v["kind"] = "original"
         v.pop("iter", None)
@@ -85,6 +88,21 @@ def remove_version(db, vid):
     return db.execute(text(
         "DELETE FROM planning_inputs.bis_plan_versions WHERE id = :id AND data->>'kind' IS DISTINCT FROM 'original' "
         "RETURNING id"), {"id": str(vid)}).first() is not None
+
+
+MAX_NAME = 60
+
+
+def rename_version(db, vid, name):
+    """Give a version its own name (empty = back to "Original" / "Iteration N"). Its place in the list (last saved
+    first) does not move. Caller commits. True when the version exists."""
+    from sqlalchemy import text
+    _ensure(db)
+    name = " ".join(str(name or "").split())[:MAX_NAME]
+    sql = ("UPDATE planning_inputs.bis_plan_versions SET data = " +
+           ("jsonb_set(data, '{name}', to_jsonb(CAST(:n AS text)))" if name else "data - 'name'") +
+           " WHERE id = :id RETURNING id")
+    return db.execute(text(sql), {"id": str(vid), "n": name}).first() is not None
 
 
 def import_versions(db, versions):

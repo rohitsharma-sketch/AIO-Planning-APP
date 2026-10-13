@@ -7,6 +7,28 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### BIS: Save as, New iteration, Rename + Sales Plan Department pages compare with a BIS iteration
+- **Asked (user):** "yes add it on the department pages. Also, add a save as button for new iteration, a new iteration button to create a new BIS sheet, a rename button to rename existing iterations". This followed the question "why is not showing up in the version selector": the Division Plan's "Compare with" lists AOP Forecaster publishes only. The last BIS save was at 10:56 (Iteration 4); later edits were never saved.
+- **BIS version picker** (bottom of the list, where "Remove an iteration" already was):
+  - **New iteration (fresh sheet)**: every unlocked division goes back to the plain AOP share (Plan tools > Reset to AOP share) and is kept as the next iteration. Sales Plan doesn't change until Save.
+  - **Save as new iteration**: the plan on screen becomes a new iteration whatever changed. It's a full Save, so it is sent to Sales Plan.
+  - **Rename this version**: renames the version on screen; with none loaded, it opens the version list.
+- **Plan history:** every version has a Rename button.
+- **Names:**
+  - A name is shown as "Name (Iteration N)" and is shared through the database (`{"rename": id, "name": ...}` on `/api/config/bis-plan-versions`).
+  - An empty name goes back to the number. A re-save keeps the name.
+- **Not toolbar buttons:** at 1366 px they squeezed the "Buyer's Input Sheet" title to 28 px. In the picker the title keeps its 146 px.
+- **Sales Plan, Department pages (Master Setup and Growth Matrix):** new panel "compare with a BIS iteration".
+  - It sets any saved BIS version beside the live plan, department by department, for Mar-Jun'27: LY, live plan and growth, the version's plan and growth, and the difference. Departments are sorted by the gap; "Changed departments only" is on by default; click a department for its months.
+  - Both sides are priced on the same LY, Sales Plan's 148 like-for-like stores.
+  - A department missing from an older version (split after it was saved) is marked "NOT IN ...".
+- **Checked:**
+  - Iteration 4 = the live plan in all 3 divisions (0 departments differ).
+  - Original vs live: KIDS 91, LADIES 55, MENS 36 differ. 4 KIDS departments are not in the Original (split on 28 Sep).
+  - Panel opened on both pages on the stand-alone Sales Plan server.
+  - Rename endpoint 404 path checked; rename SQL tested on a temp table.
+  - BIS `node --check` clean; test_bis_plan_versions passes. Save as, New iteration and Rename were not run on the live list (they write to it).
+
 ### Sales Plan: cluster-built plan weighted by sell-thru factors (the MAMJ'27 cluster workbook's working)
 - **Asked (user):** "design a similar working with the components in the Cluster level planning engine for Department output", then "just import the logics ... donot replicate the output just as is, i want the existing apps to flow their respective components as in relation to the present columns". Choices: chain-level sell-thru from the data lake, AOP held per cluster x division, view only.
 - The Store / Cluster panel's "How the plan is built" menu (Division Plan, Department Growth Matrix) has a third preview: **cluster-built (AOP x sell-thru factor)**. It shows in the panel's existing columns (months, Plan, LY, Growth, Today's plan, vs today, AOP). It is the same cluster-built split, weighted by LY x (1 + sell-thru factor) instead of LY x BIS growth.

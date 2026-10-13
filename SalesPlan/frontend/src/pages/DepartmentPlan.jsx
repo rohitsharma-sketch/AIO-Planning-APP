@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { theme, alpha } from '../theme'
+import BisCompare from '../components/BisCompare'
 
 const DIVISIONS = ['KIDS', 'LADIES', 'MENS']   // GM / RETAIL out of the Sales Plan engine (user, 2026-10-13)
 
@@ -579,6 +580,7 @@ export default function DepartmentPlan() {
           )}
         </div>
       </div>
+      <BisCompare division={activeDiv} />
     </div>
   )
 }

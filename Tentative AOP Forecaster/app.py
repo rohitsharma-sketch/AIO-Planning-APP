@@ -605,10 +605,16 @@ def get_bis_plan_versions():
 def post_bis_plan_version(body: dict = Body(...)):
     """One saved BIS version ({id, snapshot, ...}) -> {version, dropped}; the server numbers it. Or
     {"import": [...]}: the first browser's own list, accepted only while the table is empty (409 after). Or
-    {"remove": id}: remove one iteration (the Original can't be removed - 404)."""
+    {"remove": id}: remove one iteration (the Original can't be removed - 404). Or {"rename": id, "name": str}: its own
+    name ("" = back to "Iteration N")."""
     from db.base import SessionLocal
-    from db.bis_plan_versions import save_version, import_versions, remove_version
+    from db.bis_plan_versions import save_version, import_versions, remove_version, rename_version
     with SessionLocal() as db:
+        if "rename" in body:
+            if not rename_version(db, body["rename"], body.get("name")):
+                raise HTTPException(404, "No such version")
+            db.commit()
+            return {"ok": True}
         if "remove" in body:
             if not remove_version(db, body["remove"]):
                 raise HTTPException(404, "No such iteration (the Original can't be removed)")

@@ -32,3 +32,7 @@ assert [r["label"] for r in rows if r["kind"] != "original"] == [f"Iteration {n}
 # string / number ids are the same version
 assert apply_save([{"id": 5, "kind": "iteration", "iter": 3}], {"id": "5"})[0]["iter"] == 3
 print("test_bis_plan_versions: OK")
+# a re-save keeps the name it was given, even from a browser that hadn't seen the rename (2026-10-13)
+assert apply_save([{"id": 5, "kind": "iteration", "iter": 3, "name": "Buyer pass 2"}], {"id": 5})[0]["name"] == "Buyer pass 2"
+assert apply_save([{"id": 5, "kind": "iteration", "iter": 3, "name": "a"}], {"id": 5, "name": "b"})[0]["name"] == "b"
+print("rename checks passed")

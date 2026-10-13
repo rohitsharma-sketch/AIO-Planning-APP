@@ -693,3 +693,87 @@ def export_csv():
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=department_master.csv"},
     )
+
+
+# ── A BIS iteration beside the live plan, by department (user, 2026-10-13: "yes add it on the department pages") ──
+# The Division Plan holds every division on AOP, so iterations differ only below it. View only: the live plan = what
+# BIS last saved (live_growth_matrix); an iteration = its saved snapshot in planning_inputs.bis_plan_versions. Both
+# are priced on the same LY - Sales Plan's like-for-like (SSG) stores - so the gap is the growth difference alone.
+BIS_BLOCK = {11: "Mar'27", 0: "Apr'27", 1: "May'27", 2: "Jun'27"}   # BIS's block months (AOP_MIS; mi 11 = Mar'27)
+
+
+def bis_dept_id(name) -> str:
+    """BIS's department id ('KB_T-SHIRT H/S' -> 'kb_t_shirt_h_s') - = BIS sync_server.normalize_dept_id."""
+    import re
+    return re.sub(r"[^a-z0-9]+", "_", str(name).lower().strip()).strip("_")
+
+
+def _bis_versions() -> list:
+    from db.base import SessionLocal
+    from db.bis_plan_versions import list_versions
+    with SessionLocal() as db:
+        return list_versions(db)
+
+
+def _bis_version_name(v: dict) -> str:
+    base = "Original" if v.get("kind") == "original" else f"Iteration {v.get('iter')}"
+    return f"{v['name']} ({base})" if v.get("name") else base
+
+
+def bis_compare_rows(depts: list, live: dict, inputs: dict, hidden: set, ly: dict) -> list:
+    """Pure. depts = department names; live = {dept: {TY month: growth % or None}}; inputs = the iteration's
+    {bis id__mi: growth %}; hidden = its inactive bis ids (plan 0); ly = {dept: {TY month: Rs L}}. A missing growth
+    plans at LY on both sides (0%), as the engine and BIS do."""
+    out = []
+    for d in depts:
+        sid, ms = bis_dept_id(d), {}
+        for mi, m in BIS_BLOCK.items():
+            g_it = -100.0 if sid in hidden else inputs.get(f"{sid}__{mi}")
+            g_lv, l = live.get(d, {}).get(m), ly.get(d, {}).get(m, 0.0)
+            ms[m] = {"ly": l, "live_g": g_lv, "it_g": g_it,
+                     "live": l * (1 + (g_lv or 0.0) / 100), "it": l * (1 + (float(g_it) if g_it is not None else 0.0) / 100)}
+        t = {k: sum(x[k] for x in ms.values()) for k in ("ly", "live", "it")}
+        if t["ly"] or t["live"] or t["it"]:
+            # not in that version at all (e.g. a department split after it was saved) - priced at LY, and said so
+            out.append({"department": d, "months": ms, **t, "inactive_it": sid in hidden,
+                        "missing_it": sid not in hidden and all(x["it_g"] is None for x in ms.values())})
+    return out
+
+
+@router.get("/bis-versions")
+def get_bis_versions():
+    """The saved BIS versions (Original + iterations), newest first - the choices for "Compare with"."""
+    return [{"id": str(v["id"]), "label": _bis_version_name(v), "kind": v.get("kind"), "saved_at": v.get("savedAt"),
+             "division_totals": v.get("divisionTotals")} for v in _bis_versions()]
+
+
+@router.get("/bis-compare/{version_id}")
+def get_bis_compare(version_id: str, division: str = "KIDS"):
+    from fastapi import HTTPException
+    from actuals_manager import load_actuals
+    from store_master import load_store_master, is_ssg
+    v = next((x for x in _bis_versions() if str(x["id"]) == version_id), None)
+    if v is None:
+        raise HTTPException(404, "That BIS version isn't saved any more")
+    div = division.upper()
+    if div not in BIS_DIVISIONS:
+        raise HTTPException(400, f"BIS plans {', '.join(BIS_DIVISIONS)} only")
+    snap = v.get("snapshot") or {}
+    # live growth % per month = the average of the P1 / P2 index the engine plans on (index 100 = 0%)
+    lg = live_growth_matrix().get(div, {})
+    live = {d: {m: ((ps[f"{m} P1"] + ps[f"{m} P2"]) / 2 - 100 if f"{m} P1" in ps and f"{m} P2" in ps else None)
+                for m in BIS_BLOCK.values()} for d, ps in lg.items()}
+    lfl = {r["Store"] for r in load_store_master() if is_ssg(r.get("Tag", ""), r["Store"])}
+    ly = {}
+    for s, dd in load_actuals().items():
+        if s in lfl:
+            for d, ms in (dd.get(div) or {}).items():
+                for m in BIS_BLOCK.values():
+                    x = ly.setdefault(d, {})
+                    x[m] = x.get(m, 0.0) + float(ms.get(f"{m[:4]}{int(m[4:]) - 1:02d}") or 0.0)
+    depts = sorted({r["name"] for r in _build_master().get(div, [])} | set(lg) | set(ly))
+    rows = bis_compare_rows(depts, live, snap.get("inputs") or {}, set(snap.get("hiddenSecs") or []), ly)
+    tot = {k: sum(r[k] for r in rows) for k in ("ly", "live", "it")}
+    return {"version": {"id": str(v["id"]), "label": _bis_version_name(v), "saved_at": v.get("savedAt"),
+                        "division_totals": v.get("divisionTotals")},
+            "division": div, "months": list(BIS_BLOCK.values()), "rows": rows, "total": tot, "lfl_stores": len(lfl)}
