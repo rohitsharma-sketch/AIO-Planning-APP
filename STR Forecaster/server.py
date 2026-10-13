@@ -181,13 +181,28 @@ LAYER_LABEL = {"division": "Division", "department": "Department", "cluster": "C
                "attribute": "Attribute", "season": "Season", "display": "Display type", "article": "Article"}
 
 
+_ADD = ("qty", "mdq", "ly_qty", "ly_mdq", "plan_rs")
+
+
+def _avg_cell(r):
+    """the 4-month figures as the page shows them (user, 2026-10-13: "put the same averages in the excel export too"):
+    plan qty, MDQ, LY qty / MDQ, plan Rs and fixtures as the average month (over the months that have one); the store
+    count is already the average month; STR %, days and bands are unchanged (they were the average month already)"""
+    t = dict(r["total"])
+    for f in _ADD:
+        v = [c[f] for c in r["months"] if c.get(f)]
+        t[f] = sum(v) / len(v) if v else 0.0
+    t["fixtures"] = t.get("fixtures_avg", t["fixtures"])
+    return t
+
+
 def _cells_wide(c, pre):
     """one period's figures as Excel columns"""
     return {f"{pre} season": c["season"], f"{pre} season index (vs window)": c["season_idx"], f"{pre} year index": c.get("season_year"),
             f"{pre} share of plan in festival months": c.get("fest_share"), f"{pre} STR band": c["band"],
             f"{pre} base band (60-180)": c["base_band"], f"{pre} STR days": c["days"], f"{pre} LY days": c["ly_days"],
             f"{pre} plan qty": c["qty"], f"{pre} MDQ": c["mdq"], f"{pre} LY qty": c["ly_qty"], f"{pre} plan Rs": c["plan_rs"],
-            f"{pre} fixtures": c["fixtures"], f"{pre} avg fixtures": c.get("fixtures_avg"), f"{pre} stores": c.get("stores"),
+            f"{pre} fixtures": c["fixtures"], f"{pre} stores": c.get("stores"),
             f"{pre} max STR %": c["str"], f"{pre} LY STR %": c["ly_str"]}
 
 
@@ -238,7 +253,8 @@ def workbook(df, months, has_plan, layers, info, filters):
               ("Band", f"STR days rounded to the nearest 30, kept inside the season's limits ({bands}); never under {se.BAND_MIN} or over {se.BAND_MAX}"),
               ("Roll-ups", "plan qty and MDQ are summed first, then the days; a group's season = its departments' season index weighted by plan qty"),
               ("Articles", "with Article as a layer or filter: fixtures, MDQ and last year's sales of a store x department x month are split by each article's share of the department's planned qty in that store and month (Rs where the plan has no qty) - the store's own plan, else the chain's; planned Rs / qty are the article's own"),
-              ("Sheets", "STR detail = every store x department x month; Drill-down = the page's row layers fully opened, 4-month and each month; By month = long format per level")]
+              ("Sheets", "STR detail = every store x department x month; Drill-down = the page's row layers fully opened, 4-month and each month; By month = long format per level"),
+              ("4-month avg", "as on the page: plan qty, MDQ, LY qty / MDQ, plan Rs, fixtures and store count are the average month (the months' figures over the months that have one), not 4-month totals; STR days / band = the average month's MDQ over its planned qty per day")]
     with pd.ExcelWriter(out, engine="xlsxwriter", engine_kwargs={"options": {"strings_to_formulas": False}}) as xw:
         pd.DataFrame(readme, columns=["", "How it is worked out"]).to_excel(xw, sheet_name="Read me", index=False)
         d.sort_values(["cluster", "division", "department", "store", "month"]).to_excel(xw, sheet_name="STR detail", index=False)
@@ -251,7 +267,7 @@ def workbook(df, months, has_plan, layers, info, filters):
                 by.insert(by.index("department"), "division")
             for r in se.rollup(df, by, months, has_plan):
                 row = {"level": k, **{LAYER_LABEL[x]: _safe(str(r.get(x, ""))) for x in layers[:k]}}
-                row.update(_cells_wide(r["total"], "4-month"))
+                row.update(_cells_wide(_avg_cell(r), "4-month avg"))
                 for m, c in zip(months, r["months"]):
                     row.update(_cells_wide(c, m.strftime("%b %y")))
                 rows.append(row)
@@ -265,7 +281,7 @@ def workbook(df, months, has_plan, layers, info, filters):
                        (["cluster", "division", "department"], "cluster x department"), (["cluster", "store"], "store")):
             for r in se.rollup(df, by, months, has_plan):
                 base = {"level": nm, **{k: _safe(r[k]) for k in by}}
-                for m, c in [("4-month avg", r["total"])] + [(str(m), c) for m, c in zip(months, r["months"])]:
+                for m, c in [("4-month avg", _avg_cell(r))] + [(str(m), c) for m, c in zip(months, r["months"])]:
                     long.append({**base, "month": m, **{k.split(" ", 1)[1]: v for k, v in _cells_wide(c, "x").items()}})
         pd.DataFrame(long).to_excel(xw, sheet_name="By month", index=False)
     return out.getvalue()

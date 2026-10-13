@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### STR Forecaster: the Excel export's 4-month figures are averages too
+- **Asked (user):** "put the same averages in the excel export too".
+- In the Drill-down sheet ("4-month avg ..." columns) and the By month sheet ("4-month avg" rows), plan qty, MDQ, LY qty / MDQ, plan Rs, fixtures and store count are now the average month: the months' figures over the months that have one, as on the page. They were 4-month totals.
+- STR %, days and bands are unchanged. The Read me sheet says so. The separate "avg fixtures" column is gone, because "4-month avg fixtures" is the average now.
+- **Checked by downloading the export:** BH - (NP) 4-month avg = plan qty 10,21,779, MDQ 18,70,087, fixtures 15,233, 52 stores (= the page).
+- **Ops:** an earlier STR restart left two servers running, and the old one kept port 8085. Both were stopped and one fresh server started.
+
 ### STR Forecaster: the 4-month block shows averages for Plan qty and MDQ
 - **Asked (user):** "in the averge columns only average should be there for Plan Qty,MDQ".
 - The 4-month avg block showed the 4-month *totals* of plan qty and MDQ (All 1,41,18,535 / 2,52,48,122). It now shows the average month, the monthly figures over the months that have one: **Avg plan qty** / **Avg MDQ** (All 35,29,634 / 63,12,030; BH - (NP) 10,21,779 plan qty).
