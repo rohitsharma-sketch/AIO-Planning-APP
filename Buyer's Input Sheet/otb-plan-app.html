@@ -1959,6 +1959,53 @@ function _ndRowsOf(m){
   return out;
 }
 const _ndDv=div=>DVDATA.find(d=>d.id===String(div).toLowerCase());
+/* New departments in the plan itself (user, 2026-10-13: "Keep new dept cont % the same as fixed in the plan and
+   reapportion on the mix and adjust the aop always it should happen automatically"). For every department on the New
+   departments list: its month = New dept % x its reference's month (its own buyer growth no longer counts - it read
+   +226% and the carve came on top, 25.4% not 25%), then the division is re-balanced on the mix back to its AOP
+   (_divRescale), repeated until it holds (a locked reference stays put). Runs after every re-balance (_divReapp /
+   _divRescale), on load and after the New departments window saves. Only the new department's side is set here - the
+   reference's "Ref dept %" cut is Sales Plan's (it would be applied twice). A new department with no LY of its own
+   can't be held as a growth % here; Sales Plan plans it, and its total is kept the same. */
+let _ndIdx={},_ndBusy=false;   // sec id -> {div, ref (sec id), refNm, np}
+function _ndBuildIdx(m){
+  const idx={};
+  Object.entries(m||{}).forEach(([div,e])=>{const dv=_ndDv(div);if(!dv)return;
+    const byNm=Object.fromEntries(dv.secs.map(x=>[x.nm.toUpperCase(),x]));
+    Object.entries(e||{}).forEach(([nm,c])=>{const sec=byNm[String(nm).trim().toUpperCase()],ref=byNm[String(c.ref_dept||'').trim().toUpperCase()];
+      const np=+(c.new_dept_pct??c.alloc_pct??0)/100;
+      if(sec&&ref&&sec!==ref&&np>0)idx[sec.id]={div:dv.id,ref:ref.id,refNm:ref.nm,np};});});
+  _ndIdx=idx;
+}
+function _ndOf(id){return _ndIdx[id]||null;}
+function _ndSettle(dv,mi){
+  if(_ndBusy||S.divLocked.has(dv.id))return;
+  const list=Object.entries(_ndIdx).filter(([,x])=>x.div===dv.id);
+  if(!list.length)return;
+  _ndBusy=true;
+  try{
+    for(let it=0;it<6;it++){
+      let moved=0;
+      list.forEach(([id,x])=>{
+        const sec=dv.secs.find(z=>z.id===id),ref=dv.secs.find(z=>z.id===x.ref),k=id+'__'+mi;
+        if(!sec||!ref||S.hiddenSecs.has(id)||S.locked.has(k))return;
+        const nly=_secMonLY(sec,dv,mi);if(!(nly>0))return;
+        const rty=S.hiddenSecs.has(ref.id)?0:_secMonLY(ref,dv,mi)*(1+(S.inputs[ref.id+'__'+mi]??0)/100);
+        const g=(rty*x.np/nly-1)*100;
+        moved=Math.max(moved,Math.abs((S.inputs[k]??g+1)-g));S.inputs[k]=g;S.buyerSet.delete(id);
+      });
+      if(moved<1e-9)break;
+      _divRescale(dv,mi);
+    }
+  }finally{_ndBusy=false;}
+}
+function _ndSettleAll(){DVDATA.forEach(dv=>AOP_MIS.forEach(mi=>_ndSettle(dv,mi)));}
+function _ndLoadMap(){
+  return (location.port==='5050'?Promise.reject(new Error('own port')):fetch(ND_API).then(r=>{if(!r.ok||r.redirected)throw new Error(r.status);return r.json();}))
+    .catch(()=>fetch(SYNC_BASE+'/api/planner/new-depts').then(r=>r.ok?r.json():{}))
+    .then(m=>{_ndBuildIdx(m);if(Object.keys(_ndIdx).length){_ndSettleAll();refresh();}})
+    .catch(()=>{});
+}
 // the BIS plan of a division, month by month, with the new departments carved out of their reference (as the engine)
 function _ndSim(div){
   const dv=_ndDv(div),res={};if(!dv)return null;
@@ -1967,7 +2014,9 @@ function _ndSim(div){
     const pre={...ty};
     (_nd.rows[div]||[]).forEach(r=>{const R=String(r.ref||'').toUpperCase(),N=String(r.nm||'').trim().toUpperCase();
       if(!N||!(R in ty))return;const t=ty[R],np=(+r.np||0)/100,rp=(+r.rp||0)/100;if(!np&&!rp)return;
-      ty[R]=t*(1-rp);ty[N]=(ty[N]||0)+t*np;});
+      ty[R]=t*(1-rp);ty[N]=t*np;});   // its plan IS the carve (2026-10-13), then the division back on its total
+    const preT=Object.values(pre).reduce((a,b)=>a+b,0),postT=Object.values(ty).reduce((a,b)=>a+b,0),f=postT>0?preT/postT:1;
+    Object.keys(ty).forEach(k=>{ty[k]*=f;});
     res[mi]={ty,pre,tot:Object.values(ty).reduce((a,b)=>a+b,0)};});
   return res;
 }
@@ -1995,7 +2044,7 @@ function _ndRender(){
       :`<input type="text" class="nd-nm" value="${_h(r.ref)}" onchange="_ndSet(${i},'ref',this.value)"${ed} aria-label="Reference department">`;
     const own=sim&&Nm&&Nm!==R?AOP_MIS.reduce((a,mi)=>a+(sim[mi].pre[Nm]||0),0):0;
     const warn=!R?'pick its reference department':!dv?'':inactive.has(R)?'reference is inactive in BIS - nothing to carve':!refOk?'reference not in this BIS division':R===Nm?'same as its reference - it only scales itself':'';
-    return `<tr class="nd-new"><td><span class="nd-tag">NEW</span><input type="text" class="nd-nm" value="${_h(r.nm)}" placeholder="NEW DEPARTMENT" onchange="_ndSet(${i},'nm',this.value)"${ed} aria-label="New department name">${own>0?`<div class="fm-note">already planned in BIS (Rs ${L(own)} L Mar-Jun) - the carve is added to it</div>`:''}</td>
+    return `<tr class="nd-new"><td><span class="nd-tag">NEW</span><input type="text" class="nd-nm" value="${_h(r.nm)}" placeholder="NEW DEPARTMENT" onchange="_ndSet(${i},'nm',this.value)"${ed} aria-label="New department name">${own>0?`<div class="fm-note">already planned in BIS (Rs ${L(own)} L Mar-Jun) - its plan becomes the carve, then the division is re-balanced on the mix</div>`:''}</td>
       <td>${refCell}${warn?`<div class="fm-note" style="color:var(--wa)">${_h(warn)}</div>`:''}</td>
       <td class="nd-n"><input type="number" class="gi" step="1" value="${+r.np}" onchange="_ndSet(${i},'np',this.value)"${ed} aria-label="New dept %"> %</td>
       <td class="nd-n"><input type="number" class="gi" step="1" value="${+r.rp}" onchange="_ndSet(${i},'rp',this.value)"${ed} aria-label="Ref dept %"> %</td>
@@ -2035,7 +2084,7 @@ function _ndSave(){
       if(!ok){_ndRender();toast('New departments NOT saved - '+(status===401?'sign in again':status===403?'no access':(j.detail||status)));return;}
       _nd.dirty=false;_nd.rows=_ndRowsOf(body);_ndRender();
       toast(`New departments saved ✓ - ${j.saved} in Sales Plan, its plan regenerated`);
-      loadPlannerConfig().then(()=>refresh());})   // the planner's reference departments follow the same list
+      loadPlannerConfig().then(()=>refresh());_ndLoadMap();})   // the planner's reference departments follow the same list
     .catch(()=>{_nd.busy=false;_ndRender();toast('New departments NOT saved - sign in through the Planning Suite and try again');});
 }
 function _ndUpload(inp){
@@ -2377,6 +2426,9 @@ function applyImportGrowth(){
     :`${n} departments set exactly as pasted; the three divisions are locked. Save to keep it.`);
 }
 function _divRescale(dv,mi){
+  _divRescale0(dv,mi);_ndSettle(dv,mi);
+}
+function _divRescale0(dv,mi){
   if(S.divLocked.has(dv.id))return;
   const aopMon=S.aop[dv.id]?.[mi];
   if(!aopMon)return;
@@ -3211,6 +3263,8 @@ function cellVal(row,def){
       const cls='gi'+(bg==null?'':bg<0?' neg':' has')+(isLkSec?' lkd':'')+anim;
       const lockBtn=isLkDiv?'':_lkBtn(isLkSec,anim,`toggleSecLock('${sec.id}')`,
         isLkSec?'Unlock section — allow reapportion':'Lock section — freeze vs reapportion',` data-sbk="${sec.id}"`);
+      const nd=_ndOf(sec.id);
+      if(nd&&!isLkDiv)return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center" title="${_attr(`New department: its plan is ${+(nd.np*100).toFixed(2)}% of ${nd.refNm}'s, then the division is re-balanced to AOP - set in New departments, not here`)}"><span class="nd-tag">NEW</span><input class="${cls}" data-bk="${sec.id}" type="number" value="${bg!=null?bg:''}" disabled></span>`;
       return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="${cls}" data-bk="${sec.id}" type="number" step="0.01" placeholder="%" value="${bg!=null?bg:''}" ${isLkDiv?'disabled title="Division locked"':`title="${_attr(_blockWhy(row))}"`} oninput="setBlockGrowth('${sec.id}',this.value)" onblur="refresh()"></span>`;
     }
     case 'pl_fac': {
@@ -3266,6 +3320,7 @@ function cellVal(row,def){
       const cls='gi'+(v==null?'':v<0?' neg':' has')+(isLk?' lkd':'');
       const lockBtn=dl?'':_lkBtn(isLk,_lkAnim===k?' lk-anim':'',`toggleMonLock('${row._key}',${def.mi})`,
         isLk?'Unlock this month - let it re-balance':'Lock this month - freeze it vs re-balance',` data-mbk="${k}"`);
+      if(_ndOf(row._key)&&!dl)return `<input class="${cls}" data-key="${k}" type="number" value="${v!=null?+(+v).toFixed(2):''}" disabled title="${_attr(`New department: ${+(_ndOf(row._key).np*100).toFixed(2)}% of ${_ndOf(row._key).refNm}'s plan - set in New departments`)}">`;
       return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="${cls}" data-key="${k}" type="number" step="0.01" placeholder="%" value="${v!=null?+(+v).toFixed(2):''}" ${dl?'disabled title="Division locked"':''} oninput="setGrowth('${row._key}',${def.mi},this.value)" onblur="refresh()"></span>`;
     }
     case 'attr_label': return row._attr?`<span style="font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--mu)">${row._attr}</span>`:'—';
@@ -4829,6 +4884,9 @@ function toggleAttrLock(dvId,attr,rowKey){
 // Core: given a division + month, spread (aopMon - lockedTY) proportionally
 // to unlocked ACTIVE sections by monthly LY weight. Inactive depts are skipped.
 function _divReapp(dv,mi,tempLock=null){
+  _divReapp0(dv,mi,tempLock);_ndSettle(dv,mi);   // new departments follow their reference (2026-10-13)
+}
+function _divReapp0(dv,mi,tempLock=null){
   if(S.divLocked.has(dv.id))return; // division is buyer-locked — skip reapportion
   const aopMon=S.aop[dv.id]?.[mi];
   if(!aopMon)return;
@@ -7536,6 +7594,7 @@ function loadVersion(idx){
 }
 // page load: this browser's copy at once, then the shared list (here, after the version-log consts exist)
 _renderVerSel();_vlPull();
+_ndLoadMap();   // new departments follow their reference in the plan (2026-10-13)
 
 </script>
 <!-- AOP SYNC MODAL -->

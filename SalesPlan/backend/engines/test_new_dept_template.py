@@ -42,4 +42,20 @@ md = apply_new_dept_adjustments(plan, {"LADIES": {"LW_U_CORD SETS": {"ref_dept":
                                                                       "ref_reduction_pct": 20}}})["stores"]["S"]["divisions"]["LADIES"]["months"]["Mar'27"]
 c = md["departments"]["LW_U_CORD SETS"]
 assert c["active"] and abs(c["ty"] - 2) < 1e-12 and abs(md["div_total_ty"] - 10) < 1e-12 and abs(c["cont_pct"] - 20) < 1e-9, md
+# 2026-10-13: the new department's plan IS ref x New dept % (its own plan is replaced, not added to), and the division is
+# re-balanced on the mix back to its pre-carve total - one factor for every store, so the ratio holds everywhere
+def _m(depts):
+    return {"divisions": {"LADIES": {"months": {"Mar'27": {"departments": {
+        k: {"ly": v, "ty": v, "ty_p1": v / 2, "ty_p2": v / 2, "active": True} for k, v in depts.items()}}}}}}
+p2 = {"stores": {"A": _m({"FNCY": 6.0, "JAIPURI": 0.5, "KURTI": 10.0}), "B": _m({"FNCY": 2.0, "JAIPURI": 0.2, "KURTI": 5.0})}}
+apply_new_dept_adjustments(p2, {"LADIES": {"JAIPURI": {"ref_dept": "FNCY", "new_dept_pct": 25, "ref_reduction_pct": 0}}})
+dd = {s: p2["stores"][s]["divisions"]["LADIES"]["months"]["Mar'27"]["departments"] for s in "AB"}
+for s_ in "AB":   # exactly 25% of the reference in every store, P1 + P2 = TY
+    assert abs(dd[s_]["JAIPURI"]["ty"] / dd[s_]["FNCY"]["ty"] - 0.25) < 1e-12, dd[s_]
+    assert all(abs(v["ty_p1"] + v["ty_p2"] - v["ty"]) < 1e-9 for v in dd[s_].values()), dd[s_]
+tot = sum(v["ty"] for s_ in "AB" for v in dd[s_].values())
+assert abs(tot - (16.5 + 7.2)) < 1e-9, tot   # the division total is what it was before the carve
+assert abs(sum(dd[s_]["JAIPURI"]["ty"] for s_ in "AB") / sum(dd[s_]["FNCY"]["ty"] for s_ in "AB") - 0.25) < 1e-12
+# the mix is kept: KURTI / FNCY unchanged by the re-balance
+assert abs(dd["A"]["KURTI"]["ty"] / dd["A"]["FNCY"]["ty"] - 10 / 6) < 1e-12
 print("new dept template checks passed")

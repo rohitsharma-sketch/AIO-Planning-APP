@@ -95,24 +95,30 @@ def _save_new_dept_map(data: dict):
 
 def apply_new_dept_adjustments(plan_result: dict, new_dept_map: dict) -> dict:
     """
-    Post-calculation pass: two independent % controls per new dept entry.
-      new_dept_ty  = ref_dept_ty × new_dept_pct / 100
-      ref_dept_ty  = ref_dept_ty × (1 - ref_reduction_pct / 100)
-    These are intentionally independent — division totals may shift.
-    Backward-compat: old entries with only alloc_pct use it for both.
-    Applied store-by-store, month-by-month.
+    Post-calculation pass, per new dept entry {ref_dept, new_dept_pct, ref_reduction_pct}:
+      new_dept_ty = ref_dept_ty x new_dept_pct / 100      (its plan IS this - its own plan is not added, 2026-10-13)
+      ref_dept_ty = ref_dept_ty x (1 - ref_reduction_pct / 100)
+    then every active department of the division x month is scaled by ONE factor, over all stores, back to the
+    division's total before the carve (the BIS / AOP plan) - the mix is kept, and the new department stays exactly
+    new_dept_pct of its reference everywhere (user, 2026-10-13: "Keep new dept cont % the same as fixed in the plan and
+    reapportion on the mix and adjust the aop always it should happen automatically"; the carve used to be ADDED to
+    the department's own BIS plan - 25.4% instead of 25% - and the division total moved by the carve).
+    Backward-compat: old entries with only alloc_pct use it for both. Applied store-by-store, month-by-month.
     """
     if not new_dept_map:
         return plan_result
 
     # in place: every caller passes a fresh run_dept_plan() (a deep copy of the ~350 MB plan cost ~5 s, 2026-10-01)
     result = plan_result
+    tot = lambda depts: sum(v.get("ty", 0.0) for v in depts.values() if v.get("active", True))   # noqa: E731
+    pre, post = {}, {}   # (div, month) -> division total over every store, before / after the carve
 
     for store, sdata in result["stores"].items():
         for div, entries in new_dept_map.items():
             div_data = sdata["divisions"].get(div, {})
             for ty_month, month_data in div_data.get("months", {}).items():
                 depts = month_data["departments"]
+                pre[(div, ty_month)] = pre.get((div, ty_month), 0.0) + tot(depts)
                 for new_dept, cfg in entries.items():
                     ref_dept = cfg["ref_dept"]
                     # Support both old alloc_pct and new split fields
@@ -122,21 +128,19 @@ def apply_new_dept_adjustments(plan_result: dict, new_dept_map: dict) -> dict:
                     if new_dept_pct == 0 and ref_reduction_pct == 0:
                         continue
                     ref_d = depts.get(ref_dept)
-                    if ref_d is None or not ref_d.get("active", True):
-                        continue
-                    # full precision, and P1 / P2 move with TY so TY = P1 + P2 stays exact (2026-09-30: P1 / P2 were
-                    # left untouched - BHR KIDS KB_BABA SUIT DNM H/S Mar'27 was 3.06 L off its own halves)
-                    ref_ty = ref_d.get("ty", 0.0)
-                    ref_p1 = ref_d.get("ty_p1", ref_ty / 2.0)
+                    ref_ok = ref_d is not None and ref_d.get("active", True)
+                    # full precision, and P1 / P2 move with TY so TY = P1 + P2 stays exact (2026-09-30)
+                    ref_ty = ref_d.get("ty", 0.0) if ref_ok else 0.0
+                    ref_p1 = ref_d.get("ty_p1", ref_ty / 2.0) if ref_ok else 0.0
                     ref_p2 = ref_ty - ref_p1
                     carve = {"ty": ref_ty * new_dept_pct, "ty_p1": ref_p1 * new_dept_pct, "ty_p2": ref_p2 * new_dept_pct}
-                    keep = 1.0 - ref_reduction_pct   # ref dept loses ref_reduction_pct (independent of the carve)
-                    depts[ref_dept].update(ty=ref_ty * keep, ty_p1=ref_p1 * keep, ty_p2=ref_p2 * keep)
+                    if ref_ok:
+                        keep = 1.0 - ref_reduction_pct   # ref dept loses ref_reduction_pct (independent of the carve)
+                        depts[ref_dept].update(ty=ref_ty * keep, ty_p1=ref_p1 * keep, ty_p2=ref_p2 * keep)
                     if new_dept in depts:
-                        for k, v in carve.items():
-                            depts[new_dept][k] = depts[new_dept].get(k, 0.0) + v
-                        depts[new_dept]["active"] = True   # planned by the template, even if inactive in the master (2026-10-01)
-                    else:
+                        depts[new_dept].update(carve)   # replaces its own plan (no reference here -> 0)
+                        depts[new_dept]["active"] = True   # planned by the template, even if inactive in the master
+                    elif ref_ok:
                         depts[new_dept] = {
                             "ly": 0.0, **carve, "growth_pct": None,
                             "cont_pct": 0.0, "active": True, "is_new": True,
@@ -144,13 +148,23 @@ def apply_new_dept_adjustments(plan_result: dict, new_dept_map: dict) -> dict:
                             "new_dept_pct": cfg.get("new_dept_pct", legacy),
                             "ref_reduction_pct": cfg.get("ref_reduction_pct", legacy),
                         }
-                # the division total follows its departments (the two % are independent, so it may shift - by design)
-                # and the contribution % are re-derived from the new values, adding to exactly 100
+                post[(div, ty_month)] = post.get((div, ty_month), 0.0) + tot(depts)
+
+    # one factor per division x month for every store: back on the pre-carve total, mix (and new / ref) kept exactly
+    f = {k: (pre[k] / post[k]) if post.get(k) else 1.0 for k in pre}
+    for store, sdata in result["stores"].items():
+        for div in new_dept_map:
+            for ty_month, month_data in sdata["divisions"].get(div, {}).get("months", {}).items():
+                depts, k = month_data["departments"], f.get((div, ty_month), 1.0)
                 act = {d: v for d, v in depts.items() if v.get("active", True)}
+                for v in act.values():
+                    for fld in ("ty", "ty_p1", "ty_p2"):
+                        if fld in v:
+                            v[fld] *= k
                 month_data["div_total_ty"] = sum(v["ty"] for v in act.values())
                 month_data["div_total_p1"] = sum(v.get("ty_p1", 0.0) for v in act.values())
                 month_data["div_total_p2"] = sum(v.get("ty_p2", 0.0) for v in act.values())
-                pcts = shares_pct({d: v["ty"] for d, v in act.items()})
+                pcts = shares_pct({d: v["ty"] for d, v in act.items()})   # adds to exactly 100
                 for d, v in depts.items():
                     v["cont_pct"] = pcts.get(d, 0.0)
 

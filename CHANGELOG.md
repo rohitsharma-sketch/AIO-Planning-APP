@@ -7,6 +7,23 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### New departments: plan = exactly New dept % of the reference, division re-balanced to AOP automatically
+- **Asked (user):** "Keep new dept cont % the same as fixed in the plan and reapportion on the mix and adjust the aop always it should happen automatically". The result was 25.4% of the reference, not 25%.
+- **Cause:** Sales Plan *added* the carve (New dept % x reference) to the new department's own BIS plan (its buyer growth on its own LY), and the division total moved by the carve.
+- **Sales Plan engine** (`apply_new_dept_adjustments`, used by Generate Base Plan, the new-dept save and /run):
+  - the new department's plan IS reference x New dept % (its own plan is replaced; no reference in a store -> 0);
+  - the reference keeps 100 - Ref dept %;
+  - then every active department of the division x month is scaled by ONE factor over all stores, back to the division's pre-carve total (the BIS / AOP plan).
+  - So the mix is kept, the division stays on its total, and the new department is exactly New dept % of its reference in every store and in total.
+  - Checked on the real plan: JAIPURI / FNCY = 0.25, ETHNIC DRESS / DRESS = 0.40, CORD SETS / KURTI SET = 0.10 in every month Mar-Sep and in a single store; LADIES total unchanged every month (e.g. Mar'27 3,878.57 L). Self-check `engines/test_new_dept_template.py` extended.
+- **BIS:**
+  - The same rule runs in the plan itself, after every re-balance (`_divReapp` / `_divRescale` now settle new departments), on load and after the New departments window saves. Each listed new department's month = New dept % x its reference's, then the division is re-balanced on the mix to AOP, repeated until it holds.
+  - The new department's block and month cells are read-only (NEW tag; the tooltip names the reference and %).
+  - BIS sets only the new department's side: Ref dept % is applied by Sales Plan, so it isn't cut twice. A new department with no LY row in BIS (LW_U_CORD SETS) is planned by Sales Plan only.
+  - The window's preview uses the same replace-then-re-balance rule.
+  - Checked in BIS on 5050: JAIPURI / FNCY = 0.25 and ETHNIC DRESS / DRESS = 0.40 in Mar-Jun; LADIES = AOP each month; the JAIPURI cell is read-only (+226.6% shown).
+- 8010 restarted. The saved base plan (final_dept_plan.json) picks the rule up at the next Generate Base Plan or New departments save.
+
 ### BIS: Contrib% no longer changes with the filters
 - **Asked (user):** "check this why is the new cont % as per refernce superseeding the buyer's cont % which has no meaning ?" (screenshot: LADIES filtered to L_EW_SAREE_FNCY + L_EW_SAREE_JAIPURI, Contrib% 92.4% / 7.6%).
 - **Cause:** not the new-department setting. With a department / attribute / section filter on, the department view worked out Contrib% against only the rows left on screen, so any two filtered rows added up to 100%.
