@@ -26,7 +26,7 @@ import sys
 import threading
 
 import pandas as pd
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -351,7 +351,169 @@ def checks(b: dict) -> list:
     return out
 
 
+# ── promote to the MRP stage ──────────────────────────────────────────────────
+# user, 2026-10-13: "also give a provision if the art nm plan has to be promoted to mrp planning stage" -> "Split it into
+# MRP bands": each Cluster/Store x Department x Article Name plan is split over MRP bands by that group's LY article x
+# MRP mix (MAMJ), the old MRPs moved to the new structure by the Re-apportionment master's own rule (listed -> its new
+# MRP; discontinued -> nearest listed below / above, Summer 60/40, others 40/60; not in the master -> the MRP as sold).
+# Fallbacks: the chain's mix of the article, then of the department. The result, summed over the groups, is the MRP
+# stage's split (division x department x MRP x period %) while the route is Article Name - MRP Plan Output, Display
+# Type, Reconciliation and the Store / Cluster MRP panel all read it (mrp_plan_engine.effective_shares).
+
+PROMOTED_PATH = os.path.join(_HERE, "..", "mrp_promoted.json")
+_AM: dict = {}
+
+
+def ly_art_mrp(months: list) -> dict:
+    """{(store, dept, article): {new MRP: LY lakh of the block}} (negative counts as 0). Cached per sales file."""
+    from engines import mrp_reapportionment_engine as R
+    scans = R._calendar_scans()
+    files = scans._latest_monthwise_files()
+    key = (files[0], os.path.getmtime(files[0]), tuple(months), R._find_mapping_file())
+    with _LY_LOCK:
+        if _AM.get("key") == key:
+            return _AM["v"]
+        lym = sorted(_ly_month(m) for m in months)
+        lo, hi = scans._month_bounds(lym)
+        raw = scans._read_file_filtered(files[0], ["BILLMONTH", "STORE_NAME", "SL_V", "DEPARTMENT", "ARTICLE_NAME", "MRP",
+                                                   "DISPLAY_TYPE", "ATTRIBUTE1"], "BILLMONTH", lo, hi)
+        raw = raw[raw["BILLMONTH"].dt.strftime("%Y-%m").isin(lym)]
+        for c in ("STORE_NAME", "DEPARTMENT", "DISPLAY_TYPE", "ATTRIBUTE1"):
+            raw[c] = raw[c].fillna("(BLANK)").astype(str).str.strip().str.upper()
+        raw["ARTICLE_NAME"] = raw["ARTICLE_NAME"].fillna("(BLANK)").astype(str).str.strip()
+        raw["MRP_CURRENT"] = pd.to_numeric(raw["MRP"], errors="coerce").fillna(0).round().astype(int)
+        raw["SL_V"] = pd.to_numeric(raw["SL_V"], errors="coerce").fillna(0.0) / 1e5
+        g = (raw.groupby(["STORE_NAME", "DEPARTMENT", "ARTICLE_NAME", "DISPLAY_TYPE", "ATTRIBUTE1", "MRP_CURRENT"])["SL_V"]
+             .sum().reset_index().rename(columns={"DISPLAY_TYPE": "DISPLAY", "ATTRIBUTE1": "ATTRIBUTE"}))
+        try:
+            t = R._targets(R._load_mapping())
+        except Exception:   # noqa: BLE001 - no master: the MRPs as sold
+            t = pd.DataFrame(columns=["DEPARTMENT", "DISPLAY", "MRP_CURRENT", "MRP_LISTED", "BELOW", "ABOVE"])
+        x = g.merge(t, on=["DEPARTMENT", "DISPLAY", "MRP_CURRENT"], how="left")
+        listed = x["MRP_LISTED"].fillna(0) > 0
+        lo_pct = x["ATTRIBUTE"].map(R.LOWER_PCT).fillna(R.LOWER_PCT_DEFAULT) / 100.0
+        lo_pct = lo_pct.where(x["ABOVE"].fillna(0) > 0, 1.0).where(x["BELOW"].fillna(0) > 0, 0.0)
+        moved = ~listed & ((x["BELOW"].fillna(0) > 0) | (x["ABOVE"].fillna(0) > 0))
+        keep = ~listed & ~moved   # not in the master, or nothing listed in its Department x Display: as sold
+        k = ["STORE_NAME", "DEPARTMENT", "ARTICLE_NAME"]
+        parts = [x[listed].assign(NEW=x["MRP_LISTED"], V=x["SL_V"]),
+                 x[moved].assign(NEW=x["BELOW"], V=x["SL_V"] * lo_pct),
+                 x[moved].assign(NEW=x["ABOVE"], V=x["SL_V"] * (1 - lo_pct)),
+                 x[keep].assign(NEW=x["MRP_CURRENT"], V=x["SL_V"])]
+        y = pd.concat(parts, ignore_index=True)
+        y = y[y["NEW"] > 0].groupby(k + ["NEW"])["V"].sum()
+        v = {}
+        for (s, d, a, mrp), val in y.items():
+            if val > 0:
+                v.setdefault((s, d, a), {})[str(int(mrp))] = float(val)
+        _AM.update(key=key, v=v)
+        return v
+
+
+def promote_split(b: dict, mix: dict, clus: dict) -> tuple:
+    """Pure. ({div: {dept: {mrp: {month: lakh}}}}, {how: lakh}) - every group x department x article plan of build `b`
+    split over MRP bands by the group's LY article x MRP mix (mix = {(store, dept, article): {mrp: lakh}}), else the
+    chain's mix of the article, else of the department; what has none is left out ("none")."""
+    def add(acc, key, mm):
+        t = acc.setdefault(key, {})
+        for k2, v in mm.items():
+            t[k2] = t.get(k2, 0.0) + v
+    chain_art, chain_dept, by_group = {}, {}, {}
+    for (s, d, a), mm in mix.items():
+        add(chain_art, (d, a), mm)
+        add(chain_dept, d, mm)
+        add(by_group, (s, d, a), mm)
+        if s in clus:
+            add(by_group, (clus[s], d, a), mm)
+    out, how = {}, collections.defaultdict(float)
+    for r in b["rows"]:
+        for a, pm in r["arts"].items():
+            tot = sum(pm.values())
+            if tot <= 0:
+                continue
+            for kind, w in (("own", by_group.get((r["g"], r["dept"], a))), ("chain article", chain_art.get((r["dept"], a))),
+                            ("chain department", chain_dept.get(r["dept"]))):
+                if w and sum(w.values()) > 0:
+                    break
+            else:
+                how["none"] += tot
+                continue
+            how[kind] += tot
+            dd = out.setdefault(r["div"], {}).setdefault(r["dept"], {})
+            for m, v in pm.items():
+                for mrp, part in split(v, w).items():
+                    cell = dd.setdefault(mrp, {})
+                    cell[m] = cell.get(m, 0.0) + part
+    return out, dict(how)
+
+
+def _stamp(b: dict) -> dict:
+    c = b["cont"] or {}
+    return {"grain": b["grain"], "file": c.get("source_file"), "imported_at": c.get("imported_at"),
+            "plan": round(sum(sum(r["aop"].values()) for r in b["rows"]), 4), "months": b["months"]}
+
+
+def promoted() -> dict | None:
+    """The promoted split, while the route is Article Name (None otherwise)."""
+    if get_settings()["route"] != "article":
+        return None
+    return _read(PROMOTED_PATH)
+
+
+def promoted_shares() -> dict | None:
+    """{div: {dept: {mrp: {"Mar'27 P1": %, "Mar'27 P2": %}}}} - the MRP stage's split from the promoted Article Name plan."""
+    p = promoted()
+    return p["shares"] if p else None
+
+
 # ── endpoints ─────────────────────────────────────────────────────────────────
+
+@router.get("/promote")
+def get_promote():
+    """The last promote, whether the MRP stage uses it (route) and whether the article plan changed since."""
+    p = _read(PROMOTED_PATH)
+    if not p:
+        return {"promoted": False, "route": get_settings()["route"]}
+    try:
+        cur = _stamp(built(get_settings()["grain"]))
+    except Exception:   # noqa: BLE001
+        cur = None
+    return {"promoted": True, "route": get_settings()["route"], "in_use": get_settings()["route"] == "article",
+            "stale": cur is not None and cur != p["stamp"], "now": cur,
+            **{k: p[k] for k in ("promoted_at", "by", "stamp", "how", "total", "bands", "depts")}}
+
+
+@router.post("/promote")
+def post_promote(request: Request):
+    """Split the Article Name plan into MRP bands and make it the MRP stage's split (while the route is Article Name)."""
+    s = get_settings()
+    b = built(s["grain"])
+    from engines.mrp_plan_engine import _load_dept_plan
+    plan = _load_dept_plan()
+    clus = {st: (sd.get("cluster") or "(no cluster)") for st, sd in plan["stores"].items()}
+    mix = ly_art_mrp(b["months"])
+    split_, how = promote_split(b, mix, clus)
+    shares = {}
+    for dv, dd in split_.items():
+        for dp, bands in dd.items():
+            for m in b["months"]:
+                tot = sum(v.get(m, 0.0) for v in bands.values())
+                if tot <= 0:
+                    continue
+                for mrp, v in bands.items():
+                    pct = v.get(m, 0.0) / tot * 100.0
+                    if pct:
+                        cell = shares.setdefault(dv, {}).setdefault(dp, {}).setdefault(mrp, {})
+                        cell[f"{m} P1"] = cell[f"{m} P2"] = pct
+    user = ((request.scope.get("session") or {}).get("user") or {}).get("username") or ""
+    out = {"promoted_at": datetime.datetime.now().strftime("%d %b %Y %H:%M"), "by": user, "stamp": _stamp(b),
+           "how": how, "total": sum(how.values()), "shares": shares,
+           "depts": sum(len(d) for d in shares.values()), "bands": sum(len(x) for d in shares.values() for x in d.values())}
+    save_json(PROMOTED_PATH, out)
+    if s["route"] != "article":
+        set_settings({"route": "article"})
+    return {k: v for k, v in out.items() if k != "shares"}
+
 
 @router.get("/settings")
 def get_settings():

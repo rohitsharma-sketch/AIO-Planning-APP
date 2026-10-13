@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### Sales Plan: promote the Article Name plan to the MRP stage
+- **Asked (user):** "also give a provision if the art nm plan has to be promoted to mrp planning stage" -> chose "Split it into MRP bands".
+- **Promote to MRP stage** (Article Name Plan -> Plan Output; `POST /api/planning/art-nm/promote`): each store / cluster x department x article plan is split over MRP bands by that group's LY (MAMJ) article x MRP mix; old MRPs move to the new structure by the Re-apportionment master's rule (listed -> new MRP; discontinued -> nearest listed below / above, Summer 60/40, others 40/60; not in the master -> as sold). Fallback: the chain's article mix, then the department's. Summed over the groups it is saved as the MRP stage's split (`backend/mrp_promoted.json`, division x department x MRP x P1/P2 %) and sets the route to Article Name.
+- While the route is Article Name and a promote exists, `mrp_plan_engine.effective_shares()` returns the promoted split, so MRP Plan Output (banner "promoted from the Article Name plan"), Display Type (Run plan again after a promote), the Store / Cluster MRP panel and Reconciliation (both the article level and the MRP-band level) use it. Switching the route to MRP brings back the buyers' MRP Cont % split.
+- The panel shows when, by whom, by which Plan by, how much used each mix, and "promote again" when the file, Plan by or department plan changed since.
+- **Result (by store):** 178 departments over 1,252 MRP bands (the buyers' split had 4 departments with none); ₹51,026.6 L on the store's own mix, ₹457.5 L on the chain's article mix; every department's bands = its plan except MW_PULLOVER S/L's -0.006 L month (a negative department plan, nothing to split). Test: `test_promote_split`.
+
 ### Sales Plan: Article Name Plan as its own branch beside MRP Plan; saved versions on Final Results
 - **Asked (user):** "where is the article name Module in parallel to MRP similar to the Department plan by store or cluster", "the article name should be a MRP counterpart, it should follow the current selected toggle ... think of it as another parallel branch to MRP"; and on Final Results "give me a save button and all tools related to version selection, rename, save as, selection window ... Also add a little know how as to what was changed from the 1st version to this".
 - **Article Name Plan** (sidebar, after MRP Plan):

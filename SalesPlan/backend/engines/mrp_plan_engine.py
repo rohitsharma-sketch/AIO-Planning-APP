@@ -84,7 +84,16 @@ def effective_shares() -> tuple:
     """(shares {div: {dept: {mrp: {period: %}}}}, {"DIV|DEPT": reference}) - the buyers' MRP split, plus a NEW department
     without one of its own taking its reference department's split (New departments template), as its plan is a share
     of that reference (user, 2026-10-13: "take the department plan to the MRP stage" - LW_U_CORD SETS, 221 L, had no
-    MRP split, so it vanished from MRP Output). Every MRP reader uses this, so they all split the plan the same way."""
+    MRP split, so it vanished from MRP Output). Every MRP reader uses this, so they all split the plan the same way.
+    While the Sales Plan runs on the Article Name route and its plan was promoted, the split is the promoted one
+    (art_nm_engine, user 2026-10-13: "promoted to mrp planning stage" -> split into MRP bands)."""
+    try:
+        from engines.art_nm_engine import promoted_shares
+        pr = promoted_shares()
+    except Exception:   # noqa: BLE001 - no Article Name branch: the buyers' split
+        pr = None
+    if pr is not None:
+        return {dv: dict(d) for dv, d in pr.items()}, {}
     mrp = _load()
     out = {dv: dict(d) for dv, d in mrp.items()}
     inherited = {}
@@ -296,9 +305,11 @@ def get_sync_status():
 
 @router.get("/data")
 def get_mrp_data():
-    if not _load():
-        raise HTTPException(status_code=404, detail="No MRP plan imported yet. Upload a file to get started.")
     mrp, inherited = effective_shares()
+    if not mrp:
+        raise HTTPException(status_code=404, detail="No MRP plan imported yet. Upload a file to get started.")
+    from engines.art_nm_engine import promoted
+    pr = promoted()
 
     plan = _load_dept_plan()
 
@@ -383,6 +394,9 @@ def get_mrp_data():
         "total_depts": sum(len(d) for d in result.values()),
         "total_bands": sum(len(d[dept]["bands"]) for d in result.values() for dept in d),
         "has_plan": bool(plan),
+        # where the split comes from: the buyers' MRP Cont %, or the Article Name plan promoted to the MRP stage
+        "split_source": ({"kind": "promoted", "promoted_at": pr["promoted_at"], "by": pr.get("by"), "grain": pr["stamp"]["grain"]}
+                         if pr else {"kind": "buyer"}),
         "data": result,
     }
 

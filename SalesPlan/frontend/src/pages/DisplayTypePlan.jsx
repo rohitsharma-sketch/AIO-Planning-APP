@@ -71,7 +71,9 @@ function UploadBox({ label, subtitle, endpoint, onDone, imported, rows, date, co
 
 // ── main page ──────────────────────────────────────────────────────────────────
 export default function DisplayTypePlan() {
-  const [route] = useRoute()   // Display Type splits MRP bands - say so when the Sales Plan runs on Article Name
+  const [route] = useRoute()   // Display Type splits MRP bands - say whose when the Sales Plan runs on Article Name
+  const [prom, setProm] = useState(null)
+  useEffect(() => { fetch('/api/planning/art-nm/promote').then(r => (r.ok ? r.json() : null)).then(setProm).catch(() => {}) }, [])
   const [status,   setStatus]   = useState(null)
   const [tab,      setTab]      = useState('plan')   // plan | validate | qty | export
   const [running,  setRunning]  = useState(false)
@@ -176,8 +178,9 @@ export default function DisplayTypePlan() {
     <div style={{ padding: '28px 32px', minHeight: '100vh', background: theme.bg }}>
       {route?.route === 'article' && (
         <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 8, fontSize: 12.5, border: `1px solid ${alpha(theme.warning, '55')}`, background: alpha(theme.warning, '10'), color: theme.textPrimary }}>
-          The Sales Plan runs on the <b>Article Name</b> branch. Display Type splits the <b>MRP</b> branch's bands (its Table / Non-Table
-          shares are per store × department × MRP), so this plan follows the MRP split, not the Article Name one.
+          The Sales Plan runs on the <b>Article Name</b> branch. {prom?.promoted
+            ? <>Display Type splits the MRP bands <b>promoted from the Article Name plan</b> ({prom.promoted_at}) - Run plan again after each promote. Bands with no Table / Non-Table share uploaded show as missing.</>
+            : <>It is not promoted to the MRP stage yet (Article Name Plan → Plan Output → Promote to MRP stage), so Display Type still splits the buyers' MRP bands.</>}
         </div>
       )}
       {/* Header */}

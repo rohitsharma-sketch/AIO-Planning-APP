@@ -48,3 +48,17 @@ def test_route():
     st = {(r["g"], r["dept"]): r["method"] for r in A.build("store", plan, cont, ly, {"pass": True}, M)["rows"]}
     assert st[("C", "ML_JEANS")] == "cluster" and st[("C", "MU_WIN")] == "cluster"   # no LY of its own
     assert A.tier("07-SUPER-PREMIUM [LW33]") == "SUPER-PREMIUM" and A.tier("01. EPP") == "EPP"
+
+
+def test_promote_split():
+    """Promote: each group x department x article plan over MRP bands by the group's LY article x MRP mix, then the
+    chain's article mix, then the department's; the bands add back to the article plan."""
+    b = {"rows": [{"g": "S1", "div": "MENS", "dept": "ML_JEANS", "arts": {"01-EPP [ML04]": {"Mar'27": 10.0}, "02-ECO [ML04]": {"Mar'27": 6.0}}},
+                  {"g": "S2", "div": "MENS", "dept": "ML_JEANS", "arts": {"01-EPP [ML04]": {"Mar'27": 4.0}, "09-NEW [ML04]": {"Mar'27": 2.0}}}]}
+    mix = {("S1", "ML_JEANS", "01-EPP [ML04]"): {"299": 3.0, "399": 1.0}, ("S1", "ML_JEANS", "02-ECO [ML04]"): {"499": 2.0}}
+    out, how = A.promote_split(b, mix, {"S1": "C1", "S2": "C1"})
+    j = out["MENS"]["ML_JEANS"]
+    # S1 EPP 10 -> 7.5 / 2.5; S2 EPP 4 (no mix of its own) -> the chain's EPP mix 3 / 1; 09-NEW 2 -> the department's 3:1:2
+    assert abs(j["299"]["Mar'27"] - (7.5 + 3.0 + 1.0)) < 1e-9 and abs(j["399"]["Mar'27"] - (2.5 + 1.0 + 2 / 6)) < 1e-9
+    assert abs(sum(v["Mar'27"] for v in j.values()) - 22.0) < 1e-9   # 09-NEW: no mix of its own -> the department's
+    assert how == {"own": 16.0, "chain article": 4.0, "chain department": 2.0}

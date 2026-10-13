@@ -39,16 +39,15 @@ ART_LEVEL = "{G} × Dept × Month: department AOP = Σ Article Names"
 
 def check(plan: dict, mrp_data: dict | None = None, art: dict | None = None):
     """(summary rows, off rows, not-covered rows). A row is "off" when its difference shows at 8 decimals.
-    art = the Article Name branch's build (art_nm_engine.built) - checked instead of the MRP bands when the MRP stage
-    runs on the Article Name route (user, 2026-10-13: "think of it as another parallel branch to MRP")."""
-    stage = (ART_LEVEL.format(G="Cluster" if art.get("grain") == "cluster" else "Store") if art is not None
-             else "Division × Dept × Period: department TY = Σ MRP bands")
+    art = the Article Name branch's build (art_nm_engine.built) - checked when the MRP stage runs on the Article Name
+    route (user, 2026-10-13: "think of it as another parallel branch to MRP"); with it promoted, its MRP bands too."""
+    stage = ART_LEVEL.format(G="Cluster" if art.get("grain") == "cluster" else "Store") if art is not None else None
     levels = {k: {"cells": 0, "off": 0, "largest": 0.0, "where": ""} for k in (
         "Store × Division × Month: division total = Σ departments",
         "Store × Division × Month: P1 / P2 totals = Σ departments",
         "Store × Dept × Month: TY = P1 + P2",
         "Store × Division × Month: Σ contribution % = 100",
-        stage)}
+        *([stage] if stage else []), *(["Division × Dept × Period: department TY = Σ MRP bands"] if mrp_data or not stage else []))}
     off, uncovered = [], []
 
     def rec(level, total, parts, **where):
@@ -93,7 +92,7 @@ def check(plan: dict, mrp_data: dict | None = None, art: dict | None = None):
                     Store=r["g"], Division=r["div"], Department=r["dept"], Month=m)
         uncovered = [{"Division": d, "Department": n, "Why": why, "TY not split to MRPs (₹ L)": ty}
                      for (d, n, why), ty in sorted(miss.items())]
-    elif mrp_data:
+    if mrp_data:
         periods = mrp_data.get("periods", [])
         covered = {(div, dept) for div, depts in mrp_data.get("data", {}).items() for dept, v in depts.items()
                    if not v.get("no_split")}   # listed without a split: "not covered" below, not a rounding gap
@@ -117,8 +116,8 @@ def check(plan: dict, mrp_data: dict | None = None, art: dict | None = None):
                         if why:
                             k = (div, n, why)
                             miss[k] = miss.get(k, 0.0) + v["ty"]
-        uncovered = [{"Division": d, "Department": n, "Why": why, "TY not split to MRPs (₹ L)": ty}
-                     for (d, n, why), ty in sorted(miss.items())]
+        uncovered += [{"Division": d, "Department": n, "Why": why, "TY not split to MRPs (₹ L)": ty}
+                      for (d, n, why), ty in sorted(miss.items())]
 
     summary = [{"level": k, **v} for k, v in levels.items()]
     return summary, off, uncovered
@@ -137,7 +136,7 @@ def _run():
             art = art_nm_engine.built(st["grain"])
         except Exception:  # noqa: BLE001 - no plan / lake: skip that level
             art = None
-    else:
+    if st["route"] != "article" or art_nm_engine.promoted():   # the MRP bands: the buyers' or the promoted split
         try:
             mrp = get_mrp_data()
         except Exception:  # noqa: BLE001 - no MRP plan yet: skip that level

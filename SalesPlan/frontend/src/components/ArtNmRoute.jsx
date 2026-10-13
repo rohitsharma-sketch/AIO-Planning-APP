@@ -49,6 +49,23 @@ export default function ArtNmRoute() {
   useEffect(() => { setAf({}) }, [grain])
   useEffect(load, [grain, groups.join('|')])   // eslint-disable-line react-hooks/exhaustive-deps
 
+  // promote to the MRP stage (user, 2026-10-13: "a provision if the art nm plan has to be promoted to mrp planning
+  // stage" -> split into MRP bands): the article plan over MRP bands by the LY article x MRP mix becomes the MRP split
+  const [prom, setProm] = useState(null)
+  const [promBusy, setPromBusy] = useState(false)
+  const [promErr, setPromErr] = useState('')
+  const loadProm = () => fetch(`${API}/promote`).then(r => (r.ok ? r.json() : null)).then(setProm).catch(() => setProm(null))
+  useEffect(() => { loadProm() }, [grain, data?.cont?.imported_at])   // eslint-disable-line react-hooks/exhaustive-deps
+  const promote = async () => {
+    if (!window.confirm(`Promote the Article Name plan (by ${grain}) to the MRP stage? Its MRP split replaces the buyers' MRP Cont % split in MRP Plan Output, Display Type and Reconciliation while the route is Article Name. The buyers' file is kept - switching the route to MRP brings it back.`)) return
+    setPromBusy(true); setPromErr('')
+    try {
+      const r = await fetch(`${API}/promote`, { method: 'POST' })
+      if (!r.ok) throw new Error(await readErr(r))
+      await loadProm()
+    } catch (e) { setPromErr(e.message) } finally { setPromBusy(false) }
+  }
+
   const months = data?.months || []
   const dd = (data && div && data.data[div]) || {}
   const depts = Object.keys(dd).sort()
@@ -71,7 +88,24 @@ export default function ArtNmRoute() {
 
   return (
     <div style={{ padding: '20px 32px 28px', minHeight: '100vh', background: theme.surfaceAlt }}>
-      <RouteBar here="article" />
+      <RouteBar key={prom?.promoted_at || 'route'} here="article" />
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12, padding: '10px 14px', borderRadius: 10,
+        border: `1px solid ${prom?.promoted && !prom.stale ? alpha(theme.success, '55') : theme.border}`, background: prom?.promoted && !prom.stale ? alpha(theme.success, '0c') : theme.surface }}>
+        <b style={{ fontSize: 12.5 }}>MRP stage</b>
+        <span style={{ fontSize: 12, color: theme.textSecondary, flex: 1, minWidth: 260 }}>
+          {!prom?.promoted ? 'Not promoted - the MRP stage splits the department plan by the buyers\' MRP Cont %.'
+            : <>Promoted {prom.promoted_at}{prom.by ? ` by ${prom.by}` : ''} (by {prom.stamp.grain}): {prom.depts} departments over {prom.bands} MRP bands,
+              ₹{(prom.total || 0).toLocaleString('en-IN', { maximumFractionDigits: 1 })} L
+              {' '}({Object.entries(prom.how || {}).map(([k, v]) => `${k} mix ${v.toFixed(1)} L`).join(', ')})
+              {!prom.in_use && <b style={{ color: theme.warning }}> · not in use: the route is MRP</b>}
+              {prom.stale && <b style={{ color: theme.warning }}> · the article plan changed since (file, Plan by or department plan) - promote again</b>}</>}
+          {promErr && <span style={{ color: theme.danger }}> · {promErr}</span>}
+        </span>
+        <button style={{ ...BTN, background: theme.primary, color: '#fff', borderColor: theme.primary }} disabled={promBusy || !data} onClick={promote}>
+          {promBusy ? 'Promoting… (about 30 s)' : prom?.promoted ? 'Promote again' : 'Promote to MRP stage'}
+        </button>
+        {prom?.promoted && <button style={BTN} onClick={() => nav('/mrp-plan/output')}>MRP Plan Output →</button>}
+      </div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
         <div className="sp-sub" style={{ margin: 0, flex: 1, minWidth: 280 }}>
           Department plan split by Article Name: LY Art Nm mix of each {grain} × the buyers' Art Nm Cont % (deviation capped

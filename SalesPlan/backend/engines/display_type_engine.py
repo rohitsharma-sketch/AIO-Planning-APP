@@ -202,7 +202,7 @@ def _dept_plan():
 def run_plan():
     fp      = _dept_plan()
     from engines.mrp_plan_engine import effective_shares   # the same MRP split as MRP Output (2026-10-13)
-    mrp_raw = effective_shares()[0] if _load(MRP_PLAN_PATH) else None
+    mrp_raw = effective_shares()[0] or None   # the buyers' split, or the promoted Article Name one
     contrib = _load(DT_CONTRIB_PATH)
 
     if not fp:      raise HTTPException(400, "final_dept_plan not found")

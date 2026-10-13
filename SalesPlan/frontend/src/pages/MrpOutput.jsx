@@ -271,6 +271,12 @@ export default function MrpOutput() {
 
       {/* MRP or Article Name: which branch the Sales Plan runs on (2026-10-13) */}
       <RouteBar here="mrp" />
+      {data.split_source?.kind === 'promoted' && (
+        <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 8, fontSize: 12.5, border: `1px solid ${alpha(theme.primary, '55')}`, background: alpha(theme.primary, '0e') }}>
+          MRP split <b>promoted from the Article Name plan</b> ({data.split_source.promoted_at}{data.split_source.by ? `, by ${data.split_source.by}` : ''}; LY article × MRP mix by {data.split_source.grain}),
+          not the buyers' MRP Cont % - because the Sales Plan runs on the Article Name route. Switch the route to MRP to use the buyers' split again.
+        </div>
+      )}
 
       {/* Walkthrough step bar */}
       {pipeline && <StepBar pipeline={pipeline} />}
