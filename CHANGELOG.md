@@ -7,6 +7,17 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### Sales Plan Growth Matrix: the same Filters row as Final Results
+- **Asked (user):** "add the same filters row to the Growth Matrix".
+- **What changed:**
+  - The attribute chips and the "All Departments" search box are replaced by a **Filters** row with one multi-select dropdown each for **Department**, **Attribute**, **Status** (Active / Inactive) and **Month** (which month columns show).
+  - Each reads (All), the value, or (Multiple Items) n, with "showing X of Y" and Clear all.
+  - The ▾ on period headings still filters by growth value and works together with the row. Filters clear when the division changes.
+- **Checked in the sandbox (KIDS):**
+  - Status = Inactive → 31 of 122 rows, all inactive.
+  - Month = Mar + Apr'27 → only those two month columns ("2 months").
+  - The Month list = Mar-Jun'27.
+
 ### Sales Plan Final Results: one multi-select filter per field
 - **Asked (user):** "multi selection filters are required not this slop".
 - **Filters row:** a **Filters** row under Rows with one dropdown per field (Cluster, Store, Store type, Division, Attribute, Department, Month), as an Excel PivotTable's report filters.

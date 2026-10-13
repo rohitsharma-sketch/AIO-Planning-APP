@@ -4,7 +4,6 @@ import { theme, alpha } from '../theme'
 import GrainPanel from '../components/GrainPanel'
 import BisCompare from '../components/BisCompare'
 import { ENGINE_META, startPipeline } from '../pipelineState'
-import SearchSlicer from '../components/SearchSlicer'
 import ExcelFilter, { FilterButton } from '../components/ExcelFilter'
 import { useGrain } from '../grain'
 
@@ -49,8 +48,6 @@ export default function DepartmentGrowthMatrix() {
   const [activeDiv, setActiveDiv]     = useState('KIDS')
   const [data, setData]               = useState(null)
   const [loading, setLoading]         = useState(true)
-  const [deptFilters, setDeptFilters] = useState(new Set())
-  const [attrFilter, setAttrFilter]   = useState(null)
   // Excel-style column filters (user, 2026-10-13: "add the same Excel filters to the Growth Matrix page"):
   // {column: [values]} - department, attribute or a period (its growth index); cleared when the division changes
   const [xf, setXf]                   = useState({})
@@ -103,8 +100,6 @@ export default function DepartmentGrowthMatrix() {
 
   useEffect(() => {
     pendingRef.current = {}
-    setAttrFilter(null)
-    setDeptFilters(new Set())
     fetchMatrix(activeDiv)
   }, [activeDiv, fetchMatrix])
 
@@ -257,28 +252,24 @@ export default function DepartmentGrowthMatrix() {
   // to months present in Buyer's Input — either filter is skipped while its
   // own source is empty, so this degrades to "show everything" the same way
   // it always did before either live source existed.
-  const activePeriods = allPeriods.filter(p => {
+  const shownPeriods = allPeriods.filter(p => {
     const month = p.replace(/ P[12]$/, '')
     if (activeMonths.size > 0 && !activeMonths.has(month)) return false
     if (buyerMonths.size > 0 && !buyerMonths.has(month)) return false
     return true
   })
+  // the Month filter picks which of those month columns show (2026-10-13)
+  const monthsAvail = [...new Set(shownPeriods.map(p => p.replace(/ P[12]$/, '')))]
+  const activePeriods = shownPeriods.filter(p => !xf.month || xf.month.includes(p.replace(/ P[12]$/, '')))
   const monthGroups = buildMonthGroups(activePeriods)
 
-  const attrCounts = {}
-  depts.forEach(d => { attrCounts[d.attribute] = (attrCounts[d.attribute] || 0) + 1 })
-
-  const deptNames = depts.map(d => d.name)
-
-  const base = depts.filter(d => {
-    const matchDept = deptFilters.size === 0 || deptFilters.has(d.name)
-    const matchAttr = !attrFilter || d.attribute === attrFilter
-    return matchDept && matchAttr
-  })
-  // a cell as its Excel filter lists it: the name, the attribute, or the period's growth index as shown
-  const cellVal = (d, col) => (col === 'department' ? d.name : col === 'attribute' ? d.attribute : String(+(+(d.periods[col] ?? 100)).toFixed(2)))
-  const passXf = (d, skip) => Object.entries(xf).every(([c, vals]) => c === skip || vals.includes(cellVal(d, c)))
-  const isNum = col => col !== 'department' && col !== 'attribute'
+  const base = depts
+  // a cell as its filter lists it: the name, the attribute, Active / Inactive, or the period's growth index as shown
+  const cellVal = (d, col) => (col === 'department' ? d.name : col === 'attribute' ? d.attribute
+    : col === 'status' ? (d.active === false ? 'Inactive' : 'Active') : String(+(+(d.periods[col] ?? 100)).toFixed(2)))
+  // Month filters the columns, not the rows
+  const passXf = (d, skip) => Object.entries(xf).every(([c, vals]) => c === skip || c === 'month' || vals.includes(cellVal(d, c)))
+  const isNum = col => !['department', 'attribute', 'status', 'month'].includes(col)
   const filtered = base.filter(d => passXf(d))
   if (xs) {   // Excel's Sort A to Z / Smallest to Largest on that column (view only)
     const k = d => cellVal(d, xs.col)
@@ -286,9 +277,13 @@ export default function DepartmentGrowthMatrix() {
   }
   // a column's list = the values left by the OTHER columns' filters, as Excel does (numbers in numeric order)
   const xfValues = col => {
+    if (col === 'month') return monthsAvail
     const v = [...new Set(base.filter(d => passXf(d, col)).map(d => cellVal(d, col)))]
-    return col === 'department' || col === 'attribute' ? v.sort() : v.sort((a, b) => +a - +b)
+    return isNum(col) ? v.sort((a, b) => +a - +b) : v.sort()
   }
+  // the Filters row - one multi-select per field, as Final Results (user, 2026-10-13: "add the same filters row")
+  const GM_FIELDS = [['department', 'Department'], ['attribute', 'Attribute'], ['status', 'Status'], ['month', 'Month']]
+  const caption = c => (!xf[c] ? '(All)' : xf[c].length === 1 ? xf[c][0] : `(Multiple Items) ${xf[c].length}`)
   const nXf = Object.keys(xf).length
   const fb = (col, title) => (
     <FilterButton active={!!xf[col]} sorted={xs && xs.col === col ? xs.dir : null}
@@ -423,15 +418,6 @@ export default function DepartmentGrowthMatrix() {
           <div style={{ flex: 1 }} />
 
           {genMsg && <span style={{ fontSize: 12, color: theme.success, fontWeight: 600 }}>{genMsg}</span>}
-
-          <SearchSlicer
-            items={deptNames}
-            selected={deptFilters}
-            onChange={setDeptFilters}
-            label="All Departments"
-            placeholder="Search department…"
-            width={170}
-          />
 
           <button
             onClick={() => navigate('/department-plan/new-depts')}
@@ -636,47 +622,26 @@ export default function DepartmentGrowthMatrix() {
           </div>
         )}
 
-        {/* Attribute filter chips */}
-        <div style={{
+        {/* Filters - one multi-select dropdown per field, as Final Results (user, 2026-10-13) */}
+        <div data-no-undo style={{
           padding: '10px 20px', borderBottom: `1px solid ${theme.border}`,
           display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap',
         }}>
-          <span style={{ fontSize: 11, color: theme.textMuted, fontWeight: 600, letterSpacing: 0.4, marginRight: 4 }}>FILTER</span>
-          <button onClick={() => setAttrFilter(null)} style={{
-            padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-            cursor: 'pointer', border: 'none', outline: 'none',
-            background: !attrFilter ? DIV_COLOR[activeDiv] : theme.surfaceAlt,
-            color: !attrFilter ? '#fff' : theme.textSecondary,
-          }}>
-            All <span style={{ opacity: 0.7 }}>({depts.length})</span>
-          </button>
-          {Object.entries(ATTR_STYLE).map(([attr, s]) => {
-            const count = attrCounts[attr] || 0
-            if (count === 0) return null
-            const isActive = attrFilter === attr
-            return (
-              <button key={attr} onClick={() => setAttrFilter(isActive ? null : attr)} style={{
-                padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-                cursor: 'pointer', outline: 'none',
-                border: isActive ? 'none' : `1px solid ${s.bg === '#1E3A5F' ? 'var(--st-ink-2,#37423C)' : theme.border}`,
-                background: isActive ? s.color : s.bg,
-                color: isActive ? (s.bg === '#1E3A5F' ? '#1E3A5F' : '#fff') : s.color,
-              }}>
-                {attr} <span style={{ opacity: 0.7 }}>({count})</span>
-              </button>
-            )
-          })}
-          {(attrFilter || nXf > 0 || deptFilters.size > 0) && (
-            <span style={{ fontSize: 11, color: theme.textMuted, marginLeft: 4 }}>
-              showing {filtered.length} of {depts.length}
-            </span>
-          )}
-          {nXf > 0 && (
-            <button type="button" onClick={() => setXf({})} title={Object.keys(xf).join(', ')}
-              style={{ all: 'unset', cursor: 'pointer', fontSize: 11, color: theme.primary, textDecoration: 'underline', marginLeft: 6 }}>
-              Clear column filters ({nXf})
+          <span style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.6, marginRight: 4 }}>Filters</span>
+          {GM_FIELDS.map(([c, label]) => (
+            <button key={c} type="button" aria-haspopup="dialog" onClick={e => { const el = e.currentTarget; setXfEdit(x => (x && x.col === c ? null : { col: c, title: label, anchor: el })) }}
+              title={xf[c] ? xf[c].join(', ') : `All ${label.toLowerCase()}`}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px', borderRadius: 4, fontSize: 12, cursor: 'pointer', maxWidth: 260,
+                       border: `1px solid ${xf[c] ? theme.primary : theme.border}`, background: xf[c] ? alpha(theme.primary, '12') : theme.surface, color: theme.textPrimary }}>
+              <span style={{ color: theme.textMuted }}>{label}</span>
+              <b style={{ fontWeight: xf[c] ? 700 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{caption(c)}</b>
+              <span aria-hidden="true" style={{ color: theme.textMuted, fontSize: 10 }}>▾</span>
             </button>
-          )}
+          ))}
+          {nXf > 0 && (<>
+            <span style={{ fontSize: 11, color: theme.textMuted, marginLeft: 4 }}>showing {filtered.length} of {depts.length}</span>
+            <button type="button" onClick={() => setXf({})} style={{ all: 'unset', cursor: 'pointer', fontSize: 12, color: theme.textMuted, textDecoration: 'underline', marginLeft: 4 }}>Clear all</button>
+          </>)}
         </div>
 
         {loading ? (
@@ -807,7 +772,7 @@ export default function DepartmentGrowthMatrix() {
       </div>
       {xfEdit && <ExcelFilter key={xfEdit.col + JSON.stringify(xf) + JSON.stringify(xs)} title={xfEdit.title} anchor={xfEdit.anchor} picked={xf[xfEdit.col]}
         load={() => xfValues(xfEdit.col)} numeric={isNum(xfEdit.col)}
-        sort={xs && xs.col === xfEdit.col ? xs.dir : null} onSort={dir => setXs(dir ? { col: xfEdit.col, dir } : null)}
+        sort={xs && xs.col === xfEdit.col ? xs.dir : null} onSort={xfEdit.col === 'month' ? undefined : dir => setXs(dir ? { col: xfEdit.col, dir } : null)}
         onDone={vals => {
           if (vals !== undefined) setXf(f => { const n = { ...f }; if (vals.length) n[xfEdit.col] = vals; else delete n[xfEdit.col]; return n })
           setXfEdit(null)
