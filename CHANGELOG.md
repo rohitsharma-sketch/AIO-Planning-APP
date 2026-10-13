@@ -7,6 +7,19 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### Sales Plan Final Results: Hierarchy view (pick the levels and their order)
+- **Asked (user):** "i need a editable hierarchial system for editing a hierarchy for view". The user chose "the hierarchy itself (view only)", with all levels: Cluster, Store, Division, Department, Month, Attribute, Store type.
+- **New view: Final Results -> Hierarchy** (next to Dashboard).
+  - The level chips can be moved up / down (◀ ▶), removed (✕) or added (+ Add level…); Reset puts back Cluster -> Store -> Division -> Department. The chosen order is kept per browser.
+  - The plan shows as an expandable tree with LY, TY, Growth % and Cont % (share of the level above) at every level, plus a total.
+  - Without Month as a level, all plan months are added up.
+- **Backend:** `GET /api/planning/grain/hierarchy?levels=...&path=[...]` (`grain_view.hierarchy_rows`, self-check `engines/test_final_hierarchy.py`) returns the children of one node, so a branch loads only when it is opened.
+  - It reads the same cached plan cube as the Store / Cluster panels: the active saved plan, or the live base plan while the saved file has no months (as now). KIDS / LADIES / MENS only, active departments only.
+- **Checked:**
+  - Timings on the live plan: top level 0.5 s; a cluster's stores 0.1 s; one store's departments by month 0.01 s.
+  - Sandbox: 10 clusters, total 77,093.4 L (= Store / Cluster panel); BH - (NP) opens to its stores; moving Division to the top gives MENS / LADIES / KIDS = 30,312.2 / 23,606.0 / 23,175.1 L; KIDS opens to its clusters.
+  - dist rebuilt; 8010 restarted.
+
 ### Sales Plan: GM and RETAIL removed from the planning engine
 - **Asked (user):** "remove divisions - gm and retail from sales plan engine" (screenshot: the Store / Cluster panel's All divisions).
 - **Engine:** `dept_sales_engine.DIVISIONS` is now KIDS / LADIES / MENS. Every plan build loops over it (base plan, plan summary, department plan, MRP and everything after), so GM and RETAIL are no longer planned or totalled.

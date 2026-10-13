@@ -389,3 +389,65 @@ def get_display(grain: str = "cluster", division: str = "ALL"):
     return {**rows(per, c["stores"], g, months), "fields": ["plan", "table", "nontable"],
             "source": {"kind": "display", "note": f"the Display Type run of {dt.get('run_at', '-')}"},
             "division": division.upper()}
+
+
+# user, 2026-10-13: "i need a editable hierarchial system for editing a hierarchy for view" - the plan as a tree whose
+# levels (and their order) the user picks; view only. One call = the children of one node: every plan cell under
+# `path` grouped by the next level, so a branch loads only when it is opened. Same cube (and live fallback) as above.
+HIER_LEVELS = ("cluster", "store", "stype", "division", "attribute", "department", "month")
+
+
+def hierarchy_rows(cube: dict, attr_map: dict, levels: list, path: list) -> dict:
+    """Pure. levels: the order picked (from HIER_LEVELS); path: the values of levels[:len(path)] down to the node.
+    Returns {level, rows: [{key, ly, ty}] (TY high to low; months in calendar order), total: {ly, ty}}."""
+    want = dict(zip(levels, path))
+    nxt = levels[len(path)] if len(path) < len(levels) else None
+    sinfo = {s: {"cluster": x["cluster"], "store": s, "stype": "SSG" if x.get("ssg") else "NSO"}
+             for s, x in cube["stores"].items()}
+    ok = {s for s, x in sinfo.items() if all(want.get(k, v) == v for k, v in x.items())}
+    acc, tl, tt = {}, 0.0, 0.0
+    for dv, dmap in cube["dept"].items():
+        if want.get("division", dv) != dv:
+            continue
+        amap = attr_map.get(dv, {})
+        for dp, smap in dmap.items():
+            at = amap.get(dp) or "-"
+            if want.get("department", dp) != dp or want.get("attribute", at) != at:
+                continue
+            fixed = {"division": dv, "department": dp, "attribute": at}
+            for s, mm in smap.items():
+                if s not in ok:
+                    continue
+                for m, v in mm.items():
+                    if want.get("month", m) != m:
+                        continue
+                    ly, ty = v[0], v[1]
+                    tl, tt = tl + ly, tt + ty
+                    if nxt:
+                        k = m if nxt == "month" else fixed.get(nxt) or sinfo[s][nxt]
+                        a = acc.setdefault(k, [0.0, 0.0])
+                        a[0] += ly
+                        a[1] += ty
+    rows = [{"key": k, "ly": round(v[0], 4), "ty": round(v[1], 4)} for k, v in acc.items()]
+    if nxt == "month":
+        rows.sort(key=lambda r: TY_MONTHS.index(r["key"]) if r["key"] in TY_MONTHS else 99)
+    else:
+        rows.sort(key=lambda r: -r["ty"])
+    return {"level": nxt, "rows": rows, "total": {"ly": round(tl, 4), "ty": round(tt, 4)}}
+
+
+@router.get("/hierarchy")
+def get_hierarchy(levels: str, path: str = "[]"):
+    """?levels=cluster,store,division&path=["BH - (NP)"] -> the children of that node (view only)."""
+    lv = [x for x in levels.split(",") if x]
+    if not lv or len(set(lv)) != len(lv) or any(x not in HIER_LEVELS for x in lv):
+        raise HTTPException(status_code=422, detail=f"levels: pick from {', '.join(HIER_LEVELS)}, each once")
+    try:
+        pth = json.loads(path)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="path must be a JSON list")
+    if not isinstance(pth, list) or len(pth) >= len(lv):
+        raise HTTPException(status_code=422, detail="path must be shorter than levels")
+    from engines.final_results_engine import _load_dept_attr_map
+    c = _cube()
+    return {**hierarchy_rows(c, _load_dept_attr_map(), lv, [str(p) for p in pth]), "source": c["source"]}

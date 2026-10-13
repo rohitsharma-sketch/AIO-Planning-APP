@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { theme, alpha } from '../theme'
 import SearchSlicer from '../components/SearchSlicer'
 import { useGrain } from '../grain'
+import HierarchyView from '../components/HierarchyView'
 
 const CELL = { fontFamily: theme.fontMono, fontSize: 12, textAlign: 'right', padding: '5px 10px', whiteSpace: 'nowrap' }
 const HDR  = { ...CELL, fontSize: 11, color: theme.textMuted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }
@@ -22,7 +23,7 @@ export default function FinalResults() {
   const [expandedDiv, setExpandedDiv] = useState(null)
   const [storeFilters, setStoreFilters]   = useState(new Set())
   const [storeTypeFilters, setStoreTypeFilters] = useState(new Set())
-  const [viewMode, setViewMode]     = useState('store')  // 'store' | 'dept' | 'dashboard' | 'cluster'
+  const [viewMode, setViewMode]     = useState('store')  // 'store' | 'dept' | 'dashboard' | 'cluster' | 'hierarchy'
   const [grain] = useGrain()   // header Store / Cluster switch: the Store and Cluster views follow it (2026-10-12)
   useEffect(() => { setViewMode(v => (v === 'store' || v === 'cluster' ? grain : v)) }, [grain])
   const [deptDiv, setDeptDiv]         = useState('KIDS')
@@ -177,7 +178,7 @@ export default function FinalResults() {
 
       {/* View mode toggle */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
-        {[['store', 'Store View'], ['dept', 'Department View'], ['cluster', 'Cluster View'], ['dashboard', 'Dashboard']].map(([mode, label]) => (
+        {[['store', 'Store View'], ['dept', 'Department View'], ['cluster', 'Cluster View'], ['dashboard', 'Dashboard'], ['hierarchy', 'Hierarchy']].map(([mode, label]) => (
           <button key={mode} onClick={() => setViewMode(mode)} style={{
             padding: '6px 18px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer',
             background: viewMode === mode ? theme.primary : theme.surface,
@@ -606,6 +607,8 @@ export default function FinalResults() {
       )}
 
       {/* ── DASHBOARD VIEW ─────────────────────────────────────────────────── */}
+      {viewMode === 'hierarchy' && <HierarchyView />}   {/* pick the levels + order, drill as a tree (2026-10-13) */}
+
       {viewMode === 'dashboard' && (
         <>
           {!dashboard ? (
