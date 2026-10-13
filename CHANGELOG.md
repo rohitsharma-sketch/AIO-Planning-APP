@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-13
 
+### BIS: a NEW department's growth cells show 0
+- **Asked (user):** "it should be 0 by default if the new tag is there" (screenshot: L_EW_SAREE_JAIPURI NEW, Block Growth 228.64).
+- A department on the New departments list has no buyer growth of its own, so its Block Growth and month cells show **0**, read-only.
+- Its plan is still the New departments % of its reference: Plan Total / vs LY show what it gets (JAIPURI Rs 1.6 Cr, +226.6% on its own LY), and the tooltip gives both.
+- Display only: the plan, the totals and what goes to Sales Plan are unchanged. Checked in BIS on 5050.
+
 ### New departments: plan = exactly New dept % of the reference, division re-balanced to AOP automatically
 - **Asked (user):** "Keep new dept cont % the same as fixed in the plan and reapportion on the mix and adjust the aop always it should happen automatically". The result was 25.4% of the reference, not 25%.
 - **Cause:** Sales Plan *added* the carve (New dept % x reference) to the new department's own BIS plan (its buyer growth on its own LY), and the division total moved by the carve.

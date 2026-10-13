@@ -3264,7 +3264,9 @@ function cellVal(row,def){
       const lockBtn=isLkDiv?'':_lkBtn(isLkSec,anim,`toggleSecLock('${sec.id}')`,
         isLkSec?'Unlock section — allow reapportion':'Lock section — freeze vs reapportion',` data-sbk="${sec.id}"`);
       const nd=_ndOf(sec.id);
-      if(nd&&!isLkDiv)return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center" title="${_attr(`New department: its plan is ${+(nd.np*100).toFixed(2)}% of ${nd.refNm}'s, then the division is re-balanced to AOP - set in New departments, not here`)}"><span class="nd-tag">NEW</span><input class="${cls}" data-bk="${sec.id}" type="number" value="${bg!=null?bg:''}" disabled></span>`;
+      // user, 2026-10-13: "it should be 0 by default if the new tag is there" - no buyer growth of its own; its plan is the
+      // New departments % of its reference (Plan Total / vs LY show what it gets)
+      if(nd&&!isLkDiv)return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center" title="${_attr(`New department: no buyer growth of its own (0) - its plan is ${+(nd.np*100).toFixed(2)}% of ${nd.refNm}'s (${bg!=null?(bg>=0?'+':'')+bg+'% on its own LY':'-'}), then the division is re-balanced to AOP. Set in New departments, not here.`)}"><span class="nd-tag">NEW</span><input class="gi" data-bk="${sec.id}" type="number" value="0" disabled></span>`;
       return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="${cls}" data-bk="${sec.id}" type="number" step="0.01" placeholder="%" value="${bg!=null?bg:''}" ${isLkDiv?'disabled title="Division locked"':`title="${_attr(_blockWhy(row))}"`} oninput="setBlockGrowth('${sec.id}',this.value)" onblur="refresh()"></span>`;
     }
     case 'pl_fac': {
@@ -3320,7 +3322,7 @@ function cellVal(row,def){
       const cls='gi'+(v==null?'':v<0?' neg':' has')+(isLk?' lkd':'');
       const lockBtn=dl?'':_lkBtn(isLk,_lkAnim===k?' lk-anim':'',`toggleMonLock('${row._key}',${def.mi})`,
         isLk?'Unlock this month - let it re-balance':'Lock this month - freeze it vs re-balance',` data-mbk="${k}"`);
-      if(_ndOf(row._key)&&!dl)return `<input class="${cls}" data-key="${k}" type="number" value="${v!=null?+(+v).toFixed(2):''}" disabled title="${_attr(`New department: ${+(_ndOf(row._key).np*100).toFixed(2)}% of ${_ndOf(row._key).refNm}'s plan - set in New departments`)}">`;
+      if(_ndOf(row._key)&&!dl)return `<input class="gi" data-key="${k}" type="number" value="0" disabled title="${_attr(`New department: no buyer growth of its own (0) - its plan is ${+(_ndOf(row._key).np*100).toFixed(2)}% of ${_ndOf(row._key).refNm}'s (${v!=null?(v>=0?'+':'')+(+v).toFixed(2)+'% on its own LY':'-'}). Set in New departments.`)}">`;
       return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="${cls}" data-key="${k}" type="number" step="0.01" placeholder="%" value="${v!=null?+(+v).toFixed(2):''}" ${dl?'disabled title="Division locked"':''} oninput="setGrowth('${row._key}',${def.mi},this.value)" onblur="refresh()"></span>`;
     }
     case 'attr_label': return row._attr?`<span style="font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--mu)">${row._attr}</span>`:'—';
