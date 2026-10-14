@@ -61,7 +61,8 @@ export default function CheckUp() {
           </button>
           <button style={btn(!busy && r && !fails.length, '#15803D')} disabled={!!busy || !r || fails.length > 0} onClick={() => call('sign', 'POST', '/signoff')}
             title={fails.length ? 'Sign off needs every check to pass' : 'Record that this plan was checked against these versions'}>✓ Sign off</button>
-          <a href={`${API}/export`} style={{ ...btn(true, theme.accent), textDecoration: 'none' }}>⬇ Excel</a>
+          <a href={`${API}/export`} style={{ ...btn(true, theme.accent), textDecoration: 'none' }}
+            title="One Excel file: Summary (failures first, with their fix), Versions, and one sheet per issue with every row - to fix them all at one go">⬇ Issues report</a>
         </div>
         {err && <div style={{ marginTop: 8, fontSize: 12.5, color: theme.danger }}>{err}</div>}
         {so && (

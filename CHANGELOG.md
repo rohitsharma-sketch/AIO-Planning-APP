@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Display Type page latency; Home card live; reconciliation issues report (one file)
+- **Asked (user):** "fix the display type page latency too"; "fix this too" (Home: Display Type Plan "Coming soon"); "need a download excel button to check on such issues higlighted in reco ... or give a 1 button to download the report so that all issues can be addressed at one go ... in different spreadsheets in 1 files".
+- Display Type: `status` reads the run times from the files' save times (it parsed the 153 MB run + 198 MB Qty files on every page open); the page no longer downloads them - the Qty tab asks `GET /display-type/qty-view?month=&store=&division=&dept=` for one slice (up to 500 rows, largest first, totals of every row inside the filters, the filter choices), served from the Qty run kept as a table in memory and in `dt_qty_result.view.pkl` (per file version). Page status 0.01 s, Qty tab 0.05-0.07 s / ~160 KB (3.3 s the first time after a restart) instead of ~350 MB.
+- Home: Display Type Plan card active, opens the page, describes the Table / Non-Table split with ASP and qty.
+- Reconciliation: "⬇ Issues report" - one Excel: Summary (failures first, fix, link to each sheet), Versions, one sheet per failing / flagged check with every row it found (up to 20,000 per check; the page shows the first 300), then the information tables (i - ...). Today: Qty - no ASP (185 rows) + 4 information sheets.
+- .gitignore: `SalesPlan/backend/*.pkl`, `SalesPlan/backend/backups/`.
+
 ### ASP master kept in memory
 - **Asked (user):** "keep the ASP masters in cache donot parse on every run".
 - `display_type_engine.load_asp()`: dt_asp.json is parsed once per file version and kept; Import / Add missing write the file, so the next read takes the new one. The Qty run, the ASP preview, status, export / template, fill and the check-up (versions, Qty check, Rectify) all read it from there. Check-up results unchanged.

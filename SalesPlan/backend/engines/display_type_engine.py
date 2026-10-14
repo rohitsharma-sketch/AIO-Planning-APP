@@ -82,8 +82,10 @@ def _derive_months(mrp_plan: dict) -> list[str]:
 @router.get("/status")
 def status():
     asp     = load_asp()
-    result  = _load(DT_RESULT_PATH)
-    qty     = _load(DT_QTY_PATH)
+    # the run times from the files' save times - the run files are ~150-200 MB, parsing them on every page open was the
+    # page's wait (user, 2026-10-14: "fix the display type page latency too")
+    when = lambda f: datetime.datetime.fromtimestamp(os.path.getmtime(f)).strftime("%Y-%m-%d %H:%M:%S") if os.path.exists(f) else None   # noqa: E731
+    p_at, q_at = when(DT_RESULT_PATH), when(DT_QTY_PATH)
     try:   # the MRP split every MRP reader uses (mrp_plan.json alone is gone since the re-apportioned shares, 2026-10-14)
         from engines.mrp_plan_engine import effective_shares
         mrp_ok = bool(effective_shares()[0])
@@ -101,10 +103,10 @@ def status():
         "asp_imported":    asp is not None,
         "asp_rows":        asp.get("count", 0) if asp else 0,
         "asp_date":        asp.get("imported_at", "") if asp else "",
-        "plan_run":        result is not None,
-        "plan_date":       result.get("run_at", "") if result else "",
-        "qty_run":         qty is not None,
-        "qty_date":        qty.get("run_at", "") if qty else "",
+        "plan_run":        p_at is not None,
+        "plan_date":       p_at or "",
+        "qty_run":         q_at is not None,
+        "qty_date":        q_at or "",
     }
 
 
@@ -777,6 +779,72 @@ def run_qty():
     out = {"run_at": _ts(), "months": result["months"], "rows": qty_rows, "missing_asp": missing_asp}
     _save(DT_QTY_PATH, out)
     return {"ok": True, "rows": len(qty_rows), "missing_asp": len(missing_asp)}
+
+
+_QV: dict = {}
+QV_COLS = ["store", "division", "dept", "mrp", "month", "table_contrib", "nontable_contrib", "mrp_plan", "table_plan",
+           "nontable_plan", "table_asp", "table_qty", "nontable_asp", "nontable_qty", "has_contrib"]
+
+
+def _qty_frame():
+    """The Qty run as a table, read once per run file version and kept (memory, and a pickle beside the file for after
+    a restart) - the page asks for a filtered slice of it, not the ~200 MB file (2026-10-14 latency)."""
+    if not os.path.exists(DT_QTY_PATH):
+        return None
+    mt = os.path.getmtime(DT_QTY_PATH)
+    if _QV.get("mt") == mt:
+        return _QV["v"]
+    pk = DT_QTY_PATH[:-5] + ".view.pkl"
+    v = None
+    try:
+        disk = pd.read_pickle(pk)   # written below by this server only
+        if disk.get("mt") == mt:
+            v = disk["v"]
+    except Exception:   # noqa: BLE001 - none yet: build it
+        pass
+    if v is None:
+        q = _load(DT_QTY_PATH) or {}
+        df = pd.DataFrame(q.get("rows", []))
+        for c in QV_COLS:
+            if c not in df.columns:
+                df[c] = None
+        df = df[QV_COLS]
+        for c in ("store", "division", "dept", "mrp", "month"):
+            df[c] = df[c].astype(str).astype("category")
+        miss = sum(1 for m in q.get("missing_asp", []))
+        v = {"df": df, "months": q.get("months", []), "run_at": q.get("run_at"), "missing": miss}
+        try:
+            pd.to_pickle({"mt": mt, "v": v}, pk)
+        except OSError:
+            pass
+    _QV.update(mt=mt, v=v)
+    return v
+
+
+@router.get("/qty-view")
+def get_qty_view(month: str = "", store: str = "ALL", division: str = "ALL", dept: str = "ALL", limit: int = 500):
+    """One month's slice of the Qty run inside the filters: up to `limit` rows (largest MRP plan first), the totals of all
+    of them, and the filter choices - what the Qty tab shows."""
+    v = _qty_frame()
+    if not v:
+        raise HTTPException(404, "Qty not run yet")
+    df = v["df"]
+    m = month if month in set(v["months"]) else (v["months"][0] if v["months"] else "")
+    sel = df[df["month"] == m]
+    for c, val in (("store", store), ("division", division), ("dept", dept)):
+        if val and val != "ALL":
+            sel = sel[sel[c] == val]
+    num = lambda c: float(pd.to_numeric(sel[c], errors="coerce").fillna(0).sum())   # noqa: E731
+    top = sel.assign(_p=pd.to_numeric(sel["mrp_plan"], errors="coerce")).sort_values("_p", ascending=False).head(max(1, min(limit, 5000)))
+    rows = top.drop(columns="_p").astype(object).where(top.drop(columns="_p").notna(), None).to_dict("records")
+    opt = lambda c, d: sorted(d[c].astype(str).unique().tolist())   # noqa: E731
+    base = df[df["month"] == m]
+    return {"run_at": v["run_at"], "months": v["months"], "month": m, "rows": rows, "total_rows": int(len(sel)),
+            "totals": {"mrp_plan": num("mrp_plan"), "table_plan": num("table_plan"), "nontable_plan": num("nontable_plan"),
+                       "table_qty": num("table_qty"), "nontable_qty": num("nontable_qty")},
+            "missing_asp": v["missing"],
+            "stores": opt("store", base), "divisions": opt("division", base),
+            "depts": opt("dept", base if division in ("", "ALL") else base[base["division"] == division])}
 
 
 @router.get("/qty-result")

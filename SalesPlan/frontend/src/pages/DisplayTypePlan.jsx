@@ -181,10 +181,11 @@ export default function DisplayTypePlan() {
   const [validating, setValid]  = useState(false)
   const [qtyRun,   setQtyRun]  = useState(false)
 
-  // plan result
-  const [planResult, setPlanResult] = useState(null)
+  // the run files are ~150-200 MB: the page never downloads them - the Qty tab asks for one filtered slice
+  // (GET /qty-view, user 2026-10-14: "fix the display type page latency too"); the ₹L Plan tab is the display tree
   const [valResult,  setValResult]  = useState(null)
-  const [qtyResult,  setQtyResult]  = useState(null)
+  const [qtyView,    setQtyView]    = useState(null)
+  const [qtyErr,     setQtyErr]     = useState('')
 
   // filters
   const [fStore,  setFStore]  = useState('ALL')
@@ -199,32 +200,26 @@ export default function DisplayTypePlan() {
     setStatus(d)
   }
 
-  async function loadPlan() {
-    const r = await fetch(`${API}/result`)
-    if (r.ok) {
-      const d = await r.json()
-      setPlanResult(d)
-      if (!fMonth && d.months?.length) setFMonth(d.months[0])
-    }
-  }
-
   useEffect(() => {
     loadStatus()
   }, [])
 
+  // the Qty tab's slice - fetched only while that tab is open, again when a filter or the run changes
   useEffect(() => {
-    if (status?.plan_run && !planResult) loadPlan()
-    if (status?.qty_run && !qtyResult) {
-      fetch(`${API}/qty-result`).then(r => r.json()).then(d => setQtyResult(d))
-    }
-  }, [status])
+    if (tab !== 'qty' || !status?.qty_run) return
+    const qs = new URLSearchParams({ month: fMonth || '', store: fStore, division: fDiv, dept: fDept })
+    setQtyErr('')
+    fetch(`${API}/qty-view?${qs}`)
+      .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`); return j })
+      .then(d => { setQtyView(d); if (!fMonth) setFMonth(d.month) })
+      .catch(e => setQtyErr(e.message))
+  }, [tab, status?.qty_date, fMonth, fStore, fDiv, fDept])   // eslint-disable-line react-hooks/exhaustive-deps
 
   async function runPlan() {
     setRunning(true)
     try {
       const r = await fetch(`${API}/run-plan`)
       if (!r.ok) { const e = await r.json(); alert(e.detail); return }
-      await loadPlan()
       await loadStatus()
       setTab('plan')
     } finally { setRunning(false) }
@@ -243,29 +238,17 @@ export default function DisplayTypePlan() {
     try {
       const r = await fetch(`${API}/run-qty`)
       if (!r.ok) { const e = await r.json(); alert(e.detail); return }
-      const d = await fetch(`${API}/qty-result`).then(x => x.json())
-      setQtyResult(d)
       await loadStatus()
       setTab('qty')
     } finally { setQtyRun(false) }
   }
 
-  // derive filter options
-  const activeData = tab === 'qty' && qtyResult ? qtyResult : planResult
-  const rows = activeData?.rows || []
-  const months  = activeData?.months || []
-  const curMonth = fMonth || months[0]
-
-  const stores  = ['ALL', ...new Set(rows.map(r => r.store))]
-  const divs    = ['ALL', ...new Set(rows.map(r => r.division))]
-  const depts   = ['ALL', ...new Set(rows.map(r => r.dept))]
-
-  const filtered = rows.filter(r =>
-    r.month === curMonth &&
-    (fStore === 'ALL' || r.store === fStore) &&
-    (fDiv   === 'ALL' || r.division === fDiv) &&
-    (fDept  === 'ALL' || r.dept === fDept)
-  )
+  // the Qty tab's filter choices come with its slice
+  const months  = qtyView?.months || []
+  const curMonth = fMonth || qtyView?.month
+  const stores  = ['ALL', ...(qtyView?.stores || [])]
+  const divs    = ['ALL', ...(qtyView?.divisions || [])]
+  const depts   = ['ALL', ...(qtyView?.depts || [])]
 
   const canRun      = status?.contrib_ok && status?.dept_plan_ok && status?.mrp_plan_ok && !running
   const canValidate = status?.plan_run && !validating
@@ -379,7 +362,7 @@ export default function DisplayTypePlan() {
           {[
             ['plan',     '₹L Plan',    true],
             ['validate', 'Validation', !!valResult,  valResult?.errors > 0 ? theme.danger : valResult?.warnings > 0 ? '#D97706' : theme.success],
-            ['qty',      'Qty Plan',   !!qtyResult],
+            ['qty',      'Qty Plan',   !!status?.qty_run],
           ].map(([k, lbl, enabled, accentC]) => (
             <button key={k} onClick={() => enabled && setTab(k)} disabled={!enabled} style={{
               padding: '9px 18px', border: 'none',
@@ -412,12 +395,14 @@ export default function DisplayTypePlan() {
       )}
 
       {/* ── QTY TAB ── */}
-      {tab === 'qty' && qtyResult && (
-        <PlanView rows={filtered} months={months} curMonth={curMonth} setFMonth={setFMonth}
+      {tab === 'qty' && qtyErr && <div style={{ fontSize: 12.5, color: theme.danger }}>{qtyErr}</div>}
+      {tab === 'qty' && !qtyView && !qtyErr && <div style={{ fontSize: 12.5, color: theme.textMuted }}>Loading the Qty run…</div>}
+      {tab === 'qty' && qtyView && (
+        <PlanView rows={qtyView.rows} months={months} curMonth={curMonth} setFMonth={setFMonth}
           stores={stores} fStore={fStore} setFStore={setFStore}
-          divs={divs} fDiv={fDiv} setFDiv={setFDiv}
+          divs={divs} fDiv={fDiv} setFDiv={v => { setFDiv(v); setFDept('ALL') }}
           depts={depts} fDept={fDept} setFDept={setFDept}
-          showQty={true} missingAsp={qtyResult.missing_asp?.length || 0}
+          showQty={true} missingAsp={qtyView.missing_asp || 0} totals={qtyView.totals} totalRows={qtyView.total_rows}
         />
       )}
 
@@ -426,10 +411,11 @@ export default function DisplayTypePlan() {
 }
 
 // ── Plan / Qty view ────────────────────────────────────────────────────────────
-function PlanView({ rows, months, curMonth, setFMonth, stores, fStore, setFStore, divs, fDiv, setFDiv, depts, fDept, setFDept, showQty, missingAsp }) {
-  const totalMrp   = rows.reduce((s, r) => s + (r.mrp_plan || 0), 0)
-  const totalTable = rows.reduce((s, r) => s + (r.table_plan || 0), 0)
-  const totalNonT  = rows.reduce((s, r) => s + (r.nontable_plan || 0), 0)
+function PlanView({ rows, months, curMonth, setFMonth, stores, fStore, setFStore, divs, fDiv, setFDiv, depts, fDept, setFDept, showQty, missingAsp, totals, totalRows }) {
+  // totals of every row inside the filters (the server's), not only of the rows listed
+  const totalMrp   = totals?.mrp_plan ?? rows.reduce((s, r) => s + (r.mrp_plan || 0), 0)
+  const totalTable = totals?.table_plan ?? rows.reduce((s, r) => s + (r.table_plan || 0), 0)
+  const totalNonT  = totals?.nontable_plan ?? rows.reduce((s, r) => s + (r.nontable_plan || 0), 0)
 
   return (
     <>
@@ -465,7 +451,7 @@ function PlanView({ rows, months, curMonth, setFMonth, stores, fStore, setFStore
         ))}
         {showQty && missingAsp > 0 && (
           <span style={{ fontSize: 11, color: '#D97706', fontWeight: 600, marginLeft: 'auto' }}>
-            ⚠ {missingAsp} rows missing ASP
+            ⚠ {Number(missingAsp).toLocaleString('en-IN')} projected values with no ASP (all months)
           </span>
         )}
       </div>
@@ -473,7 +459,9 @@ function PlanView({ rows, months, curMonth, setFMonth, stores, fStore, setFStore
       {/* KPIs */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
         {[
-          { label: 'Rows', val: rows.length, c: theme.textPrimary },
+          { label: 'Rows', val: totalRows != null && totalRows > rows.length ? `${rows.length.toLocaleString('en-IN')} of ${totalRows.toLocaleString('en-IN')} (largest first)` : (totalRows ?? rows.length).toLocaleString('en-IN'), c: theme.textPrimary },
+          ...(totals ? [{ label: 'Table Qty', val: Math.round(totals.table_qty).toLocaleString('en-IN'), c: theme.primary },
+                        { label: 'Non-Table Qty', val: Math.round(totals.nontable_qty).toLocaleString('en-IN'), c: '#D97706' }] : []),
           { label: 'MRP Plan (₹L)', val: totalMrp.toFixed(2), c: theme.accent },
           { label: 'Table Plan (₹L)', val: totalTable.toFixed(2), c: theme.primary },
           { label: 'Non-Table Plan (₹L)', val: totalNonT.toFixed(2), c: '#D97706' },

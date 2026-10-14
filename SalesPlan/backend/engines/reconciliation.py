@@ -203,28 +203,32 @@ def export_reconciliation():
 @router.get("/checkup")
 def get_checkup(fresh: bool = False):
     """The last check-up while nothing it reads has changed (instant); fresh=1 checks again."""
-    from engines.plan_checkup import checkup
-    return checkup(fresh)
+    from engines.plan_checkup import checkup, for_page
+    return for_page(checkup(fresh))
 
 
 @router.post("/checkup/rectify")
 def post_checkup_rectify():
     """Re-run the chain (plan on today's inputs, MRP Cont %, Display Type run + Qty) and check again."""
-    from engines.plan_checkup import rectify
-    return rectify()
+    from engines.plan_checkup import rectify, for_page
+    return for_page(rectify())
 
 
 @router.post("/checkup/signoff")
 def post_checkup_signoff(request: Request):
-    from engines.plan_checkup import sign_off
+    from engines.plan_checkup import sign_off, for_page
     from engines.plan_versions import _user
-    return sign_off(_user(request))
+    return for_page(sign_off(_user(request)))
 
 
 @router.get("/checkup/export")
 def get_checkup_export():
     from engines.plan_checkup import checkup, export_xlsx
     r = checkup()
-    return StreamingResponse(io.BytesIO(export_xlsx(r) if r.get("ok") else b""),
+    if not r.get("ok"):
+        from fastapi import HTTPException
+        raise HTTPException(409, r.get("error") or "No check-up yet")
+    name = f"Sales Plan reconciliation issues {datetime.datetime.now():%d %b %Y %H%M}.xlsx"
+    return StreamingResponse(io.BytesIO(export_xlsx(r)),
                              media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                             headers={"Content-Disposition": 'attachment; filename="sales_plan_checkup.xlsx"'})
+                             headers={"Content-Disposition": f'attachment; filename="{name}"'})

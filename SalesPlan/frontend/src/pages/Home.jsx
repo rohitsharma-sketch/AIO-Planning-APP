@@ -26,9 +26,10 @@ const engines = [
   },
   {
     title: 'Display Type Plan',
-    description: 'Allocate sales targets across display types — gondola, endcap, wall fixture — by store format.',
-    status: 'coming-soon',
+    description: 'The MRP plan split into Table / Non-Table by each store’s last-year sales mix, with ASP and unit quantities.',
+    status: 'active',
     icon: 'display',
+    route: '/display-type',
   },
 ]
 

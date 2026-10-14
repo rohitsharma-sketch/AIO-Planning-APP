@@ -28,7 +28,9 @@ TOL = 1e-6   # Rs lakh (Rs 0.10) for source tie-outs; the additivity checks abov
 _HERE = os.path.dirname(os.path.abspath(__file__))
 SIGNOFF_PATH = os.path.join(_HERE, "..", "checkup_signoff.json")
 _RUN_LOCK = threading.Lock()
-ROWS_KEPT = 300
+ROWS_KEPT = 300      # rows a check shows on the page
+ROWS_ALL = 20000     # rows a check keeps for the issues report (user, 2026-10-14: "1 button to download the report so that
+                     # all issues can be addressed at one go ... in different spreadsheets in 1 file")
 
 
 # Seasons (user, 2026-10-14: "if the attributes are Winter or PreWinter then they should be avoided as neither they have
@@ -73,7 +75,7 @@ class Acc:
             self.largest, self.where = d, " / ".join(str(v) for v in w.values())
         if abs(d) > self.tol:
             self.off += 1
-            if len(self.rows) < ROWS_KEPT:
+            if len(self.rows) < ROWS_ALL:
                 self.rows.append({**w, "Expected": exp, "Plan": got, "Difference": d})
 
     def out(self, stage, key, title, level, fix="rerun", note=""):
@@ -483,7 +485,7 @@ def mrp_checks(gm=None, new=None) -> list:
             + (f", ₹{fb_v:,.2f} L of it on the same department × MRP's other display type ASP (fallback)" if fb_v > 1e-9 else "")
             + (f"; ₹{miss_v:,.2f} L has no ASP in the ASP master ({asp.get('source')}) - fix it there and import again." if miss_v else "."))
     out.append(_plain(st6, "qty", "Every projected in-season value has an ASP → qty (all stores)", "UDF", "fail" if rows else "pass",
-                      note + f" Season: {rule}.", rows[:ROWS_KEPT * 3],
+                      note + f" Season: {rule}.", rows[:ROWS_ALL],
                       fix="input", cells=len(proj), off=sum(len(v["months"]) for v in miss.values()), largest=miss_v))
     out[-1]["all_rows"] = len(rows)
     return att(cov) + out
@@ -647,24 +649,83 @@ def sign_off(user: str) -> dict:
     return r
 
 
+def for_page(r: dict) -> dict:
+    """The check-up as the page gets it: each check's first ROWS_KEPT rows (all_rows = how many there are)."""
+    if not r.get("checks"):
+        return r
+    return {**r, "checks": [{**c, "rows": c["rows"][:ROWS_KEPT], "all_rows": len(c["rows"])} for c in r["checks"]]}
+
+
+SHEET = {"qty": "Qty - no ASP", "mrp_none": "MRP - not split", "att_off": "Off-season with plan", "att_bis": "No BIS growth",
+         "dt_mix": "Display - no LY mix", "dt_run": "Display run vs tree", "mrp_mix": "MRP Cont % vs LY mix",
+         "mrp_fwd": "Dept TY vs MRPs", "mrp_back": "Dept LY vs MRPs", "dt_fwd": "MRP TY vs displays", "dt_back": "MRP LY vs displays",
+         "ly_other": "LY vs Calendar (other)", "ly_lfl": "LY vs AOP base (LFL)", "ly_mix": "Dept LY vs Calendar mix",
+         "aop_div": "LFL TY vs AOP", "bis_g": "Growth vs BIS", "bis_ty": "TY vs BIS formula", "new_ratio": "New dept vs preset",
+         "att_season": "i - Season by attribute", "new_ratio_sum": "i - New departments", "ly_chain": "i - LY vs Calendar",
+         "aop_all": "i - TY by store group"}
+
+
 def export_xlsx(r: dict) -> bytes:
+    """The issues report: one file - Summary (failures first, with their fix), Versions, then one sheet per failing /
+    flagged check with every row it found, then the information tables (i - ...)."""
     import io
+    pass  # sheet names cleaned below
     import pandas as pd
+    rank = {"fail": 0, "warn": 1, "info": 3, "pass": 2}
+    checks = sorted(r["checks"], key=lambda c: rank.get(c["status"], 9))
+    used, sheets = set(), []
+
+    def name(c):
+        n = "".join("-" if ch in "[]:*?/\\" else ch for ch in SHEET.get(c["key"], c["title"]))[:31]   # Excel's banned sheet-name characters
+        while n in used:
+            n = n[:29] + "_" + str(len(used))
+        used.add(n)
+        return n
+    for c in checks:
+        if c["rows"] and c["status"] in ("fail", "warn"):
+            sheets.append((name(c), c))
+    for c in checks:
+        if c["rows"] and c["status"] == "info":
+            sheets.append((name(c), c))
+    where = {id(c): n for n, c in sheets}
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="xlsxwriter") as xw:
-        pd.DataFrame([{"Stage": c["stage"], "Level": c["level"], "Check": c["title"], "Status": c["status"].upper(),
-                       "Cells": c["cells"], "Off": c["off"], "Largest difference (₹L)": c["largest"], "Where": c["where"],
-                       "Fix": {"rerun": "Rectify (re-run)", "input": "your input"}.get(c["fix"] or "", ""), "Note": c["note"]}
-                      for c in r["checks"]]).to_excel(xw, sheet_name="Check-up", index=False)
+        wb = xw.book
+        hd = wb.add_format({"bold": True, "bg_color": "#E8EFEA", "border": 1, "text_wrap": True, "valign": "top"})
+        wrap = wb.add_format({"text_wrap": True, "valign": "top"})
+        col = {"fail": wb.add_format({"bold": True, "font_color": "#B91C1C"}), "warn": wb.add_format({"bold": True, "font_color": "#B45309"}),
+               "pass": wb.add_format({"bold": True, "font_color": "#15803D"}), "info": wb.add_format({"font_color": "#475569"})}
+        summ = pd.DataFrame([{"Status": c["status"].upper(), "Stage": c["stage"], "Level": c["level"], "Check": c["title"],
+                              "Cells checked": c["cells"], "Off": c["off"], "Largest gap (₹L)": c["largest"], "Where": c["where"],
+                              "Fix": {"rerun": "Rectify (re-run the chain)", "input": "your input"}.get(c["fix"] or "", ""),
+                              "Rows": len(c["rows"]), "Sheet": where.get(id(c), ""), "Note": c["note"]} for c in checks])
+        summ.to_excel(xw, sheet_name="Summary", index=False, startrow=2)
+        ws = xw.sheets["Summary"]
+        ws.write(0, 0, f"Sales Plan reconciliation - checked {r.get('checked_at')} - {sum(c['status'] == 'fail' for c in checks)} fail, "
+                       f"{sum(c['status'] == 'warn' for c in checks)} to look at, {sum(c['status'] == 'pass' for c in checks)} pass", hd)
+        for j, h in enumerate(summ.columns):
+            ws.write(2, j, h, hd)
+        for i, c in enumerate(checks, 3):
+            ws.write(i, 0, c["status"].upper(), col.get(c["status"]))
+            if where.get(id(c)):
+                ws.write_url(i, 10, f"internal:'{where[id(c)]}'!A1", string=where[id(c)])
+        for j, w in enumerate((8, 20, 10, 70, 12, 8, 14, 30, 22, 7, 22, 90)):
+            ws.set_column(j, j, w, wrap if j in (3, 11) else None)
+        ws.freeze_panes(3, 0)
         pd.DataFrame([{"Source": k, "Version": str(v)} for k, v in r["versions"].items()]).to_excel(xw, sheet_name="Versions", index=False)
-        used = set()
-        for c in r["checks"]:
-            if c["rows"]:
-                name = c["key"][:28]
-                while name in used:
-                    name += "_"
-                used.add(name)
-                pd.DataFrame(c["rows"]).to_excel(xw, sheet_name=name, index=False)
-        for ws in xw.sheets.values():
-            ws.set_column(0, 12, 18)
+        xw.sheets["Versions"].set_column(0, 0, 16)
+        xw.sheets["Versions"].set_column(1, 1, 110)
+        for n, c in sheets:
+            df = pd.DataFrame(c["rows"])
+            df.to_excel(xw, sheet_name=n, index=False, startrow=3)
+            w = xw.sheets[n]
+            w.write(0, 0, f"{c['status'].upper()} - {c['stage']} - {c['title']}", col.get(c["status"]))
+            w.write(1, 0, c["note"] or "")
+            w.write(2, 0, f"{len(df):,} rows" + (" - fix: " + {"rerun": "Rectify (re-run the chain)", "input": "your input"}[c["fix"]] if c.get("fix") else ""))
+            for j, h in enumerate(df.columns):
+                w.write(3, j, h, hd)
+                w.set_column(j, j, max(12, min(40, int(df[h].astype(str).str.len().max() if len(df) else 10) + 2)))
+            w.freeze_panes(4, 0)
+            if len(df):
+                w.autofilter(3, 0, 3 + len(df), len(df.columns) - 1)
     return buf.getvalue()
