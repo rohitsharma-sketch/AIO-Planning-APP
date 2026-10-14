@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import EngineCard from '../components/EngineCard'
 import { theme, alpha } from '../theme'
@@ -26,35 +26,31 @@ function SavedPlans() {
     return () => { window.removeEventListener('sp-versions', reload); window.removeEventListener('sp-version', v) }
   }, [])
   const vs = list?.versions || []
-  const view = v => { openPlanVersion(v); navigate('/department-plan/final-results') }
-  const btn = primary => ({ padding: '5px 12px', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+  const [layer, setLayer] = useState(false)   // the other iterations' dropdown
+  const box = useRef(null)
+  useEffect(() => {
+    if (!layer) return
+    const out = e => { if (box.current && !box.current.contains(e.target)) setLayer(false) }
+    const esc = e => { if (e.key === 'Escape') setLayer(false) }
+    document.addEventListener('mousedown', out); document.addEventListener('keydown', esc)
+    return () => { document.removeEventListener('mousedown', out); document.removeEventListener('keydown', esc) }
+  }, [layer])
+  const view = v => { setLayer(false); openPlanVersion(v); navigate('/department-plan/final-results') }
+  const compare = v => { setLayer(false); setCmp({ id: '', base: v.id }) }
+  const btn = (primary, small) => ({ padding: small ? '3px 9px' : '5px 12px', borderRadius: 7, fontSize: small ? 11.5 : 12, fontWeight: 700, cursor: 'pointer',
     border: `1px solid ${primary ? theme.primary : theme.border}`, background: primary ? theme.primary : theme.surface, color: primary ? '#fff' : theme.textPrimary })
-  const tile = (key, title, sub, ly, ty, v, isLive) => {
-    const on = isLive ? !open || !vs.some(x => x.id === open) : open === v.id
-    return (
-      <div key={key} style={{ background: theme.surface, borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 8,
-        border: `1px solid ${on ? theme.primary : theme.border}`, boxShadow: on ? `0 0 0 3px ${alpha(theme.primary, '1f')}` : 'none' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <b style={{ fontSize: 15, color: theme.navy, flex: 1 }}>{title}</b>
-          {on && <span style={{ fontSize: 10.5, fontWeight: 800, color: theme.primary, background: alpha(theme.primary, '14'), borderRadius: 999, padding: '2px 8px' }}>OPEN</span>}
-          {isLive && <span style={{ fontSize: 10.5, fontWeight: 800, color: theme.textMuted, border: `1px solid ${theme.border}`, borderRadius: 999, padding: '2px 8px' }}>LIVE</span>}
-        </div>
-        <div style={{ fontSize: 12, color: theme.textMuted }}>{sub}</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, fontSize: 12 }}>
-          <div><div style={{ color: theme.textMuted, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.4 }}>Plan TY</div><b style={{ fontFamily: theme.fontMono }}>{Cr(ty)}</b></div>
-          <div><div style={{ color: theme.textMuted, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.4 }}>LY</div><span style={{ fontFamily: theme.fontMono }}>{Cr(ly)}</span></div>
-          <div><div style={{ color: theme.textMuted, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.4 }}>Growth</div><b style={{ fontFamily: theme.fontMono, color: theme.primary }}>{pct(ty, ly)}</b></div>
-        </div>
-        {!isLive && list && <div style={{ fontSize: 11.5, color: theme.textMuted }}>Live plan now: <b style={{ fontFamily: theme.fontMono, color: Math.abs(list.live.ty - ty) < 0.005 ? theme.textMuted : theme.textPrimary }}>
-          {Math.abs(list.live.ty - ty) < 0.005 ? 'the same TY' : `${list.live.ty >= ty ? '+' : '−'}${Cr(Math.abs(list.live.ty - ty))} (${pct(list.live.ty, ty)})`}</b>{Math.abs(list.live.ty - ty) < 0.005 ? '' : ' vs this'}</div>}
-        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-          <button type="button" style={btn(true)} onClick={() => view(isLive ? null : v)}>View</button>
-          {vs.length > 0 && <button type="button" style={btn(false)} onClick={() => setCmp(isLive ? { id: '', base: vs[vs.length - 1].id } : { id: '', base: v.id })}
-            title="What changed - pick the two plans to compare">Compare…</button>}
-        </div>
-      </div>
-    )
-  }
+  const tag = (t, c) => <span style={{ fontSize: 10, fontWeight: 800, color: c, background: alpha(c, '14'), borderRadius: 999, padding: '1px 7px' }}>{t}</span>
+  // the small gist of a version: TY, LY, growth on one line, then how far the live plan has moved since
+  const gist = v => (<>
+    <div style={{ fontSize: 12, display: 'flex', gap: 10, flexWrap: 'wrap', fontFamily: theme.fontMono }}>
+      <span><span style={{ color: theme.textMuted }}>TY </span><b>{Cr(v.ty)}</b></span>
+      <span><span style={{ color: theme.textMuted }}>LY </span>{Cr(v.ly)}</span>
+      <b style={{ color: theme.primary }}>{pct(v.ty, v.ly)}</b>
+    </div>
+    {list && <div style={{ fontSize: 11, color: theme.textMuted }}>Live plan now: {Math.abs(list.live.ty - v.ty) < 0.005 ? 'the same TY'
+      : <b style={{ color: theme.textPrimary, fontFamily: theme.fontMono }}>{list.live.ty >= v.ty ? '+' : '−'}{Cr(Math.abs(list.live.ty - v.ty))} ({pct(list.live.ty, v.ty)})</b>}{Math.abs(list.live.ty - v.ty) < 0.005 ? '' : ' vs this'}</div>}
+  </>)
+  const first = vs[0], rest = vs.slice(1).reverse()
   return (
     <>
       <div style={{ fontSize: 11, fontWeight: 800, color: theme.textMuted, letterSpacing: 1.2, textTransform: 'uppercase', margin: '36px 0 6px' }}>
@@ -65,12 +61,57 @@ function SavedPlans() {
       </div>
       {err && <div style={{ fontSize: 12.5, color: theme.danger }}>{err}</div>}
       {!list && !err && <div style={{ fontSize: 12.5, color: theme.textMuted }}>Loading saved plans…</div>}
-      {list && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-          {[...vs].reverse().map(v => tile(v.id, v.name, `Saved ${when(v.updated_at)}${v.saved_by ? ` by ${v.saved_by}` : ''}`, v.ly, v.ty, v, false))}
+      {list && !vs.length && <div style={{ fontSize: 12.5, color: theme.textMuted }}>No saved plans yet.</div>}
+      {/* one squeezed tile - the first version (user, 2026-10-14: "keep ver 1 and squeeze the tiles and give a layer where
+          the versions open afterwards on clicking like a dropdown with a small gist") - the later iterations in its layer */}
+      {first && (
+        <div ref={box} style={{ position: 'relative', maxWidth: 380 }}>
+          <div style={{ background: theme.surface, borderRadius: 12, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 6,
+            border: `1px solid ${open === first.id ? theme.primary : theme.border}`, boxShadow: open === first.id ? `0 0 0 3px ${alpha(theme.primary, '1f')}` : 'none' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <b style={{ fontSize: 14, color: theme.navy }}>{first.name}</b>
+              {tag('FIRST', theme.textMuted)}
+              {open === first.id && tag('OPEN', theme.primary)}
+              <span style={{ flex: 1 }} />
+              <span style={{ fontSize: 11, color: theme.textMuted }}>{when(first.updated_at)}</span>
+            </div>
+            {gist(first)}
+            <div style={{ display: 'flex', gap: 6, marginTop: 2, alignItems: 'center' }}>
+              <button type="button" style={btn(true, true)} onClick={() => view(first)}>View</button>
+              <button type="button" style={btn(false, true)} onClick={() => compare(first)} title="What changed - pick the two plans to compare">Compare…</button>
+              <span style={{ flex: 1 }} />
+              {rest.length > 0 && (
+                <button type="button" aria-expanded={layer} aria-haspopup="true" onClick={() => setLayer(o => !o)}
+                  style={{ ...btn(false, true), borderColor: layer ? theme.primary : theme.border, color: theme.primary }}>
+                  {rest.length} later iteration{rest.length > 1 ? 's' : ''} {layer ? '▴' : '▾'}
+                </button>
+              )}
+            </div>
+          </div>
+          {layer && (
+            <div role="menu" aria-label="Later iterations" style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 30, background: theme.surface,
+              border: `1px solid ${theme.border}`, borderRadius: 12, boxShadow: '0 14px 34px rgba(0,0,0,.16)', maxHeight: 380, overflowY: 'auto' }}>
+              {rest.map((v, i) => (
+                <div key={v.id} role="menuitem" style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 4,
+                  borderTop: i ? `1px solid ${theme.border}` : 'none', background: open === v.id ? alpha(theme.primary, '0d') : undefined }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <b style={{ fontSize: 13, color: theme.navy }}>{v.name}</b>
+                    {i === 0 && tag('LATEST', theme.textMuted)}
+                    {open === v.id && tag('OPEN', theme.primary)}
+                    <span style={{ flex: 1 }} />
+                    <span style={{ fontSize: 11, color: theme.textMuted }}>{when(v.updated_at)}</span>
+                  </div>
+                  {gist(v)}
+                  <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+                    <button type="button" style={btn(true, true)} onClick={() => view(v)}>View</button>
+                    <button type="button" style={btn(false, true)} onClick={() => compare(v)}>Compare…</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
-      {list && !vs.length && <div style={{ fontSize: 12.5, color: theme.textMuted }}>No saved plans yet.</div>}
       {cmp && <Changes id={cmp.id} base={cmp.base} versions={vs} onClose={() => setCmp(null)} />}
     </>
   )

@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Home Saved plans: one squeezed tile (the first version) + a dropdown layer of the later iterations
+- **Asked (user):** "keep ver 1 and squeeze the tiles and give a layer where the versions open afterwards on clicking like a dropdown with a small gist".
+- One compact tile for the first version (FIRST / OPEN tags, saved time, gist: TY · LY · growth on one line, how far the live plan has moved since; View, Compare…). "n later iterations ▾" opens a dropdown layer under it - newest first (LATEST tag), each with the same small gist and View / Compare…; closes on an outside click or Esc.
+
 ### Home: Live plan tile removed from Saved plans
 - **Asked (user):** "remove live plan". Saved plans shows only the saved iterations ("No saved plans yet." when none); each tile still says how far the live plan has moved since it was saved, and Compare can still pick the live plan.
 
