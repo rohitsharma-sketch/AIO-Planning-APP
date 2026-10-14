@@ -10,6 +10,7 @@ const LEVELS = {
   cluster: 'Cluster', store: 'Store', stype: 'Store type', division: 'Division',
   attribute: 'Attribute', department: 'Department', month: 'Month',
 }
+const COLS = { ly: 'LY (₹L)', ty: 'TY (₹L)', growth: 'Growth %' }   // the number columns (Re-apportionment: Before / After)
 const DEFAULT = ['cluster', 'store', 'division', 'department']
 const L = v => (v ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 const gr = (ty, ly) => (ly > 0 ? (ty / ly - 1) * 100 : null)
@@ -19,7 +20,7 @@ const P = v => (v == null ? '–' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`)
 // in plain words and summarised" - GET /api/planning/grain/explain builds it from the very cells the row adds up, so the
 // parts always add back to the number on the row; what it explains follows the level clicked (division, department,
 // cluster, store, month ...)
-function Explain({ api, LV, query, levels, path, filters, version, onClose }) {
+function Explain({ api, LV, query, cols = COLS, levels, path, filters, version, onClose }) {
   const [d, setD] = useState(null)
   const [err, setErr] = useState('')
   useEffect(() => {
@@ -52,9 +53,9 @@ function Explain({ api, LV, query, levels, path, filters, version, onClose }) {
           {!d && !err && <div style={{ color: theme.textMuted, fontSize: 13 }}>Working it out…</div>}
           {d && (<>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-              <div style={tile}><div style={cap}>LY (₹L)</div><div style={big}>{L(d.ly)}</div></div>
-              <div style={tile}><div style={cap}>TY (₹L)</div><div style={big}>{L(d.ty)}</div></div>
-              <div style={tile}><div style={cap}>Growth %</div><div style={{ ...big, color: (d.growth ?? 0) >= 0 ? theme.success : theme.danger }}>{P(d.growth)}</div></div>
+              <div style={tile}><div style={cap}>{cols.ly}</div><div style={big}>{L(d.ly)}</div></div>
+              <div style={tile}><div style={cap}>{cols.ty}</div><div style={big}>{L(d.ty)}</div></div>
+              <div style={tile}><div style={cap}>{cols.growth}</div><div style={{ ...big, color: (d.growth ?? 0) >= 0 ? theme.success : theme.danger }}>{P(d.growth)}</div></div>
               <div style={tile}><div style={cap}>Cont %</div><div style={big}>{d.cont == null ? (path.length ? '–' : '100%') : `${d.cont.toFixed(1)}%`}</div></div>
             </div>
             <div style={{ display: 'grid', gap: 8 }}>
@@ -77,7 +78,7 @@ function Explain({ api, LV, query, levels, path, filters, version, onClose }) {
             )}
             {d.months?.length > 1 && !d.table && (
               <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12, fontSize: 12 }}>
-                <thead><tr>{['Month', 'LY (₹L)', 'TY (₹L)', 'Growth %'].map((h, i) => <th key={h} style={{ textAlign: i ? 'right' : 'left', padding: '5px 8px', color: theme.textMuted, fontSize: 10.5, borderBottom: `1px solid ${theme.border}` }}>{h}</th>)}</tr></thead>
+                <thead><tr>{['Month', cols.ly, cols.ty, cols.growth].map((h, i) => <th key={h} style={{ textAlign: i ? 'right' : 'left', padding: '5px 8px', color: theme.textMuted, fontSize: 10.5, borderBottom: `1px solid ${theme.border}` }}>{h}</th>)}</tr></thead>
                 <tbody>{d.months.map(m => (
                   <tr key={m.month}>
                     <td style={{ padding: '4px 8px' }}>{m.month}</td>
@@ -112,7 +113,7 @@ function loadLevels(store, LV, defaults) {
 // the same tree serves the department plan (Final Results) and the Article Name plan (user, 2026-10-13: "make similar
 // output page as the department with all features similarly"): api = where hierarchy / hierarchy-options / explain
 // live, LV = its fields, query = extra query (e.g. grain), store = the localStorage prefix, versions = the version bar
-export default function HierarchyView({ api = '/api/planning/grain', levels: LV = LEVELS, defaults = DEFAULT, store = 'sp.fr', versions = true, query = {} }) {
+export default function HierarchyView({ api = '/api/planning/grain', levels: LV = LEVELS, defaults = DEFAULT, store = 'sp.fr', versions = true, query = {}, cols = COLS }) {
   const [levels, setLevels] = useState(() => loadLevels(store, LV, defaults))
   const [nodes, setNodes] = useState({})          // JSON(path) -> {rows, total, level} | {err} | 'loading'
   const [open, setOpen] = useState(() => new Set())
@@ -270,7 +271,7 @@ export default function HierarchyView({ api = '/api/planning/grain', levels: LV 
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead><tr>
             <th style={{ ...th, textAlign: 'left' }}>{levels.map(x => LV[x]).join(' › ')}</th>
-            <th style={th}>LY (₹L)</th><th style={th}>TY (₹L)</th><th style={th}>Growth %</th><th style={th}>Cont %</th>
+            <th style={th}>{cols.ly}</th><th style={th}>{cols.ty}</th><th style={th}>{cols.growth}</th><th style={th}>Cont %</th>
           </tr></thead>
           <tbody>
             {renderRows([], 0)}
@@ -288,7 +289,7 @@ export default function HierarchyView({ api = '/api/planning/grain', levels: LV 
         load={() => fetch(`${api}/hierarchy-options?${new URLSearchParams({ level: editing.level, filters: fkey, version, ...query })}`)
           .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`); return j[editing.level] || [] })}
         onDone={vals => { if (vals !== undefined) setFilter(editing.level, vals); setEditing(null) }} />}
-      {why && <Explain key={JSON.stringify(why) + fkey + version + qx} api={api} LV={LV} query={query} levels={levels} path={why} filters={filters} version={version} onClose={() => { setWhy(null); back.current?.focus() }} />}
+      {why && <Explain key={JSON.stringify(why) + fkey + version + qx} api={api} LV={LV} query={query} cols={cols} levels={levels} path={why} filters={filters} version={version} onClose={() => { setWhy(null); back.current?.focus() }} />}
     </div>
   )
 }

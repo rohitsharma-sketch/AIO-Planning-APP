@@ -1,6 +1,14 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { theme, alpha } from '../theme'
 import { FiltersRow } from '../components/ExcelFilter'
+import HierarchyView from '../components/HierarchyView'
+
+// Before -> After (user, 2026-10-14: "a before and after comp for the mrp to easily identify and put all the necessary
+// things in a similar pop up style on click just like the rest of the modules"): the department plan's tree over the
+// re-apportionment the master in use gives (the same rule a Run uses) - Before = LY sold at each old MRP, After = on the
+// new MRP structure (Unmapped its own row); the ⓘ shows where an MRP's sales went and what it received.
+const CMP_FIELDS = { department: 'Department', display: 'Display', mrp: 'MRP', attribute: 'Attribute', division: 'Division', store: 'Store', month: 'Month' }
+const CMP_COLS = { ly: 'Before · old MRP (₹L)', ty: 'After · new MRP (₹L)', growth: 'Change %' }
 
 const mono = { fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }
 
@@ -552,7 +560,7 @@ export default function MrpReapportionment() {
               padding: '0 22px', borderBottom: `1px solid ${theme.border}`,
               background: theme.surfaceAlt, display: 'flex', alignItems: 'center',
             }}>
-              {['groups', ...(result ? ['results'] : [])].map(tab => (
+              {['groups', 'compare', ...(result ? ['results'] : [])].map(tab => (
                 <button key={tab} onClick={() => setActiveTab(tab)} style={{
                   padding: '12px 16px', fontSize: 12, fontWeight: activeTab === tab ? 700 : 400,
                   color: activeTab === tab ? theme.primary : theme.textMuted,
@@ -560,6 +568,7 @@ export default function MrpReapportionment() {
                   borderBottom: activeTab === tab ? `2px solid ${theme.primary}` : '2px solid transparent',
                 }}>
                   {tab === 'groups' && `MRP Groups${groups ? ` (${groups.total_groups})` : ''}`}
+                  {tab === 'compare' && 'Before → After'}
                   {tab === 'results' && 'Run Results'}
                 </button>
               ))}
@@ -607,6 +616,18 @@ export default function MrpReapportionment() {
                     </div>
                   </>
                 )}
+              </div>
+            )}
+
+            {/* Before -> After tab */}
+            {activeTab === 'compare' && (
+              <div style={{ padding: '16px 22px' }}>
+                <div style={{ fontSize: 12, color: theme.textMuted, marginBottom: 10 }}>
+                  LY sales at every old MRP (before) and the same sales on the new MRP structure (after), by the master in use and the rule a Run uses - no Run needed.
+                  An MRP with sales before and none after is discontinued; one that gains took a discontinued MRP's share. Unmapped is its own row. ⓘ = where an MRP's sales went and what it received.
+                  {' '}The first open after a restart or a new master takes about a minute.
+                </div>
+                <HierarchyView api="/api/planning/mrp-reapportionment" levels={CMP_FIELDS} defaults={['department', 'display', 'mrp']} store="sp.reapp" versions={false} cols={CMP_COLS} />
               </div>
             )}
 

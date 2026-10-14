@@ -565,6 +565,27 @@ def make_index(cells, levels) -> dict:
             "ly": np.asarray(ly, dtype=float), "ty": np.asarray(ty, dtype=float)}
 
 
+def index_from_frame(df, levels, ly_col: str, ty_col: str) -> dict:
+    """make_index straight from a DataFrame (one column per level) - pandas factorize, for a million cells in a second."""
+    import numpy as np
+    import pandas as pd
+    names, pos, c = {}, {}, {}
+    for lv in levels:
+        codes, uniq = pd.factorize(df[lv].astype(str), sort=False)
+        names[lv] = list(uniq)
+        pos[lv] = {v: i for i, v in enumerate(uniq)}
+        c[lv] = codes.astype(np.int32)
+    return {"names": names, "pos": pos, "c": c, "ly": df[ly_col].to_numpy(dtype=float), "ty": df[ty_col].to_numpy(dtype=float)}
+
+
+def _mrp_key(v):
+    """MRPs in price order (as numbers), anything else (Unmapped) last."""
+    try:
+        return (0, float(v))
+    except (TypeError, ValueError):
+        return (1, 0.0)
+
+
 # One column index per cube (user, 2026-10-13: "make sure that the population speed is fast"): every cell once, each
 # level as an integer code, so a branch / a filter list is a mask + a bincount (ms) instead of a walk over every cell
 # (~0.2 s on the 305k cells of the MAMJ plan). Built once per cube and attribute map; 8010 builds it at start.
@@ -614,7 +635,8 @@ def values_of(ix: dict, filt: dict | None, levels) -> dict:
     out = {}
     for lv in levels:
         vals = [ix["names"][lv][i] for i in np.unique(ix["c"][lv][_mask(ix, {}, filt, skip=lv) & nz])]
-        out[lv] = sorted(vals, key=lambda m: TY_MONTHS.index(m) if m in TY_MONTHS else 99) if lv == "month" else sorted(vals)
+        out[lv] = (sorted(vals, key=lambda m: TY_MONTHS.index(m) if m in TY_MONTHS else 99) if lv == "month" else
+                   sorted(vals, key=_mrp_key) if lv in ("mrp", "old_mrp", "new_mrp") else sorted(vals))
     return out
 
 
@@ -641,6 +663,8 @@ def rows_of(ix: dict, levels: list, path: list, filt: dict | None = None) -> dic
     rows = [{"key": k, "ly": round(v[0], 4), "ty": round(v[1], 4)} for k, v in acc.items() if abs(v[0]) > 1e-9 or abs(v[1]) > 1e-9]
     if nxt == "month":
         rows.sort(key=lambda r: TY_MONTHS.index(r["key"]) if r["key"] in TY_MONTHS else 99)
+    elif nxt == "mrp":   # price order (Re-apportionment's before / after, 2026-10-14)
+        rows.sort(key=lambda r: _mrp_key(r["key"]))
     else:
         rows.sort(key=lambda r: -r["ty"])
     return {"level": nxt, "rows": rows, "total": {"ly": round(tl, 4), "ty": round(tt, 4)}}

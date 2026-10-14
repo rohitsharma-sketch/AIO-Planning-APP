@@ -197,11 +197,19 @@ def _read_engine_sales(scans, path, key):
     _SALES_CACHE.update(key=key, df=wide, month_cols=month_cols, check=check)
 
 
+def _quiet(fn):
+    try:
+        fn()
+    except Exception as e:  # noqa: BLE001 - the page shows the reason itself
+        print(f"MRP re-apportionment background step skipped: {e}", flush=True)
+
+
 def warm_sales():
     """Read the sales engine file once at server start (user, 2026-10-07: the first MRP Re-apportionment open after a
     restart took ~85 s). Never raises - the page shows the reason itself if the file isn't reachable."""
     try:
         _engine_sales()
+        _compare()   # the Before -> After tree too (~50 s), so its first open is instant (2026-10-14)
     except Exception as e:  # noqa: BLE001
         print(f"MRP re-apportionment warm-up skipped: {e}", flush=True)
 
@@ -951,6 +959,8 @@ def upload_mapping(file: UploadFile = File(...)):
         if os.path.exists(tmp):
             os.remove(tmp)
     t = _targets(new)
+    # the Before -> After tree for the new master, built in the background so its tab opens ready (2026-10-14)
+    threading.Thread(target=lambda: _quiet(_compare), name="reapp-compare", daemon=True).start()
     return {"ok": True, "file": name, "archived": [os.path.basename(d) for _, d in moved],
             "rows": len(new), "groups": int(new.groupby(["DEPARTMENT", "DISPLAY"]).ngroups),
             "listed": int((new["MRP_LISTED"] > 0).sum()), "discontinued": int((new["MRP_LISTED"] == 0).sum()),
@@ -965,3 +975,185 @@ def download_mapping():
     if not path:
         raise HTTPException(404, detail=f"No MRP master in: {MAPPING_DIR}")
     return FileResponse(path, media_type=XLSX, filename=os.path.basename(path))
+
+
+# ── Before -> After (user, 2026-10-14: "keep the rules intact ... the engine has to run true to its core working, and
+# should be making a before and after comp for the mrp to easily identify and put all the necessary things in a similar
+# pop up style on click just like the rest of the modules where the output is being previewd") ──────────────────────
+# The same _redistribute a Run uses, on the master in use and the sales engine's LY: Before = LY sold at each old MRP,
+# After = the same sales on the new MRP structure (Unmapped apart). Served as the department plan's Hierarchy tree
+# (grain_view index), with an ⓘ pop-up that shows where an MRP's sales went and which old MRPs an MRP received.
+
+CMP_LEVELS = ("department", "display", "mrp", "attribute", "division", "store", "month")
+CMP_COLS = ["STORE", "DIVISION", "DEPARTMENT", "DISPLAY", "ATTRIBUTE"]
+_CMP: dict = {}
+_CMP_LOCK = threading.Lock()
+
+
+def _compare():
+    """{ix, flows, before, after, unmapped, months, master} - cached on the sales file and the master."""
+    mf = _find_mapping_file()
+    if not mf:
+        raise HTTPException(404, f"No MRP master in {MAPPING_DIR} - import one first")
+    sales_df, month_cols, check = _engine_sales()
+    key = (_SALES_CACHE.get("key"), mf, os.path.getmtime(mf))
+    with _CMP_LOCK:
+        if _CMP.get("key") == key:
+            return _CMP["v"]
+        from engines.grain_view import index_from_frame
+        mp = _load_mapping(mf)
+        sales = sales_df[sales_df["DEPARTMENT"].isin(set(mp["DEPARTMENT"]))].reset_index(drop=True)
+        out, unm, _ = _redistribute(sales, mp, month_cols)
+        ren = {"STORE": "store", "DIVISION": "division", "DEPARTMENT": "department", "DISPLAY": "display",
+               "ATTRIBUTE": "attribute"}
+        b = sales.melt(id_vars=CMP_COLS + ["MRP"], value_vars=month_cols, var_name="month", value_name="v")
+        b = b.assign(mrp=b["MRP"].astype(int).astype(str), BEFORE=b["v"] / 1e5, AFTER=0.0)
+        a = out.melt(id_vars=CMP_COLS + ["MRP_CURRENT", "LISTED_MRP", "SHARE_PCT"], value_vars=month_cols,
+                     var_name="month", value_name="v")
+        u = unm.melt(id_vars=CMP_COLS + ["MRP_CURRENT", "REASON"], value_vars=month_cols, var_name="month", value_name="v") \
+            if not unm.empty else pd.DataFrame(columns=CMP_COLS + ["MRP_CURRENT", "REASON", "month", "v"])
+        flows = pd.concat([a.assign(new=a["LISTED_MRP"].astype(int).astype(str), how="listed"),
+                           u.assign(new="Unmapped", SHARE_PCT=100.0, how=u["REASON"])], ignore_index=True)
+        flows = flows[flows["v"] != 0].rename(columns=ren)
+        flows["old"] = flows["MRP_CURRENT"].astype(int).astype(str)
+        flows["v"] = flows["v"] / 1e5
+        # listed / discontinued as the master says it (a discontinued MRP with one side listed moves 100% too)
+        lst = (mp.assign(old=mp["MRP_CURRENT"].astype(int).astype(str))[["DEPARTMENT", "DISPLAY", "old", "MRP_LISTED"]]
+               .rename(columns={"DEPARTMENT": "department", "DISPLAY": "display"}).drop_duplicates(["department", "display", "old"]))
+        flows = flows.merge(lst, on=["department", "display", "old"], how="left")
+        moved = flows["new"] != "Unmapped"
+        flows.loc[moved, "how"] = flows.loc[moved, "MRP_LISTED"].fillna(0).gt(0).map({True: "listed", False: "discontinued"})
+        cells = pd.concat([b.rename(columns=ren)[list(CMP_LEVELS) + ["BEFORE", "AFTER"]],
+                           flows.assign(mrp=flows["new"], BEFORE=0.0, AFTER=flows["v"])[list(CMP_LEVELS) + ["BEFORE", "AFTER"]]],
+                          ignore_index=True)
+        cells = cells.groupby(list(CMP_LEVELS), sort=False, as_index=False)[["BEFORE", "AFTER"]].sum()
+        cells = cells[(cells["BEFORE"].abs() > 1e-12) | (cells["AFTER"].abs() > 1e-12)].reset_index(drop=True)
+        v = {"ix": index_from_frame(cells, CMP_LEVELS, "BEFORE", "AFTER"), "flows": flows, "months": month_cols,
+             "targets": _targets(mp), "master": os.path.basename(mf), "check": check,
+             "before": float(b["BEFORE"].sum()), "after": float(a["v"].sum()) / 1e5,
+             "unmapped": float(u["v"].sum()) / 1e5 if len(u) else 0.0}
+        _CMP.update(key=key, v=v)
+        return v
+
+
+def _cmp_path(levels: str, path: str, longest: int = 0):
+    lv = [x for x in levels.split(",") if x]
+    if not lv or len(set(lv)) != len(lv) or any(x not in CMP_LEVELS for x in lv):
+        raise HTTPException(422, f"levels: pick from {', '.join(CMP_LEVELS)}, each once")
+    try:
+        pth = json.loads(path)
+    except ValueError:
+        raise HTTPException(422, "path must be a JSON list")
+    if not isinstance(pth, list) or len(pth) > len(lv) - longest:
+        raise HTTPException(422, "path is too long for these levels")
+    return lv, [str(p) for p in pth]
+
+
+@router.get("/hierarchy")
+def get_cmp_hierarchy(levels: str, path: str = "[]", filters: str = "{}"):
+    """Before -> After, one node of the tree: Before = LY at the old MRP, After = on the new MRP structure."""
+    from engines.grain_view import parse_filters, rows_of
+    lv, pth = _cmp_path(levels, path, longest=1)
+    c = _compare()
+    return {**rows_of(c["ix"], lv, pth, parse_filters(filters, CMP_LEVELS)),
+            "source": {"kind": "reapp", "name": "MRP re-apportionment", "note": f"the MRP master {c['master']} on LY "
+                       f"{c['months'][0]} - {c['months'][-1]} (the rule a Run uses)"}}
+
+
+@router.get("/hierarchy-options")
+def get_cmp_options(filters: str = "{}", level: str = ""):
+    from engines.grain_view import parse_filters, values_of
+    if level and level not in CMP_LEVELS:
+        raise HTTPException(422, f"level: one of {', '.join(CMP_LEVELS)}")
+    return values_of(_compare()["ix"], parse_filters(filters, CMP_LEVELS), [level] if level else CMP_LEVELS)
+
+
+def explain_cmp(c: dict, levels: list, path: list, filt: dict | None) -> dict:
+    """Pure. How a Before -> After row is made: its Before (sold at these old MRPs), its After (the new MRPs they moved
+    to), and - for one MRP - where its sales went and which old MRPs it received, each with the rule's share."""
+    from engines.grain_view import _inr
+    want, f = dict(zip(levels, path)), filt or {}
+    fl = c["flows"]
+    others = {k: v for k, v in want.items() if k != "mrp"}
+    m = pd.Series(True, index=fl.index)
+    for k, v in others.items():
+        m &= fl[k].astype(str) == v
+    for k, vals in f.items():
+        if k == "mrp":
+            continue
+        m &= fl[k].astype(str).isin(vals)
+    sel = fl[m]
+    mrp_in = {want["mrp"]} if "mrp" in want else set(f.get("mrp") or [])
+    out_f = sel[sel["old"].isin(mrp_in)] if mrp_in else sel   # the sales of these old MRPs, wherever they went
+    in_f = sel[sel["new"].isin(mrp_in)] if mrp_in else sel     # what these MRPs received
+    B, A = float(out_f["v"].sum()), float(in_f[in_f["new"] != "Unmapped"]["v"].sum())
+    U = float(out_f[out_f["new"] == "Unmapped"]["v"].sum())
+    label = " · ".join(path) if path else "The total"
+    lines = []
+    say = lambda h, t: lines.append({"h": h, "t": t})   # noqa: E731
+    say("The number", f"{label}: ₹{_inr(B)} L of LY sales sold at {'MRP ' + ', '.join(sorted(mrp_in)) if mrp_in else 'the old MRPs'} "
+        f"(before) and ₹{_inr(A)} L on {'that MRP' if len(mrp_in) == 1 else 'the new MRPs'} after the re-apportionment "
+        f"(LY {c['months'][0]} - {c['months'][-1]}, sales engine).")
+    say("The rule", "a listed old MRP moves to its new MRP (100%); a discontinued one splits between the nearest listed MRP "
+        "below and above in its Department × Display - 40% / 60% (Regular, Occasional, Winter), 60% / 40% (Summer); only "
+        "one side listed → 100% there; nothing listed in the Department × Display → Unmapped. Stores, departments, display "
+        "types, attributes and months never mix.")
+    tbl = None
+    if mrp_in and len(mrp_in) == 1:
+        (x,) = mrp_in
+        g = out_f.groupby(["new", "how"])["v"].sum().sort_values(ascending=False)
+        if len(g):
+            say(f"Where MRP {x}'s sales went", "; ".join(
+                f"₹{_inr(v)} L → {'Unmapped (' + h + ')' if n == 'Unmapped' else 'MRP ' + n + (' (listed, 100%)' if h == 'listed' else ' (discontinued: the nearest listed MRP)')}"
+                for (n, h), v in g.items()) + ".")
+        g = in_f.groupby(["old", "how"])["v"].sum().sort_values(ascending=False)
+        if len(g) and x != "Unmapped":
+            say(f"What MRP {x} received", "; ".join(
+                f"₹{_inr(v)} L from MRP {o}" + (" (listed - its own sales)" if h == "listed" and o == x else
+                                                 " (listed → this new MRP)" if h == "listed" else " (discontinued)")
+                for (o, h), v in g.items()) + ".")
+        t = c["targets"]
+        dd = {k: want.get(k) or (list(f[k])[0] if len(f.get(k) or []) == 1 else None) for k in ("department", "display")}
+        if dd["department"] and dd["display"] and x != "Unmapped":
+            r = t[(t["DEPARTMENT"] == dd["department"]) & (t["DISPLAY"] == dd["display"]) & (t["MRP_CURRENT"].astype(str) == x)]
+            if len(r):
+                r = r.iloc[0]
+                say("In the master", f"{dd['department']} · {dd['display']}: old MRP {x} is " + (
+                    f"listed → new MRP {int(r['MRP_LISTED'])}." if r["MRP_LISTED"] > 0 else
+                    f"discontinued; nearest listed below {int(r['BELOW']) or '-'}, above {int(r['ABOVE']) or '-'}."))
+        rows = (pd.concat([out_f, in_f]).drop_duplicates()
+                .groupby(["old", "attribute", "new", "how"], as_index=False).agg(share=("SHARE_PCT", "max"), v=("v", "sum"))
+                .sort_values("v", ascending=False).head(40))
+        tbl = {"title": f"MRP {x}: every old → new move (all stores and months added up)",
+               "cols": ["Old MRP", "Attribute", "New MRP", "How", "Share %", "₹ L"],
+               "rows": [[r.old, r.attribute, r.new, r.how, f"{r.share:.0f}%", _inr(r.v)] for r in rows.itertuples()]}
+    else:
+        g = sel.groupby("how")["v"].sum()
+        say("How it moved", "; ".join(f"₹{_inr(v)} L {k if k in ('listed', 'discontinued') else 'Unmapped - ' + k}" for k, v in g.items()) + ".")
+    if not mrp_in:
+        ok = abs(B - A - U) < 1e-6
+        say("Check", f"before ₹{_inr(B)} = after ₹{_inr(A)} + Unmapped ₹{_inr(U)}" + (" ✓" if ok else " ✗ - an engine fault, report it"))
+    if f:
+        lines.insert(0, {"h": "Filters on", "t": "; ".join(f"{k}: {', '.join(sorted(v))}" for k, v in f.items())
+                         + " - every figure here is inside them."})
+    bm = sel["old"].isin(mrp_in) if mrp_in else pd.Series(True, index=sel.index)
+    am = (sel["new"].isin(mrp_in) if mrp_in else pd.Series(True, index=sel.index)) & (sel["new"] != "Unmapped")
+    months = [{"month": mm, "ly": float(sel[bm & (sel["month"] == mm)]["v"].sum()),
+               "ty": float(sel[am & (sel["month"] == mm)]["v"].sum())} for mm in c["months"]]
+    return {"label": label, "path": [{"level": lv, "value": v} for lv, v in zip(levels, path)], "ly": B, "ty": A,
+            "growth": (A / B - 1) * 100 if B else None, "lines": lines, "months": months, "source": f"the MRP master {c['master']}",
+            **({"table": tbl} if tbl else {})}
+
+
+@router.get("/explain")
+def get_cmp_explain(levels: str, path: str = "[]", filters: str = "{}"):
+    from engines.grain_view import parse_filters
+    lv, pth = _cmp_path(levels, path)
+    return explain_cmp(_compare(), lv, pth, parse_filters(filters, CMP_LEVELS))
+
+
+@router.get("/compare-summary")
+def get_compare_summary():
+    """Before / after / unmapped totals of the master in use (no run needed)."""
+    c = _compare()
+    return {k: c[k] for k in ("before", "after", "unmapped", "months", "master")}
