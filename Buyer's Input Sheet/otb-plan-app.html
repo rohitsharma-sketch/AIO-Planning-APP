@@ -7698,8 +7698,35 @@ function loadVersion(idx){
   _renderVerSel();
   toast(`Loaded: ${_vlName(v)}`);
 }
+// The plan on screen vs the version it says it came from (user, 2026-10-14: "load iteration 4 in my browser and fix it" -
+// a browser kept its own older plan after Iteration 4 was saved from another browser: Rs.431.9 Cr held on AOP, nothing
+// locked, vs the saved Rs.430.4 Cr with the three divisions locked; a Save there would have made an Iteration 5 and sent
+// it to Sales Plan). On open: each division's plan total (to Rs.0.01 Cr) and the division locks - not the raw inputs,
+// which page load seeds for inactive departments. Different -> a bar offering to load the saved version; nothing changes
+// until it is clicked (unsaved work of this browser is not touched).
+function _vlStaleCheck(){
+  const old=document.getElementById('vlStale');if(old)old.remove();
+  const vers=_vlLoad(),v=vers.find(x=>x.id===_vlActiveId());
+  if(!v||!v.snapshot||!v.divisionTotals)return;
+  const cur=_vlCurrentTotals(),sv=v.divisionTotals,D=['MENS','LADIES','KIDS'];
+  const totOff=D.some(d=>Math.abs((cur[d]||0)-(sv[d]||0))>0.01);
+  const lk=x=>JSON.stringify([...(x||[])].sort());
+  const lockOff=!!v.snapshot.divLocked&&lk(v.snapshot.divLocked)!==lk(S.divLocked);
+  if(!totOff&&!lockOff)return;
+  const sum=t=>D.reduce((a,d)=>a+(t[d]||0),0).toFixed(2);
+  const bar=document.createElement('div');bar.id='vlStale';bar.setAttribute('role','alert');
+  bar.style.cssText='position:fixed;top:66px;left:50%;transform:translateX(-50%);z-index:900;max-width:min(860px,94vw);display:flex;gap:10px;align-items:center;flex-wrap:wrap;'+
+    'background:var(--sf);color:var(--tx);border:1px solid var(--wa);border-left:5px solid var(--wa);border-radius:10px;padding:10px 14px;box-shadow:0 10px 30px rgba(0,0,0,.18);font-size:13px';
+  bar.innerHTML=`<span style="flex:1;min-width:260px">The plan on screen is not <b>${_h(_vlName(v))}</b> as saved ${_vlShort(v.savedAt)}: `+
+    `on screen Rs.${sum(cur)} Cr${S.divLocked.size?'':', no division locked'} - saved Rs.${sum(sv)} Cr${v.snapshot.divLocked?.length?`, ${v.snapshot.divLocked.length} divisions locked`:''}. `+
+    `It was saved from another browser, or this screen has changes not saved yet.</span>`+
+    `<button class="tbtn pri" onclick="loadVersion(${vers.indexOf(v)});_vlStaleCheck()">Load the saved ${_h(_vlName(v))}</button>`+
+    `<button class="tbtn" onclick="this.parentElement.remove()">Keep this screen</button>`;
+  document.body.appendChild(bar);
+}
 // page load: this browser's copy at once, then the shared list (here, after the version-log consts exist)
-_renderVerSel();_vlPull();
+// ponytail: the check waits 1.5 s for the AOP seeding of page load to settle; hook it to that seeding's end if it races
+_renderVerSel();_vlPull().then(()=>setTimeout(_vlStaleCheck,1500));
 _ndLoadMap();   // new departments follow their reference in the plan (2026-10-13)
 
 </script>

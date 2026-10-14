@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### BIS: a browser showing an older copy of its iteration says so, with a Load button
+- **Asked (user):** "load iteration 4 in my browser and fix it" (their Chrome showed "Iteration 4 · 14 Oct, 3:19 pm" in the picker but its own older plan: Rs.431.9 Cr held on AOP, nothing locked - the saved Iteration 4 is Rs.430.4 Cr with the three divisions locked; a Save there would have made an Iteration 5 and sent it to Sales Plan).
+- Claude in Chrome was not connected, so the user's browser could not be driven. Fix for every browser instead: on open, after the shared version list arrives, BIS compares the plan on screen with the version it says it came from - each division's plan total (to Rs.0.01 Cr) and the division locks (not the raw inputs, which page load seeds for inactive departments) - and when they differ shows a bar: what is on screen vs saved, "Load the saved <version>" (BIS's own Load, with its confirm) or "Keep this screen". Nothing changes until clicked.
+- Tested: a clean Iteration 4 shows no bar; a screen re-balanced onto AOP and kept only in that browser (Rs.431.87 Cr, no lock) shows it, and Load brings back Rs.430.45 Cr with the three divisions locked; the saved Iteration 4 in the database untouched.
+
 ### BIS Planner's columns (and group growth %) on the Buyer's Plan LY
 - **Asked (user):** "fix planner's output too" (grand total: Planner Value Rs.431.9 Cr but Planner Gr% +11.7%).
 - Planner Gr% on a division header / the grand total divided by the active departments' LY only (Rs.431.9 Cr vs Rs.386.7 Cr = +11.7%); the Buyer's Plan's LY also carries the inactive departments' LY at a plan of 0. New `_offLY(row, mi)` adds that LY on division / grand rows - used by Planner Gr% / Planner Value (`_plannerRowAgg`), Block Growth% and the monthly growth cells (`_effGrowth`), and their hovers (`_blockWhy`, `_plannerWhy`, which now names the inactive LY). Departments and attributes unchanged.
