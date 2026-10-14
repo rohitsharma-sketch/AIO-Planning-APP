@@ -159,7 +159,11 @@ def _copy(session, table, cols, frame):
     buf = io.StringIO()
     frame[cols].to_csv(buf, index=False, header=False)
     with raw.cursor() as cur:
-        with cur.copy(f"COPY {table} ({','.join(cols)}) FROM STDIN WITH (FORMAT csv)") as cp:
+        # an empty article / display is '' (NOT NULL), not NULL - COPY reads an empty unquoted field as NULL unless told
+        # (2026-10-14: the July plan has no ARTICLE column and its upload failed on it)
+        nn = [c for c in ("article", "display") if c in cols]
+        opt = f", FORCE_NOT_NULL ({','.join(nn)})" if nn else ""
+        with cur.copy(f"COPY {table} ({','.join(cols)}) FROM STDIN WITH (FORMAT csv{opt})") as cp:
             cp.write(buf.getvalue())
 
 
@@ -811,7 +815,7 @@ SEASON_CUT = [1.15, 0.85]
 class _Season:
     """season inputs from str_season.py: base(cluster, DEPT, month) = the cluster's festival-free curve (chain where the
     cluster has few stores), fest(store, period) = (festival days, names) of the store's own calendar cluster that month,
-    lift(cluster, DEPT) = sales lift on its Mar-Jun festival days (user, 9 Oct: "Take festivals falling in MAMJ into account")"""
+    lift(cluster, DEPT) = sales lift on its Mar-Jul festival days (user, 9 Oct: "Take festivals falling in MAMJ into account")"""
     def __init__(self, w):
         self.w, self.built_at = w, w.get("built_at")
         self.ch, self.cl = w.get("chain", {}), w.get("cluster", {})

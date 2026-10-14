@@ -318,7 +318,7 @@ function renderStores(){
     {id:'status',label:'Status',cls:'l',filt:true,get:r=>r.status,html:r=>`<span class="tg ${r.status.startsWith('Mapped')?'core':'seasonal'}">${h(r.status)}</span>`},
     {id:'cluster',label:'Cluster',cls:'l',filt:true,get:r=>r.cluster},{id:'fm',label:'Fixture plan months',cls:'l',get:r=>r.fixture_months||null},
     {id:'pm',label:'Sales plan months',cls:'l',get:r=>r.plan_months||null},{id:'miss',label:'Missing',cls:'l',filt:true,get:r=>r.missing||null},
-    {id:'mdq',label:'MDQ (4 months)',num:true,get:r=>r.mdq,html:r=>n0(r.mdq)},{id:'rs',label:'Plan (Rs lakh)',num:true,get:r=>r.plan_rs,html:r=>n1(r.plan_rs/1e5)}],rows);
+    {id:'mdq',label:'MDQ (all months)',num:true,get:r=>r.mdq,html:r=>n0(r.mdq)},{id:'rs',label:'Plan (Rs lakh)',num:true,get:r=>r.plan_rs,html:r=>n1(r.plan_rs/1e5)}],rows);
 }
 
 /* ---- popover: header filters and the calculation of a figure */
@@ -542,7 +542,7 @@ function rollCols(){
   // user, 9 Oct: "view the 4 month avg in the first place and if i want then only i will see monthly changes" - the
   // 4-month average comes first; the months fold behind the toggle on its header (remembered per browser)
   const ml=R.months.map(mon),tog=`<button class="mtog" data-mtog aria-expanded="${S.months}" title="${S.months?'Hide':'Show'} the months">${S.months?'&#9666; hide months':'&#9656; '+h(ml[0]+'–'+ml[ml.length-1])}</button>`;
-  for(const [i,g] of [['t','4-month avg'],...(S.months?R.months.map((m,i)=>[i,ml[i]]):[])])for(const [f,l,t] of FIG)
+  for(const [i,g] of [['t',R.months.length+'-month avg'],...(S.months?R.months.map((m,i)=>[i,ml[i]]):[])])for(const [f,l,t] of FIG)
     {// user, 2026-10-13: "in the averge columns only average should be there for Plan Qty,MDQ" - the 4-month block shows the
      // average month (the months' figures / the months that have one), not the 4-month total
      const avg=i==='t'&&(f==='qty'||f==='mdq');
@@ -555,7 +555,7 @@ function rollCols(){
   // user, 2026-10-13: "I need Avg Fixtures, Avg Store Count in this view and its respective month fixture count and store
   // count" - from the fixture plan; stores = distinct stores with fixtures (a store under many rows counts once)
   const fxCols=[];
-  for(const [i,g] of [['t','4-month avg'],...(S.months?R.months.map((m,i)=>[i,ml[i]]):[])])for(const [f,l,t] of (i==='t'
+  for(const [i,g] of [['t',R.months.length+'-month avg'],...(S.months?R.months.map((m,i)=>[i,ml[i]]):[])])for(const [f,l,t] of (i==='t'
       ?[['fixtures_avg','Avg fixtures','fixtures in the average month (over the months with fixtures)'],['stores','Avg store count','stores with fixtures in the average month']]
       :[['fixtures','Fixtures','fixtures in the month (fixture plan, with edits)'],['stores','Store count','stores with fixtures in the month']]))
     fxCols.push({id:f+':'+i,grp:g,label:l,title:t,m:i,cls:'',num:true,filt:true,get:r=>cellOf(r,i)[f],
@@ -581,7 +581,7 @@ function renderRoll(){
     po.length?`a month missing in one file ${po.length} (${po.join(', ')})`:''].filter(Boolean);
   const tn='▸ opens a row into the next layer; drag the layer chips to change the order; ✎ on a department opens its stores to edit fixtures; click a figure for its calculation; ▾ on any hierarchy chip searches / filters it (shown as a layer or not); click a header to sort. '+
     'The All row adds up the rows shown (after the header filters).',dn=
-    'Plan qty and MDQ are summed before the days are worked out; a month’s STR days = its MDQ sold down by its own and the next months’ planned sales; the 4-month figure = the months’ STR days weighted by their MDQ.  Season = each cluster’s own curve from day-wise sales'+(i.season_built?` (built ${String(i.season_built).slice(0,16).replace('T',' ')})`:'')+'.'+
+    'Plan qty and MDQ are summed before the days are worked out; a month’s STR days = its MDQ sold down by its own and the next months’ planned sales; the all-months figure = the months’ STR days weighted by their MDQ.  Season = each cluster’s own curve from day-wise sales'+(i.season_built?` (built ${String(i.season_built).slice(0,16).replace('T',' ')})`:'')+'.'+
     (lo.length?` Stores not compared: ${lo.join('; ')} - MDQ ${n0(cm.left_out_mdq)}, Rs ${n0(cm.left_out_rs)} left out.`:'')+
     (Object.keys(i.split_departments||{}).length?` Old department names split as in the core apps, fixtures / MDQ / plan by each part's last-year share (same store and month, else the chain's month; pieces for qty, value for Rs): ${Object.entries(i.split_departments).map(([o,n])=>o+' → '+n.join(' + ')).join('; ')}.`:'')+
     (i.qty_by_price_rows?` ${i.qty_by_price_rows} rows had no plan qty and use Rs ÷ LY selling price.`:'')+
@@ -658,7 +658,7 @@ function renderTags(){
     {id:'attribute',label:'Attribute',cls:'l',filt:true,get:r=>r.attribute||r.attribute_master,
       html:r=>ed?`<input type="text" list="tg-att" data-ta value="${h(r.attribute||'')}" placeholder="${h(r.attribute_master||'')}" aria-label="Attribute ${h(r.department)}">`:h(r.attribute||r.attribute_master||'—')},
     {id:'master',label:'Attribute master',cls:'l',filt:true,get:r=>r.attribute_master},
-    {id:'mdq',label:'MDQ (4 months)',num:true,get:r=>r.mdq,html:r=>n0(r.mdq)},
+    {id:'mdq',label:'MDQ (all months)',num:true,get:r=>r.mdq,html:r=>n0(r.mdq)},
     {id:'rs',label:'Plan (Rs lakh)',num:true,get:r=>r.plan_rs,html:r=>n1(r.plan_rs/1e5)},
     {id:'upd',label:'Updated',cls:'l',get:r=>r.updated_at||null,html:r=>r.updated_at?`<span class="note">${h(r.updated_by||'')} · ${h(String(r.updated_at).slice(0,16).replace('T',' '))} · ${h(r.source||'')}</span>`:''}];
   grid('tags',$('#tg-t'),cols,T.rows,{rowAttr:r=>`data-dept="${h(r.department)}"`});
@@ -689,7 +689,7 @@ document.addEventListener('click',async e=>{
     g.sort=g.sort?.id!==c.id?{id:c.id,dir:first}:g.sort.dir===first?{id:c.id,dir:-first}:null;RENDER[n]();return;}
   const cc=e.target.closest('td.c');
   if(cc){const tr=cc.closest('tr'),m=cc.dataset.m,i=m==='t'?'t':+m,tbl=cc.closest('table').id;
-    if(tbl==='t'){const R=S.roll,r=tr.dataset.k==='all'?S.allAgg:S.vis.roll[+tr.dataset.k],ml=i==='t'?'4-month avg':mon(R.months[i]);
+    if(tbl==='t'){const R=S.roll,r=tr.dataset.k==='all'?S.allAgg:S.vis.roll[+tr.dataset.k],ml=i==='t'?R.months.length+'-month avg':mon(R.months[i]);
       const who=tr.dataset.k==='all'?'All'+(lfText()?' · '+lfText():''):r._p.join(' · ');
       const ci=S.layers.indexOf('cluster'),cl=(S.lf.cluster&&S.lf.cluster.size===1?[...S.lf.cluster][0]:null)||(tr.dataset.k!=='all'&&ci>=0&&r._p.length>ci?r._p[ci]:null),fx=(S.st.info.festivals||{})[cl]||{};
       const fm=(i==='t'?R.months:[R.months[i]]).filter(m=>fx[m]).map(m=>`${mon(m)}: ${fx[m].join(', ')}`).join('; ');

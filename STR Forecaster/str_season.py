@@ -55,13 +55,14 @@ def index_by(sales, days, keys):
     return pd.DataFrame(yr, index=s.index, columns=range(1, 13)).groupby(level=lv).mean()   # average over the years
 
 
-FEST_MONTHS = (3, 6)   # user, 9 Oct: "Take festivals falling in MAMJ into account" - lift measured on Mar-Jun festivals
+FEST_MONTHS = (3, 7)   # user, 9 Oct: "Take festivals falling in MAMJ into account" - lift measured on Mar-Jun festivals;
+                       # Mar-Jul since 14 Oct ("Implement the respective plans till july"), so July's festivals (Rath Yatra) learn their own lift
 LIFT_CLIP = (0.5, 3.0)
 
 
 def festival_lift(mm, fdays):
     """per festival x department (user, 9 Oct: "Bihu is there in NE as a whole not just NE(P) so why only Peak season for
-    NE(P)"): sales per open store-day on that festival's days / on the same stores' other Mar-Jun days, 2022-25, from
+    NE(P)"): sales per open store-day on that festival's days / on the same stores' other Mar-Jul days, 2022-25, from
     every store whose calendar cluster has the festival - so Bihu is learnt from all N. East stores whatever their AOP
     cluster. A festival few stores sold the department in leans on the department's pooled festival lift (w = stores /
     (stores + SHRINK)); clipped to LIFT_CLIP. -> ({FESTIVAL: {DEPT: lift}}, {DEPT: pooled lift})"""

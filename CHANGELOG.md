@@ -7,6 +7,14 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### STR Forecaster: Mar-Jul (July fixture and sales plan added)
+- **Asked (user):** "this is the respective sales plan and fixture plan sheet. Implement the respective plans till july and preview the same logic till july in the STR forecaster" (Mar'26 to Oct'26 Fixture Allocation (2).xlsx, month wise sales plan - julyu - feb.xlsx).
+- Fixture upload 7 = the new workbook's Mar'26-Jul'26 sheets through the app's own parser (Aug fresh / old stock, Sep, Oct left out), +12 -> Mar-Jul'27: 112,180 rows; Mar / Apr / Jun the same as before, May MDQ 6.79 M -> 6.89 M (the new file), Jul 203 stores, 6.93 M MDQ.
+- Sales plan upload 9 = the MAMJ plan in use (upload 6) + the JULY sheet (Store Name / DEPARTMENT / UDF 06 / "July Sales Plan - Final" Rs lakh / "... Final Qty"): July Rs 85.88 Cr, 2.95 M pcs, 194 stores (no article column - July splits at department level). The same 180 stores are compared (every month in both files); LY Jul'26 from the Calendar actuals.
+- The logic is the same, now over 5 months: forward cover walks Jun into Jul; the festival lift is learnt on Mar-Jul festival days (str_season FEST_MONTHS (3, 7); season file rebuilt - Rath Yatra 6 days in Jul'27 for Odisha / WB). Labels follow the months loaded ("5-month avg", "MDQ (all months)") on the page and in the Excel.
+- Fix: an upload with an empty article / display failed (COPY read '' as NULL; `_copy` now uses FORCE_NOT_NULL). The earlier uploads stay (Rollback switches back).
+- Today (division, forward-cover days Mar / Apr / May / Jun / Jul): KIDS 61 / 63 / 70 / 86 / 96, LADIES 58 / 59 / 57 / 63 / 69, MENS 43 / 45 / 46 / 50 / 57.
+
 ### Number journey: Excel in plain words
 - **Asked (user):** "give me an excel downloader for this journey so that in plain words can be explained" (and, on cluster / SSG-NSO-Others tags: "nervermind it is there in the right side").
 - "⬇ Excel (this journey)" on the Journey page (`GET /display-type/journey/export`, `journey.journey_xlsx`): sheet Journey = store, group, cluster, tag, reference, department, month, then one row per step (stage, step, in plain words, calculation, value, unit, check); sheet "All MRPs to UDF" = every MRP of the department that month with all 32 export fields. The store picker also shows each store's group (e.g. "ABD · SSG · BH - (NP)").

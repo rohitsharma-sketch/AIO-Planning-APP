@@ -251,14 +251,14 @@ def workbook(df, months, has_plan, layers, info, filters):
     readme = [("What", "STR Forecaster - full working behind the page"), ("Built", time.strftime("%d %b %Y %H:%M")),
               ("Filters", filters or "none"), ("Months", ", ".join(str(m) for m in months)),
               ("Stores", f"{df.store.nunique()} (every month in both the fixture plan and the sales plan)"),
-              ("STR days", "forward cover: a month's MDQ sold down by that month's planned qty, then the next months', till none is left (past the last plan month at its selling rate); 4-month = the months' STR days weighted by their MDQ; only rows with both a plan and fixtures"),
+              ("STR days", "forward cover: a month's MDQ sold down by that month's planned qty, then the next months', till none is left (past the last plan month at its selling rate); the all-months figure = the months' STR days weighted by their MDQ; only rows with both a plan and fixtures"),
               ("LY days", "the file MDQ / (last year's qty / days in that month), store-months that sold last year"),
               ("Season", f"year index = the cluster's festival-free sales curve (day-wise sales 2022-25: the month vs the department's average month of the year) raised by the month's festival days at the cluster x department festival lift; season index = that month vs the same cluster x department's average month of the plan window ({', '.join(str(m) for m in months)}), so a tag shows which months stand out for that cluster; peak >= {se.SEASON_CUT[0]}, off <= {se.SEASON_CUT[1]}; built {info.get('season_built')}"),
               ("Band", f"STR days rounded to the nearest {se.BAND_STEP}, kept inside the season's limits ({bands}); never under {se.BAND_MIN} or over {se.BAND_MAX}"),
               ("Roll-ups", "plan qty and MDQ are summed first, then the days; a group's season = its departments' season index weighted by plan qty"),
               ("Articles", "with Article as a layer or filter: fixtures, MDQ and last year's sales of a store x department x month are split by each article's share of the department's planned qty in that store and month (Rs where the plan has no qty) - the store's own plan, else the chain's; planned Rs / qty are the article's own"),
-              ("Sheets", "STR detail = every store x department x month; Drill-down = the page's row layers fully opened, 4-month and each month; By month = long format per level"),
-              ("4-month avg", "as on the page: plan qty, MDQ, LY qty / MDQ, plan Rs, fixtures and store count are the average month (the months' figures over the months that have one), not 4-month totals; STR days = the months' forward-cover days weighted by their MDQ")]
+              ("Sheets", "STR detail = every store x department x month; Drill-down = the page's row layers fully opened, all months and each month; By month = long format per level"),
+              ("N-month avg", "as on the page (N = the months loaded): plan qty, MDQ, LY qty / MDQ, plan Rs, fixtures and store count are the average month (the months' figures over the months that have one), not totals; STR days = the months' forward-cover days weighted by their MDQ")]
     # rows straight to xlsxwriter in streaming mode (user, 2026-10-14: "decrease the latency for extracting output in STR
     # forecaster in excel" - pandas' cell-by-cell formatter took ~230 s of the 5 million cells); same sheets, same values
     import xlsxwriter
@@ -282,7 +282,7 @@ def workbook(df, months, has_plan, layers, info, filters):
                 by.insert(by.index("department"), "division")
             for r in se.rollup(df, by, months, has_plan):
                 row = {"level": k, **{LAYER_LABEL[x]: _safe(str(r.get(x, ""))) for x in layers[:k]}}
-                row.update(_cells_wide(_avg_cell(r), "4-month avg"))
+                row.update(_cells_wide(_avg_cell(r), f"{len(months)}-month avg"))
                 for m, c in zip(months, r["months"]):
                     row.update(_cells_wide(c, m.strftime("%b %y")))
                 rows.append(row)
@@ -296,7 +296,7 @@ def workbook(df, months, has_plan, layers, info, filters):
                        (["cluster", "division", "department"], "cluster x department"), (["cluster", "store"], "store")):
             for r in se.rollup(df, by, months, has_plan):
                 base = {"level": nm, **{k: _safe(r[k]) for k in by}}
-                for m, c in [("4-month avg", _avg_cell(r))] + [(str(m), c) for m, c in zip(months, r["months"])]:
+                for m, c in [(f"{len(months)}-month avg", _avg_cell(r))] + [(str(m), c) for m, c in zip(months, r["months"])]:
                     long.append({**base, "month": m, **{k.split(" ", 1)[1]: v for k, v in _cells_wide(c, "x").items()}})
         xw.sheet(pd.DataFrame(long), "By month")
     finally:
@@ -514,7 +514,7 @@ class H(BaseHTTPRequestHandler):
                 sm = pd.DataFrame((info.get("common") or {}).get("store_map") or [])
                 if len(sm):
                     sm = sm.rename(columns={"store": "Store", "status": "Status", "cluster": "Cluster (AOP)", "fixture_months": "Fixture plan months",
-                                            "plan_months": "Sales plan months", "missing": "Missing", "mdq": "MDQ (4 months)", "plan_rs": "Plan Rs (4 months)"})
+                                            "plan_months": "Sales plan months", "missing": "Missing", "mdq": "MDQ (all months)", "plan_rs": "Plan Rs (all months)"})
                     for c in ("Store", "Cluster (AOP)"):
                         sm[c] = sm[c].map(_safe)
                 out = io.BytesIO()
