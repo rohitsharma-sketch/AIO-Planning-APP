@@ -131,7 +131,7 @@ tr.lv0 td.l1{font-weight:700}tr.lv1 td,tr.lv3 td{background:#FCFBF8}tr.lv1 td.l1
   <div class="panel" id="p-fc">
   <section class="card">
     <div class="card-h"><div class="grow"><h2>1 &middot; Inputs</h2>
-      <p class="desc">MENS, LADIES and KIDS by store, department and month. Minimum display stock (MDQ) = fixtures × qty per fixture, from the fixture plan; planned qty = the sales plan's qty (else planned sales ÷ last year's average selling price). <b>STR in days</b> = MDQ ÷ planned qty per day: 60 days means the minimum display stock lasts 60 days at the plan's selling rate - fewer days, faster sell-through. <b>Band</b> = the actual days rounded to the nearest 30, kept between 60 and 180; <b>Peak / Off</b> = a month that stands out / lags inside the plan window for that cluster (✦ = festival-driven) (54 → 60, 75 → 90, 104 → 90, 250 → 180); every season (peak, normal, off) 60–180; seasons from the Listing - Delisting Analyser&#39;s seasonality. Only stores with every month in both files are compared. Click any figure to see how it is worked out.</p></div></div>
+      <p class="desc">MENS, LADIES and KIDS by store, department and month. Minimum display stock (MDQ) = fixtures × qty per fixture, from the fixture plan; planned qty = the sales plan's qty (else planned sales ÷ last year's average selling price). <b>STR in days</b> = how long a month's MDQ lasts: it is sold down by that month's planned sales, then the next months', till none is left (past the last plan month at its selling rate) - fewer days, faster sell-through. <b>Band</b> = the actual days rounded to the nearest 15, kept between 60 and 120; <b>Peak / Off</b> = a month that stands out / lags inside the plan window for that cluster (✦ = festival-driven) (54 → 60, 74 → 75, 82 → 75, 104 → 105, 250 → 120); every season (peak, normal, off) 60–120; seasons from the Listing - Delisting Analyser&#39;s seasonality. Only stores with every month in both files are compared. Click any figure to see how it is worked out.</p></div></div>
     <div class="card-c"><div class="inputs">
       <div class="in" id="in-fixture"></div>
       <div class="in" id="in-sales_plan"></div>
@@ -224,13 +224,14 @@ function addM(s,n){const d=new Date(+s.slice(0,4),+s.slice(5,7)-1+n,1);return d.
 /* ---- the All row: the server's sums, worked out over the rows shown (str_engine.rollup: sum first, then the ratio) */
 const dim=s=>new Date(+s.slice(0,4),+s.slice(5,7),0).getDate();
 const lyDim=s=>new Date(+s.slice(0,4)-1,+s.slice(5,7),0).getDate();
-const band=d=>d==null?null:Math.min(Math.max(Math.floor(d/30+0.5)*30,60),180);
+// the nearest 15, 60-120 (user, 2026-10-14: "+15 interval ... like 60, 75, 90 etc till 120 ... 60 to 120 instead of 180")
+const band=d=>d==null?null:Math.min(Math.max(Math.floor(d/15+0.5)*15,60),120);
 const daysOf=(q,md,nd,nm)=>q>0&&nd?(md/nm)/(q/nd):null;
 const SUMS=['qty','mdq','ly_qty','ly_mdq','fixtures','plan_rs','rows','ly_rows','sq','sy','fq','pk'];
 // season (user, 9 Oct: "incorporate the seasonality trends from the Listing - Delisting Analyser App") - same rule as str_engine
 const seasonOf=x=>{const c=S.st.info.season_cut||[1.15,.85];return x==null?null:x>=c[0]?'peak':x<=c[1]?'off':'normal';};
-const lim=s=>(S.st.info.season_bands||{})[s]||S.st.info.base_band||[60,180];
-const bandS=(d,s)=>{if(d==null)return null;const [lo,hi]=lim(s);return Math.min(Math.max(Math.floor(d/30+0.5)*30,lo),hi);};
+const lim=s=>(S.st.info.season_bands||{})[s]||S.st.info.base_band||[60,120];
+const bandS=(d,s)=>{if(d==null)return null;const [lo,hi]=lim(s);return Math.min(Math.max(Math.floor(d/15+0.5)*15,lo),hi);};
 const bandOf=c=>c?(S.seasonal?c.band:c.base_band):null;
 // hover text (user, 9 Oct: "a reasonable hover message ... to make others understand of the choice you took based on data")
 const win=()=>{const m=S.st.info.months||[];return m.length?mon(m[0])+'–'+mon(m[m.length-1]):'the plan window';};
@@ -387,7 +388,10 @@ function peakSug(cells,c,ms,qd,cur){
   const q=run.reduce((s,j)=>s+qd(cells[j],j)[0],0),nd=run.reduce((s,j)=>s+qd(cells[j],j)[1],0),qpd=q/nd,d=c.mdq/(c.n_months||1)/qpd;
   return {qty:q,nd,qpd,days:d,band:bandS(d,'peak'),months:run.map(j=>ms[j]),ahead:cur!=='t'&&run[0]>cur};}
 const span=ms=>ms.length>1?`${mon(ms[0])}–${mon(ms[ms.length-1])}`:mon(ms[0]);
-const r30=d=>d==null?null:Math.floor(d/30+0.5)*30;
+const r30=d=>d==null?null:Math.floor(d/15+0.5)*15;
+// the forward-cover working (user, 2026-10-14: "standing in Mar ... take the MDQ ... move forward in months till i have 0 for Mar's MDQ")
+const coverTxt=c=>(c.cover||[]).map(w=>w.month==null?`then ${n0(w.used)} left ÷ ${n1(w.rate)}/day = ${n1(w.took)} d`:
+  w.left>0?`${mon(w.month)}: sells ${n0(w.used)} → ${n0(w.left)} left (${w.days} d)`:`${mon(w.month)}: ${n0(w.used)} ÷ ${n1(w.qty/w.days)}/day = ${n1(w.took)} d`).join(' · ');
 // Regular | Peak-oriented, one row per step of the working (user, 9 Oct: "remove the last year numbers in the table
 // those are baseless"). x = {per, q, nd} for this period
 function compare(c,p,x){
@@ -404,10 +408,11 @@ function compare(c,p,x){
     row('Qty',`${n0(x.q)} pcs in ${x.nd} days`,pk(`${n0(P.qty)} pcs in ${P.nd} days`))+
     row('Qty per day',`${n0(x.q)} ÷ ${x.nd} = <b>${n1(qpd)}</b>`,pk(`${n0(P.qty)} ÷ ${P.nd} = <b>${n1(P.qpd)}</b>`))+
     row('MDQ',`${n0(avg)}${c.n_months>1?` <span class="note">(${n0(c.mdq)} ÷ ${c.n_months} months)</span>`:''}`,pk(`${n0(avg)}`))+
-    row('STR days',`${n0(avg)} ÷ ${n1(qpd)} = <b>${n1(c.days)}</b>`,pk(`${n0(avg)} ÷ ${n1(P.qpd)} = <b>${n1(P.days)}</b>`))+
-    row('Nearest 30',`${r30(c.days)}`,pk(`${r30(P.days)}`))+
-    row('Range',rangeTxt,pk('60–180'))+
-    row('Suggested band',`<b class="bd">${bandOf(c)} days</b>${S.seasonal&&c.band!==c.base_band?` <span class="note">(${c.base_band} on 60–180)</span>`:''}`,
+    row('STR days',(c.cover&&c.cover.length?`MDQ ${n0(c.mdq)} sold down month by month: ${coverTxt(c)} = <b>${n1(c.days)}</b>`:
+      c.n_months>1?`the months' STR days, weighted by their MDQ = <b>${n1(c.days)}</b>`:`<b>${n1(c.days)}</b>`),pk(`${n0(avg)} ÷ ${n1(P.qpd)} = <b>${n1(P.days)}</b>`))+
+    row('Nearest 15',`${r30(c.days)}`,pk(`${r30(P.days)}`))+
+    row('Range',rangeTxt,pk('60–120'))+
+    row('Suggested band',`<b class="bd">${bandOf(c)} days</b>${S.seasonal&&c.band!==c.base_band?` <span class="note">(${c.base_band} on 60–120)</span>`:''}`,
       `<b class="bd">${reg?bandOf(c):P.band} days</b>`)+
     row('Sell-thru at MDQ',`${n0(x.q)} ÷ (${n0(x.q)} + ${n0(c.mdq)}) = ${pct(x.q/(x.q+c.mdq))}`,pk(`${n0(pq)} ÷ (${n0(pq)} + ${n0(c.mdq)}) = ${pct(pq/(pq+c.mdq))}`))+
     `</tbody></table>`;}
@@ -420,7 +425,7 @@ function seasonRows(c,fest,why){
     L('Season index',`${n2(c.season_idx)}× the average ${win()} month <span class="note">(this cluster x department, festivals in)</span>`+
       (c.season_year!=null?` · ${n2(c.season_year)}× the average month of the year <span class="note">(2022–25)</span>`:'')),
     ...(fest?[L('Festivals',fest)]:[]),
-    L('Rule',`<span class="note">peak ≥ ${cut[0]}× with a festival or ≥ ${cut[0]}× the year's average month; off ≤ ${cut[1]}×; band = days to the nearest 30 within the range</span>`)];
+    L('Rule',`<span class="note">peak ≥ ${cut[0]}× with a festival or ≥ ${cut[0]}× the year's average month; off ≤ ${cut[1]}×; band = days to the nearest 15 within the range</span>`)];
 }
 function calcAgg(title,c,fest,pk,per,lyPer){
   if(!c.rows)return calcBox(title,[L('STR','— <span class="note">'+(S.roll.has_plan?'no store has both a plan and fixtures here':'no sales plan loaded')+'</span>'),L('MDQ',n0(c.mdq)+' pcs')]);
@@ -518,8 +523,8 @@ function flat(cols){   // the rows on screen: top layer filtered + sorted, open 
   walk(applyGrid('roll',cols,S.roll.rows),0,[]);
   return out;
 }
-const FIG=[['band','Band','actual STR days rounded to the nearest 30, kept between 60 and 180'],
-  ['days','STR days','days the MDQ lasts at the planned selling rate: MDQ ÷ (planned qty ÷ days), over rows with both a plan and fixtures'],
+const FIG=[['band','Band','actual STR days rounded to the nearest 15, kept between 60 and 120'],
+  ['days','STR days',"days the month's MDQ lasts: sold down by that month's planned sales, then the next months', till none is left (rows with both a plan and fixtures)"],
   ['qty','Plan qty','planned qty: the sales plan’s own, else planned sales ÷ LY selling price'],['mdq','MDQ','fixtures × qty per fixture']];
 const cellOf=(r,i)=>i==='t'?r.total:r.months[i];
 const avgOf=(r,f)=>{const v=(r.months||[]).map(c=>c?.[f]||0).filter(x=>x>0);return v.length?v.reduce((a,b)=>a+b,0)/v.length:0;};   // the average month
@@ -570,7 +575,7 @@ function renderRoll(){
     po.length?`a month missing in one file ${po.length} (${po.join(', ')})`:''].filter(Boolean);
   const tn='▸ opens a row into the next layer; drag the layer chips to change the order; ✎ on a department opens its stores to edit fixtures; click a figure for its calculation; ▾ on any hierarchy chip searches / filters it (shown as a layer or not); click a header to sort. '+
     'The All row adds up the rows shown (after the header filters).',dn=
-    'Plan qty and MDQ are summed before the days are worked out; the 4-month figure = average MDQ ÷ planned qty per day.  Season = each cluster’s own curve from day-wise sales'+(i.season_built?` (built ${String(i.season_built).slice(0,16).replace('T',' ')})`:'')+'.'+
+    'Plan qty and MDQ are summed before the days are worked out; a month’s STR days = its MDQ sold down by its own and the next months’ planned sales; the 4-month figure = the months’ STR days weighted by their MDQ.  Season = each cluster’s own curve from day-wise sales'+(i.season_built?` (built ${String(i.season_built).slice(0,16).replace('T',' ')})`:'')+'.'+
     (lo.length?` Stores not compared: ${lo.join('; ')} - MDQ ${n0(cm.left_out_mdq)}, Rs ${n0(cm.left_out_rs)} left out.`:'')+
     (Object.keys(i.split_departments||{}).length?` Old department names split as in the core apps, fixtures / MDQ / plan by each part's last-year share (same store and month, else the chain's month; pieces for qty, value for Rs): ${Object.entries(i.split_departments).map(([o,n])=>o+' → '+n.join(' + ')).join('; ')}.`:'')+
     (i.qty_by_price_rows?` ${i.qty_by_price_rows} rows had no plan qty and use Rs ÷ LY selling price.`:'')+
@@ -585,7 +590,7 @@ async function renderMatrix(){
   const mf=gf();delete mf.division;
   let R;try{R=await getRoll('department',mf);}catch(e){return;}
   const vals=R.rows.map(r=>bandOf(r.total)??null),a=S.mx;
-  const bands=[...new Set([60,90,120,150,180,...vals.filter(v=>v!=null)])].sort((x,y)=>x-y).concat(vals.includes(null)?[null]:[]);
+  const bands=[...new Set([60,75,90,105,120,...vals.filter(v=>v!=null)])].sort((x,y)=>x-y).concat(vals.includes(null)?[null]:[]);
   const n=(d,b)=>R.rows.filter(r=>(!d||r.division===d)&&(bandOf(r.total)??null)===b).length;
   $('#mx').innerHTML=`<table class="mx"><thead><tr><th class="l">Departments by final band (4-month)${lfText()?' · '+h(lfText()):''}</th>${bands.map(b=>`<th>${b?b+' days':'No band'}</th>`).join('')}<th>Total</th></tr></thead><tbody>`+
     ['MENS','LADIES','KIDS',''].map(d=>`<tr${d?'':' class="tot"'}><td class="l"><b>${d||'All'}</b></td>`+bands.map(b=>{const k=n(d,b);

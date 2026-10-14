@@ -200,7 +200,7 @@ def _cells_wide(c, pre):
     """one period's figures as Excel columns"""
     return {f"{pre} season": c["season"], f"{pre} season index (vs window)": c["season_idx"], f"{pre} year index": c.get("season_year"),
             f"{pre} share of plan in festival months": c.get("fest_share"), f"{pre} STR band": c["band"],
-            f"{pre} base band (60-180)": c["base_band"], f"{pre} STR days": c["days"], f"{pre} LY days": c["ly_days"],
+            f"{pre} base band (60-120)": c["base_band"], f"{pre} STR days": c["days"], f"{pre} LY days": c["ly_days"],
             f"{pre} plan qty": c["qty"], f"{pre} MDQ": c["mdq"], f"{pre} LY qty": c["ly_qty"], f"{pre} plan Rs": c["plan_rs"],
             f"{pre} fixtures": c["fixtures"], f"{pre} stores": c.get("stores"),
             f"{pre} max STR %": c["str"], f"{pre} LY STR %": c["ly_str"]}
@@ -217,8 +217,11 @@ def workbook(df, months, has_plan, layers, info, filters):
     dly = df.month.map(lambda m: (m - 12).days_in_month).astype(float)
     ok = (df.mdq > 0) & (df.plan_qty > 0) & has_plan
     lyok = df.ly_known & (df.ly_q > 0)
-    days = np.where(ok, df.mdq / (df.plan_qty.where(df.plan_qty > 0) / dim), np.nan)
-    ly_days = np.where(lyok, df.mdq_base / (df.ly_q.where(df.ly_q > 0) / dly), np.nan)
+    # STR days by forward cover (2026-10-14): each month's MDQ sold down by its own and the later months' sales
+    fk = [c for c in ("store", "department", "display", "article") if c in df]
+    days = np.where(ok, se.forward_days(df, "plan_qty", "mdq", fk), np.nan) if has_plan else np.full(len(df), np.nan)
+    ly_days = np.where(lyok, se.forward_days(df.assign(_lq=df.ly_q.where(lyok, 0.0)), "_lq", "mdq_base", fk,
+                                             dim_of=lambda m: (m - 12).days_in_month), np.nan)
     d = pd.DataFrame({
         "division": df.division, "cluster": df.cluster, "store": df.store, "department": df.department, **({"display type": df.display} if "display" in df else {}), **({"article": df.article, "article cont % of the department's plan": df.cont,
                                          "cont % from": df.cont_from, "article cont % in its cluster": df.cont_cluster,
@@ -228,8 +231,9 @@ def workbook(df, months, has_plan, layers, info, filters):
         "MDQ = fixtures x qty per fixture": df.mdq, "edited": df.edited,
         "plan Rs": df.plan_rs, "plan qty": df.plan_qty, "plan qty from": df.qty_from, "LY avg selling price": df.asp,
         "price from": df.asp_from, "LY month": (df.month - 12).astype(str), "LY qty": df.ly_q, "LY Rs": df.ly_v,
-        "plan qty per day": np.where(ok, df.plan_qty / dim, np.nan), "STR days = MDQ / qty per day": days,
-        "LY days = MDQ (file) / LY qty per day": ly_days,
+        "plan qty per day": np.where(ok, df.plan_qty / dim, np.nan),
+        "STR days = MDQ sold down by this and the next months' plan": days,
+        "LY days = MDQ (file) sold down by this and the next months' LY sales": ly_days,
         "season base index (festival-free, cluster)": df.season_base, "festival days (store calendar)": df.fest_days,
         "festivals": df.festivals, "festival days x lift (per festival, learnt from every store that has it)": df.fest_detail,
         "festival lift (effective)": df.fest_lift,
@@ -237,7 +241,7 @@ def workbook(df, months, has_plan, layers, info, filters):
         "season index = year index / cluster x dept window average": df.season_idx, "season": df.season,
         "peak reason (festival / high sales vs the year)": df.peak_why})
     d["STR band (season)"] = [se.str_band(x, sea) for x, sea in zip(days, df.season)]
-    d["base band (60-180)"] = [se.str_band(x) for x in days]
+    d["base band (60-120)"] = [se.str_band(x) for x in days]
     d["LY band (season)"] = [se.str_band(x, sea) for x, sea in zip(ly_days, df.season)]
     d["max STR % = qty / (qty + MDQ)"] = np.where(ok, se.str_of(df.plan_qty, df.mdq), np.nan)
     d["LY STR %"] = np.where(lyok, se.str_of(df.ly_q, df.mdq_base), np.nan)
@@ -343,16 +347,28 @@ class H(BaseHTTPRequestHandler):
                 if d.empty:
                     return self._send(404, {"error": "No such department in the fixture plan."})
                 mi = {m: i for i, m in enumerate(months)}
+                # STR days by forward cover (2026-10-14), per store (and per display type for the display rows)
+                hp_ = bool(info.get("sales_plan"))
+                d = d.assign(fwd_days=se.forward_days(d, "plan_qty", "mdq", ["store"]) if hp_ else np.nan,
+                             fwd_ly_days=se.forward_days(d.assign(_lq=d.ly_q.where(d.ly_known, 0.0)), "_lq", "mdq_base", ["store"],
+                                                  dim_of=lambda m: (m - 12).days_in_month))
 
-                def cell(r):
+                def cell(r, src=None, by_disp=False):
                     dim, ldim = r.month.days_in_month, (r.month - 12).days_in_month
                     c = {"fixtures": r.fixtures, "fixtures_file": r.fixtures_file, "density": r.density, "mdq": r.mdq,
                          "mdq_base": r.mdq_base, "plan_rs": r.plan_rs, "plan_qty": r.plan_qty, "qty_from": r.qty_from,
                          "asp": r.asp, "asp_from": r.asp_from, "ly_q": r.ly_q, "n_days": dim, "ly_n_days": ldim,
                          "str": float(se.str_of(r.plan_qty, r.mdq)) if info.get("sales_plan") and r.mdq > 0 and r.plan_qty > 0 else None,
                          "ly_str": float(se.str_of(r.ly_q, r.mdq_base)) if r.ly_known and r.ly_q > 0 else None,
-                         "days": se.days_of(r.plan_qty, r.mdq, dim) if info.get("sales_plan") and r.mdq > 0 else None,
-                         "ly_days": se.days_of(r.ly_q, r.mdq_base, ldim) if r.ly_known else None, "edited": r.edited}
+                         "days": (None if r.fwd_days != r.fwd_days else float(r.fwd_days)) if info.get("sales_plan") and r.mdq > 0 else None,
+                         "ly_days": (None if r.fwd_ly_days != r.fwd_ly_days else float(r.fwd_ly_days)) if r.ly_known else None, "edited": r.edited}
+                    if c["days"] is not None and src is not None:   # the forward-cover working for the pop-up (2026-10-14)
+                        nx = src[(src.store == r.store) & (src.month >= r.month)]
+                        if by_disp:
+                            nx = nx[nx.display == r.display]
+                        nx = nx.sort_values("month")
+                        c["cover"] = se.cover_walk(r.mdq, nx.plan_qty.astype(float).tolist(),
+                                                   [m.days_in_month for m in nx.month], [str(m) for m in nx.month])
                     sea = r.season
                     c.update(season=sea, season_idx=r.season_idx, band=se.str_band(c["days"], sea), base_band=se.str_band(c["days"]),
                              season_base=r.season_base, fest_days=r.fest_days, festivals=r.festivals, fest_lift=r.fest_lift, fest_detail=r.fest_detail,
@@ -365,16 +381,19 @@ class H(BaseHTTPRequestHandler):
                 # and a read-only row per display type with its own STR
                 dv = display_df()
                 dv = dv[dv.department == dept]
+                dv = dv.assign(fwd_days=se.forward_days(dv, "plan_qty", "mdq", ["store", "display"]) if hp_ else np.nan,
+                               fwd_ly_days=se.forward_days(dv.assign(_lq=dv.ly_q.where(dv.ly_known, 0.0)), "_lq", "mdq_base",
+                                                    ["store", "display"], dim_of=lambda m: (m - 12).days_in_month))
                 kinds = dv.groupby("store").display.unique()
                 by = {}
                 for r in d.itertuples():
                     if r.month in mi:
                         ks = kinds.get(r.store, [se.NO_DISP])
                         key = (r.store, ks[0] if len(ks) == 1 else "All")
-                        by.setdefault(key, [None] * len(months))[mi[r.month]] = cell(r)
+                        by.setdefault(key, [None] * len(months))[mi[r.month]] = cell(r, d)
                 for r in dv.itertuples():
                     if r.month in mi and len(kinds.get(r.store, [])) > 1:
-                        by.setdefault((r.store, r.display), [None] * len(months))[mi[r.month]] = cell(r)
+                        by.setdefault((r.store, r.display), [None] * len(months))[mi[r.month]] = cell(r, dv, True)
                 cl = dict(zip(d.store, d.cluster))
                 order = {"All": 0, "TABLE": 1, "NON_TABLE": 2}
                 rows = [{"store": st, "display": k, "edit": k == "All" or len(kinds.get(st, [])) <= 1, "cluster": cl.get(st),

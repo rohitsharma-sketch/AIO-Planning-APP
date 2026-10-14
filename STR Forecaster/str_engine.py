@@ -702,9 +702,66 @@ def days_of(qty, mdq, n_days, n_months=1):
     return float((mdq / n_months) / (qty / n_days))
 
 
+def cover_days(mdq, qtys, dims):
+    """STR days of a month by forward cover (user, 2026-10-14: "If i am standing in Mar i will take the MDQ for the month
+    and will divide the Avg Sales Per Day & Calculate if the MDQ is being able to fulfil with the current month's sales
+    or not, if not i will move forward in months till i have 0 for Mar's MDQ"): the month's MDQ is sold down by that
+    month's planned sales, then the next month's, and so on; the days it takes are its STR days. qtys / dims = the
+    planned qty and days of this month and the ones after it. A month with no sales lets its days pass; MDQ still left
+    after the last month carries on at the last selling rate. None when this month has no sales or no MDQ."""
+    if not mdq or mdq <= 0 or not qtys or not qtys[0] or qtys[0] <= 0:
+        return None
+    left, days, rate = float(mdq), 0.0, None
+    for q, d in zip(qtys, dims):
+        if q and q > 0:
+            rate = q / d
+            if left <= q:
+                return days + left / rate
+            left -= q
+        days += d
+    return days + left / rate
+
+
+def cover_walk(mdq, qtys, dims, labels):
+    """cover_days step by step, for the pop-up: [{month, qty, days, used, left, took}] - took = the days that month adds;
+    the last step may be "carried on at the last rate" (month None)."""
+    if cover_days(mdq, qtys, dims) is None:
+        return []
+    left, rate, out = float(mdq), None, []
+    for q, d, lab in zip(qtys, dims, labels):
+        if q and q > 0:
+            rate = q / d
+            if left <= q:
+                out.append({"month": lab, "qty": q, "days": d, "used": left, "left": 0.0, "took": left / rate})
+                return out
+            out.append({"month": lab, "qty": q, "days": d, "used": q, "left": left - q, "took": d})
+            left -= q
+        else:
+            out.append({"month": lab, "qty": 0.0, "days": d, "used": 0.0, "left": left, "took": d})
+    out.append({"month": None, "qty": None, "days": None, "rate": rate, "used": left, "left": 0.0, "took": left / rate})
+    return out
+
+
+def forward_days(df, qty_col, mdq_col, keys, dim_of=lambda m: m.days_in_month):
+    """cover_days for every row of a store x department (x display / article) x month frame: each row's MDQ sold down
+    by its own and its later months' qty. Returns a float array aligned with df (NaN where None)."""
+    out = np.full(len(df), np.nan)
+    pos = {i: n for n, i in enumerate(df.index)}
+    for _, g in df.sort_values("month").groupby(keys, sort=False):
+        q, md = g[qty_col].astype(float).tolist(), g[mdq_col].astype(float).tolist()
+        dims = [float(dim_of(m)) for m in g["month"]]
+        for k, i in enumerate(g.index):
+            v = cover_days(md[k], q[k:], dims[k:])
+            if v is not None:
+                out[pos[i]] = v
+    return out
+
+
 # user, 9 Oct: "give me STR days according to the nearest round ranging from a store base minimum to 60 till 180 max
-# after the actual STR is calculated" - actual days rounded to the nearest 30, kept between 60 and 180
-BAND_STEP, BAND_MIN, BAND_MAX = 30, 60, 180
+# after the actual STR is calculated" - actual days rounded to the nearest 30, kept between 60 and 180; then (user,
+# 2026-10-14) "introduce +15 interval in between too for accuracy like 60, 75, 90 etc till 120 ... revise the ceiling to
+# being 60 to 120 instead of the earlier 180" - the nearest 15, kept between 60 and 120
+BAND_STEP, BAND_MIN, BAND_MAX = 15, 60, 120
 
 
 # user, 9 Oct: "incorporate the seasonality trends from the Listing - Delisting Analyser App where peak seasons can be
@@ -763,8 +820,8 @@ def season_of(idx):
 
 
 def str_band(days, season=None):
-    """54 -> 60, 75 -> 90 (half rounds up), 104 -> 90, 105 -> 120, 250 -> 180; None stays None. With a season the
-    limits are that season's (all 60-180 today), never outside BAND_MIN-BAND_MAX"""
+    """54 -> 60, 67.5 -> 75 (half rounds up), 74 -> 75, 82 -> 75, 104 -> 105, 250 -> 120; None stays None. With a season
+    the limits are that season's (all 60-120 today), never outside BAND_MIN-BAND_MAX"""
     if days is None or days != days:
         return None
     lo, hi = SEASON_BANDS.get(season, (BAND_MIN, BAND_MAX))
@@ -821,14 +878,35 @@ def rollup(df, by, months, has_plan=True):
         keys, mi = t[0][:-1], t[0][-1]
         acc.setdefault(keys, [[0.0] * len(V) for _ in months])[mi] = list(t[1:])
     out = []
+    def forward(c, i, ms, qi, mi, dims, key, band_key):
+        # STR days by forward cover (2026-10-14): month i's MDQ sold down by its own and the later months' sales
+        v = cover_days(ms[i][mi], [s[qi] for s in ms[i:]], dims[i:])
+        c[key] = v
+        c[band_key] = str_band(v, c["season"])
+        return v
+
     for keys, ms in acc.items():
         row = dict(zip(by, keys))
         cells = [cell(s, dim[i], 1 if s[2] else 0, ldim[i], 1 if s[5] else 0) for i, s in enumerate(ms)]
+        for i, c in enumerate(cells):
+            if ms[i][2]:
+                forward(c, i, ms, 0, 1, dim, "days", "band")
+                c["base_band"] = str_band(c["days"])
+                c["cover"] = cover_walk(ms[i][1], [s[0] for s in ms[i:]], dim[i:], [str(m) for m in months[i:]])
+            if ms[i][5]:
+                forward(c, i, ms, 3, 4, ldim, "ly_days", "ly_band")
+                c["ly_base_band"] = str_band(c["ly_days"])
         for i, c in enumerate(cells):
             c["stores"] = int(sc.get(tuple(keys) + (i,), 0))
         tot = [sum(s[j] for s in ms) for j in range(len(V))]
         pm, lm = [i for i, s in enumerate(ms) if s[2]], [i for i, s in enumerate(ms) if s[5]]
         tc = cell(tot, sum(dim[i] for i in pm), len(pm), sum(ldim[i] for i in lm), len(lm))
+        # the 4-month STR days: the months' forward-cover days, weighted by their MDQ (2026-10-14)
+        for key, band_key, base_key, idx, mdq_i in (("days", "band", "base_band", pm, 1), ("ly_days", "ly_band", "ly_base_band", lm, 4)):
+            w = [(cells[i][key], ms[i][mdq_i]) for i in idx if cells[i][key] is not None and ms[i][mdq_i] > 0]
+            if w:
+                tc[key] = sum(v * m for v, m in w) / sum(m for _, m in w)
+                tc[band_key], tc[base_key] = str_band(tc[key], tc["season"]), str_band(tc[key])
         fm, sm = [c["fixtures"] for c in cells if c["fixtures"] > 0], [c["stores"] for c in cells if c["stores"]]
         # the 4-month figures: the average month (over the months that have fixtures / stores)
         tc["fixtures_avg"], tc["stores"] = (sum(fm) / len(fm) if fm else 0.0), (sum(sm) / len(sm) if sm else 0.0)
@@ -872,13 +950,24 @@ if __name__ == "__main__":   # self-check of the maths on tiny frames (no DB)
     assert r["total"]["stores"] == 3 and r["total"]["fixtures_avg"] == 5.0       # one month: the average is that month
     t = r["months"][0]
     assert abs(t["days"] - 150 / (30 / 31)) < 1e-9 and abs(t["ly_days"] - 200 / (10 / 31)) < 1e-9   # Mar'27 / Mar'26: 31 days
-    assert [str_band(x) for x in (20, 54, 75, 104, 105, 250, None)] == [60, 60, 90, 90, 120, 180, None]
-    assert t["band"] == 150 and t["ly_band"] == 180          # 155 days -> 150; 620 days -> capped at 180
-    assert (str_band(45, "peak"), str_band(150, "peak"), str_band(40, "off"), str_band(40, "normal")) == (60, 150, 60, 60)
+    assert [str_band(x) for x in (20, 54, 67.5, 74, 82, 104, 105, 250, None)] == [60, 60, 75, 75, 75, 105, 105, 120, None]
+    assert t["band"] == 120 and t["ly_band"] == 120          # 155 days / 620 days -> capped at 120
+    assert (str_band(45, "peak"), str_band(150, "peak"), str_band(40, "off"), str_band(40, "normal")) == (60, 120, 60, 60)
     assert min(str_band(d, s) for d in (1, 20, 44, 400) for s in ("peak", "normal", "off", None)) >= BAND_MIN   # never under 60
+    assert max(str_band(d, s) for d in (1, 130, 400) for s in ("peak", "normal", "off", None)) <= BAND_MAX   # never over 120
+    # forward cover: 300 MDQ; Mar sells 100 in 31 days, Apr 150 in 30, May 310 in 31 -> 31 + 30 + 50 / 10 = 66 days
+    assert abs(cover_days(300, [100, 150, 310], [31, 30, 31]) - 66.0) < 1e-9
+    assert abs(cover_days(50, [100, 150], [31, 30]) - 15.5) < 1e-9                    # covered inside its own month
+    assert abs(cover_days(400, [100, 0, 100], [31, 30, 31]) - (92 + 200 / (100 / 31))) < 1e-9   # empty month passes; then the last rate
+    assert cover_days(0, [10], [31]) is None and cover_days(10, [0, 10], [31, 30]) is None
+    fw = pd.DataFrame({"month": [P("2027-03"), P("2027-04"), P("2027-05")], "store": ["S1"] * 3, "q": [100.0, 150.0, 310.0], "m": [300.0, 200.0, 100.0]})
+    assert np.allclose(forward_days(fw, "q", "m", ["store"]), [66.0, 30 + 50 / 10, 100 / 10])
+    wk = cover_walk(300, [100, 150, 310], [31, 30, 31], ["Mar", "Apr", "May"])
+    assert [round(x["took"], 6) for x in wk] == [31, 30, 5.0] and abs(sum(x["took"] for x in wk) - 66.0) < 1e-9 and wk[-1]["left"] == 0
+    assert cover_walk(400, [100, 0, 100], [31, 30, 31], ["Mar", "Apr", "May"])[-1]["month"] is None   # carried on at the last rate
     assert (season_of(1.2), season_of(1.0), season_of(0.8), season_of(None)) == ("peak", "normal", "off", None)
     rs = rollup(d.assign(season_idx=1.3), ["division"], [P("2027-03")])[0]["months"][0]
-    assert rs["season"] == "peak" and rs["band"] == 150 and rs["base_band"] == 150   # 155 days: peak keeps the 180 max
+    assert rs["season"] == "peak" and rs["band"] == 120 and rs["base_band"] == 120   # 155 days: the 120 ceiling
     assert (_tag(" core"), _tag("Seasonal"), _tag("x"), _tag(None)) == ("CORE", "SEASONAL", None, None)
     sp = split_depts(pd.DataFrame({"month": [P("2027-03")] * 2, "store": ["S1"] * 2, "division": ["MENS"] * 2,
                                    "department": ["MSE_PYJAMA", "MSE_TXTL PYJAMA"], "plan_rs": [100.0, 10.0], "q": [np.nan, 4.0]}), {"plan_rs": "sl_v", "q": "sl_q"})

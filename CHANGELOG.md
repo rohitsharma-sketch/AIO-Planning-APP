@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### STR Forecaster: STR days by forward cover; bands every 15 days, 60-120
+- **Asked (user):** "If i am standing in Mar i will take the MDQ for the month and will divide the Avg Sales Per Day & Calculate if the MDQ is being able to fulfil with the current month's sales or not, if not i will move forward in months till i have 0 for Mar's MDQ ... introduce +15 interval in between too ... like 60, 75, 90 etc till 120 ... revise the ceiling to being 60 to 120 instead of the earlier 180".
+- `str_engine.cover_days` / `forward_days` / `cover_walk`: a month's STR days = its MDQ sold down by that month's planned sales, then the next months', till none is left (a month with no sales lets its days pass; past the last plan month at the last selling rate). Used for every roll-up month, the department editor's store / display-type cells, and the Excel export; LY days the same way on LY sales. The 4-month figure = the months' STR days weighted by their MDQ. The rest unchanged (MDQ, planned qty, seasons, peak-oriented column).
+- Band: the nearest 15, kept between 60 and 120 (`BAND_STEP, BAND_MIN, BAND_MAX = 15, 60, 120`; was nearest 30, 60-180), in the engine and the page. The pop-up's STR days row shows the walk (e.g. KI_AP_BABA SUIT HSR H/S Mar'27: MDQ 1,94,210 - Mar sells 84,671 (31 d), Apr 69,248 (30 d), May the last 40,291 in 18.6 d = 79.6 days -> 75; the old MDQ / per-day gave 71.1).
+- Result: department bands (4-month) 60: 51, 75: 11, 90: 15, 105: 7, 120: 27. Self-check extended (cover, walk, 15-step band, 120 ceiling).
+
 ### Sales Plan MRP Re-apportionment: LY sales from the Calendar app, Actual / Reindexed toggle
 - **Asked (user):** "link the sales from the backend sales of the calendar app - keep the reindexed and actual toggle with this".
 - The input card is now "LY Sales · Calendar app" with an **Actual / Reindexed** switch (saved on the server, `Output/_sales_basis.json`; `GET/POST /api/planning/mrp-reapportionment/sales-basis`). The Calendar keeps no MRP detail, so the MRP x display x attribute rows still come from the Calendar engine's own data-lake reader; Actual ties them to the Calendar's `actual_dept` snapshot (LY months, as before), Reindexed puts every store x department x month onto the Calendar's reindexed `trend_shifted_dept` figure on the plan months (Mar-Jun 2027), each row keeping its LY share of that store x department (its mix over all the months when that month has none).
