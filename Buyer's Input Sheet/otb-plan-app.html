@@ -3692,9 +3692,12 @@ function buildRows_division(){
 // pipeline (cellVal, KPI, GT, export) needs no attribute-specific branching
 // beyond recognizing the synthetic _attrKey() row key.
 function buildRows_attr(){
+  // the Buyer's Plan's own rules (buildRows_dept, user 2026-10-14: "they all should display the same output as
+  // highlighted in the buyer's plan"): an inactive department's LY counts in its division with a plan of 0; contrib is
+  // against the division's active LY - so division, subtotal and grand totals equal the Buyer's Plan's
   const c=cols();
   const rows=[];
-  let grandLY=0,grandTY=0,anyGrand=false;
+  let grandLY=0,grandTY=0,anyGrand=false,grandAll=0;
   DVDATA.forEach(dv=>{
     if(S.filters.div.size&&!S.filters.div.has(dv.id))return;
     if(S.divTab&&dv.id!==S.divTab)return;
@@ -3708,11 +3711,12 @@ function buildRows_attr(){
       if(!attrSecs[attr]){attrSecs[attr]=[];attrOrder.push(attr);}
       attrSecs[attr].push(sec);
     });
-    let dvLY=0,dvTY=0,anyDv=false;
+    let dvLY=0,dvTY=0,anyDv=false,dvOff=0;
     const groupRows=[];
     attrOrder.forEach(attr=>{
       const allSecs=attrSecs[attr];
       const activeSecs=allSecs.filter(sec=>!S.hiddenSecs.has(sec.id));
+      allSecs.forEach(sec=>{if(S.hiddenSecs.has(sec.id))c.forEach(mi=>{dvOff+=_secMonLY(sec,dv,mi,divAnnual);});});
       const inactive=activeSecs.length===0;
       // All its depts inactive -> the group is only on the Inactive Depts sheet, like buildRows_dept (2026-09-29).
       if(inactive)return;
@@ -3740,13 +3744,15 @@ function buildRows_attr(){
         _filled:inactive?0:filled,_tot:inactive?0:c.length,
         _contrib:null,_divId:dv.id,_attr:attr,...(inactive?{_inactiveBuyer:true}:{})});
     });
+    dvLY+=dvOff;
     grandLY+=dvLY;if(anyDv){anyGrand=true;grandTY+=dvTY;}
-    groupRows.forEach(r=>r._contrib=dvLY>0?(r._ly/dvLY*100):null);
+    const dvAll=_divLYAll(dv,c);grandAll+=dvAll;
+    groupRows.forEach(r=>r._contrib=dvAll>0?(r._ly/dvAll*100):null);
     const dvTYByMon={},dvLYByMon={};
     c.forEach(mi=>{
       let mly=0,mty=0;
       dv.secs.forEach(sec=>{
-        if(S.hiddenSecs.has(sec.id))return;
+        if(S.hiddenSecs.has(sec.id)){mly+=_secMonLY(sec,dv,mi);return;}   // inactive: LY counts, plan 0 (as the Buyer's Plan)
         const ml=_secMonLY(sec,dv,mi);mly+=ml;
         const g=S.inputs[sec.id+'__'+mi];
         mty+=g!=null?ml*(1+g/100):ml;
@@ -3758,7 +3764,7 @@ function buildRows_attr(){
     rows.push(...groupRows);
     if(groupRows.length)rows.push({_isTot:true,_name:'Subtotal',_ly:dvLY,_ty:anyDv?dvTY:null,_filled:0,_tot:0});
   });
-  rows.filter(r=>!r._isGrpHd&&!r._isTot).forEach(r=>r._contrib=grandLY>0?(r._ly/grandLY*100):null);
+  rows.filter(r=>!r._isGrpHd&&!r._isTot).forEach(r=>r._contrib=grandAll>0?(r._ly/grandAll*100):null);
   const grandTYByMon={},grandLYByMon={};
   rows.filter(r=>r._isGrpHd).forEach(r=>{
     c.forEach(mi=>{
@@ -4142,14 +4148,14 @@ function buildRows_summary(){
     c.forEach(mi=>{
       let mLY=0,mTY=0,anyM=false;
       dv.secs.forEach(sec=>{
-        if(S.hiddenSecs.has(sec.id))return;
         if(S.filters.attr.size&&!S.filters.attr.has(sec.attr))return;
         if(S.filters.sec.size&&!(DEPT_TO_SEC[sec.id]&&S.filters.sec.has(DEPT_TO_SEC[sec.id])))return;
         if(S.filters.dept!==null&&!S.filters.dept.has(sec.id))return;
         const mly=_secMonLY(sec,dv,mi);
         mLY+=mly;
+        if(S.hiddenSecs.has(sec.id))return;   // inactive: its LY counts, its plan is 0 - the Buyer's Plan's rule (2026-10-14)
         const g=S.inputs[sec.id+'__'+mi];
-        if(g!=null){mTY+=mly*(1+g/100);anyM=true;}
+        mTY+=g!=null?mly*(1+g/100):mly;anyM=true;   // no growth typed = plan at LY, as the Buyer's Plan
       });
       dvLY+=mLY;dvLYByMon[mi]=mLY;
       gLYByMon[mi]=(gLYByMon[mi]||0)+mLY;
@@ -4173,12 +4179,10 @@ function buildRows_inactive(){
       (!S.filters.attr.size||S.filters.attr.has(s.attr))&&
       (!S.filters.sec.size||!!(DEPT_TO_SEC[s.id]&&S.filters.sec.has(DEPT_TO_SEC[s.id])))).forEach(sec=>{
       const secLY=c.reduce((a,mi)=>a+_secMonLY(sec,dv,mi),0);
-      const tyByMon={};let secTY=0,any=false;
-      c.forEach(mi=>{
-        const mly=_secMonLY(sec,dv,mi);
-        const g=S.inputs[sec.id+'__'+mi];
-        if(g!=null){tyByMon[mi]=mly*(1+g/100);secTY+=tyByMon[mi];any=true;}
-      });
+      // plan 0 while inactive - what the Buyer's Plan and Sales Plan count for it (2026-10-14: it showed LY x its
+      // growth, so an inactive department at 0% read as planned at LY here only)
+      const tyByMon={};let secTY=0,any=true;
+      c.forEach(mi=>{tyByMon[mi]=0;});
       const phase=S.manualInactive.has(sec.id)?'p2':'p1';
       rows.push({_annLY:sec.ly,_lyMo:sec.lyMo,_ly:secLY,_ty:any?secTY:null,_tyByMon:tyByMon,
         _key:sec.id,_name:sec.nm,_d2:dv.nm,_divId:dv.id,_attr:sec.attr,

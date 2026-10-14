@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### BIS reports = the Buyer's Plan (latest iteration)
+- **Asked (user):** "patch the rest of the modules to buyer's plan's latest iteration. they all should display the same output as highlighted in the buyer's plan as per the respective nomenclature and hierarchy specified."
+- Found on Iteration 4: plan ₹430.4 Cr everywhere, but LY ₹388.8 Cr (+10.7%) on Buyer's Plan / Department Summary vs ₹386.7 Cr (+11.3%) on Division / Attribute Summary - those two left the inactive departments' LY out; Division Summary also left a department with no growth typed out of TY (the Buyer's Plan plans it at LY); Inactive Depts showed LY x the department's growth though its plan is 0.
+- Division Summary and Attribute Summary now follow the Buyer's Plan's rules (buildRows_dept): an inactive department's LY counts in its division with a plan of 0, no growth typed = plan at LY, Attribute contrib against the division's active LY. Inactive Depts shows plan 0.
+- Checked on Iteration 4: Division and Attribute Summary = Buyer's Plan for every division x month and the grand total, LY and plan (0 differences at 1e-6): LY ₹388.84 Cr, plan ₹430.45 Cr, +10.7%; Inactive Depts 60 departments, plan 0.
+
 ### Sales Plan iterations: header picker (as BIS's) + Saved plans tiles on Home
 - **Asked (user):** "how to save plan iterations and give me the same features as this button in similar fashion, and i want the saved plans to be highlighted here as a tile so that i can easily view the plan and compare it with the new iteration if reauired".
 - Top bar, every page: plan iteration picker - Live plan / each saved iteration ("name · date") - picking one opens it on Final Results; then 💾 Save to the iteration in use, ⧉ Save as new iteration…, ✎ Rename a version…, ✕ Remove an iteration… (`components/VersionPicker.jsx`).
