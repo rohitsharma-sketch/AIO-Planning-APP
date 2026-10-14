@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### ASP master kept in memory
+- **Asked (user):** "keep the ASP masters in cache donot parse on every run".
+- `display_type_engine.load_asp()`: dt_asp.json is parsed once per file version and kept; Import / Add missing write the file, so the next read takes the new one. The Qty run, the ASP preview, status, export / template, fill and the check-up (versions, Qty check, Rectify) all read it from there. Check-up results unchanged.
+
 ### Reconciliation check-up: latency
 - **Asked (user):** "fix the latency issue in this module" (the check-up and the 8-decimal table sat on "Checking…").
 - The page opens on the last check-up while nothing it reads has changed (`plan_checkup.checkup`: plan / stamp / ASP / Display Type run / Qty / MRP Cont % / New Departments / Department Master / season file times, the re-apportionment key, the versions); "Check again" (`?fresh=1`), Rectify and Sign off check anew. 8010 runs it in the background at start, after the trees.

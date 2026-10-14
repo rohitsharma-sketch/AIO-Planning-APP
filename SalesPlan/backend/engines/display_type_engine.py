@@ -37,6 +37,21 @@ def _load(path):
             return json.load(f)
     return None
 
+_ASP_MEM: dict = {}
+
+
+def load_asp():
+    """The ASP master (dt_asp.json), parsed once per file version and kept (user, 2026-10-14: "keep the ASP masters in
+    cache do not parse on every run") - re-read only when an Import / Add missing writes the file. Read-only: callers
+    must not change what it returns (fill_missing copies before merging)."""
+    if not os.path.exists(DT_ASP_PATH):
+        return None
+    mt = (DT_ASP_PATH, os.path.getmtime(DT_ASP_PATH))
+    if _ASP_MEM.get("mt") != mt:
+        _ASP_MEM.update(mt=mt, v=_load(DT_ASP_PATH))
+    return _ASP_MEM["v"]
+
+
 def _save(path, data):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False)
@@ -66,7 +81,7 @@ def _derive_months(mrp_plan: dict) -> list[str]:
 
 @router.get("/status")
 def status():
-    asp     = _load(DT_ASP_PATH)
+    asp     = load_asp()
     result  = _load(DT_RESULT_PATH)
     qty     = _load(DT_QTY_PATH)
     try:   # the MRP split every MRP reader uses (mrp_plan.json alone is gone since the re-apportioned shares, 2026-10-14)
@@ -408,7 +423,7 @@ async def import_asp(file: UploadFile = File(...), mode: str = "replace"):
     records, periods, level = asp_from_frame(df)
     if not records:
         raise HTTPException(400, "No ASP rows in the file")
-    cur = _load(DT_ASP_PATH)
+    cur = load_asp()
     if mode == "fill" and cur:
         out, added, filled = fill_missing(cur, records, periods, file.filename, level)
         _save(DT_ASP_PATH, out)
@@ -437,7 +452,7 @@ def asp_lookup(data: dict, dept, mrp, dt, month) -> tuple:
 @router.get("/asp")
 def get_asp_preview():
     """The ASP in use, as the preview shows it (company level, Rs per piece)."""
-    a = _load(DT_ASP_PATH)
+    a = load_asp()
     if not a:
         raise HTTPException(404, "No ASP imported yet")
     def mk(r):
@@ -453,7 +468,7 @@ def get_asp_preview():
 def asp_template_frame() -> tuple:
     """(DataFrame in the template layout, filled?) - the ASP in use, else a blank template of every department x MRP x
     display type the plan splits into (the MRP split x the LY display types), on the plan's periods."""
-    a = _load(DT_ASP_PATH)
+    a = load_asp()
     if a:
         periods = a.get("months") or []
         rows = [{"Division": r.get("division", ""), "Department": r["dept"], "MRP": int(float(r["mrp"])),
@@ -720,7 +735,7 @@ def validate():
 @router.get("/run-qty")
 def run_qty():
     result = _load(DT_RESULT_PATH)
-    asp    = _load(DT_ASP_PATH)
+    asp    = load_asp()
     if not result: raise HTTPException(400, "Run plan first")
     if not asp:    raise HTTPException(400, "ASP not imported")
 

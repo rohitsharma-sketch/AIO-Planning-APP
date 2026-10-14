@@ -137,8 +137,8 @@ def versions(source, at, plan) -> dict:
     rs = read_shares() or {}
     v["mrp"] = (f"re-apportionment shares {rs.get('built_at', '')[:16].replace('T', ' ')} on {rs.get('master')}, "
                 f"{rs.get('basis')} basis") if rs else "no re-apportionment shares"
-    from engines.display_type_engine import _load, DT_ASP_PATH, DT_RESULT_PATH, DT_QTY_PATH
-    asp = _load(DT_ASP_PATH)
+    from engines.display_type_engine import load_asp, DT_RESULT_PATH, DT_QTY_PATH
+    asp = load_asp()
     v["asp"] = f"{asp.get('source')} ({asp.get('imported_at')}, {asp.get('count')} rows)" if asp else "no ASP imported"
     # the run times from the files' save times - not a load of the ~100 MB run files (2026-10-14 latency)
     when = lambda f: datetime.datetime.fromtimestamp(os.path.getmtime(f)).strftime("%Y-%m-%d %H:%M:%S") if os.path.exists(f) else None   # noqa: E731
@@ -348,7 +348,7 @@ def mrp_checks(gm=None, new=None) -> list:
     from engines.final_results_engine import _load_dept_attr_map
     from engines.mrp_plan_engine import get_source
     from engines.mrp_reapportionment_engine import read_shares, _find_mapping_file, get_basis, _compare, _plan_period
-    from engines.display_type_engine import _load, DT_ASP_PATH, DT_RESULT_PATH, _asp_key, MIX_NOTE, asp_lookup
+    from engines.display_type_engine import _load, load_asp, DT_RESULT_PATH, _asp_key, MIX_NOTE, asp_lookup
     out = []
     cube, am = gv._cube(), _load_dept_attr_map()
     dix, mix, xix = gv._index(cube, am, False), gv._mrp_index(cube, am, False), gv._display_index(cube, am, False)
@@ -442,7 +442,7 @@ def mrp_checks(gm=None, new=None) -> list:
                            note="Off = the plan, the MRP split or the display mix changed after the run; Rectify re-runs it."))
 
     st6 = "Qty (ASP master)"
-    asp = _load(DT_ASP_PATH)
+    asp = load_asp()
     proj_all = {k: v for k, v in _sum_by(xix, ("division", "department", "attribute", "mrp", "display", "month")).items()
                 if k[4] != "-" and v[1] > 1e-9}
     proj = {k: v for k, v in proj_all.items() if _in(k[2], ins)}
@@ -621,7 +621,7 @@ def rectify() -> dict:
         log.append(f"Display Type run: {r['rows']:,} rows")
         v = dte.validate()
         log.append(f"Display Type validation: {v['errors']} errors, {v['warnings']} warnings")
-        if dte._load(dte.DT_ASP_PATH):
+        if dte.load_asp():
             q = dte.run_qty()
             log.append(f"Qty run: {q['rows']:,} rows, {q['missing_asp']:,} without an ASP")
     except Exception as e:   # noqa: BLE001 - say where it stopped
