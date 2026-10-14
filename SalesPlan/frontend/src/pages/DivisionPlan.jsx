@@ -51,7 +51,7 @@ export default function DivisionPlan() {
     a.href = url
     a.download = 'division_plan.csv'
     a.click()
-    URL.revokeObjectURL(url)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)   // revoked at once, some browsers dropped the download
   }
 
   const totalGrowth = cfg && cfg.total_ly ? (cfg.total_plan / cfg.total_ly - 1) * 100 : null
@@ -67,7 +67,7 @@ export default function DivisionPlan() {
 
         {cfg && (<>
           <div style={{ ...card, padding: '12px 18px', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 13 }}>
-            <span style={{ flex: 1, color: theme.textPrimary }}>
+            <span style={{ flex: '1 1 420px', color: theme.textPrimary }}>
               <strong>{cfg.source}</strong> · Mar'27 – Jun'27 · like-for-like stores, as in BIS · {cfg.n_divisions} divisions (KLM)
               <span style={{ color: theme.textMuted, marginLeft: 8 }}>· LY base and plan are fixed by the AOP publish; change the plan in BIS{cfg.bis_saved_at ? ` · BIS last saved ${cfg.bis_saved_at} - every division is held on its AOP, so a BIS save changes departments (Growth Matrix, Final Results), not these totals` : ''}</span>
             </span>
@@ -92,53 +92,7 @@ export default function DivisionPlan() {
             </details>
           </div>
 
-          <div className="sp-slim" style={{ marginBottom: 18 }}>
-            <span title={`₹ ${L(cfg.total_ly)} L`}>LY Base MAMJ <b>₹ {Cr(cfg.total_ly)} Cr</b></span>
-            <span title={`₹ ${L(cfg.total_plan)} L`}>Plan MAMJ <b style={{ color: theme.primary }}>₹ {Cr(cfg.total_plan)} Cr</b></span>
-            <span>Plan Growth <b style={{ color: theme.accent }}>{pct(totalGrowth)}</b></span>
-          </div>
-
-          <div style={{ ...card, marginBottom: 24, overflow: 'hidden' }}>
-            <div style={{ padding: '14px 20px', borderBottom: `1px solid ${theme.border}`, fontSize: 14, fontWeight: 600, color: theme.textPrimary }}>
-              Division Plan (as in BIS)
-            </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr style={{ background: theme.surfaceAlt }}>
-                    <th style={th}>Division</th>
-                    {cfg.divisions[0]?.months.map(m => <th key={m.month} style={th}>{m.month} LY / Plan (₹ Cr)</th>)}
-                    <th style={th}>LY Base MAMJ (₹ Cr)</th>
-                    <th style={th}>Plan MAMJ (₹ Cr)</th>
-                    <th style={th}>Growth %</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cfg.divisions.map((d, idx) => (
-                    <tr key={d.division_name} style={{ background: idx % 2 === 0 ? theme.surface : theme.surfaceAlt }}>
-                      <td style={{ ...td, fontWeight: 600, color: theme.textPrimary }}>{d.division_name}</td>
-                      {d.months.map(m => (
-                        <td key={m.month} style={td} title={`${m.month}: LY ₹ ${L(m.ly)} L → plan ₹ ${L(m.plan)} L (${pct(m.growth_pct)})`}>
-                          <span style={{ color: theme.textMuted }}>{Cr(m.ly)}</span> / <strong style={{ color: theme.primary }}>{Cr(m.plan)}</strong>
-                        </td>
-                      ))}
-                      <td style={td}>{Cr(d.ly_mamj)}</td>
-                      <td style={{ ...td, color: theme.primary, fontWeight: 700 }}>{Cr(d.plan_mamj)}</td>
-                      <td style={td}>
-                        <span style={{ background: theme.accentLight, color: theme.accent, borderRadius: 5, padding: '2px 7px', fontWeight: 600, fontSize: 12 }}>
-                          {pct(d.growth_pct)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          {/* user, 2026-10-12: "can i have a cluster/store breakup based on the toggle" - right under the division table
-              (it sat at the page foot, under the charts), following the header's Plan by Store / Cluster */}
-          <GrainPanel stage="division" title="Division plan" />
-
+          {cmpId && !cmp && <div style={{ fontSize: 12.5, color: theme.textMuted, margin: '-8px 0 14px' }}>Loading that version…</div>}
           {cmp && (() => {
             const bis = Object.fromEntries(cfg.divisions.map(d => [d.division_name, d]))
             const diff = (a, b) => a - b
@@ -197,6 +151,53 @@ export default function DivisionPlan() {
               </div>
             )
           })()}
+          <div className="sp-slim" style={{ marginBottom: 18 }}>
+            <span title={`₹ ${L(cfg.total_ly)} L`}>LY Base MAMJ <b>₹ {Cr(cfg.total_ly)} Cr</b></span>
+            <span title={`₹ ${L(cfg.total_plan)} L`}>Plan MAMJ <b style={{ color: theme.primary }}>₹ {Cr(cfg.total_plan)} Cr</b></span>
+            <span>Plan Growth <b style={{ color: theme.accent }}>{pct(totalGrowth)}</b></span>
+          </div>
+
+          <div style={{ ...card, marginBottom: 24, overflow: 'hidden' }}>
+            <div style={{ padding: '14px 20px', borderBottom: `1px solid ${theme.border}`, fontSize: 14, fontWeight: 600, color: theme.textPrimary }}>
+              Division Plan (as in BIS)
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: theme.surfaceAlt }}>
+                    <th style={th}>Division</th>
+                    {cfg.divisions[0]?.months.map(m => <th key={m.month} style={th}>{m.month} LY / Plan (₹ Cr)</th>)}
+                    <th style={th}>LY Base MAMJ (₹ Cr)</th>
+                    <th style={th}>Plan MAMJ (₹ Cr)</th>
+                    <th style={th}>Growth %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cfg.divisions.map((d, idx) => (
+                    <tr key={d.division_name} style={{ background: idx % 2 === 0 ? theme.surface : theme.surfaceAlt }}>
+                      <td style={{ ...td, fontWeight: 600, color: theme.textPrimary }}>{d.division_name}</td>
+                      {d.months.map(m => (
+                        <td key={m.month} style={td} title={`${m.month}: LY ₹ ${L(m.ly)} L → plan ₹ ${L(m.plan)} L (${pct(m.growth_pct)})`}>
+                          <span style={{ color: theme.textMuted }}>{Cr(m.ly)}</span> / <strong style={{ color: theme.primary }}>{Cr(m.plan)}</strong>
+                        </td>
+                      ))}
+                      <td style={td}>{Cr(d.ly_mamj)}</td>
+                      <td style={{ ...td, color: theme.primary, fontWeight: 700 }}>{Cr(d.plan_mamj)}</td>
+                      <td style={td}>
+                        <span style={{ background: theme.accentLight, color: theme.accent, borderRadius: 5, padding: '2px 7px', fontWeight: 600, fontSize: 12 }}>
+                          {pct(d.growth_pct)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {/* user, 2026-10-12: "can i have a cluster/store breakup based on the toggle" - right under the division table
+              (it sat at the page foot, under the charts), following the header's Plan by Store / Cluster */}
+          <GrainPanel stage="division" title="Division plan" />
+
           <details className="sp-fold">
           <summary style={{ textTransform: 'uppercase', letterSpacing: 0.7, marginBottom: 10 }}>Monthly Plan by Division (charts)</summary>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 18 }}>

@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Division Plan: "Compare with" shows its comparison where you pick it
+- **Asked (user):** "doesnt work" (Division Plan header bar: Compare with / Export CSV / Data).
+- The compare request worked (Version 1, publish 32: KIDS 133.11 / LADIES 124.80 / MENS 162.99 Cr), but the comparison table rendered under the Store / Cluster breakdown, ~1,550 px down, so picking a version looked like nothing happened. It now sits right under the bar, with "Loading that version…" while it fetches.
+- Export CSV frees its download link a second after the click (freed at once, some browsers dropped the file); the bar's text keeps its width and the buttons wrap below it on narrow screens.
+
 ### Attr Correction: a failed load no longer reads as "the plan has no months"
 - **Asked (user):** "yes look into the attribute data issue" ("No attribute data for KIDS - the saved department plan has no plan months yet").
 - The saved plan is fine (Mar-Jun'27, 148 SSG stores) and the engine's preview returns KIDS / LADIES / MENS attribute data in 1.6 s. The message came from the test copy of the app, which didn't load the Attr Correction engine: the page hid the failed request (404) and showed the "no plan months" note with a "Generate the department plan" button - the same would show on live during an 8010 restart or after a sign-out, and the button would regenerate the real base plan.
