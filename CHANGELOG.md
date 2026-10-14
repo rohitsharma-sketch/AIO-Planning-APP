@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Attr Correction: a failed load no longer reads as "the plan has no months"
+- **Asked (user):** "yes look into the attribute data issue" ("No attribute data for KIDS - the saved department plan has no plan months yet").
+- The saved plan is fine (Mar-Jun'27, 148 SSG stores) and the engine's preview returns KIDS / LADIES / MENS attribute data in 1.6 s. The message came from the test copy of the app, which didn't load the Attr Correction engine: the page hid the failed request (404) and showed the "no plan months" note with a "Generate the department plan" button - the same would show on live during an 8010 restart or after a sign-out, and the button would regenerate the real base plan.
+- The page now shows "Could not load the attribute data" with the reason (signed out / server restarting / the server's message) and a Retry button; the Generate note stays for a plan that really has no months. Test copy (`sp_sandbox.py`) now loads the Attr Correction engine, its writes going to the scratchpad.
+
 ### Attr / Base Correction: no longer Store-only
 - **Asked (user):** "remove this from store only to general" (the "store only" tag on Attr / Base Correction in Cluster view).
 - Both run in Store and Cluster view: the sidebar rows are plain links with their on/off switch, their pages open in either view, Growth Matrix's "What next?" offers them in either view. They still correct the store-level plan; Cluster view shows it rolled up. `ClusterOff` removed; the switched-off page note is now `components/EngineGate.jsx`.

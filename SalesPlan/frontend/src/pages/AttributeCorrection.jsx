@@ -247,13 +247,22 @@ export default function AttributeCorrection() {
   const [showDeptInfo, setShowDeptInfo] = useState(null)      // {attr, depts}
   const [locks, setLocks]               = useState({})        // {div: Set<attr>}
   const [originalCorrections, setOriginalCorrections] = useState({})   // snapshot of defaults on load
+  // a failed load is shown as such, not as "the plan has no months" with a Generate button (2026-10-14: a 404 / server
+  // restart read as an empty plan and offered to regenerate the real base plan)
+  const [loadErr, setLoadErr]           = useState('')
+  const [reload, setReload]             = useState(0)
 
   // ── Fetch base data ─────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
+    setLoading(true); setLoadErr('')
     fetch('/api/planning/attr-correction/preview')
-      .then(r => { if (!r.ok) throw new Error(r.status); return r.json() })
+      .then(async r => {
+        const j = await r.json().catch(() => null)   // a proxy error page (8010 restarting) is HTML
+        if (!r.ok || !j) throw new Error(j?.detail || (r.status === 401 ? 'You are signed out - sign in again and retry.'
+          : r.status >= 500 || !j ? 'The planning server is restarting or unreachable - retry in a minute.' : `Request failed (HTTP ${r.status}).`))
+        return j
+      })
       .then(d => {
         if (cancelled) return
         setData(d.data || {})
@@ -277,9 +286,9 @@ export default function AttributeCorrection() {
         }
         setLoading(false)
       })
-      .catch(e => { if (!cancelled) { console.error(e); setLoading(false) } })
+      .catch(e => { if (!cancelled) { setLoadErr(e.message || 'Could not load the attribute data.'); setLoading(false) } })
     return () => { cancelled = true }
-  }, [])
+  }, [reload])
 
   // ── Lock toggle ────────────────────────────────────────────────────────────
   const toggleLock = (div, attr) => {
@@ -535,6 +544,15 @@ export default function AttributeCorrection() {
       {/* Content */}
       {loading ? (
         <div style={{ color: theme.textMuted, fontSize: 13, padding: '40px 0' }}>Loading attribute data…</div>
+      ) : loadErr ? (
+        <div style={{ padding: 32, background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`, textAlign: 'center' }}>
+          <div style={{ fontSize: 14, color: theme.danger, marginBottom: 6 }}>Could not load the attribute data</div>
+          <div style={{ fontSize: 12, color: theme.textMuted }}>{loadErr}</div>
+          <button onClick={() => setReload(n => n + 1)}
+            style={{ marginTop: 14, background: divColor, border: 'none', color: '#fff', borderRadius: 8, padding: '8px 20px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+            ↺ Retry
+          </button>
+        </div>
       ) : !hasData ? (
         <div style={{ padding: 32, background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`, textAlign: 'center' }}>
           <div style={{ fontSize: 28, marginBottom: 12 }}>📋</div>
