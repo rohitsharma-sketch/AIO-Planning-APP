@@ -2,8 +2,6 @@ import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { theme, alpha } from '../theme'
 import PipelineBanner from '../components/PipelineBanner'
-import ClusterOff from '../components/ClusterOff'
-import { useGrain } from '../grain'
 import SearchSlicer from '../components/SearchSlicer'
 import { currentEngineKey, advancePipeline } from '../pipelineState'
 
@@ -16,7 +14,7 @@ const DIV_COLOR = {
   KIDS: '#C85A12', LADIES: '#7420B8', MENS: '#077A4A', GM: '#1E54C0', RETAIL: '#B22620',
 }
 
-function BaseCorrection() {
+export default function BaseCorrection() {
   const navigate    = useNavigate()
   const inPipeline  = currentEngineKey() === 'base-correction'
   const [checking, setChecking]   = useState(false)
@@ -302,10 +300,4 @@ function BaseCorrection() {
       )}
     </div>
   )
-}
-
-// user, 2026-10-12: "disable attr correction and base correction in cluster view" - store-level, so Cluster view shows a note
-export default function BaseCorrectionGate() {
-  const [grain] = useGrain()
-  return grain === 'cluster' ? <ClusterOff name="Base Correction" /> : <BaseCorrection />
 }

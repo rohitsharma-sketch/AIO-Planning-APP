@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Attr / Base Correction: no longer Store-only
+- **Asked (user):** "remove this from store only to general" (the "store only" tag on Attr / Base Correction in Cluster view).
+- Both run in Store and Cluster view: the sidebar rows are plain links with their on/off switch, their pages open in either view, Growth Matrix's "What next?" offers them in either view. They still correct the store-level plan; Cluster view shows it rolled up. `ClusterOff` removed; the switched-off page note is now `components/EngineGate.jsx`.
+
 ### Optional engines: on/off switch (opted out by default)
 - **Asked (user):** "for optional engines give a toggle for the user so the user can activate and deactive the engine if it is to be used"; then "toggles missing from attr correction and base correction and toggles not working they are static - they should active - inactive the optional engine, opted out is their default".
 - Sidebar: Attr Correction, Base Correction, PW/W Deviation and SOR Deviation each have a switch on their row (replaces the "opt" tag; Attr / Base keep it in Cluster view too). Off = the row is greyed and struck through, its page says "switched off" with a Switch on button, Growth Matrix's "What next?" offers only switched-on corrections (none on → Generate Base Plan goes straight to Final Results), MRP Plan Output drops it from the step bar and the "Apply Deviations?" prompt (both off → no prompt).

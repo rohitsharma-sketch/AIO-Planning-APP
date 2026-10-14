@@ -2,8 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { theme, alpha } from '../theme'
 import PipelineBanner from '../components/PipelineBanner'
-import ClusterOff from '../components/ClusterOff'
-import { useGrain } from '../grain'
 import { currentEngineKey, advancePipeline } from '../pipelineState'
 
 const DIVISIONS = ['KIDS', 'LADIES', 'MENS']   // GM / RETAIL out of the Sales Plan engine (user, 2026-10-13)
@@ -233,7 +231,7 @@ function CompareDrawer({ open, onClose, months, pre, post, activeDiv }) {
   )
 }
 
-function AttributeCorrection() {
+export default function AttributeCorrection() {
   const navigate     = useNavigate()
   const inPipeline   = currentEngineKey() === 'attr-correction'
   const [activeDiv, setActiveDiv]       = useState('KIDS')
@@ -729,10 +727,4 @@ function AttributeCorrection() {
       )}
     </div>
   )
-}
-
-// user, 2026-10-12: "disable attr correction and base correction in cluster view" - store-level, so Cluster view shows a note
-export default function AttributeCorrectionGate() {
-  const [grain] = useGrain()
-  return grain === 'cluster' ? <ClusterOff name="Attribute Correction" /> : <AttributeCorrection />
 }
