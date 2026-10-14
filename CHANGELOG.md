@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Excel downloads in the classic pivot layout (no drill-down rows)
+- **Asked (user):** "also make the download happen in classic pivot table formats rather than straight drill downs as it increases rows and blank space".
+- Sales Plan hierarchy exports (Final Results, MRP Output, Display Type, Article Name, re-apportionment compare - `grain_view.tree_xlsx`): Excel's tabular form with every item label repeated - one row per combination of the Rows fields (the deepest level, in the page's order), each field in its own column, LY / TY / Growth % / Cont % (of the level above), Grand Total last; no parent / outline rows, no indented first column. Final Results Division › Department › Month: 771 rows, no blank labels, rows add up to the Grand Total (₹79,403.1 L).
+- STR Forecaster Excel: the "Drill-down" sheet (one row per layer level) is now "Pivot" - one row per cluster x division x department x store (the page's layers), labels on every row, the N-month average and each month's figures alongside (21,903 rows).
+
 ### STR Forecaster: Mar-Jul (July fixture and sales plan added)
 - **Asked (user):** "this is the respective sales plan and fixture plan sheet. Implement the respective plans till july and preview the same logic till july in the STR forecaster" (Mar'26 to Oct'26 Fixture Allocation (2).xlsx, month wise sales plan - julyu - feb.xlsx).
 - Fixture upload 7 = the new workbook's Mar'26-Jul'26 sheets through the app's own parser (Aug fresh / old stock, Sep, Oct left out), +12 -> Mar-Jul'27: 112,180 rows; Mar / Apr / Jun the same as before, May MDQ 6.79 M -> 6.89 M (the new file), Jul 203 stores, 6.93 M MDQ.

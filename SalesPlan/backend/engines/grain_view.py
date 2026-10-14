@@ -970,9 +970,9 @@ def explain_half(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: l
 
 def tree_xlsx(ix: dict, levels: list, names: dict, filt: dict | None, cols: tuple, title: str, about: list) -> bytes:
     """The Hierarchy view as an Excel sheet (user, 2026-10-14: "also available in excel download too keeping the same
-    view"): every branch fully opened, in the order the page shows it (months in calendar order, MRPs in price order,
-    the rest by TY high to low), indented and grouped per level (Excel's + / - outline), one column per Rows field
-    (for Excel filters), then LY, TY, Growth %, Cont % (share of the level above). about = [(label, text)] on sheet 2."""
+    view"), in the classic pivot layout (tabular, item labels repeated): one row per combination of the Rows fields in
+    the order the page shows it (months in calendar order, MRPs in price order, the rest by TY high to low), one column
+    per Rows field, then LY, TY, Growth %, Cont % (share of the level above). about = [(label, text)] on sheet 2."""
     import io
     import pandas as pd
     import xlsxwriter
@@ -1006,6 +1006,11 @@ def tree_xlsx(ix: dict, levels: list, names: dict, filt: dict | None, cols: tupl
     allr[rk] = allr[rk].fillna(0)
     allr = allr.sort_values(rk, kind="stable").reset_index(drop=True)
 
+    # classic pivot layout (user, 2026-10-14: "make the download happen in classic pivot table formats rather than straight
+    # drill downs as it increases rows and blank space"): Excel's tabular form with every item label repeated - one row per
+    # combination of the Rows fields (the deepest level, in the page's order), each field in its own column, no parent /
+    # outline rows; Cont % = its share of the level above, as on the page; Grand Total last
+    leaf = allr[allr["_d"] == len(levels)].reset_index(drop=True)
     buf = io.BytesIO()
     wb = xlsxwriter.Workbook(buf, {"constant_memory": True, "in_memory": True})
     ws = wb.add_worksheet(title[:31])
@@ -1014,46 +1019,37 @@ def tree_xlsx(ix: dict, levels: list, names: dict, filt: dict | None, cols: tupl
     numb = wb.add_format({"num_format": "#,##0.0", "bold": True})
     pct = wb.add_format({"num_format": "+0.0%;-0.0%;0.0%"})
     cpc = wb.add_format({"num_format": "0.0%"})
-    lab = [wb.add_format({"indent": i, "bold": i == 0}) for i in range(len(levels))]
     tb = wb.add_format({"bold": True, "top": 1})
     tbn = wb.add_format({"bold": True, "top": 1, "num_format": "#,##0.0"})
     tbp = wb.add_format({"bold": True, "top": 1, "num_format": "+0.0%;-0.0%;0.0%"})
     nc = len(levels)
-    head = [" › ".join(names.get(x, x) for x in levels), "Level"] + [names.get(x, x) for x in levels] +         [cols[0], cols[1], cols[2], "Cont %"]
-    ws.write_row(0, 0, head, hd)
-    ws.set_column(0, 0, 38)
-    ws.set_column(1, 1, 12)
-    ws.set_column(2, 1 + nc, 16)
-    ws.set_column(2 + nc, 5 + nc, 13)
-    ws.freeze_panes(1, 1)
-    ws.outline_settings(True, False, True, False)   # +/- above its rows, as the page's ▸ / ▾
-    codes = allr[list(levels)].to_numpy()
+    up = names.get(levels[-2], levels[-2]) if nc > 1 else "the total"
+    ws.write_row(0, 0, [names.get(x, x) for x in levels] + [cols[0], cols[1], cols[2], f"Cont % (of {up})"], hd)
+    ws.set_column(0, nc - 1, 18)
+    ws.set_column(nc, nc + 3, 13)
+    ws.freeze_panes(1, nc)
+    codes = leaf[list(levels)].to_numpy()
     names_of = [ix["names"][lv] for lv in levels]
-    for i, (d, ly, ty, pty) in enumerate(zip(allr["_d"].to_numpy(), allr["ly"].to_numpy(), allr["ty"].to_numpy(),
-                                             allr["_pty"].to_numpy()), 1):
-        d = int(d)
+    for i, (ly, ty, pty) in enumerate(zip(leaf["ly"].to_numpy(), leaf["ty"].to_numpy(), leaf["_pty"].to_numpy()), 1):
         row = codes[i - 1]
-        vals = [str(names_of[j][int(row[j])]) for j in range(d)]
-        if d > 1:
-            ws.set_row(i, None, None, {"level": min(d - 1, 7)})
-        ws.write_string(i, 0, vals[-1], lab[d - 1])
-        ws.write_string(i, 1, names.get(levels[d - 1], levels[d - 1]))
-        for j, v in enumerate(vals):
-            ws.write_string(i, 2 + j, v)
-        ws.write_number(i, 2 + nc, float(ly), num)
-        ws.write_number(i, 3 + nc, float(ty), numb)
+        for j in range(nc):
+            ws.write_string(i, j, str(names_of[j][int(row[j])]))
+        ws.write_number(i, nc, float(ly), num)
+        ws.write_number(i, nc + 1, float(ty), numb)
         if ly > 0:
-            ws.write_number(i, 4 + nc, float(ty / ly - 1), pct)
+            ws.write_number(i, nc + 2, float(ty / ly - 1), pct)
         if pty:
-            ws.write_number(i, 5 + nc, float(ty / pty), cpc)
-    r = len(allr) + 1
+            ws.write_number(i, nc + 3, float(ty / pty), cpc)
+    r = len(leaf) + 1
     ws.write_string(r, 0, "Grand Total", tb)
-    ws.write_number(r, 2 + nc, tot_ly, tbn)
-    ws.write_number(r, 3 + nc, tot_ty, tbn)
+    for j in range(1, nc):
+        ws.write_blank(r, j, None, tb)
+    ws.write_number(r, nc, tot_ly, tbn)
+    ws.write_number(r, nc + 1, tot_ty, tbn)
     if tot_ly > 0:
-        ws.write_number(r, 4 + nc, tot_ty / tot_ly - 1, tbp)
-    ws.write_number(r, 5 + nc, 1.0, wb.add_format({"bold": True, "top": 1, "num_format": "0.0%"}))
-    ws.autofilter(0, 0, r - 1, 5 + nc)
+        ws.write_number(r, nc + 2, tot_ty / tot_ly - 1, tbp)
+    ws.write_number(r, nc + 3, 1.0, wb.add_format({"bold": True, "top": 1, "num_format": "0.0%"}))
+    ws.autofilter(0, 0, r - 1, nc + 3)
     ab = wb.add_worksheet("About")
     ab.set_column(0, 0, 18)
     ab.set_column(1, 1, 110)

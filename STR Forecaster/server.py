@@ -257,7 +257,7 @@ def workbook(df, months, has_plan, layers, info, filters):
               ("Band", f"STR days rounded to the nearest {se.BAND_STEP}, kept inside the season's limits ({bands}); never under {se.BAND_MIN} or over {se.BAND_MAX}"),
               ("Roll-ups", "plan qty and MDQ are summed first, then the days; a group's season = its departments' season index weighted by plan qty"),
               ("Articles", "with Article as a layer or filter: fixtures, MDQ and last year's sales of a store x department x month are split by each article's share of the department's planned qty in that store and month (Rs where the plan has no qty) - the store's own plan, else the chain's; planned Rs / qty are the article's own"),
-              ("Sheets", "STR detail = every store x department x month; Drill-down = the page's row layers fully opened, all months and each month; By month = long format per level"),
+              ("Sheets", "STR detail = every store x department x month; Pivot = the page's row layers as a classic pivot (one row per combination, every label repeated), all months and each month; By month = long format per level"),
               ("N-month avg", "as on the page (N = the months loaded): plan qty, MDQ, LY qty / MDQ, plan Rs, fixtures and store count are the average month (the months' figures over the months that have one), not totals; STR days = the months' forward-cover days weighted by their MDQ")]
     # rows straight to xlsxwriter in streaming mode (user, 2026-10-14: "decrease the latency for extracting output in STR
     # forecaster in excel" - pandas' cell-by-cell formatter took ~230 s of the 5 million cells); same sheets, same values
@@ -273,24 +273,23 @@ def workbook(df, months, has_plan, layers, info, filters):
     try:
         xw.sheet(pd.DataFrame(readme, columns=["", "How it is worked out"]), "Read me")
         xw.sheet(d.sort_values(["cluster", "division", "department", "store", "month"]), "STR detail")
-        # drill-down: every level of the layers, parents before their children
-        keys = [LAYER_LABEL[x] for x in layers]
+        # the page's layers in the classic pivot layout (user, 2026-10-14: "make the download happen in classic pivot table
+        # formats rather than straight drill downs as it increases rows and blank space"): one row per combination of
+        # the layers (their deepest level), every layer in its own column with its label on every row - no parent rows
+        by = list(layers)
+        if "department" in by and "division" not in by:
+            by.insert(by.index("department"), "division")
         rows = []
-        for k in range(1, len(layers) + 1):
-            by = list(layers[:k])
-            if "department" in by and "division" not in by:
-                by.insert(by.index("department"), "division")
-            for r in se.rollup(df, by, months, has_plan):
-                row = {"level": k, **{LAYER_LABEL[x]: _safe(str(r.get(x, ""))) for x in layers[:k]}}
-                row.update(_cells_wide(_avg_cell(r), f"{len(months)}-month avg"))
-                for m, c in zip(months, r["months"]):
-                    row.update(_cells_wide(c, m.strftime("%b %y")))
-                rows.append(row)
+        for r in se.rollup(df, by, months, has_plan):
+            row = {LAYER_LABEL.get(x, x.title()): _safe(str(r.get(x, ""))) for x in by}
+            row.update(_cells_wide(_avg_cell(r), f"{len(months)}-month avg"))
+            for m, c in zip(months, r["months"]):
+                row.update(_cells_wide(c, m.strftime("%b %y")))
+            rows.append(row)
         dr = pd.DataFrame(rows)
-        for c in keys:
-            dr[c] = dr[c].fillna("") if c in dr else ""
-        dr = dr.sort_values(keys + ["level"], kind="stable")
-        xw.sheet(dr[["level"] + keys + [c for c in dr.columns if c not in keys and c != "level"]], "Drill-down")
+        lab = [LAYER_LABEL.get(x, x.title()) for x in by]
+        dr = dr.sort_values(lab, kind="stable")
+        xw.sheet(dr[lab + [c for c in dr.columns if c not in lab]], "Pivot")
         long = []
         for by, nm in ((["cluster"], "cluster"), (["division"], "division"), (["division", "department"], "department"),
                        (["cluster", "division", "department"], "cluster x department"), (["cluster", "store"], "store")):
