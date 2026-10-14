@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Sales Plan MRP Plan Buyer's Input: folder-sync panel removed
+- **Asked (user):** "remove all this" (the Source file card, Sync from Folder, How it works, Expected file format, Divisions expected).
+- Gone from the page; the buyers' file is synced from a small "Sync the buyers' file" button on the "Where it comes from" card (same `POST /mrp-plan/sync`, same folder). Header text no longer says the page must always be synced from the file.
+
 ### Sales Plan MRP Plan: MRP Cont % from the re-apportioned sales by default; the buyers' file optional
 - **Asked (user):** "i want the user to be asked to either drop a file for cont % or by default the cont % for the re-apportioned sales will be taken, this is an optional scenario now" and "upon running the new re-apportionment how will the user get its benefits ... how can i point to the latest version of the re-apportionment run in the engine, find a way to easily carry this out".
 - Every MRP re-apportionment run whose checks pass saves its MRP shares (`Output/_reapp_shares.json`: per division x department x new MRP, each month's re-apportioned LY sales as % of the department, on its plan period - same % in P1 and P2; Unmapped left out). `POST /api/planning/mrp-reapportionment/shares/rebuild` builds them from the master in use without a full run (same rule and checks); `GET /shares-status`.
