@@ -368,15 +368,12 @@ def _expand_listed(listed: pd.DataFrame) -> pd.DataFrame:
     reads: every MRP the Department x Display sold LY (the sales engine) and the file doesn't list is discontinued (new MRP
     0), so it splits to the nearest listed MRP below / above as before. The rule itself is unchanged."""
     sales, month_cols, _ = _engine_sales()
-    # a department named by its old, pre-split name (KB_BERMUDA ...) - the sales engine has only its parts: the old
-    # name's MRPs apply to each part the file doesn't list itself (the suite's data-lake department split)
+    # old, pre-split department names (KB_BERMUDA ...) are removed - the master runs on the new names only (user,
+    # 2026-10-14: "if you find old names just remove them and generate with new names only"); a name that is also one of
+    # its own parts (L_IN_BRA) stays
     from engines.art_nm_engine import DEPT_SPLITS
-    have = set(listed["DEPARTMENT"])
-    parts = [listed[listed["DEPARTMENT"] == old].assign(DEPARTMENT=p)
-             for old, ps in DEPT_SPLITS.items() if old in have for p in ps if p != old and p not in have]
-    if parts:
-        listed = pd.concat([listed[~listed["DEPARTMENT"].isin({o for o in DEPT_SPLITS if o in have and o not in
-                                                                set(sales["DEPARTMENT"])})], *parts], ignore_index=True)
+    old = {o for o, ps in DEPT_SPLITS.items() if o not in ps}
+    listed = listed[~listed["DEPARTMENT"].isin(old)]
     pairs = listed[["DEPARTMENT", "DISPLAY"]].drop_duplicates()
     s = sales[(sales[month_cols] != 0).any(axis=1)].merge(pairs, on=["DEPARTMENT", "DISPLAY"])
     sold = s[["DEPARTMENT", "DISPLAY", "MRP"]].drop_duplicates().rename(columns={"MRP": "MRP_CURRENT"})
