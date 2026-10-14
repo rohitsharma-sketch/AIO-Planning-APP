@@ -7,12 +7,9 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
-### Sales Plan: AOP cap per Division × Cluster × Cluster tag (SSG / NSO / Others)
-- **Asked (user):** "are we capping at Div x CLuster ?" -> "CLUSTER x CLUSTER TAG should be maintained only so cap should be that - cluster cap means - BH(P) x SSG or BH(P) x NSO".
-- Before: the SSG hold was one factor per division × month over all 148 stores - divisions exact, but ~₹470 L sat in other clusters than in the AOP (small clusters up to +17% / -11%).
-- Now (`dept_sales_engine` Step 1b): one factor per division × CLUSTER × month - each cluster's SSG stores land on the AOP Forecaster's plan for them (the sum of its store plans, scaled onto the AOP division plan), the department mix kept; NSO / Others were already on their AOP store plans. The new-department re-balance keeps SSG stores per cluster (`grp = ("SSG", cluster)`). Meta `lfl_hold_cluster` {div: {cluster: {month: factor}}}; Journey shows "× AOP cap (division × cluster × month)", the export's "AOP cap factor (SSG, division x cluster)".
-- Result: all 54 division × cluster × tag cells = the AOP exactly; division / grand totals unchanged (₹79,403.1 L; SSG ₹43,186.8 L). Factors 0.67-1.51, 88 of 108 within ±5% - the large ones are Mar'27 in the small clusters (NE (NP), Kashmir), where the AOP's March differs from BIS's single growth %. New check-up "Division × Cluster × Month (SSG): plan TY = the AOP's plan for that cluster's SSG stores" (108 cells, 0 off); "TY = LY/2 × BIS growth × one division-cluster-month factor" (135,226 cells, 0 off). All checks pass. Backup `backups/final_dept_plan.before-cluster-cap-14Oct2026.json`.
-- Supersedes "keep the AOP hold on each division" (the division totals still hold exactly - the cap is now finer).
+### Division x Cluster x Cluster-tag cap tried and reverted - back to the AOP hold per division x month
+- **Asked (user):** "CLUSTER x CLUSTER TAG should be maintained only so cap should be that" (commit `9ae33d4`: one factor per division x cluster x month for the SSG stores - all 54 cells on the AOP, factors 0.67-1.51, the manual-vs-portal gap unchanged at ~₹2,015 L), then "remove the cap and revert back to the previous version".
+- Reverted (`git revert` of `9ae33d4`, this entry kept as the record): the SSG stores are held on the AOP per division x month again (one factor over all 148 stores, the mix kept); the new-department re-balance keeps SSG stores together. Plan regenerated, Display Type / Qty re-run (23,406,367 pieces - the same as before the cap), every check passes. Cluster totals are free flow inside each division again (NSO / Others stay on their AOP store plans).
 
 ### Display Type: Validation tab removed
 - **Asked (user):** "remove validation" (Display Type page tabs ₹L Plan / Validation / Qty Plan).

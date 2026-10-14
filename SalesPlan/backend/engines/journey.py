@@ -131,9 +131,7 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
         cal = float(((load_actuals("actual").get(store, {}).get(div, {}).get(dept) or {}).get(lym)) or 0.0)
         if not cal:   # no actual sales that month: the reindexed mix (the engine's fallback)
             cal = float(((load_actuals().get(store, {}).get(div, {}).get(dept) or {}).get(lym)) or 0.0)
-        meta = p.get("meta") or {}
-        hold = float((((meta.get("lfl_hold_cluster") or {}).get(div) or {}).get(sd.get("cluster") or "") or {}).get(month)
-                     or (meta.get("lfl_hold_on_aop") or {}).get(div, {}).get(month, 1.0))
+        hold = float(((p.get("meta") or {}).get("lfl_hold_on_aop") or {}).get(div, {}).get(month, 1.0))
         g1, g2 = float(rec.get("g_p1") or 0.0), float(rec.get("g_p2") or 0.0)
         step("Department", "Actual LY", f"{dept} at {store} in {lym}: its actual sales (Calendar, own dates).", cal, formula="Calendar actual snapshot")
         k = ly / cal if cal else None
@@ -143,10 +141,8 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
         step("Department", "× BIS growth", f"BIS growth in use: P1 {g1 - 100:+.2f}%, P2 {g2 - 100:+.2f}% "
              "(each half of the month = LY / 2 × its growth).", pre, formula=f"{L(ly)}/2 × {g1 / 100:.4f} + {L(ly)}/2 × {g2 / 100:.4f}")
         after = pre * hold
-        cl_ = sd.get("cluster") or "-"
-        step("Department", "× AOP cap (division × cluster × month)", f"Every like-for-like {div} department of cluster {cl_} in {month} "
-             "is scaled by one factor so the cluster's SSG stores land exactly on the AOP's plan for them (the mix kept).",
-             after, formula=f"× {hold:.6f}", factor=hold)
+        step("Department", "× AOP hold (division × month)", f"Every like-for-like {div} department in {month} is scaled by one factor "
+             "so the division lands exactly on its AOP plan (the mix kept).", after, formula=f"× {hold:.6f}", factor=hold)
         derived = after
         if (_load_new_dept_map() or {}).get(div):   # the carve + re-balance of a division with new departments
             f = ty / after if after else 1.0
@@ -268,7 +264,7 @@ def export_rows(division: str = "", group: str = "", store: str = "") -> pd.Data
     from engines.final_results_engine import _load_dept_attr_map
     from engines.mrp_plan_engine import effective_shares
     attrs, shares = _load_dept_attr_map(), effective_shares()[0]
-    hold = (p.get("meta") or {}).get("lfl_hold_cluster") or {}
+    hold = (p.get("meta") or {}).get("lfl_hold_on_aop") or {}
     st = p["stores"]
     df = pd.DataFrame(q["rows"])
     if division:
@@ -293,8 +289,8 @@ def export_rows(division: str = "", group: str = "", store: str = "") -> pd.Data
                                      "BIS growth P1 (index)", "BIS growth P2 (index)", "Dept share of store-division %"])
     df = df.merge(dp, on=["store", "division", "month", "dept"], how="left")
     df["Dept growth %"] = ((df["Dept TY (₹L)"] / df["Dept LY (₹L)"] - 1) * 100).where(df["Dept LY (₹L)"] > 0)
-    df["AOP cap factor (SSG, division x cluster)"] = [((hold.get(dv) or {}).get(cl) or {}).get(m) if g == "SSG" else None
-                                                     for dv, m, g, cl in zip(df["division"], df["month"], df["Store group"], df["Cluster"])]
+    df["AOP hold factor (SSG)"] = [hold.get(dv, {}).get(m) if g == "SSG" else None
+                                   for dv, m, g in zip(df["division"], df["month"], df["Store group"])]
     for h in ("P1", "P2"):
         df[f"MRP share {h} %"] = [(((shares.get(dv) or {}).get(d) or {}).get(str(mr)) or {}).get(f"{m} {h}")
                                   for dv, d, mr, m in zip(df["division"], df["dept"], df["mrp"], df["month"])]
@@ -310,7 +306,7 @@ def export_rows(division: str = "", group: str = "", store: str = "") -> pd.Data
                             "nontable_plan": "Non-Table TY (₹L)", "table_asp": "Table ASP (₹)", "table_qty": "Table Qty",
                             "nontable_asp": "Non-Table ASP (₹)", "nontable_qty": "Non-Table Qty"})
     cols = ["Store", "Store group", "Cluster", "Store tag", "Reference store (split follows)", "Division", "Attribute", "Department",
-            "Month", "Dept LY (₹L)", "BIS growth P1 (index)", "BIS growth P2 (index)", "AOP cap factor (SSG, division x cluster)", "Store-division TY (₹L)",
+            "Month", "Dept LY (₹L)", "BIS growth P1 (index)", "BIS growth P2 (index)", "AOP hold factor (SSG)", "Store-division TY (₹L)",
             "Dept share of store-division %", "Dept TY P1 (₹L)", "Dept TY P2 (₹L)", "Dept TY (₹L)", "Dept growth %", "MRP",
             "MRP share P1 %", "MRP share P2 %", "MRP TY (₹L)", "Table %", "Non-Table %", "Display mix from", "Table TY (₹L)",
             "Non-Table TY (₹L)", "Table ASP (₹)", "Non-Table ASP (₹)", "Table Qty", "Non-Table Qty"]
