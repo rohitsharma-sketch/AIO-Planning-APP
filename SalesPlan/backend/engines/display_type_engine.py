@@ -137,30 +137,31 @@ def _mix_tables() -> dict:
     # the LY table is kept on disk for the re-apportionment's inputs, so a restart doesn't re-run it (~40 s; 2026-10-14)
     from engines.mrp_reapportionment_engine import OUTPUT_DIR
     path = os.path.join(OUTPUT_DIR, "_display_ly.pkl")
-    g = None
+    ga = None   # signed (returns netted) - the MRP Cont % is made on it; the display split takes the positive cells
     try:
         disk = pd.read_pickle(path)   # written below by this server only
-        if disk.get("key") == key:
-            g = disk["g"]
+        if disk.get("key") == key and "g_all" in disk:
+            ga = disk["g_all"]
     except Exception:   # noqa: BLE001 - none yet / unreadable: build it
         pass
-    if g is None:
+    if ga is None:
         c = _compare()
         f = c["flows"]
         f = f[f["new"] != "Unmapped"]
-        g = f.groupby(["store", "department", "new", "display", "month"], as_index=False, sort=False)["v"].sum()
-        g = g[g["v"] > 0].rename(columns={"new": "mrp"})
-        g["month"] = g["month"].map({m: _plan_period(m) for m in g["month"].unique()})
+        ga = f.groupby(["store", "department", "new", "display", "month"], as_index=False, sort=False)["v"].sum()
+        ga = ga.rename(columns={"new": "mrp"})
+        ga["month"] = ga["month"].map({m: _plan_period(m) for m in ga["month"].unique()})
         try:
-            pd.to_pickle({"key": key, "g": g}, path)
+            pd.to_pickle({"key": key, "g_all": ga}, path)
         except OSError:
             pass
+    g = ga[ga["v"] > 0]
     tabs = []
     for name, ks in MIX_LEVELS:
         t = g.groupby(ks + ["display"], as_index=False, sort=False)["v"].sum()
         t["pct"] = t["v"] / t.groupby(ks)["v"].transform("sum") * 100
         tabs.append((name, ks, t[ks + ["display", "pct"]]))
-    v = {"tabs": tabs, "displays": sorted(g["display"].unique())}
+    v = {"tabs": tabs, "displays": sorted(g["display"].unique()), "g_all": ga}   # g_all: the check-up's MRP-mix check
     _MIX.update(key=key, v=v)
     return v
 

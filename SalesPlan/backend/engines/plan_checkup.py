@@ -102,10 +102,18 @@ def _try(fn, default=None):
 
 
 # ── versions: what the plan is checked against ─────────────────────────────────────────────────────────────────────
-def versions(source, at, plan) -> dict:
+_VER_DB: dict = {}
+
+
+def _db_versions() -> dict:
+    """The AOP publish, BIS save and Calendar snapshot names - database reads, kept a minute (ponytail: a minute-old
+    name at worst; the plan stamp check catches a real change)."""
+    import time
+    if _VER_DB.get("at", 0) > time.time() - 60:
+        return _VER_DB["v"]
     from engines.division_plan import _bis_aop, _versions
     from engines.final_results_engine import _bis_saved_at
-    v = {"plan": f"{source} (made {at})"}
+    v = {}
     a = _try(_bis_aop)
     if isinstance(a, tuple) and a[0]:
         pub = next((x["published_at"] for x in (_try(_versions, []) or []) if x["id"] == a[0]), None)
@@ -115,11 +123,16 @@ def versions(source, at, plan) -> dict:
         v["aop"] = "not reachable"
     bv = _try(lambda: __import__("engines.department_plan", fromlist=["x"]).get_bis_versions(), [])
     saved = _try(_bis_saved_at)
-    v["bis"] = "live BIS" + (f", saved {saved}" if isinstance(saved, str) else "") + \
-        (f" - last saved version: {bv[0]['label']}" if isinstance(bv, list) and bv else "")
+    v["bis"] = "live BIS" + (f", saved {saved}" if isinstance(saved, str) else "") +         (f" - last saved version: {bv[0]['label']}" if isinstance(bv, list) and bv else "")
     from actuals_manager import _snapshot
     cs = _try(lambda: _snapshot("reindexed")[0])
     v["calendar"] = f"reindexed department sales, computed {str(cs)[:16]}" if not isinstance(cs, Exception) else "not reachable"
+    _VER_DB.update(at=time.time(), v=v)
+    return v
+
+
+def versions(source, at, plan) -> dict:
+    v = {"plan": f"{source} (made {at})", **_db_versions()}
     from engines.mrp_reapportionment_engine import read_shares
     rs = read_shares() or {}
     v["mrp"] = (f"re-apportionment shares {rs.get('built_at', '')[:16].replace('T', ' ')} on {rs.get('master')}, "
@@ -127,10 +140,9 @@ def versions(source, at, plan) -> dict:
     from engines.display_type_engine import _load, DT_ASP_PATH, DT_RESULT_PATH, DT_QTY_PATH
     asp = _load(DT_ASP_PATH)
     v["asp"] = f"{asp.get('source')} ({asp.get('imported_at')}, {asp.get('count')} rows)" if asp else "no ASP imported"
-    run = _load(DT_RESULT_PATH)
-    v["display_run"] = run.get("run_at") if run else None
-    q = _load(DT_QTY_PATH)
-    v["qty_run"] = q.get("run_at") if q else None
+    # the run times from the files' save times - not a load of the ~100 MB run files (2026-10-14 latency)
+    when = lambda f: datetime.datetime.fromtimestamp(os.path.getmtime(f)).strftime("%Y-%m-%d %H:%M:%S") if os.path.exists(f) else None   # noqa: E731
+    v["display_run"], v["qty_run"] = when(DT_RESULT_PATH), when(DT_QTY_PATH)
     v["lfl_ly_base"] = (plan.get("meta") or {}).get("lfl_ly_base")
     return v
 
@@ -311,6 +323,26 @@ def _sum_by(ix: dict, levels: tuple, mask=None) -> dict:
             for k, (a, b) in zip(g.index, g.to_numpy())}
 
 
+_RUN: dict = {}
+
+
+def _run_totals(path, load):
+    """{run_at, R: {(dept, mrp, display, month): Rs L}} of the Display Type run file - read once per file version (the
+    file is ~150 MB; 2026-10-14 latency)."""
+    if not os.path.exists(path):
+        return None
+    mt = os.path.getmtime(path)
+    if _RUN.get("mt") != mt:
+        run = load(path)
+        R = {}
+        for r in (run or {}).get("rows", []):
+            for dt, k in (("TABLE", "table_plan"), ("NON_TABLE", "nontable_plan")):
+                kk = (r["dept"], str(r["mrp"]), dt, r["month"])
+                R[kk] = R.get(kk, 0.0) + float(r.get(k) or 0.0)
+        _RUN.update(mt=mt, v={"run_at": (run or {}).get("run_at"), "R": R} if run else None)
+    return _RUN["v"]
+
+
 def mrp_checks(gm=None, new=None) -> list:
     from engines import grain_view as gv
     from engines.final_results_engine import _load_dept_attr_map
@@ -338,20 +370,20 @@ def mrp_checks(gm=None, new=None) -> list:
         out.append(_plain(st4, "mrp_src", "MRP Cont % = the latest re-apportionment on the master in use", "MRP",
                           "pass" if fresh else "fail",
                           f"shares {rs.get('built_at', '-')} on {rs.get('master')} ({rs.get('basis')}); master in use {cur_m} ({cur_b})", fix="rerun"))
-        # the shares in use = the re-apportioned LY mix, recomputed from the re-apportionment itself
-        c = _compare()
-        f = c["flows"]
-        f = f[f["new"] != "Unmapped"]
-        g = f.groupby(["division", "department", "new", "month"], sort=False)["v"].sum()
-        tot = g.groupby(level=[0, 1, 3]).transform("sum")
+        # the shares in use = the re-apportioned LY mix, recomputed from the re-apportionment's LY on the new MRPs (the
+        # table the display split reads, kept on disk - not a 30 s re-run of the re-apportionment; 2026-10-14 latency)
+        from engines.display_type_engine import _mix_tables
+        g = _mix_tables()["g_all"].groupby(["department", "mrp", "month"], sort=False)["v"].sum()
+        tot = g.groupby(level=[0, 2]).transform("sum")
         pct = (g / tot * 100).where(tot > 0)
         sh = rs.get("shares") or {}
+        dept_div = {dp: dv for dv, d in sh.items() for dp in d}
         acc = Acc(1e-6)
         seen = set()
-        for (dv, dp, mr, mo), v in pct.items():
+        for (dp, mr, pm), v in pct.items():
             if v != v or v <= 0:
                 continue
-            pm = _plan_period(mo)
+            dv = dept_div.get(dp, "-")
             seen.add((dv, dp, mr, pm))
             acc.add(float(v), float(((sh.get(dv) or {}).get(dp) or {}).get(mr, {}).get(f"{pm} P1", 0.0)),
                     Division=dv, Department=dp, MRP=mr, Month=pm)
@@ -396,15 +428,11 @@ def mrp_checks(gm=None, new=None) -> list:
     out.append(_plain(st5, "dt_mix", "Display type % = each store's re-apportioned LY mix on that MRP", "UDF",
                       "fail" if nonef > 1e-6 else "pass", f"₹{nonef:,.2f} L has no LY anywhere to split by" if nonef > 1e-6 else
                       "every split MRP has a display type mix (fallbacks listed)", srcs, fix="input"))
-    run = _load(DT_RESULT_PATH)
+    run = _run_totals(DT_RESULT_PATH, _load)
     if not run:
         out.append(_plain(st5, "dt_run", "Display Type run (SSG stores) = the display tree", "UDF", "fail", "not run yet", fix="rerun"))
     else:
-        R = {}
-        for r in run["rows"]:
-            for dt, k in (("TABLE", "table_plan"), ("NON_TABLE", "nontable_plan")):
-                kk = (r["dept"], str(r["mrp"]), dt, r["month"])
-                R[kk] = R.get(kk, 0.0) + float(r.get(k) or 0.0)
+        R = run["R"]
         ssg = xix["c"]["stype"] == xix["pos"]["stype"].get("SSG", -1)
         T = _sum_by(xix, ("department", "mrp", "display", "month"), ssg)
         acc = Acc()
@@ -516,6 +544,33 @@ def _fingerprint(ver: dict) -> str:
     return json.dumps({k: ver.get(k) for k in ("plan", "aop", "bis", "calendar", "mrp", "asp", "display_run")}, sort_keys=True, default=str)
 
 
+_LAST: dict = {}
+
+
+def _inputs_fp() -> tuple:
+    """Everything the check-up reads, cheaply: file times, the re-apportionment's key, the minute-cached versions."""
+    from engines.final_results_engine import _pipeline_status
+    from engines.display_type_engine import DT_ASP_PATH, DT_RESULT_PATH, DT_QTY_PATH
+    from engines.mrp_reapportionment_engine import compare_key, SHARES_PATH
+    from engines.dept_sales_engine import NEW_DEPT_MAP_PATH, FINAL_STAMP_PATH
+    from engines.department_plan import STATE_PATH
+    mt = lambda f: os.path.getmtime(f) if f and os.path.exists(f) else None   # noqa: E731
+    return (tuple(mt(f) for f in (_pipeline_status().get("active_file"), FINAL_STAMP_PATH, DT_ASP_PATH, DT_RESULT_PATH, DT_QTY_PATH,
+                                   SHARES_PATH, NEW_DEPT_MAP_PATH, STATE_PATH, SEASON_PATH)),
+            _try(compare_key, None), json.dumps(_db_versions(), sort_keys=True, default=str))
+
+
+def checkup(fresh: bool = False) -> dict:
+    """The last check-up while none of its inputs changed (instant), else a new one. fresh = always check again."""
+    fp = _try(_inputs_fp)
+    if not fresh and _LAST.get("fp") == fp and not isinstance(fp, Exception):
+        return {**_LAST["r"], "cached": True}
+    r = run_checkup()
+    if r.get("ok") and not isinstance(fp, Exception):
+        _LAST.update(fp=fp, r=r)
+    return r
+
+
 def run_checkup() -> dict:
     import time
     from engines.reconciliation import _active_plan
@@ -573,11 +628,11 @@ def rectify() -> dict:
         log.append(f"Stopped: {getattr(e, 'detail', e)}")
     finally:
         _RUN_LOCK.release()
-    return {**run_checkup(), "log": log}
+    return {**checkup(fresh=True), "log": log}
 
 
 def sign_off(user: str) -> dict:
-    r = run_checkup()
+    r = checkup()
     if not r.get("ok"):
         return r
     fails = [c["title"] for c in r["checks"] if c["status"] == "fail"]

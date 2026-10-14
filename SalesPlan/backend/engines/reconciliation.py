@@ -201,9 +201,10 @@ def export_reconciliation():
 
 # ── Full check-up: the plan tied back to its sources (Calendar, AOP, BIS, re-apportionment, ASP) - engines/plan_checkup.py
 @router.get("/checkup")
-def get_checkup():
-    from engines.plan_checkup import run_checkup
-    return run_checkup()
+def get_checkup(fresh: bool = False):
+    """The last check-up while nothing it reads has changed (instant); fresh=1 checks again."""
+    from engines.plan_checkup import checkup
+    return checkup(fresh)
 
 
 @router.post("/checkup/rectify")
@@ -222,8 +223,8 @@ def post_checkup_signoff(request: Request):
 
 @router.get("/checkup/export")
 def get_checkup_export():
-    from engines.plan_checkup import run_checkup, export_xlsx
-    r = run_checkup()
+    from engines.plan_checkup import checkup, export_xlsx
+    r = checkup()
     return StreamingResponse(io.BytesIO(export_xlsx(r) if r.get("ok") else b""),
                              media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                              headers={"Content-Disposition": 'attachment; filename="sales_plan_checkup.xlsx"'})

@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Reconciliation check-up: latency
+- **Asked (user):** "fix the latency issue in this module" (the check-up and the 8-decimal table sat on "Checking…").
+- The page opens on the last check-up while nothing it reads has changed (`plan_checkup.checkup`: plan / stamp / ASP / Display Type run / Qty / MRP Cont % / New Departments / Department Master / season file times, the re-apportionment key, the versions); "Check again" (`?fresh=1`), Rectify and Sign off check anew. 8010 runs it in the background at start, after the trees.
+- The MRP-mix check reads the re-apportioned LY table kept on disk (`_display_ly.pkl`, now with the signed values - returns netted, as the MRP Cont % is made) instead of re-running the re-apportionment (32 s cold); the version names (AOP publish, BIS save, Calendar snapshot - database reads) are kept a minute; the Display Type / Qty run times come from the files' save times instead of loading the 153 MB / 198 MB files; the run's totals are read once per file version.
+- Timings: cold 55 s → 16 s (in the background at start), page open 6 s → instant, Check again 6 s → 1.3 s; every check's result unchanged.
+
 ### ASP fallback: the other display type's ASP; reconciliation re-run
 - **Asked (user):** "use the other display type ASP as fallback and rerun reco".
 - `display_type_engine.asp_lookup`: a department × MRP × display type × month with no ASP takes the same department × MRP × month's ASP on the other display type (TABLE ↔ NON_TABLE). Used by the Qty run and the check-up; the check-up says how much rests on the fallback.

@@ -33,7 +33,7 @@ export default function CheckUp() {
       setR(j)
     } catch (e) { setErr(e.message) } finally { setBusy('') }
   }
-  useEffect(() => { call('check') }, [])
+  useEffect(() => { call('check') }, [])   // the kept result - instant while nothing changed
   const toggle = k => setOpen(o => { const n = new Set(o); n.has(k) ? n.delete(k) : n.add(k); return n })
   const checks = r?.checks || []
   const stages = [...new Set(checks.map(c => c.stage))]
@@ -51,10 +51,10 @@ export default function CheckUp() {
           <div style={{ flex: 1, minWidth: 260 }}>
             <div style={{ fontSize: 15, fontWeight: 700 }}>Full check-up — the plan tied back to Calendar, AOP, BIS, the re-apportionment and the ASP master</div>
             <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 3 }}>
-              {busy === 'check' ? 'Checking…' : busy === 'fix' ? 'Re-running the chain (plan → MRP Cont % → Display Type → Qty), then checking…' : r ? <>Checked {r.checked_at} in {r.seconds} s{head && <> · <b style={{ color: head[1] }}>{head[0]}</b></>}</> : ''}
+              {busy === 'check' ? 'Checking…' : busy === 'fix' ? 'Re-running the chain (plan → MRP Cont % → Display Type → Qty), then checking…' : r ? <>Checked {r.checked_at} in {r.seconds} s{r.cached ? ' - nothing it reads has changed since' : ''}{head && <> · <b style={{ color: head[1] }}>{head[0]}</b></>}</> : ''}
             </div>
           </div>
-          <button style={btn(!busy, theme.surfaceAlt, theme.primary)} disabled={!!busy} onClick={() => call('check')}>↺ Check again</button>
+          <button style={btn(!busy, theme.surfaceAlt, theme.primary)} disabled={!!busy} onClick={() => call('check', 'GET', '?fresh=1')}>↺ Check again</button>
           <button style={btn(!busy && r, r?.fixable ? '#B91C1C' : 'var(--st-accent,#4F7A66)')} disabled={!!busy || !r} onClick={() => call('fix', 'POST', '/rectify')}
             title="Regenerate the plan on today's inputs, rebuild the MRP Cont % from the master in use, re-run Display Type and Qty - then check again. Your inputs (BIS, AOP, master, ASP) are not changed.">
             {busy === 'fix' ? 'Rectifying…' : '⟳ Rectify - re-run the chain'}

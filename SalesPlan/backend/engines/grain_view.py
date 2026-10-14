@@ -748,6 +748,8 @@ def warm_hierarchy():
         totals(_cube())                           # the version bar's live totals
         _mrp_index(_cube(), _load_dept_attr_map(), False)   # month and P1 / P2
         _display_index(_cube(), _load_dept_attr_map(), False)   # the Display Type tree on top of it
+        from engines.plan_checkup import checkup
+        checkup()   # the Reconciliation check-up, so its page opens at once (2026-10-14)
     except Exception:   # noqa: BLE001 - the page builds it on first use and shows any error itself
         pass
 
