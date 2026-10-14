@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 from apportion import SHOWN, split  # noqa: E402
 
 from plan_cache import load_json as _load_plan_json  # noqa: E402
+from engines.engine_switch import plan_files  # noqa: E402
 
 router = APIRouter()
 
@@ -534,7 +535,7 @@ def export_asp():
 
 def _dept_plan():
     """The latest department plan - corrected first, like every other engine (was the uncorrected plan only)."""
-    for f in ("base_corrected_plan.json", "attr_corrected_plan.json", "final_dept_plan.json"):
+    for f in plan_files():   # minus a switched-off correction (2026-10-14)
         d = _load_plan_json(os.path.join(_PARENT, f))
         if d:
             return d

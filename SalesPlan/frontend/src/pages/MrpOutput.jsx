@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { theme, alpha } from '../theme'
 import HierarchyView from '../components/HierarchyView'
 import RouteBar from '../components/RouteBar'
+import { useEngines } from '../engines'
 
 const MRP_FIELDS = {
   cluster: 'Cluster', store: 'Store', stype: 'Store type', division: 'Division',
@@ -79,6 +80,7 @@ function StepBar({ pipeline }) {
 // ── Deviation prompt modal ───────────────────────────────────────────────────
 function DeviationPrompt({ pwwDone, sorDone, onProceed }) {
   const navigate = useNavigate()
+  const [engineOn] = useEngines()
   const allDone  = pwwDone && sorDone
 
   return (
@@ -103,9 +105,9 @@ function DeviationPrompt({ pwwDone, sorDone, onProceed }) {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
           {[
-            { label: 'PW/W Deviation', done: pwwDone, to: '/deviation/pww', desc: 'Price-Width / Width deviation adjustment' },
-            { label: 'SOR Deviation',  done: sorDone, to: '/deviation/sor',  desc: 'Summer / Occasional / Regular deviation' },
-          ].map(item => (
+            { label: 'PW/W Deviation', done: pwwDone, to: '/deviation/pww', desc: 'Price-Width / Width deviation adjustment', k: 'pww' },
+            { label: 'SOR Deviation',  done: sorDone, to: '/deviation/sor',  desc: 'Summer / Occasional / Regular deviation', k: 'sor' },
+          ].filter(item => engineOn(item.k)).map(item => (
             <button key={item.label}
               onClick={() => navigate(item.to)}
               style={{
@@ -160,6 +162,7 @@ export default function MrpOutput() {
   // pipeline status
   const [pipeline, setPipeline]       = useState(null)
   const [showPrompt, setShowPrompt]   = useState(false)
+  const [engineOn, , engLoaded] = useEngines()   // switched-off deviations leave the flow (2026-10-14)
 
   useEffect(() => {
     // Fetch pipeline status for walkthrough header + deviation prompt
@@ -177,8 +180,8 @@ export default function MrpOutput() {
       setPipeline([
         { label: "Buyer's Input",    done: mrpDone,   sub: mrpDone   ? `${mrp.dept_count || ''} depts` : 'Not synced',    current: false },
         { label: 'Re-apportionment', done: reappDone, sub: reappDone ? 'Completed'        : 'Pending',                    current: false },
-        { label: 'PW/W Deviation',   done: pwwDone,   optional: true, sub: pwwDone ? 'Applied' : 'Skipped',               current: false },
-        { label: 'SOR Deviation',    done: sorDone,   optional: true, sub: sorDone ? 'Applied' : 'Skipped',               current: false },
+        { label: 'PW/W Deviation',   done: pwwDone,   optional: true, sub: pwwDone ? 'Applied' : 'Skipped',               current: false, engine: 'pww' },
+        { label: 'SOR Deviation',    done: sorDone,   optional: true, sub: sorDone ? 'Applied' : 'Skipped',               current: false, engine: 'sor' },
         { label: 'Plan Output',      done: false,     current: true,  sub: 'Viewing now' },
       ])
 
@@ -224,7 +227,7 @@ export default function MrpOutput() {
     <div style={{ padding: '28px 32px', minHeight: '100vh', background: theme.surfaceAlt }}>
 
       {/* Deviation prompt */}
-      {showPrompt && pipeline && (
+      {showPrompt && pipeline && engLoaded && (engineOn('pww') || engineOn('sor')) && (
         <DeviationPrompt
           pwwDone={pipeline[2]?.done}
           sorDone={pipeline[3]?.done}
@@ -242,7 +245,7 @@ export default function MrpOutput() {
       )}
 
       {/* Walkthrough step bar */}
-      {pipeline && <StepBar pipeline={pipeline} />}
+      {pipeline && <StepBar pipeline={pipeline.filter(s => !s.engine || engineOn(s.engine))} />}
 
       {/* Header */}
       <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>

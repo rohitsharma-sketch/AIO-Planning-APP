@@ -6,6 +6,7 @@ import BisCompare from '../components/BisCompare'
 import { ENGINE_META, startPipeline } from '../pipelineState'
 import ExcelFilter, { FilterButton } from '../components/ExcelFilter'
 import { useGrain } from '../grain'
+import { useEngines } from '../engines'
 
 const DIVISIONS = ['KIDS', 'LADIES', 'MENS']   // GM / RETAIL out of the Sales Plan engine (user, 2026-10-13)
 
@@ -63,6 +64,8 @@ export default function DepartmentGrowthMatrix() {
   const [pipelineChecked, setPipelineChecked] = useState({ 'attr-correction': false, 'base-correction': false })
   const [grain] = useGrain()
   const corrOff = grain === 'cluster'   // Attr / Base Correction are store-level: off in Cluster view (2026-10-12)
+  const [engineOn] = useEngines()   // a switched-off engine is not offered (sidebar switch, 2026-10-14)
+  const corrEngines = Object.keys(ENGINE_META).filter(k => engineOn(k.replace('-', '_')))
   const [genStores, setGenStores] = useState(null)
   const navigate = useNavigate()
 
@@ -154,7 +157,8 @@ export default function DepartmentGrowthMatrix() {
       if (d.ok) {
         setGenMsg(`✓ ${d.stores} stores`)
         setGenStores(d.stores)
-        setShowPipelineModal(true)
+        if (corrEngines.length) setShowPipelineModal(true)
+        else navigate('/department-plan/final-results')   // every correction engine is switched off
       } else {
         setGenMsg('Error generating plan')
       }
@@ -168,7 +172,7 @@ export default function DepartmentGrowthMatrix() {
   const handleStartPipeline = (only) => {
     // engines run in the pipeline's own order (Attr -> Base); `only` runs just that one. New departments come from
     // BIS (BIS > New departments) and are already in the base plan (user, 2026-10-12)
-    const queue = corrOff ? [] : only ? [only] : Object.keys(ENGINE_META).filter(k => pipelineChecked[k])
+    const queue = corrOff ? [] : only ? [only] : corrEngines.filter(k => pipelineChecked[k])
     if (queue.length === 0) {
       navigate('/department-plan/final-results')
       return
@@ -316,7 +320,7 @@ export default function DepartmentGrowthMatrix() {
 
             {corrOff && <div style={{ fontSize: 12.5, color: theme.warning, marginBottom: 10 }}>You are in Cluster view: Attr and Base Correction work store by store, so they are off here - switch to Store view (top bar) to run them.</div>}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
-              {Object.entries(ENGINE_META).map(([key, meta]) => (
+              {corrEngines.map(key => [key, ENGINE_META[key]]).map(([key, meta]) => (
                 <label key={key} title={corrOff ? 'Store-level - switch to Store view (top bar) to run it' : undefined} style={{
                   display: 'flex', alignItems: 'flex-start', gap: 12, cursor: corrOff ? 'not-allowed' : 'pointer', opacity: corrOff ? 0.5 : 1,
                   padding: '10px 14px', borderRadius: 9,

@@ -38,6 +38,7 @@ from fastapi.responses import StreamingResponse
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from apportion import SHOWN, split  # noqa: E402
 from plan_cache import save_json  # noqa: E402
+from engines.engine_switch import plan_files  # noqa: E402
 
 router = APIRouter()
 
@@ -323,7 +324,7 @@ def built(grain: str) -> dict:
     months = _plan_months(plan)
     ly, check = ly_sales(months)
     stamps = tuple(os.path.getmtime(p) if os.path.exists(p) else 0 for p in (CONT_PATH, *(
-        os.path.join(_HERE, "..", f) for f in ("base_corrected_plan.json", "attr_corrected_plan.json", "final_dept_plan.json"))))
+        os.path.join(_HERE, "..", f) for f in plan_files())))   # a switched-off correction drops out (2026-10-14)
     key = (grain, stamps, _LY["key"])
     with _BUILD_LOCK:
         if _BUILT.get(grain, {}).get("key") != key:

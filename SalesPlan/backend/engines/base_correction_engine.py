@@ -56,8 +56,9 @@ MONTH_PAIR = dict(zip(TY_MONTHS, LY_MONTHS))
 # ── I/O ───────────────────────────────────────────────────────────────────────
 
 def _load_source_plan() -> dict:
-    """Use attr_corrected_plan if available, else final_dept_plan."""
-    for path in (ATTR_PLAN_PATH, FINAL_PLAN_PATH):
+    """Use attr_corrected_plan if available (and Attr Correction is switched on), else final_dept_plan."""
+    from engines.engine_switch import switches
+    for path in ((ATTR_PLAN_PATH,) if switches()["attr_correction"] else ()) + (FINAL_PLAN_PATH,):
         if os.path.exists(path):
             return _load_plan_json(path)   # read-only here: apply_corrections works on a copy
     return {}

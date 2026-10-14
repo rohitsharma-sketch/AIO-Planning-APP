@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { theme } from '../theme'
 import Icon from './Icon'
 import { useGrain } from '../grain'
+import { useEngines } from '../engines'
 
 const DIVISION_PLAN_SUB = [
   { label: 'Plan Setup', to: '/division-plan' },
@@ -11,8 +12,8 @@ const DIVISION_PLAN_SUB = [
 const DEPARTMENT_PLAN_SUB = [
   { label: 'Master Setup',    to: '/department-plan' },
   { label: 'Growth Matrix',   to: '/department-plan/growth' },
-  { label: 'Attr Correction', to: '/department-plan/attr-correction', optional: true, storeOnly: true },
-  { label: 'Base Correction', to: '/department-plan/base-correction', optional: true, storeOnly: true },
+  { label: 'Attr Correction', to: '/department-plan/attr-correction', optional: true, storeOnly: true, engine: 'attr_correction' },
+  { label: 'Base Correction', to: '/department-plan/base-correction', optional: true, storeOnly: true, engine: 'base_correction' },
   { label: 'Final Results',   to: '/department-plan/final-results',   final: true },
 ]
 
@@ -29,8 +30,8 @@ const navItems = [
   { label: 'MRP Plan', icon: 'mrp', to: '/mrp-plan', subItems: [
     { label: 'Buyer\'s Input',   to: '/mrp-plan/import' },
     { label: 'Re-apportionment', to: '/mrp-plan/reapportionment' },
-    { label: 'PW/W Deviation',   to: '/deviation/pww',  optional: true },
-    { label: 'SOR Deviation',    to: '/deviation/sor',  optional: true },
+    { label: 'PW/W Deviation',   to: '/deviation/pww',  optional: true, engine: 'pww' },
+    { label: 'SOR Deviation',    to: '/deviation/sor',  optional: true, engine: 'sor' },
     { label: 'Plan Output',      to: '/mrp-plan/output', final: true },
   ]},
   { label: 'Display Type Plan', icon: 'display', to: '/display-type' },
@@ -148,9 +149,24 @@ function PlanSnapshot() {
 
 const FOLD_KEY = 'sp.nav.collapsed'
 
+// the on/off switch of an optional engine (2026-10-14) - sits on its sidebar row; off greys the row out
+function EngineSwitch({ label, on, set }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} aria-label={`${label}: ${on ? 'on' : 'off'}`}
+      title={on ? `${label} is on - click to switch it off (its output is then ignored)` : `${label} is off - click to switch it on`}
+      onClick={e => { e.preventDefault(); e.stopPropagation(); set(!on).catch(() => {}) }}
+      style={{ marginLeft: 6, width: 26, height: 14, borderRadius: 7, border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0,
+               position: 'relative', background: on ? 'var(--st-btn,#A8CBB7)' : 'rgba(255,255,255,0.18)', transition: 'background 0.15s' }}>
+      <span style={{ position: 'absolute', top: 2, left: on ? 14 : 2, width: 10, height: 10, borderRadius: '50%',
+                     background: on ? 'var(--st-btn-text,#1F4D3A)' : 'rgba(255,255,255,0.6)', transition: 'left 0.15s' }} />
+    </button>
+  )
+}
+
 export default function Sidebar() {
   const location = useLocation()
   const [grain] = useGrain()   // Attr / Base Correction are store-level: off in Cluster view (2026-10-12)
+  const [engineOn, setEngine] = useEngines()
   const [collapsed, setCollapsed] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem(FOLD_KEY) || '[]')) } catch { return new Set() }
   })
@@ -242,6 +258,17 @@ export default function Sidebar() {
                   }}>
                     <span style={{ flex: 1 }}>{sub.label}</span>
                     <span style={{ fontSize: 9, background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.35)', borderRadius: 4, padding: '1px 5px', letterSpacing: 0.3, marginLeft: 4 }}>store only</span>
+                    {sub.engine && <EngineSwitch label={sub.label} on={engineOn(sub.engine)} set={v => setEngine(sub.engine, v)} />}
+                  </div>
+                ) : sub.engine && !engineOn(sub.engine) ? (
+                  <div key={sub.to} title={`${sub.label} is switched off - its step is skipped and its output ignored`} style={{
+                    display: 'flex', alignItems: 'center',
+                    paddingLeft: 44, paddingRight: 18, paddingTop: 6, paddingBottom: 6,
+                    color: 'rgba(255,255,255,0.28)', fontSize: 12.5, userSelect: 'none',
+                    borderLeft: '3px solid transparent', textDecoration: 'line-through',
+                  }}>
+                    <span style={{ flex: 1 }}>{sub.label}</span>
+                    <EngineSwitch label={sub.label} on={false} set={v => setEngine(sub.engine, v)} />
                   </div>
                 ) : sub.soon ? (
                   <div key={sub.to} style={{
@@ -269,7 +296,8 @@ export default function Sidebar() {
                     })}
                   >
                     <span style={{ flex: 1 }}>{sub.label}</span>
-                    {sub.optional && (
+                    {sub.engine && <EngineSwitch label={sub.label} on set={v => setEngine(sub.engine, v)} />}
+                    {sub.optional && !sub.engine && (
                       <span style={{ fontSize: 9, background: 'rgba(255,255,255,0.10)', color: 'rgba(255,255,255,0.45)', borderRadius: 4, padding: '1px 5px', letterSpacing: 0.3, marginLeft: 4 }}>opt</span>
                     )}
                     {sub.final && (

@@ -4,10 +4,11 @@ Final Results Engine
 Read-only. Which engines have run and the most-advanced plan file (base_corrected > attr_corrected > final_dept);
 the page itself is the Hierarchy view (grain_view /hierarchy, 2026-10-13). Also the department -> attribute map.
 """
-from fastapi import APIRouter
+from fastapi import APIRouter, Body, HTTPException
 import json, os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from engines.department_plan import _MASTER_RAW
+from engines.engine_switch import switches, set_switch, ENGINES
 
 # Build dept→attribute lookup once at import time
 _DEPT_ATTR: dict = {}   # {div: {dept: attribute}}
@@ -27,8 +28,9 @@ def _pipeline_status():
     has_master_setup = os.path.exists(_DEPT_STATE)
     has_mrp_synced   = os.path.exists(_MRP_PLAN)
     has_new_depts    = os.path.exists(_FINAL_DEPT)
-    has_attr         = os.path.exists(_ATTR_CORRECTED)
-    has_base         = os.path.exists(_BASE_CORRECTED)
+    on               = switches()   # a switched-off engine's output is ignored (2026-10-14)
+    has_attr         = on["attr_correction"] and os.path.exists(_ATTR_CORRECTED)
+    has_base         = on["base_correction"] and os.path.exists(_BASE_CORRECTED)
 
     if has_base:
         active_file = _BASE_CORRECTED
@@ -81,6 +83,19 @@ def get_pipeline():
             "active_source": ps["active_source"], "remark": ps["remark"],
             # when the base plan was made - it remakes itself within a minute of a BIS save / AOP publish (2026-10-13)
             "base_plan_at": made, "bis_saved_at": _bis_saved_at()}
+
+
+@router.get("/engines")
+def get_engines():
+    """The optional engines and whether each is switched on (engines/engine_switch.py)."""
+    return {"engines": switches(), "labels": ENGINES}
+
+
+@router.put("/engines/{key}")
+def put_engine(key: str, on: bool = Body(..., embed=True)):
+    if key not in ENGINES:
+        raise HTTPException(404, f"No optional engine '{key}'")
+    return {"engines": set_switch(key, on), "labels": ENGINES}
 
 
 def _bis_saved_at():

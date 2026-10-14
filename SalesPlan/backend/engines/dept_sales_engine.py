@@ -877,7 +877,8 @@ def refresh_saved_plan() -> bool:
     base plan would wipe (that stays the user's Generate Base Plan). True when it regenerated."""
     if not os.path.exists(FINAL_PLAN_PATH):
         return False
-    if any(os.path.exists(os.path.join(_BASE, "..", f)) for f in _CORRECTED):
+    from engines.engine_switch import plan_files   # only a correction that is switched on holds the base plan back
+    if any(os.path.exists(os.path.join(_BASE, "..", f)) for f in plan_files() if f in _CORRECTED):
         return False
     try:
         with open(FINAL_STAMP_PATH, encoding="utf-8") as fh:

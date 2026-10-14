@@ -21,6 +21,7 @@ from fastapi.responses import StreamingResponse
 
 from plan_cache import load_json as _load_plan_json  # noqa: E402
 from plan_cache import save_json  # noqa: E402 - atomic JSON writes (audit 2026-10-06)
+from engines.engine_switch import plan_files  # noqa: E402
 
 router = APIRouter()
 
@@ -167,7 +168,7 @@ def effective_shares() -> tuple:
 
 
 def _load_dept_plan() -> dict:
-    for fname in ["base_corrected_plan.json", "attr_corrected_plan.json", "final_dept_plan.json"]:
+    for fname in plan_files():   # minus a switched-off correction (2026-10-14)
         # the plan files live in backend/, one level up, like every other engine reads them (2026-09-30: this looked in
         # engines/, found nothing, and every MRP band showed 0)
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", fname)

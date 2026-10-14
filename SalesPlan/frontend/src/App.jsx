@@ -20,6 +20,7 @@ import ArtNmImport from './pages/ArtNmImport'
 import ArtNmRoute from './components/ArtNmRoute'
 import PwwDeviation from './pages/PwwDeviation'
 import SorDeviation from './pages/SorDeviation'
+import { EngineGate } from './components/ClusterOff'
 import DisplayTypePlan from './pages/DisplayTypePlan'
 import MrpReapportionment from './pages/MrpReapportionment'
 import SyncEngine from './pages/SyncEngine'
@@ -87,15 +88,15 @@ export default function App() {
             <Route path="/department-plan" element={<DepartmentPlan />} />
             <Route path="/department-plan/growth" element={<DepartmentGrowthMatrix />} />
             <Route path="/department-plan/new-depts" element={<NewDeptPlan />} />
-            <Route path="/department-plan/attr-correction" element={<AttributeCorrection />} />
-            <Route path="/department-plan/base-correction" element={<BaseCorrection />} />
+            <Route path="/department-plan/attr-correction" element={<EngineGate k="attr_correction" name="Attr Correction"><AttributeCorrection /></EngineGate>} />
+            <Route path="/department-plan/base-correction" element={<EngineGate k="base_correction" name="Base Correction"><BaseCorrection /></EngineGate>} />
             <Route path="/department-plan/final-results" element={<FinalResults />} />
             <Route path="/mrp-plan/import" element={<MrpImport />} />
             <Route path="/mrp-plan/output" element={<MrpOutput />} />
             <Route path="/art-plan/import" element={<ArtNmImport />} />
             <Route path="/art-plan/output" element={<ArtNmRoute />} />
-            <Route path="/deviation/pww" element={<PwwDeviation />} />
-            <Route path="/deviation/sor" element={<SorDeviation />} />
+            <Route path="/deviation/pww" element={<EngineGate k="pww" name="PW/W Deviation"><PwwDeviation /></EngineGate>} />
+            <Route path="/deviation/sor" element={<EngineGate k="sor" name="SOR Deviation"><SorDeviation /></EngineGate>} />
             <Route path="/display-type" element={<DisplayTypePlan />} />
             <Route path="/mrp-plan/reapportionment" element={<MrpReapportionment />} />
             <Route path="/sync" element={<SyncEngine />} />

@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Optional engines: on/off switch (opted out by default)
+- **Asked (user):** "for optional engines give a toggle for the user so the user can activate and deactive the engine if it is to be used"; then "toggles missing from attr correction and base correction and toggles not working they are static - they should active - inactive the optional engine, opted out is their default".
+- Sidebar: Attr Correction, Base Correction, PW/W Deviation and SOR Deviation each have a switch on their row (replaces the "opt" tag; Attr / Base keep it in Cluster view too). Off = the row is greyed and struck through, its page says "switched off" with a Switch on button, Growth Matrix's "What next?" offers only switched-on corrections (none on → Generate Base Plan goes straight to Final Results), MRP Plan Output drops it from the step bar and the "Apply Deviations?" prompt (both off → no prompt).
+- Backend `engines/engine_switch.py` (state in `backend/engine_switches.json`, git-ignored; **default all off**); `GET /api/planning/final-results/engines`, `PUT /engines/{key}` `{on}`. Every plan reader (Final Results / grain trees / reconciliation, MRP plan, Article Name, Display Type, Base Correction's source, the base-plan auto-refresh) skips a switched-off correction's plan file - the file stays on disk, so switching back on brings it back as it was.
+- "Static" toggles: 8010 was serving the new screens on the old backend (no switch endpoint) - restarted.
+
 ### Display Type page latency; Home card live; reconciliation issues report (one file)
 - **Asked (user):** "fix the display type page latency too"; "fix this too" (Home: Display Type Plan "Coming soon"); "need a download excel button to check on such issues higlighted in reco ... or give a 1 button to download the report so that all issues can be addressed at one go ... in different spreadsheets in 1 files".
 - Display Type: `status` reads the run times from the files' save times (it parsed the 153 MB run + 198 MB Qty files on every page open); the page no longer downloads them - the Qty tab asks `GET /display-type/qty-view?month=&store=&division=&dept=` for one slice (up to 500 rows, largest first, totals of every row inside the filters, the filter choices), served from the Qty run kept as a table in memory and in `dt_qty_result.view.pkl` (per file version). Page status 0.01 s, Qty tab 0.05-0.07 s / ~160 KB (3.3 s the first time after a restart) instead of ~350 MB.
