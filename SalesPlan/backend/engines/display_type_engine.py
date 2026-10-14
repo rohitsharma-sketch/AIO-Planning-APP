@@ -902,6 +902,16 @@ def get_journey_options(store: str = "", dept: str = ""):
     return options(store, dept)
 
 
+@router.get("/journey/export")
+def get_journey_export(store: str, dept: str, month: str, mrp: str = "", display: str = ""):
+    """The journey on screen as an Excel file in plain words, plus every MRP of the department to UDF."""
+    from engines.journey import journey_xlsx
+    from urllib.parse import quote
+    data, name = journey_xlsx(store, dept, month, mrp, display)
+    return StreamingResponse(io.BytesIO(data), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                             headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"})
+
+
 @router.get("/journey")
 def get_journey(store: str, dept: str, month: str, mrp: str = "", display: str = ""):
     """How one store x department x month (x MRP x display type) is made, step by step down to qty - engines/journey."""

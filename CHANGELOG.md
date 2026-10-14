@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Number journey: Excel in plain words
+- **Asked (user):** "give me an excel downloader for this journey so that in plain words can be explained" (and, on cluster / SSG-NSO-Others tags: "nervermind it is there in the right side").
+- "⬇ Excel (this journey)" on the Journey page (`GET /display-type/journey/export`, `journey.journey_xlsx`): sheet Journey = store, group, cluster, tag, reference, department, month, then one row per step (stage, step, in plain words, calculation, value, unit, check); sheet "All MRPs to UDF" = every MRP of the department that month with all 32 export fields. The store picker also shows each store's group (e.g. "ABD · SSG · BH - (NP)").
+
 ### Sales Plan: Number journey (how a number is made, sources to UDF) + export of every field
 - **Asked (user):** "i want a journey mapper in the side tile where i can know about how a number was derived till udf. Make sure that each and every contribution towards the numbers are mapped in a plain flow. Also i want all the fields availble for export till display type so that the user can easily export the report for fact finding".
 - Sidebar "Number journey" (`/journey`, `pages/Journey.jsx`; `engines/journey.py`, `GET /display-type/journey`, `/journey/options`): pick store (grouped SSG / NSO / Others), department, month, MRP, display type -> a top-to-bottom flow, each step re-derived from its own input with its value and formula. SSG: Calendar LY -> x AOP LY base -> x BIS growth P1 / P2 -> x AOP hold (division x month) -> new-department step (LADIES) -> department plan (checked against the saved plan, ✓ / ✗). NSO / Others: AOP Forecaster store plan -> x the reference store's department share -> P1 / P2 like the reference -> department plan. Then MRP share (and where the split comes from) -> Table / Non-Table share (which LY mix, the reference store's for non-SSG) -> ASP (own / other display type) -> pieces. An MRP list beside it to follow any MRP.

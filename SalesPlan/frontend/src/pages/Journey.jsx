@@ -66,7 +66,7 @@ export default function Journey() {
             <select value={sel.store} onChange={set('store')} style={sel_} aria-label="Store">
               {groups.map(g => (
                 <optgroup key={g} label={`${g} (${(opt?.stores || []).filter(s => s.group === g).length})`}>
-                  {(opt?.stores || []).filter(s => s.group === g).map(s => <option key={s.store} value={s.store}>{s.store} · {s.cluster}</option>)}
+                  {(opt?.stores || []).filter(s => s.group === g).map(s => <option key={s.store} value={s.store}>{s.store} · {s.group} · {s.cluster}</option>)}
                 </optgroup>))}
             </select>
           </label>
@@ -96,6 +96,9 @@ export default function Journey() {
               <option value="NON_TABLE">Non-Table</option>
             </select>
           </label>
+          <a href={sel.store && sel.dept && sel.month ? `${API}/journey/export?${new URLSearchParams(sel)}` : undefined}
+            style={{ ...btn(true), alignSelf: 'end', height: 18, display: 'inline-flex', alignItems: 'center' }}
+            title="This journey in plain words (one row per step, with its calculation) + every MRP of the department to UDF">⬇ Excel (this journey)</a>
         </div>
       </div>
 

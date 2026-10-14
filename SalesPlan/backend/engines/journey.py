@@ -219,6 +219,38 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
             "steps": steps, "ok": ok, "mrps": sorted(mrps, key=lambda r: -r["ty"]), "mrp_source": src if bands else None}
 
 
+def journey_xlsx(store: str, dept: str, month: str, mrp: str = "", display: str = "") -> tuple:
+    """The journey as an Excel file in plain words (user, 2026-10-14: "give me an excel downloader for this journey so
+    that in plain words can be explained"): sheet Journey = the steps on screen (stage, step, explanation, calculation,
+    value); sheet "All MRPs to UDF" = every MRP of the department that month down to Table / Non-Table and pieces."""
+    j = journey(store, dept, month, mrp, display)
+    sd = _plan()["stores"][store]
+    head = [("Store", f"{store} ({j['group']})"), ("Cluster", sd.get("cluster") or "-"), ("Store tag", sd.get("tag") or "-"),
+            ("Split follows", sd.get("ref_used") or store), ("Division", j["division"]), ("Department", dept), ("Month", month),
+            ("MRP", mrp or "all - see the next sheet"), ("Display type", display or "Table and Non-Table"),
+            ("How to read", "Each row is one step; its value is worked out from the row above with the calculation shown. "
+                            "Rs lakh unless the unit says pieces. The department row is checked against the saved plan.")]
+    steps = pd.DataFrame([{"#": i + 1, "Stage": x["stage"], "Step": x["title"], "In plain words": x["text"],
+                           "Calculation": x["formula"], "Value": x["value"], "Unit": x["unit"] or "",
+                           "Check": "lands on the saved plan" if x.get("check") is True else "does NOT land on the saved plan" if x.get("check") is False else ""}
+                          for i, x in enumerate(j["steps"])])
+    allm = export_rows(store=store)
+    allm = allm[(allm["Department"] == dept) & (allm["Month"] == month)]
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as xw:
+        pd.DataFrame(head, columns=["", ""]).to_excel(xw, sheet_name="Journey", index=False, header=False)
+        steps.to_excel(xw, sheet_name="Journey", index=False, startrow=len(head) + 1)
+        allm.to_excel(xw, sheet_name="All MRPs to UDF", index=False)
+        ws = xw.sheets["Journey"]
+        wrap = xw.book.add_format({"text_wrap": True, "valign": "top"})
+        bold = xw.book.add_format({"bold": True})
+        ws.set_column(0, 0, 14, bold); ws.set_column(1, 1, 14); ws.set_column(2, 2, 30); ws.set_column(3, 3, 80, wrap)
+        ws.set_column(4, 4, 45, wrap); ws.set_column(5, 5, 14); ws.set_column(6, 7, 12)
+        xw.sheets["All MRPs to UDF"].set_column(0, 40, 16)
+    name = f"Journey - {store} - {dept} - {month}{' - ' + mrp if mrp else ''}.xlsx".replace("/", "-")
+    return buf.getvalue(), name
+
+
 # ── the export: every field, store x department x MRP x month ─────────────────────────────────────────────────────
 
 def export_rows(division: str = "", group: str = "", store: str = "") -> pd.DataFrame:
