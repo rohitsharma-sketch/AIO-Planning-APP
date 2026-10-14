@@ -7,6 +7,9 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Home: Live plan tile removed from Saved plans
+- **Asked (user):** "remove live plan". Saved plans shows only the saved iterations ("No saved plans yet." when none); each tile still says how far the live plan has moved since it was saved, and Compare can still pick the live plan.
+
 ### BIS reports = the Buyer's Plan (latest iteration)
 - **Asked (user):** "patch the rest of the modules to buyer's plan's latest iteration. they all should display the same output as highlighted in the buyer's plan as per the respective nomenclature and hierarchy specified."
 - Found on Iteration 4: plan ₹430.4 Cr everywhere, but LY ₹388.8 Cr (+10.7%) on Buyer's Plan / Department Summary vs ₹386.7 Cr (+11.3%) on Division / Attribute Summary - those two left the inactive departments' LY out; Division Summary also left a department with no growth typed out of TY (the Buyer's Plan plans it at LY); Inactive Depts showed LY x the department's growth though its plan is 0.

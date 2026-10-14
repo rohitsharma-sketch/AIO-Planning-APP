@@ -6,8 +6,8 @@ import { API, call, openPlanVersion, openVersionId, when } from '../planVersion'
 import { Changes } from '../components/PlanVersions'
 
 // Saved plans as tiles (user, 2026-10-14: "i want the saved plans to be highlighted here as a tile so that i can easily
-// view the plan and compare it with the new iteration if required"): the live plan + every saved iteration, newest
-// first - View opens it on Final Results, Compare opens "What changed" (any iteration or the live plan, either side).
+// view the plan and compare it with the new iteration if required"): every saved iteration, newest first (the live
+// plan's tile removed - user, 2026-10-14: "remove live plan") - View opens it on Final Results, Compare opens "What changed" (any iteration or the live plan, either side).
 const Cr = v => `₹${((v ?? 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Cr`
 const pct = (a, b) => (b ? `${a >= b ? '+' : ''}${((a / b - 1) * 100).toFixed(1)}%` : '–')
 
@@ -67,10 +67,10 @@ function SavedPlans() {
       {!list && !err && <div style={{ fontSize: 12.5, color: theme.textMuted }}>Loading saved plans…</div>}
       {list && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-          {tile('live', 'Live plan', 'Updates by itself from BIS, AOP and the Calendar', list.live.ly, list.live.ty, null, true)}
           {[...vs].reverse().map(v => tile(v.id, v.name, `Saved ${when(v.updated_at)}${v.saved_by ? ` by ${v.saved_by}` : ''}`, v.ly, v.ty, v, false))}
         </div>
       )}
+      {list && !vs.length && <div style={{ fontSize: 12.5, color: theme.textMuted }}>No saved plans yet.</div>}
       {cmp && <Changes id={cmp.id} base={cmp.base} versions={vs} onClose={() => setCmp(null)} />}
     </>
   )
