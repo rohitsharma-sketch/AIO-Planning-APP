@@ -124,7 +124,7 @@ function AspCard({ status, onDone }) {
       </div>
       <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 6, lineHeight: 1.6 }}>
         Template: Division | Department | MRP | Display Type | Mar'27 P1 | Mar'27 P2 | Mar'27 | … (₹ per piece). The planners' file with P1 / P2 VAL and QTY
-        by cluster and article is converted on import: everything added up per Department × MRP × Display Type, ASP = value ÷ pieces, the month weighted by pieces.
+        by cluster and article is converted on import: carried onto the new MRPs through the MRP master (the re-apportionment's rule - listed MRPs move whole, discontinued ones split to the nearest listed below / above), added up per Department × MRP × Display Type, ASP = value ÷ pieces, the month weighted by pieces.
       </div>
       {err && <div style={{ fontSize: 12, color: theme.danger, marginTop: 6 }}>{err}</div>}
       {d && (

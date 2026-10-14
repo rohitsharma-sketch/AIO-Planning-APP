@@ -251,6 +251,49 @@ def _col(df, *names):
     return next((up[n] for n in names if n in up), None)
 
 
+def _onto_new_mrps(base: pd.DataFrame, nums: pd.DataFrame, df: pd.DataFrame) -> tuple:
+    """The raw file's value and pieces carried onto the new MRPs through the MRP master in use (user, 2026-10-14: "carry
+    the ASP onto the new MRPs through the master") - the MRP Re-apportionment's own rule (_redistribute): a listed MRP
+    moves 100% to its new MRP; a discontinued one splits to the nearest listed MRP below / above (Summer 60 / 40, others
+    40 / 60, by the row's ATTRIBUTE-1); value and pieces split alike, so a new MRP's ASP = the piece-weighted mix of the
+    old MRPs it took. An MRP the master doesn't list for its Department x Display is treated as the sales are
+    (_expand_listed): listed to itself when it is one of the new MRPs there, else discontinued. A Department x Display
+    the master doesn't cover keeps its own MRPs. Returns ({(dept, new mrp, display): sums}, how-it-went text)."""
+    import numpy as np
+    from engines.mrp_reapportionment_engine import _load_mapping, _redistribute, _find_mapping_file
+    mp = _load_mapping()
+    c_attr = _col(df, "ATTRIBUTE-1", "ATTRIBUTE1", "ATTRIBUTE")
+    c_store = _col(df, "CLUSTER", "STORE")
+    cols = [f"c{i}" for i in range(nums.shape[1])]
+    s = pd.DataFrame({"STORE": df.loc[base.index, c_store].astype(str).to_numpy() if c_store else "ALL", "DIVISION": "",
+                      "DEPARTMENT": base["dept"].to_numpy(), "MRP": base["mrp"].round().astype(int).to_numpy(),
+                      "DISPLAY": base["dt"].to_numpy(),
+                      "ATTRIBUTE": df.loc[base.index, c_attr].astype(str).str.strip().str.upper().to_numpy() if c_attr else ""})
+    s[cols] = nums.to_numpy()
+    k = (s[["DEPARTMENT", "DISPLAY", "MRP"]].drop_duplicates().rename(columns={"MRP": "MRP_CURRENT"})
+         .merge(mp[["DEPARTMENT", "DISPLAY"]].drop_duplicates(), on=["DEPARTMENT", "DISPLAY"])
+         .merge(mp[["DEPARTMENT", "DISPLAY", "MRP_CURRENT"]], how="left", indicator=True))
+    k = k[k["_merge"] == "left_only"].drop(columns="_merge")
+    newm = (mp.loc[mp["MRP_LISTED"] > 0, ["DEPARTMENT", "DISPLAY", "MRP_LISTED"]].drop_duplicates()
+            .rename(columns={"MRP_LISTED": "MRP_CURRENT"}).assign(_n=1))
+    k = k.merge(newm, how="left")
+    k["MRP_LISTED"] = np.where(k["_n"].eq(1), k["MRP_CURRENT"], 0).astype(int)
+    mp2 = pd.concat([mp, k[["DEPARTMENT", "DISPLAY", "MRP_CURRENT", "MRP_LISTED"]]], ignore_index=True)
+    out, unm, _ = _redistribute(s, mp2, cols)
+    moved = out.rename(columns={"LISTED_MRP": "mrp"})[["DEPARTMENT", "mrp", "DISPLAY"] + cols]
+    kept = unm.rename(columns={"MRP_CURRENT": "mrp"})[["DEPARTMENT", "mrp", "DISPLAY"] + cols] if len(unm) else moved.iloc[:0]
+    g = (pd.concat([moved, kept], ignore_index=True).rename(columns={"DEPARTMENT": "dept", "DISPLAY": "dt"})
+         .groupby(["dept", "mrp", "dt"], sort=True)[cols].sum())
+    g.columns = list(nums.columns)
+    nv = len([c for c in cols[: len(cols) // 2]])
+    vtot = float(nums.iloc[:, :nv].to_numpy().sum())
+    vk = float(kept[cols[:nv]].to_numpy().sum()) if len(kept) else 0.0
+    how = (f"carried onto the new MRPs through {os.path.basename(_find_mapping_file() or '')} "
+           f"({int((out['SHARE_PCT'] >= 100).sum()):,} moved whole, {int((out['SHARE_PCT'] < 100).sum()):,} split parts"
+           + (f"; ₹{vk:,.1f} L of ₹{vtot:,.1f} L value kept on its own MRP - Department × Display not in the master" if vk > 1e-6 else "") + ")")
+    return g, how
+
+
 def asp_from_frame(df: pd.DataFrame) -> tuple:
     """The raw VAL / QTY file or the ASP template -> ({key: record}, periods, level). record = {division, dept, mrp,
     display_type, months: {"Mar'27 P1": ASP, "Mar'27 P2": ASP, "Mar'27": ASP}} (division names from the plan)."""
@@ -271,7 +314,7 @@ def asp_from_frame(df: pd.DataFrame) -> tuple:
     if val and qty:   # the raw file: company-level ASP from value and pieces
         halves = sorted((pp for pp in val if pp in qty), key=_period_key)
         nums = df.loc[base.index, [val[pp] for pp in halves] + [qty[pp] for pp in halves]].apply(pd.to_numeric, errors="coerce").fillna(0.0)
-        g = pd.concat([base, nums], axis=1).groupby(["dept", "mrp", "dt"], sort=True)[list(nums.columns)].sum()
+        g, how = _onto_new_mrps(base, nums, df)
         months = []
         for pp in halves:
             if pp.split(" ")[0] not in months:
@@ -287,7 +330,7 @@ def asp_from_frame(df: pd.DataFrame) -> tuple:
                 V, Q = sum(r[val[x]] for x in hs), sum(r[qty[x]] for x in hs)
                 ms[mon] = round(V * 1e5 / Q, 4) if Q > 0 else None
             out[_asp_key(dp, mr, dt)] = {"division": divs.get(dp, ""), "dept": dp, "mrp": str(int(mr)), "display_type": dt, "months": ms}
-        return out, periods, "company (converted from VAL / QTY)"
+        return out, periods, f"company, converted from VAL / QTY - {how}"
     # the ASP template (or the older month-only layout)
     pcs = sorted(((c, pp) for c, (pp, k) in kinds.items() if pp and k in ("", "ASP")), key=lambda x: _period_key(x[1]))
     if not pcs:
