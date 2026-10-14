@@ -309,12 +309,25 @@ def asp_from_frame(df: pd.DataFrame) -> tuple:
     base = pd.DataFrame({"dept": df[c_dept].astype(str).str.strip().str.upper(),
                          "mrp": pd.to_numeric(df[c_mrp], errors="coerce"),
                          "dt": df[c_dt].astype(str).str.strip().str.upper().str.replace("-", "_").str.replace(" ", "_")})
+    # the planners' own new MRP / display type, when the file gives them (for ASP MAMJ 2.xlsx: NEW MRP, NEW DISPLAY
+    # TYPE beside the old ones, 2026-10-14) - then the ASP is priced on them directly, not carried through the master
+    c_nmrp, c_ndt = _col(df, "NEW MRP"), _col(df, "NEW DISPLAY TYPE")
+    if c_nmrp:
+        nm = pd.to_numeric(df[c_nmrp], errors="coerce")
+        base["mrp"] = nm.where(nm > 0, base["mrp"])
+        if c_ndt:
+            nd = df[c_ndt].astype(str).str.strip().str.upper().str.replace("-", "_").str.replace(" ", "_")
+            base["dt"] = nd.where(~nd.isin(["", "NAN", "NONE"]), base["dt"])
     base = base[base["dept"].ne("") & base["dept"].ne("NAN") & base["mrp"].notna()]
     out = {}
     if val and qty:   # the raw file: company-level ASP from value and pieces
         halves = sorted((pp for pp in val if pp in qty), key=_period_key)
         nums = df.loc[base.index, [val[pp] for pp in halves] + [qty[pp] for pp in halves]].apply(pd.to_numeric, errors="coerce").fillna(0.0)
-        g, how = _onto_new_mrps(base, nums, df)
+        if c_nmrp:
+            g = pd.concat([base, nums], axis=1).groupby(["dept", "mrp", "dt"], sort=True)[list(nums.columns)].sum()
+            how = "priced on the file's own NEW MRP / NEW DISPLAY TYPE"
+        else:
+            g, how = _onto_new_mrps(base, nums, df)
         months = []
         for pp in halves:
             if pp.split(" ")[0] not in months:
@@ -356,8 +369,35 @@ def asp_from_frame(df: pd.DataFrame) -> tuple:
     return out, periods, "company (template)"
 
 
+def fill_missing(cur: dict, records: dict, periods: list, source: str, level: str) -> tuple:
+    """Pure. The ASP in use + a second file, only where the first has nothing (user, 2026-10-14: "add the ASPs from this
+    file for missing entries"): a Department x MRP x Display Type it lacks is added whole; one it has gets only its
+    empty periods. Nothing it has is overwritten. -> (merged dt_asp.json content, rows added, periods filled)."""
+    data = {k: {**v, "months": dict(v["months"])} for k, v in cur["data"].items()}
+    added = filled = 0
+    for k, rec in records.items():
+        if k not in data:
+            if any(v for v in rec["months"].values()):
+                data[k] = {**rec, "from": source}
+                added += 1
+            continue
+        for pp, v in rec["months"].items():
+            if v and not data[k]["months"].get(pp):
+                data[k]["months"][pp] = v
+                data[k].setdefault("filled", {})[pp] = source
+                filled += 1
+    pers = list(cur.get("months") or [])
+    pers += [pp for pp in periods if pp not in pers]
+    pers.sort(key=_period_key)
+    out = {**cur, "imported_at": _ts(), "count": len(data), "months": pers, "data": data,
+           "source": f"{cur.get('source')} + missing from {source}",
+           "level": f"{cur.get('level', '')}; missing entries from {source} ({level})"}
+    return out, added, filled
+
+
 @router.post("/import/asp")
-async def import_asp(file: UploadFile = File(...)):
+async def import_asp(file: UploadFile = File(...), mode: str = "replace"):
+    """mode=replace: the file is the ASP master; mode=fill: it only fills what the ASP in use lacks (fill_missing)."""
     raw = await file.read()
     try:
         df = pd.read_excel(io.BytesIO(raw)) if not file.filename.endswith(".csv") else pd.read_csv(io.BytesIO(raw))
@@ -367,6 +407,11 @@ async def import_asp(file: UploadFile = File(...)):
     records, periods, level = asp_from_frame(df)
     if not records:
         raise HTTPException(400, "No ASP rows in the file")
+    cur = _load(DT_ASP_PATH)
+    if mode == "fill" and cur:
+        out, added, filled = fill_missing(cur, records, periods, file.filename, level)
+        _save(DT_ASP_PATH, out)
+        return {"ok": True, "rows": out["count"], "added": added, "filled": filled, "months": out["months"], "level": out["level"]}
     out = {"imported_at": _ts(), "source": file.filename, "count": len(records), "level": level,
            "months": periods, "data": records}
     _save(DT_ASP_PATH, out)
@@ -485,6 +530,7 @@ def run_plan():
                 depts_data = month_data.get("departments", {})
                 for dept, dept_rec in depts_data.items():
                     if dept not in mrp_raw.get(div, {}): continue
+                    if not dept_rec.get("active", True): continue   # inactive (e.g. off season): plan 0, nothing to split (2026-10-14)
                     mrp_dept = mrp_raw[div][dept]
                     ty_p1 = dept_rec.get("ty_p1", 0.0)
                     ty_p2 = dept_rec.get("ty_p2", 0.0)

@@ -358,8 +358,39 @@ def _load_mapping(path: Optional[str] = None) -> pd.DataFrame:
         if missing:
             raise ValueError(f"MRP Mapping Master missing columns: {missing}")
     if listed_only:
-        return _expand_listed(_clean_master(df))
-    return _clean_master(df)
+        return _with_ly_departments(_expand_listed(_clean_master(df)))
+    return _with_ly_departments(_clean_master(df))
+
+
+MASTER_RULE = "ly-departments-2"   # in compare_key: caches built before this rule are not reused
+
+
+def _with_ly_departments(mp: pd.DataFrame) -> pd.DataFrame:
+    """Departments the master doesn't cover keep their LY MRPs (user, 2026-10-14: "for occasional departments go with
+    the last year mrp and their cont % the inputs for occasional mrp inputs were not there with us ... make the plan
+    wherever missing"): every Department x Display x MRP such a department sold LY is listed to itself, so its MRP split
+    is its own LY MRP mix and its display mix its own LY display mix - in the run, the MRP Cont %, Before -> After, the
+    display split and the check-up alike. Old pre-split names and blank displays are left out (blank stays Unmapped)."""
+    try:
+        sales, month_cols, _ = _engine_sales()
+    except Exception:   # noqa: BLE001 - no sales: the master as it is
+        return mp
+    from engines.art_nm_engine import DEPT_SPLITS
+    old = {o for o, ps in DEPT_SPLITS.items() if o not in ps}
+    s = sales[(sales[month_cols] != 0).any(axis=1) & ~sales["DEPARTMENT"].isin(set(mp["DEPARTMENT"]) | old)
+              & (sales["DISPLAY"] != "(BLANK)")]
+    try:   # only the departments the Sales Plan plans (KIDS / LADIES / MENS Department Master) - not GM / RETAIL
+        from engines.final_results_engine import _load_dept_attr_map
+        am = _load_dept_attr_map()
+        s = s[s["DEPARTMENT"].isin({d for dv in ("KIDS", "LADIES", "MENS") for d in (am.get(dv) or {})})]
+    except Exception:   # noqa: BLE001
+        pass
+    if s.empty:
+        return mp
+    add = s[["DEPARTMENT", "DISPLAY", "MRP"]].drop_duplicates().rename(columns={"MRP": "MRP_CURRENT"})
+    add["MRP_CURRENT"] = add["MRP_CURRENT"].astype(int)
+    add["MRP_LISTED"] = add["MRP_CURRENT"]
+    return pd.concat([mp, add], ignore_index=True).sort_values(["DEPARTMENT", "DISPLAY", "MRP_CURRENT"]).reset_index(drop=True)
 
 
 def _expand_listed(listed: pd.DataFrame) -> pd.DataFrame:
@@ -1184,7 +1215,7 @@ def compare_key() -> tuple:
     mf = _find_mapping_file()
     if not mf:
         raise HTTPException(404, f"No MRP master in {MAPPING_DIR} - import one first")
-    return (_sales_key(), mf, os.path.getmtime(mf))
+    return (_sales_key(), mf, os.path.getmtime(mf), MASTER_RULE)
 
 
 def _compare():

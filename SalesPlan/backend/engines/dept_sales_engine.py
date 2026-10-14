@@ -311,9 +311,20 @@ def run_dept_plan():
     # the master, +10% in BIS); BIS's delisted ones come as -100% (index 0) and drop out either way.
     from engines.department_plan import BIS_DIVISIONS, _load_state
     state = _load_state()
+    # ...except off season (user, 2026-10-14: "MAKE WINTER/PREWINTER INACTIVE FOR MAMJ"): BIS gives the winter / pre-winter
+    # departments a growth, but one the master has inactive stays out for months its attribute is off season
+    # (plan_checkup.season) - BIS can't switch it back on
+    try:
+        from engines.plan_checkup import season, _in
+        from engines.final_results_engine import _load_dept_attr_map
+        _ins, _ = season(active_ty_months)
+        _attrs = _load_dept_attr_map()
+    except Exception:   # noqa: BLE001 - no rule to hand: BIS decides, as before
+        _ins, _attrs, _in = None, {}, (lambda a, i: True)
     active_depts = {}
     for div, rows in dept_config.items():
         bis = {d for d, p in growth_matrix.get(div, {}).items() if any(float(x) > 0 for x in p.values())}
+        bis -= {d for d in bis if not _in((_attrs.get(div) or {}).get(d, "-"), _ins)}
         off = ({n for n, v in state.get(div, {}).items() if not v.get("active", True)} - bis) if div in BIS_DIVISIONS else set()
         active_depts[div] = {r["name"] for r in rows if r.get("active", True) and r["name"] not in off}
 

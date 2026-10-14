@@ -597,6 +597,16 @@ def sync_from_buyer():
 
     state = _load_state()
     master = _build_master()
+    # off-season attributes stay inactive whatever BIS sends (user, 2026-10-14: "MAKE WINTER/PREWINTER INACTIVE FOR
+    # MAMJ" - BIS gives them a growth, so the sync would switch them back on); the rule: plan_checkup.season
+    try:
+        from actuals_manager import plan_ty_months
+        from engines.final_results_engine import _load_dept_attr_map
+        from engines.plan_checkup import season, _in
+        ins, _rule = season(plan_ty_months() or [])
+        attrs = _load_dept_attr_map()
+    except Exception:   # noqa: BLE001 - no rule to hand: BIS decides alone, as before
+        ins, attrs, _in = None, {}, (lambda a, i: True)
 
     activated = deactivated = 0
 
@@ -608,7 +618,7 @@ def sync_from_buyer():
         for row in dept_rows:
             dept = row["name"]
             was_active = div_state.get(dept, {}).get("active", True)
-            now_active = dept in div_buyer
+            now_active = dept in div_buyer and _in((attrs.get(div) or {}).get(dept, "-"), ins)
             entry = div_state.setdefault(dept, {})
             entry["active"] = now_active
             if "contrib_pct" not in entry:

@@ -157,7 +157,7 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
         keep = 1 - float(c.get("ref_reduction_pct", c.get("alloc_pct", 0)) or 0) / 100
         refs[(dv, c["ref_dept"])] = refs.get((dv, c["ref_dept"]), 1.0) * keep
 
-    c_oth, c_lfl, c_mix = Acc(), Acc(), Acc()
+    c_oth, c_lfl, c_mix, nd_acc, nd_sum = Acc(), Acc(), Acc(), Acc(), {}
     b_g, b_ty = Acc(1e-9), Acc()
     chain, lfl_ty, all_ty = {}, {}, {}
     ratios = {}       # (div, month) -> [TY P1 / (LY/2 x g P1)] of plain like-for-like rows
@@ -202,6 +202,20 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
                         lfl_rows.append((store, dv, m, dp, x, deps))
                 elif cal_ok:
                     c_oth.add(cal, ly, **w)
+                # a new department = its preset % of its reference's plan before the reference's own cut, every store x
+                # month (user, 2026-10-14: "add a check that the new department - ref department ratio is maintained as per
+                # the preset at BIS")
+                for (dvn, n), c in new.items():
+                    x, r = deps.get(n), deps.get(c["ref_dept"])
+                    if dvn != dv or x is None or r is None or not r.get("active", True):
+                        continue
+                    kp = refs.get((dv, c["ref_dept"]), 1.0)
+                    pct = float(c.get("new_dept_pct", c.get("alloc_pct", 0)) or 0) / 100
+                    rt = float(r.get("ty") or 0.0) / kp if kp else 0.0
+                    nd_acc.add(rt * pct, float(x.get("ty") or 0.0), **w, Department=n, Reference=c["ref_dept"])
+                    e = nd_sum.setdefault((dv, n, c["ref_dept"]), [0.0, 0.0, pct, 1 - kp])
+                    e[0] += float(x.get("ty") or 0.0)
+                    e[1] += rt
     st1 = "Calendar → LY"
     if cal_ok:
         out.append(c_oth.out(st1, "ly_other", "Store × Division × Month (other stores): plan LY = Calendar reindexed sales", "Division"))
@@ -261,6 +275,15 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
                         fix="rerun" if not corrected else "input",
                         note=("A corrected plan (" + source + ") moves TY on purpose. " if corrected else "") +
                         "New departments = their % of the reference's plan; references keep their share. Factors: " + fn))
+    if new:
+        rows = [{"Division": dv, "New department": n, "Reference": r, "Preset new %": pct * 100, "Preset reference cut %": cut * 100,
+                 "New TY (₹L)": a, "Reference TY before its cut (₹L)": b, "Actual %": a / b * 100 if b else None}
+                for (dv, n, r), (a, b, pct, cut) in sorted(nd_sum.items())]
+        out.append(nd_acc.out(st3, "new_ratio", "Store × Month: new department = its preset % of the reference department (New Departments preset)",
+                              "Department", note="The preset of the New Departments template (BIS new departments): new TY = preset % × the reference's plan "
+                              "before its own cut; the reference keeps (1 − its cut %)."))
+        out.append(_plain(st3, "new_ratio_sum", "New departments vs their reference - preset and actual %", "Department", "info",
+                          f"{len(rows)} new departments", rows))
     from engines.dept_sales_engine import FINAL_STAMP_PATH, _inputs_stamp
     try:
         with open(FINAL_STAMP_PATH, encoding="utf-8") as fh:

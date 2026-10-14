@@ -82,6 +82,8 @@ function UploadBox({ label, subtitle, endpoint, onDone, imported, rows, date, co
 const ASP_FIELDS = [['division', 'Division'], ['dept', 'Department'], ['mrp', 'MRP'], ['display_type', 'Display type']]
 function AspCard({ status, onDone }) {
   const ref = useRef()
+  const mode = useRef('replace')   // 'fill' = only what the ASP in use lacks (user, 2026-10-14: "add the ASPs from this file for missing entries")
+  const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [d, setD] = useState(null)
@@ -90,12 +92,13 @@ function AspCard({ status, onDone }) {
   const load = () => fetch(`${API}/asp`).then(r => (r.ok ? r.json() : null)).then(setD).catch(() => setD(null))
   useEffect(() => { if (status?.asp_imported) load() }, [status?.asp_imported, status?.asp_date])   // eslint-disable-line react-hooks/exhaustive-deps
   const upload = async file => {
-    setBusy(true); setErr('')
+    setBusy(true); setErr(''); setMsg('')
     const fd = new FormData(); fd.append('file', file)
     try {
-      const r = await fetch(`${API}/import/asp`, { method: 'POST', body: fd })
+      const r = await fetch(`${API}/import/asp?mode=${mode.current}`, { method: 'POST', body: fd })
       const j = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`)
+      if (j.added != null) setMsg(`${file.name}: ${j.added} rows added, ${j.filled} empty periods filled - nothing in use was overwritten`)
       onDone(); load()
     } catch (e) { setErr(e.message) } finally { setBusy(false); if (ref.current) ref.current.value = '' }
   }
@@ -117,7 +120,9 @@ function AspCard({ status, onDone }) {
         </span>
         <span style={{ flex: 1 }} />
         <input ref={ref} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={e => { const x = e.target.files[0]; if (x) upload(x) }} />
-        <button type="button" style={{ ...btn, background: 'var(--st-btn,#A8CBB7)', border: 'none', color: 'var(--st-btn-text,#1F4D3A)' }} disabled={busy} onClick={() => ref.current?.click()}>{busy ? 'Importing…' : 'Import ↑'}</button>
+        <button type="button" style={{ ...btn, background: 'var(--st-btn,#A8CBB7)', border: 'none', color: 'var(--st-btn-text,#1F4D3A)' }} disabled={busy} onClick={() => { mode.current = 'replace'; ref.current?.click() }}>{busy ? 'Importing…' : 'Import ↑'}</button>
+        {status?.asp_imported && <button type="button" style={btn} disabled={busy} onClick={() => { mode.current = 'fill'; ref.current?.click() }}
+          title="Take ASPs from another file only where the ASP in use has none (new Department × MRP × Display Type rows, empty periods)">Add missing ↑</button>}
         <button type="button" style={btn} onClick={() => window.open(`${API}/export/asp`, '_blank')} title={status?.asp_imported ? 'The ASP in use, in the template' : 'A blank template on the plan’s Department × MRP × Display Type'}>
           {status?.asp_imported ? 'Export ↓' : 'Template ↓'}
         </button>
@@ -127,6 +132,7 @@ function AspCard({ status, onDone }) {
         by cluster and article is converted on import: carried onto the new MRPs through the MRP master (the re-apportionment's rule - listed MRPs move whole, discontinued ones split to the nearest listed below / above), added up per Department × MRP × Display Type, ASP = value ÷ pieces, the month weighted by pieces.
       </div>
       {err && <div style={{ fontSize: 12, color: theme.danger, marginTop: 6 }}>{err}</div>}
+      {msg && <div style={{ fontSize: 12, color: theme.success, marginTop: 6 }}>{msg}</div>}
       {d && (
         <>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', margin: '12px 0 8px' }}>
