@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### STR Forecaster: the detailed Excel ~3x faster to build, instant to download again
+- **Asked (user):** "decrease the latency for extracting output in STR forecaster in excel".
+- Profiled: pandas' cell-by-cell Excel formatter ~230 s of 5.1 million cells, and the new forward-cover days looping over ~40,000 store x department groups ~90 s. Now the rows go straight to xlsxwriter in streaming mode (`_write_sheet`), and `forward_days` works on whole arrays (proved equal to the per-group `cover_days` on 1,017 random rows, gaps and zero months included). Same four sheets, same values.
+- The finished workbook is kept per inputs version x layers x filters (last 4), dropped on any change; the default one (the page's layers, no filters) is built in the background at start and after every change.
+- Result: first build 66 s (was ~200 s live), the same download again 0.1 s, a filtered one (MENS) 16.5 s. Read me texts updated for forward cover and the 15-day bands.
+
 ### Sales Plan MRP Re-apportionment: the listed-MRPs master format
 - **Asked (user):** "i will give the mrp master like this from now on. How about you convert it and give me the output so that it matches the ly sales and follows the existing rules for change" - `mrp master.xlsx`: DEPARTMENT | DISPLAY TYPE | MRP | REVISE MRP, only the MRPs that stay.
 - `_load_mapping` reads it (REVISE MRP = the new MRP) and `_expand_listed` adds every MRP the Department x Display sold LY that the file doesn't list as discontinued (new MRP 0), so the rule is unchanged (listed -> revised MRP; discontinued -> nearest listed below / above, 40/60, Summer 60/40; nothing listed -> Unmapped). Old pre-split department names (KB_BERMUDA, KB_T-SHIRT H/S, LW_L_JEGGING, LW_L_PALAZZO, MSE_PYJAMA) are removed - the master runs on the new names only (user: "if you find old names just remove them and generate with new names only"; L_IN_BRA, still a department, stays). Import new version accepts the format; new **Export as read** gives the master as the rule reads it (status, nearest listed below / above, LY sales).

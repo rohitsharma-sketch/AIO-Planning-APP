@@ -745,15 +745,45 @@ def cover_walk(mdq, qtys, dims, labels):
 def forward_days(df, qty_col, mdq_col, keys, dim_of=lambda m: m.days_in_month):
     """cover_days for every row of a store x department (x display / article) x month frame: each row's MDQ sold down
     by its own and its later months' qty. Returns a float array aligned with df (NaN where None)."""
-    out = np.full(len(df), np.nan)
-    pos = {i: n for n, i in enumerate(df.index)}
-    for _, g in df.sort_values("month").groupby(keys, sort=False):
-        q, md = g[qty_col].astype(float).tolist(), g[mdq_col].astype(float).tolist()
-        dims = [float(dim_of(m)) for m in g["month"]]
-        for k, i in enumerate(g.index):
-            v = cover_days(md[k], q[k:], dims[k:])
-            if v is not None:
-                out[pos[i]] = v
+    # whole-array (user, 2026-10-14: "decrease the latency ... in excel" - a loop over the ~40,000 groups took ~90 s):
+    # rows sorted by group and month; offset k looks k months ahead inside the same group - cover_days for every row at once
+    n = len(df)
+    if not n:
+        return np.full(0, np.nan)
+    o = df.reset_index(drop=True)
+    order = o.sort_values(keys + ["month"], kind="stable").index.to_numpy()
+    s = o.loc[order]
+    gid = s.groupby(keys, sort=False, dropna=False).ngroup().to_numpy()
+    q = s[qty_col].astype(float).fillna(0.0).to_numpy()
+    md = s[mdq_col].astype(float).fillna(0.0).to_numpy()
+    dm = s["month"].map(dim_of).astype(float).to_numpy()
+    left, days = md.copy(), np.zeros(n)
+    done = ~((md > 0) & (q > 0))                         # no MDQ or no sales this month: None
+    bad = done.copy()
+    rate = np.full(n, np.nan)
+    k = 0
+    while True:
+        idx = np.arange(n) + k
+        ok = idx < n
+        ok[ok] = gid[idx[ok]] == gid[np.arange(n)[ok]]
+        if not ok.any():
+            break
+        j = np.where(ok, idx, 0)
+        qk, dk = q[j], dm[j]
+        act = ok & ~done
+        sell = act & (qk > 0)
+        rate = np.where(sell, qk / np.where(dk > 0, dk, 1.0), rate)
+        fin = sell & (left <= qk)
+        days = np.where(fin, days + left / np.where(sell, qk / dk, 1.0), days)
+        go = act & ~fin
+        days = np.where(go, days + dk, days)
+        left = np.where(sell & ~fin, left - qk, left)
+        done = done | fin
+        k += 1
+    days = np.where(~done, days + left / rate, days)     # MDQ left after the last month: at the last selling rate
+    days = np.where(bad, np.nan, days)
+    out = np.full(n, np.nan)
+    out[order] = days
     return out
 
 

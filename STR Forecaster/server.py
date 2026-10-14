@@ -251,17 +251,28 @@ def workbook(df, months, has_plan, layers, info, filters):
     readme = [("What", "STR Forecaster - full working behind the page"), ("Built", time.strftime("%d %b %Y %H:%M")),
               ("Filters", filters or "none"), ("Months", ", ".join(str(m) for m in months)),
               ("Stores", f"{df.store.nunique()} (every month in both the fixture plan and the sales plan)"),
-              ("STR days", "MDQ / (planned qty / days in month); 4-month = average MDQ / (planned qty / days in the months); only rows with both a plan and fixtures"),
+              ("STR days", "forward cover: a month's MDQ sold down by that month's planned qty, then the next months', till none is left (past the last plan month at its selling rate); 4-month = the months' STR days weighted by their MDQ; only rows with both a plan and fixtures"),
               ("LY days", "the file MDQ / (last year's qty / days in that month), store-months that sold last year"),
               ("Season", f"year index = the cluster's festival-free sales curve (day-wise sales 2022-25: the month vs the department's average month of the year) raised by the month's festival days at the cluster x department festival lift; season index = that month vs the same cluster x department's average month of the plan window ({', '.join(str(m) for m in months)}), so a tag shows which months stand out for that cluster; peak >= {se.SEASON_CUT[0]}, off <= {se.SEASON_CUT[1]}; built {info.get('season_built')}"),
-              ("Band", f"STR days rounded to the nearest 30, kept inside the season's limits ({bands}); never under {se.BAND_MIN} or over {se.BAND_MAX}"),
+              ("Band", f"STR days rounded to the nearest {se.BAND_STEP}, kept inside the season's limits ({bands}); never under {se.BAND_MIN} or over {se.BAND_MAX}"),
               ("Roll-ups", "plan qty and MDQ are summed first, then the days; a group's season = its departments' season index weighted by plan qty"),
               ("Articles", "with Article as a layer or filter: fixtures, MDQ and last year's sales of a store x department x month are split by each article's share of the department's planned qty in that store and month (Rs where the plan has no qty) - the store's own plan, else the chain's; planned Rs / qty are the article's own"),
               ("Sheets", "STR detail = every store x department x month; Drill-down = the page's row layers fully opened, 4-month and each month; By month = long format per level"),
-              ("4-month avg", "as on the page: plan qty, MDQ, LY qty / MDQ, plan Rs, fixtures and store count are the average month (the months' figures over the months that have one), not 4-month totals; STR days / band = the average month's MDQ over its planned qty per day")]
-    with pd.ExcelWriter(out, engine="xlsxwriter", engine_kwargs={"options": {"strings_to_formulas": False}}) as xw:
-        pd.DataFrame(readme, columns=["", "How it is worked out"]).to_excel(xw, sheet_name="Read me", index=False)
-        d.sort_values(["cluster", "division", "department", "store", "month"]).to_excel(xw, sheet_name="STR detail", index=False)
+              ("4-month avg", "as on the page: plan qty, MDQ, LY qty / MDQ, plan Rs, fixtures and store count are the average month (the months' figures over the months that have one), not 4-month totals; STR days = the months' forward-cover days weighted by their MDQ")]
+    # rows straight to xlsxwriter in streaming mode (user, 2026-10-14: "decrease the latency for extracting output in STR
+    # forecaster in excel" - pandas' cell-by-cell formatter took ~230 s of the 5 million cells); same sheets, same values
+    import xlsxwriter
+    wb = xlsxwriter.Workbook(out, {"constant_memory": True, "strings_to_formulas": False, "strings_to_urls": False,
+                                   "in_memory": True})
+    head = wb.add_format({"bold": True, "bg_color": "#E8EEE9", "border": 1, "text_wrap": True, "valign": "top"})
+
+    class _XW:   # what the sheets below need of pandas' ExcelWriter
+        def sheet(self, frame, name):
+            _write_sheet(wb, head, frame, name)
+    xw = _XW()
+    try:
+        xw.sheet(pd.DataFrame(readme, columns=["", "How it is worked out"]), "Read me")
+        xw.sheet(d.sort_values(["cluster", "division", "department", "store", "month"]), "STR detail")
         # drill-down: every level of the layers, parents before their children
         keys = [LAYER_LABEL[x] for x in layers]
         rows = []
@@ -279,7 +290,7 @@ def workbook(df, months, has_plan, layers, info, filters):
         for c in keys:
             dr[c] = dr[c].fillna("") if c in dr else ""
         dr = dr.sort_values(keys + ["level"], kind="stable")
-        dr[["level"] + keys + [c for c in dr.columns if c not in keys and c != "level"]].to_excel(xw, sheet_name="Drill-down", index=False)
+        xw.sheet(dr[["level"] + keys + [c for c in dr.columns if c not in keys and c != "level"]], "Drill-down")
         long = []
         for by, nm in ((["cluster"], "cluster"), (["division"], "division"), (["division", "department"], "department"),
                        (["cluster", "division", "department"], "cluster x department"), (["cluster", "store"], "store")):
@@ -287,8 +298,65 @@ def workbook(df, months, has_plan, layers, info, filters):
                 base = {"level": nm, **{k: _safe(r[k]) for k in by}}
                 for m, c in [("4-month avg", _avg_cell(r))] + [(str(m), c) for m, c in zip(months, r["months"])]:
                     long.append({**base, "month": m, **{k.split(" ", 1)[1]: v for k, v in _cells_wide(c, "x").items()}})
-        pd.DataFrame(long).to_excel(xw, sheet_name="By month", index=False)
+        xw.sheet(pd.DataFrame(long), "By month")
+    finally:
+        wb.close()
     return out.getvalue()
+
+
+# The detailed Excel, kept per inputs version x layers x filters (user, 2026-10-14: "decrease the latency for extracting
+# output in STR forecaster in excel"): the same file is served again at once while nothing changed; the default one
+# (the page's layers, no filters) is built in the background at start and after every change. ponytail: last 4 kept.
+_wb_cache: dict = {}
+_wb_lock = threading.Lock()
+DL_FILTERS = ("division", "cluster", "department", "store", "season", "display", "article", "tag", "attribute")
+
+
+def _download(q):
+    df, info = frame()
+    months = sorted(df.month.unique())
+    lay = [k for k in q.get("layers", ["cluster,department,store"])[0].split(",") if k in LAYER_KEYS] or ["cluster", "department", "store"]
+    key = (state.get("ver"), tuple(lay), tuple((k, tuple(sorted(q[k]))) for k in DL_FILTERS if q.get(k)))
+    with _wb_lock:
+        if key in _wb_cache:
+            return _wb_cache[key]
+        fl = "; ".join(f"{k} = {', '.join(q[k])}" for k in DL_FILTERS if q.get(k))
+        x = workbook(_filter(_base(df, q, lay), q), months, bool(info.get("sales_plan")), lay, info, fl)
+        while len(_wb_cache) >= 4:
+            _wb_cache.pop(next(iter(_wb_cache)))
+        _wb_cache[key] = x
+        return x
+
+
+def _warm_download():
+    """build the default Excel in the background (start, and after a change)"""
+    try:
+        _download({})
+    except Exception:  # noqa: BLE001 - the button builds it itself and shows any error
+        traceback.print_exc()
+
+
+def _write_sheet(wb, head, df, name):
+    """one DataFrame as a sheet, header + rows, column by column to plain Python values (blank for NaN / inf)."""
+    ws = wb.add_worksheet(name[:31])
+    cols = [str(c) for c in df.columns]
+    ws.write_row(0, 0, cols, head)
+    data = []
+    for c in df.columns:
+        s = df[c]
+        if pd.api.types.is_bool_dtype(s):
+            data.append(s.astype(object).where(s.notna(), None).tolist())
+        elif pd.api.types.is_numeric_dtype(s):
+            v = s.astype(float).to_numpy()
+            data.append(np.where(np.isfinite(v), v, np.nan).astype(object).tolist())
+            data[-1] = [None if x != x else x for x in data[-1]]
+        else:
+            data.append([None if x is None or (isinstance(x, float) and x != x) else
+                         x if isinstance(x, (int, float, bool, str)) else str(x) for x in s.astype(object).tolist()])
+    for r, row in enumerate(zip(*data), 1):
+        ws.write_row(r, 0, row)
+    ws.freeze_panes(1, 0)
+    ws.set_column(0, max(len(cols) - 1, 0), 14)
 
 
 class H(BaseHTTPRequestHandler):
@@ -456,10 +524,7 @@ class H(BaseHTTPRequestHandler):
                                   {"Content-Disposition": f'attachment; filename="STR Store mapping - {time.strftime("%d.%m.%y")}.xlsx"'})
             if path == "/api/download":
                 name = f"STR Forecast - {time.strftime('%d.%m.%y')}.xlsx"
-                lay = [k for k in q.get("layers", ["cluster,department,store"])[0].split(",") if k in LAYER_KEYS] or ["cluster", "department", "store"]
-                fl = "; ".join(f"{k} = {', '.join(q[k])}" for k in ("division", "cluster", "department", "store", "season", "display", "article", "tag", "attribute") if q.get(k))
-                d = _base(df, q, lay)
-                return self._send(200, workbook(_filter(d, q), months, bool(info.get("sales_plan")), lay, info, fl),
+                return self._send(200, _download(q),
                                   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                   {"Content-Disposition": f'attachment; filename="{name}"'})
             return self._send(404, {"error": "Not found"})
@@ -470,6 +535,14 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         u = urllib.parse.urlparse(self.path)
         path = u.path.rstrip("/")
+        try:
+            return self._post(u, path)
+        finally:   # any change: the cached Excel files are old - drop them and build the default one again
+            with _wb_lock:
+                _wb_cache.clear()
+            threading.Thread(target=_warm_download, daemon=True).start()
+
+    def _post(self, u, path):
         me = who(self.headers.get("Cookie"))
         if not can_edit(me):
             return self._send(403, {"error": "Only an admin or a planner can change the STR inputs."})
@@ -554,7 +627,7 @@ def _season_watch():
 
 def main():
     print(f"STR Forecaster on http://127.0.0.1:{PORT}")
-    threading.Thread(target=lambda: frame(), daemon=True).start()   # warm the frame so the first page load is quick
+    threading.Thread(target=lambda: (frame(), _warm_download()), daemon=True).start()   # the frame, then the default Excel
     threading.Thread(target=_season_watch, daemon=True).start()
     ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
 
