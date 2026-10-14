@@ -1,6 +1,7 @@
 import { useLocation } from 'react-router-dom'
 import { theme } from '../theme'
 import { useGrain } from '../grain'
+import VersionPicker from './VersionPicker'
 
 // Title per route - one header for every page (pages used to add their own,
 // and only 3 of 16 did, so the navy frame came and went between pages).
@@ -49,6 +50,7 @@ export default function Header() {
     }}>
       <span style={{ fontSize: 16, fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>{title}</span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <VersionPicker />
         <div role="group" aria-label="Plan by" title="Show every stage by store or by cluster" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.7)' }}>Plan by</span>
           <div style={{ display: 'flex', background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 999, padding: 2 }}>

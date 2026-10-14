@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Sales Plan iterations: header picker (as BIS's) + Saved plans tiles on Home
+- **Asked (user):** "how to save plan iterations and give me the same features as this button in similar fashion, and i want the saved plans to be highlighted here as a tile so that i can easily view the plan and compare it with the new iteration if reauired".
+- Top bar, every page: plan iteration picker - Live plan / each saved iteration ("name · date") - picking one opens it on Final Results; then 💾 Save to the iteration in use, ⧉ Save as new iteration…, ✎ Rename a version…, ✕ Remove an iteration… (`components/VersionPicker.jsx`).
+- Remove (`POST /plan-versions/remove`): soft - hidden from every list, its file and index line kept (marked removed); the first version can't be removed (like BIS's Original).
+- Home: "Saved plans" tiles - the live plan + every iteration (newest first): TY, LY, growth, how far the live plan has moved since, OPEN tag on the one being viewed; View (opens it on Final Results), Compare… ("What changed", now with both sides pickable - any iteration or the live plan).
+- One shared module (`planVersion.js`) keeps the picker, Final Results' version bar and the tiles in step ('sp-version' / 'sp-versions' events). Save as defaults to "Iteration n".
+
 ### Reconciliation check-up: progress bar with elapsed and remaining time
 - **Asked (user):** "give me a progress bar, elapsed time and remaining time true to the progress bar".
 - The check-up and Rectify mark each step as they reach it (`plan_checkup._prog_mark`); `GET /reconciliation/checkup/progress` -> step i of n, elapsed, remaining, %. Remaining = what each step took last time (`backend/checkup_timing.json`, git-ignored; rough defaults until the first run) plus the current step's left-over; the bar = elapsed / (elapsed + remaining), so bar and times agree. Steps - check: reading the plan and versions / Calendar, AOP, BIS and season checks / building the trees / MRP, display and qty checks; Rectify adds department plan / MRP Cont % (re-apportionment source only) / Display Type run / validation / Qty run in front. The page polls every 0.5 s while it runs. A cached result (nothing changed) opens instantly with no bar.

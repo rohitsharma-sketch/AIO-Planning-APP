@@ -164,6 +164,13 @@ export default function HierarchyView({ api = '/api/planning/grain', levels: LV 
     if (v?.view?.levels?.length && v.view.levels.every(x => LV[x])) setLevels(v.view.levels)
     if (v?.view?.filters) setFilters(v.view.filters)
   }
+  // a version opened from the header picker or a Home tile (planVersion.js, 2026-10-14)
+  useEffect(() => {
+    if (!versions) return
+    const h = e => openVersion(e.detail)
+    window.addEventListener('sp-version', h)
+    return () => window.removeEventListener('sp-version', h)
+  }, [versions])   // eslint-disable-line react-hooks/exhaustive-deps
   // the month filter follows the switch: Mar'27 <-> Mar'27 P1 + Mar'27 P2
   const switchPeriod = p => {
     if (p === period) return

@@ -52,7 +52,7 @@ def _user(request: Request) -> str:
 
 def _find(v: list, vid: str) -> dict:
     for r in v:
-        if r["id"] == vid:
+        if r["id"] == vid and not r.get("removed"):   # a removed version is hidden, its file kept
             return r
     raise HTTPException(404, f"No version {vid}")
 
@@ -197,7 +197,7 @@ def _remember(user: str, **kw):
 def list_versions(request: Request):
     """Every saved version (oldest first), the live plan's totals and this user's open / Save-to version."""
     t = totals(live_snapshot()["cube"])
-    return {"versions": _index(), "live": {"ly": t["ly"], "ty": t["ty"]}, "me": _state().get(_user(request), {})}
+    return {"versions": [r for r in _index() if not r.get("removed")], "live": {"ly": t["ly"], "ty": t["ty"]}, "me": _state().get(_user(request), {})}
 
 
 @router.post("/open")
@@ -260,13 +260,33 @@ def rename(body: dict, request: Request):
     return r
 
 
+@router.post("/remove")
+def remove(body: dict, request: Request):
+    """{id}: the version leaves every list (user, 2026-10-14: the same tools as BIS's iteration picker - "Remove an
+    iteration"). Soft: its file and its line in index.json stay (marked removed), so nothing is lost; the first version
+    can't be removed, like BIS's Original."""
+    with _lock:
+        v = _index()
+        r = _find(v, body.get("id") or "")
+        if r is next(x for x in v if not x.get("removed")):
+            raise HTTPException(409, f"\"{r['name']}\" is the first version - it stays (like BIS's Original)")
+        r["removed"] = True
+        r["history"] = (r.get("history") or []) + [{"at": _now(), "by": _user(request), "what": "removed (file kept)"}]
+        _write_index(v)
+        _snap.pop(r["id"], None)
+    return {"ok": True, "id": r["id"]}
+
+
 @router.get("/changes")
 def get_changes(id: str = "live", base: str = ""):
     """What changed from `base` (default Version 1) to version `id` (default the live plan)."""
     v = _index()
     if not v:
         raise HTTPException(404, "No saved version yet - Save the plan first")
-    b = _find(v, base) if base else v[0]
+    shown = [r for r in v if not r.get("removed")]
+    if not shown:
+        raise HTTPException(404, "No saved version yet - Save the plan first")
+    b = _find(v, base) if base else shown[0]
     cur = live_snapshot() if id == "live" else snapshot(id)
     cname = "the live plan" if id == "live" else f"\"{_find(v, id)['name']}\""
     cview = None if id == "live" else _find(v, id).get("view")

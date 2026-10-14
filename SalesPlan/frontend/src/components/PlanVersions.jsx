@@ -1,27 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { theme, alpha } from '../theme'
+import { API, call, openPlanVersion, versionsChanged, keepSaveTarget } from '../planVersion'
 
 // Final Results' saved versions (user, 2026-10-13: "give me a save button and all tools related to version selection,
 // rename, save as, selection window ... Also add a little know how as to what was changed from the 1st version to
 // this"). Save = the live plan (and the Rows / Filters) into the version in use; Save as = a new version; Rename;
 // Versions… = the selection window; What changed = this version (or the live plan) against Version 1. Never deletes.
-const API = '/api/planning/plan-versions'
 const L = v => `₹${(v ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`
 const G = r => (r.ly ? `${((r.ty / r.ly - 1) * 100).toFixed(1)}%` : '–')
 const when = s => (s ? s.replace('T', ' ').slice(0, 16) : '')
 const CUR = 'sp.fr.version.current'   // the version Save writes to, per browser
 
-async function call(url, body) {
-  const r = await fetch(url, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined)
-  const j = await r.json().catch(() => ({}))
-  if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`)
-  return j
-}
-
 const btn = primary => ({ padding: '5px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
   border: `1px solid ${primary ? theme.primary : theme.border}`, background: primary ? theme.primary : theme.surface, color: primary ? '#fff' : theme.textPrimary })
 
-function Modal({ title, onClose, children, width = 640 }) {
+export function Modal({ title, onClose, children, width = 640 }) {
   useEffect(() => {
     const esc = e => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', esc)
@@ -41,7 +34,7 @@ function Modal({ title, onClose, children, width = 640 }) {
   )
 }
 
-function NameForm({ label, initial, onSubmit, onClose }) {
+export function NameForm({ label, initial, onSubmit, onClose }) {
   const [v, setV] = useState(initial || '')
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
@@ -64,19 +57,25 @@ function NameForm({ label, initial, onSubmit, onClose }) {
   )
 }
 
-function Changes({ id, versions, onClose }) {
-  const [base, setBase] = useState(versions[0]?.id || '')
+export function Changes({ id, base: base0, versions, onClose }) {
+  const [base, setBase] = useState(base0 || versions[0]?.id || '')
+  const [cur, setCur] = useState(id || '')   // '' = the live plan
   const [d, setD] = useState(null)
   const [err, setErr] = useState('')
   useEffect(() => {
     setD(null); setErr('')
-    call(`${API}/changes?${new URLSearchParams({ id: id || 'live', base })}`).then(setD).catch(e => setErr(e.message))
-  }, [id, base])
+    call(`${API}/changes?${new URLSearchParams({ id: cur || 'live', base })}`).then(setD).catch(e => setErr(e.message))
+  }, [cur, base])
+  const sel = { fontSize: 12, padding: '2px 6px' }
   return (
     <Modal title="What changed" onClose={onClose} width={700}>
       <div style={{ fontSize: 12, color: theme.textMuted, marginBottom: 10, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        {id ? `"${versions.find(v => v.id === id)?.name}"` : 'The live plan'} compared with
-        <select value={base} onChange={e => setBase(e.target.value)} aria-label="Compare with" style={{ fontSize: 12, padding: '2px 6px' }}>
+        <select value={cur} onChange={e => setCur(e.target.value)} aria-label="Plan to compare" style={sel}>
+          <option value="">The live plan</option>
+          {versions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+        </select>
+        compared with
+        <select value={base} onChange={e => setBase(e.target.value)} aria-label="Compare with" style={sel}>
           {versions.map(v => <option key={v.id} value={v.id}>{v.name}{v.n === versions[0].n ? ' (first)' : ''}</option>)}
         </select>
       </div>
@@ -112,7 +111,11 @@ export default function PlanVersions({ version, onOpen, view }) {
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState('')
   const reload = () => call(API).then(setList).catch(e => setErr(e.message))
-  useEffect(() => { reload() }, [])
+  useEffect(() => {
+    reload()
+    window.addEventListener('sp-versions', reload)   // saved / renamed / removed from the header picker
+    return () => window.removeEventListener('sp-versions', reload)
+  }, [])   // eslint-disable-line react-hooks/exhaustive-deps
   // the first load takes up where this user left off - in any browser (the server remembers, 2026-10-13: "if i saved
   // a version here it should stay saved in my next session"); a version not on this server: back to the live plan
   const first = useRef(true)
@@ -127,8 +130,8 @@ export default function PlanVersions({ version, onOpen, view }) {
     }
     if (version && !has(version)) onOpen(null)
   }, [list])   // eslint-disable-line react-hooks/exhaustive-deps
-  const openIt = v => { onOpen(v); call(`${API}/open`, { id: v ? v.id : '' }).catch(() => {}) }
-  const keepCur = id => { setCur(id); try { localStorage.setItem(CUR, id) } catch { /* ignore */ } }
+  const openIt = v => { onOpen(v); openPlanVersion(v) }
+  const keepCur = id => { setCur(id); keepSaveTarget(id) }
   const vs = list?.versions || []
   // what Save writes to: the version open, else the one this browser saved last, else the newest
   const target = vs.find(v => v.id === (version || cur)) || vs[vs.length - 1] || null
@@ -139,11 +142,11 @@ export default function PlanVersions({ version, onOpen, view }) {
     setBusy(true); setNote('')
     try {
       const r = await call(`${API}/save`, target ? { id: target.id, view } : { view })
-      keepCur(r.id); setNote(`Saved to "${r.name}" ${when(r.updated_at)}`); await reload()
+      keepCur(r.id); setNote(`Saved to "${r.name}" ${when(r.updated_at)}`); versionsChanged()
     } catch (e) { setNote(`Not saved: ${e.message}`) } finally { setBusy(false) }
   }
-  const saveAs = async name => { const r = await call(`${API}/save`, { name, view }); keepCur(r.id); setNote(`Saved as "${r.name}"`); await reload() }
-  const rename = async name => { const r = await call(`${API}/rename`, { id: target.id, name }); setNote(`Renamed to "${r.name}"`); await reload() }
+  const saveAs = async name => { const r = await call(`${API}/save`, { name, view }); keepCur(r.id); setNote(`Saved as "${r.name}"`); versionsChanged() }
+  const rename = async name => { const r = await call(`${API}/rename`, { id: target.id, name }); setNote(`Renamed to "${r.name}"`); versionsChanged() }
 
   return (
     <div data-no-undo style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 12, padding: '8px 16px', marginBottom: 10 }}>
@@ -200,10 +203,10 @@ export default function PlanVersions({ version, onOpen, view }) {
             </tbody>
           </table>
           {!vs.length && <div style={{ fontSize: 12.5, color: theme.textMuted, padding: '10px 8px' }}>No saved versions yet - Save keeps the live plan and this layout as Version 1.</div>}
-          <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 10 }}>Open shows that version's plan and layout exactly as saved. Hover a name for its history. Versions are never deleted.</div>
+          <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 10 }}>Open shows that version's plan and layout exactly as saved. Hover a name for its history. Remove (header picker) hides a version; its file is kept.</div>
         </Modal>
       )}
-      {dlg === 'saveas' && <NameForm label="Save as a new version" initial={`Version ${vs.reduce((m, v) => Math.max(m, v.n), 0) + 1}`} onSubmit={saveAs} onClose={() => setDlg(null)} />}
+      {dlg === 'saveas' && <NameForm label="Save as a new version" initial={`Iteration ${vs.reduce((m, v) => Math.max(m, v.n), 0) + 1}`} onSubmit={saveAs} onClose={() => setDlg(null)} />}
       {dlg === 'rename' && target && <NameForm label={`Rename "${target.name}"`} initial={target.name} onSubmit={rename} onClose={() => setDlg(null)} />}
       {dlg === 'changes' && <Changes id={version} versions={vs} onClose={() => setDlg(null)} />}
     </div>
