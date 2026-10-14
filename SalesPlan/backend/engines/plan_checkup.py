@@ -23,11 +23,79 @@ import datetime
 import json
 import os
 import threading
+import time
 
 TOL = 1e-6   # Rs lakh (Rs 0.10) for source tie-outs; the additivity checks above stay at 8 decimals
 _HERE = os.path.dirname(os.path.abspath(__file__))
 SIGNOFF_PATH = os.path.join(_HERE, "..", "checkup_signoff.json")
 _RUN_LOCK = threading.Lock()
+
+# Progress of the check-up / Rectify run (user, 2026-10-14: "give me a progress bar, elapsed time and remaining time true
+# to the progress bar"). The run marks each step as it reaches it; remaining = what each step took the last time it ran
+# (checkup_timing.json, git-ignored - first runs use rough defaults), the current step's left-over included; the page
+# draws the bar as elapsed / (elapsed + remaining), so the bar and the two times always agree.
+CHECK_STEPS = ["Reading the plan and the source versions", "Calendar, AOP, BIS and season checks",
+               "Building the department, MRP and display trees", "MRP, display type and qty checks"]
+TIMING_PATH = os.path.join(_HERE, "..", "checkup_timing.json")
+_DEFAULT_SECS = {CHECK_STEPS[0]: 3, CHECK_STEPS[1]: 6, CHECK_STEPS[2]: 5, CHECK_STEPS[3]: 4,
+                 "Department plan on today's inputs": 5, "MRP Cont % from the master in use": 30,
+                 "Display Type run": 60, "Display Type validation": 10, "Qty run": 30}
+_PROG: dict = {"running": False}
+
+
+def _timing() -> dict:
+    try:
+        with open(TIMING_PATH, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return {}
+
+
+def _prog_start(kind: str, steps: list):
+    now = time.time()
+    _PROG.clear()
+    _PROG.update(running=True, kind=kind, steps=steps, i=0, t0=now, ts=now, took={}, est={**_DEFAULT_SECS, **_timing()})
+
+
+def _prog_mark(step: str):
+    """The run has reached `step` (a later step of the list; anything else is ignored)."""
+    p = _PROG
+    if not p.get("running") or step not in p["steps"] or p["steps"].index(step) <= p["i"]:
+        return
+    now = time.time()
+    p["took"][p["steps"][p["i"]]] = now - p["ts"]
+    p["i"], p["ts"] = p["steps"].index(step), now
+
+
+def _prog_end():
+    p = _PROG
+    if not p.get("running"):
+        return
+    p["took"][p["steps"][p["i"]]] = time.time() - p["ts"]
+    t = _timing()
+    t.update({k: round(v, 2) for k, v in p["took"].items()})
+    try:
+        with open(TIMING_PATH, "w", encoding="utf-8") as fh:
+            json.dump(t, fh, indent=1)
+    except OSError:
+        pass
+    p["running"] = False
+
+
+def progress() -> dict:
+    """{running, kind, step, i, n, elapsed, remaining, pct} of the run going now ({running: False} when none)."""
+    p = dict(_PROG)
+    if not p.get("running"):
+        return {"running": False}
+    now = time.time()
+    steps, i, est = p["steps"], p["i"], p["est"]
+    e = lambda st: max(float(est.get(st, 3)), 0.2)   # noqa: E731
+    in_step = now - p["ts"]
+    remaining = max(e(steps[i]) - in_step, min(1.0, e(steps[i]) * 0.1)) + sum(e(st) for st in steps[i + 1:])
+    elapsed = now - p["t0"]
+    return {"running": True, "kind": p["kind"], "step": steps[i], "i": i + 1, "n": len(steps),
+            "elapsed": round(elapsed, 1), "remaining": round(remaining, 1),
+            "pct": round(100 * elapsed / (elapsed + remaining), 1) if elapsed + remaining > 0 else 0}
 ROWS_KEPT = 300      # rows a check shows on the page
 ROWS_ALL = 20000     # rows a check keeps for the issues report (user, 2026-10-14: "1 button to download the report so that
                      # all issues can be addressed at one go ... in different spreadsheets in 1 file")
@@ -352,9 +420,11 @@ def mrp_checks(gm=None, new=None) -> list:
     from engines.mrp_reapportionment_engine import read_shares, _find_mapping_file, get_basis, _compare, _plan_period
     from engines.display_type_engine import _load, load_asp, DT_RESULT_PATH, _asp_key, MIX_NOTE, asp_lookup
     out = []
+    _prog_mark(CHECK_STEPS[2])
     cube, am = gv._cube(), _load_dept_attr_map()
     dix, mix, xix = gv._index(cube, am, False), gv._mrp_index(cube, am, False), gv._display_index(cube, am, False)
     ins, rule = season(cube["months"])
+    _prog_mark(CHECK_STEPS[3])
 
     st4 = "MRP (re-apportioned)"
     promoted = _try(lambda: __import__("engines.art_nm_engine", fromlist=["x"]).promoted_shares())
@@ -590,13 +660,24 @@ def checkup(fresh: bool = False) -> dict:
 
 
 def run_checkup() -> dict:
-    import time
+    own = not _PROG.get("running")   # a Rectify run has already started the bar with its own steps
+    if own:
+        _prog_start("check", CHECK_STEPS)
+    try:
+        return _run_checkup()
+    finally:
+        if own:
+            _prog_end()
+
+
+def _run_checkup() -> dict:
     from engines.reconciliation import _active_plan
     t0 = time.time()
     plan, source, at = _active_plan()
     if plan is None:
         return {"ok": False, "error": "No saved plan yet - Generate Base Plan first"}
     ver = versions(source, at, plan)
+    _prog_mark(CHECK_STEPS[1])
     checks, gm, new = plan_checks(plan, source, ver)
     try:
         checks += mrp_checks(gm, new)
@@ -623,30 +704,39 @@ def rectify() -> dict:
         from fastapi import HTTPException
         raise HTTPException(409, "A rectify run is already going")
     log = []
+    from engines.mrp_plan_engine import get_source
+    from engines import display_type_engine as dte
+    steps = (["Department plan on today's inputs"] + (["MRP Cont % from the master in use"] if get_source() == "reapp" else [])
+             + ["Display Type run", "Display Type validation"] + (["Qty run"] if dte.load_asp() else []) + CHECK_STEPS)
+    _prog_start("rectify", steps)
     try:
-        from engines.dept_sales_engine import refresh_saved_plan, _CORRECTED, _BASE
-        if any(os.path.exists(os.path.join(_BASE, "..", f)) for f in _CORRECTED):
-            log.append("Department plan: a correction step is applied - left as it is (regenerate from Final Results)")
-        else:
-            log.append("Department plan: regenerated on today's inputs" if refresh_saved_plan() else "Department plan: already on today's inputs")
-        from engines.mrp_plan_engine import get_source
-        if get_source() == "reapp":
-            from engines.mrp_reapportionment_engine import rebuild_shares
-            r = rebuild_shares()
-            log.append(f"MRP Cont %: rebuilt from {r.get('master')} ({r.get('departments')} departments)")
-        from engines import display_type_engine as dte
-        r = dte.run_plan()
-        log.append(f"Display Type run: {r['rows']:,} rows")
-        v = dte.validate()
-        log.append(f"Display Type validation: {v['errors']} errors, {v['warnings']} warnings")
-        if dte.load_asp():
-            q = dte.run_qty()
-            log.append(f"Qty run: {q['rows']:,} rows, {q['missing_asp']:,} without an ASP")
-    except Exception as e:   # noqa: BLE001 - say where it stopped
-        log.append(f"Stopped: {getattr(e, 'detail', e)}")
+        try:
+            from engines.dept_sales_engine import refresh_saved_plan, _CORRECTED, _BASE
+            if any(os.path.exists(os.path.join(_BASE, "..", f)) for f in _CORRECTED):
+                log.append("Department plan: a correction step is applied - left as it is (regenerate from Final Results)")
+            else:
+                log.append("Department plan: regenerated on today's inputs" if refresh_saved_plan() else "Department plan: already on today's inputs")
+            if get_source() == "reapp":
+                _prog_mark("MRP Cont % from the master in use")
+                from engines.mrp_reapportionment_engine import rebuild_shares
+                r = rebuild_shares()
+                log.append(f"MRP Cont %: rebuilt from {r.get('master')} ({r.get('departments')} departments)")
+            _prog_mark("Display Type run")
+            r = dte.run_plan()
+            log.append(f"Display Type run: {r['rows']:,} rows")
+            _prog_mark("Display Type validation")
+            v = dte.validate()
+            log.append(f"Display Type validation: {v['errors']} errors, {v['warnings']} warnings")
+            if dte.load_asp():
+                _prog_mark("Qty run")
+                q = dte.run_qty()
+                log.append(f"Qty run: {q['rows']:,} rows, {q['missing_asp']:,} without an ASP")
+        except Exception as e:   # noqa: BLE001 - say where it stopped
+            log.append(f"Stopped: {getattr(e, 'detail', e)}")
+        return {**checkup(fresh=True), "log": log}   # the check steps run inside this bar too
     finally:
+        _prog_end()
         _RUN_LOCK.release()
-    return {**checkup(fresh=True), "log": log}
 
 
 def sign_off(user: str) -> dict:

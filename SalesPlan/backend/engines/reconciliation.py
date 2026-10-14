@@ -207,6 +207,13 @@ def get_checkup(fresh: bool = False):
     return for_page(checkup(fresh))
 
 
+@router.get("/checkup/progress")
+def get_checkup_progress():
+    """Where the running check-up / Rectify is: step i of n, elapsed and remaining seconds, % (the page polls it)."""
+    from engines.plan_checkup import progress
+    return progress()
+
+
 @router.post("/checkup/rectify")
 def post_checkup_rectify():
     """Re-run the chain (plan on today's inputs, MRP Cont %, Display Type run + Qty) and check again."""

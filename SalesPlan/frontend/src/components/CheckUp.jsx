@@ -11,6 +11,7 @@ const ST = {
 }
 const VER = [['calendar', 'Calendar'], ['aop', 'AOP Forecaster'], ['bis', 'BIS'], ['plan', 'Department plan'], ['mrp', 'MRP Cont %'],
   ['asp', 'ASP master'], ['display_run', 'Display Type run'], ['qty_run', 'Qty run']]
+const mmss = v => `${Math.floor(v / 60)}:${String(Math.round(v % 60)).padStart(2, '0')}`
 const fmtv = v => (typeof v === 'number' ? (Math.abs(v) >= 1000 ? v.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : v.toLocaleString('en-IN', { maximumFractionDigits: 6 })) : String(v ?? ''))
 
 function Pill({ s }) {
@@ -34,6 +35,21 @@ export default function CheckUp() {
     } catch (e) { setErr(e.message) } finally { setBusy('') }
   }
   useEffect(() => { call('check') }, [])   // the kept result - instant while nothing changed
+  // the running check / Rectify, read from the server every half second (user, 2026-10-14: "give me a progress bar,
+  // elapsed time and remaining time true to the progress bar") - the bar is elapsed / (elapsed + remaining)
+  const [prog, setProg] = useState(null)
+  useEffect(() => {
+    if (busy !== 'check' && busy !== 'fix') { setProg(null); return }
+    let live = true
+    const tick = async () => {
+      const p = await fetch(API + '/progress').then(r => r.ok ? r.json() : null).catch(() => null)
+      if (!live) return
+      setProg(p?.running ? p : null)
+      setTimeout(tick, 500)
+    }
+    tick()
+    return () => { live = false }
+  }, [busy])
   const toggle = k => setOpen(o => { const n = new Set(o); n.has(k) ? n.delete(k) : n.add(k); return n })
   const checks = r?.checks || []
   const stages = [...new Set(checks.map(c => c.stage))]
@@ -64,6 +80,20 @@ export default function CheckUp() {
           <a href={`${API}/export`} style={{ ...btn(true, theme.accent), textDecoration: 'none' }}
             title="One Excel file: Summary (failures first, with their fix), Versions, and one sheet per issue with every row - to fix them all at one go">⬇ Issues report</a>
         </div>
+        {prog && (
+          <div style={{ marginTop: 12 }} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(prog.pct)}
+            aria-label={`${prog.kind === 'rectify' ? 'Rectify' : 'Check-up'} progress`}>
+            <div style={{ height: 8, borderRadius: 4, background: theme.surfaceAlt, overflow: 'hidden', border: `1px solid ${theme.border}` }}>
+              <div style={{ height: '100%', width: `${prog.pct}%`, background: 'var(--st-accent,#4F7A66)', transition: 'width 0.5s linear' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 6, fontSize: 12, color: theme.textMuted }}>
+              <span style={{ flex: 1, minWidth: 220 }}>Step {prog.i} of {prog.n}: <b style={{ color: theme.textPrimary }}>{prog.step}</b></span>
+              <span style={{ fontFamily: theme.fontMono }}>{Math.round(prog.pct)}%</span>
+              <span>Elapsed <b style={{ fontFamily: theme.fontMono, color: theme.textPrimary }}>{mmss(prog.elapsed)}</b></span>
+              <span>Remaining about <b style={{ fontFamily: theme.fontMono, color: theme.textPrimary }}>{mmss(prog.remaining)}</b></span>
+            </div>
+          </div>
+        )}
         {err && <div style={{ marginTop: 8, fontSize: 12.5, color: theme.danger }}>{err}</div>}
         {so && (
           <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 8, fontSize: 12.5, background: alpha(so.current ? '#15803D' : '#B45309', '10'), border: `1px solid ${alpha(so.current ? '#15803D' : '#B45309', '44')}` }}>
