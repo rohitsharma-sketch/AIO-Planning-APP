@@ -996,3 +996,15 @@ def warm():
             built(s["grain"])
     except Exception as e:   # noqa: BLE001
         print(f"Article Name route warm-up skipped: {e}", flush=True)
+
+
+@router.get("/hierarchy-export")
+def get_hierarchy_export(levels: str, filters: str = "{}", grain: str = "cluster"):
+    """The Article Name plan tree as on screen (Rows, filters) as an Excel file - every branch opened (2026-10-14)."""
+    from engines.grain_view import export_about, parse_filters, tree_xlsx, xlsx_response
+    lv, _ = _levels_path(levels, "[]", grain)
+    f = parse_filters(filters, art_levels(grain))
+    _, h = _hindex(grain)
+    data = tree_xlsx(h["ix"], lv, ART_LEVEL_NAME, f, ("LY (₹L)", "TY (₹L)", "Growth %"), "Article Name plan",
+                     export_about(lv, ART_LEVEL_NAME, f, "month", f"the Article Name plan by {grain}"))
+    return xlsx_response(data, f"Article Name plan by {grain}.xlsx")

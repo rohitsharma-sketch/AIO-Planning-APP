@@ -7,6 +7,19 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Sales Plan: Month / P1-P2 switch and Excel export on the Hierarchy view; MRP Plan Output on the same tree
+- **Asked (user):** "i want a view with toggle for month wise or P1 P2, which is also availble in excel download too keeping the same view availbe. P1 P2 is 15 day interval for the month" and "merge all the views similarly to the department view which is the final design".
+- Final Results: a Month | P1 / P2 switch (P1 = days 1-15, P2 = 16th to month end). P1 / P2 = the plan's own TY P1 / TY P2; LY = half of each month (as the plan engine grows it, LY half x BIS P1 / P2 growth). P1 + P2 = the month to the paisa (MENS, all months, LY and TY). The month filter follows the switch; the ⓘ pop-up shows the fortnight's numbers on top of the month's working. `?period=month|half` on `/api/planning/grain/hierarchy`, `/hierarchy-options`, `/explain`.
+- Today's plan has BIS P1 growth = P2 growth in every cell (0 of 414,304 differ), so P1 = P2 until BIS gives them different growth.
+- **Export Excel ↓** on every Hierarchy tree (Final Results, MRP Plan Output, Article Name Plan Output, Re-apportionment Before → After): the view as on screen - Rows, filters, version, month or P1 / P2 - every branch opened in the page's order, indented with Excel +/- grouping, one column per Rows field, LY / TY / Growth % / Cont %, Grand Total, an About sheet (view, filters, source, time). `grain_view.tree_xlsx`; `GET .../hierarchy-export` on grain, grain/mrp-view, art-nm and mrp-reapportionment.
+- MRP Plan Output: the division tabs, P1/P2 matrix and the Store / Cluster panel are replaced by the department view's tree with an MRP level (`/api/planning/grain/mrp-view/*`): Cluster, Store, Store type, Division, Attribute, Department, MRP, Month; filters, ⓘ pop-up, Month / P1-P2, Export. TY = each store x department x fortnight's plan x the department's MRP share of that fortnight (effective_shares - the same split MRP Output had); LY = the store's department LY x that store's own re-apportioned LY mix over the new MRPs. Departments without a split sit under "No MRP split" and inactive departments' LY under "Not planned", so every level ties to Final Results: LY ₹46,333.86 L / TY ₹51,484.13 L, every division, cluster, store and month, by month and by P1 / P2. Step bar, route banner, Deviations and the CSV export stay. Built at 8010 start (about 40 s cold).
+- Not changed: Display Type Plan (no run saved yet to show).
+
+### MRP Re-apportionment: a sold MRP that is itself a new MRP stays listed
+- **Asked (user):** "shouldnt this be listed instead of discontinued, as it is LY = TY MRPs matching" (ML_JEANS · NON_TABLE · 749: the file lists 699 -> 749 but not 749 itself, so 749 was discontinued and split 40% to 749 / 60% to 829).
+- `_expand_listed`: an MRP sold LY that the file doesn't list but that is one of the new MRPs of the same Department x Display is listed to itself (100%), no longer split. ML_JEANS · NON_TABLE · 749: ₹14.9 L now stays on 749 (was ₹5.9 L on 749 + ₹8.9 L to 829).
+- The saved MRP Cont % shares predate this: MRP Plan · Buyer's Input → "Rebuild from the master in use" (or a Run) brings it into the MRP plan.
+
 ### Sales Plan MRP Plan Buyer's Input: folder-sync panel removed
 - **Asked (user):** "remove all this" (the Source file card, Sync from Folder, How it works, Expected file format, Divisions expected).
 - Gone from the page; the buyers' file is synced from a small "Sync the buyers' file" button on the "Where it comes from" card (same `POST /mrp-plan/sync`, same folder). Header text no longer says the page must always be synced from the file.

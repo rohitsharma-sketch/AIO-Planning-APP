@@ -113,7 +113,12 @@ function loadLevels(store, LV, defaults) {
 // the same tree serves the department plan (Final Results) and the Article Name plan (user, 2026-10-13: "make similar
 // output page as the department with all features similarly"): api = where hierarchy / hierarchy-options / explain
 // live, LV = its fields, query = extra query (e.g. grain), store = the localStorage prefix, versions = the version bar
-export default function HierarchyView({ api = '/api/planning/grain', levels: LV = LEVELS, defaults = DEFAULT, store = 'sp.fr', versions = true, query = {}, cols = COLS }) {
+// halves: the Month / P1-P2 switch (user, 2026-10-14: "a view with toggle for month wise or P1 P2, which is also availble
+// in excel download too ... P1 P2 is 15 day interval for the month") - the api takes ?period=month|half; Export Excel
+// downloads the view as on screen (api/hierarchy-export: Rows, filters, version, period - every branch opened)
+export default function HierarchyView({ api = '/api/planning/grain', levels: LV = LEVELS, defaults = DEFAULT, store = 'sp.fr', versions = true, query: query0 = {}, cols = COLS, halves = false }) {
+  const [period, setPeriod] = useState(() => { try { return (halves && localStorage.getItem(`${store}.period`)) || 'month' } catch { return 'month' } })
+  const query = halves ? { ...query0, period } : query0
   const [levels, setLevels] = useState(() => loadLevels(store, LV, defaults))
   const [nodes, setNodes] = useState({})          // JSON(path) -> {rows, total, level} | {err} | 'loading'
   const [open, setOpen] = useState(() => new Set())
@@ -145,7 +150,7 @@ export default function HierarchyView({ api = '/api/planning/grain', levels: LV 
 
   // a new hierarchy starts again from the top; new filters keep the open branches open (each re-fetched at once)
   useEffect(() => {
-    try { localStorage.setItem(`${store}.hierarchy`, JSON.stringify(levels)); localStorage.setItem(`${store}.filters`, fkey); if (versions) localStorage.setItem(`${store}.version`, version) } catch { /* ignore */ }
+    try { localStorage.setItem(`${store}.hierarchy`, JSON.stringify(levels)); localStorage.setItem(`${store}.filters`, fkey); if (versions) localStorage.setItem(`${store}.version`, version); if (halves) localStorage.setItem(`${store}.period`, period) } catch { /* ignore */ }
     const lv = levels.join(',') + '|' + version + '|' + qx, same = lastLv.current === lv
     lastLv.current = lv
     setNodes({})
@@ -159,6 +164,17 @@ export default function HierarchyView({ api = '/api/planning/grain', levels: LV 
     if (v?.view?.levels?.length && v.view.levels.every(x => LV[x])) setLevels(v.view.levels)
     if (v?.view?.filters) setFilters(v.view.filters)
   }
+  // the month filter follows the switch: Mar'27 <-> Mar'27 P1 + Mar'27 P2
+  const switchPeriod = p => {
+    if (p === period) return
+    setFilters(f => {
+      if (!f.month) return f
+      const m = p === 'half' ? f.month.flatMap(x => (/ P[12]$/.test(x) ? [x] : [`${x} P1`, `${x} P2`])) : [...new Set(f.month.map(x => x.replace(/ P[12]$/, '')))]
+      return { ...f, month: m }
+    })
+    setPeriod(p)
+  }
+  const exportXlsx = () => window.open(`${api}/hierarchy-export?${new URLSearchParams({ levels: levels.join(','), filters: fkey, version, ...query })}`, '_blank')
   const setFilter = (lv, vals) => setFilters(f => { const n = { ...f }; if (vals && vals.length) n[lv] = vals; else delete n[lv]; return n })
 
   const toggle = path => {
@@ -244,6 +260,18 @@ export default function HierarchyView({ api = '/api/planning/grain', levels: LV 
             </select>
           )}
           <span style={{ flex: 1 }} />
+          {halves && (
+            <div role="group" aria-label="Months by" style={{ display: 'inline-flex', border: `1px solid ${theme.border}`, borderRadius: 6, overflow: 'hidden' }}>
+              {[['month', 'Month'], ['half', 'P1 / P2']].map(([k, t]) => (
+                <button key={k} type="button" aria-pressed={period === k} onClick={() => switchPeriod(k)}
+                  title={k === 'half' ? 'Each month as its two fortnights: P1 = days 1–15, P2 = 16th to month end' : 'Whole months'}
+                  style={{ padding: '3px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none',
+                           background: period === k ? 'var(--st-btn,#A8CBB7)' : theme.surface, color: period === k ? 'var(--st-btn-text,#1F4D3A)' : theme.textMuted }}>{t}</button>
+              ))}
+            </div>
+          )}
+          <button type="button" onClick={exportXlsx} title="This view - Rows, filters and months as set here - with every branch opened"
+            style={{ padding: '3px 10px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `1px solid ${theme.border}`, background: theme.surface, color: theme.textPrimary }}>Export Excel ↓</button>
           <button type="button" onClick={() => setLevels(defaults)} style={{ ...mini, textDecoration: 'underline' }}>Reset</button>
         </div>
         {/* one multi-select filter per field, as an Excel PivotTable's report filters (user, 2026-10-13: "multi selection
@@ -263,7 +291,7 @@ export default function HierarchyView({ api = '/api/planning/grain', levels: LV 
           {nF > 0 && <button type="button" onClick={() => setFilters({})} style={{ ...mini, textDecoration: 'underline' }}>Clear all</button>}
         </div>
         <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 6 }}>
-          View only · ₹ lakh · {levels.includes('month') ? 'by month' : 'all plan months added up'} · Cont % = share of the level above · ⓘ = how a row's numbers are made
+          View only · ₹ lakh · {halves && period === 'half' ? (levels.includes('month') ? 'by fortnight - P1 = days 1–15, P2 = 16th to month end' : 'all plan months added up') : levels.includes('month') ? 'by month' : 'all plan months added up'} · Cont % = share of the level above · ⓘ = how a row's numbers are made
           {source && <> · from {source.note || source.name}</>}
         </div>
       </div>

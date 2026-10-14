@@ -1,27 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { theme, alpha } from '../theme'
-import GrainPanel from '../components/GrainPanel'
-import ExcelFilter from '../components/ExcelFilter'
+import HierarchyView from '../components/HierarchyView'
 import RouteBar from '../components/RouteBar'
 
-const DIV_COLOR = {
-  KIDS: '#C85A12', LADIES: '#7420B8', MENS: '#077A4A', GM: '#1E54C0', RETAIL: '#B22620',
-}
-
-const CELL = { fontFamily: theme.fontMono, fontSize: 11, textAlign: 'right', padding: '4px 7px', whiteSpace: 'nowrap' }
-const HDR  = { ...CELL, fontSize: 10, color: theme.textMuted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }
-
-// Build month groups from periods list e.g. ["Mar'27 P1","Mar'27 P2","Apr'27 P1","Apr'27 P2"]
-function buildMonthGroups(periods) {
-  const map = {}
-  const order = []
-  for (const p of periods) {
-    const m = p.replace(/ P[12]$/, '')
-    if (!map[m]) { map[m] = []; order.push(m) }
-    map[m].push(p)
-  }
-  return order.map(m => ({ month: m, periods: map[m] }))
+const MRP_FIELDS = {
+  cluster: 'Cluster', store: 'Store', stype: 'Store type', division: 'Division',
+  attribute: 'Attribute', department: 'Department', mrp: 'MRP', month: 'Month',
 }
 
 // ── Walkthrough step bar ────────────────────────────────────────────────────
@@ -172,14 +157,6 @@ export default function MrpOutput() {
   const [data, setData]               = useState(null)
   const [loading, setLoading]         = useState(true)
   const [err, setErr]                 = useState('')
-  const [activeDiv, setActiveDiv]     = useState(null)
-  // the Filters row - one multi-select per field, as Final Results (user, 2026-10-13: "add the same filters row to the
-  // MRP pages"): {field: [values]}; cleared when the division changes
-  const [mf, setMf]                   = useState({})
-  const [mfEdit, setMfEdit]           = useState(null)
-  const [viewMode, setViewMode]       = useState('ty')   // 'contrib' | 'ty'
-  const [expandedDept, setExpandedDept] = useState(null)
-
   // pipeline status
   const [pipeline, setPipeline]       = useState(null)
   const [showPrompt, setShowPrompt]   = useState(false)
@@ -215,7 +192,7 @@ export default function MrpOutput() {
   useEffect(() => {
     fetch('/api/planning/mrp-plan/data')
       .then(r => r.ok ? r.json() : r.json().then(e => { throw new Error(e.detail) }))
-      .then(d => { setData(d); setActiveDiv(d.divisions?.[0] || null); setLoading(false) })
+      .then(d => { setData(d); setLoading(false) })
       .catch(e => { setErr(e.message); setLoading(false) })
   }, [])
 
@@ -232,30 +209,8 @@ export default function MrpOutput() {
   )
 
   const periods     = data.periods || []
-  const monthGroups = buildMonthGroups(periods)
-  const divData     = activeDiv ? (data.data[activeDiv] || {}) : {}
-  const allDepts    = Object.keys(divData).sort()
-  const badDepts    = allDepts.filter(d => !divData[d].all_ok)
-
-  // Check: is the department fully split over its MRP bands?
-  const checkOf = d => (divData[d].no_split ? 'No MRP split' : !divData[d].all_ok ? 'Contrib ≠ 100%' : divData[d].shares_from ? 'Split from reference' : 'OK')
-  const MO_FIELDS = [['department', 'Department'], ['check', 'Check']]
-  const cellVal = (d, c) => (c === 'department' ? d : checkOf(d))
-  const passMf = (d, skip) => Object.entries(mf).every(([c, vals]) => c === skip || vals.includes(cellVal(d, c)))
-  const visibleDepts = allDepts.filter(d => passMf(d))
-  const mfValues = c => [...new Set(allDepts.filter(d => passMf(d, c)).map(d => cellVal(d, c)))].sort()
-  const nMf = Object.keys(mf).length
-  const caption = c => (!mf[c] ? '(All)' : mf[c].length === 1 ? mf[c][0] : `(Multiple Items) ${mf[c].length}`)
-  const noSplit = allDepts.filter(d => divData[d].no_split)
-
-  const divTotals = {}
-  for (const div of data.divisions) {
-    let ty = 0, depts = 0, bands = 0
-    for (const dept of Object.values(data.data[div] || {})) {
-      ty += dept.dept_total_ty; depts++; bands += dept.bands.length
-    }
-    divTotals[div] = { ty, depts, bands }
-  }
+  const noSplit     = data.divisions.flatMap(dv => Object.values(data.data[dv] || {}).filter(x => x.no_split))
+  const noSplitTy   = noSplit.reduce((t, x) => t + (x.dept_total_ty || 0), 0)
 
   return (
     <div style={{ padding: '28px 32px', minHeight: '100vh', background: theme.surfaceAlt }}>
@@ -284,7 +239,7 @@ export default function MrpOutput() {
       {/* Header */}
       <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div className="sp-sub" style={{ margin: 0 }}>
-          Department TY plan split by MRP price point × buyer contribution % — P1 &amp; P2 per month.
+          The department plan split over its MRP price points - by month or P1 / P2, store or cluster.
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           {!data.has_plan && (
@@ -318,222 +273,17 @@ export default function MrpOutput() {
         ))}
       </div>
 
-      {/* Division tabs */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {data.divisions.map(div => {
-          const tot = divTotals[div]
-          const isActive = activeDiv === div
-          return (
-            <button key={div} onClick={() => { setActiveDiv(div); setMf({}); setMfEdit(null); setExpandedDept(null) }} style={{
-              padding: '8px 18px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
-              border: `2px solid ${isActive ? DIV_COLOR[div] : theme.border}`,
-              background: isActive ? `${alpha(DIV_COLOR[div],'18')}` : theme.surface,
-              color: isActive ? DIV_COLOR[div] : theme.textMuted,
-              fontWeight: isActive ? 700 : 400, fontSize: 12,
-            }}>
-              <div style={{ fontWeight: 700, fontSize: 13 }}>{div}</div>
-              <div style={{ fontSize: 10, opacity: 0.8, marginTop: 1 }}>{tot.depts} depts · {tot.bands} bands</div>
-            </button>
-          )
-        })}
-      </div>
-
-      {activeDiv && (
-        <>
-          {/* Toolbar */}
-          <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.6 }}>Filters</span>
-            {MO_FIELDS.map(([c, label]) => (
-              <button key={c} type="button" data-no-undo aria-haspopup="dialog" onClick={e => { const el = e.currentTarget; setMfEdit(x => (x && x.col === c ? null : { col: c, title: label, anchor: el })) }}
-                title={mf[c] ? mf[c].join(', ') : `All ${label.toLowerCase()}`}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px', borderRadius: 4, fontSize: 12, cursor: 'pointer', maxWidth: 260,
-                         border: `1px solid ${mf[c] ? theme.primary : theme.border}`, background: mf[c] ? alpha(theme.primary, '12') : theme.surface, color: theme.textPrimary }}>
-                <span style={{ color: theme.textMuted }}>{label}</span>
-                <b style={{ fontWeight: mf[c] ? 700 : 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{caption(c)}</b>
-                <span aria-hidden="true" style={{ color: theme.textMuted, fontSize: 10 }}>▾</span>
-              </button>
-            ))}
-            {nMf > 0 && <button type="button" onClick={() => setMf({})} style={{ all: 'unset', cursor: 'pointer', fontSize: 12, color: theme.textMuted, textDecoration: 'underline' }}>Clear all</button>}
-            {mfEdit && <ExcelFilter key={mfEdit.col + JSON.stringify(mf)} title={mfEdit.title} anchor={mfEdit.anchor} picked={mf[mfEdit.col]}
-              load={() => mfValues(mfEdit.col)}
-              onDone={vals => {
-                if (vals !== undefined) setMf(f => { const n = { ...f }; if (vals.length) n[mfEdit.col] = vals; else delete n[mfEdit.col]; return n })
-                setMfEdit(null)
-              }} />}
-
-            <div style={{ display: 'flex', borderRadius: 7, overflow: 'hidden', border: `1px solid ${theme.border}` }}>
-              {[['contrib', 'Contrib %'], ['ty', 'TY Split (₹L)']].map(([mode, label]) => (
-                <button key={mode} onClick={() => setViewMode(mode)} style={{
-                  padding: '5px 14px', fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none',
-                  background: viewMode === mode ? 'var(--st-btn,#A8CBB7)' : theme.surface,
-                  color: viewMode === mode ? 'var(--st-btn-text,#1F4D3A)' : theme.textMuted,
-                }}>{label}</button>
-              ))}
-            </div>
-
-            {(badDepts.length > 0 || noSplit.length > 0) && (
-              <span style={{ fontSize: 11, color: theme.danger, fontWeight: 600 }}>
-                {badDepts.length > 0 && `⚠ ${badDepts.length} with contrib ≠ 100%`}{badDepts.length > 0 && noSplit.length > 0 && ' · '}
-                {noSplit.length > 0 && `${noSplit.length} with no MRP split (₹ ${noSplit.reduce((s, d) => s + divData[d].dept_total_ty, 0).toFixed(1)} L not split) - pick Check to see them`}
-              </span>
-            )}
-
-            <span style={{ fontSize: 11, color: theme.textMuted, marginLeft: 4 }}>
-              {visibleDepts.length} of {allDepts.length} depts · {monthGroups.length} months × P1/P2
-            </span>
-          </div>
-
-          {/* Matrix table */}
-          <div style={{ background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`, overflow: 'hidden' }}>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ borderCollapse: 'collapse', fontSize: 11, width: '100%', tableLayout: 'auto' }}>
-                <thead>
-                  {/* Month group header */}
-                  <tr style={{ background: theme.surfaceAlt, borderBottom: `1px solid ${theme.border}` }}>
-                    <th style={{ ...HDR, textAlign: 'left', padding: '7px 14px', minWidth: 200, borderRight: `2px solid ${theme.border}` }} rowSpan={2}>
-                      Department / MRP
-                    </th>
-                    <th style={{ ...HDR, padding: '7px 10px', minWidth: 70, borderRight: `2px solid ${theme.border}` }} rowSpan={2}>
-                      Dept TY (₹L)
-                    </th>
-                    {monthGroups.map(({ month, periods: mps }) => (
-                      <th key={month} colSpan={mps.length} style={{
-                        ...HDR, textAlign: 'center', padding: '5px 4px',
-                        color: theme.primary, borderRight: `1px solid ${theme.border}`,
-                        minWidth: 58 * mps.length,
-                      }}>
-                        {month}
-                      </th>
-                    ))}
-                    <th style={{ ...HDR, padding: '7px 10px', borderLeft: `2px solid ${theme.border}` }} rowSpan={2}>
-                      Band Total (₹L)
-                    </th>
-                  </tr>
-                  {/* P1/P2 sub-header */}
-                  <tr style={{ background: theme.surfaceAlt, borderBottom: `2px solid ${theme.border}` }}>
-                    {monthGroups.map(({ periods: mps }) =>
-                      mps.map((p, pi) => (
-                        <th key={p} style={{
-                          ...HDR, textAlign: 'center', padding: '4px 6px', fontSize: 9,
-                          color: p.endsWith('P1') ? theme.success : theme.accent,
-                          borderRight: pi === mps.length - 1 ? `1px solid ${theme.border}` : `1px dashed ${alpha(theme.border,'22')}`,
-                          minWidth: 52,
-                        }}>
-                          {p.endsWith('P1') ? 'P1' : 'P2'}
-                        </th>
-                      ))
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleDepts.map(dept => {
-                    const d = divData[dept]
-                    const isExpanded = expandedDept === dept
-                    const isBad = !d.all_ok
-                    const divColor = DIV_COLOR[activeDiv] || theme.primary
-
-                    return [
-                      /* Dept summary row */
-                      <tr key={`${dept}-hdr`}
-                        onClick={() => setExpandedDept(isExpanded ? null : dept)}
-                        style={{
-                          borderBottom: isExpanded ? 'none' : `1px solid ${theme.border}`,
-                          background: isBad ? `${alpha(theme.danger,'08')}` : `${alpha(divColor,'0a')}`,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <td style={{
-                          padding: '6px 14px', fontWeight: 700, fontSize: 12,
-                          color: divColor, borderRight: `2px solid ${theme.border}`,
-                          display: 'flex', alignItems: 'center', gap: 8,
-                        }}>
-                          <span style={{ fontSize: 11, color: theme.textMuted, fontWeight: 400 }}>{isExpanded ? '▾' : '▸'}</span>
-                          {dept}
-                          {isBad && <span style={{ fontSize: 10, color: theme.danger, fontWeight: 600, background: `${alpha(theme.danger,'18')}`, borderRadius: 4, padding: '1px 5px' }}>⚠</span>}
-                          {d.no_split && <span title="No MRP shares for this department in the MRP Cont % file - its plan is not split into price bands" style={{ fontSize: 10, color: theme.danger, fontWeight: 700, border: `1px solid ${alpha(theme.danger, '55')}`, borderRadius: 4, padding: '1px 5px' }}>NO MRP SPLIT</span>}
-                          {d.shares_from && <span title={`A new department: split over MRP bands as its reference department ${d.shares_from} is`} style={{ fontSize: 10, color: theme.textSecondary, fontWeight: 600, border: `1px solid ${theme.border}`, borderRadius: 4, padding: '1px 5px' }}>split as {d.shares_from}</span>}
-                          <span style={{ fontSize: 10, color: theme.textMuted, fontWeight: 400, marginLeft: 'auto' }}>{d.bands.length} bands</span>
-                        </td>
-                        <td style={{ ...CELL, fontWeight: 700, color: theme.primary, borderRight: `2px solid ${theme.border}` }}>
-                          {d.dept_total_ty > 0 ? d.dept_total_ty.toFixed(2) : '—'}
-                        </td>
-                        {periods.map((p, pi) => {
-                          const isLastInMonth = monthGroups.find(g => g.periods[g.periods.length - 1] === p)
-                          const contribOk = d.contrib_ok[p]
-                          const periodTotal = viewMode === 'ty'
-                            ? d.bands.reduce((s, b) => s + (b.period_ty[p] || 0), 0)
-                            : null
-                          return (
-                            <td key={p} style={{
-                              ...CELL, textAlign: 'center', fontWeight: 600, fontSize: 10,
-                              borderRight: isLastInMonth ? `1px solid ${theme.border}` : `1px dashed ${alpha(theme.border,'44')}`,
-                              color: viewMode === 'ty'
-                                ? (periodTotal > 0 ? theme.textPrimary : theme.textMuted)
-                                : (contribOk ? theme.textMuted : theme.danger),
-                            }}>
-                              {viewMode === 'ty'
-                                ? (periodTotal > 0 ? periodTotal.toFixed(1) : '—')
-                                : (contribOk ? '✓' : '⚠')
-                              }
-                            </td>
-                          )
-                        })}
-                        <td style={{ ...CELL, fontWeight: 700, color: theme.accent, borderLeft: `2px solid ${theme.border}` }}>
-                          {d.bands.reduce((s, b) => s + b.band_total_ty, 0).toFixed(2)}
-                        </td>
-                      </tr>,
-
-                      /* Expanded band rows */
-                      ...(isExpanded ? d.bands.map((band, bi) => (
-                        <tr key={`${dept}-${band.mrp}`} style={{
-                          borderBottom: bi === d.bands.length - 1 ? `2px solid ${theme.border}` : `1px solid ${alpha(theme.border,'22')}`,
-                          background: bi % 2 === 0 ? `${alpha(divColor,'04')}` : 'transparent',
-                        }}>
-                          <td style={{
-                            padding: '4px 14px 4px 36px', fontSize: 11,
-                            color: theme.textPrimary, borderRight: `2px solid ${theme.border}`,
-                            fontFamily: theme.fontMono,
-                          }}>
-                            <span style={{ color: theme.accent }}>₹</span>{band.mrp.toLocaleString()}
-                          </td>
-                          <td style={{ ...CELL, borderRight: `2px solid ${theme.border}`, color: theme.textMuted, fontSize: 10 }}>—</td>
-                          {periods.map((p, pi) => {
-                            const isLastInMonth = monthGroups.find(g => g.periods[g.periods.length - 1] === p)
-                            const val = viewMode === 'ty' ? band.period_ty[p] : band.period_contrib[p]
-                            const isZero = !val || val === 0
-                            const isP1 = p.endsWith('P1')
-                            return (
-                              <td key={p} style={{
-                                ...CELL, textAlign: 'center',
-                                borderRight: isLastInMonth ? `1px solid ${theme.border}` : `1px dashed ${alpha(theme.border,'44')}`,
-                                color: isZero ? theme.textMuted
-                                  : viewMode === 'ty'
-                                    ? (isP1 ? theme.success : theme.accent)
-                                    : theme.textPrimary,
-                                fontWeight: isZero ? 400 : 600,
-                              }}>
-                                {isZero ? '—'
-                                  : viewMode === 'ty'
-                                    ? val.toFixed(2)
-                                    : `${val.toFixed(1)}%`
-                                }
-                              </td>
-                            )
-                          })}
-                          <td style={{ ...CELL, color: theme.success, fontWeight: 700, borderLeft: `2px solid ${theme.border}` }}>
-                            {band.band_total_ty > 0 ? band.band_total_ty.toFixed(2) : '—'}
-                          </td>
-                        </tr>
-                      )) : []),
-                    ]
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
+      {noSplit.length > 0 && (
+        <div style={{ fontSize: 12, color: theme.danger, fontWeight: 600, margin: '0 4px 10px' }}>
+          {noSplit.length} departments have no MRP split (₹ {noSplitTy.toLocaleString('en-IN', { maximumFractionDigits: 1 })} L) - in the tree under MRP "No MRP split", so every department still adds back to its plan
+        </div>
       )}
-      <GrainPanel stage="mrp" division={activeDiv || undefined} title={`${activeDiv || ''} MRP plan`.trim()} />
+
+      {/* the department plan's tree with an MRP level (user, 2026-10-14: "merge all the views similarly to the
+          department view which is the final design") - Division / Department / MRP / Month, Store / Cluster, filters,
+          the ⓘ pop-up, Month or P1 / P2 and Export Excel, as Final Results */}
+      <HierarchyView api="/api/planning/grain/mrp-view" levels={MRP_FIELDS} defaults={['division', 'department', 'mrp', 'month']}
+        store="sp.mrp" versions={false} halves />
     </div>
   )
 }

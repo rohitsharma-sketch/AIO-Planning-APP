@@ -379,6 +379,13 @@ def _expand_listed(listed: pd.DataFrame) -> pd.DataFrame:
     sold = s[["DEPARTMENT", "DISPLAY", "MRP"]].drop_duplicates().rename(columns={"MRP": "MRP_CURRENT"})
     sold = sold.merge(listed[["DEPARTMENT", "DISPLAY", "MRP_CURRENT"]], how="left", indicator=True)
     disc = sold[sold["_merge"] == "left_only"].drop(columns="_merge").assign(MRP_LISTED=0)
+    # a sold MRP that is itself one of the new MRPs of its Department x Display (699 -> 749 while 749 sold LY too) is
+    # listed - its sales stay on it (user, 2026-10-14: "shouldnt this be listed instead of discontinued, as it is LY = TY
+    # MRPs matching"), not split to the nearest below / above
+    new = listed.loc[listed["MRP_LISTED"] > 0, ["DEPARTMENT", "DISPLAY", "MRP_LISTED"]].drop_duplicates()
+    keep = disc.merge(new.rename(columns={"MRP_LISTED": "MRP_CURRENT"}), on=["DEPARTMENT", "DISPLAY", "MRP_CURRENT"],
+                      how="left", indicator=True)["_merge"].eq("both").to_numpy()
+    disc.loc[keep, "MRP_LISTED"] = disc.loc[keep, "MRP_CURRENT"]
     out = pd.concat([listed, disc], ignore_index=True).astype({"MRP_CURRENT": int, "MRP_LISTED": int})
     return out.sort_values(["DEPARTMENT", "DISPLAY", "MRP_CURRENT"]).reset_index(drop=True)
 
@@ -1398,3 +1405,20 @@ def rebuild_shares():
         return get_shares_status()
     finally:
         _BUSY.release()
+
+
+CMP_LEVEL_NAME = {"department": "Department", "display": "Display", "mrp": "MRP", "attribute": "Attribute",
+                  "division": "Division", "store": "Store", "month": "Month"}
+
+
+@router.get("/hierarchy-export")
+def get_cmp_hierarchy_export(levels: str, filters: str = "{}"):
+    """The Before -> After tree as on screen (Rows, filters) as an Excel file - every branch opened (2026-10-14)."""
+    from engines.grain_view import export_about, parse_filters, tree_xlsx, xlsx_response
+    lv, _ = _cmp_path(levels, "[]")
+    f = parse_filters(filters, CMP_LEVELS)
+    c = _compare()
+    data = tree_xlsx(c["ix"], lv, CMP_LEVEL_NAME, f, ("Before · old MRP (₹L)", "After · new MRP (₹L)", "Change %"),
+                     "MRP before - after", export_about(lv, CMP_LEVEL_NAME, f, "month",
+                                                        f"MRP Re-apportionment on master {c['master']}, {get_basis()} LY sales"))
+    return xlsx_response(data, "MRP re-apportionment before - after.xlsx")

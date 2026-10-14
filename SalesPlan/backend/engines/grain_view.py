@@ -497,9 +497,11 @@ def _sinfo(cube: dict) -> dict:
             for s, x in cube["stores"].items()}
 
 
-def _cells(cube: dict, attr_map: dict, want: dict, sinfo: dict, filt: dict | None = None):
+def _cells(cube: dict, attr_map: dict, want: dict, sinfo: dict, filt: dict | None = None, halves: bool = False):
     """Every (division, department, attribute, store, month, LY, TY) cell of the node want = {level: value}, inside the
-    filters filt = {level: set of values} (user, 2026-10-13: "filters required")."""
+    filters filt = {level: set of values} (user, 2026-10-13: "filters required"). halves: each month as its two
+    fortnights "Mar'27 P1" (days 1-15) / "Mar'27 P2" (16th to month end) - TY = the plan's own TY P1 / P2, LY = half
+    the month's LY each, as the plan engine grows it (dept_sales_engine: ly_half x BIS P1 / P2 growth)."""
     f = filt or {}
     fit = lambda lv, v: want.get(lv, v) == v and (lv not in f or v in f[lv])   # noqa: E731
     ok = {s for s, x in sinfo.items() if all(fit(k, v) for k, v in x.items())}
@@ -515,7 +517,11 @@ def _cells(cube: dict, attr_map: dict, want: dict, sinfo: dict, filt: dict | Non
                 if s not in ok:
                     continue
                 for m, v in mm.items():
-                    if fit("month", m):
+                    if halves:
+                        for h, t in (("P1", v[2]), ("P2", v[3])):
+                            if fit("month", f"{m} {h}"):
+                                yield dv, dp, at, s, f"{m} {h}", v[0] / 2, t
+                    elif fit("month", m):
                         yield dv, dp, at, s, m, v[0], v[1]
     for dv, dmap in (cube.get("off") or {}).items():   # inactive departments: LY, plan 0
         if not fit("division", dv):
@@ -528,8 +534,9 @@ def _cells(cube: dict, attr_map: dict, want: dict, sinfo: dict, filt: dict | Non
             for s, mm in smap.items():
                 if s in ok:
                     for m, ly in mm.items():
-                        if fit("month", m):
-                            yield dv, dp, at, s, m, ly, 0.0
+                        for m2, l2 in (((f"{m} P1", ly / 2), (f"{m} P2", ly / 2)) if halves else ((m, ly),)):
+                            if fit("month", m2):
+                                yield dv, dp, at, s, m2, l2, 0.0
 
 
 def parse_filters(raw: str, allowed=HIER_LEVELS) -> dict:
@@ -578,6 +585,12 @@ def index_from_frame(df, levels, ly_col: str, ty_col: str) -> dict:
     return {"names": names, "pos": pos, "c": c, "ly": df[ly_col].to_numpy(dtype=float), "ty": df[ty_col].to_numpy(dtype=float)}
 
 
+def month_key(m: str):
+    """Calendar order of "Mar'27" and of its fortnights "Mar'27 P1" / "Mar'27 P2"."""
+    base, _, half = str(m).partition(" ")
+    return (TY_MONTHS.index(base) if base in TY_MONTHS else 99, half)
+
+
 def _mrp_key(v):
     """MRPs in price order (as numbers), anything else (Unmapped) last."""
     try:
@@ -589,22 +602,29 @@ def _mrp_key(v):
 # One column index per cube (user, 2026-10-13: "make sure that the population speed is fast"): every cell once, each
 # level as an integer code, so a branch / a filter list is a mask + a bincount (ms) instead of a walk over every cell
 # (~0.2 s on the 305k cells of the MAMJ plan). Built once per cube and attribute map; 8010 builds it at start.
-_ix = {"key": None, "v": None}
+_ix: dict = {}   # halves (False = by month, True = P1 / P2) -> (key, index)
 _ix_lock = threading.Lock()
 
 
-def _index(cube: dict, attr_map: dict) -> dict:
-    import numpy as np
+def _index(cube: dict, attr_map: dict, halves: bool = False) -> dict:
     key = (id(cube), json.dumps(attr_map, sort_keys=True, default=str))
     with _ix_lock:
-        if _ix["key"] == key:
-            return _ix["v"]
+        hit = _ix.get(halves)
+        if hit and hit[0] == key:
+            return hit[1]
         sinfo = _sinfo(cube)
         v = make_index((({"division": dv, "department": dp, "attribute": at, "month": m, "store": st,
                           "cluster": sinfo[st]["cluster"], "stype": sinfo[st]["stype"]}, a, t)
-                        for dv, dp, at, st, m, a, t in _cells(cube, attr_map, {}, sinfo)), HIER_LEVELS)
-        _ix.update(key=key, v=v)
+                        for dv, dp, at, st, m, a, t in _cells(cube, attr_map, {}, sinfo, halves=halves)), HIER_LEVELS)
+        _ix[halves] = (key, v)
         return v
+
+
+def _halves(period: str) -> bool:
+    """?period=month (default) | half - the month level by month or by fortnight (P1 / P2)."""
+    if period not in ("month", "half"):
+        raise HTTPException(422, "period must be 'month' or 'half'")
+    return period == "half"
 
 
 def _mask(ix: dict, want: dict, filt: dict | None, skip: str | None = None):
@@ -622,10 +642,10 @@ def _mask(ix: dict, want: dict, filt: dict | None, skip: str | None = None):
     return m
 
 
-def hierarchy_values(cube: dict, attr_map: dict, filt: dict | None = None, levels=None) -> dict:
+def hierarchy_values(cube: dict, attr_map: dict, filt: dict | None = None, levels=None, halves: bool = False) -> dict:
     """{level: [values]} a level can be filtered on, as an Excel filter list: the values with any LY / TY inside the
     OTHER levels' filters (the level's own filter does not hide its own choices). Months in calendar order."""
-    return values_of(_index(cube, attr_map), filt, levels or HIER_LEVELS)
+    return values_of(_index(cube, attr_map, halves), filt, levels or HIER_LEVELS)
 
 
 def values_of(ix: dict, filt: dict | None, levels) -> dict:
@@ -635,15 +655,15 @@ def values_of(ix: dict, filt: dict | None, levels) -> dict:
     out = {}
     for lv in levels:
         vals = [ix["names"][lv][i] for i in np.unique(ix["c"][lv][_mask(ix, {}, filt, skip=lv) & nz])]
-        out[lv] = (sorted(vals, key=lambda m: TY_MONTHS.index(m) if m in TY_MONTHS else 99) if lv == "month" else
+        out[lv] = (sorted(vals, key=month_key) if lv == "month" else
                    sorted(vals, key=_mrp_key) if lv in ("mrp", "old_mrp", "new_mrp") else sorted(vals))
     return out
 
 
-def hierarchy_rows(cube: dict, attr_map: dict, levels: list, path: list, filt: dict | None = None) -> dict:
+def hierarchy_rows(cube: dict, attr_map: dict, levels: list, path: list, filt: dict | None = None, halves: bool = False) -> dict:
     """Pure. levels: the order picked (from HIER_LEVELS); path: the values of levels[:len(path)] down to the node.
     Returns {level, rows: [{key, ly, ty}] (TY high to low; months in calendar order), total: {ly, ty}}."""
-    return rows_of(_index(cube, attr_map), levels, path, filt)
+    return rows_of(_index(cube, attr_map, halves), levels, path, filt)
 
 
 def rows_of(ix: dict, levels: list, path: list, filt: dict | None = None) -> dict:
@@ -662,7 +682,7 @@ def rows_of(ix: dict, levels: list, path: list, filt: dict | None = None) -> dic
     # a branch with no data at all (e.g. stores with no cluster and no sales) is not listed (user, 2026-10-13)
     rows = [{"key": k, "ly": round(v[0], 4), "ty": round(v[1], 4)} for k, v in acc.items() if abs(v[0]) > 1e-9 or abs(v[1]) > 1e-9]
     if nxt == "month":
-        rows.sort(key=lambda r: TY_MONTHS.index(r["key"]) if r["key"] in TY_MONTHS else 99)
+        rows.sort(key=lambda r: month_key(r["key"]))
     elif nxt == "mrp":   # price order (Re-apportionment's before / after, 2026-10-14)
         rows.sort(key=lambda r: _mrp_key(r["key"]))
     else:
@@ -682,7 +702,7 @@ def _view(version: str) -> tuple:
 
 
 @router.get("/hierarchy")
-def get_hierarchy(levels: str, path: str = "[]", filters: str = "{}", version: str = ""):
+def get_hierarchy(levels: str, path: str = "[]", filters: str = "{}", version: str = "", period: str = "month"):
     """?levels=cluster,store,division&path=["BH - (NP)"] -> the children of that node (view only)."""
     lv = [x for x in levels.split(",") if x]
     if not lv or len(set(lv)) != len(lv) or any(x not in HIER_LEVELS for x in lv):
@@ -694,24 +714,26 @@ def get_hierarchy(levels: str, path: str = "[]", filters: str = "{}", version: s
     if not isinstance(pth, list) or len(pth) >= len(lv):
         raise HTTPException(status_code=422, detail="path must be shorter than levels")
     c, am, _ = _view(version)
-    return {**hierarchy_rows(c, am, lv, [str(p) for p in pth], parse_filters(filters)), "source": c["source"]}
+    return {**hierarchy_rows(c, am, lv, [str(p) for p in pth], parse_filters(filters), _halves(period)), "source": c["source"]}
 
 
 @router.get("/hierarchy-options")
-def get_hierarchy_options(filters: str = "{}", level: str = "", version: str = ""):
+def get_hierarchy_options(filters: str = "{}", level: str = "", version: str = "", period: str = "month"):
     """The values each Hierarchy level (or just `level`) can be filtered on - Excel style: inside the other levels'
     filters, so a pick in one column narrows the lists of the others."""
     if level and level not in HIER_LEVELS:
         raise HTTPException(status_code=422, detail=f"level: one of {', '.join(HIER_LEVELS)}")
     c, am, _ = _view(version)
-    return hierarchy_values(c, am, parse_filters(filters), [level] if level else None)
+    return hierarchy_values(c, am, parse_filters(filters), [level] if level else None, _halves(period))
 
 
 def warm_hierarchy():
-    """8010 start: load the active plan and build its index, so the first Final Results open doesn't wait for it."""
+    """8010 start: load the active plan and build its index, so the first Final Results open doesn't wait for it - then
+    the MRP tree's (it reads the MRP Re-apportionment, ~40 s cold)."""
     try:
         from engines.final_results_engine import _load_dept_attr_map
         _index(_cube(), _load_dept_attr_map())
+        _mrp_index(_cube(), _load_dept_attr_map(), False)
     except Exception:   # noqa: BLE001 - the page builds it on first use and shows any error itself
         pass
 
@@ -881,8 +903,181 @@ def explain(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: list, 
     return out
 
 
+def _whole(m: str) -> str:
+    return str(m).partition(" ")[0]
+
+
+def explain_half(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: list, filt: dict | None = None) -> dict:
+    """explain() in the P1 / P2 view: the working of the whole months, with the row's own fortnight numbers (LY, TY,
+    Growth %, Cont %, the period table) on top - so the pop-up still shows the number on screen."""
+    import numpy as np
+    mi = levels.index("month") if "month" in levels else None
+    out = explain(cube, attr_map, nd_map, levels, [(_whole(v) if i == mi else v) for i, v in enumerate(path)],
+                  {k: ({_whole(x) for x in v} if k == "month" else v) for k, v in (filt or {}).items()})
+    ix = _index(cube, attr_map, True)
+    m = _mask(ix, dict(zip(levels, path)), filt)
+    LY, TY = float(ix["ly"][m].sum()), float(ix["ty"][m].sum())
+    g, n = ix["c"]["month"][m], len(ix["names"]["month"])
+    Lm = np.bincount(g, weights=ix["ly"][m], minlength=n)
+    Tm = np.bincount(g, weights=ix["ty"][m], minlength=n)
+    per = sorted(((ix["names"]["month"][i], float(Lm[i]), float(Tm[i])) for i in np.unique(g)), key=lambda x: month_key(x[0]))
+    out["months"] = [{"month": k, "ly": a, "ty": b} for k, a, b in per]
+    note = {"h": "P1 / P2", "t": "P1 = days 1-15 of the month, P2 = the 16th to the month end. Each store x department's "
+            "month LY is split in two halves and each half grows by BIS's own P1 / P2 growth (the plan engine's working); "
+            "TY P1 + TY P2 = the month's TY."}
+    head = [x for x in out["lines"] if x["h"] == "Filters on"]
+    rest = [x for x in out["lines"] if x["h"] != "Filters on"]
+    if abs(TY - out["ty"]) > 1e-6 or abs(LY - out["ly"]) > 1e-6:
+        label = out["label"] if not path else " · ".join(str(x) for x in path)
+        note["t"] += (f" The working below is for the whole month{'s' if len(per) > 2 else ''}: ₹{_inr(out['ty'])} L, "
+                      f"of which this row is ₹{_inr(TY)} L.")
+        out.update(label=label, ly=LY, ty=TY, growth=(TY / LY - 1) * 100 if LY else None)
+        rest = [x for x in rest if x["h"] not in ("The number", "Growth %", "Cont %")]
+        top = [{"h": "The number", "t": f"{label} plans ₹{_inr(TY)} L this year against ₹{_inr(LY)} L last year, in "
+                f"{', '.join(k for k, _, _ in per)}."}]
+        if LY:
+            top.append({"h": "Growth %", "t": f"₹{_inr(TY)} ÷ ₹{_inr(LY)} − 1 = {out['growth']:+.1f}%."})
+        if path:
+            pty = float(ix["ty"][_mask(ix, dict(zip(levels, path[:-1])), filt)].sum())
+            plabel = " · ".join(str(x) for x in path[:-1]) or "the whole plan"
+            out["parent"], out["cont"] = {"label": plabel, "ty": pty}, (TY / pty * 100 if pty else None)
+            if pty:
+                top.append({"h": "Cont %", "t": f"its share of the level above ({plabel}): ₹{_inr(TY)} ÷ ₹{_inr(pty)} = {out['cont']:.1f}%."})
+        rest = top + [note] + rest
+    else:
+        rest.insert(min(3, len(rest)), note)
+    out["lines"] = head + rest
+    return out
+
+
+def tree_xlsx(ix: dict, levels: list, names: dict, filt: dict | None, cols: tuple, title: str, about: list) -> bytes:
+    """The Hierarchy view as an Excel sheet (user, 2026-10-14: "also available in excel download too keeping the same
+    view"): every branch fully opened, in the order the page shows it (months in calendar order, MRPs in price order,
+    the rest by TY high to low), indented and grouped per level (Excel's + / - outline), one column per Rows field
+    (for Excel filters), then LY, TY, Growth %, Cont % (share of the level above). about = [(label, text)] on sheet 2."""
+    import io
+    import pandas as pd
+    import xlsxwriter
+    m = _mask(ix, {}, filt)
+    df = pd.DataFrame({lv: ix["c"][lv][m] for lv in levels})
+    df["ly"], df["ty"] = ix["ly"][m], ix["ty"][m]
+    tot_ly, tot_ty = float(df["ly"].sum()), float(df["ty"].sum())
+    frames, prev = [], None
+    for d, lv in enumerate(levels, 1):
+        keys = list(levels[:d])
+        g = df.groupby(keys, sort=False, as_index=False)[["ly", "ty"]].sum()
+        g = g[(g["ly"].abs() > 1e-9) | (g["ty"].abs() > 1e-9)].reset_index(drop=True)
+        nm = ix["names"][lv]
+        if lv in ("month", "mrp", "old_mrp", "new_mrp"):
+            key = month_key if lv == "month" else _mrp_key
+            order = {c: i for i, c in enumerate(sorted(range(len(nm)), key=lambda c: key(nm[c])))}
+            g["_s"] = g[lv].map(order)
+        else:
+            g["_s"] = -g["ty"]
+        g[f"_r{d}"] = (g.groupby(keys[:-1], sort=False)["_s"] if d > 1 else g["_s"]).rank(method="first")
+        if prev is not None:
+            g = g.merge(prev[keys[:-1] + [f"_r{i}" for i in range(1, d)] + ["ty"]].rename(columns={"ty": "_pty"}),
+                        on=keys[:-1], how="left")
+        else:
+            g["_pty"] = tot_ty
+        g["_d"] = d
+        prev = g
+        frames.append(g)
+    allr = pd.concat(frames, ignore_index=True)
+    rk = [f"_r{i}" for i in range(1, len(levels) + 1)]
+    allr[rk] = allr[rk].fillna(0)
+    allr = allr.sort_values(rk, kind="stable").reset_index(drop=True)
+
+    buf = io.BytesIO()
+    wb = xlsxwriter.Workbook(buf, {"constant_memory": True, "in_memory": True})
+    ws = wb.add_worksheet(title[:31])
+    hd = wb.add_format({"bold": True, "bg_color": "#E8EFEA", "border": 1, "text_wrap": True, "valign": "top"})
+    num = wb.add_format({"num_format": "#,##0.0"})
+    numb = wb.add_format({"num_format": "#,##0.0", "bold": True})
+    pct = wb.add_format({"num_format": "+0.0%;-0.0%;0.0%"})
+    cpc = wb.add_format({"num_format": "0.0%"})
+    lab = [wb.add_format({"indent": i, "bold": i == 0}) for i in range(len(levels))]
+    tb = wb.add_format({"bold": True, "top": 1})
+    tbn = wb.add_format({"bold": True, "top": 1, "num_format": "#,##0.0"})
+    tbp = wb.add_format({"bold": True, "top": 1, "num_format": "+0.0%;-0.0%;0.0%"})
+    nc = len(levels)
+    head = [" › ".join(names.get(x, x) for x in levels), "Level"] + [names.get(x, x) for x in levels] +         [cols[0], cols[1], cols[2], "Cont %"]
+    ws.write_row(0, 0, head, hd)
+    ws.set_column(0, 0, 38)
+    ws.set_column(1, 1, 12)
+    ws.set_column(2, 1 + nc, 16)
+    ws.set_column(2 + nc, 5 + nc, 13)
+    ws.freeze_panes(1, 1)
+    ws.outline_settings(True, False, True, False)   # +/- above its rows, as the page's ▸ / ▾
+    codes = allr[list(levels)].to_numpy()
+    names_of = [ix["names"][lv] for lv in levels]
+    for i, (d, ly, ty, pty) in enumerate(zip(allr["_d"].to_numpy(), allr["ly"].to_numpy(), allr["ty"].to_numpy(),
+                                             allr["_pty"].to_numpy()), 1):
+        d = int(d)
+        row = codes[i - 1]
+        vals = [str(names_of[j][int(row[j])]) for j in range(d)]
+        if d > 1:
+            ws.set_row(i, None, None, {"level": min(d - 1, 7)})
+        ws.write_string(i, 0, vals[-1], lab[d - 1])
+        ws.write_string(i, 1, names.get(levels[d - 1], levels[d - 1]))
+        for j, v in enumerate(vals):
+            ws.write_string(i, 2 + j, v)
+        ws.write_number(i, 2 + nc, float(ly), num)
+        ws.write_number(i, 3 + nc, float(ty), numb)
+        if ly > 0:
+            ws.write_number(i, 4 + nc, float(ty / ly - 1), pct)
+        if pty:
+            ws.write_number(i, 5 + nc, float(ty / pty), cpc)
+    r = len(allr) + 1
+    ws.write_string(r, 0, "Grand Total", tb)
+    ws.write_number(r, 2 + nc, tot_ly, tbn)
+    ws.write_number(r, 3 + nc, tot_ty, tbn)
+    if tot_ly > 0:
+        ws.write_number(r, 4 + nc, tot_ty / tot_ly - 1, tbp)
+    ws.write_number(r, 5 + nc, 1.0, wb.add_format({"bold": True, "top": 1, "num_format": "0.0%"}))
+    ws.autofilter(0, 0, r - 1, 5 + nc)
+    ab = wb.add_worksheet("About")
+    ab.set_column(0, 0, 18)
+    ab.set_column(1, 1, 110)
+    for i, (k, v) in enumerate(about):
+        ab.write_string(i, 0, k, hd)
+        ab.write_string(i, 1, v)
+    wb.close()
+    return buf.getvalue()
+
+
+def xlsx_response(data: bytes, name: str):
+    from fastapi.responses import Response
+    return Response(data, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+def export_about(levels: list, names: dict, filt: dict | None, period: str, source: str, extra=()) -> list:
+    import datetime
+    return [("View", " › ".join(names.get(x, x) for x in levels)),
+            ("Months", "P1 / P2 - P1 = days 1-15, P2 = 16th to month end" if period == "half" else "by month"),
+            ("Filters", "; ".join(f"{names.get(k, k)}: {', '.join(sorted(v))}" for k, v in (filt or {}).items()) or "none"),
+            ("From", source or "-"), *extra,
+            ("Exported", datetime.datetime.now().strftime("%d %b %Y %H:%M")),
+            ("Units", "₹ lakh · Growth % = TY ÷ LY − 1 · Cont % = share of the level above")]
+
+
+@router.get("/hierarchy-export")
+def get_hierarchy_export(levels: str, filters: str = "{}", version: str = "", period: str = "month"):
+    """The Final Results Hierarchy view as on screen (Rows, filters, version, month or P1 / P2) as an Excel file."""
+    lv = [x for x in levels.split(",") if x]
+    if not lv or len(set(lv)) != len(lv) or any(x not in HIER_LEVELS for x in lv):
+        raise HTTPException(status_code=422, detail=f"levels: pick from {', '.join(HIER_LEVELS)}, each once")
+    c, am, _ = _view(version)
+    f = parse_filters(filters)
+    src = (c.get("source") or {}).get("note") or ""
+    data = tree_xlsx(_index(c, am, _halves(period)), lv, LEVEL_NAME, f, ("LY (₹L)", "TY (₹L)", "Growth %"),
+                     "Department plan", export_about(lv, LEVEL_NAME, f, period, src + (f" · version {version}" if version else "")))
+    return xlsx_response(data, f"Department plan{' P1-P2' if period == 'half' else ''}.xlsx")
+
+
 @router.get("/explain")
-def get_explain(levels: str, path: str = "[]", filters: str = "{}", version: str = ""):
+def get_explain(levels: str, path: str = "[]", filters: str = "{}", version: str = "", period: str = "month"):
     """?levels=division,department&path=["MENS","ML_JEANS"] -> how that row's numbers are made (view only)."""
     lv = [x for x in levels.split(",") if x]
     if not lv or len(set(lv)) != len(lv) or any(x not in HIER_LEVELS for x in lv):
@@ -894,7 +1089,295 @@ def get_explain(levels: str, path: str = "[]", filters: str = "{}", version: str
     if not isinstance(pth, list) or len(pth) > len(lv):
         raise HTTPException(status_code=422, detail="path can't be longer than levels")
     c, am, nd = _view(version)
-    return explain(c, am, nd, lv, [str(p) for p in pth], parse_filters(filters))
+    return (explain_half if _halves(period) else explain)(c, am, nd, lv, [str(p) for p in pth], parse_filters(filters))
+
+
+
+# ── MRP Plan Output as the department plan's tree (user, 2026-10-14: "merge all the views similarly to the department
+# view which is the final design") ────────────────────────────────────────────────────────────────────────────────────
+# The same plan cube as Final Results with one more level, MRP: each store x department x fortnight's TY (TY P1 / TY P2)
+# x the department's MRP share of that fortnight (effective_shares - what MRP Output, Display Type and Reconciliation
+# split by), LY = the store's department LY x that store's own LY mix over the new MRPs (the MRP Re-apportionment's
+# after side; the plan's MRP share where the store has no re-apportioned sales). A department / month with no MRP split
+# keeps its plan under "No MRP split", so every department adds back to its plan. Active departments only (as MRP Output).
+MRP_LEVELS = ("cluster", "store", "stype", "division", "attribute", "department", "mrp", "month")
+MRP_LEVEL_NAME = {**LEVEL_NAME, "mrp": "MRP"}
+NO_SPLIT = "No MRP split"
+NOT_PLANNED = "Not planned"   # inactive departments: their LY with a plan of 0, as Final Results shows them
+_mx: dict = {}
+_mx_lock = threading.Lock()
+
+
+def _split_source() -> str:
+    try:
+        from engines.art_nm_engine import promoted_shares
+        if promoted_shares() is not None:
+            return "the Article Name plan, promoted to the MRP stage"
+    except Exception:   # noqa: BLE001
+        pass
+    from engines.mrp_plan_engine import get_source, _reapp_shares
+    if get_source() == "reapp" and _reapp_shares():
+        return "the re-apportioned LY sales of the latest MRP Re-apportionment run"
+    return "the buyers' MRP Cont % file"
+
+
+def _reapp_mix():
+    """(DataFrame store, department, mrp, month ("Mar'27"), lw = share of the store x department x month's LY on the new
+    MRPs, about) - from the MRP Re-apportionment's after side (Unmapped left out), or (None, reason)."""
+    try:
+        from engines.mrp_reapportionment_engine import _compare, _plan_period, get_basis
+        c = _compare()
+    except Exception as e:   # noqa: BLE001 - no master / sales: LY is split by the plan's shares
+        return None, f"no MRP Re-apportionment to read ({e})", None
+    f = c["flows"]
+    f = f[f["new"] != "Unmapped"]
+    g = f.groupby(["store", "department", "new", "month"], sort=False, as_index=False)["v"].sum()
+    g = g[g["v"] > 0]
+    g["month"] = g["month"].map({m: _plan_period(m) for m in g["month"].unique()})
+    g["lw"] = g["v"] / g.groupby(["store", "department", "month"])["v"].transform("sum")
+    return (g.rename(columns={"new": "mrp"})[["store", "department", "mrp", "month", "lw"]],
+            f"master {c['master']}, {get_basis()} LY sales", id(c))
+
+
+def _mrp_index(cube: dict, attr_map: dict, halves: bool) -> dict:
+    import numpy as np
+    import pandas as pd
+    from engines.mrp_plan_engine import effective_shares
+    try:
+        sh = effective_shares()[0]
+    except (OSError, ValueError):
+        sh = {}
+    mix, about, mid = _reapp_mix()
+    key = (id(cube), json.dumps(attr_map, sort_keys=True, default=str), json.dumps(sh, sort_keys=True), mid, halves)
+    with _mx_lock:
+        if _mx.get(halves) and _mx[halves][0] == key:
+            return _mx[halves][1]
+    sinfo = _sinfo(cube)
+    # departments / stores / months as integer codes, so the million-row split stays light
+    dkeys, base = [], []
+    for dv, deps in cube["dept"].items():
+        for dp, ss in deps.items():
+            d = len(dkeys)
+            dkeys.append((dv, dp, (attr_map.get(dv, {}) or {}).get(dp) or "-"))
+            for st, mm in ss.items():
+                for m, (ly, _ty, p1, p2) in mm.items():
+                    base.append((st, d, m, ly, p1, p2))
+    b = pd.DataFrame(base, columns=["store", "d", "month", "ly", "p1", "p2"])
+    off = []
+    for dv, deps in (cube.get("off") or {}).items():
+        for dp, ss in deps.items():
+            d = len(dkeys)
+            dkeys.append((dv, dp, (attr_map.get(dv, {}) or {}).get(dp) or "-"))
+            for st, mm in ss.items():
+                for m, ly in mm.items():
+                    for h in (("P1", "P2") if halves else ("",)):
+                        off.append((st, d, f"{m} {h}" if h else m, NOT_PLANNED, ly / 2 if h else ly, 0.0, 0.0, 0.0, 0.0))
+    srows = []
+    for d, (dv, dp, _) in enumerate(dkeys):
+        for k, per in (sh.get(dv, {}).get(dp) or {}).items():
+            for pk, v in (per or {}).items():
+                m, _, h = str(pk).partition(" ")
+                if h in ("P1", "P2") and v and float(v) > 0:
+                    srows.append((d, m, str(k), h, float(v)))
+    S = pd.DataFrame(srows, columns=["d", "month", "mrp", "h", "w"])
+    if len(S):
+        S["w"] = S["w"] / S.groupby(["d", "month", "h"])["w"].transform("sum")
+    dept_of = {}
+    for d, (_, dp, _) in enumerate(dkeys):
+        dept_of.setdefault(dp, []).append(d)
+    if mix is not None and len(mix):
+        mix = mix[mix["department"].isin(dept_of)]
+        mix = mix.assign(d=mix["department"].map(lambda x: dept_of[x][0]))[["store", "d", "mrp", "month", "lw"]]
+    cols = ["store", "d", "month", "mrp", "ly", "ty", "ly_mix", "ly_sh", "ns"]
+    parts = []
+    for h, pc in (("P1", "p1"), ("P2", "p2")):
+        x = b.assign(ly=b["ly"] / 2, t=b[pc])
+        if halves:
+            x = x.assign(month=x["month"] + " " + h)
+        sh_h = S[S["h"] == h].drop(columns="h")
+        has = x[["d", "month"]].assign(month=x["month"].str.partition(" ")[0]).merge(
+            sh_h[["d", "month"]].drop_duplicates(), how="left", indicator=True)["_merge"].eq("both").to_numpy()
+        xs, xn = x[has], x[~has]
+        xs = xs.assign(mo=xs["month"].str.partition(" ")[0])
+        ty = xs.merge(sh_h.rename(columns={"month": "mo"}), on=["d", "mo"])
+        ty = ty.assign(ty=ty["t"] * ty["w"], ly=0.0, ly_mix=0.0, ly_sh=0.0, ns=0.0)
+        if mix is not None and len(mix):
+            mk = mix[["store", "d", "month"]].drop_duplicates().rename(columns={"month": "mo"})
+            inm = xs.merge(mk, on=["store", "d", "mo"], how="left", indicator=True)["_merge"].eq("both").to_numpy()
+            lm = xs[inm].merge(mix.rename(columns={"month": "mo"}), on=["store", "d", "mo"])
+            lm = lm.assign(ly=lm["ly"] * lm["lw"], ty=0.0, ly_sh=0.0, ns=0.0)
+            lm["ly_mix"] = lm["ly"]
+            xs_sh = xs[~inm]
+        else:
+            lm, xs_sh = None, xs
+        ls = xs_sh.merge(sh_h.rename(columns={"month": "mo"}), on=["d", "mo"])
+        ls = ls.assign(ly=ls["ly"] * ls["w"], ty=0.0, ly_mix=0.0, ns=0.0)
+        ls["ly_sh"] = ls["ly"]
+        ns = xn.assign(mrp=NO_SPLIT, ty=xn["t"], ly_mix=0.0, ly_sh=0.0, ns=1.0)
+        parts += [f[cols] for f in (ty, lm, ls, ns) if f is not None and len(f)]
+    if off:
+        parts.append(pd.DataFrame(off, columns=cols))
+    allp = pd.concat(parts, ignore_index=True)
+    allp["ns"] = allp["ns"] * (allp["ly"].abs() + allp["ty"].abs())   # the No-split amount, for the pop-up
+    g = allp.groupby(["store", "d", "month", "mrp"], sort=False, as_index=False)[["ly", "ty", "ly_mix", "ly_sh", "ns"]].sum()
+    g = g[(g["ly"].abs() > 1e-12) | (g["ty"].abs() > 1e-12)].reset_index(drop=True)
+    names, pos, c = {}, {}, {}
+
+    def put(lv, values):
+        codes, uniq = pd.factorize(pd.Series(values, dtype=object), sort=False)
+        names[lv], pos[lv], c[lv] = list(uniq), {v: i for i, v in enumerate(uniq)}, codes.astype(np.int32)
+
+    put("store", g["store"].to_numpy())
+    put("cluster", g["store"].map(lambda x: sinfo.get(x, {}).get("cluster", NO_CLUSTER)).to_numpy())
+    put("stype", g["store"].map(lambda x: sinfo.get(x, {}).get("stype", "NSO")).to_numpy())
+    dk = np.array(dkeys, dtype=object)
+    di = g["d"].to_numpy()
+    put("division", dk[di, 0])
+    put("department", dk[di, 1])
+    put("attribute", dk[di, 2])
+    put("mrp", g["mrp"].to_numpy())
+    put("month", g["month"].to_numpy())
+    v = {"names": names, "pos": pos, "c": c, "ly": g["ly"].to_numpy(float), "ty": g["ty"].to_numpy(float),
+         "x": {k: g[k].to_numpy(float) for k in ("ly_mix", "ly_sh", "ns")}, "about": about,
+         "source": _split_source()}
+    with _mx_lock:
+        _mx[halves] = (key, v)
+    return v
+
+
+def _mrp_lv_path(levels: str, path: str, longest: int = 0):
+    lv = [x for x in levels.split(",") if x]
+    if not lv or len(set(lv)) != len(lv) or any(x not in MRP_LEVELS for x in lv):
+        raise HTTPException(422, f"levels: pick from {', '.join(MRP_LEVELS)}, each once")
+    try:
+        pth = json.loads(path)
+    except ValueError:
+        raise HTTPException(422, "path must be a JSON list")
+    if not isinstance(pth, list) or len(pth) >= len(lv) + longest:
+        raise HTTPException(422, "path too long for these levels")
+    return lv, [str(p) for p in pth]
+
+
+MRP_SOURCE = {"kind": "mrp", "name": "MRP plan", "note": "the department plan split over its MRPs"}
+
+
+@router.get("/mrp-view/hierarchy")
+def get_mrp_hierarchy(levels: str, path: str = "[]", filters: str = "{}", period: str = "month"):
+    lv, pth = _mrp_lv_path(levels, path)
+    ix = _mrp_index(_cube(), _load_attr(), _halves(period))
+    return {**rows_of(ix, lv, pth, parse_filters(filters, MRP_LEVELS)),
+            "source": {**MRP_SOURCE, "note": f"the department plan split by {ix['source']}"}}
+
+
+@router.get("/mrp-view/hierarchy-options")
+def get_mrp_hierarchy_options(filters: str = "{}", level: str = "", period: str = "month"):
+    if level and level not in MRP_LEVELS:
+        raise HTTPException(422, f"level: one of {', '.join(MRP_LEVELS)}")
+    return values_of(_mrp_index(_cube(), _load_attr(), _halves(period)), parse_filters(filters, MRP_LEVELS),
+                     [level] if level else MRP_LEVELS)
+
+
+@router.get("/mrp-view/hierarchy-export")
+def get_mrp_hierarchy_export(levels: str, filters: str = "{}", period: str = "month"):
+    lv, _ = _mrp_lv_path(levels, "[]")
+    f = parse_filters(filters, MRP_LEVELS)
+    ix = _mrp_index(_cube(), _load_attr(), _halves(period))
+    data = tree_xlsx(ix, lv, MRP_LEVEL_NAME, f, ("LY (₹L)", "TY (₹L)", "Growth %"), "MRP plan",
+                     export_about(lv, MRP_LEVEL_NAME, f, period, f"the department plan split by {ix['source']}",
+                                  [("LY by MRP", f"each store's department LY x its own re-apportioned LY mix ({ix['about']})")]))
+    return xlsx_response(data, f"MRP plan{' P1-P2' if period == 'half' else ''}.xlsx")
+
+
+def _load_attr() -> dict:
+    from engines.final_results_engine import _load_dept_attr_map
+    return _load_dept_attr_map()
+
+
+def explain_mrp(ix: dict, dix: dict, levels: list, path: list, filt: dict | None, halves: bool) -> dict:
+    """Pure (on the indexes). How the MRP tree's row at `path` gets its numbers; dix = the department plan's index of
+    the same period, for the check that the MRPs add back to the department plan."""
+    import numpy as np
+    want = dict(zip(levels, path))
+    m = _mask(ix, want, filt)
+    LY, TY = float(ix["ly"][m].sum()), float(ix["ty"][m].sum())
+    X = {k: float(a[m].sum()) for k, a in ix["x"].items()}
+    label = " · ".join(str(x) for x in path) if path else "The total"
+    out = {"label": label, "path": [{"level": lv, "value": v} for lv, v in zip(levels, path)], "ly": LY, "ty": TY,
+           "growth": (TY / LY - 1) * 100 if LY else None, "source": f"the department plan split by {ix['source']}"}
+    g, n = ix["c"]["month"][m], len(ix["names"]["month"])
+    Lm, Tm = np.bincount(g, weights=ix["ly"][m], minlength=n), np.bincount(g, weights=ix["ty"][m], minlength=n)
+    per = sorted(((ix["names"]["month"][i], float(Lm[i]), float(Tm[i])) for i in np.unique(g)), key=lambda x: month_key(x[0]))
+    out["months"] = [{"month": k, "ly": a, "ty": b} for k, a, b in per]
+    lines = []
+    say = lambda h, t: lines.append({"h": h, "t": t})   # noqa: E731
+    if filt:
+        say("Filters on", "; ".join(f"{MRP_LEVEL_NAME.get(k, k)}: {', '.join(sorted(v))}" for k, v in filt.items())
+            + " - every figure here is inside them.")
+    say("The number", f"{label} plans ₹{_inr(TY)} L this year against ₹{_inr(LY)} L last year"
+        + (f", over {', '.join(k for k, _, _ in per)}." if per else "."))
+    if LY:
+        say("Growth %", f"₹{_inr(TY)} ÷ ₹{_inr(LY)} − 1 = {out['growth']:+.1f}%.")
+    if path:
+        pty = float(ix["ty"][_mask(ix, dict(zip(levels, path[:-1])), filt)].sum())
+        plabel = " · ".join(str(x) for x in path[:-1]) or "the whole plan"
+        out["parent"], out["cont"] = {"label": plabel, "ty": pty}, (TY / pty * 100 if pty else None)
+        if pty:
+            say("Cont %", f"its share of the level above ({plabel}): ₹{_inr(TY)} ÷ ₹{_inr(pty)} = {out['cont']:.1f}%.")
+    if want.get("mrp") == NOT_PLANNED or ("mrp" not in want and float(ix["ly"][m & (ix["c"]["mrp"] == ix["pos"]["mrp"].get(NOT_PLANNED, -1))].sum())):
+        npl = float(ix["ly"][m & (ix["c"]["mrp"] == ix["pos"]["mrp"].get(NOT_PLANNED, -1))].sum())
+        say("Not planned", f"₹{_inr(npl)} L of LY is departments inactive / dropped in BIS - kept in the LY with a plan "
+            "of 0, as Final Results and the AOP base do.")
+    ns = want.get("mrp") == NO_SPLIT
+    if want.get("mrp") and not ns:
+        say("TY", f"each store's department plan for each fortnight (P1 = days 1-15, P2 = 16th to month end) × the "
+            f"department's MRP {want['mrp']} share of that fortnight, from {ix['source']}.")
+    elif not ns:
+        say("TY", f"each store x department x fortnight's plan (P1 = days 1-15, P2 = 16th to month end) split over the "
+            f"department's MRPs by its share of that fortnight, from {ix['source']}.")
+    ly_ns = float(ix["ly"][m & (ix["c"]["mrp"] == ix["pos"]["mrp"].get(NO_SPLIT, -1))].sum())
+    if not ns:
+        bits = []
+        if X["ly_mix"]:
+            bits.append(f"₹{_inr(X['ly_mix'])} L is each store's department LY x that store's own LY mix over the new MRPs "
+                        f"(MRP Re-apportionment: {ix['about']})")
+        if X["ly_sh"] > 0.05:
+            bits.append(f"₹{_inr(X['ly_sh'])} L is stores with no re-apportioned sales for that department and month - "
+                        "their LY is split by the plan's MRP share")
+        if bits:
+            say("LY", "; ".join(bits) + ".")
+    if X["ns"] or ns:
+        nty = TY if ns else float(ix["ty"][m & (ix["c"]["mrp"] == ix["pos"]["mrp"].get(NO_SPLIT, -1))].sum())
+        say("No MRP split", f"₹{_inr(nty)} L of plan (₹{_inr(ly_ns if not ns else LY)} L LY) is in departments / months "
+            "the MRP split does not cover - kept as 'No MRP split' so every department adds back to its plan. Rebuild "
+            "the MRP Cont % (MRP Plan · Buyer's Input) or cover them in the master to split it.")
+    if want.get("department") and want.get("mrp") and not ns:
+        dw = {k: v for k, v in want.items() if k != "mrp"}
+        dm = _mask(ix, dw, {k: v for k, v in (filt or {}).items() if k != "mrp"})
+        dg, dn = ix["c"]["month"][dm], len(ix["names"]["month"])
+        Dt = np.bincount(dg, weights=ix["ty"][dm], minlength=dn)
+        rows = []
+        for k, _a, t in per:
+            dt = float(Dt[ix["pos"]["month"][k]])
+            rows.append([k, f"{t / dt * 100:.1f}%" if dt else "–", _inr(dt), _inr(t)])
+        out["table"] = {"title": f"MRP {want['mrp']}: its share of {want['department']} by {'fortnight' if halves else 'month'}",
+                        "cols": ["Period", "MRP share", "Department plan (₹L)", f"MRP {want['mrp']} (₹L)"], "rows": rows}
+    if "mrp" not in want and "mrp" not in (filt or {}):
+        dw = {k: v for k, v in want.items() if k != "mrp"}
+        dt = float(dix["ty"][_mask(dix, dw, filt)].sum())
+        dl = float(dix["ly"][_mask(dix, dw, filt)].sum())
+        say("Check", f"the MRPs add back to the department plan: TY ₹{_inr(TY)} = ₹{_inr(dt)}, LY ₹{_inr(LY)} = ₹{_inr(dl)}"
+            + (" ✓" if abs(TY - dt) < 0.005 and abs(LY - dl) < 0.005 else " - they differ: reopen the page after a plan change"))
+    else:
+        say("Check", f"₹{_inr(TY)} - the number on screen ✓")
+    out["lines"] = lines
+    return out
+
+
+@router.get("/mrp-view/explain")
+def get_mrp_explain(levels: str, path: str = "[]", filters: str = "{}", period: str = "month"):
+    lv, pth = _mrp_lv_path(levels, path, longest=1)
+    c, am, hv = _cube(), _load_attr(), _halves(period)
+    return explain_mrp(_mrp_index(c, am, hv), _index(c, am, hv), lv, pth, parse_filters(filters, MRP_LEVELS), hv)
 
 
 _register_live_cube()

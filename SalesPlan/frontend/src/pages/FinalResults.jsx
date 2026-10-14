@@ -47,7 +47,7 @@ export default function FinalResults() {
         </div>
       )}
 
-      <HierarchyView />
+      <HierarchyView halves />
     </div>
   )
 }
