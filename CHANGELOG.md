@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### MRP Cont % rebuilt from the master in use (data, no code change)
+- **Asked (user):** "rebuild the mrp cont % from the master in use".
+- `POST /mrp-reapportionment/shares/rebuild` at 11:27 on mrp master.xlsx, actual LY sales Mar-Jun 2026; every check passed. 104 departments, 568 bands, every department x period 100%. 50 departments' shares moved, mostly from the "a sold MRP that is itself a new MRP stays listed" fix (ML_JEANS 749 Mar'27 P1 4.55% → 5.07%, 829 3.75% → 3.24%). MRP Output, the MRP tree, Display Type and Reconciliation read it at once.
+- The previous file is kept in `Output/Backups/_reapp_shares.before-rebuild-14Oct2026.json`.
+
 ### Sales Plan: faster Hierarchy views (Final Results, MRP Plan Output, version bar)
 - **Asked (user):** "decrease the latency for such views" (Final Results on P1 / P2 stuck on "Loading…" / "Loading versions…").
 - P1 / P2 tree: derived from the month index with numpy instead of a second pass over every cell - first P1 / P2 open 1.0 s → 0.04 s.
