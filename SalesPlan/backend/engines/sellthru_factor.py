@@ -41,6 +41,13 @@ FACTOR = ((2.0, "Exceptional / outstanding", (0.18, 0.21, 0.25, 0.30)),
           (float("-inf"), "Very weak vs division", (0.0, 0.0, 0.0, 0.0)))
 
 
+# the workbook's REVISED GROWTH FACTOR (MAIN DATA - 1 BF:BJ, read in its back-working file 2026-10-14; seen on 13 Oct as
+# "20 manual zeroes"): a department whose MAMJ sell-thru is at most 4% AND whose deviation averages at most 50% over
+# Mar-Jul'26 gets no factor (0%) in every month
+REVISE_ST, REVISE_DEV = 0.04, 0.5
+REVISE_MONTHS = ("Mar'26", "Apr'26", "May'26", "Jun'26", "Jul'26")
+
+
 def status(st: float) -> str:
     return next(t for lo, t in STATUS if st >= lo)
 
@@ -115,10 +122,12 @@ def growth(depts: dict, months: list, st: dict | None = None) -> tuple[dict, dic
         for dp in names:
             tst = st["tag"].get(dp, 0.0)
             tag, ms = status(tst), {}
+            devs = [st["dept"].get(dp, {}).get(m, 0.0) / b if (b := st["div"].get(dv, {}).get(m, 0.0)) > 0 else 0.0 for m in REVISE_MONTHS]
+            off = tst <= REVISE_ST and sum(devs) / len(devs) <= REVISE_DEV
             for m in months:
                 a, b = st["dept"].get(dp, {}).get(ly_of(m), 0.0), st["div"].get(dv, {}).get(ly_of(m), 0.0)
                 dev = a / b if b > 0 else 0.0
-                ms[m] = {"st": a, "div_st": b, "dev": dev, "factor": factor(dev, tag)}
+                ms[m] = {"st": a, "div_st": b, "dev": dev, "factor": 0.0 if off else factor(dev, tag), "revised": off}
                 g.setdefault(dv, {}).setdefault(dp, {})[m] = 1.0 + ms[m]["factor"]
             info.setdefault(dv, {})[dp] = {"tag": tag, "tag_st": tst, "months": ms}
     return g, info
@@ -136,6 +145,10 @@ def _check():
     # A: dev 2.0, Excellent -> 1.30; B: dev 0.667, Average -> 1.05; C: no sell-thru -> very weak -> flat
     assert g["KIDS"] == {"A": {"Mar'27": 1.30}, "B": {"Mar'27": 1.05}, "C": {"Mar'27": 1.0}}
     assert info["KIDS"]["B"]["tag"] == "Average" and info["KIDS"]["C"]["tag"] == "Low"
+    # revised: MAMJ ST 3% (<= 4%) and deviation 1.0 in Mar only -> average 0.2 over Mar-Jul (<= 0.5) -> no factor
+    st2 = {"dept": {"D": {"Mar'26": 0.15}}, "div": {"KIDS": {m: 0.15 for m in REVISE_MONTHS}}, "tag": {"D": 0.03}}
+    g2, info2 = growth({"KIDS": ["D"]}, ["Mar'27"], st2)
+    assert g2["KIDS"]["D"]["Mar'27"] == 1.0 and info2["KIDS"]["D"]["months"]["Mar'27"]["revised"], (g2, info2)
     print("ok")
 
 
