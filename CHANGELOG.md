@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### STR Forecaster: band table counts department x month; a click shows and highlights the matching months
+- **Asked (user):** "i want total month x count instead of focusing on avg for this so that every month's count is there in this table and when upon clicking the data should be populated for that branch only and it should get highlighted wherever it meets the criteria ... if mar, may and june have 60 for a combination they should get highlighted ... instead of avg".
+- The table is now "Department × month by band": each department x month counts once in that month's band (MENS / LADIES / KIDS / All, then a row per month under All; All = the sum of the months, e.g. 422 = 110 + 104 + 104 + 104).
+- A count opens that division's departments with that band in any month (or in that month, from a month row) - not the 4-month band - with the months shown and every matching month's Band and STR days cells lightly shaded (also in the stores under them). Revert / Clear bring the view back.
+
 ### STR Forecaster: the detailed Excel ~3x faster to build, instant to download again
 - **Asked (user):** "decrease the latency for extracting output in STR forecaster in excel".
 - Profiled: pandas' cell-by-cell Excel formatter ~230 s of 5.1 million cells, and the new forward-cover days looping over ~40,000 store x department groups ~90 s. Now the rows go straight to xlsxwriter in streaming mode (`_write_sheet`), and `forward_days` works on whole arrays (proved equal to the per-group `cover_days` on 1,017 random rows, gaps and zero months included). Same four sheets, same values.

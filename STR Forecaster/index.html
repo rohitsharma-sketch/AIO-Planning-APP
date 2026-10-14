@@ -84,6 +84,8 @@ td.ed,td.ed input{background:#FFF8E6}
 .mx td{text-align:center;min-width:70px}.mx td.l{text-align:left}
 .mxb{border:0;background:none;color:var(--primary);font:inherit;font-weight:800;text-decoration:underline;cursor:pointer;padding:0 6px;border-radius:6px}
 .mxb.on{background:var(--btn);color:var(--btn-t);text-decoration:none}
+.mx tr.mrow td{font-size:12px}.mx tr.mrow td.l{padding-left:22px;color:var(--muted)}
+td.mxhl{background:color-mix(in srgb,var(--primary) 16%,transparent)!important;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--primary) 35%,transparent)}
 .sb{font-size:10.5px;font-weight:700;border-radius:4px;padding:0 4px;margin-left:4px;vertical-align:1px}
 .sb.peak{background:#FDE7D6;color:#9A3412}.sb.off{background:#E5E7EB;color:#374151}
 .lays{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
@@ -264,9 +266,12 @@ function condOk(k,v){
   if(v==null||isNaN(v))return false;
   return {'=':v===k.a,'≠':v!==k.a,'>':v>k.a,'≥':v>=k.a,'<':v<k.a,'≤':v<=k.a,between:v>=Math.min(k.a,k.b)&&v<=Math.max(k.a,k.b)}[k.op];
 }
+// a band picked in the band table: a row stays when one of its months (or the month picked) has that band
+const mxHit=(r,j)=>{const x=S.mx,c=r.months&&r.months[j];return !!(x&&c&&(c.rows||c.mdq)&&(x.m==null||x.m===j)&&(bandOf(c)??null)===x.b);};
+const mxRow=r=>!S.mx||!r.months||r.months.some((_,j)=>mxHit(r,j));
 function applyGrid(n,cols,rows,sortOnly){
   const g=gstate(n);
-  let out=sortOnly?rows:rows.filter(r=>cols.every(c=>(!g.filt[c.id]||g.filt[c.id].has(fv(c,r)))&&(!g.cond[c.id]||condOk(g.cond[c.id],c.get(r)))));
+  let out=sortOnly?rows:rows.filter(r=>(n!=='roll'||mxRow(r))&&cols.every(c=>(!g.filt[c.id]||g.filt[c.id].has(fv(c,r)))&&(!g.cond[c.id]||condOk(g.cond[c.id],c.get(r)))));
   if(!sortOnly)for(const c of cols){const k=g.cond[c.id];if(!k||(k.op!=='top'&&k.op!=='bottom'))continue;   // top / bottom N after the other filters
     const vs=out.map(r=>c.get(r)).filter(v=>v!=null&&!isNaN(v)).sort((x,y)=>k.op==='top'?y-x:x-y),t=vs[Math.min(k.a,vs.length)-1];
     if(t!=null)out=out.filter(r=>{const v=c.get(r);return v!=null&&(k.op==='top'?v>=t:v<=t);});}
@@ -544,6 +549,7 @@ function rollCols(){
      cols.push({id:f+':'+i,grp:g,grpHtml:i==='t'?h(g)+' '+tog:null,gtitle:i==='t'?'the average month: plan qty and MDQ averaged over the months, the days from them':'',
       label:avg?'Avg '+(f==='qty'?'plan qty':'MDQ'):l,title:avg?t+' - average month':t,m:i,
       cls:f==='band'?'b band':f==='ly_days'?'ly':'',num:true,filt:true,fmt:f==='band'?v=>v+' days':null,
+      tdc:r=>i!=='t'&&(f==='band'||f==='days')&&mxHit(r,i)?'mxhl':'',
       get:r=>f==='band'?bandOf(cellOf(r,i)):avg?avgOf(r,f):cellOf(r,i)[f],
       html:r=>{const c=cellOf(r,i),v=avg?avgOf(r,f):c[f];return f==='band'?dd(bandOf(c))+seaTag(c):f==='qty'||f==='mdq'?n0(v):dd(v);}});}
   // user, 2026-10-13: "I need Avg Fixtures, Avg Store Count in this view and its respective month fixture count and store
@@ -589,13 +595,19 @@ function renderRoll(){
 async function renderMatrix(){
   const mf=gf();delete mf.division;
   let R;try{R=await getRoll('department',mf);}catch(e){return;}
-  const vals=R.rows.map(r=>bandOf(r.total)??null),a=S.mx;
+  // user, 2026-10-14: "i want total month x count instead of focusing on avg ... so that every month's count is there in
+  // this table" - each department x month counts once in that month's band (a department at 60 in Mar, May and Jun
+  // counts 3 under 60), every month's own row under All; a month with an MDQ but no band (no plan) is "No band"
+  const a=S.mx,nm=R.months.length,mb=(r,j)=>{const c=r.months[j];return !c||!(c.rows||c.mdq)?undefined:(bandOf(c)??null);};
+  const vals=R.rows.flatMap(r=>R.months.map((m,j)=>mb(r,j))).filter(v=>v!==undefined);
   const bands=[...new Set([60,75,90,105,120,...vals.filter(v=>v!=null)])].sort((x,y)=>x-y).concat(vals.includes(null)?[null]:[]);
-  const n=(d,b)=>R.rows.filter(r=>(!d||r.division===d)&&(bandOf(r.total)??null)===b).length;
-  $('#mx').innerHTML=`<table class="mx"><thead><tr><th class="l">Departments by final band (4-month)${lfText()?' · '+h(lfText()):''}</th>${bands.map(b=>`<th>${b?b+' days':'No band'}</th>`).join('')}<th>Total</th></tr></thead><tbody>`+
-    ['MENS','LADIES','KIDS',''].map(d=>`<tr${d?'':' class="tot"'}><td class="l"><b>${d||'All'}</b></td>`+bands.map(b=>{const k=n(d,b);
-      return `<td>${k?`<button class="mxb${a&&a.d===d&&a.b===b?' on':''}" data-mx="${d}|${b??''}" title="Show the ${k} ${d||''} departments in the ${b?b+'-day':'no'} band">${k}</button>`:'<span class="note">0</span>'}</td>`;}).join('')+
-      `<td>${R.rows.filter(r=>!d||r.division===d).length}</td></tr>`).join('')+'</tbody></table>';
+  const n=(d,b,m)=>R.rows.filter(r=>!d||r.division===d).reduce((s,r)=>s+R.months.reduce((t,_,j)=>t+((m==null||m===j)&&mb(r,j)===b?1:0),0),0);
+  const tot=(d,m)=>R.rows.filter(r=>!d||r.division===d).reduce((s,r)=>s+R.months.reduce((t,_,j)=>t+((m==null||m===j)&&mb(r,j)!==undefined?1:0),0),0);
+  const btn=(d,b,m,k)=>k?`<button class="mxb${a&&a.d===d&&a.b===b&&(a.m??null)===(m??null)?' on':''}" data-mx="${d}|${b??''}|${m??''}" title="Show the ${d||''} departments with ${b?b+' days':'no band'} in ${m==null?'any month':mon(R.months[m])} - the matching months highlighted">${k}</button>`:'<span class="note">0</span>';
+  const line=(d,m,cls,label)=>`<tr class="${cls}"><td class="l">${label}</td>`+bands.map(b=>`<td>${btn(d,b,m,n(d,b,m))}</td>`).join('')+`<td>${tot(d,m)}</td></tr>`;
+  $('#mx').innerHTML=`<table class="mx"><thead><tr><th class="l">Department × month by band (${nm} months)${lfText()?' · '+h(lfText()):''}</th>${bands.map(b=>`<th>${b?b+' days':'No band'}</th>`).join('')}<th>Total</th></tr></thead><tbody>`+
+    ['MENS','LADIES','KIDS'].map(d=>line(d,null,'',`<b>${d}</b>`)).join('')+line('',null,'tot','<b>All</b>')+
+    R.months.map((m,j)=>line('',j,'mrow',mon(m))).join('')+'</tbody></table>';
 }
 async function loadCells(){
   try{S.cells=await api('api/cells?department='+encodeURIComponent(S.dept));}catch(e){S.dept=null;$('#dd').hidden=true;return;}
@@ -700,13 +712,16 @@ document.addEventListener('click',async e=>{
   if(e.target.closest('[data-efc]')){S.grid.cells={sort:null,filt:{},cond:{}};renderCells();return;}
   const lfx=e.target.closest('[data-lf]');if(lfx){await openLayerFilter(lfx.dataset.lf,lfx);return;}
   const mx=e.target.closest('[data-mx]');
-  if(mx){const [d,b]=mx.dataset.mx.split('|'),g=S.grid.roll;
-    if(!S.prev)S.prev={layers:[...S.layers],open:[...S.open],lf:Object.fromEntries(Object.entries(S.lf).map(([k,v])=>[k,new Set(v)])),grid:g?{sort:g.sort,filt:{...g.filt}}:null};   // what Revert goes back to
-    S.mx={d,b:b===''?null:+b};if(d)S.lf.division=new Set([d]);else delete S.lf.division;
-    S.grid.roll={sort:{id:'days:t',dir:-1},cond:{},filt:{'band:t':new Set([b===''?'(blank)':b+' days'])}};
+  if(mx){const [d,b,m]=mx.dataset.mx.split('|'),g=S.grid.roll;
+    if(!S.prev)S.prev={layers:[...S.layers],open:[...S.open],lf:Object.fromEntries(Object.entries(S.lf).map(([k,v])=>[k,new Set(v)])),grid:g?{sort:g.sort,filt:{...g.filt}}:null,months:S.months};   // what Revert goes back to
+    // the departments with that band in any month (or the month picked), the matching month cells highlighted - not the
+    // 4-month figure (user, 2026-10-14: "if mar, may and june have 60 for a combination they should get highlighted")
+    S.mx={d,b:b===''?null:+b,m:m===''?null:+m};if(d)S.lf.division=new Set([d]);else delete S.lf.division;
+    S.months=true;
+    S.grid.roll={sort:{id:'days:t',dir:-1},cond:{},filt:{}};
     setLayers(['department',...S.layers.filter(k=>!['department','division','tag','attribute'].includes(k))]);
     $('#t').closest('.tw').scrollIntoView({behavior:'smooth',block:'nearest'});return;}
-  if(e.target.id==='rev'&&S.prev){const p=S.prev;S.prev=null;S.mx=null;S.lf=p.lf;
+  if(e.target.id==='rev'&&S.prev){const p=S.prev;S.prev=null;S.mx=null;S.lf=p.lf;if(p.months!=null)S.months=p.months;
     S.layers=p.layers;S.open=new Set(p.open);S.kids={};S.grid.roll=p.grid||{sort:null,filt:{}};await loadRoll();return;}
   if(e.target.id==='dd-x'){S.dept=null;$('#dd').hidden=true;renderRoll();return;}
   if(e.target.id==='dd-reset'){if(!confirm(`Reset ${S.dept} to the fixture file? Its edited fixtures and qty per fixture are dropped (the edit history is kept).`))return;
