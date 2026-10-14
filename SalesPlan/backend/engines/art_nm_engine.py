@@ -380,10 +380,90 @@ def checks(b: dict) -> list:
                  + (f"; {negs} negative department plans ({neg_amt:,.4f} L, from negative LY) kept at 0" if negs else ""),
                  "Not allocated = no LY in the chain and no buyer Art Nm Cont % - add those departments to the file and "
                  "import it again." if off else "The department plan is negative there (returns in LY) - nothing to split."))
-    tot = sum(sum(r["aop"].values()) for r in rows)
-    out.append(c("trace", "Department AOP traced to the Sales Plan department plan", "ok",
-                 f"{tot:,.2f} L over {', '.join(months)} = the department plan Plan Output splits"))
+    pc = post_check(b)
+    s = pc["summary"]
+    out.append(c("dept_plan", "Post-generation: article plan = department sales plan, every department x month",
+                 "ok" if not s["dept_off"] else "fail",
+                 f"{s['dept_cells'] - s['dept_off']:,} of {s['dept_cells']:,} department x month cells match "
+                 f"(largest difference {s['dept_worst']:.8f} L)" + (f"; {s['dept_neg']} carry a negative store plan "
+                                                                   f"({s['neg_total']:,.4f} L, kept at 0)" if s["dept_neg"] else ""),
+                 "Those departments' articles don't add back to their plan - see the post-generation table."))
+    out.append(c("aop_month", f"Post-generation: like-for-like department plan = AOP ({s['aop_label'] or 'publish'}), every division x month",
+                 "warn" if s["aop_cells"] == 0 else "ok" if not s["aop_off"] else "fail",
+                 "the AOP publish could not be read" if s["aop_cells"] == 0 else
+                 f"{s['aop_cells'] - s['aop_off']:,} of {s['aop_cells']:,} division x month cells match, "
+                 f"₹{s['aop_total']:,.2f} L in all (largest difference {s['aop_worst']:.6f} L)",
+                 "The department plan has moved off the AOP - regenerate the base plan (it holds each division x month on "
+                 "the AOP) or check the AOP publish BIS plans on." if s["aop_cells"] else "Check the AOP Forecaster / database."))
     return out
+
+
+def post_check(b: dict) -> dict:
+    """After the plan is generated (user, 2026-10-13: "make a check where the post generation of the data it should look
+    if the department sales plan is matching for all departments x months and AOP is correct for all months"), traced
+    from the plan file itself, not from the build: (1) every division x department x month - the article plan (all
+    groups) = the department sales plan (department engine; a negative store-month plan counts as 0, its articles are
+    0); (2) every division x month - the like-for-like stores' department plan = the AOP publish's division plan (the
+    target the department engine holds them on), with the all-store plan and the article plan beside it."""
+    from engines.mrp_plan_engine import _load_dept_plan
+    from engines.dept_sales_engine import _aop_lfl_targets
+    plan, months = _load_dept_plan(), b["months"]
+    dept, grp, lfl, allp = (collections.defaultdict(float) for _ in range(4))
+    for s, sd in (plan.get("stores") or {}).items():
+        g = (sd.get("cluster") or "(no cluster)") if b["grain"] == "cluster" else s
+        for dv, dd in (sd.get("divisions") or {}).items():
+            for m, md in ((dd or {}).get("months") or {}).items():
+                if m not in months or not isinstance(md, dict):
+                    continue
+                for dp, x in (md.get("departments") or {}).items():
+                    if not (isinstance(x, dict) and x.get("active", True)):
+                        continue
+                    v = float(x.get("ty") or 0.0)
+                    dept[(dv, dp, m)] += v
+                    grp[(g, dv, dp, m)] += v
+                    allp[(dv, m)] += v
+                    if sd.get("is_ssg"):
+                        lfl[(dv, m)] += v
+    # what the articles must add to: the plan of each cluster / store (as the plan is built), a negative one counting 0
+    due, neg = collections.defaultdict(float), collections.defaultdict(float)
+    for (g, dv, dp, m), v in grp.items():
+        due[(dv, dp, m)] += max(v, 0.0)
+        neg[(dv, dp, m)] += min(v, 0.0)
+    art, art_div = collections.defaultdict(float), collections.defaultdict(float)
+    for r in b["rows"]:
+        for mv in r["arts"].values():
+            for m, v in mv.items():
+                art[(r["div"], r["dept"], m)] += v
+                art_div[(r["div"], m)] += v
+    drows = []
+    for k in sorted(set(dept) | set(art), key=lambda k: (k[0], k[1], months.index(k[2]) if k[2] in months else 99)):
+        if not dept.get(k) and not art.get(k):
+            continue
+        d = art.get(k, 0.0) - due.get(k, 0.0)
+        drows.append({"division": k[0], "department": k[1], "month": k[2], "plan": dept.get(k, 0.0), "articles": art.get(k, 0.0),
+                      "negative": neg.get(k, 0.0), "diff": d, "ok": abs(d) <= 1e-6})
+    try:
+        from engines.division_plan import _bis_aop
+        _, label, *_ = _bis_aop()
+    except Exception:   # noqa: BLE001
+        label = None
+    aop = _aop_lfl_targets()
+    arows = []
+    for dv in sorted({k[0] for k in allp}):
+        for m in months:
+            a = (aop.get(dv) or {}).get(m)
+            arows.append({"division": dv, "month": m, "aop": a, "lfl_plan": lfl.get((dv, m), 0.0),
+                          "diff": None if a is None else lfl.get((dv, m), 0.0) - a,
+                          "ok": None if a is None else abs(lfl.get((dv, m), 0.0) - a) <= 1e-4,
+                          "all_plan": allp.get((dv, m), 0.0), "articles": art_div.get((dv, m), 0.0)})
+    have = [r for r in arows if r["aop"] is not None]
+    return {"months": months, "departments": drows, "divisions": arows, "summary": {
+        "dept_cells": len(drows), "dept_off": sum(1 for r in drows if not r["ok"]),
+        "dept_worst": max((abs(r["diff"]) for r in drows), default=0.0),
+        "dept_neg": sum(1 for r in drows if r["negative"]), "neg_total": sum(r["negative"] for r in drows),
+        "aop_cells": len(have), "aop_off": sum(1 for r in have if not r["ok"]),
+        "aop_worst": max((abs(r["diff"]) for r in have), default=0.0), "aop_total": sum(r["aop"] for r in have),
+        "aop_label": label}}
 
 
 # ── promote to the MRP stage ──────────────────────────────────────────────────
@@ -841,6 +921,13 @@ def get_explain(levels: str, path: str = "[]", filters: str = "{}", grain: str =
     lv, pth = _levels_path(levels, path, grain)
     b, h = _hindex(grain)
     return explain_art(b, h["attr"], lv, pth, parse_filters(filters, art_levels(grain)), grain)
+
+
+@router.get("/post-check")
+def get_post_check(grain: str = "cluster"):
+    """The post-generation check in full: every department x month (article plan vs department sales plan) and every
+    division x month (like-for-like department plan vs AOP; all-store plan and article plan beside it)."""
+    return post_check(built(grain))
 
 
 @router.get("/summary")

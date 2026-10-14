@@ -37,12 +37,18 @@ def _active_plan():
 ART_LEVEL = "{G} × Dept × Month: department AOP = Σ Article Names"
 
 
-def check(plan: dict, mrp_data: dict | None = None, art: dict | None = None):
+AOP_LEVEL = "Division × Month: like-for-like department plan = AOP"
+
+
+def check(plan: dict, mrp_data: dict | None = None, art: dict | None = None, aop: dict | None = None):
     """(summary rows, off rows, not-covered rows). A row is "off" when its difference shows at 8 decimals.
     art = the Article Name branch's build (art_nm_engine.built) - checked when the MRP stage runs on the Article Name
-    route (user, 2026-10-13: "think of it as another parallel branch to MRP"); with it promoted, its MRP bands too."""
+    route (user, 2026-10-13: "think of it as another parallel branch to MRP"); with it promoted, its MRP bands too.
+    aop = {DIVISION: {month: lakh}} of the AOP publish: every division x month's like-for-like plan must equal it (user,
+    2026-10-13: "... AOP is correct for all months")."""
     stage = ART_LEVEL.format(G="Cluster" if art.get("grain") == "cluster" else "Store") if art is not None else None
     levels = {k: {"cells": 0, "off": 0, "largest": 0.0, "where": ""} for k in (
+        *([AOP_LEVEL] if aop else []),
         "Store × Division × Month: division total = Σ departments",
         "Store × Division × Month: P1 / P2 totals = Σ departments",
         "Store × Dept × Month: TY = P1 + P2",
@@ -78,6 +84,19 @@ def check(plan: dict, mrp_data: dict | None = None, art: dict | None = None):
                     if "ty_p1" in v:
                         rec("Store × Dept × Month: TY = P1 + P2", v.get("ty", 0.0),
                             v.get("ty_p1", 0.0) + v.get("ty_p2", 0.0), **{**w, "Department": n})
+
+    if aop:
+        lfl = {}
+        for sd in plan.get("stores", {}).values():
+            if not sd.get("is_ssg"):
+                continue
+            for div, dd in sd.get("divisions", {}).items():
+                for m, md in dd.get("months", {}).items():
+                    lfl[(div, m)] = lfl.get((div, m), 0.0) + sum(
+                        v.get("ty", 0.0) for v in md.get("departments", {}).values() if v.get("active"))
+        for div, mm in aop.items():
+            for m, target in mm.items():
+                rec(AOP_LEVEL, target, lfl.get((div, m), 0.0), Store="(like-for-like)", Division=div, Department="", Month=m)
 
     if art is not None:
         miss = {}
@@ -141,7 +160,11 @@ def _run():
             mrp = get_mrp_data()
         except Exception:  # noqa: BLE001 - no MRP plan yet: skip that level
             mrp = None
-    summary, off, uncovered = check(plan, mrp if mrp and mrp.get("has_plan") else None, art)
+    from engines.dept_sales_engine import _aop_lfl_targets
+    from engines.art_nm_engine import _plan_months
+    pm = set(_plan_months(plan))   # the months Sales Plan plans (BIS's input months)
+    aop = {dv: {m: v for m, v in mm.items() if m in pm} for dv, mm in (_aop_lfl_targets() or {}).items()}
+    summary, off, uncovered = check(plan, mrp if mrp and mrp.get("has_plan") else None, art, aop)
     return {"source": source, "generated_at": at, "summary": summary, "off": off, "uncovered": uncovered,
             "route": st["route"]}
 

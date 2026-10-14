@@ -5,6 +5,13 @@ Newest first. Each entry names its commit.
 
 ---
 
+## 2026-10-14
+
+### Sales Plan: post-generation check - department sales plan per department x month, AOP per month
+- **Asked (user):** "make a check where the post generation of the data it should look if the department sales plan is matching for all departments x months and AOP is correct for all months".
+- `art_nm_engine.post_check()` (`/api/planning/art-nm/post-check`), traced from the plan file, not the build: every division x department x month - Article Name plan = department sales plan (a negative cluster / store plan counts as 0, as the plan is built); every division x month - the like-for-like department plan = the AOP publish's division plan, with the all-store plan and the article plan beside it. Two new checks on Article Name Plan Output (they replace the old always-OK "trace" line) and a Post-generation check panel (division x month table; department x month - the ones off, or all). Reconciliation gets the level "Division x Month: like-for-like department plan = AOP" whichever route is in use.
+- Result: 648 of 648 department x month cells = department sales plan by cluster and by store (16 by store carry a negative store plan, -0.037 L, at 0); 12 of 12 division x month = AOP (Version 2 - 25 Sept 2026, 43,186.78 L, largest difference 0.000000 L). A ₹1 L nudge to one store is caught (MENS Mar'27 +1.0). Test `test_post_check`.
+
 ## 2026-10-13
 
 ### Sales Plan Article Name: the plan engine month by month, in-active MC = 0%, new article names on the input %; output page = the department Final Results tree with the working pop-up

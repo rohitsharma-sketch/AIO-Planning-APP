@@ -92,3 +92,22 @@ def test_monthly_deviation_inactive_and_new_article():
     # in-active MC: input 0% -> every deviation at the 50% floor -> the LY mix
     mo = r["MU_OFF"]
     assert mo["method"] == "inactive" and abs(mo["arts"]["01-EPP [MU01]"]["Mar'27"] - 1.0) < 1e-9
+
+
+def test_post_check(monkeypatch):
+    """Post-generation: article plan = department sales plan per department x month (a negative cluster/store plan
+    counts as 0), and the like-for-like plan = the AOP per division x month - a moved plan is caught."""
+    import engines.mrp_plan_engine as MP
+    import engines.dept_sales_engine as DS
+    plan = {"stores": {s: {"cluster": "C1", "is_ssg": s == "A", "divisions": {"MENS": {"months": {m: {"departments": {
+        "ML_JEANS": {"ty": 10.0, "active": True}, "MU_NEG": {"ty": -0.01 if s == "B" else 0.0, "active": True}}}
+        for m in M}}}} for s in ("A", "B")}}
+    monkeypatch.setattr(MP, "_load_dept_plan", lambda: plan)
+    monkeypatch.setattr(DS, "_aop_lfl_targets", lambda: {"MENS": {"Mar'27": 10.0, "Apr'27": 9.0}})
+    ly = {("A", "ML_JEANS"): {"01-EPP [ML04]": {m: 1.0 for m in M}}, ("B", "ML_JEANS"): {"01-EPP [ML04]": {m: 2.0 for m in M}}}
+    b = A.build("store", plan, None, ly, {"pass": True}, M)
+    s = A.post_check(b)["summary"]
+    assert s["dept_off"] == 0 and s["dept_neg"] == 2   # MU_NEG's -0.01 in B: articles 0, not a mismatch
+    assert s["aop_cells"] == 2 and s["aop_off"] == 1   # Apr'27: like-for-like plan 10 vs AOP 9
+    b["rows"][0]["arts"]["01-EPP [ML04]"]["Mar'27"] += 0.5
+    assert A.post_check(b)["summary"]["dept_off"] == 1

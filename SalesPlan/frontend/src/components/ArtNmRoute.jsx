@@ -26,6 +26,75 @@ const STEPS = g => [
   ['5', 'Plan', `resultants apportioned to 100% per ${g} × department × month, × the department AOP`],
 ]
 
+// The post-generation check (user, 2026-10-13: "make a check where the post generation of the data it should look if the
+// department sales plan is matching for all departments x months and AOP is correct for all months"): every division x
+// month - like-for-like department plan vs the AOP, the all-store plan and the article plan beside it; every department x
+// month - article plan vs department sales plan (only the ones that don't match listed, all on request).
+function PostCheck({ grain }) {
+  const [d, setD] = useState(null)
+  const [err, setErr] = useState('')
+  const [all, setAll] = useState(false)
+  useEffect(() => {
+    setD(null); setErr('')
+    fetch(`${API}/post-check?grain=${grain}`).then(async r => { if (!r.ok) throw new Error(await readErr(r)); return r.json() }).then(setD).catch(e => setErr(e.message))
+  }, [grain])
+  const L = v => (v == null ? '–' : v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+  const ok = v => <span style={{ fontWeight: 700, color: v === null ? theme.textMuted : v ? theme.success : theme.danger }}>{v === null ? '–' : v ? '✓' : '✗'}</span>
+  const th = { padding: '5px 8px', fontSize: 10.5, color: theme.textMuted, textAlign: 'right', borderBottom: `1px solid ${theme.border}`, whiteSpace: 'nowrap' }
+  const td = { padding: '4px 8px', fontSize: 12, textAlign: 'right', fontFamily: theme.fontMono, borderBottom: `1px solid ${alpha(theme.border, '88')}` }
+  const s = d?.summary
+  const deps = d ? (all ? d.departments : d.departments.filter(r => !r.ok)) : []
+  const good = s && !s.dept_off && !s.aop_off && s.aop_cells
+  return (
+    <details open={!good} style={{ background: theme.surface, border: `1px solid ${good ? alpha(theme.success, '55') : theme.border}`, borderRadius: 10, padding: '8px 14px', marginBottom: 14 }}>
+      <summary style={{ cursor: 'pointer', fontSize: 12.5, fontWeight: 700 }}>
+        Post-generation check {s && <span style={{ fontWeight: 600, color: good ? theme.success : theme.danger, marginLeft: 6 }}>
+          {s.dept_cells - s.dept_off} of {s.dept_cells} department × month = department sales plan · {s.aop_cells - s.aop_off} of {s.aop_cells} division × month = AOP{s.aop_label ? ` (${s.aop_label})` : ''}</span>}
+        {err && <span style={{ color: theme.danger, fontWeight: 400, marginLeft: 6 }}>{err}</span>}
+      </summary>
+      {!d && !err && <div style={{ fontSize: 12, color: theme.textMuted, padding: 6 }}>Checking…</div>}
+      {d && (<>
+        <div style={{ fontSize: 11.5, color: theme.textMuted, margin: '8px 0 4px' }}>
+          Division × month - the like-for-like stores' department plan against the AOP (the department engine holds them on it), with the all-store plan and the Article Name plan (₹ lakh).
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <thead><tr>{['Division', 'Month', 'AOP', 'LFL dept plan', 'Diff', '= AOP', 'All-store dept plan', 'Article plan', '= dept plan'].map((h, i) => <th key={h} style={{ ...th, textAlign: i < 2 ? 'left' : 'right' }}>{h}</th>)}</tr></thead>
+            <tbody>{d.divisions.map(r => {
+              const ad = r.articles - r.all_plan
+              return (
+                <tr key={r.division + r.month}>
+                  <td style={{ ...td, textAlign: 'left', fontFamily: 'inherit', fontWeight: 600 }}>{r.division}</td><td style={{ ...td, textAlign: 'left', fontFamily: 'inherit' }}>{r.month}</td>
+                  <td style={td}>{L(r.aop)}</td><td style={td}>{L(r.lfl_plan)}</td><td style={td}>{r.diff == null ? '–' : r.diff.toFixed(4)}</td><td style={td}>{ok(r.ok)}</td>
+                  <td style={td}>{L(r.all_plan)}</td><td style={td}>{L(r.articles)}</td>
+                  <td style={td} title="A negative store-month department plan (returns in LY) keeps its articles at 0">{ok(Math.abs(ad + d.departments.filter(x => x.division === r.division && x.month === r.month).reduce((t, x) => t + x.negative, 0)) < 1e-4)}</td>
+                </tr>)
+            })}</tbody>
+          </table>
+        </div>
+        <div style={{ fontSize: 11.5, color: theme.textMuted, margin: '10px 0 4px', display: 'flex', gap: 10, alignItems: 'center' }}>
+          <span>Department × month - Article Name plan against the department sales plan: {s.dept_off ? `${s.dept_off} don't match` : `all ${s.dept_cells} match`}
+            {s.dept_neg ? ` (${s.dept_neg} carry a negative store plan, ₹${s.neg_total.toFixed(4)} L, kept at 0)` : ''}.</span>
+          <button type="button" onClick={() => setAll(a => !a)} style={{ all: 'unset', cursor: 'pointer', color: theme.primary, textDecoration: 'underline' }}>{all ? 'Show only the ones off' : `Show all ${s.dept_cells}`}</button>
+        </div>
+        {deps.length > 0 && (
+          <div style={{ overflow: 'auto', maxHeight: 320 }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+              <thead><tr>{['Division', 'Department', 'Month', 'Dept sales plan', 'Article plan', 'Negative store plan', 'Diff', 'Check'].map((h, i) => <th key={h} style={{ ...th, textAlign: i < 3 ? 'left' : 'right', position: 'sticky', top: 0, background: theme.surface }}>{h}</th>)}</tr></thead>
+              <tbody>{deps.map(r => (
+                <tr key={r.division + r.department + r.month}>
+                  <td style={{ ...td, textAlign: 'left', fontFamily: 'inherit' }}>{r.division}</td><td style={{ ...td, textAlign: 'left', fontFamily: 'inherit', fontWeight: 600 }}>{r.department}</td>
+                  <td style={{ ...td, textAlign: 'left', fontFamily: 'inherit' }}>{r.month}</td><td style={td}>{L(r.plan)}</td><td style={td}>{L(r.articles)}</td>
+                  <td style={td}>{r.negative ? r.negative.toFixed(4) : '–'}</td><td style={td}>{r.diff.toFixed(6)}</td><td style={td}>{ok(r.ok)}</td>
+                </tr>))}</tbody>
+            </table>
+          </div>
+        )}
+      </>)}
+    </details>
+  )
+}
+
 async function readErr(r) {
   if (r.status === 401) return 'Not signed in - sign in again on Landing'
   try { const j = await r.json(); return j.detail || r.statusText } catch { return r.statusText }
@@ -121,6 +190,7 @@ export default function ArtNmRoute() {
           ))}
         </div>
       )}
+      {sum && <PostCheck grain={grain} />}
       {sum && <HierarchyView key={grain} api={API} levels={levels} defaults={['department', 'article', 'month']} store={`sp.art.${grain}`} versions={false} query={{ grain }} />}
     </div>
   )
