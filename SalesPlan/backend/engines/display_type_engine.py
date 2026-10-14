@@ -807,7 +807,7 @@ def run_qty():
 
 _QV: dict = {}
 QV_COLS = ["store", "division", "dept", "mrp", "month", "table_contrib", "nontable_contrib", "mrp_plan", "table_plan",
-           "nontable_plan", "table_asp", "table_qty", "nontable_asp", "nontable_qty", "has_contrib"]
+           "nontable_plan", "table_asp", "table_qty", "nontable_asp", "nontable_qty", "has_contrib", "contrib_from"]
 
 
 def _qty_frame():
@@ -822,7 +822,7 @@ def _qty_frame():
     v = None
     try:
         disk = pd.read_pickle(pk)   # written below by this server only
-        if disk.get("mt") == mt:
+        if disk.get("mt") == mt and disk.get("cols") == QV_COLS:   # a cache with other columns is rebuilt
             v = disk["v"]
     except Exception:   # noqa: BLE001 - none yet: build it
         pass
@@ -838,7 +838,7 @@ def _qty_frame():
         miss = sum(1 for m in q.get("missing_asp", []))
         v = {"df": df, "months": q.get("months", []), "run_at": q.get("run_at"), "missing": miss}
         try:
-            pd.to_pickle({"mt": mt, "v": v}, pk)
+            pd.to_pickle({"mt": mt, "cols": QV_COLS, "v": v}, pk)
         except OSError:
             pass
     _QV.update(mt=mt, v=v)
@@ -881,36 +881,29 @@ def get_qty():
 # ── export ─────────────────────────────────────────────────────────────────────
 
 @router.get("/export")
-def export():
-    qty = _load(DT_QTY_PATH) or _load(DT_RESULT_PATH)
-    if not qty: raise HTTPException(404, "No result to export")
+def export(format: str = "csv", division: str = "", group: str = "", store: str = ""):
+    """Every field from the store to the display type and qty, one row per store x department x MRP x month (user,
+    2026-10-14: "all the fields availble for export till display type so that the user can easily export the report for
+    fact finding") - engines/journey.export_rows. CSV by default (the full run is ~700k rows); format=xlsx up to an Excel
+    sheet's limit (filter by division / store group / store). Filters take comma-separated values."""
+    from engines.journey import export_bytes
+    data, ext, n = export_bytes(format, division=division, group=group, store=store)
+    tag = "-".join(x for x in (division, group, store) if x).replace(",", "+") or "all stores"
+    return StreamingResponse(io.BytesIO(data), media_type="text/csv" if ext == "csv" else
+                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                             headers={"Content-Disposition": f'attachment; filename="Plan to UDF - {tag} - {_ts()[:10]}.{ext}"',
+                                      "X-Rows": str(n)})
 
-    records = []
-    for r in qty.get("rows", []):
-        month = r["month"]
-        records.append({
-            "Store":      r["store"], "Division": r["division"],
-            "Department": r["dept"],  "MRP":      r["mrp"],
-            "Month":      month,
-            "Table Contrib%":    r.get("table_contrib", 0),
-            "NonTable Contrib%": r.get("nontable_contrib", 0),
-            "MRP Plan (₹L)":    r.get("mrp_plan", 0),
-            "Table Plan (₹L)":  r.get("table_plan", 0),
-            "NonTable Plan (₹L)": r.get("nontable_plan", 0),
-            "Table ASP (₹)":    r.get("table_asp", ""),
-            "Table Qty":        r.get("table_qty", ""),
-            "NonTable ASP (₹)": r.get("nontable_asp", ""),
-            "NonTable Qty":     r.get("nontable_qty", ""),
-        })
 
-    df = pd.DataFrame(records)
-    buf = io.BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-        for div, grp in df.groupby("Division"):
-            grp.to_excel(writer, index=False, sheet_name=str(div)[:31])
-    buf.seek(0)
-    return StreamingResponse(
-        buf,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": "attachment; filename=display_type_plan.xlsx"},
-    )
+@router.get("/journey/options")
+def get_journey_options(store: str = "", dept: str = ""):
+    """The Journey page's pickers: planned stores (group), the store's departments, months, the department's MRPs."""
+    from engines.journey import options
+    return options(store, dept)
+
+
+@router.get("/journey")
+def get_journey(store: str, dept: str, month: str, mrp: str = "", display: str = ""):
+    """How one store x department x month (x MRP x display type) is made, step by step down to qty - engines/journey."""
+    from engines.journey import journey
+    return journey(store, dept, month, mrp, display)

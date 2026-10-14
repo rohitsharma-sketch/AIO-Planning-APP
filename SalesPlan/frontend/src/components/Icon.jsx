@@ -8,6 +8,7 @@ const PATHS = {
   sync:     'M21 12a9 9 0 0 1-15.5 6.2M3 12A9 9 0 0 1 18.5 5.8M21 4v5h-5M3 20v-5h5',
   check:    'M20 6 9 17l-5-5',
   article:  'M4 6h16M4 12h16M4 18h10M18 16l2 2 3-3',
+  journey:  'M6 3h12v5H6zM12 8v3M8 11h8v5H8zM12 16v3M10 19h4v3h-4z',
 }
 
 export default function Icon({ name, size = 18, strokeWidth = 1.8 }) {

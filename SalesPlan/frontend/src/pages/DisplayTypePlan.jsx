@@ -352,7 +352,8 @@ export default function DisplayTypePlan() {
         )}
 
         {status?.qty_run && (
-          <a href={`${API}/export`} style={btnStyle(true, 'var(--st-accent,#4F7A66)', true)}>↓ Export Excel</a>
+          <a href={`${API}/export`} style={btnStyle(true, 'var(--st-accent,#4F7A66)', true)}
+            title="Every field from store to display type and qty (CSV, all stores). Filtered / Excel exports: Number journey page">↓ Export all fields (CSV)</a>
         )}
       </div>
 

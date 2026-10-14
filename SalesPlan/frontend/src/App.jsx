@@ -20,6 +20,7 @@ import ArtNmImport from './pages/ArtNmImport'
 import ArtNmRoute from './components/ArtNmRoute'
 import PwwDeviation from './pages/PwwDeviation'
 import SorDeviation from './pages/SorDeviation'
+import Journey from './pages/Journey'
 import { EngineGate } from './components/EngineGate'
 import DisplayTypePlan from './pages/DisplayTypePlan'
 import MrpReapportionment from './pages/MrpReapportionment'
@@ -98,6 +99,7 @@ export default function App() {
             <Route path="/deviation/pww" element={<EngineGate k="pww" name="PW/W Deviation"><PwwDeviation /></EngineGate>} />
             <Route path="/deviation/sor" element={<EngineGate k="sor" name="SOR Deviation"><SorDeviation /></EngineGate>} />
             <Route path="/display-type" element={<DisplayTypePlan />} />
+            <Route path="/journey" element={<Journey />} />
             <Route path="/mrp-plan/reapportionment" element={<MrpReapportionment />} />
             <Route path="/sync" element={<SyncEngine />} />
             <Route path="/reconciliation" element={<Reconciliation />} />

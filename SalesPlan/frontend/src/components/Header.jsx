@@ -22,6 +22,7 @@ const TITLES = [
   ['/deviation/pww', 'MRP Plan · PW/W Deviation'],
   ['/deviation/sor', 'MRP Plan · SOR Deviation'],
   ['/display-type', 'Display Type Plan'],
+  ['/journey', 'Number journey · how a number is made'],
   ['/sync', 'Sales Sync'],
   ['/reconciliation', 'Reconciliation'],
 ]

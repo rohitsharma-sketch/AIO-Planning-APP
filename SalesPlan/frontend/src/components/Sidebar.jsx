@@ -34,6 +34,7 @@ const navItems = [
     { label: 'Plan Output',      to: '/mrp-plan/output', final: true },
   ]},
   { label: 'Display Type Plan', icon: 'display', to: '/display-type' },
+  { label: 'Number journey',    icon: 'journey', to: '/journey' },   // how a number is made, sources to UDF (2026-10-14)
   { label: 'Sales Sync',        icon: 'sync', to: '/sync' },
   { label: 'Reconciliation',    icon: 'check', to: '/reconciliation' },
 ]
