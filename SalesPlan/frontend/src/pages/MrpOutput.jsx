@@ -6,7 +6,7 @@ import RouteBar from '../components/RouteBar'
 import { useEngines } from '../engines'
 
 const MRP_FIELDS = {
-  cluster: 'Cluster', store: 'Store', stype: 'Store type', division: 'Division',
+  cluster: 'Cluster', store: 'Store', stype: 'Store group', division: 'Division',
   attribute: 'Attribute', department: 'Department', mrp: 'MRP', month: 'Month',
 }
 

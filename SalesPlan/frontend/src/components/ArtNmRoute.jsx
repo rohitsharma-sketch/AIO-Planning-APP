@@ -15,7 +15,7 @@ const API = '/api/planning/art-nm'
 const ST = { ok: theme.success, warn: theme.warning, fail: theme.danger }
 const BTN = { padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `1px solid ${theme.border}`, background: theme.surface, color: theme.textPrimary }
 const FIELDS = {   // Department first: the department selection
-  department: 'Department', article: 'Article Name', cluster: 'Cluster', store: 'Store', stype: 'Store type',
+  department: 'Department', article: 'Article Name', cluster: 'Cluster', store: 'Store', stype: 'Store group',
   division: 'Division', attribute: 'Attribute', month: 'Month',
 }
 const STEPS = g => [

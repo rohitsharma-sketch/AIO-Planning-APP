@@ -313,6 +313,14 @@ def run_dept_plan():
     """
     store_master   = _load_store_master()
     dept_actuals, ly_locked = _load_dept_actuals()
+    # the like-for-like AOP base is broken into departments by ACTUAL LY sales cont % (user, 2026-10-14: "AOP forecaster
+    # will use LY cont % actual sales will be used to break the target instead of reindexed") - as AOP's own Output tab
+    # (since 9 Oct) and BIS (own actual department LY) do; the reindexed mix only where a store x division x month has no
+    # actual sales
+    try:
+        dept_actual = load_actuals("actual")
+    except Exception:   # noqa: BLE001 - no actual snapshot: the reindexed mix, as before
+        dept_actual = {}
     store_div_acts = _load_store_div_actuals()
     growth_matrix  = _load_growth_matrix()
     dept_config    = _load_dept_config()
@@ -376,10 +384,19 @@ def run_dept_plan():
             for ty_month, ly_month in active_pairs:   # only locked months
                 store_dept_data = dept_actuals.get(store, {}).get(div, {})
                 dept_vals = {}
-                k_base = _base_scale(aop_base, store, div, ty_month, ly_month, store_dept_data)
+                # the store x division x month total (the AOP base, else the Calendar's reindexed total) split by the
+                # departments' share of ACTUAL LY sales (the reindexed mix where there are none)
+                act = dept_actual.get(str(store).strip().upper(), {}).get(div, {})
+                asum = sum(v.get(ly_month, 0.0) for v in act.values() if isinstance(v, dict))
+                rsum = sum(v.get(ly_month, 0.0) for v in store_dept_data.values() if isinstance(v, dict))
+                b = (aop_base.get(str(store).strip().upper()) or {}).get(div, {}).get(ty_month)
+                tot = b if b else rsum
+                mix_data = act if asum > 0 else store_dept_data
+                msum = asum if asum > 0 else rsum
+                k_base = tot / msum if msum > 0 else 1.0
 
                 for dept in active:
-                    ly_val = store_dept_data.get(dept, {}).get(ly_month, 0.0) * k_base
+                    ly_val = mix_data.get(dept, {}).get(ly_month, 0.0) * k_base
                     g_p1, g_p2 = _growth_p1_p2(growth_matrix, div, dept, ty_month)
                     g = (g_p1 + g_p2) / 2.0
                     ly_half = ly_val / 2.0
@@ -397,7 +414,7 @@ def run_dept_plan():
                 # Add inactive depts (zero, not in total)
                 all_depts = {r["name"] for r in dept_config.get(div, [])}
                 for dept in all_depts - active:
-                    ly_val = store_dept_data.get(dept, {}).get(ly_month, 0.0) * k_base
+                    ly_val = mix_data.get(dept, {}).get(ly_month, 0.0) * k_base
                     dept_vals[dept] = {
                         "ly": ly_val, "ly_p1": ly_val / 2.0, "ly_p2": ly_val / 2.0,
                         "ty": 0.0, "ty_p1": 0.0, "ty_p2": 0.0,
@@ -566,6 +583,7 @@ def run_dept_plan():
             "ly_months_locked": ly_locked,
             "ty_months_active": active_ty_months,
             "lfl_ly_base": f"AOP publish {aop_pid}" if aop_base else "Calendar snapshot",
+            "lfl_dept_mix": "actual LY sales" if dept_actual else "reindexed LY sales (no actual snapshot)",
             "lfl_hold_on_aop": hold,
         },
     }

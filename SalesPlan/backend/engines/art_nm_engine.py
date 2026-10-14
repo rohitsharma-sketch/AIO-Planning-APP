@@ -805,7 +805,7 @@ def get_hierarchy_options(filters: str = "{}", level: str = "", grain: str = "cl
 
 
 ART_LEVEL_NAME = {"department": "Department", "article": "Article Name", "cluster": "Cluster", "store": "Store",
-                  "stype": "Store type", "division": "Division", "attribute": "Attribute", "month": "Month"}
+                  "stype": "Store group (SSG / NSO / Others)", "division": "Division", "attribute": "Attribute", "month": "Month"}
 
 
 def explain_art(b: dict, attr: dict, levels: list, path: list, filt: dict | None, grain: str) -> dict:

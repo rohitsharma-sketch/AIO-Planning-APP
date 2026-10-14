@@ -8,7 +8,7 @@ const API = '/api/planning/display-type'
 // the MRP plan broken into display types, as the department plan's tree (user, 2026-10-14: "the MRP plan should break
 // and it should be highlighted as per that only") - GET /api/planning/grain/display-view/*
 const DT_FIELDS = {
-  cluster: 'Cluster', store: 'Store', stype: 'Store type', division: 'Division', attribute: 'Attribute',
+  cluster: 'Cluster', store: 'Store', stype: 'Store group', division: 'Division', attribute: 'Attribute',
   department: 'Department', mrp: 'MRP', display: 'Display type', month: 'Month',
 }
 

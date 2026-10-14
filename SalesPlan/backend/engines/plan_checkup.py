@@ -226,6 +226,7 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
     corrected = source != "final_dept_plan.json"
     cal_div = _try(load_store_div_actuals)
     cal_dept = _try(load_actuals, {})
+    act_dept = _try(lambda: load_actuals("actual"), {})   # the like-for-like department split is by actual LY (2026-10-14)
     cal_ok = isinstance(cal_div, dict) and bool(cal_div)
     base = _try(lambda: aop_base_by_store()[1], {})
     base = base if isinstance(base, dict) else {}
@@ -273,8 +274,11 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
                     b = base.get(store, {}).get(dv, {}).get(m)
                     if cal_ok:
                         c_lfl.add(b if (b and cal > 0) else cal, ly, **w)
-                        k = ly / cal if cal else 0.0
-                        cd = cal_dept.get(store, {}).get(dv, {}) if isinstance(cal_dept, dict) else {}
+                        ad = act_dept.get(store, {}).get(dv, {}) if isinstance(act_dept, dict) else {}
+                        asum = sum(v.get(_lym(m), 0.0) for v in ad.values() if isinstance(v, dict))
+                        cd = ad if asum > 0 else (cal_dept.get(store, {}).get(dv, {}) if isinstance(cal_dept, dict) else {})
+                        csum = asum if asum > 0 else sum(v.get(_lym(m), 0.0) for v in cd.values() if isinstance(v, dict))
+                        k = ly / csum if csum else 0.0
                         for dp, x in deps.items():
                             if (dv, dp) in new:
                                 continue
@@ -313,7 +317,8 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
         out.append(c_oth.out(st1, "ly_other", "Store × Division × Month (other stores): plan LY = Calendar reindexed sales", "Division"))
         out.append(c_lfl.out(st1, "ly_lfl", "Store × Division × Month (like-for-like): plan LY = AOP version's LY base (Calendar where it has none)", "Division",
                              note="The engine anchors like-for-like LY on the AOP base its growth was set on; the department mix stays the Calendar's."))
-        out.append(c_mix.out(st1, "ly_mix", "Store × Department × Month (like-for-like): department LY = Calendar department mix", "Department"))
+        out.append(c_mix.out(st1, "ly_mix", "Store × Department × Month (like-for-like): department LY = the store-division LY split by actual LY department cont %", "Department",
+                           note="The AOP base is broken into departments by actual LY sales (the reindexed mix only where a store × division × month has none)."))
         rows = [{"Division": dv, "Month": m, "Plan LY (₹L)": a, "Calendar (₹L)": c, "Plan − Calendar": a - c}
                 for (dv, m), (a, c) in sorted(chain.items())]
         out.append(_plain(st1, "ly_chain", "Division × Month: plan LY vs Calendar (all stores)", "Division", "info",

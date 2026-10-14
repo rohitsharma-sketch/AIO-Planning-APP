@@ -756,7 +756,7 @@ def warm_hierarchy():
         pass
 
 
-LEVEL_NAME = {"cluster": "Cluster", "store": "Store", "stype": "Store type", "division": "Division",
+LEVEL_NAME = {"cluster": "Cluster", "store": "Store", "stype": "Store group (SSG / NSO / Others)", "division": "Division",
               "attribute": "Attribute", "department": "Department", "month": "Month"}
 
 
@@ -976,6 +976,11 @@ def tree_xlsx(ix: dict, levels: list, names: dict, filt: dict | None, cols: tupl
     import io
     import pandas as pd
     import xlsxwriter
+    # the store group as a column in every export (user, 2026-10-14: "the filters should be present to see actual sales
+    # growth %" - the plan now has new / placeholder stores with no LY): when it isn't in the Rows, it is added as the
+    # last field, so an Excel filter on SSG shows the like-for-like growth
+    if "stype" in ix["c"] and "stype" not in levels:
+        levels = list(levels) + ["stype"]
     m = _mask(ix, {}, filt)
     df = pd.DataFrame({lv: ix["c"][lv][m] for lv in levels})
     df["ly"], df["ty"] = ix["ly"][m], ix["ty"][m]

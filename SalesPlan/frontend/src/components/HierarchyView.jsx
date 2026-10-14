@@ -7,7 +7,7 @@ import PlanVersions from './PlanVersions'
 // order, then drill the plan as a tree (view only). Each branch is fetched when it is opened
 // (GET /api/planning/grain/hierarchy, from the same plan the Store / Cluster panels use). The order is kept per browser.
 const LEVELS = {
-  cluster: 'Cluster', store: 'Store', stype: 'Store type', division: 'Division',
+  cluster: 'Cluster', store: 'Store', stype: 'Store group', division: 'Division',
   attribute: 'Attribute', department: 'Department', month: 'Month',
 }
 const COLS = { ly: 'LY (₹L)', ty: 'TY (₹L)', growth: 'Growth %' }   // the number columns (Re-apportionment: Before / After)

@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Like-for-like department LY = AOP base split by ACTUAL LY sales; store-group filter in every export; BIS = 148 SSG
+- **Asked (user):** "the filters should be present to see actual sales growth %. Secondly, the BIS will only and only run on 148 stores AOP always which are SSG. Also, AOP forecaster will use LY cont % actual sales will be used to break the target instead of reindexed."
+- Sales Plan like-for-like step: each store x division x month AOP base (else the Calendar's reindexed total) is broken into departments by the departments' share of ACTUAL LY sales (Calendar actual_dept, the same month last year); the reindexed mix only where that store x division x month has no actual sales (`dept_sales_engine`, meta `lfl_dept_mix`). Same rule as the AOP Forecaster's Output tab (actual cont % since 9 Oct) and BIS (own actual department LY): Sales Plan's department LY now equals BIS's for all 113 departments of the manual-vs-portal table (max 0.01%) - the "LY base" step went from -₹154.7 L to 0; what is left between portal and BIS is the AOP division hold (+₹239.5 L). Check-up "department LY = split by actual LY cont %" passes; Journey shows "Actual LY". Totals unchanged (₹79,403.1 L; SSG ₹43,186.8 L).
+- Store group filter: "Store type" is now "Store group (SSG / NSO / Others)" on every Hierarchy (Final Results, MRP, Display Type, Article Name); every Excel export carries it as a column (added as the last field when not in the Rows), so a filter on SSG gives the like-for-like growth.
+- BIS rule recorded: BIS plans only the 148 like-for-like (SSG) stores against the AOP like-for-like division targets (sync_server `plan_lfl_stores`); NSO / Others live in Sales Plan only.
+
 ### Excel downloads in the classic pivot layout (no drill-down rows)
 - **Asked (user):** "also make the download happen in classic pivot table formats rather than straight drill downs as it increases rows and blank space".
 - Sales Plan hierarchy exports (Final Results, MRP Output, Display Type, Article Name, re-apportionment compare - `grain_view.tree_xlsx`): Excel's tabular form with every item label repeated - one row per combination of the Rows fields (the deepest level, in the page's order), each field in its own column, LY / TY / Growth % / Cont % (of the level above), Grand Total last; no parent / outline rows, no indented first column. Final Results Division › Department › Month: 771 rows, no blank labels, rows add up to the Grand Total (₹79,403.1 L).

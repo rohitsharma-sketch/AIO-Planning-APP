@@ -128,13 +128,15 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
         derived = 0.0
     elif ssg:
         from actuals_manager import load_actuals
-        cal = float(((load_actuals().get(store, {}).get(div, {}).get(dept) or {}).get(lym)) or 0.0)
+        cal = float(((load_actuals("actual").get(store, {}).get(div, {}).get(dept) or {}).get(lym)) or 0.0)
+        if not cal:   # no actual sales that month: the reindexed mix (the engine's fallback)
+            cal = float(((load_actuals().get(store, {}).get(div, {}).get(dept) or {}).get(lym)) or 0.0)
         hold = float(((p.get("meta") or {}).get("lfl_hold_on_aop") or {}).get(div, {}).get(month, 1.0))
         g1, g2 = float(rec.get("g_p1") or 0.0), float(rec.get("g_p2") or 0.0)
-        step("Department", "Calendar LY", f"{dept} at {store} in {lym}: the Calendar app's reindexed sales.", cal, formula="Calendar snapshot")
+        step("Department", "Actual LY", f"{dept} at {store} in {lym}: its actual sales (Calendar, own dates).", cal, formula="Calendar actual snapshot")
         k = ly / cal if cal else None
-        step("Department", "LY on the AOP base", "The store × division LY is put on the base the AOP version's growth was set on "
-             "(the department mix stays the Calendar's).", ly, formula=f"{L(cal)} × {k:.6f}" if k else "no Calendar LY", factor=k)
+        step("Department", "LY on the AOP base", "The store × division AOP base (what the AOP version's growth was set on) is broken "
+             "into departments by their share of actual LY sales.", ly, formula=f"{L(cal)} × {k:.6f}" if k else "no LY", factor=k)
         pre = ly / 2 * g1 / 100 + ly / 2 * g2 / 100
         step("Department", "× BIS growth", f"BIS growth in use: P1 {g1 - 100:+.2f}%, P2 {g2 - 100:+.2f}% "
              "(each half of the month = LY / 2 × its growth).", pre, formula=f"{L(ly)}/2 × {g1 / 100:.4f} + {L(ly)}/2 × {g2 / 100:.4f}")
