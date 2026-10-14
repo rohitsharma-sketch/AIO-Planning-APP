@@ -605,9 +605,14 @@ async function renderMatrix(){
   const tot=(d,m)=>R.rows.filter(r=>!d||r.division===d).reduce((s,r)=>s+R.months.reduce((t,_,j)=>t+((m==null||m===j)&&mb(r,j)!==undefined?1:0),0),0);
   const btn=(d,b,m,k)=>k?`<button class="mxb${a&&a.d===d&&a.b===b&&(a.m??null)===(m??null)?' on':''}" data-mx="${d}|${b??''}|${m??''}" title="Show the ${d||''} departments with ${b?b+' days':'no band'} in ${m==null?'any month':mon(R.months[m])} - the matching months highlighted">${k}</button>`:'<span class="note">0</span>';
   const line=(d,m,cls,label)=>`<tr class="${cls}"><td class="l">${label}</td>`+bands.map(b=>`<td>${btn(d,b,m,n(d,b,m))}</td>`).join('')+`<td>${tot(d,m)}</td></tr>`;
-  $('#mx').innerHTML=`<table class="mx"><thead><tr><th class="l">Department × month by band (${nm} months)${lfText()?' · '+h(lfText()):''}</th>${bands.map(b=>`<th>${b?b+' days':'No band'}</th>`).join('')}<th>Total</th></tr></thead><tbody>`+
-    ['MENS','LADIES','KIDS'].map(d=>line(d,null,'',`<b>${d}</b>`)).join('')+line('',null,'tot','<b>All</b>')+
-    R.months.map((m,j)=>line('',j,'mrow',mon(m))).join('')+'</tbody></table>';
+  // user, 2026-10-14: "i wanted the view to be restricted to division ... shift the month table to the right of this
+  // division table" - the division table on its own, the months in their own table beside it
+  const headRow=first=>`<thead><tr><th class="l">${first}</th>${bands.map(b=>`<th>${b?b+' days':'No band'}</th>`).join('')}<th>Total</th></tr></thead>`;
+  $('#mx').innerHTML=`<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">`+
+    `<table class="mx">${headRow(`Department × month by band (${nm} months)${lfText()?' · '+h(lfText()):''}`)}<tbody>`+
+    ['MENS','LADIES','KIDS'].map(d=>line(d,null,'',`<b>${d}</b>`)).join('')+line('',null,'tot','<b>All</b>')+'</tbody></table>'+
+    `<table class="mx">${headRow('By month (all divisions)')}<tbody>`+
+    R.months.map((m,j)=>line('',j,'',`<b>${mon(m)}</b>`)).join('')+line('',null,'tot','<b>All months</b>')+'</tbody></table></div>';
 }
 async function loadCells(){
   try{S.cells=await api('api/cells?department='+encodeURIComponent(S.dept));}catch(e){S.dept=null;$('#dd').hidden=true;return;}
