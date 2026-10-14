@@ -13,7 +13,7 @@ import os
 import sys
 
 import pandas as pd
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -197,3 +197,33 @@ def export_reconciliation():
     buf.seek(0)
     return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                              headers={"Content-Disposition": "attachment; filename=sales_plan_reconciliation.xlsx"})
+
+
+# ── Full check-up: the plan tied back to its sources (Calendar, AOP, BIS, re-apportionment, ASP) - engines/plan_checkup.py
+@router.get("/checkup")
+def get_checkup():
+    from engines.plan_checkup import run_checkup
+    return run_checkup()
+
+
+@router.post("/checkup/rectify")
+def post_checkup_rectify():
+    """Re-run the chain (plan on today's inputs, MRP Cont %, Display Type run + Qty) and check again."""
+    from engines.plan_checkup import rectify
+    return rectify()
+
+
+@router.post("/checkup/signoff")
+def post_checkup_signoff(request: Request):
+    from engines.plan_checkup import sign_off
+    from engines.plan_versions import _user
+    return sign_off(_user(request))
+
+
+@router.get("/checkup/export")
+def get_checkup_export():
+    from engines.plan_checkup import run_checkup, export_xlsx
+    r = run_checkup()
+    return StreamingResponse(io.BytesIO(export_xlsx(r) if r.get("ok") else b""),
+                             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                             headers={"Content-Disposition": 'attachment; filename="sales_plan_checkup.xlsx"'})

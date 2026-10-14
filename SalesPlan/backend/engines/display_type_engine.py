@@ -645,9 +645,10 @@ def run_qty():
         t_qty  = to_qty(r["table_plan"],    t_asp)
         nt_qty = to_qty(r["nontable_plan"], nt_asp)
 
-        if t_qty is None:
+        # only a value that is projected needs a qty (2026-10-14: a display type with no plan there isn't "missing")
+        if t_qty is None and r["table_plan"] > 1e-9:
             missing_asp.append({"store": r["store"], "dept": dept, "mrp": mrp, "dt": DT_TABLE, "month": month})
-        if nt_qty is None:
+        if nt_qty is None and r["nontable_plan"] > 1e-9:
             missing_asp.append({"store": r["store"], "dept": dept, "mrp": mrp, "dt": DT_NONTABLE, "month": month})
 
         qty_rows.append({**r,

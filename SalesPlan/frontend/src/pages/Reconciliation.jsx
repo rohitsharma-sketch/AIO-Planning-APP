@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { theme } from '../theme'
+import CheckUp from '../components/CheckUp'
 
 // Reconciliation (user, 2026-09-30: "embed the matrix to give me the least apportioned difference"): every apportioned
 // total in the plan vs the sum of its parts, to 8 decimals. Off = a difference that shows at 8 decimals.
@@ -31,6 +32,7 @@ export default function Reconciliation() {
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', padding: '24px 32px', background: theme.surfaceAlt }}>
+      <CheckUp />
       {error && <div style={{ background: '#FEF2F2', border: `1px solid ${theme.danger}`, borderRadius: 8, padding: '10px 16px', marginBottom: 18, color: theme.danger, fontSize: 13 }}>{error}</div>}
 
       <div style={{ ...card, padding: '12px 18px', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 13 }}>
