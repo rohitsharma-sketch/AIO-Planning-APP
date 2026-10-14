@@ -103,7 +103,13 @@ def _load() -> dict:
             for dv, d in r.items():
                 out.setdefault(dv, {}).update(d)
             return out
-    return _file_shares()
+        return _file_shares()
+    # the buyers' file wins for the departments it has; the others keep the re-apportioned split (2026-10-14: for ASP
+    # MAMJ 2.xlsx covers 114 of the plan's 224 departments - file-only left 110 with no MRP split)
+    out = {dv: dict(d) for dv, d in (_reapp_shares() or {}).items()}
+    for dv, d in _file_shares().items():
+        out.setdefault(dv, {}).update(d)
+    return out
 
 
 @router.get("/source")

@@ -363,8 +363,24 @@ def mrp_checks(gm=None, new=None) -> list:
     if promoted is not None and not isinstance(promoted, Exception):
         out.append(_plain(st4, "mrp_src", "MRP Cont % in use", "MRP", "info", "the Article Name plan's promoted split (Article Name route)"))
     elif get_source() != "reapp":
-        out.append(_plain(st4, "mrp_src", "MRP Cont % in use = the re-apportioned LY sales", "MRP", "fail",
-                          "the buyers' MRP Cont % file is picked (MRP Plan · Buyer's Input) - not the re-apportioned sales", fix="input"))
+        # the buyers' file picked (2026-10-14, for ASP MAMJ 2.xlsx): its departments take the file's split, the rest the
+        # re-apportioned one (mrp_plan_engine._load) - checked: every file department x fortnight adds to 100 (or is 0)
+        from engines.mrp_plan_engine import _file_shares
+        fs = _file_shares()
+        sums = {}
+        for dv, dd in fs.items():
+            for dp, bands in dd.items():
+                for ps in bands.values():
+                    for pp, v in ps.items():
+                        sums[(dp, pp)] = sums.get((dp, pp), 0.0) + float(v or 0)
+        bad = sorted(f"{dp} {pp} = {s:.4f}%" for (dp, pp), s in sums.items() if abs(s - 100) > 0.01 and abs(s) > 0.01)
+        nf = sum(len(d) for d in fs.values())
+        nr = sum(1 for dv, d in (rs.get("shares") or {}).items() for dp in d if dp not in fs.get(dv, {}))
+        out.append(_plain(st4, "mrp_src", "MRP Cont % in use = the buyers' file (its departments) + the re-apportioned LY sales (the rest)",
+                          "MRP", "fail" if bad else "pass",
+                          f"{nf} departments from the buyers' MRP Cont % file, {nr} on the re-apportionment"
+                          + (f"; not adding to 100: {', '.join(bad[:10])}" if bad else "; every file department × fortnight adds to 100% (or is 0)"),
+                          fix="input"))
     else:
         cur_m, cur_b = os.path.basename(mf or ""), get_basis()
         fresh = bool(rs) and rs.get("master") == cur_m and rs.get("basis") == cur_b and bool(mf) and \
