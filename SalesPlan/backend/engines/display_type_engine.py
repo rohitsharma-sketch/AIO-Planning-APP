@@ -193,19 +193,125 @@ def display_shares(keys: pd.DataFrame, _ref: bool = True) -> pd.DataFrame:
     return pd.concat(out, ignore_index=True) if out else pd.DataFrame(columns=K + ["display", "pct", "src"])
 
 
-def _asp_key(div, dept, mrp, dt) -> str:
-    """One spelling for the ASP match: case / spaces off, MRP as a whole number (749.0 -> 749), display type as the LY
-    data writes it (Table / TABLE -> TABLE, Non-Table / NON TABLE / NON_TABLE -> NON_TABLE) - 2026-10-14."""
+def _asp_key(dept, mrp, dt) -> str:
+    """One spelling for the ASP match - department x MRP x display type (department names are unique across
+    divisions): case / spaces off, MRP as a whole number (749.0 -> 749), display type as the LY data writes it (Table /
+    TABLE -> TABLE, Non-Table / NON TABLE / NON_TABLE -> NON_TABLE) - 2026-10-14."""
     try:
         mrp = str(int(round(float(mrp))))
     except (TypeError, ValueError):
         mrp = str(mrp).strip()
     d = str(dt).strip().upper().replace("-", "_").replace(" ", "_")
-    return "|".join((str(div).strip().upper(), str(dept).strip().upper(), mrp, d))
+    return "|".join((str(dept).strip().upper(), mrp, d))
 
 
-# ── ASP import ─────────────────────────────────────────────────────────────────
-# Expected: Division | Department | MRP | Display Type | Mar'27 | Apr'27 | ...
+# ── ASP import / export (user, 2026-10-14: "calculate the ASP for P1 P2 and month wise ASPs too and convert the file
+# like that, also remove the extras like sales and qty in the import file so that the preview is all about ASP on
+# Company level. Make the template default and start the import and export functionality") ─────────────────────────
+# The template (default, what Export gives and Import reads):
+#     Division | Department | MRP | Display Type | Mar'27 P1 | Mar'27 P2 | Mar'27 | Apr'27 P1 | ...   (ASP, Rs per piece)
+# Import also takes the planners' raw file - CLUSTER TAG | CLUSTER | ATTRIBUTE-1 | DEPARTMENT | ARTICLE NAME | MRP |
+# DISPLAY TYPE | <Mon>'yy P1 / P2 VAL (Rs lakh) | ... QTY - and converts it: company level = every cluster, cluster tag,
+# attribute and article added up per department x MRP x display type; P1 / P2 ASP = VAL x 1e5 / QTY, the month's ASP =
+# (P1 + P2 VAL) / (P1 + P2 QTY), weighted by pieces. Sales and quantity are not kept - only the ASP.
+import re  # noqa: E402
+
+_PERIOD = re.compile(r"^([A-Za-z]{3})\s*'?\s*(\d{2})\s*(P[12])?\s*(VAL|QTY|ASP)?(\s*\(.*\))?$", re.I)
+_CAL = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def _period(col):
+    """"MAR'27 P1 VAL" -> ("Mar'27 P1", "VAL"); "Mar'27" -> ("Mar'27", ""); anything else -> (None, None)."""
+    m = _PERIOD.match(str(col).strip().replace("\u2019", "'"))
+    if not m or m.group(1).title() not in _CAL:
+        return None, None
+    per = f"{m.group(1).title()}'{m.group(2)}" + (f" {m.group(3).upper()}" if m.group(3) else "")
+    return per, (m.group(4) or "").upper()
+
+
+def _period_key(per: str):
+    """Calendar order; within a month P1, P2, then the month itself."""
+    mon, _, half = per.partition(" ")
+    return (int(mon[-2:]) * 12 + _CAL.index(mon[:3]), half or "P3")
+
+
+def _plan_divisions() -> dict:
+    """{DEPARTMENT: division} from the department plan (for the template's Division column)."""
+    out = {}
+    for sd in ((_dept_plan() or {}).get("stores") or {}).values():
+        for dv, dd in (sd.get("divisions") or {}).items():
+            for md in (dd.get("months") or {}).values():
+                for dp in (md.get("departments") or {}):
+                    out.setdefault(str(dp).upper(), dv)
+    return out
+
+
+def _col(df, *names):
+    up = {str(c).strip().upper(): c for c in df.columns}
+    return next((up[n] for n in names if n in up), None)
+
+
+def asp_from_frame(df: pd.DataFrame) -> tuple:
+    """The raw VAL / QTY file or the ASP template -> ({key: record}, periods, level). record = {division, dept, mrp,
+    display_type, months: {"Mar'27 P1": ASP, "Mar'27 P2": ASP, "Mar'27": ASP}} (division names from the plan)."""
+    c_dept = _col(df, "DEPARTMENT", "DEPT")
+    c_mrp = _col(df, "MRP", "FINAL MRP")
+    c_dt = _col(df, "DISPLAY TYPE", "DISPLAY_TYPE", "UDF-06", "UDF06", "TYPE", "DT")
+    if not (c_dept and c_mrp and c_dt):
+        raise HTTPException(400, f"Need Department, MRP and Display Type columns. Got: {list(df.columns)}")
+    kinds = {c: _period(c) for c in df.columns}
+    val = {pp: c for c, (pp, k) in kinds.items() if k == "VAL"}
+    qty = {pp: c for c, (pp, k) in kinds.items() if k == "QTY"}
+    divs = _plan_divisions()
+    base = pd.DataFrame({"dept": df[c_dept].astype(str).str.strip().str.upper(),
+                         "mrp": pd.to_numeric(df[c_mrp], errors="coerce"),
+                         "dt": df[c_dt].astype(str).str.strip().str.upper().str.replace("-", "_").str.replace(" ", "_")})
+    base = base[base["dept"].ne("") & base["dept"].ne("NAN") & base["mrp"].notna()]
+    out = {}
+    if val and qty:   # the raw file: company-level ASP from value and pieces
+        halves = sorted((pp for pp in val if pp in qty), key=_period_key)
+        nums = df.loc[base.index, [val[pp] for pp in halves] + [qty[pp] for pp in halves]].apply(pd.to_numeric, errors="coerce").fillna(0.0)
+        g = pd.concat([base, nums], axis=1).groupby(["dept", "mrp", "dt"], sort=True)[list(nums.columns)].sum()
+        months = []
+        for pp in halves:
+            if pp.split(" ")[0] not in months:
+                months.append(pp.split(" ")[0])
+        periods = [x for mon in months for x in [h for h in halves if h.startswith(mon + " ")] + [mon]]
+        for (dp, mr, dt), r in g.iterrows():
+            ms = {}
+            for mon in months:
+                hs = [x for x in halves if x.startswith(mon + " ")]
+                for x in hs:
+                    v, q = r[val[x]], r[qty[x]]
+                    ms[x] = round(v * 1e5 / q, 4) if q > 0 else None
+                V, Q = sum(r[val[x]] for x in hs), sum(r[qty[x]] for x in hs)
+                ms[mon] = round(V * 1e5 / Q, 4) if Q > 0 else None
+            out[_asp_key(dp, mr, dt)] = {"division": divs.get(dp, ""), "dept": dp, "mrp": str(int(mr)), "display_type": dt, "months": ms}
+        return out, periods, "company (converted from VAL / QTY)"
+    # the ASP template (or the older month-only layout)
+    pcs = sorted(((c, pp) for c, (pp, k) in kinds.items() if pp and k in ("", "ASP")), key=lambda x: _period_key(x[1]))
+    if not pcs:
+        raise HTTPException(400, "No period columns - expected Mar'27 P1 / Mar'27 P2 / Mar'27 ... (ASP) or ... VAL / ... QTY")
+    periods = [pp for _, pp in pcs]
+    for i, r in base.iterrows():
+        ms = {}
+        for c, pp in pcs:
+            v = pd.to_numeric(df.at[i, c], errors="coerce")
+            ms[pp] = float(v) if v == v and v > 0 else None
+        for mon in {pp.split(" ")[0] for pp in periods if " " in pp}:   # a month column left out: P1 / P2 average
+            if mon not in ms:
+                h = [x for x in (ms.get(f"{mon} P1"), ms.get(f"{mon} P2")) if x]
+                ms[mon] = sum(h) / len(h) if h else None
+        out[_asp_key(r["dept"], r["mrp"], r["dt"])] = {"division": divs.get(r["dept"], ""), "dept": r["dept"],
+                                                      "mrp": str(int(r["mrp"])), "display_type": r["dt"], "months": ms}
+    if any(" " in pp for pp in periods):
+        mons = []
+        for pp in periods:
+            if pp.split(" ")[0] not in mons:
+                mons.append(pp.split(" ")[0])
+        periods = [x for mon in mons for x in (f"{mon} P1", f"{mon} P2", mon)]
+    return out, periods, "company (template)"
+
 
 @router.post("/import/asp")
 async def import_asp(file: UploadFile = File(...)):
@@ -215,39 +321,92 @@ async def import_asp(file: UploadFile = File(...)):
         df.columns = [str(c).strip() for c in df.columns]
     except Exception as e:
         raise HTTPException(400, f"Parse error: {e}")
-
-    FIXED = {"division", "dept", "department", "mrp", "final mrp", "display type", "display_type", "type"}
-    col_map = {}
-    for c in df.columns:
-        cu = c.strip().upper()
-        if cu in ("DIVISION", "DIV"):          col_map[c] = "division"
-        elif cu in ("DEPARTMENT", "DEPT"):     col_map[c] = "dept"
-        elif cu in ("MRP", "FINAL MRP"):       col_map[c] = "mrp"
-        elif cu in ("DISPLAY TYPE", "DISPLAY_TYPE", "TYPE", "DT"): col_map[c] = "display_type"
-    df = df.rename(columns=col_map)
-
-    month_cols = [c for c in df.columns if c not in {"division","dept","mrp","display_type"}]
-
-    records = {}
-    for _, r in df.iterrows():
-        div  = str(r.get("division","")).strip()
-        dept = str(r.get("dept","")).strip()
-        mrp  = str(r.get("mrp","")).strip()
-        dt   = str(r.get("display_type","")).strip()
-        if not dept or dept == "nan": continue
-        month_vals = {}
-        for m in month_cols:
-            try: month_vals[m] = float(r[m])
-            except: month_vals[m] = 0.0
-        records[_asp_key(div, dept, mrp, dt)] = {
-            "division": div, "dept": dept, "mrp": mrp, "display_type": dt,
-            "months": month_vals,
-        }
-
-    out = {"imported_at": _ts(), "source": file.filename, "count": len(records),
-           "months": month_cols, "data": records}
+    records, periods, level = asp_from_frame(df)
+    if not records:
+        raise HTTPException(400, "No ASP rows in the file")
+    out = {"imported_at": _ts(), "source": file.filename, "count": len(records), "level": level,
+           "months": periods, "data": records}
     _save(DT_ASP_PATH, out)
-    return {"ok": True, "rows": len(records), "months": month_cols}
+    return {"ok": True, "rows": len(records), "months": periods, "level": level}
+
+
+@router.get("/asp")
+def get_asp_preview():
+    """The ASP in use, as the preview shows it (company level, Rs per piece)."""
+    a = _load(DT_ASP_PATH)
+    if not a:
+        raise HTTPException(404, "No ASP imported yet")
+    def mk(r):
+        try:
+            return float(r["mrp"])
+        except (TypeError, ValueError):
+            return 0.0
+    rows = sorted(a["data"].values(), key=lambda r: (r.get("division", ""), r["dept"], mk(r), r["display_type"]))
+    return {"imported_at": a.get("imported_at"), "source": a.get("source"), "level": a.get("level", ""),
+            "periods": a.get("months", []), "rows": rows}
+
+
+def asp_template_frame() -> tuple:
+    """(DataFrame in the template layout, filled?) - the ASP in use, else a blank template of every department x MRP x
+    display type the plan splits into (the MRP split x the LY display types), on the plan's periods."""
+    a = _load(DT_ASP_PATH)
+    if a:
+        periods = a.get("months") or []
+        rows = [{"Division": r.get("division", ""), "Department": r["dept"], "MRP": int(float(r["mrp"])),
+                 "Display Type": r["display_type"], **{pp: r["months"].get(pp) for pp in periods}} for r in a["data"].values()]
+        return pd.DataFrame(rows).sort_values(["Division", "Department", "MRP", "Display Type"]), True
+    from engines.mrp_plan_engine import effective_shares
+    sh = effective_shares()[0] or {}
+    mons = _derive_months(sh) if sh else []
+    periods = [x for mon in mons for x in (f"{mon} P1", f"{mon} P2", mon)]
+    try:
+        chain = next(t for name, _, t in _mix_tables()["tabs"] if name == "chain")
+        dts = chain.groupby(["department", "mrp"])["display"].apply(sorted).to_dict()
+    except Exception:   # noqa: BLE001 - no re-apportionment: both display types on every MRP
+        dts = {}
+    rows = []
+    for dv, deps in sh.items():
+        for dp, bands in deps.items():
+            for mr in sorted(bands, key=lambda x: float(x)):
+                for dt in dts.get((dp, mr), ["NON_TABLE", "TABLE"]):
+                    rows.append({"Division": dv, "Department": dp, "MRP": int(float(mr)), "Display Type": dt, **{pp: None for pp in periods}})
+    return pd.DataFrame(rows, columns=["Division", "Department", "MRP", "Display Type"] + periods), False
+
+
+def asp_xlsx(df: pd.DataFrame, filled: bool) -> bytes:
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as xw:
+        df.to_excel(xw, index=False, sheet_name="ASP")
+        ws, wb = xw.sheets["ASP"], xw.book
+        ws.freeze_panes(1, 4)
+        ws.set_column(0, 0, 10)
+        ws.set_column(1, 1, 28)
+        ws.set_column(2, 3, 12)
+        num = wb.add_format({"num_format": "#,##0.00"})
+        mon = wb.add_format({"num_format": "#,##0.00", "bold": True, "bg_color": "#EEF4F0"})
+        for j, c in enumerate(df.columns[4:], 4):
+            ws.set_column(j, j, 11, num if " " in str(c) else mon)
+        ws.autofilter(0, 0, len(df), len(df.columns) - 1)
+        nb = wb.add_worksheet("How to fill")
+        nb.set_column(0, 0, 120)
+        for i, t in enumerate([
+            "ASP template - company level (every cluster and article added up), Rs per piece.",
+            "Division | Department | MRP | Display Type, then per month: <Mon>'yy P1 (days 1-15), <Mon>'yy P2 (16th to month end), <Mon>'yy (the month).",
+            "The month's ASP = (P1 + P2 value) / (P1 + P2 pieces). If you leave a month column out, Import takes the P1 / P2 average.",
+            "Import also takes the raw planning file (CLUSTER ... DISPLAY TYPE, <Mon>'yy P1 VAL / QTY): it is converted to this layout on import.",
+            "Qty Run uses the month's ASP of each Department x MRP x Display Type.",
+            "Filled from the ASP in use." if filled else "Blank: no ASP imported yet - rows are the plan's Department x MRP x Display Type."]):
+            nb.write(i, 0, t)
+    return buf.getvalue()
+
+
+@router.get("/export/asp")
+def export_asp():
+    """The ASP template - the ASP in use, or blank on the plan's department x MRP x display type rows."""
+    df, filled = asp_template_frame()
+    return StreamingResponse(io.BytesIO(asp_xlsx(df, filled)),
+                             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                             headers={"Content-Disposition": 'attachment; filename="ASP template.xlsx"'})
 
 
 # ── run plan ───────────────────────────────────────────────────────────────────
@@ -463,7 +622,7 @@ def run_qty():
     asp_data = asp["data"]
 
     def get_asp(div, dept, mrp, dt, month):
-        rec = asp_data.get(_asp_key(div, dept, mrp, dt)) or asp_data.get(f"{div}|{dept}|{mrp}|{dt}", {})
+        rec = asp_data.get(_asp_key(dept, mrp, dt)) or {}
         val = rec.get("months", {}).get(month, 0.0)
         return val
 

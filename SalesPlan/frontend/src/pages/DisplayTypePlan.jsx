@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { theme, alpha } from '../theme'
 import HierarchyView from '../components/HierarchyView'
+import ExcelFilter from '../components/ExcelFilter'
 import { useRoute } from '../components/RouteBar'
 
 const API = '/api/planning/display-type'
@@ -71,6 +72,94 @@ function UploadBox({ label, subtitle, endpoint, onDone, imported, rows, date, co
       {err  && <div style={{ fontSize: 11, color: theme.danger, marginTop: 4 }}>{err}</div>}
       {imported && !busy && <div style={{ fontSize: 11, color: theme.success }}>{rows} rows · {date}</div>}
       {!imported && !busy && <div style={{ fontSize: 11, color: theme.textMuted }}>Drop file or click to browse</div>}
+    </div>
+  )
+}
+
+// ── ASP: import, export (the template) and a company-level preview (user, 2026-10-14: "calculate the ASP for P1 P2 and
+// month wise ASPs too ... remove the extras like sales and qty ... so that the preview is all about ASP on Company level.
+// Make the template default and start the import and export functionality") ─────────────────────────────────────
+const ASP_FIELDS = [['division', 'Division'], ['dept', 'Department'], ['mrp', 'MRP'], ['display_type', 'Display type']]
+function AspCard({ status, onDone }) {
+  const ref = useRef()
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [d, setD] = useState(null)
+  const [f, setF] = useState({})
+  const [edit, setEdit] = useState(null)
+  const load = () => fetch(`${API}/asp`).then(r => (r.ok ? r.json() : null)).then(setD).catch(() => setD(null))
+  useEffect(() => { if (status?.asp_imported) load() }, [status?.asp_imported, status?.asp_date])   // eslint-disable-line react-hooks/exhaustive-deps
+  const upload = async file => {
+    setBusy(true); setErr('')
+    const fd = new FormData(); fd.append('file', file)
+    try {
+      const r = await fetch(`${API}/import/asp`, { method: 'POST', body: fd })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`)
+      onDone(); load()
+    } catch (e) { setErr(e.message) } finally { setBusy(false); if (ref.current) ref.current.value = '' }
+  }
+  const rows = d?.rows || []
+  const val = (r, c) => String(r[c] ?? '')
+  const pass = (r, skip) => Object.entries(f).every(([c, v]) => c === skip || v.includes(val(r, c)))
+  const shown = rows.filter(r => pass(r))
+  const opts = c => [...new Set(rows.filter(r => pass(r, c)).map(r => val(r, c)))].sort((a, b) => (c === 'mrp' ? a - b : a.localeCompare(b)))
+  const cap = c => (!f[c] ? '(All)' : f[c].length === 1 ? f[c][0] : `(Multiple Items) ${f[c].length}`)
+  const per = d?.periods || []
+  const fmt = v => (v == null ? '–' : v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+  const btn = { padding: '6px 14px', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `1px solid ${theme.border}`, background: theme.surface, color: theme.textPrimary }
+  return (
+    <div style={{ background: theme.surface, border: `1px solid ${status?.asp_imported ? theme.success : theme.border}`, borderRadius: 10, padding: '16px 18px', marginBottom: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 13, fontWeight: 700 }}>ASP · company level</div>
+        <span style={{ fontSize: 11.5, color: status?.asp_imported ? theme.success : theme.textMuted }}>
+          {status?.asp_imported ? `${status.asp_rows} rows · ${d?.source || ''} · ${status.asp_date}` : 'Not imported yet'}
+        </span>
+        <span style={{ flex: 1 }} />
+        <input ref={ref} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={e => { const x = e.target.files[0]; if (x) upload(x) }} />
+        <button type="button" style={{ ...btn, background: 'var(--st-btn,#A8CBB7)', border: 'none', color: 'var(--st-btn-text,#1F4D3A)' }} disabled={busy} onClick={() => ref.current?.click()}>{busy ? 'Importing…' : 'Import ↑'}</button>
+        <button type="button" style={btn} onClick={() => window.open(`${API}/export/asp`, '_blank')} title={status?.asp_imported ? 'The ASP in use, in the template' : 'A blank template on the plan’s Department × MRP × Display Type'}>
+          {status?.asp_imported ? 'Export ↓' : 'Template ↓'}
+        </button>
+      </div>
+      <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 6, lineHeight: 1.6 }}>
+        Template: Division | Department | MRP | Display Type | Mar'27 P1 | Mar'27 P2 | Mar'27 | … (₹ per piece). The planners' file with P1 / P2 VAL and QTY
+        by cluster and article is converted on import: everything added up per Department × MRP × Display Type, ASP = value ÷ pieces, the month weighted by pieces.
+      </div>
+      {err && <div style={{ fontSize: 12, color: theme.danger, marginTop: 6 }}>{err}</div>}
+      {d && (
+        <>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', margin: '12px 0 8px' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.6 }}>Filters</span>
+            {ASP_FIELDS.map(([c, t]) => (
+              <button key={c} type="button" data-no-undo onClick={e => { const el = e.currentTarget; setEdit(x => (x && x.c === c ? null : { c, t, el })) }}
+                style={{ display: 'inline-flex', gap: 6, padding: '3px 8px', borderRadius: 4, fontSize: 12, cursor: 'pointer', border: `1px solid ${f[c] ? theme.primary : theme.border}`, background: f[c] ? alpha(theme.primary, '12') : theme.surface, color: theme.textPrimary }}>
+                <span style={{ color: theme.textMuted }}>{t}</span><b style={{ fontWeight: f[c] ? 700 : 500 }}>{cap(c)}</b><span style={{ color: theme.textMuted, fontSize: 10 }}>▾</span>
+              </button>
+            ))}
+            {Object.keys(f).length > 0 && <button type="button" onClick={() => setF({})} style={{ all: 'unset', cursor: 'pointer', fontSize: 12, color: theme.textMuted, textDecoration: 'underline' }}>Clear all</button>}
+            <span style={{ fontSize: 11.5, color: theme.textMuted, marginLeft: 6 }}>{shown.length} of {rows.length} rows · ₹ per piece · {d.level}</span>
+            {edit && <ExcelFilter key={edit.c + JSON.stringify(f)} title={edit.t} anchor={edit.el} picked={f[edit.c]} load={() => opts(edit.c)}
+              onDone={v => { if (v !== undefined) setF(x => { const n = { ...x }; if (v.length) n[edit.c] = v; else delete n[edit.c]; return n }); setEdit(null) }} />}
+          </div>
+          <div style={{ overflow: 'auto', maxHeight: 420, border: `1px solid ${theme.border}`, borderRadius: 8 }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12 }}>
+              <thead style={{ position: 'sticky', top: 0, background: theme.surfaceAlt }}>
+                <tr>{['Division', 'Department', 'MRP', 'Display type', ...per].map((h, i) => (
+                  <th key={h} style={{ ...HDR, textAlign: i < 2 || i === 3 ? 'left' : 'right', background: i > 3 && !h.includes(' P') ? alpha(theme.primary, '14') : undefined }}>{h}</th>))}</tr>
+              </thead>
+              <tbody>{shown.map(r => (
+                <tr key={`${r.dept}|${r.mrp}|${r.display_type}`} style={{ borderBottom: `1px solid ${theme.border}` }}>
+                  <td style={{ ...CELL, textAlign: 'left', color: theme.textMuted }}>{r.division}</td>
+                  <td style={{ ...CELL, textAlign: 'left' }}>{r.dept}</td>
+                  <td style={CELL}>{r.mrp}</td>
+                  <td style={{ ...CELL, textAlign: 'left' }}>{r.display_type}</td>
+                  {per.map(pp => <td key={pp} style={{ ...CELL, fontWeight: pp.includes(' P') ? 400 : 700, background: pp.includes(' P') ? undefined : alpha(theme.primary, '08') }}>{fmt(r.months[pp])}</td>)}
+                </tr>))}</tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -239,17 +328,9 @@ export default function DisplayTypePlan() {
             {status ? (status.contrib_ok ? `From the ${status.contrib_from}` : `Not available: ${status.contrib_from}`) : ''}
           </div>
         </div>
-        <UploadBox
-          label="Month-wise ASP"
-          subtitle="Division | Department | MRP | Display Type | Mar'27 | Apr'27 | …"
-          endpoint="import/asp"
-          onDone={loadStatus}
-          imported={status?.asp_imported}
-          rows={status?.asp_rows}
-          date={status?.asp_date}
-          color="#4F46E5"
-        />
       </div>
+
+      <AspCard status={status} onDone={loadStatus} />
 
       {/* Action buttons */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 28, alignItems: 'center', flexWrap: 'wrap' }}>
