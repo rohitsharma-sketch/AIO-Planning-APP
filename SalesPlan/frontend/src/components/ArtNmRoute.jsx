@@ -150,7 +150,7 @@ export default function ArtNmRoute() {
         <button style={{ ...BTN, background: theme.primary, color: '#fff', borderColor: theme.primary }} disabled={promBusy || !sum} onClick={promote}>
           {promBusy ? 'Promoting… (about 40 s)' : prom?.promoted ? 'Promote again' : 'Promote to MRP stage'}
         </button>
-        {prom?.promoted && <button style={BTN} onClick={() => nav('/mrp-plan/output')}>MRP Plan Output →</button>}
+        {prom?.promoted && <button style={BTN} onClick={() => nav('/mrp-plan/import')} title="The MRP module starts at its Buyer's Input (user, 2026-10-14)">MRP Plan · Buyer's Input →</button>}
       </div>
 
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>

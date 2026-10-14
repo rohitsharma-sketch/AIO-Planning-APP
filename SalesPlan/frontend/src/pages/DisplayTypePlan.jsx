@@ -1,9 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 import { theme, alpha } from '../theme'
-import GrainPanel from '../components/GrainPanel'
+import HierarchyView from '../components/HierarchyView'
 import { useRoute } from '../components/RouteBar'
 
 const API = '/api/planning/display-type'
+// the MRP plan broken into display types, as the department plan's tree (user, 2026-10-14: "the MRP plan should break
+// and it should be highlighted as per that only") - GET /api/planning/grain/display-view/*
+const DT_FIELDS = {
+  cluster: 'Cluster', store: 'Store', stype: 'Store type', division: 'Division', attribute: 'Attribute',
+  department: 'Department', mrp: 'MRP', display: 'Display type', month: 'Month',
+}
 
 // ── shared styles ──────────────────────────────────────────────────────────────
 const MONO = theme.fontMono
@@ -166,7 +172,7 @@ export default function DisplayTypePlan() {
     (fDept  === 'ALL' || r.dept === fDept)
   )
 
-  const canRun      = status?.contrib_imported && status?.dept_plan_ok && status?.mrp_plan_ok && !running
+  const canRun      = status?.contrib_ok && status?.dept_plan_ok && status?.mrp_plan_ok && !running
   const canValidate = status?.plan_run && !validating
   const canQty      = valResult?.gate_open && status?.asp_imported && !qtyRun
 
@@ -179,7 +185,7 @@ export default function DisplayTypePlan() {
       {route?.route === 'article' && (
         <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 8, fontSize: 12.5, border: `1px solid ${alpha(theme.warning, '55')}`, background: alpha(theme.warning, '10'), color: theme.textPrimary }}>
           The Sales Plan runs on the <b>Article Name</b> branch. {prom?.promoted
-            ? <>Display Type splits the MRP bands <b>promoted from the Article Name plan</b> ({prom.promoted_at}) - Run plan again after each promote. Bands with no Table / Non-Table share uploaded show as missing.</>
+            ? <>Display Type splits the MRP bands <b>promoted from the Article Name plan</b> ({prom.promoted_at}) - Run plan again after each promote. Their Table / Non-Table % come from the LY sales on each band.</>
             : <>It is not promoted to the MRP stage yet (Article Name Plan → Plan Output → Promote to MRP stage), so Display Type still splits the buyers' MRP bands.</>}
         </div>
       )}
@@ -194,7 +200,7 @@ export default function DisplayTypePlan() {
           {[
             { label: 'Dept Plan',   ok: status.dept_plan_ok },
             { label: 'MRP Plan',    ok: status.mrp_plan_ok  },
-            { label: 'Contributions', ok: status.contrib_imported, sub: status.contrib_rows ? `${status.contrib_rows} rows` : null },
+            { label: 'Table / Non-Table %', ok: status.contrib_ok, sub: status.contrib_ok ? 'from LY' : null },
             { label: 'ASP',         ok: status.asp_imported, sub: status.asp_rows ? `${status.asp_rows} rows` : null },
             { label: 'Plan Run',    ok: status.plan_run,   sub: status.plan_date || null },
             { label: 'Qty Run',     ok: status.qty_run,    sub: status.qty_date  || null },
@@ -220,16 +226,19 @@ export default function DisplayTypePlan() {
 
       {/* Uploads */}
       <div style={{ display: 'flex', gap: 14, marginBottom: 22 }}>
-        <UploadBox
-          label="Display Type Contributions"
-          subtitle="Store | Division | Department | MRP | Table% | Non-Table%"
-          endpoint="import/contributions"
-          onDone={loadStatus}
-          imported={status?.contrib_imported}
-          rows={status?.contrib_rows}
-          date={status?.contrib_date}
-          color={theme.primary}
-        />
+        {/* Table / Non-Table % are no longer uploaded (user, 2026-10-14: "Cont % should be according the Re-apportioned
+            MRPs and their respective Display types % as per LY sales") */}
+        <div style={{ flex: 1, border: `1px solid ${status?.contrib_ok ? theme.success : theme.border}`, borderRadius: 10, padding: '20px 22px',
+          background: status?.contrib_ok ? alpha(theme.success, '08') : theme.surface }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: theme.textPrimary, marginBottom: 3 }}>Table / Non-Table %</div>
+          <div style={{ fontSize: 11.5, color: theme.textMuted, lineHeight: 1.6 }}>
+            No upload: each store × department × new MRP × month splits by its own LY sales on that MRP by display type
+            (MRP Re-apportionment). A store that didn't sell the MRP that month takes its own mix over the months, then the chain's.
+          </div>
+          <div style={{ fontSize: 11, marginTop: 8, color: status?.contrib_ok ? theme.success : theme.danger }}>
+            {status ? (status.contrib_ok ? `From the ${status.contrib_from}` : `Not available: ${status.contrib_from}`) : ''}
+          </div>
+        </div>
         <UploadBox
           label="Month-wise ASP"
           subtitle="Division | Department | MRP | Display Type | Mar'27 | Apr'27 | …"
@@ -278,10 +287,10 @@ export default function DisplayTypePlan() {
       </div>
 
       {/* Tab bar */}
-      {(planResult || valResult) && (
+      {(
         <div style={{ display: 'flex', gap: 6, marginBottom: 20, borderBottom: `1px solid ${theme.border}`, paddingBottom: 0 }}>
           {[
-            ['plan',     '₹L Plan',    !!planResult],
+            ['plan',     '₹L Plan',    true],
             ['validate', 'Validation', !!valResult,  valResult?.errors > 0 ? theme.danger : valResult?.warnings > 0 ? '#D97706' : theme.success],
             ['qty',      'Qty Plan',   !!qtyResult],
           ].map(([k, lbl, enabled, accentC]) => (
@@ -305,13 +314,9 @@ export default function DisplayTypePlan() {
       )}
 
       {/* ── PLAN TAB ── */}
-      {tab === 'plan' && planResult && (
-        <PlanView rows={filtered} months={months} curMonth={curMonth} setFMonth={setFMonth}
-          stores={stores} fStore={fStore} setFStore={setFStore}
-          divs={divs} fDiv={fDiv} setFDiv={setFDiv}
-          depts={depts} fDept={fDept} setFDept={setFDept}
-          showQty={false}
-        />
+      {tab === 'plan' && (
+        <HierarchyView api="/api/planning/grain/display-view" levels={DT_FIELDS} defaults={['division', 'department', 'mrp', 'display']}
+          store="sp.dt" versions={false} halves />
       )}
 
       {/* ── VALIDATE TAB ── */}
@@ -329,12 +334,6 @@ export default function DisplayTypePlan() {
         />
       )}
 
-      {!planResult && !running && (
-        <div style={{ textAlign: 'center', padding: 60, color: theme.textMuted, fontSize: 13 }}>
-          {canRun ? 'Click "Run Plan" to compute Display Type plan.' : 'Import contributions above, then run plan.'}
-        </div>
-      )}
-      <GrainPanel stage="display" title="Display Type plan" />
     </div>
   )
 }

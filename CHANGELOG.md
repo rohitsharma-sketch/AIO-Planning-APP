@@ -7,6 +7,20 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Display Type Plan: Table / Non-Table % from the re-apportioned LY sales; the MRP plan broken by display type
+- **Asked (user):** "i will give the ASP file in an imported format everytime. Cont % should be according the Re-apportioned MRPs and their respective Display types % as per LY sales. the MRP plan should break and the it should be highlighted as per that only".
+- No contributions upload any more (`POST /display-type/import/contributions` and `dt_contributions.json` gone). Each store x department x new MRP x plan month splits by its own LY sales on that MRP by display type (MRP Re-apportionment's after side on the master in use, Unmapped left out). Fallbacks, first with sales: the store's mix over all months → the chain's that month → the chain's over all months → the department's → a new department takes its reference department's mix (as it takes its MRP split; LW_U_CORD SETS → L_EW_KURTI SET). `display_type_engine.display_shares`.
+- Run Plan (SSG stores, as before): 340,992 rows - 293,302 on the store's own month mix, 23,514 store all-months, 16,771 chain month, 2,669 chain, 4,736 reference; Table + Non-Table = the MRP plan in every row; Validate 0 errors, gate open (1,761 warnings = departments with no MRP split, as before).
+- ASP stays an import, every time; the match ignores case / spacing / 749 vs 749.0 / Table vs TABLE / Non-Table vs NON_TABLE.
+- The ₹L Plan tab is now the department view's tree with a Display type level (`/api/planning/grain/display-view/*`, all stores): Division › Department › MRP › Display type, filters, ⓘ pop-up (which LY mix each rupee used, check vs the MRP plan), Month / P1-P2, Export Excel. Ties to the MRP tree at every level (LY ₹46,333.86 L / TY ₹51,484.13 L); by display TABLE ₹13,162.5 L, NON_TABLE ₹35,546.7 L, not split ₹2,775.0 L (no MRP split / not planned). The Store / Cluster panel is replaced by it; Validate / Qty tabs stay.
+- The LY table is kept on disk (`Output/_display_ly.pkl`, keyed on the re-apportionment's inputs): first open after a restart 58 s → 8 s; 8010 builds it at start.
+- Status: "MRP Plan" now ticks off the split in use (it read the old mrp_plan.json).
+
+### Sales Plan route: chosen at the end of Final Results, opens the module
+- **Asked (user):** "this route should be a prompt which redirects to Article module or MRP module after the department plan is done and reviewed, it should be a redirection for the user to click on" and "After the toggle is promote to MRP and the MRP route is clicked from Article Name the landing page should be Buyer's input instead of the direct output page".
+- Final Results ends with "Department plan reviewed? Take it to the next stage": MRP plan → / Article Name plan → - saves the route and opens that module's Buyer's Input. The branch pages show which branch is in use with a link back to it (no toggle there). Article Name's after-promote button opens MRP Plan · Buyer's Input.
+- MRP Plan Output: a proxy error page (8010 restarting) is retried with "The planning server is restarting - trying again…" instead of "Unexpected token '<'".
+
 ### MRP Cont % rebuilt from the master in use (data, no code change)
 - **Asked (user):** "rebuild the mrp cont % from the master in use".
 - `POST /mrp-reapportionment/shares/rebuild` at 11:27 on mrp master.xlsx, actual LY sales Mar-Jun 2026; every check passed. 104 departments, 568 bands, every department x period 100%. 50 departments' shares moved, mostly from the "a sold MRP that is itself a new MRP stays listed" fix (ML_JEANS 749 Mar'27 P1 4.55% → 5.07%, 829 3.75% → 3.24%). MRP Output, the MRP tree, Display Type and Reconciliation read it at once.

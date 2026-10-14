@@ -747,6 +747,7 @@ def warm_hierarchy():
         from engines.plan_versions import totals
         totals(_cube())                           # the version bar's live totals
         _mrp_index(_cube(), _load_dept_attr_map(), False)   # month and P1 / P2
+        _display_index(_cube(), _load_dept_attr_map(), False)   # the Display Type tree on top of it
     except Exception:   # noqa: BLE001 - the page builds it on first use and shows any error itself
         pass
 
@@ -1442,6 +1443,163 @@ def get_mrp_explain(levels: str, path: str = "[]", filters: str = "{}", period: 
     lv, pth = _mrp_lv_path(levels, path, longest=1)
     c, am, hv = _cube(), _load_attr(), _halves(period)
     return explain_mrp(_mrp_index(c, am, hv), _index(c, am, hv), lv, pth, parse_filters(filters, MRP_LEVELS), hv)
+
+
+
+# ── Display Type plan as the department plan's tree (user, 2026-10-14: "Cont % should be according the Re-apportioned
+# MRPs and their respective Display types % as per LY sales. the MRP plan should break and it should be highlighted as
+# per that only") ───────────────────────────────────────────────────────────────────────────────────────────────────
+# The MRP tree's cells, each MRP broken into its display types by display_type_engine.display_shares (the store's own
+# LY mix on that new MRP that month, then the fallbacks there). LY and TY split by the same %, so a display type's Cont %
+# under its MRP is its LY share. "No MRP split" / "Not planned" rows keep display "-" so every level ties to the MRP plan.
+DT_LEVELS = ("cluster", "store", "stype", "division", "attribute", "department", "mrp", "display", "month")
+DT_LEVEL_NAME = {**MRP_LEVEL_NAME, "display": "Display type"}
+_dx: dict = {}
+
+
+def _display_index(cube: dict, attr_map: dict, halves: bool) -> dict:
+    import numpy as np
+    import pandas as pd
+    from engines.display_type_engine import display_shares, mix_key, MIX_NOTE
+    mi = _mrp_index(cube, attr_map, True)
+    key = (id(mi), mix_key())
+    if _dx.get("key") == key:
+        return _dx["v"][halves]
+    N = mi["names"]
+    df = pd.DataFrame({lv: np.asarray(N[lv], dtype=object)[mi["c"][lv]] for lv in ("store", "department", "mrp", "month")})
+    df["mo"] = df["month"].str.partition(" ")[0]
+    df["i"] = np.arange(len(df))
+    keys = df.loc[~df["mrp"].isin([NO_SPLIT, NOT_PLANNED]), ["store", "department", "mrp", "mo"]].drop_duplicates()
+    sh = display_shares(keys.rename(columns={"mo": "month"})).rename(columns={"month": "mo"})
+    j = df.merge(sh, on=["store", "department", "mrp", "mo"], how="left")
+    j["display"] = j["display"].fillna("-")
+    j["pct"] = j["pct"].fillna(100.0)
+    j["src"] = j["src"].fillna("none")
+    i, w = j["i"].to_numpy(), j["pct"].to_numpy(float) / 100
+    ly, ty = mi["ly"][i] * w, mi["ty"][i] * w
+    c = {lv: a[i] for lv, a in mi["c"].items()}
+    codes, uniq = pd.factorize(j["display"], sort=True)
+    names = {**N, "display": list(uniq)}
+    pos = {**mi["pos"], "display": {v: k for k, v in enumerate(uniq)}}
+    c["display"] = codes.astype(np.int32)
+    src = j["src"].to_numpy()
+    x = {f"src_{k}": np.where(src == k, ty, 0.0) for k in MIX_NOTE if k != "none"}
+    x["src_none"] = np.where((src == "none") & ~j["mrp"].isin([NO_SPLIT, NOT_PLANNED]).to_numpy(), ty, 0.0)
+    v = {"names": names, "pos": pos, "c": c, "ly": ly, "ty": ty, "x": x, "about": mi["about"], "source": mi["source"]}
+    both = {True: v, False: _unhalve(v)}
+    _dx.update(key=key, v=both)
+    return both[halves]
+
+
+def _dt_lv_path(levels: str, path: str, longest: int = 0):
+    lv = [x for x in levels.split(",") if x]
+    if not lv or len(set(lv)) != len(lv) or any(x not in DT_LEVELS for x in lv):
+        raise HTTPException(422, f"levels: pick from {', '.join(DT_LEVELS)}, each once")
+    try:
+        pth = json.loads(path)
+    except ValueError:
+        raise HTTPException(422, "path must be a JSON list")
+    if not isinstance(pth, list) or len(pth) >= len(lv) + longest:
+        raise HTTPException(422, "path too long for these levels")
+    return lv, [str(p) for p in pth]
+
+
+def _dt_about() -> str:
+    from engines.display_type_engine import mix_about
+    return mix_about()
+
+
+@router.get("/display-view/hierarchy")
+def get_dt_hierarchy(levels: str, path: str = "[]", filters: str = "{}", period: str = "month"):
+    lv, pth = _dt_lv_path(levels, path)
+    ix = _display_index(_cube(), _load_attr(), _halves(period))
+    return {**rows_of(ix, lv, pth, parse_filters(filters, DT_LEVELS)),
+            "source": {"kind": "display", "name": "Display Type plan",
+                       "note": f"the MRP plan split by display type on the {_dt_about()}"}}
+
+
+@router.get("/display-view/hierarchy-options")
+def get_dt_hierarchy_options(filters: str = "{}", level: str = "", period: str = "month"):
+    if level and level not in DT_LEVELS:
+        raise HTTPException(422, f"level: one of {', '.join(DT_LEVELS)}")
+    return values_of(_display_index(_cube(), _load_attr(), _halves(period)), parse_filters(filters, DT_LEVELS),
+                     [level] if level else DT_LEVELS)
+
+
+@router.get("/display-view/hierarchy-export")
+def get_dt_hierarchy_export(levels: str, filters: str = "{}", period: str = "month"):
+    lv, _ = _dt_lv_path(levels, "[]")
+    f = parse_filters(filters, DT_LEVELS)
+    ix = _display_index(_cube(), _load_attr(), _halves(period))
+    data = tree_xlsx(ix, lv, DT_LEVEL_NAME, f, ("LY (₹L)", "TY (₹L)", "Growth %"), "Display Type plan",
+                     export_about(lv, DT_LEVEL_NAME, f, period, f"the MRP plan (split by {ix['source']})",
+                                  [("Display type %", f"each store x department x MRP x month's LY mix by display type - {_dt_about()}")]))
+    return xlsx_response(data, f"Display Type plan{' P1-P2' if period == 'half' else ''}.xlsx")
+
+
+def explain_display(ix: dict, mx: dict, levels: list, path: list, filt: dict | None, halves: bool) -> dict:
+    """Pure (on the indexes). How the Display tree's row at `path` gets its numbers; mx = the MRP tree's index of the
+    same period, for the check that the display types add back to the MRP plan."""
+    import numpy as np
+    from engines.display_type_engine import MIX_NOTE
+    want = dict(zip(levels, path))
+    m = _mask(ix, want, filt)
+    LY, TY = float(ix["ly"][m].sum()), float(ix["ty"][m].sum())
+    label = " · ".join(str(x) for x in path) if path else "The total"
+    out = {"label": label, "path": [{"level": lv, "value": v} for lv, v in zip(levels, path)], "ly": LY, "ty": TY,
+           "growth": (TY / LY - 1) * 100 if LY else None, "source": f"the MRP plan split by display type on the {_dt_about()}"}
+    g, n = ix["c"]["month"][m], len(ix["names"]["month"])
+    Lm, Tm = np.bincount(g, weights=ix["ly"][m], minlength=n), np.bincount(g, weights=ix["ty"][m], minlength=n)
+    per = sorted(((ix["names"]["month"][k], float(Lm[k]), float(Tm[k])) for k in np.unique(g)), key=lambda x: month_key(x[0]))
+    out["months"] = [{"month": k, "ly": a, "ty": b} for k, a, b in per]
+    lines = []
+    say = lambda h, t: lines.append({"h": h, "t": t})   # noqa: E731
+    if filt:
+        say("Filters on", "; ".join(f"{DT_LEVEL_NAME.get(k, k)}: {', '.join(sorted(v))}" for k, v in filt.items())
+            + " - every figure here is inside them.")
+    say("The number", f"{label} plans ₹{_inr(TY)} L this year against ₹{_inr(LY)} L last year"
+        + (f", over {', '.join(k for k, _, _ in per)}." if per else "."))
+    if LY:
+        say("Growth %", f"₹{_inr(TY)} ÷ ₹{_inr(LY)} − 1 = {out['growth']:+.1f}%.")
+    if path:
+        pty = float(ix["ty"][_mask(ix, dict(zip(levels, path[:-1])), filt)].sum())
+        plabel = " · ".join(str(x) for x in path[:-1]) or "the whole plan"
+        out["parent"], out["cont"] = {"label": plabel, "ty": pty}, (TY / pty * 100 if pty else None)
+        if pty:
+            say("Cont %", f"its share of the level above ({plabel}): ₹{_inr(TY)} ÷ ₹{_inr(pty)} = {out['cont']:.1f}%.")
+    d = want.get("display")
+    if d and d != "-":
+        mw = {k: v for k, v in want.items() if k != "display"}
+        mf = {k: v for k, v in (filt or {}).items() if k != "display"}
+        base = float(ix["ty"][_mask(ix, mw, mf)].sum())
+        say("Display split", f"{d} is {TY / base * 100 if base else 0:.1f}% of the MRP plan here (₹{_inr(TY)} of ₹{_inr(base)}): "
+            f"each store's MRP plan x {d}'s share of its LY sales on that new MRP and month ({_dt_about()}).")
+    elif d != "-":
+        say("Display split", "each store x department x MRP x month's plan is split over the display types by that "
+            f"store's LY sales on the new MRP that month, by display type ({_dt_about()}).")
+    used = [(MIX_NOTE[k], float(ix["x"][f"src_{k}"][m].sum())) for k in MIX_NOTE]
+    used = [(t, v) for t, v in used if abs(v) > 0.05]
+    if used and d != "-":
+        say("Which LY mix", "; ".join(f"₹{_inr(v)} L on {t}" for t, v in used) + ".")
+    dash = float(ix["ty"][m & (ix["c"]["display"] == ix["pos"]["display"].get("-", -1))].sum())
+    if d == "-" or abs(dash) > 0.005:
+        say("Not split", f"₹{_inr(dash)} L has no display type: departments / months with no MRP split, departments "
+            "not planned, or a department with no LY on the re-apportioned MRPs at all.")
+    if "display" not in want and "display" not in (filt or {}):
+        dt = float(mx["ty"][_mask(mx, want, filt)].sum())
+        say("Check", f"the display types add back to the MRP plan: ₹{_inr(TY)} = ₹{_inr(dt)}"
+            + (" ✓" if abs(TY - dt) < 0.005 else f" - off by ₹{_inr(TY - dt)} L"))
+    else:
+        say("Check", f"₹{_inr(TY)} - the number on screen ✓")
+    out["lines"] = lines
+    return out
+
+
+@router.get("/display-view/explain")
+def get_dt_explain(levels: str, path: str = "[]", filters: str = "{}", period: str = "month"):
+    lv, pth = _dt_lv_path(levels, path, longest=1)
+    c, am, hv = _cube(), _load_attr(), _halves(period)
+    return explain_display(_display_index(c, am, hv), _mrp_index(c, am, hv), lv, pth, parse_filters(filters, DT_LEVELS), hv)
 
 
 _register_live_cube()

@@ -190,20 +190,28 @@ export default function MrpOutput() {
   }, [])
 
   useEffect(() => {
-    fetch('/api/planning/mrp-plan/data')
-      .then(r => r.ok ? r.json() : r.json().then(e => { throw new Error(e.detail) }))
-      .then(d => { setData(d); setLoading(false) })
-      .catch(e => { setErr(e.message); setLoading(false) })
+    // a proxy error page (8010 restarting - Landing answers 502 in HTML) is retried, not shown as a JSON error (2026-10-14)
+    const load = async (left = 8) => {
+      const r = await fetch('/api/planning/mrp-plan/data').catch(() => null)
+      if (!r || !(r.headers.get('content-type') || '').includes('json')) {
+        if (left > 0) { setErr(''); setLoading('restart'); setTimeout(() => load(left - 1), 5000); return }
+        throw new Error('The planning server is restarting or unreachable - reload the page in a minute.')
+      }
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`)
+      setData(d); setLoading(false)
+    }
+    load().catch(e => { setErr(e.message); setLoading(false) })
   }, [])
 
-  if (loading) return <div style={{ padding: '28px 32px', color: theme.textMuted, fontSize: 13 }}>Loading MRP plan…</div>
+  if (loading) return <div style={{ padding: '28px 32px', color: theme.textMuted, fontSize: 13 }}>{loading === 'restart' ? 'The planning server is restarting - trying again…' : 'Loading MRP plan…'}</div>
 
   if (err) return (
     <div style={{ padding: '28px 32px' }}>
       <div style={{ padding: 32, background: theme.surface, borderRadius: 12, border: `1px solid ${theme.border}`, textAlign: 'center' }}>
         <div style={{ fontSize: 28, marginBottom: 10 }}>📦</div>
         <div style={{ fontSize: 14, color: theme.danger, fontWeight: 600, marginBottom: 6 }}>{err}</div>
-        <div style={{ fontSize: 12, color: theme.textMuted }}>Go to MRP Plan → Import to upload buyer MRP data.</div>
+        {!/server/.test(err) && <div style={{ fontSize: 12, color: theme.textMuted }}>MRP Plan → Buyer's Input sets where the MRP Cont % comes from.</div>}
       </div>
     </div>
   )

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { theme } from '../theme'
 import HierarchyView from '../components/HierarchyView'
+import { RoutePrompt } from '../components/RouteBar'
 
 // user, 2026-10-13: "remove multiple views just keep the hierarchial view so that any view can be drilled down to" - the
 // Store / Department / Cluster / Dashboard views are gone; the Hierarchy view reaches every one of them (pick the levels
@@ -48,6 +49,7 @@ export default function FinalResults() {
       )}
 
       <HierarchyView halves />
+      <RoutePrompt />
     </div>
   )
 }

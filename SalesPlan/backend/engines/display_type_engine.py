@@ -3,9 +3,10 @@
 #
 # Sources:
 #   final_dept_plan.json  — store × div × dept × month → ty_p1, ty_p2 (₹L)
-#   mrp_plan.json         — div × dept × mrp × period  → contrib%
-#   dt_contributions.json — store × div × dept × mrp   → {table%, nontable%}  (user upload)
-#   dt_asp.json           — div × dept × mrp × dt × month → ASP ₹              (user upload)
+#   MRP split             — effective_shares(): div × dept × mrp × period → contrib%
+#   Table / Non-Table %   — store × dept × new MRP × month: its LY sales on the re-apportioned MRPs by display type
+#                           (MRP Re-apportionment, the master in use) - no upload (user, 2026-10-14)
+#   dt_asp.json           — div × dept × mrp × dt × month → ASP ₹              (user upload, every time)
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
@@ -20,9 +21,6 @@ router = APIRouter()
 
 _BASE          = os.path.dirname(__file__)
 _PARENT        = os.path.join(_BASE, "..")
-FINAL_PLAN_PATH = os.path.join(_PARENT, "final_dept_plan.json")
-MRP_PLAN_PATH   = os.path.join(_BASE,  "mrp_plan.json")
-DT_CONTRIB_PATH = os.path.join(_PARENT, "dt_contributions.json")
 DT_ASP_PATH     = os.path.join(_PARENT, "dt_asp.json")
 DT_RESULT_PATH  = os.path.join(_PARENT, "dt_plan_result.json")
 DT_QTY_PATH     = os.path.join(_PARENT, "dt_qty_result.json")
@@ -68,18 +66,23 @@ def _derive_months(mrp_plan: dict) -> list[str]:
 
 @router.get("/status")
 def status():
-    contrib = _load(DT_CONTRIB_PATH)
     asp     = _load(DT_ASP_PATH)
     result  = _load(DT_RESULT_PATH)
     qty     = _load(DT_QTY_PATH)
-    fp      = _load(FINAL_PLAN_PATH)
-    mrp     = _load(MRP_PLAN_PATH)
+    try:   # the MRP split every MRP reader uses (mrp_plan.json alone is gone since the re-apportioned shares, 2026-10-14)
+        from engines.mrp_plan_engine import effective_shares
+        mrp_ok = bool(effective_shares()[0])
+    except Exception:   # noqa: BLE001
+        mrp_ok = False
+    try:
+        contrib_ok, contrib_from = True, mix_about()
+    except Exception as e:   # noqa: BLE001 - no master / sales yet: the page says why
+        contrib_ok, contrib_from = False, str(getattr(e, "detail", e))
     return {
-        "dept_plan_ok":    fp is not None,
-        "mrp_plan_ok":     mrp is not None,
-        "contrib_imported": contrib is not None,
-        "contrib_rows":     contrib.get("count", 0) if contrib else 0,
-        "contrib_date":     contrib.get("imported_at", "") if contrib else "",
+        "dept_plan_ok":    _dept_plan() is not None,
+        "mrp_plan_ok":     mrp_ok,
+        "contrib_ok":      contrib_ok,
+        "contrib_from":    contrib_from,
         "asp_imported":    asp is not None,
         "asp_rows":        asp.get("count", 0) if asp else 0,
         "asp_date":        asp.get("imported_at", "") if asp else "",
@@ -90,55 +93,115 @@ def status():
     }
 
 
-# ── contribution import ─────────────────────────────────────────────────────────
-# Expected columns: Store | Division | Department | MRP | Table% | Non-Table%
+# ── Table / Non-Table % from the re-apportioned LY sales ───────────────────────
+# user, 2026-10-14: "Cont % should be according the Re-apportioned MRPs and their respective Display types % as per LY
+# sales. the MRP plan should break and it should be highlighted as per that only" - no contributions upload any more.
+# Each store x department x new MRP x plan month splits by its own LY sales on that MRP by display type (the MRP
+# Re-apportionment's after side on the master in use, Unmapped left out). Where that store didn't sell the MRP that
+# month: its own mix over all the months, then the chain's that month, the chain's over all months, then the
+# department's - the first that has sales.
+MIX_LEVELS = (("store-month", ["store", "department", "mrp", "month"]),
+              ("store", ["store", "department", "mrp"]),
+              ("chain-month", ["department", "mrp", "month"]),
+              ("chain", ["department", "mrp"]),
+              ("department-month", ["department", "month"]),
+              ("department", ["department"]))
+MIX_NOTE = {"store-month": "the store's own LY mix of that MRP that month",
+            "store": "the store's own LY mix of that MRP over all the months (none sold that month)",
+            "chain-month": "the chain's LY mix of that MRP that month (the store didn't sell it)",
+            "chain": "the chain's LY mix of that MRP over all the months",
+            "department-month": "the department's LY mix that month (no LY on that MRP anywhere)",
+            "department": "the department's LY mix over all the months",
+            "reference": "its reference department's mix (a new department with no LY of its own, as its MRP split)",
+            "none": "no LY sales in the department at all - not split"}
+_MIX: dict = {}
 
-@router.post("/import/contributions")
-async def import_contributions(file: UploadFile = File(...)):
-    raw = await file.read()
+
+def mix_key():
+    from engines.mrp_reapportionment_engine import compare_key
+    return compare_key()
+
+
+def mix_about() -> str:
+    """Which re-apportionment the split is read from - cheap (no run)."""
+    k = mix_key()
+    return f"re-apportioned LY sales on {os.path.basename(k[1])}, {k[0][3]} basis"
+
+
+def _mix_tables() -> dict:
+    """LY sales on the new MRPs per store x department x MRP x display x plan month, as % tables per fallback level."""
+    from engines.mrp_reapportionment_engine import _compare, _plan_period
+    key = mix_key()
+    if _MIX.get("key") == key:
+        return _MIX["v"]
+    # the LY table is kept on disk for the re-apportionment's inputs, so a restart doesn't re-run it (~40 s; 2026-10-14)
+    from engines.mrp_reapportionment_engine import OUTPUT_DIR
+    path = os.path.join(OUTPUT_DIR, "_display_ly.pkl")
+    g = None
     try:
-        df = pd.read_excel(io.BytesIO(raw)) if not file.filename.endswith(".csv") else pd.read_csv(io.BytesIO(raw))
-        df.columns = [str(c).strip() for c in df.columns]
-    except Exception as e:
-        raise HTTPException(400, f"Parse error: {e}")
+        disk = pd.read_pickle(path)   # written below by this server only
+        if disk.get("key") == key:
+            g = disk["g"]
+    except Exception:   # noqa: BLE001 - none yet / unreadable: build it
+        pass
+    if g is None:
+        c = _compare()
+        f = c["flows"]
+        f = f[f["new"] != "Unmapped"]
+        g = f.groupby(["store", "department", "new", "display", "month"], as_index=False, sort=False)["v"].sum()
+        g = g[g["v"] > 0].rename(columns={"new": "mrp"})
+        g["month"] = g["month"].map({m: _plan_period(m) for m in g["month"].unique()})
+        try:
+            pd.to_pickle({"key": key, "g": g}, path)
+        except OSError:
+            pass
+    tabs = []
+    for name, ks in MIX_LEVELS:
+        t = g.groupby(ks + ["display"], as_index=False, sort=False)["v"].sum()
+        t["pct"] = t["v"] / t.groupby(ks)["v"].transform("sum") * 100
+        tabs.append((name, ks, t[ks + ["display", "pct"]]))
+    v = {"tabs": tabs, "displays": sorted(g["display"].unique())}
+    _MIX.update(key=key, v=v)
+    return v
 
-    col_map = {}
-    for c in df.columns:
-        cu = c.strip().upper()
-        if cu == "STORE":               col_map[c] = "store"
-        elif cu in ("DIVISION","DIV"):  col_map[c] = "division"
-        elif cu in ("DEPARTMENT","DEPT"): col_map[c] = "dept"
-        elif cu in ("MRP","FINAL MRP","PRICE"): col_map[c] = "mrp"
-        elif "TABLE" in cu and "NON" not in cu and "%" in cu: col_map[c] = "table_pct"
-        elif "NON" in cu and "TABLE" in cu:                   col_map[c] = "nontable_pct"
-        elif cu == "TABLE%":   col_map[c] = "table_pct"
-        elif cu == "NON-TABLE%" or cu == "NONTABLE%": col_map[c] = "nontable_pct"
-    df = df.rename(columns=col_map)
 
-    required = {"store", "division", "dept", "mrp", "table_pct", "nontable_pct"}
-    missing = required - set(df.columns)
-    if missing:
-        raise HTTPException(400, f"Missing columns: {missing}. Got: {list(df.columns)}")
+def display_shares(keys: pd.DataFrame, _ref: bool = True) -> pd.DataFrame:
+    """keys: store, department, mrp, month (plan month) -> one row per key x display: + pct (adds to 100 per key) and
+    src (the MIX_LEVELS level it came from, or "reference": a new department with no LY takes its reference
+    department's mix, as it takes its MRP split - effective_shares). A key with no LY anywhere is not returned."""
+    K = ["store", "department", "mrp", "month"]
+    left = keys[K].drop_duplicates().reset_index(drop=True)
+    out = []
+    for name, ks, t in _mix_tables()["tabs"]:
+        if left.empty:
+            break
+        hit = left.merge(t, on=ks)
+        if len(hit):
+            out.append(hit.assign(src=name))
+            left = left.merge(hit[K].drop_duplicates(), on=K, how="left", indicator=True)
+            left = left[left["_merge"] == "left_only"].drop(columns="_merge")
+    if _ref and not left.empty:
+        from engines.mrp_plan_engine import effective_shares
+        refs = {k.split("|", 1)[-1]: v for k, v in (effective_shares()[1] or {}).items()}
+        lr = left[left["department"].isin(refs)]
+        if len(lr):
+            lr = lr.assign(orig=lr["department"], department=lr["department"].map(refs))
+            r = display_shares(lr, _ref=False)
+            if len(r):
+                r = r.merge(lr[K + ["orig"]], on=K).assign(department=lambda d: d["orig"], src="reference")
+                out.append(r.drop(columns="orig"))
+    return pd.concat(out, ignore_index=True) if out else pd.DataFrame(columns=K + ["display", "pct", "src"])
 
-    records = {}  # (store, div, dept, mrp) → {table_pct, nontable_pct}
-    for _, r in df.iterrows():
-        store = str(r["store"]).strip()
-        div   = str(r["division"]).strip()
-        dept  = str(r["dept"]).strip()
-        mrp   = str(r["mrp"]).strip()
-        if not store or store == "nan": continue
-        try: tbl = float(r["table_pct"])
-        except: tbl = 0.0
-        try: ntbl = float(r["nontable_pct"])
-        except: ntbl = 0.0
-        records[f"{store}|{div}|{dept}|{mrp}"] = {
-            "store": store, "division": div, "dept": dept, "mrp": mrp,
-            "table_pct": round(tbl, 4), "nontable_pct": round(ntbl, 4),
-        }
 
-    out = {"imported_at": _ts(), "source": file.filename, "count": len(records), "data": records}
-    _save(DT_CONTRIB_PATH, out)
-    return {"ok": True, "rows": len(records)}
+def _asp_key(div, dept, mrp, dt) -> str:
+    """One spelling for the ASP match: case / spaces off, MRP as a whole number (749.0 -> 749), display type as the LY
+    data writes it (Table / TABLE -> TABLE, Non-Table / NON TABLE / NON_TABLE -> NON_TABLE) - 2026-10-14."""
+    try:
+        mrp = str(int(round(float(mrp))))
+    except (TypeError, ValueError):
+        mrp = str(mrp).strip()
+    d = str(dt).strip().upper().replace("-", "_").replace(" ", "_")
+    return "|".join((str(div).strip().upper(), str(dept).strip().upper(), mrp, d))
 
 
 # ── ASP import ─────────────────────────────────────────────────────────────────
@@ -176,7 +239,7 @@ async def import_asp(file: UploadFile = File(...)):
         for m in month_cols:
             try: month_vals[m] = float(r[m])
             except: month_vals[m] = 0.0
-        records[f"{div}|{dept}|{mrp}|{dt}"] = {
+        records[_asp_key(div, dept, mrp, dt)] = {
             "division": div, "dept": dept, "mrp": mrp, "display_type": dt,
             "months": month_vals,
         }
@@ -203,13 +266,9 @@ def run_plan():
     fp      = _dept_plan()
     from engines.mrp_plan_engine import effective_shares   # the same MRP split as MRP Output (2026-10-13)
     mrp_raw = effective_shares()[0] or None   # the buyers' split, or the promoted Article Name one
-    contrib = _load(DT_CONTRIB_PATH)
-
     if not fp:      raise HTTPException(400, "final_dept_plan not found")
-    if not mrp_raw: raise HTTPException(400, "mrp_plan not found")
-    if not contrib: raise HTTPException(400, "Contributions not imported")
+    if not mrp_raw: raise HTTPException(400, "No MRP split - MRP Plan · Buyer's Input")
 
-    contrib_data = contrib["data"]
     months = _derive_months(mrp_raw)
 
     rows = []
@@ -232,29 +291,30 @@ def run_plan():
                     s2 = split(ty_p2, {m: pm.get(f"{month} P2", 0.0) for m, pm in mrp_dept.items()})
 
                     for mrp_str in mrp_dept:
-                        mrp_plan_rs = s1[mrp_str] + s2[mrp_str]
-
-                        ck = f"{store}|{div}|{dept}|{mrp_str}"
-                        c  = contrib_data.get(ck, {})
-                        tbl_pct  = c.get("table_pct",    0.0)
-                        ntbl_pct = c.get("nontable_pct", 0.0)
-                        has_contrib = bool(c) and (tbl_pct + ntbl_pct) > 0
-                        # Table / Non-Table add back to the MRP plan exactly
-                        dt = split(mrp_plan_rs, {"t": tbl_pct, "n": ntbl_pct})
-
                         rows.append({
                             "store": store, "division": div, "dept": dept, "mrp": mrp_str,
                             "month": month,
                             "ty_p1": ty_p1, "ty_p2": ty_p2,
-                            "mrp_plan": mrp_plan_rs,
-                            "table_contrib":    tbl_pct,
-                            "nontable_contrib": ntbl_pct,
-                            "table_plan":    dt["t"],
-                            "nontable_plan": dt["n"],
-                            "has_contrib": has_contrib,
+                            "mrp_plan": s1[mrp_str] + s2[mrp_str],
                         })
 
-    out = {"run_at": _ts(), "months": months, "rows": rows}
+    # Table / Non-Table % of each row from the re-apportioned LY sales (2026-10-14); they add back to the MRP plan exactly
+    try:
+        sh = display_shares(pd.DataFrame({"store": [r["store"] for r in rows], "department": [r["dept"] for r in rows],
+                                          "mrp": [r["mrp"] for r in rows], "month": [r["month"] for r in rows]}))
+    except HTTPException as e:
+        raise HTTPException(409, f"Table / Non-Table % come from the MRP Re-apportionment: {e.detail}")
+    pv = {}
+    for st, dp, mr, mo, d, pc, src in sh[["store", "department", "mrp", "month", "display", "pct", "src"]].itertuples(index=False):
+        pv.setdefault((st, dp, mr, mo), {"src": src})[d] = pc
+    for r in rows:
+        c = pv.get((r["store"], r["dept"], r["mrp"], r["month"]), {})
+        tbl_pct, ntbl_pct = c.get("TABLE", 0.0), c.get("NON_TABLE", 0.0)
+        dt = split(r["mrp_plan"], {"t": tbl_pct, "n": ntbl_pct})
+        r.update(table_contrib=tbl_pct, nontable_contrib=ntbl_pct, table_plan=dt["t"], nontable_plan=dt["n"],
+                 has_contrib=(tbl_pct + ntbl_pct) > 0, contrib_from=c.get("src", "none"))
+
+    out = {"run_at": _ts(), "months": months, "rows": rows, "contrib_from": mix_about()}
     _save(DT_RESULT_PATH, out)
     return {"ok": True, "rows": len(rows), "months": months}
 
@@ -297,9 +357,9 @@ def validate():
                 "expected": round(r["mrp_plan"], 4), "actual": 0.0,
                 "gap": round(r["mrp_plan"], 4),
                 "message": (
-                    f"No Display Type contribution defined for "
-                    f"{r['store']} / {r['dept']} / MRP ₹{r['mrp']} in {r['month']}. "
-                    f"Full MRP plan of ₹{r['mrp_plan']:.2f}L is unallocated."
+                    f"{r['dept']} has no LY sales on the re-apportioned MRPs at all, so "
+                    f"{r['store']} / MRP ₹{r['mrp']} in {r['month']} has no Table / Non-Table split - "
+                    f"₹{r['mrp_plan']:.2f}L is unallocated."
                 ),
             })
         elif gap > TOLS:
@@ -318,30 +378,6 @@ def validate():
                     f"{'remaining ' + str(round(100 - contrib_sum, 1)) + '% unallocated' if contrib_sum < 100 else 'over-allocated by ' + str(round(contrib_sum - 100, 1)) + '%'}."
                 ),
             })
-
-    # 2. Contribution sum check
-    seen_contrib = set()
-    contrib_data = (_load(DT_CONTRIB_PATH) or {}).get("data", {})
-    for ck, c in contrib_data.items():
-        total = c.get("table_pct", 0) + c.get("nontable_pct", 0)
-        if abs(total - 100) > 0.05:
-            key = f"{c['store']}|{c['dept']}|{c['mrp']}"
-            if key not in seen_contrib:
-                seen_contrib.add(key)
-                anomalies.append({
-                    "level": "Contribution Sum",
-                    "severity": "warning",
-                    "store": c["store"], "division": c.get("division",""),
-                    "dept": c["dept"], "mrp": c["mrp"], "month": "—",
-                    "expected": 100.0, "actual": round(total, 2),
-                    "gap": round(total - 100, 2),
-                    "message": (
-                        f"Contribution for {c['store']} / {c['dept']} / MRP ₹{c['mrp']} "
-                        f"sums to {total:.1f}% — "
-                        f"{'remaining ' + str(round(100 - total, 1)) + '% unallocated' if total < 100 else 'over-allocated by ' + str(round(total - 100, 1)) + '%'}. "
-                        f"Assign the balance to Table or Non-Table."
-                    ),
-                })
 
     # 3. MRP → Dept check per store × month
     from collections import defaultdict
@@ -427,8 +463,7 @@ def run_qty():
     asp_data = asp["data"]
 
     def get_asp(div, dept, mrp, dt, month):
-        k = f"{div}|{dept}|{mrp}|{dt}"
-        rec = asp_data.get(k, {})
+        rec = asp_data.get(_asp_key(div, dept, mrp, dt)) or asp_data.get(f"{div}|{dept}|{mrp}|{dt}", {})
         val = rec.get("months", {}).get(month, 0.0)
         return val
 
