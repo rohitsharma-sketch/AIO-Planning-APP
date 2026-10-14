@@ -948,6 +948,8 @@ def _run_engine():
     _step("Saving", 94)
     with open(out_path, "wb") as f:
         f.write(xlsx_bytes)
+    if checks_pass:   # the MRP Cont % MRP Plan reads by default: this run's shares (2026-10-14)
+        _save_shares(output_df, month_cols, f"run {out_filename}")
 
     preview = []
     if not output_df.empty:
@@ -1319,3 +1321,80 @@ def get_compare_summary():
     """Before / after / unmapped totals of the master in use (no run needed)."""
     c = _compare()
     return {k: c[k] for k in ("before", "after", "unmapped", "months", "master")}
+
+
+# ── MRP Cont % from the re-apportioned sales (user, 2026-10-14: "i want the user to be asked to either drop a file for
+# cont % or by default the cont % for the re-apportioned sales will be taken ... how can i point to the latest version of
+# the re-apportionment run in the engine, find a way to easily carry this out") ─────────────────────────────────────
+# Every run whose checks pass saves its shares: per division x department x new MRP, each month's re-apportioned LY sales
+# as % of the department's (Unmapped left out - it is on no new MRP), the month put on its plan period (Mar 2026 / Mar
+# 2027 -> "Mar'27 P1" and "P2", the same % in both halves). MRP Plan's Buyer's Input reads them by default.
+
+SHARES_PATH = os.path.join(OUTPUT_DIR, "_reapp_shares.json")
+
+
+def _plan_period(label: str) -> str:
+    """'Mar 2026' (actual LY) or 'Mar 2027' (reindexed) -> "Mar'27" - the plan month it is the base of."""
+    d = datetime.datetime.strptime(label, "%b %Y")
+    return f"{d:%b}'{(d.year + (1 if d.year < 2027 else 0)) % 100:02d}"
+
+
+def shares_from_output(output_df: pd.DataFrame, month_cols: list) -> dict:
+    """Pure. {DIVISION: {DEPARTMENT: {"MRP": {"Mar'27 P1": %, "Mar'27 P2": %, ...}}}} - each month's shares add to 100."""
+    g = output_df.groupby(["DIVISION", "DEPARTMENT", "LISTED_MRP"])[month_cols].sum()
+    out = {}
+    for m in month_cols:
+        tot = g[m].groupby(level=[0, 1]).transform("sum")
+        pct = (g[m] / tot * 100.0).where(tot > 0)
+        per = _plan_period(m)
+        for (dv, dp, mrp), v in pct.items():
+            if v == v and v > 0:
+                cell = out.setdefault(str(dv), {}).setdefault(str(dp), {}).setdefault(str(int(mrp)), {})
+                cell[f"{per} P1"] = cell[f"{per} P2"] = float(v)
+    return out
+
+
+def _save_shares(output_df, month_cols, source: str):
+    sh = shares_from_output(output_df, month_cols)
+    save_json(SHARES_PATH, {"built_at": datetime.datetime.now().isoformat(timespec="seconds"), "source": source,
+                            "basis": get_basis(), "master": os.path.basename(_find_mapping_file() or ""),
+                            "months": month_cols, "departments": sum(len(d) for d in sh.values()), "shares": sh})
+    return sh
+
+
+def read_shares() -> Optional[dict]:
+    try:
+        with open(SHARES_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+@router.get("/shares-status")
+def get_shares_status():
+    """The MRP shares the latest passed run saved (what MRP Plan reads by default)."""
+    s = read_shares()
+    if not s:
+        return {"built": False}
+    return {"built": True, **{k: s.get(k) for k in ("built_at", "source", "basis", "master", "months", "departments")}}
+
+
+@router.post("/shares/rebuild")
+def rebuild_shares():
+    """The shares of the master in use on today's sales, without the Excel of a full run (same rule, same checks)."""
+    if not _BUSY.acquire(blocking=False):
+        raise HTTPException(409, "A run or an import is in progress - wait for it")
+    try:
+        bad = [c for c in _pre_checks() if c["status"] == "fail"]
+        if bad:
+            raise HTTPException(409, f"{bad[0]['label']}: {bad[0]['detail']} - {bad[0]['fix']}")
+        mp = _load_mapping()
+        sales, months, _ = _mapped_sales(mp)
+        out, unm, _ = _redistribute(sales, mp, months)
+        val_rows, ok = _validate(sales, out, months, unm)
+        if not ok or any(c["status"] != "ok" for c in _post_checks(sales, out, unm, months, mp, ok)):
+            raise HTTPException(500, "The re-apportionment checks failed - not saved; run it from the page to see why")
+        _save_shares(out, months, "built from the master in use")
+        return get_shares_status()
+    finally:
+        _BUSY.release()

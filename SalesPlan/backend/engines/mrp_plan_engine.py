@@ -61,11 +61,66 @@ def _normalize_period_header(h: str) -> str:
     return h
 
 
-def _load() -> dict:
+# Where the MRP Cont % comes from (user, 2026-10-14: "either drop a file for cont % or by default the cont % for the
+# re-apportioned sales will be taken, this is an optional scenario now"): "reapp" (default) = the shares the latest
+# passed MRP re-apportionment run saved (LY sales on the new MRP structure); "file" = the buyers' MRP Cont % file.
+SOURCE_PATH = os.path.join(os.path.dirname(__file__), "..", "mrp_source.json")
+
+
+def get_source() -> str:
+    try:
+        with open(SOURCE_PATH, encoding="utf-8") as f:
+            s = json.load(f).get("source")
+    except (OSError, ValueError):
+        s = None
+    return s if s in ("reapp", "file") else "reapp"
+
+
+def _file_shares() -> dict:
     if os.path.exists(DATA_PATH):
         with open(DATA_PATH) as f:
             return json.load(f)
     return {}
+
+
+def _reapp_shares() -> dict | None:
+    try:
+        from engines.mrp_reapportionment_engine import read_shares
+        s = read_shares()
+    except Exception:   # noqa: BLE001
+        s = None
+    return (s or {}).get("shares") or None
+
+
+def _load() -> dict:
+    """The MRP Cont % in use: the re-apportionment's shares by default, the buyers' file when picked (or when no run has
+    saved shares yet)."""
+    if get_source() == "reapp":
+        r = _reapp_shares()
+        if r:   # a department the run doesn't cover keeps the buyers' file shares, if synced
+            out = {dv: dict(d) for dv, d in _file_shares().items()}
+            for dv, d in r.items():
+                out.setdefault(dv, {}).update(d)
+            return out
+    return _file_shares()
+
+
+@router.get("/source")
+def get_mrp_source():
+    from engines.mrp_reapportionment_engine import get_shares_status
+    r = _reapp_shares()
+    src = get_source()
+    return {"source": src, "in_use": "reapp" if src == "reapp" and r else "file" if _file_shares() else None,
+            "reapp": get_shares_status(), "file": {"imported": bool(_file_shares())}}
+
+
+@router.post("/source")
+def set_mrp_source(body: dict):
+    s = body.get("source")
+    if s not in ("reapp", "file"):
+        raise HTTPException(422, "source: reapp or file")
+    save_json(SOURCE_PATH, {"source": s})
+    return get_mrp_source()
 
 
 def _save(data: dict):

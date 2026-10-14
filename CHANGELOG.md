@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Sales Plan MRP Plan: MRP Cont % from the re-apportioned sales by default; the buyers' file optional
+- **Asked (user):** "i want the user to be asked to either drop a file for cont % or by default the cont % for the re-apportioned sales will be taken, this is an optional scenario now" and "upon running the new re-apportionment how will the user get its benefits ... how can i point to the latest version of the re-apportionment run in the engine, find a way to easily carry this out".
+- Every MRP re-apportionment run whose checks pass saves its MRP shares (`Output/_reapp_shares.json`: per division x department x new MRP, each month's re-apportioned LY sales as % of the department, on its plan period - same % in P1 and P2; Unmapped left out). `POST /api/planning/mrp-reapportionment/shares/rebuild` builds them from the master in use without a full run (same rule and checks); `GET /shares-status`.
+- MRP Plan reads them by default (`mrp_plan_engine.get_source()` = "reapp", `backend/mrp_source.json`; `GET/POST /api/planning/mrp-plan/source`): a department the run doesn't cover keeps the buyers' file share if one is synced; picking "Buyer's MRP Cont % file" uses the file as before. Buyer's Input shows the choice, which run is in use (master, basis, months, departments) and Rebuild from the master in use - so the latest run flows into MRP Output, Display Type and Reconciliation by itself.
+- Built from the master in use (mrp master.xlsx, imported by the user): 104 departments; MRP Output on them: 576 bands, every department's shares 100% and its bands = its plan (largest difference 0.0000000000002 L); 74 departments (₹2,775 L) are outside the master - no split until the master or a buyers' file covers them.
+
 ### STR Forecaster: band table counts department x month; a click shows and highlights the matching months
 - **Asked (user):** "i want total month x count instead of focusing on avg for this so that every month's count is there in this table and when upon clicking the data should be populated for that branch only and it should get highlighted wherever it meets the criteria ... if mar, may and june have 60 for a combination they should get highlighted ... instead of avg".
 - The table is now "Department × month by band": each department x month counts once in that month's band (MENS / LADIES / KIDS / All, then a row per month under All; All = the sum of the months, e.g. 422 = 110 + 104 + 104 + 104).
