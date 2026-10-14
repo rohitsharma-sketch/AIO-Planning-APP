@@ -17,22 +17,6 @@ const MONO = theme.fontMono
 const HDR  = { fontFamily: MONO, fontSize: 11, color: theme.textMuted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, padding: '7px 10px', textAlign: 'right', whiteSpace: 'nowrap' }
 const CELL = { fontFamily: MONO, fontSize: 12, padding: '5px 10px', textAlign: 'right', whiteSpace: 'nowrap' }
 
-const SEV_STYLE = {
-  error:   { bg: '#FEE2E2', color: '#DC2626', label: 'ERROR' },
-  warning: { bg: '#FEF3C7', color: '#D97706', label: 'WARN'  },
-  info:    { bg: '#EEF2FF', color: '#4F46E5', label: 'INFO'  },
-}
-
-function SevChip({ sev }) {
-  const s = SEV_STYLE[sev] || SEV_STYLE.info
-  return (
-    <span style={{
-      fontSize: 9, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase',
-      padding: '2px 7px', borderRadius: 4, background: s.bg, color: s.color,
-    }}>{s.label}</span>
-  )
-}
-
 function UploadBox({ label, subtitle, endpoint, onDone, imported, rows, date, color }) {
   const ref = useRef()
   const [drag, setDrag] = useState(false)
@@ -176,14 +160,13 @@ export default function DisplayTypePlan() {
   const [prom, setProm] = useState(null)
   useEffect(() => { fetch('/api/planning/art-nm/promote').then(r => (r.ok ? r.json() : null)).then(setProm).catch(() => {}) }, [])
   const [status,   setStatus]   = useState(null)
-  const [tab,      setTab]      = useState('plan')   // plan | validate | qty | export
+  const [tab,      setTab]      = useState('plan')   // plan | qty (Validation tab removed - user, 2026-10-14: "remove validation";
+                                                     // its checks run in Reconciliation's full check-up)
   const [running,  setRunning]  = useState(false)
-  const [validating, setValid]  = useState(false)
   const [qtyRun,   setQtyRun]  = useState(false)
 
   // the run files are ~150-200 MB: the page never downloads them - the Qty tab asks for one filtered slice
   // (GET /qty-view, user 2026-10-14: "fix the display type page latency too"); the ₹L Plan tab is the display tree
-  const [valResult,  setValResult]  = useState(null)
   const [qtyView,    setQtyView]    = useState(null)
   const [qtyErr,     setQtyErr]     = useState('')
 
@@ -192,7 +175,6 @@ export default function DisplayTypePlan() {
   const [fDiv,    setFDiv]    = useState('ALL')
   const [fDept,   setFDept]   = useState('ALL')
   const [fMonth,  setFMonth]  = useState(null)
-  const [fSev,    setFSev]    = useState('ALL')
 
   async function loadStatus() {
     const r = await fetch(`${API}/status`)
@@ -225,14 +207,6 @@ export default function DisplayTypePlan() {
     } finally { setRunning(false) }
   }
 
-  async function runValidate() {
-    setValid(true)
-    try {
-      const r = await fetch(`${API}/validate`)
-      if (r.ok) { setValResult(await r.json()); setTab('validate') }
-    } finally { setValid(false) }
-  }
-
   async function runQty() {
     setQtyRun(true)
     try {
@@ -251,12 +225,7 @@ export default function DisplayTypePlan() {
   const depts   = ['ALL', ...(qtyView?.depts || [])]
 
   const canRun      = status?.contrib_ok && status?.dept_plan_ok && status?.mrp_plan_ok && !running
-  const canValidate = status?.plan_run && !validating
-  const canQty      = valResult?.gate_open && status?.asp_imported && !qtyRun
-
-  // anomaly filter
-  const allAnoms = valResult?.anomalies || []
-  const filtAnoms = fSev === 'ALL' ? allAnoms : allAnoms.filter(a => a.severity === fSev)
+  const canQty      = status?.plan_run && status?.asp_imported && !qtyRun
 
   return (
     <div style={{ padding: '28px 32px', minHeight: '100vh', background: theme.bg }}>
@@ -328,24 +297,6 @@ export default function DisplayTypePlan() {
         </button>
 
         {status?.plan_run && (
-          <button onClick={runValidate} disabled={!canValidate} style={btnStyle(canValidate, '#D97706')}>
-            {validating ? 'Validating…' : '✓ Validate'}
-          </button>
-        )}
-
-        {valResult && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 8, background: valResult.gate_open ? `${alpha(theme.success,'14')}` : `${alpha(theme.danger,'14')}`, border: `1px solid ${valResult.gate_open ? theme.success : theme.danger}` }}>
-            <span style={{ fontSize: 13 }}>{valResult.gate_open ? '🟢' : '🔴'}</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: valResult.gate_open ? theme.success : theme.danger }}>
-              {valResult.gate_open ? 'Gate Open' : 'Gate Blocked'}
-            </span>
-            <span style={{ fontSize: 11, color: theme.textMuted }}>
-              {valResult.errors}E / {valResult.warnings}W
-            </span>
-          </div>
-        )}
-
-        {valResult?.gate_open && (
           <button onClick={runQty} disabled={!canQty} style={btnStyle(canQty, '#4F46E5')}>
             {qtyRun ? 'Computing Qty…' : status?.qty_run ? '↻ Re-run Qty' : '📦 Run Qty'}
           </button>
@@ -362,7 +313,6 @@ export default function DisplayTypePlan() {
         <div style={{ display: 'flex', gap: 6, marginBottom: 20, borderBottom: `1px solid ${theme.border}`, paddingBottom: 0 }}>
           {[
             ['plan',     '₹L Plan',    true],
-            ['validate', 'Validation', !!valResult,  valResult?.errors > 0 ? theme.danger : valResult?.warnings > 0 ? '#D97706' : theme.success],
             ['qty',      'Qty Plan',   !!status?.qty_run],
           ].map(([k, lbl, enabled, accentC]) => (
             <button key={k} onClick={() => enabled && setTab(k)} disabled={!enabled} style={{
@@ -373,12 +323,6 @@ export default function DisplayTypePlan() {
               color: !enabled ? theme.textMuted : tab === k ? (accentC || theme.primary) : theme.textSecondary,
             }}>
               {lbl}
-              {k === 'validate' && valResult && (
-                <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 800,
-                  color: valResult.errors > 0 ? theme.danger : valResult.warnings > 0 ? '#D97706' : theme.success }}>
-                  {valResult.errors > 0 ? `${valResult.errors} ERR` : valResult.warnings > 0 ? `${valResult.warnings} WARN` : '✓'}
-                </span>
-              )}
             </button>
           ))}
         </div>
@@ -388,11 +332,6 @@ export default function DisplayTypePlan() {
       {tab === 'plan' && (
         <HierarchyView api="/api/planning/grain/display-view" levels={DT_FIELDS} defaults={['division', 'department', 'mrp', 'display']}
           store="sp.dt" versions={false} halves />
-      )}
-
-      {/* ── VALIDATE TAB ── */}
-      {tab === 'validate' && valResult && (
-        <ValidateView anoms={filtAnoms} all={allAnoms} fSev={fSev} setFSev={setFSev} summary={valResult} />
       )}
 
       {/* ── QTY TAB ── */}
@@ -522,90 +461,6 @@ function PlanView({ rows, months, curMonth, setFMonth, stores, fStore, setFStore
             </tbody>
           </table>
         </div>
-      </div>
-    </>
-  )
-}
-
-// ── Validate view ──────────────────────────────────────────────────────────────
-function ValidateView({ anoms, all, fSev, setFSev, summary }) {
-  const byLevel = {}
-  all.forEach(a => {
-    if (!byLevel[a.level]) byLevel[a.level] = { error: 0, warning: 0, info: 0 }
-    byLevel[a.level][a.severity] = (byLevel[a.level][a.severity] || 0) + 1
-  })
-
-  return (
-    <>
-      {/* Summary cards */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-        {[
-          { label: 'Total Anomalies', val: summary.total,    c: theme.textPrimary },
-          { label: 'Errors (Gate)',   val: summary.errors,   c: theme.danger },
-          { label: 'Warnings',        val: summary.warnings, c: '#D97706' },
-          { label: 'Gate Status',     val: summary.gate_open ? 'OPEN' : 'BLOCKED', c: summary.gate_open ? theme.success : theme.danger },
-        ].map(({ label, val, c }) => (
-          <div key={label} style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 8, padding: '10px 16px', flex: 1 }}>
-            <div style={{ fontSize: 10, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>{label}</div>
-            <div style={{ fontSize: 16, fontWeight: 800, fontFamily: MONO, color: c, marginTop: 3 }}>{val}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Level breakdown */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {Object.entries(byLevel).map(([level, counts]) => (
-          <div key={level} style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 8, padding: '8px 14px', fontSize: 12 }}>
-            <div style={{ fontWeight: 700, color: theme.textPrimary, marginBottom: 4 }}>{level}</div>
-            {counts.error > 0   && <span style={{ color: theme.danger, marginRight: 8 }}>{counts.error} error{counts.error > 1 ? 's' : ''}</span>}
-            {counts.warning > 0 && <span style={{ color: '#D97706',   marginRight: 8 }}>{counts.warning} warn{counts.warning > 1 ? 's' : ''}</span>}
-          </div>
-        ))}
-      </div>
-
-      {/* Severity filter */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 14, alignItems: 'center' }}>
-        <span style={{ fontSize: 11, color: theme.textMuted, fontWeight: 600 }}>SHOW</span>
-        {['ALL', 'error', 'warning'].map(s => (
-          <button key={s} onClick={() => setFSev(s)} style={{
-            padding: '4px 12px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
-            fontWeight: fSev === s ? 700 : 400,
-            border: `1.5px solid ${fSev === s ? (SEV_STYLE[s]?.color || theme.primary) : theme.border}`,
-            background: fSev === s ? `${SEV_STYLE[s]?.bg || theme.primary}` : theme.surface,
-            color: fSev === s ? (SEV_STYLE[s]?.color || theme.primary) : theme.textSecondary,
-          }}>{s === 'ALL' ? 'All' : s === 'error' ? '🔴 Errors' : '🟡 Warnings'}</button>
-        ))}
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: theme.textMuted }}>{anoms.length} shown</span>
-      </div>
-
-      {anoms.length === 0 && (
-        <div style={{ textAlign: 'center', padding: 40, color: theme.success, fontSize: 14, fontWeight: 600 }}>
-          ✓ No anomalies found for this filter
-        </div>
-      )}
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {anoms.map((a, i) => (
-          <div key={i} style={{
-            background: theme.surface, border: `1px solid ${a.severity === 'error' ? theme.danger : a.severity === 'warning' ? '#D97706' : theme.border}`,
-            borderLeft: `4px solid ${a.severity === 'error' ? theme.danger : '#D97706'}`,
-            borderRadius: 8, padding: '14px 16px',
-          }}>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 8 }}>
-              <SevChip sev={a.severity} />
-              <span style={{ fontWeight: 700, fontSize: 12, color: theme.textPrimary }}>{a.level}</span>
-              <span style={{ fontFamily: MONO, fontSize: 11, color: theme.textMuted }}>
-                {[a.store, a.dept, a.mrp !== 'ALL' && `₹${a.mrp}`, a.month].filter(Boolean).join(' · ')}
-              </span>
-              {a.expected != null && (
-                <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 11, color: theme.textMuted }}>
-                  expected: {a.expected} · actual: {a.actual} · gap: <span style={{ color: theme.danger, fontWeight: 700 }}>{a.gap > 0 ? '+' : ''}{a.gap}</span>
-                </span>
-              )}
-            </div>
-            <div style={{ fontSize: 12.5, color: theme.textSecondary, lineHeight: 1.6 }}>{a.message}</div>
-          </div>
-        ))}
       </div>
     </>
   )

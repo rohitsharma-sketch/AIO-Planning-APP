@@ -7,6 +7,10 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Display Type: Validation tab removed
+- **Asked (user):** "remove validation" (Display Type page tabs ₹L Plan / Validation / Qty Plan).
+- The Validation tab, the "✓ Validate" button and its gate are gone; "Run Qty" shows once the plan has run (ASP imported), next to "Re-run Plan". The same checks stay in Reconciliation's full check-up (UDF and Qty stages) and Rectify still runs the server-side validation; the `/validate` endpoint stays for them.
+
 ### Decision: Sales Plan keeps the AOP hold on each division
 - **User (14 Oct):** "keep the AOP hold on each division". The like-for-like plan stays on each division's AOP month by month (one factor per division x month over the 148 SSG stores, the department mix kept), also when BIS divisions are locked off AOP (Iteration 4: KIDS Mar x1.11). No code change - recorded so it isn't reopened; the portal vs BIS difference on the manual table (+₹239.5 L) is this hold, by design.
 
