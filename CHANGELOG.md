@@ -7,6 +7,9 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Decision: Sales Plan keeps the AOP hold on each division
+- **User (14 Oct):** "keep the AOP hold on each division". The like-for-like plan stays on each division's AOP month by month (one factor per division x month over the 148 SSG stores, the department mix kept), also when BIS divisions are locked off AOP (Iteration 4: KIDS Mar x1.11). No code change - recorded so it isn't reopened; the portal vs BIS difference on the manual table (+₹239.5 L) is this hold, by design.
+
 ### Like-for-like department LY = AOP base split by ACTUAL LY sales; store-group filter in every export; BIS = 148 SSG
 - **Asked (user):** "the filters should be present to see actual sales growth %. Secondly, the BIS will only and only run on 148 stores AOP always which are SSG. Also, AOP forecaster will use LY cont % actual sales will be used to break the target instead of reindexed."
 - Sales Plan like-for-like step: each store x division x month AOP base (else the Calendar's reindexed total) is broken into departments by the departments' share of ACTUAL LY sales (Calendar actual_dept, the same month last year); the reindexed mix only where that store x division x month has no actual sales (`dept_sales_engine`, meta `lfl_dept_mix`). Same rule as the AOP Forecaster's Output tab (actual cont % since 9 Oct) and BIS (own actual department LY): Sales Plan's department LY now equals BIS's for all 113 departments of the manual-vs-portal table (max 0.01%) - the "LY base" step went from -₹154.7 L to 0; what is left between portal and BIS is the AOP division hold (+₹239.5 L). Check-up "department LY = split by actual LY cont %" passes; Journey shows "Actual LY". Totals unchanged (₹79,403.1 L; SSG ₹43,186.8 L).
