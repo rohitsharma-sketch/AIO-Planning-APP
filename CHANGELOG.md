@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### ASP fallback: the other display type's ASP; reconciliation re-run
+- **Asked (user):** "use the other display type ASP as fallback and rerun reco".
+- `display_type_engine.asp_lookup`: a department × MRP × display type × month with no ASP takes the same department × MRP × month's ASP on the other display type (TABLE ↔ NON_TABLE). Used by the Qty run and the check-up; the check-up says how much rests on the fallback.
+- Re-run (Display Type run 0 errors / 0 warnings, Qty, check-up): every check passes except Qty - ₹50,118.74 L of ₹51,484.13 L has a qty (14,741,485 pieces), ₹1,759.89 L of it on the fallback; ₹1,365.39 L still has no ASP (₹1,315.8 L MRP in neither file, e.g. MU_SEMI CASUAL SHIRT F/S 649 TABLE ₹264.2 L, L_EW_SAREE_FNCY 3999 ₹191.5 L; ₹26.4 L department not in the files; ₹23.1 L no pieces that month). ASP coverage REGULAR 96.7%, SUMMER 99.3%, OCCASIONAL 85.6%.
+
 ### MAMJ: winter / pre-winter off, Occasional on their LY MRPs, ASP filled from file 2, new-department preset check; reconciliation re-run
 - **Asked (user):** "MAKE WINTER/PREWINTER INACTIVE FOR MAMJ. TAKE THIS FILE ADD THE ASPS FROM THIS FILE FOR MISSING ENTRIES AND RERUN RECONCILIATION" (for ASP MAMJ 2.xlsx); "also add a check that the new department - ref department ratio is maintained as per the preset at BIS"; "for occasional departments go with the last year mrp and thier cont % the inputs for occasinoal mrp inputs were not there with us so yes intiatie this step make the plan wherever missing and update the reco".
 - Winter / pre-winter: the 62 PREWINTER / LT WINTER / HVY WINTER departments set inactive in the Department Master (backup `SalesPlan/backend/backups/department_state.before-winter-off-14Oct2026.json`). The plan engine's "BIS growth keeps a department planned" rule no longer re-activates a department the master has inactive while its attribute is off season (`plan_checkup.season`); the "sync from Buyer's Input" button keeps them inactive too. Regenerated plan: winter departments carry their LY with plan 0; like-for-like stays on AOP (12 / 12).

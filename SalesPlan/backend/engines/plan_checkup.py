@@ -316,7 +316,7 @@ def mrp_checks(gm=None, new=None) -> list:
     from engines.final_results_engine import _load_dept_attr_map
     from engines.mrp_plan_engine import get_source
     from engines.mrp_reapportionment_engine import read_shares, _find_mapping_file, get_basis, _compare, _plan_period
-    from engines.display_type_engine import _load, DT_ASP_PATH, DT_RESULT_PATH, _asp_key, MIX_NOTE
+    from engines.display_type_engine import _load, DT_ASP_PATH, DT_RESULT_PATH, _asp_key, MIX_NOTE, asp_lookup
     out = []
     cube, am = gv._cube(), _load_dept_attr_map()
     dix, mix, xix = gv._index(cube, am, False), gv._mrp_index(cube, am, False), gv._display_index(cube, am, False)
@@ -427,10 +427,10 @@ def mrp_checks(gm=None, new=None) -> list:
     for r in data.values():
         by_dm.setdefault((r["dept"], str(r["mrp"])), set()).add(r["display_type"])
     depts = {r["dept"] for r in data.values()}
-    miss, qty, ok_v, miss_v, cov = {}, {}, 0.0, 0.0, {}
+    miss, qty, ok_v, miss_v, cov, fb_v = {}, {}, 0.0, 0.0, {}, 0.0
     for (dv, dp, at, mr, dt, mo), (_, ty) in proj_all.items():
         rec = data.get(_asp_key(dp, mr, dt))
-        a = (rec or {}).get("months", {}).get(mo)
+        a, how = asp_lookup(data, dp, mr, dt, mo)   # own, else the other display type's (user, 2026-10-14)
         c = cov.setdefault(at, [0.0, 0.0])
         c[0] += ty
         c[1] += ty if a else 0.0
@@ -438,6 +438,7 @@ def mrp_checks(gm=None, new=None) -> list:
             continue
         if a:
             ok_v += ty
+            fb_v += ty if how != "own" else 0.0
             qty[dv] = qty.get(dv, 0.0) + ty * 1e5 / a
             continue
         miss_v += ty
@@ -451,6 +452,7 @@ def mrp_checks(gm=None, new=None) -> list:
              "Months": ", ".join(v["months"]), "TY with no qty (₹L)": v["ty"]} for k, v in sorted(miss.items(), key=lambda kv: -kv[1]["ty"])]
     note = (f"₹{ok_v + miss_v:,.2f} L projected over {len(proj):,} department × MRP × display × month cells; "
             f"₹{ok_v:,.2f} L has a qty ({sum(qty.values()):,.0f} pieces: " + ", ".join(f"{d} {q:,.0f}" for d, q in sorted(qty.items())) + ")"
+            + (f", ₹{fb_v:,.2f} L of it on the same department × MRP's other display type ASP (fallback)" if fb_v > 1e-9 else "")
             + (f"; ₹{miss_v:,.2f} L has no ASP in the ASP master ({asp.get('source')}) - fix it there and import again." if miss_v else "."))
     out.append(_plain(st6, "qty", "Every projected in-season value has an ASP → qty (all stores)", "UDF", "fail" if rows else "pass",
                       note + f" Season: {rule}.", rows[:ROWS_KEPT * 3],

@@ -418,6 +418,21 @@ async def import_asp(file: UploadFile = File(...), mode: str = "replace"):
     return {"ok": True, "rows": len(records), "months": periods, "level": level}
 
 
+_OTHER_DT = {"TABLE": "NON_TABLE", "NON_TABLE": "TABLE"}
+
+
+def asp_lookup(data: dict, dept, mrp, dt, month) -> tuple:
+    """(ASP, how) of a department x MRP x display type x month - its own ASP, else the same department x MRP x month's
+    ASP on the other display type (user, 2026-10-14: "use the other display type ASP as fallback"); (None, None) when
+    neither has one. how = "own" | "other display type"."""
+    a = ((data.get(_asp_key(dept, mrp, dt)) or {}).get("months") or {}).get(month)
+    if a:
+        return a, "own"
+    o = _OTHER_DT.get(str(dt).strip().upper().replace("-", "_").replace(" ", "_"))
+    b = ((data.get(_asp_key(dept, mrp, o)) or {}).get("months") or {}).get(month) if o else None
+    return (b, "other display type") if b else (None, None)
+
+
 @router.get("/asp")
 def get_asp_preview():
     """The ASP in use, as the preview shows it (company level, Rs per piece)."""
@@ -711,9 +726,7 @@ def run_qty():
     asp_data = asp["data"]
 
     def get_asp(div, dept, mrp, dt, month):
-        rec = asp_data.get(_asp_key(dept, mrp, dt)) or {}
-        val = rec.get("months", {}).get(month, 0.0)
-        return val
+        return asp_lookup(asp_data, dept, mrp, dt, month)[0] or 0.0
 
     qty_rows = []
     missing_asp = []
