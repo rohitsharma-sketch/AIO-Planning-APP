@@ -497,11 +497,10 @@ def _sinfo(cube: dict) -> dict:
             for s, x in cube["stores"].items()}
 
 
-def _cells(cube: dict, attr_map: dict, want: dict, sinfo: dict, filt: dict | None = None, halves: bool = False):
+def _cells(cube: dict, attr_map: dict, want: dict, sinfo: dict, filt: dict | None = None, p12: bool = False):
     """Every (division, department, attribute, store, month, LY, TY) cell of the node want = {level: value}, inside the
-    filters filt = {level: set of values} (user, 2026-10-13: "filters required"). halves: each month as its two
-    fortnights "Mar'27 P1" (days 1-15) / "Mar'27 P2" (16th to month end) - TY = the plan's own TY P1 / P2, LY = half
-    the month's LY each, as the plan engine grows it (dept_sales_engine: ly_half x BIS P1 / P2 growth)."""
+    filters filt = {level: set of values} (user, 2026-10-13: "filters required"). p12: each cell also carries its TY P1 /
+    TY P2 (an inactive department's 0, 0) - what the P1 / P2 index is made of (_halve)."""
     f = filt or {}
     fit = lambda lv, v: want.get(lv, v) == v and (lv not in f or v in f[lv])   # noqa: E731
     ok = {s for s, x in sinfo.items() if all(fit(k, v) for k, v in x.items())}
@@ -517,12 +516,8 @@ def _cells(cube: dict, attr_map: dict, want: dict, sinfo: dict, filt: dict | Non
                 if s not in ok:
                     continue
                 for m, v in mm.items():
-                    if halves:
-                        for h, t in (("P1", v[2]), ("P2", v[3])):
-                            if fit("month", f"{m} {h}"):
-                                yield dv, dp, at, s, f"{m} {h}", v[0] / 2, t
-                    elif fit("month", m):
-                        yield dv, dp, at, s, m, v[0], v[1]
+                    if fit("month", m):
+                        yield (dv, dp, at, s, m, v[0], v[1], v[2], v[3]) if p12 else (dv, dp, at, s, m, v[0], v[1])
     for dv, dmap in (cube.get("off") or {}).items():   # inactive departments: LY, plan 0
         if not fit("division", dv):
             continue
@@ -534,9 +529,8 @@ def _cells(cube: dict, attr_map: dict, want: dict, sinfo: dict, filt: dict | Non
             for s, mm in smap.items():
                 if s in ok:
                     for m, ly in mm.items():
-                        for m2, l2 in (((f"{m} P1", ly / 2), (f"{m} P2", ly / 2)) if halves else ((m, ly),)):
-                            if fit("month", m2):
-                                yield dv, dp, at, s, m2, l2, 0.0
+                        if fit("month", m):
+                            yield (dv, dp, at, s, m, ly, 0.0, 0.0, 0.0) if p12 else (dv, dp, at, s, m, ly, 0.0)
 
 
 def parse_filters(raw: str, allowed=HIER_LEVELS) -> dict:
@@ -602,22 +596,39 @@ def _mrp_key(v):
 # One column index per cube (user, 2026-10-13: "make sure that the population speed is fast"): every cell once, each
 # level as an integer code, so a branch / a filter list is a mask + a bincount (ms) instead of a walk over every cell
 # (~0.2 s on the 305k cells of the MAMJ plan). Built once per cube and attribute map; 8010 builds it at start.
-_ix: dict = {}   # halves (False = by month, True = P1 / P2) -> (key, index)
+_ix: dict = {"key": None, "v": None}   # v = {False: by month, True: by P1 / P2}
 _ix_lock = threading.Lock()
+
+
+def _halve(ix: dict, p12) -> dict:
+    """The month index as fortnights: every cell twice - "Mar'27 P1" with half its LY and its TY P1, "Mar'27 P2" with
+    the other half and its TY P2 (the plan engine's LY half x BIS P1 / P2 growth). numpy only, so the P1 / P2 view
+    costs milliseconds once the month index is there (user, 2026-10-14: "decrease the latency for such views")."""
+    import numpy as np
+    n = len(ix["ly"])
+    months = [f"{m} {h}" for m in ix["names"]["month"] for h in ("P1", "P2")]
+    c = {lv: np.repeat(a, 2) for lv, a in ix["c"].items()}
+    c["month"] = (np.repeat(ix["c"]["month"], 2) * 2 + np.tile(np.array([0, 1], dtype=np.int32), n)).astype(np.int32)
+    return {"names": {**ix["names"], "month": months}, "pos": {**ix["pos"], "month": {v: i for i, v in enumerate(months)}},
+            "c": c, "ly": np.repeat(ix["ly"] / 2, 2), "ty": np.asarray(p12, dtype=float).reshape(-1)}
 
 
 def _index(cube: dict, attr_map: dict, halves: bool = False) -> dict:
     key = (id(cube), json.dumps(attr_map, sort_keys=True, default=str))
     with _ix_lock:
-        hit = _ix.get(halves)
-        if hit and hit[0] == key:
-            return hit[1]
+        if _ix["key"] == key:
+            return _ix["v"][halves]
         sinfo = _sinfo(cube)
-        v = make_index((({"division": dv, "department": dp, "attribute": at, "month": m, "store": st,
-                          "cluster": sinfo[st]["cluster"], "stype": sinfo[st]["stype"]}, a, t)
-                        for dv, dp, at, st, m, a, t in _cells(cube, attr_map, {}, sinfo, halves=halves)), HIER_LEVELS)
-        _ix[halves] = (key, v)
-        return v
+        p12 = []
+
+        def cells():
+            for dv, dp, at, st, m, a, t, p1, p2 in _cells(cube, attr_map, {}, sinfo, p12=True):
+                p12.append((p1, p2))
+                yield ({"division": dv, "department": dp, "attribute": at, "month": m, "store": st,
+                        "cluster": sinfo[st]["cluster"], "stype": sinfo[st]["stype"]}, a, t)
+        mon = make_index(cells(), HIER_LEVELS)
+        _ix.update(key=key, v={False: mon, True: _halve(mon, p12)})
+        return _ix["v"][halves]
 
 
 def _halves(period: str) -> bool:
@@ -732,8 +743,10 @@ def warm_hierarchy():
     the MRP tree's (it reads the MRP Re-apportionment, ~40 s cold)."""
     try:
         from engines.final_results_engine import _load_dept_attr_map
-        _index(_cube(), _load_dept_attr_map())
-        _mrp_index(_cube(), _load_dept_attr_map(), False)
+        _index(_cube(), _load_dept_attr_map())   # month and P1 / P2
+        from engines.plan_versions import totals
+        totals(_cube())                           # the version bar's live totals
+        _mrp_index(_cube(), _load_dept_attr_map(), False)   # month and P1 / P2
     except Exception:   # noqa: BLE001 - the page builds it on first use and shows any error itself
         pass
 
@@ -1121,13 +1134,46 @@ def _split_source() -> str:
     return "the buyers' MRP Cont % file"
 
 
+_mix_mem: dict = {}
+
+
 def _reapp_mix():
     """(DataFrame store, department, mrp, month ("Mar'27"), lw = share of the store x department x month's LY on the new
-    MRPs, about) - from the MRP Re-apportionment's after side (Unmapped left out), or (None, reason)."""
+    MRPs, about, key) - from the MRP Re-apportionment's after side (Unmapped left out), or (None, reason, None).
+    Memoised on the re-apportionment's inputs and kept on disk (Output/_store_mix.pkl, written by this server only), so
+    after a restart the MRP tree is ready in seconds instead of re-running the re-apportionment (~40 s; 2026-10-14)."""
+    import pandas as pd
+    try:
+        from engines.mrp_reapportionment_engine import compare_key, OUTPUT_DIR
+        key = compare_key()
+    except Exception as e:   # noqa: BLE001 - no master / sales: LY is split by the plan's shares
+        return None, f"no MRP Re-apportionment to read ({e})", None
+    if _mix_mem.get("key") == key:
+        return _mix_mem["v"]
+    path = os.path.join(OUTPUT_DIR, "_store_mix.pkl")
+    try:
+        disk = pd.read_pickle(path)
+        if disk.get("key") == key:
+            _mix_mem.update(key=key, v=(disk["mix"], disk["about"], key))
+            return _mix_mem["v"]
+    except Exception:   # noqa: BLE001 - none yet / unreadable: build it
+        pass
+    v = _build_mix()
+    if v[0] is not None:
+        _mix_mem.update(key=key, v=(v[0], v[1], key))
+        try:
+            pd.to_pickle({"key": key, "mix": v[0], "about": v[1]}, path)
+        except OSError:
+            pass
+        return _mix_mem["v"]
+    return v
+
+
+def _build_mix():
     try:
         from engines.mrp_reapportionment_engine import _compare, _plan_period, get_basis
         c = _compare()
-    except Exception as e:   # noqa: BLE001 - no master / sales: LY is split by the plan's shares
+    except Exception as e:   # noqa: BLE001
         return None, f"no MRP Re-apportionment to read ({e})", None
     f = c["flows"]
     f = f[f["new"] != "Unmapped"]
@@ -1148,10 +1194,11 @@ def _mrp_index(cube: dict, attr_map: dict, halves: bool) -> dict:
     except (OSError, ValueError):
         sh = {}
     mix, about, mid = _reapp_mix()
-    key = (id(cube), json.dumps(attr_map, sort_keys=True, default=str), json.dumps(sh, sort_keys=True), mid, halves)
+    key = (id(cube), json.dumps(attr_map, sort_keys=True, default=str), json.dumps(sh, sort_keys=True), mid)
     with _mx_lock:
-        if _mx.get(halves) and _mx[halves][0] == key:
-            return _mx[halves][1]
+        if _mx.get("key") == key:
+            return _mx["v"][halves]
+    want, halves = halves, True   # built once by fortnight; the month index is derived from it (_unhalve, ms)
     sinfo = _sinfo(cube)
     # departments / stores / months as integer codes, so the million-row split stays light
     dkeys, base = [], []
@@ -1240,9 +1287,26 @@ def _mrp_index(cube: dict, attr_map: dict, halves: bool) -> dict:
     v = {"names": names, "pos": pos, "c": c, "ly": g["ly"].to_numpy(float), "ty": g["ty"].to_numpy(float),
          "x": {k: g[k].to_numpy(float) for k in ("ly_mix", "ly_sh", "ns")}, "about": about,
          "source": _split_source()}
+    both = {True: v, False: _unhalve(v)}
     with _mx_lock:
-        _mx[halves] = (key, v)
-    return v
+        _mx.update(key=key, v=both)
+    return both[want]
+
+
+def _unhalve(ix: dict) -> dict:
+    """A by-fortnight index read by month: "Mar'27 P1" and "Mar'27 P2" cells both count under "Mar'27" (the tree adds
+    cells up, so nothing needs regrouping)."""
+    import numpy as np
+    base, bpos = [], {}
+    remap = np.empty(len(ix["names"]["month"]), dtype=np.int32)
+    for i, m in enumerate(ix["names"]["month"]):
+        b = _whole(m)
+        if b not in bpos:
+            bpos[b] = len(base)
+            base.append(b)
+        remap[i] = bpos[b]
+    return {**ix, "names": {**ix["names"], "month": base}, "pos": {**ix["pos"], "month": bpos},
+            "c": {**ix["c"], "month": remap[ix["c"]["month"]]}}
 
 
 def _mrp_lv_path(levels: str, path: str, longest: int = 0):

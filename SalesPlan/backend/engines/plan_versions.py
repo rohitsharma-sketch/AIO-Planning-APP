@@ -83,8 +83,20 @@ def snapshot(vid: str) -> dict:
     return s
 
 
+_tot: dict = {"cube": None, "v": None}
+
+
 def totals(cube: dict) -> dict:
-    """{ly, ty, divs: {div: [ly, ty]}, depts: {(div, dept): [ly, ty]}} of a cube (active + inactive LY)."""
+    """{ly, ty, divs: {div: [ly, ty]}, depts: {(div, dept): [ly, ty]}} of a cube (active + inactive LY). Kept for the
+    cube in hand (a cube is never changed - a new plan is a new cube), so the version bar opens at once (2026-10-14)."""
+    if _tot["cube"] is cube:
+        return _tot["v"]
+    out = _totals(cube)
+    _tot.update(cube=cube, v=out)
+    return out
+
+
+def _totals(cube: dict) -> dict:
     out = {"ly": 0.0, "ty": 0.0, "divs": {}, "depts": {}}
     for part, ty_on in (("dept", True), ("off", False)):
         for dv, dd in (cube.get(part) or {}).items():

@@ -7,6 +7,15 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Sales Plan: faster Hierarchy views (Final Results, MRP Plan Output, version bar)
+- **Asked (user):** "decrease the latency for such views" (Final Results on P1 / P2 stuck on "Loading…" / "Loading versions…").
+- P1 / P2 tree: derived from the month index with numpy instead of a second pass over every cell - first P1 / P2 open 1.0 s → 0.04 s.
+- MRP tree: built once by fortnight, the month view read off it (P1 / P2 switch 3.6 s → 0.03 s); the stores' re-apportioned LY mix it needs is kept on disk (`MRP Merging Engine/.../Output/_store_mix.pkl`, keyed on the sales file, Calendar snapshot stamps, basis and master), so after a restart the tree is ready in ~4 s instead of re-running the re-apportionment (35.5 s → 3.9 s cold).
+- Every tree click: the cached re-apportionment is checked on a key (`compare_key`) before the LY sales table is copied - repeat MRP clicks 0.26 s → 0.03 s; the Calendar snapshot stamps are read at most every 30 s.
+- Version bar: the live plan's totals kept per plan instead of walked on every page open (1.7 s → 0.02 s).
+- 8010 start warms the department tree (month and P1 / P2), the version totals and the MRP tree, in that order.
+- Same numbers: LY ₹46,333.86 L / TY ₹51,484.13 L on both trees, every division / cluster / store / month, by month and P1 / P2; P1 + P2 = the month.
+
 ### Sales Plan: Month / P1-P2 switch and Excel export on the Hierarchy view; MRP Plan Output on the same tree
 - **Asked (user):** "i want a view with toggle for month wise or P1 P2, which is also availble in excel download too keeping the same view availbe. P1 P2 is 15 day interval for the month" and "merge all the views similarly to the department view which is the final design".
 - Final Results: a Month | P1 / P2 switch (P1 = days 1-15, P2 = 16th to month end). P1 / P2 = the plan's own TY P1 / TY P2; LY = half of each month (as the plan engine grows it, LY half x BIS P1 / P2 growth). P1 + P2 = the month to the paisa (MENS, all months, LY and TY). The month filter follows the switch; the ⓘ pop-up shows the fortnight's numbers on top of the month's working. `?period=month|half` on `/api/planning/grain/hierarchy`, `/hierarchy-options`, `/explain`.

@@ -1161,13 +1161,39 @@ _CMP: dict = {}
 _CMP_LOCK = threading.Lock()
 
 
-def _compare():
-    """{ix, flows, before, after, unmapped, months, master} - cached on the sales file and the master."""
+_STAMP: dict = {}
+
+
+def _sales_key() -> tuple:
+    """_engine_sales' cache key without reading or copying the sales: the lake file, its time, the Calendar snapshot
+    stamps, the basis. ponytail: the stamps are read at most every 30 s (two DB reads per tree click before)."""
+    import time
+    path = _find_sales_file()
+    if not path:
+        raise ValueError(f"Sales engine file not reachable: {_calendar_scans().PARQUET_DIR}")
+    basis = get_basis()
+    if time.time() - _STAMP.get("at", 0) > 30 or _STAMP.get("basis") != basis:
+        _STAMP.update(at=time.time(), basis=basis,
+                      v=(_snapshot_stamp(), _snapshot_stamp(BASES[basis]) if basis != "actual" else None))
+    a, b = _STAMP["v"]
+    return (path, os.path.getmtime(path), a, basis, b)
+
+
+def compare_key() -> tuple:
+    """What the Before -> After depends on: the sales and the master in use (no work done)."""
     mf = _find_mapping_file()
     if not mf:
         raise HTTPException(404, f"No MRP master in {MAPPING_DIR} - import one first")
+    return (_sales_key(), mf, os.path.getmtime(mf))
+
+
+def _compare():
+    """{ix, flows, before, after, unmapped, months, master} - cached on the sales file and the master."""
+    key = compare_key()
+    mf = key[1]
+    if _CMP.get("key") == key:   # no sales copy, no lake read on a cached tree (2026-10-14)
+        return _CMP["v"]
     sales_df, month_cols, check = _engine_sales()
-    key = (_SALES_CACHE.get("key"), mf, os.path.getmtime(mf))
     with _CMP_LOCK:
         if _CMP.get("key") == key:
             return _CMP["v"]
