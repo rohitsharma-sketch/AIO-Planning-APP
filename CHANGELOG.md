@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### BIS Planner's columns (and group growth %) on the Buyer's Plan LY
+- **Asked (user):** "fix planner's output too" (grand total: Planner Value Rs.431.9 Cr but Planner Gr% +11.7%).
+- Planner Gr% on a division header / the grand total divided by the active departments' LY only (Rs.431.9 Cr vs Rs.386.7 Cr = +11.7%); the Buyer's Plan's LY also carries the inactive departments' LY at a plan of 0. New `_offLY(row, mi)` adds that LY on division / grand rows - used by Planner Gr% / Planner Value (`_plannerRowAgg`), Block Growth% and the monthly growth cells (`_effGrowth`), and their hovers (`_blockWhy`, `_plannerWhy`, which now names the inactive LY). Departments and attributes unchanged.
+- Iteration 4: Planner Gr% grand +11.07% (= Rs.431.87 Cr AOP on Rs.388.84 Cr LY); per division the planner's LY = the Buyer's Plan's LY, and Block Growth% = plan vs LY exactly (MENS +10.42%, LADIES +11.59%, KIDS +10.21%, total +10.70%). Same on Buyer's Plan and Attribute Summary.
+
 ### Home Saved plans: one squeezed tile (the first version) + a dropdown layer of the later iterations
 - **Asked (user):** "keep ver 1 and squeeze the tiles and give a layer where the versions open afterwards on clicking like a dropdown with a small gist".
 - One compact tile for the first version (FIRST / OPEN tags, saved time, gist: TY · LY · growth on one line, how far the live plan has moved since; View, Compare…). "n later iterations ▾" opens a dropdown layer under it - newest first (LATEST tag), each with the same small gist and View / Compare…; closes on an outside click or Esc.

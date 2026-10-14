@@ -5153,6 +5153,7 @@ function _effGrowth(row,mis){
   _plannerScope(row).forEach(({dvId,ids})=>{const dv=DVDATA.find(d=>d.id===dvId);if(!dv)return;
     ids.forEach(id=>{const sec=dv.secs.find(x=>x.id===id);if(!sec)return;
       mis.forEach(mi=>{const ly=_secMonLY(sec,dv,mi);l+=ly;t+=ly*(1+(S.inputs[id+'__'+mi]??0)/100);});});});
+  mis.forEach(mi=>{l+=_offLY(row,mi);});   // a division / grand row: its inactive departments' LY at plan 0 (Buyer's Plan rule)
   return l>0?(t/l-1)*100:null;
 }
 // Block Growth% hover (user, 2026-10-07: "show the month wise growth in the hover"): the months it is built from,
@@ -5161,6 +5162,7 @@ function _blockWhy(row){
   const m=AOP_MIS.map(mi=>{let l=0,t=0;
     _plannerScope(row).forEach(({dvId,ids})=>{const dv=DVDATA.find(d=>d.id===dvId);if(!dv)return;
       ids.forEach(id=>{const sec=dv.secs.find(x=>x.id===id);if(!sec)return;const ly=_secMonLY(sec,dv,mi);l+=ly;t+=ly*(1+(S.inputs[id+'__'+mi]??0)/100);});});
+    l+=_offLY(row,mi);
     return {mi,l,t};});
   const L=m.reduce((a,x)=>a+x.l,0);if(!L)return '';
   return 'Month-wise growth\n'+m.map(x=>`${MO[x.mi]}: ${fP(x.l>0?(x.t/x.l-1)*100:null)}  (${(x.l/L*100).toFixed(0)}% of block LY)`).join('\n')+
@@ -6250,10 +6252,11 @@ function _plannerWhy(row,mis){
     let sh=0,v=0,val=0,ly=0,n=0;const PC=_plannerCalc();
     _plannerScope(row).forEach(({dvId,ids})=>ids.forEach(id=>{let any=false;mis.forEach(mi=>{const o=PC[dvId]?.[mi]?.[id];if(o){sh+=o.share;v+=o.v;val+=o.val;ly+=o.ly;any=true;}});if(any)n++;}));
     if(!sh)return `${lbl}: no planner value yet.`;
+    const off=mis.reduce((a,mi)=>a+_offLY(row,mi),0);ly+=off;   // inactive departments' LY, plan 0 (Buyer's Plan rule)
     const cr=x=>'Rs.'+x.toFixed(2)+' Cr',f=v/sh;
     return `${lbl}: ${n} departments, factor ${f.toFixed(2)} (weighted by their AOP share)\n`+
       `AOP share by LY cont % ${cr(sh)} × ${f.toFixed(2)} = ${cr(v)} → re-balanced ×${(v>0?val/v:0).toFixed(3)} to the division AOP = ${cr(val)}\n`+
-      `vs LY ${cr(ly)} = ${fP(ly>0?(val/ly-1)*100:null)} · hover a department in the Buyer's Plan for its own inputs`;
+      `vs LY ${cr(ly)}${off>0?` (incl. ${cr(off)} of inactive departments, plan 0)`:''} = ${fP(ly>0?(val/ly-1)*100:null)} · hover a department in the Buyer's Plan for its own inputs`;
   }
   const P=_plannerCalc()[row._divId]||{},os=mis.map(mi=>P[mi]?.[row._key]).filter(Boolean);
   if(!os.length)return '';
@@ -6275,7 +6278,18 @@ const _attr=t=>String(t).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/<
 function _plannerRowAgg(row,mis){
   let v=0,l=0,any=false;const P=_plannerCalc();
   _plannerScope(row).forEach(({dvId,ids})=>mis.forEach(mi=>ids.forEach(id=>{const o=P[dvId]?.[mi]?.[id];if(o){v+=o.val;l+=o.ly;any=true;}})));
+  if(any)mis.forEach(mi=>{l+=_offLY(row,mi);});
   return any?{val:v,ly:l,gr:l>0?(v/l-1)*100:null}:null;
+}
+// A division header / the grand total also carries its inactive departments' LY with a plan of 0 - the Buyer's Plan's
+// rule (buildRows_dept; user, 2026-10-14: "fix planner's output too" - Planner Gr% read +11.7% on the grand total, i.e.
+// Rs.431.9 Cr against the active LY only, where the Buyer's Plan's LY gives +11.1%). Departments / attributes: 0.
+function _offLY(row,mi){
+  if(!(row._isGrand||(row._key==null&&row._divId)))return 0;
+  let l=0;
+  _plannerScope(row).forEach(({dvId})=>{const dv=DVDATA.find(d=>d.id===dvId);if(!dv)return;
+    dv.secs.forEach(s=>{if(S.hiddenSecs.has(s.id))l+=_secMonLY(s,dv,mi);});});
+  return l;
 }
 // "use" - the department's buyer growth goes back to the planner's Gr % (month by month), the rest re-balance
 function usePlannerGr(secId){
