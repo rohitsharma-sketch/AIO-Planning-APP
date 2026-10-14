@@ -6012,8 +6012,22 @@ function _planMode(){try{return localStorage.getItem('bis_plan_mode')==='month'?
 function loadPlannerConfig(){
   return fetch(SYNC_BASE+'/api/planner/config').then(r=>r.ok?r.json():null).then(j=>{
     if(!j)return;
-    PLANNER.ft=j.factor_table||null;PLANNER.refs=j.refs||{};PLANNER.fill=j.fill_rate||null;_plMemo.k=null;
+    PLANNER.ft=j.factor_table||null;PLANNER.refs=j.refs||{};PLANNER.fill=j.fill_rate||null;PLANNER.pg=j.planner_growth||null;_plPgIdx=null;_plMemo.k=null;
   }).catch(()=>{});
+}
+/* Imported planner's growth (user, 2026-10-14: "planner's growth check where we lack in logic update it through back end
+   and implement it into iteration 4" - the colleague's sheet, column DO = Approach 1, AOP capped at the SSG cluster over
+   all divisions): planner_growth.json {source, column, imported_at, departments{NAME: fraction}} from sync_server. A
+   department in it takes that growth on its LY, month by month, NOT re-balanced to the division AOP (their cap is the
+   cluster, so the division totals float); the rest keep the factor table. A pre-split name goes to its parts
+   (DEPT_SPLITS) and wins over their own rows, as in the growth import. */
+let _plPgIdx=null;
+function _plannerImported(sec){
+  const d=PLANNER.pg?.departments;if(!d)return null;
+  if(!_plPgIdx){_plPgIdx={};const parent={};
+    Object.entries(d).forEach(([nm,g])=>{const id=_impIdf(nm),to=DEPT_SPLITS[id];
+      if(to&&to.some(t=>t!==id))to.forEach(t=>{_plPgIdx[t]=+g;parent[t]=1;});else if(!parent[id])_plPgIdx[id]=+g;});}
+  const g=_plPgIdx[sec.id];return g==null||!isFinite(g)?null:g;
 }
 function _band(list,x){
   if(x==null||!list)return null;
@@ -6208,7 +6222,7 @@ function _plannerFactor(sec,mis){
 // {divId:{mi:{secId:{ly,fc,val,gr}}}} over the AOP months - recomputed only when one of its inputs changes
 function _plannerCalc(){
   const mode=_planMode();
-  const k=JSON.stringify([S.aop,[...S.hiddenSecs].sort(),mode,PLANNER.ft?.version??null,!!PLANNER.ft,PLANNER.fill?.imported_at??null,
+  const k=JSON.stringify([S.aop,[...S.hiddenSecs].sort(),mode,PLANNER.ft?.version??null,!!PLANNER.ft,PLANNER.fill?.imported_at??null,PLANNER.pg?.imported_at??null,
     Object.keys(PLANNER.refs).length,_lyHash(),Object.keys(window._SELLTHRU_LIVE_DEPT||{}).length,Object.keys(SEC_LFL_GROWTH).length]);
   if(_plMemo.k===k)return _plMemo.v;
   _fmCutCache=new Map();
@@ -6227,6 +6241,8 @@ function _plannerCalc(){
         const share=aop*ly[s.id]/lyTot;m[s.id]={ly:ly[s.id],fc,share,v:share*fc.f};raw+=m[s.id].v;});
       const scale=raw>0?aop/raw:0; // re-balance: the division x month lands exactly on its AOP target
       Object.values(m).forEach(o=>{o.scale=scale;o.val=o.v*scale;o.gr=o.ly>0?(o.val/o.ly-1)*100:null;});
+      act.forEach(s=>{const g=_plannerImported(s),o=m[s.id];if(g==null)return;   // imported planner's growth: LY x (1 + g)
+        o.imp=g;o.val=o.ly*(1+g);o.gr=o.ly>0?g*100:null;});
       out[dv.id][mi]=m;
     });
   });
@@ -6260,6 +6276,9 @@ function _plannerWhy(row,mis){
   }
   const P=_plannerCalc()[row._divId]||{},os=mis.map(mi=>P[mi]?.[row._key]).filter(Boolean);
   if(!os.length)return '';
+  if(os.every(o=>o.imp!=null)){const pg=PLANNER.pg||{},ly=os.reduce((a,o)=>a+o.ly,0),val=os.reduce((a,o)=>a+o.val,0);
+    return `${lbl}: planner's growth ${fP(os[0].imp*100)} imported - ${pg.source||'planner growth file'}${pg.column?' ('+pg.column+')':''}${pg.imported_at?', '+String(pg.imported_at).slice(0,16).replace('T',' '):''}\n`+
+      `LY Rs.${ly.toFixed(2)} Cr × (1 ${os[0].imp<0?'−':'+'} ${Math.abs(os[0].imp*100).toFixed(1)}%) = Rs.${val.toFixed(2)} Cr - not re-balanced to the division AOP (that planner is capped at the SSG cluster over all divisions)`;}
   const cr=v=>'Rs.'+v.toFixed(2)+' Cr',pc=v=>v==null?'n/a':(v*100).toFixed(1)+'%',fc=os[0].fc,t=fc.tags,x=fc.inp;
   const sum=k=>os.reduce((a,o)=>a+o[k],0),sh=sum('share'),v=sum('v'),val=sum('val'),ly=sum('ly');
   const g=ly>0?(val/ly-1)*100:null;

@@ -145,7 +145,7 @@ export default function Journey() {
           <div style={{ ...card, padding: '12px 14px', display: 'grid', gap: 8 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.4 }}>Export every field</div>
             <div style={{ fontSize: 11.5, color: theme.textMuted }}>
-              One row per store × department × MRP × month: store group, reference store, LY, BIS growth, AOP hold, department plan and share,
+              One row per store × department × MRP × month: store group, reference store, LY, BIS growth, AOP cap, store balance, department plan and share,
               MRP share and plan, Table / Non-Table %, where the mix came from, ASP and qty.
             </div>
             <label style={lab}>Division

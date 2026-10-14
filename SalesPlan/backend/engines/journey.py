@@ -5,8 +5,8 @@ till display type so that the user can easily export the report for fact finding
 
 journey(store, dept, month, mrp, display) walks one store x department x month (and, when given, one MRP and display
 type) through the saved plan, re-deriving each step from its own inputs and checking it lands on the saved number:
-  SSG store      Calendar LY -> x AOP LY base -> x BIS growth P1 / P2 -> x AOP hold (division x month)
-                 -> x new-department re-balance (a division with new departments) -> department plan
+  SSG store      actual LY -> x BIS growth P1 / P2 -> x AOP cap (SSG cluster x month, all divisions) -> x store balance
+                 (onto its AOP store plan) -> x new-department step (carve + re-balance) -> department plan
   NSO / Others   AOP Forecaster store plan (division x month) -> x reference store's department share -> department plan
   then           x MRP share (P1, P2) -> x Table / Non-Table share -> / ASP -> qty
 export_rows() is the same chain as one row per store x department x MRP x month (Display Type run + Qty run + plan).
@@ -131,20 +131,26 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
         cal = float(((load_actuals("actual").get(store, {}).get(div, {}).get(dept) or {}).get(lym)) or 0.0)
         if not cal:   # no actual sales that month: the reindexed mix (the engine's fallback)
             cal = float(((load_actuals().get(store, {}).get(div, {}).get(dept) or {}).get(lym)) or 0.0)
-        hold = float(((p.get("meta") or {}).get("lfl_hold_on_aop") or {}).get(div, {}).get(month, 1.0))
+        meta, cl = p.get("meta") or {}, sd.get("cluster") or ""
+        hold = float(((meta.get("lfl_hold_cluster") or {}).get(cl) or {}).get(month)
+                     or ((meta.get("lfl_hold_on_aop") or {}).get(div) or {}).get(month) or 1.0)
+        bal = float(rec.get("bal", 1.0))
         g1, g2 = float(rec.get("g_p1") or 0.0), float(rec.get("g_p2") or 0.0)
-        step("Department", "Actual LY", f"{dept} at {store} in {lym}: its actual sales (Calendar, own dates).", cal, formula="Calendar actual snapshot")
-        k = ly / cal if cal else None
-        step("Department", "LY on the AOP base", "The store × division AOP base (what the AOP version's growth was set on) is broken "
-             "into departments by their share of actual LY sales.", ly, formula=f"{L(cal)} × {k:.6f}" if k else "no LY", factor=k)
+        step("Department", "Actual LY", f"{dept} at {store} in {lym}: its actual sales (Calendar, own dates) - the plan's LY.", ly,
+             formula="Calendar actual snapshot" + ("" if abs(cal - ly) < TOL else f" (reindexed {L(ly)}: no actual sales that month)"))
         pre = ly / 2 * g1 / 100 + ly / 2 * g2 / 100
         step("Department", "× BIS growth", f"BIS growth in use: P1 {g1 - 100:+.2f}%, P2 {g2 - 100:+.2f}% "
              "(each half of the month = LY / 2 × its growth).", pre, formula=f"{L(ly)}/2 × {g1 / 100:.4f} + {L(ly)}/2 × {g2 / 100:.4f}")
         after = pre * hold
-        step("Department", "× AOP hold (division × month)", f"Every like-for-like {div} department in {month} is scaled by one factor "
-             "so the division lands exactly on its AOP plan (the mix kept).", after, formula=f"× {hold:.6f}", factor=hold)
+        step("Department", "× AOP cap (SSG cluster × month)", f"Every like-for-like department of cluster {cl or '-'} in {month}, all "
+             "divisions together, is scaled by one factor so the cluster lands exactly on the AOP's plan for its SSG stores - "
+             "the buyer's mix kept, the division totals free (the colleague's method).", after, formula=f"× {hold:.6f}", factor=hold)
+        if abs(bal - 1) > 1e-12:
+            after *= bal
+            step("Department", "× store balance", f"{store} is put on its AOP store plan (all divisions) while every department keeps "
+                 f"its cluster total (a two-way balance over the cluster's stores and departments).", after, formula=f"× {bal:.6f}", factor=bal)
         derived = after
-        if (_load_new_dept_map() or {}).get(div):   # the carve + re-balance of a division with new departments
+        if _load_new_dept_map():   # the carve + re-balance: per SSG cluster over all divisions (2026-10-14), so every division
             f = ty / after if after else 1.0
             c = ((_load_new_dept_map() or {}).get(div) or {}).get(dept)
             if c:   # a new department: its plan is its reference's (after the re-balance) x its %
@@ -154,8 +160,8 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
             else:
                 fml = f"× {f:.6f}"
             step("Department", "× new-department step", (_new_dept_note(div, dept) + " " if _new_dept_note(div, dept) else "") +
-                 f"New departments take their % of their reference; {div}'s like-for-like departments are then re-balanced by one "
-                 "factor so the division stays on the AOP plan.", ty, formula=fml, factor=f)
+                 "New departments take their % of their reference; the cluster's like-for-like departments are then re-balanced by "
+                 "one factor so the cluster stays on the AOP, and the stores back onto their store plans.", ty, formula=fml, factor=f)
             derived = ty if abs(f - 1) < 0.25 or _new_dept_note(div, dept) else after   # a large factor on a plain department = not explained
     else:
         from engines.dept_sales_engine import _aop_store_plan
@@ -264,7 +270,7 @@ def export_rows(division: str = "", group: str = "", store: str = "") -> pd.Data
     from engines.final_results_engine import _load_dept_attr_map
     from engines.mrp_plan_engine import effective_shares
     attrs, shares = _load_dept_attr_map(), effective_shares()[0]
-    hold = (p.get("meta") or {}).get("lfl_hold_on_aop") or {}
+    hold = (p.get("meta") or {}).get("lfl_hold_cluster") or {}
     st = p["stores"]
     df = pd.DataFrame(q["rows"])
     if division:
@@ -284,13 +290,14 @@ def export_rows(division: str = "", group: str = "", store: str = "") -> pd.Data
                 dtot = sum(v["ty"] for v in act.values())
                 for d, v in act.items():
                     recs.append((s, dv, m, d, v.get("ly", 0.0), v.get("ty", 0.0), dtot, v.get("g_p1"), v.get("g_p2"),
-                                 v["ty"] / dtot * 100 if dtot else 0.0))
+                                 v["ty"] / dtot * 100 if dtot else 0.0, v.get("bal")))
     dp = pd.DataFrame(recs, columns=["store", "division", "month", "dept", "Dept LY (₹L)", "Dept TY (₹L)", "Store-division TY (₹L)",
-                                     "BIS growth P1 (index)", "BIS growth P2 (index)", "Dept share of store-division %"])
+                                     "BIS growth P1 (index)", "BIS growth P2 (index)", "Dept share of store-division %",
+                                     "Store balance factor (SSG)"])
     df = df.merge(dp, on=["store", "division", "month", "dept"], how="left")
     df["Dept growth %"] = ((df["Dept TY (₹L)"] / df["Dept LY (₹L)"] - 1) * 100).where(df["Dept LY (₹L)"] > 0)
-    df["AOP hold factor (SSG)"] = [hold.get(dv, {}).get(m) if g == "SSG" else None
-                                   for dv, m, g in zip(df["division"], df["month"], df["Store group"])]
+    df["AOP cap factor (SSG cluster x month)"] = [(hold.get(cl) or {}).get(m) if g == "SSG" else None
+                                                  for cl, m, g in zip(df["Cluster"], df["month"], df["Store group"])]
     for h in ("P1", "P2"):
         df[f"MRP share {h} %"] = [(((shares.get(dv) or {}).get(d) or {}).get(str(mr)) or {}).get(f"{m} {h}")
                                   for dv, d, mr, m in zip(df["division"], df["dept"], df["mrp"], df["month"])]
@@ -306,7 +313,7 @@ def export_rows(division: str = "", group: str = "", store: str = "") -> pd.Data
                             "nontable_plan": "Non-Table TY (₹L)", "table_asp": "Table ASP (₹)", "table_qty": "Table Qty",
                             "nontable_asp": "Non-Table ASP (₹)", "nontable_qty": "Non-Table Qty"})
     cols = ["Store", "Store group", "Cluster", "Store tag", "Reference store (split follows)", "Division", "Attribute", "Department",
-            "Month", "Dept LY (₹L)", "BIS growth P1 (index)", "BIS growth P2 (index)", "AOP hold factor (SSG)", "Store-division TY (₹L)",
+            "Month", "Dept LY (₹L)", "BIS growth P1 (index)", "BIS growth P2 (index)", "AOP cap factor (SSG cluster x month)", "Store balance factor (SSG)", "Store-division TY (₹L)",
             "Dept share of store-division %", "Dept TY P1 (₹L)", "Dept TY P2 (₹L)", "Dept TY (₹L)", "Dept growth %", "MRP",
             "MRP share P1 %", "MRP share P2 %", "MRP TY (₹L)", "Table %", "Non-Table %", "Display mix from", "Table TY (₹L)",
             "Non-Table TY (₹L)", "Table ASP (₹)", "Non-Table ASP (₹)", "Table Qty", "Non-Table Qty"]

@@ -37,14 +37,14 @@ def _active_plan():
 ART_LEVEL = "{G} × Dept × Month: department AOP = Σ Article Names"
 
 
-AOP_LEVEL = "Division × Month: like-for-like department plan = AOP"
+AOP_LEVEL = "Month (all divisions): like-for-like department plan = AOP"
 
 
 def check(plan: dict, mrp_data: dict | None = None, art: dict | None = None, aop: dict | None = None):
     """(summary rows, off rows, not-covered rows). A row is "off" when its difference shows at 8 decimals.
     art = the Article Name branch's build (art_nm_engine.built) - checked when the MRP stage runs on the Article Name
     route (user, 2026-10-13: "think of it as another parallel branch to MRP"); with it promoted, its MRP bands too.
-    aop = {DIVISION: {month: lakh}} of the AOP publish: every division x month's like-for-like plan must equal it (user,
+    aop = {DIVISION: {month: lakh}} of the AOP publish: every month's like-for-like plan must equal it over all divisions (cluster cap, 2026-10-14; user,
     2026-10-13: "... AOP is correct for all months")."""
     stage = ART_LEVEL.format(G="Cluster" if art.get("grain") == "cluster" else "Store") if art is not None else None
     levels = {k: {"cells": 0, "off": 0, "largest": 0.0, "where": ""} for k in (
@@ -92,11 +92,13 @@ def check(plan: dict, mrp_data: dict | None = None, art: dict | None = None, aop
                 continue
             for div, dd in sd.get("divisions", {}).items():
                 for m, md in dd.get("months", {}).items():
-                    lfl[(div, m)] = lfl.get((div, m), 0.0) + sum(
+                    lfl[m] = lfl.get(m, 0.0) + sum(
                         v.get("ty", 0.0) for v in md.get("departments", {}).values() if v.get("active"))
-        for div, mm in aop.items():
-            for m, target in mm.items():
-                rec(AOP_LEVEL, target, lfl.get((div, m), 0.0), Store="(like-for-like)", Division=div, Department="", Month=m)
+        # the like-for-like plan is capped per SSG cluster x month over all divisions (2026-10-14, the colleague's method),
+        # so the division totals float and the AOP holds per month
+        for m in sorted({m for mm in aop.values() for m in mm}):
+            rec(AOP_LEVEL, sum(float(mm.get(m) or 0.0) for mm in aop.values()), lfl.get(m, 0.0),
+                Store="(like-for-like)", Division="all", Department="", Month=m)
 
     if art is not None:
         miss = {}

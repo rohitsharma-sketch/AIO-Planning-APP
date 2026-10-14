@@ -220,16 +220,13 @@ def versions(source, at, plan) -> dict:
 # ── 1-3: Calendar, AOP, BIS - one pass over the plan ───────────────────────────────────────────────────────────────
 def plan_checks(plan: dict, source: str, ver: dict) -> list:
     from actuals_manager import load_actuals, load_store_div_actuals
-    from engines.grain_view import aop_base_by_store
-    from engines.dept_sales_engine import _aop_lfl_targets, _load_new_dept_map
+    from engines.dept_sales_engine import _aop_lfl_targets, _load_new_dept_map, _store_aop, DIVISIONS, BUYER_BAND_PCT
     out = []
     corrected = source != "final_dept_plan.json"
     cal_div = _try(load_store_div_actuals)
     cal_dept = _try(load_actuals, {})
     act_dept = _try(lambda: load_actuals("actual"), {})   # the like-for-like department split is by actual LY (2026-10-14)
     cal_ok = isinstance(cal_div, dict) and bool(cal_div)
-    base = _try(lambda: aop_base_by_store()[1], {})
-    base = base if isinstance(base, dict) else {}
     from engines.department_plan import live_growth_matrix
     gm = _try(live_growth_matrix)
     gm_ok = isinstance(gm, dict) and bool(gm)
@@ -247,8 +244,9 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
     from engines.dept_sales_engine import _aop_store_plan
     aop_st = _try(_aop_store_plan, {}) or {}
     c_aop, grp_ty, grp_n = Acc(), {}, {}
-    ratios = {}       # (div, month) -> [TY P1 / (LY/2 x g P1)] of plain like-for-like rows
-    lfl_rows = []     # (store, div, month, dept, row, the month's departments) - checked once the factor is known
+    ssg_st, cl_ty, dept_gr = {}, {}, {}   # (store, month) -> [TY, cluster]; (cluster, month) -> TY; (div, dept) -> [LY, TY, LY x g]
+    ratios = {}       # (cluster, month) -> [TY P1 / (LY/2 x g P1 x store balance)] of plain like-for-like rows (2026-10-14)
+    lfl_rows = []     # (store, div, month, dept, row, the month's departments, cluster) - checked once the factor is known
     seen_g = set()
     for store, sd in (plan.get("stores") or {}).items():
         lfl = bool(sd.get("is_ssg"))
@@ -271,11 +269,14 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
                     c_aop.add(float((aop_st.get(str(store).upper(), {}).get(dv) or {}).get(m) or 0.0), ty, Group=g_, **w)
                 if lfl:
                     lfl_ty[(dv, m)] = lfl_ty.get((dv, m), 0.0) + ty
-                    b = base.get(store, {}).get(dv, {}).get(m)
+                    cl = sd.get("cluster") or ""
+                    e = ssg_st.setdefault((store, m), [0.0, cl])
+                    e[0] += ty
+                    cl_ty[(cl, m)] = cl_ty.get((cl, m), 0.0) + ty
+                    ad = act_dept.get(store, {}).get(dv, {}) if isinstance(act_dept, dict) else {}
+                    asum = sum(v.get(_lym(m), 0.0) for v in ad.values() if isinstance(v, dict))
                     if cal_ok:
-                        c_lfl.add(b if (b and cal > 0) else cal, ly, **w)
-                        ad = act_dept.get(store, {}).get(dv, {}) if isinstance(act_dept, dict) else {}
-                        asum = sum(v.get(_lym(m), 0.0) for v in ad.values() if isinstance(v, dict))
+                        c_lfl.add(asum if asum > 0 else cal, ly, **w)
                         cd = ad if asum > 0 else (cal_dept.get(store, {}).get(dv, {}) if isinstance(cal_dept, dict) else {})
                         csum = asum if asum > 0 else sum(v.get(_lym(m), 0.0) for v in cd.values() if isinstance(v, dict))
                         k = ly / csum if csum else 0.0
@@ -292,10 +293,15 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
                                 b_g.add(float(gm.get(dv, {}).get(dp, {}).get(f"{m} {h}", 100.0)), float(x.get(f"g_{h.lower()}", 100.0)),
                                         Division=dv, Department=dp, Month=f"{m} {h}")
                         if (dv, dp) not in new and (dv, dp) not in refs and x.get("ly"):
-                            bb = float(x["ly"]) / 2 * float(x["g_p1"]) / 100
+                            bb = float(x["ly"]) / 2 * float(x["g_p1"]) / 100 * float(x.get("bal", 1.0))
                             if bb > 1e-6:
-                                ratios.setdefault((dv, m), []).append(float(x["ty_p1"]) / bb)
-                        lfl_rows.append((store, dv, m, dp, x, deps))
+                                ratios.setdefault((cl, m), []).append(float(x["ty_p1"]) / bb)
+                        if (dv, dp) not in new:
+                            dg = dept_gr.setdefault((dv, dp), [0.0, 0.0, 0.0])
+                            dg[0] += float(x.get("ly") or 0.0)
+                            dg[1] += float(x.get("ty") or 0.0)
+                            dg[2] += float(x.get("ly") or 0.0) / 2 * (float(x["g_p1"]) + float(x.get("g_p2", x["g_p1"]))) / 100
+                        lfl_rows.append((store, dv, m, dp, x, deps, cl))
                 elif cal_ok:
                     c_oth.add(cal, ly, **w)
                 # a new department = its preset % of its reference's plan before the reference's own cut, every store x
@@ -315,28 +321,53 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
     st1 = "Calendar → LY"
     if cal_ok:
         out.append(c_oth.out(st1, "ly_other", "Store × Division × Month (other stores): plan LY = Calendar reindexed sales", "Division"))
-        out.append(c_lfl.out(st1, "ly_lfl", "Store × Division × Month (like-for-like): plan LY = AOP version's LY base (Calendar where it has none)", "Division",
-                             note="The engine anchors like-for-like LY on the AOP base its growth was set on; the department mix stays the Calendar's."))
+        out.append(c_lfl.out(st1, "ly_lfl", "Store × Division × Month (like-for-like): plan LY = actual LY sales (reindexed where it has none)", "Division",
+                             note="The colleague's method (2026-10-14): the like-for-like LY is actual sales; the AOP enters as the cluster cap."))
         out.append(c_mix.out(st1, "ly_mix", "Store × Department × Month (like-for-like): department LY = the store-division LY split by actual LY department cont %", "Department",
-                           note="The AOP base is broken into departments by actual LY sales (the reindexed mix only where a store × division × month has none)."))
+                           note="Departments carry their actual LY sales (the reindexed mix only where a store × division × month has none)."))
         rows = [{"Division": dv, "Month": m, "Plan LY (₹L)": a, "Calendar (₹L)": c, "Plan − Calendar": a - c}
                 for (dv, m), (a, c) in sorted(chain.items())]
         out.append(_plain(st1, "ly_chain", "Division × Month: plan LY vs Calendar (all stores)", "Division", "info",
-                          "Not expected to be equal: like-for-like stores sit on the AOP base (the gap here is AOP base − Calendar on them).", rows))
+                          "Not expected to be equal: like-for-like stores carry actual LY sales, the Calendar column is reindexed.", rows))
     else:
         out.append(_plain(st1, "ly_cal", "Calendar sales snapshot", "-", "fail", f"Calendar not reachable: {cal_div}", fix="input"))
 
     st2 = "AOP → TY"
     tg = _try(_aop_lfl_targets, {}) or {}
-    a1 = Acc()
-    for dv, mm in (tg if isinstance(tg, dict) else {}).items():
-        for m, t in mm.items():
-            if (dv, m) in lfl_ty:
-                a1.add(float(t), lfl_ty[(dv, m)], Division=dv, Month=m)
-    out.append(a1.out(st2, "aop_div", f"Division × Month: like-for-like plan TY = AOP {ver.get('aop', '')}", "Division",
-                      note="Corrected plans move TY on purpose." if corrected else ""))
+    tg = tg if isinstance(tg, dict) else {}
+    # the cap (2026-10-14, the colleague's method): each SSG cluster x month = the AOP's plan for its SSG stores (all
+    # divisions), the clusters scaled so they add to the AOP plan of the month; the division totals float
+    a1, a_st, cl_a, mon_a = Acc(), Acc(), {}, {}
+    for (store, m), (t_, cl) in ssg_st.items():
+        a_ = _store_aop(aop_st, store, DIVISIONS, m) if aop_st else 0.0
+        cl_a[(cl, m)] = cl_a.get((cl, m), 0.0) + a_
+        mon_a[m] = mon_a.get(m, 0.0) + a_
+    mon_t = {m: sum(float(mm.get(m) or 0.0) for mm in tg.values()) for m in mon_a}
+    for (cl, m), a_ in sorted(cl_a.items()):
+        k_ = mon_t[m] / mon_a[m] if mon_a.get(m) and mon_t.get(m) else 1.0
+        a1.add(a_ * k_, cl_ty.get((cl, m), 0.0), Cluster=cl, Month=m)
+    out.append(a1.out(st2, "aop_div", f"SSG cluster × Month (all divisions): like-for-like plan TY = AOP {ver.get('aop', '')}", "Cluster",
+                      note=("Corrected plans move TY on purpose. " if corrected else "") +
+                      "Capped at the cluster across divisions (the colleague's method): the division totals follow the buyer's growth."))
+    # every SSG store x month on its AOP store plan (the store balance, scaled with its cluster)
+    st_cl = {}
+    for (store, m), (t_, cl) in ssg_st.items():
+        a_ = _store_aop(aop_st, store, DIVISIONS, m) if aop_st else 0.0
+        if a_ > 0 and t_ > 0:
+            st_cl.setdefault((cl, m), []).append((store, t_, a_))
+    for (cl, m), rs in sorted(st_cl.items()):
+        T_, A_ = sum(r[1] for r in rs), sum(r[2] for r in rs)
+        for store, t_, a_ in rs:
+            a_st.add(a_ * T_ / A_, t_, Store=store, Cluster=cl, Month=m)
+    out.append(a_st.out(st2, "aop_ssg_store", "Store × Month (SSG, all divisions): plan TY = the AOP Forecaster's store plan", "Store",
+                        note="Each SSG store lands on its AOP store plan (scaled with its cluster); every department keeps its cluster total "
+                             "(two-way balance). The store × division split follows the buyer's growth."))
+    rows = [{"Division": dv, "Month": m, "AOP (₹L)": float(t), "Plan TY (₹L)": lfl_ty.get((dv, m), 0.0),
+             "Plan − AOP": lfl_ty.get((dv, m), 0.0) - float(t)} for dv, mm in sorted(tg.items()) for m, t in mm.items() if (dv, m) in lfl_ty]
+    out.append(_plain(st2, "aop_div_info", "Division × Month (SSG): plan TY vs AOP", "Division", "info",
+                      "Not held per division since the cluster cap (2026-10-14): the months and clusters are on the AOP.", rows))
     want = f"AOP publish {ver.get('aop_pid')}"
-    got = (plan.get("meta") or {}).get("lfl_ly_base")
+    got = (plan.get("meta") or {}).get("aop_publish") or (plan.get("meta") or {}).get("lfl_ly_base")
     out.append(_plain(st2, "aop_pub", "The plan is built on the AOP version BIS plans on", "Division",
                       "pass" if got == want else "fail", f"plan: {got}; BIS plans on: {want}", fix="rerun"))
     if aop_st:
@@ -351,7 +382,7 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
              **{f"{g_} (₹L)": grp_ty.get((g_, dv, m), 0.0) for g_ in G}} for (dv, m) in sorted(all_ty)]
     out.append(_plain(st2, "aop_all", "Division × Month: TY by store group", "Division", "info",
                       "Stores with a plan: " + ", ".join(f"{g_} {len(grp_n.get(g_, ()))}" for g_ in G) +
-                      ". SSG = like-for-like (BIS growth, held on the AOP division plan); NSO = named new / ramp-up stores; "
+                      ". SSG = like-for-like (BIS growth, capped at the cluster's AOP); NSO = named new / ramp-up stores; "
                       "Others = placeholder stores (NS- / AD- / MAMJ-) - both on the AOP Forecaster's store plan.", rows))
 
     st3 = "BIS → TY"
@@ -361,8 +392,8 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
     else:
         out.append(_plain(st3, "bis_g", "BIS growth", "-", "fail", f"BIS growth not reachable: {gm}", fix="input"))
     F = {k: sorted(r)[len(r) // 2] for k, r in ratios.items() if r}
-    for store, dv, m, dp, x, deps in lfl_rows:
-        f = F.get((dv, m))
+    for store, dv, m, dp, x, deps, cl in lfl_rows:
+        f = F.get((cl, m))
         if f is None or (not x.get("ly") and (dv, dp) not in new):
             continue
         for h in ("p1", "p2"):
@@ -371,14 +402,14 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
                 r = deps.get(c["ref_dept"])
                 if not r or "g_" + h not in r:
                     continue
-                exp = float(r["ly"]) / 2 * float(r["g_" + h]) / 100 * f * float(c.get("new_dept_pct", c.get("alloc_pct", 0)) or 0) / 100
+                exp = (float(r["ly"]) / 2 * float(r["g_" + h]) / 100 * f * float(c.get("new_dept_pct", c.get("alloc_pct", 0)) or 0) / 100
+                       * float(r.get("bal", 1.0)))
             else:
-                exp = float(x["ly"]) / 2 * float(x["g_" + h]) / 100 * f * refs.get((dv, dp), 1.0)
+                exp = float(x["ly"]) / 2 * float(x["g_" + h]) / 100 * f * refs.get((dv, dp), 1.0) * float(x.get("bal", 1.0))
             b_ty.add(exp, float(x.get("ty_" + h) or 0.0), Store=store, Division=dv, Department=dp, Month=f"{m} {h.upper()}")
-    hold = (plan.get("meta") or {}).get("lfl_hold_on_aop") or {}
-    fn = "; ".join(f"{dv} {m} ×{F[(dv, m)]:.6f}" + (f" (AOP hold ×{hold[dv][m]:.6f})" if hold.get(dv, {}).get(m) else "")
-                   for dv, m in sorted(F))
-    out.append(b_ty.out(st3, "bis_ty", "Store × Department × Period (like-for-like): TY = LY/2 × BIS growth × one division-month factor", "Department",
+    fs = sorted(F.values())
+    fn = f"{len(fs)} cluster × month factors, {fs[0]:.4f} to {fs[-1]:.4f}" if fs else "none"
+    out.append(b_ty.out(st3, "bis_ty", "Store × Department × Period (like-for-like): TY = LY/2 × BIS growth × one cluster-month factor × the store balance", "Department",
                         fix="rerun" if not corrected else "input",
                         note=("A corrected plan (" + source + ") moves TY on purpose. " if corrected else "") +
                         "New departments = their % of the reference's plan; references keep their share. Factors: " + fn))
@@ -391,6 +422,22 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
                               "before its own cut; the reference keeps (1 − its cut %)."))
         out.append(_plain(st3, "new_ratio_sum", "New departments vs their reference - preset and actual %", "Department", "info",
                           f"{len(rows)} new departments", rows))
+    # the buyer's growth vs the plan's, department total (user's colleague, 2026-10-14: "the diff buyer growth at total
+    # level can be accepted at min of 3% and max of 3%" - their DR - EI column): flagged beyond the band, not capped
+    rows = []
+    for (dv, dp), (l_, t_, b_) in sorted(dept_gr.items()):
+        if l_ > 0 and t_ > 0:
+            gb, gp = (b_ / l_ - 1) * 100, (t_ / l_ - 1) * 100
+            if abs(gp - gb) > BUYER_BAND_PCT:
+                rows.append({"Division": dv, "Department": dp, "LY (₹L)": l_, "Plan TY (₹L)": t_, "Buyer's growth %": gb,
+                             "Plan growth %": gp, "Plan − buyer (points)": gp - gb})
+    rows.sort(key=lambda r: -abs(r["Plan − buyer (points)"]))
+    n_ = sum(1 for v in dept_gr.values() if v[0] > 0 and v[1] > 0)
+    out.append(_plain(st3, "buyer_band", f"Department (SSG, all months): plan growth within ±{BUYER_BAND_PCT:g} points of the buyer's growth",
+                      "Department", "warn" if rows else "pass",
+                      (f"{len(rows)} of {n_} departments outside the band - the cluster cap moved them; the buyer's growth is not changed "
+                       "(a flag for the buyer to revise)") if rows else f"all {n_} departments within the band", rows, cells=n_, off=len(rows),
+                      largest=rows[0]["Plan − buyer (points)"] if rows else 0.0, where=rows[0]["Department"] if rows else ""))
     from engines.dept_sales_engine import FINAL_STAMP_PATH, _inputs_stamp
     try:
         with open(FINAL_STAMP_PATH, encoding="utf-8") as fh:
@@ -799,7 +846,7 @@ SHEET = {"qty": "Qty - no ASP", "mrp_none": "MRP - not split", "att_off": "Off-s
          "dt_mix": "Display - no LY mix", "dt_run": "Display run vs tree", "mrp_mix": "MRP Cont % vs LY mix",
          "mrp_fwd": "Dept TY vs MRPs", "mrp_back": "Dept LY vs MRPs", "dt_fwd": "MRP TY vs displays", "dt_back": "MRP LY vs displays",
          "ly_other": "LY vs Calendar (other)", "ly_lfl": "LY vs AOP base (LFL)", "ly_mix": "Dept LY vs Calendar mix",
-         "aop_div": "LFL TY vs AOP", "bis_g": "Growth vs BIS", "bis_ty": "TY vs BIS formula", "new_ratio": "New dept vs preset",
+         "aop_div": "SSG cluster TY vs AOP", "aop_ssg_store": "SSG store vs AOP store plan", "buyer_band": "Buyer growth ±3 pts", "bis_g": "Growth vs BIS", "bis_ty": "TY vs BIS formula", "new_ratio": "New dept vs preset",
          "att_season": "i - Season by attribute", "new_ratio_sum": "i - New departments", "ly_chain": "i - LY vs Calendar",
          "aop_all": "i - TY by store group", "aop_store": "AOP store plan", "dt_stores": "Stores not at UDF"}
 

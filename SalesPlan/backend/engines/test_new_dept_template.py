@@ -58,4 +58,20 @@ assert abs(tot - (16.5 + 7.2)) < 1e-9, tot   # the division total is what it was
 assert abs(sum(dd[s_]["JAIPURI"]["ty"] for s_ in "AB") / sum(dd[s_]["FNCY"]["ty"] for s_ in "AB") - 0.25) < 1e-12
 # the mix is kept: KURTI / FNCY unchanged by the re-balance
 assert abs(dd["A"]["KURTI"]["ty"] / dd["A"]["FNCY"]["ty"] - 10 / 6) < 1e-12
+# 2026-10-14 (the colleague's method): the store balance puts every SSG store x month on its AOP store plan (scaled onto
+# what the cluster carries) while each (division, department) keeps its cluster total; a tied new dept moves with its ref
+from engines.dept_sales_engine import _store_balance  # noqa: E402
+def _s(depts):
+    return {"LADIES": {"months": {"Mar'27": {"departments": {
+        k: {"ly": v, "ty": v, "ty_p1": v / 2, "ty_p2": v / 2, "active": True} for k, v in depts.items()}}}}}
+p3 = {"A": _s({"FNCY": 6.0, "JAIPURI": 1.5, "KURTI": 10.0}), "B": _s({"FNCY": 4.0, "JAIPURI": 1.0, "KURTI": 2.0})}
+aop = {"A": {"LADIES": {"Mar'27": 10.0}}, "B": {"LADIES": {"Mar'27": 10.0}}}   # 24.5 carried -> 12.25 each
+_store_balance(p3, aop, {"A": "C1", "B": "C1"}, {("LADIES", "JAIPURI"): "FNCY"})
+d3 = {s: p3[s]["LADIES"]["months"]["Mar'27"]["departments"] for s in "AB"}
+for s_ in "AB":
+    assert abs(sum(v["ty"] for v in d3[s_].values()) - 12.25) < 1e-9, d3[s_]
+    assert abs(d3[s_]["JAIPURI"]["ty"] / d3[s_]["FNCY"]["ty"] - 0.25) < 1e-9, d3[s_]
+    assert all(abs(v["ty_p1"] + v["ty_p2"] - v["ty"]) < 1e-9 for v in d3[s_].values())
+for d_, t_ in (("FNCY", 10.0), ("JAIPURI", 2.5), ("KURTI", 12.0)):
+    assert abs(sum(d3[s_][d_]["ty"] for s_ in "AB") - t_) < 1e-8, (d_, d3)
 print("new dept template checks passed")

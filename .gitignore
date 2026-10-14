@@ -75,3 +75,5 @@ SalesPlan/backend/art_nm_cont_source.xlsx
 # Sales Plan engine caches and one-off backups (business data, 2026-10-14)
 SalesPlan/backend/*.pkl
 SalesPlan/backend/backups/
+# imported planner's growth (the colleague's DO column, 2026-10-14) - business data, never in git
+Buyer's Input Sheet/planner_growth.json

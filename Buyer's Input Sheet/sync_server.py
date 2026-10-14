@@ -339,6 +339,10 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 FACTOR_TABLE_JSON = os.path.join(_HERE, "factor_table.json")
 FILL_RATE_JSON = os.path.join(_HERE, "fill_rate.json")
 NEW_DEPT_MAP_JSON = os.path.join(_HERE, "..", "SalesPlan", "backend", "new_dept_mapping.json")
+# imported planner's growth per department (2026-10-14, the colleague's "MAMJ'27 DEPARTMENT - AOP (NEW APPROACH)" column
+# DO, Approach 1 = AOP capped at the SSG cluster): {source, column, imported_at, departments{NAME: fraction}} - business
+# data, gitignored; the page takes it over the factor table for those departments
+PLANNER_GROWTH_JSON = os.path.join(_HERE, "planner_growth.json")
 
 
 def _read_json(path, default):
@@ -367,7 +371,7 @@ def planner_config():
             if ref and ref != dept:
                 refs[dept] = ref
     return jsonify({"factor_table": _read_json(FACTOR_TABLE_JSON, None), "refs": refs,
-                    "fill_rate": _read_json(FILL_RATE_JSON, None)})
+                    "fill_rate": _read_json(FILL_RATE_JSON, None), "planner_growth": _read_json(PLANNER_GROWTH_JSON, None)})
 
 
 def _planner_editor():
