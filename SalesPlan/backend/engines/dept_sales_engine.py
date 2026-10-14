@@ -61,6 +61,26 @@ def _is_ssg(tag: str, store: str = "") -> bool:
     return _universal_is_ssg(tag, store)
 
 
+# Store groups (user, 2026-10-14: "Clusters can have 3 sets - SSG/NSO/Others wherein NSO means stores which have names
+# and are not genericly numbered. Others are the ones which will fall under the NSO-01 or MAMJ-01 category") - the AOP
+# Forecaster's own placeholder prefixes (engine_v3 UNNAMED_PFX)
+PLACEHOLDER_PFX = ("NS-", "AD-", "MAMJ")
+
+
+def store_group(store: str, ssg: bool) -> str:
+    return "SSG" if ssg else "Others" if str(store).strip().upper().startswith(PLACEHOLDER_PFX) else "NSO"
+
+
+def _aop_store_plan() -> dict:
+    """{STORE: {DIVISION: {TY month: Rs lakh}}} - the AOP Forecaster's store plan of the publish BIS plans on; {} if
+    it can't be read (the non-SSG stores then keep the old rule: own LY x the division's average BIS growth)."""
+    try:
+        from engines.grain_view import _aop_by_store
+        return _aop_by_store()[2] or {}
+    except Exception:   # noqa: BLE001 - AOP / DB unreachable
+        return {}
+
+
 
 # ── Data Loaders ──────────────────────────────────────────────────────────────
 
@@ -115,8 +135,10 @@ def apply_new_dept_adjustments(plan_result: dict, new_dept_map: dict) -> dict:
     # totals, so the LFL stores stay exactly on the AOP plan (2026-10-13: over all stores together LADIES' LFL moved 2.4 L)
     pre, post = {}, {}
 
+    # like-for-like stores together (they stay on the AOP division plan); every other store on its own, so it stays on
+    # its own AOP store plan (2026-10-14: together, the carve moved Rs.30.85 L from the placeholder stores to the named ones)
     for store, sdata in result["stores"].items():
-        grp = bool(sdata.get("is_ssg"))
+        grp = True if sdata.get("is_ssg") else store
         for div, entries in new_dept_map.items():
             div_data = sdata["divisions"].get(div, {})
             for ty_month, month_data in div_data.get("months", {}).items():
@@ -156,7 +178,7 @@ def apply_new_dept_adjustments(plan_result: dict, new_dept_map: dict) -> dict:
     # one factor per division x month for every store: back on the pre-carve total, mix (and new / ref) kept exactly
     f = {k: (pre[k] / post[k]) if post.get(k) else 1.0 for k in pre}
     for store, sdata in result["stores"].items():
-        grp = bool(sdata.get("is_ssg"))
+        grp = True if sdata.get("is_ssg") else store
         for div in new_dept_map:
             for ty_month, month_data in sdata["divisions"].get(div, {}).get("months", {}).items():
                 depts, k = month_data["departments"], f.get((div, ty_month, grp), 1.0)
@@ -423,7 +445,14 @@ def run_dept_plan():
                 md["div_total_p2"] = sum(v["ty_p2"] for v in act)
 
     # ── Step 2: Non-SSG stores ────────────────────────────────────────────────
+    # (user, 2026-10-14: "plan should come for the 309 stores or whatever count it is for the sales in the aop
+    # forecaster ... For stores which are out of the SSG 148 stores - their respective ref stores plan cont % can be
+    # taken and moved forward on every step"): TY = the AOP Forecaster's plan for the store x division x month, split
+    # by its reference store's department cont % (and P1 / P2) - the MRP, display type and qty steps then follow that
+    # reference too. A reference that is itself not like-for-like is followed to its own reference (up to 3 steps).
     results_non_ssg = {}
+    aop_store = _aop_store_plan()
+    ref_used = {}
 
     for s_info in store_master:
         store = s_info["Store"]
@@ -431,11 +460,16 @@ def run_dept_plan():
             continue
 
         ref = s_info.get("Ref Store", "")
+        for _ in range(3):
+            if ref in results_ssg or ref not in store_info:
+                break
+            ref = store_info[ref].get("Ref Store", "")
         if ref not in results_ssg:
             missing_ref.append(store)
             ref_data = None
         else:
             ref_data = results_ssg[ref]
+            ref_used[store] = ref
 
         results_non_ssg[store] = {}
         for div in DIVISIONS:
@@ -455,7 +489,10 @@ def run_dept_plan():
                         if isinstance(info, dict)
                     )
                 div_growth = _avg_division_growth(growth_matrix, div, ty_month)
-                div_total_ty = ly_div_total * (div_growth / 100.0)
+                if aop_store:   # the AOP Forecaster's plan for it (0 when the AOP has none - untagged rows, an NSO with no opening month)
+                    div_total_ty = float((aop_store.get(str(store).strip().upper(), {}).get(div) or {}).get(ty_month) or 0.0)
+                else:
+                    div_total_ty = ly_div_total * (div_growth / 100.0)
 
                 dept_vals = {}
 
@@ -472,7 +509,8 @@ def run_dept_plan():
                 for dept in active:
                     ref_dept = ref_depts.get(dept, {})
                     ty_val = tys[dept]
-                    g        = ref_dept.get("growth_pct", div_growth)
+                    # its own growth on its own LY when it has one; a store new since LY carries its reference's
+                    g        = (ty_val / lys[dept] * 100.0) if lys[dept] > 0 else ref_dept.get("growth_pct", div_growth)
                     ref_p1 = ref_dept.get("ty_p1", 0.0)
                     ref_ty = ref_dept.get("ty", 0.0)
                     ty_p1 = ty_val * ref_p1 / ref_ty if ref_ty > 0 else ty_val / 2.0
@@ -506,10 +544,13 @@ def run_dept_plan():
     all_results = {}
     for s, data in {**results_ssg, **results_non_ssg}.items():
         info = store_info.get(s, {})
+        ssg = _is_ssg(info.get("Tag", ""), s)
         all_results[s] = {
             "tag": info.get("Tag", ""),
-            "is_ssg": _is_ssg(info.get("Tag", ""), s),
+            "is_ssg": ssg,
+            "group": store_group(s, ssg) if (ssg or info.get("Tag")) else "Untagged",   # untagged ERP rows: no AOP plan
             "ref_store": info.get("Ref Store", ""),
+            "ref_used": ref_used.get(s, s if ssg else ""),   # the like-for-like store its split follows
             "cluster": info.get("Cluster", ""),
             "divisions": data,
         }
@@ -521,6 +562,7 @@ def run_dept_plan():
             "non_ssg_count": len(results_non_ssg),
             "dept_actuals_loaded": dept_actuals_loaded,
             "missing_ref_stores": list(set(missing_ref)),
+            "non_ssg_ty_source": "AOP Forecaster store plan" if aop_store else "own LY x division average BIS growth (AOP store plan unreadable)",
             "ly_months_locked": ly_locked,
             "ty_months_active": active_ty_months,
             "lfl_ly_base": f"AOP publish {aop_pid}" if aop_base else "Calendar snapshot",

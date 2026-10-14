@@ -35,7 +35,9 @@ def build_cube(plan: dict, source: dict) -> dict:
     stores, div, dept, months, grow, off = {}, {}, {}, set(), {}, {}
     for s, sd in (plan.get("stores") or {}).items():
         stores[s] = {"cluster": sd.get("cluster") or NO_CLUSTER, "ssg": bool(sd.get("is_ssg")), "tag": sd.get("tag"),
-                     "ref": sd.get("ref_store") or ""}
+                     "ref": sd.get("ref_store") or "",
+                     # SSG / NSO / Others and the like-for-like store a non-SSG store's split follows (2026-10-14)
+                     "group": sd.get("group") or ("SSG" if sd.get("is_ssg") else "NSO"), "ref_used": sd.get("ref_used") or ""}
         for dv, dd in (sd.get("divisions") or {}).items():
             if dv not in PLAN_DIVS:   # a plan saved before GM / RETAIL left the engine (2026-10-13)
                 continue
@@ -493,7 +495,7 @@ HIER_LEVELS = ("cluster", "store", "stype", "division", "attribute", "department
 
 
 def _sinfo(cube: dict) -> dict:
-    return {s: {"cluster": x["cluster"], "store": s, "stype": "SSG" if x.get("ssg") else "NSO"}
+    return {s: {"cluster": x["cluster"], "store": s, "stype": x.get("group") or ("SSG" if x.get("ssg") else "NSO")}
             for s, x in cube["stores"].items()}
 
 

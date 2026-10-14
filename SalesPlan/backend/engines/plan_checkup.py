@@ -242,6 +242,10 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
     c_oth, c_lfl, c_mix, nd_acc, nd_sum = Acc(), Acc(), Acc(), Acc(), {}
     b_g, b_ty = Acc(1e-9), Acc()
     chain, lfl_ty, all_ty = {}, {}, {}
+    # non-SSG stores plan on the AOP Forecaster's store plan, split by their reference store (2026-10-14)
+    from engines.dept_sales_engine import _aop_store_plan
+    aop_st = _try(_aop_store_plan, {}) or {}
+    c_aop, grp_ty, grp_n = Acc(), {}, {}
     ratios = {}       # (div, month) -> [TY P1 / (LY/2 x g P1)] of plain like-for-like rows
     lfl_rows = []     # (store, div, month, dept, row, the month's departments) - checked once the factor is known
     seen_g = set()
@@ -257,7 +261,13 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
                 ch[0] += ly
                 ch[1] += cal
                 all_ty[(dv, m)] = all_ty.get((dv, m), 0.0) + ty
+                g_ = sd.get("group") or ("SSG" if lfl else "NSO")
+                grp_ty[(g_, dv, m)] = grp_ty.get((g_, dv, m), 0.0) + ty
+                if ty > 0:
+                    grp_n.setdefault(g_, set()).add(store)
                 w = {"Store": store, "Division": dv, "Month": m}
+                if not lfl and aop_st:
+                    c_aop.add(float((aop_st.get(str(store).upper(), {}).get(dv) or {}).get(m) or 0.0), ty, Group=g_, **w)
                 if lfl:
                     lfl_ty[(dv, m)] = lfl_ty.get((dv, m), 0.0) + ty
                     b = base.get(store, {}).get(dv, {}).get(m)
@@ -324,10 +334,20 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
     got = (plan.get("meta") or {}).get("lfl_ly_base")
     out.append(_plain(st2, "aop_pub", "The plan is built on the AOP version BIS plans on", "Division",
                       "pass" if got == want else "fail", f"plan: {got}; BIS plans on: {want}", fix="rerun"))
-    rows = [{"Division": dv, "Month": m, "Plan TY all stores (₹L)": all_ty[(dv, m)], "LFL TY (₹L)": lfl_ty.get((dv, m), 0.0),
-             "Other stores TY (₹L)": all_ty[(dv, m)] - lfl_ty.get((dv, m), 0.0)} for (dv, m) in sorted(all_ty)]
+    if aop_st:
+        out.append(c_aop.out(st2, "aop_store", "Store × Division × Month (NSO / Others): plan TY = the AOP Forecaster's store plan", "Store",
+                             note="Stores outside the like-for-like 148 plan on the AOP Forecaster's own store plan, split by their "
+                                  "reference store's department, P1 / P2, MRP and display type mix."))
+    else:
+        out.append(_plain(st2, "aop_store", "Store × Division × Month (NSO / Others): plan TY = the AOP Forecaster's store plan", "Store",
+                          "fail", "the AOP store plan could not be read", fix="input"))
+    G = sorted({g_ for g_, _, _ in grp_ty})
+    rows = [{"Division": dv, "Month": m, "Plan TY all stores (₹L)": all_ty[(dv, m)],
+             **{f"{g_} (₹L)": grp_ty.get((g_, dv, m), 0.0) for g_ in G}} for (dv, m) in sorted(all_ty)]
     out.append(_plain(st2, "aop_all", "Division × Month: TY by store group", "Division", "info",
-                      "Other (non-LFL / new) stores grow at their division's average BIS growth - not tied to AOP.", rows))
+                      "Stores with a plan: " + ", ".join(f"{g_} {len(grp_n.get(g_, ()))}" for g_ in G) +
+                      ". SSG = like-for-like (BIS growth, held on the AOP division plan); NSO = named new / ramp-up stores; "
+                      "Others = placeholder stores (NS- / AD- / MAMJ-) - both on the AOP Forecaster's store plan.", rows))
 
     st3 = "BIS → TY"
     if gm_ok:
@@ -404,12 +424,14 @@ def _run_totals(path, load):
     mt = os.path.getmtime(path)
     if _RUN.get("mt") != mt:
         run = load(path)
-        R = {}
+        R, S = {}, {}
         for r in (run or {}).get("rows", []):
             for dt, k in (("TABLE", "table_plan"), ("NON_TABLE", "nontable_plan")):
                 kk = (r["dept"], str(r["mrp"]), dt, r["month"])
-                R[kk] = R.get(kk, 0.0) + float(r.get(k) or 0.0)
-        _RUN.update(mt=mt, v={"run_at": (run or {}).get("run_at"), "R": R} if run else None)
+                v = float(r.get(k) or 0.0)
+                R[kk] = R.get(kk, 0.0) + v
+                S[r["store"]] = S.get(r["store"], 0.0) + v
+        _RUN.update(mt=mt, v={"run_at": (run or {}).get("run_at"), "R": R, "S": S} if run else None)
     return _RUN["v"]
 
 
@@ -518,16 +540,22 @@ def mrp_checks(gm=None, new=None) -> list:
                       "every split MRP has a display type mix (fallbacks listed)", srcs, fix="input"))
     run = _run_totals(DT_RESULT_PATH, _load)
     if not run:
-        out.append(_plain(st5, "dt_run", "Display Type run (SSG stores) = the display tree", "UDF", "fail", "not run yet", fix="rerun"))
+        out.append(_plain(st5, "dt_run", "Display Type run (all planned stores) = the display tree", "UDF", "fail", "not run yet", fix="rerun"))
     else:
         R = run["R"]
-        ssg = xix["c"]["stype"] == xix["pos"]["stype"].get("SSG", -1)
-        T = _sum_by(xix, ("department", "mrp", "display", "month"), ssg)
+        T = _sum_by(xix, ("department", "mrp", "display", "month"))
         acc = Acc()
         for k in set(R) | {k for k in T if k[2] != "-"}:
             acc.add(T.get(k, [0.0, 0.0])[1], R.get(k, 0.0), Department=k[0], MRP=k[1], Display=k[2], Month=k[3])
-        out.append(acc.out(st5, "dt_run", f"Display Type run of {run.get('run_at')} (SSG stores) = the display tree", "UDF",
+        out.append(acc.out(st5, "dt_run", f"Display Type run of {run.get('run_at')} (all planned stores) = the display tree", "UDF",
                            note="Off = the plan, the MRP split or the display mix changed after the run; Rectify re-runs it."))
+        # every store with a plan reaches the display type level (2026-10-14: the run covered the 148 SSG stores only)
+        st_plan = {k[0]: v[1] for k, v in _sum_by(dix, ("store",)).items() if v[1] > 1e-9}
+        a_st = Acc()
+        for s_, t_ in st_plan.items():
+            a_st.add(t_, run.get("S", {}).get(s_, 0.0), Store=s_)
+        out.append(a_st.out(st5, "dt_stores", f"Store: plan TY = its Display Type run total - {len(st_plan)} stores with a plan", "Store",
+                            note="A non-SSG store takes its reference store's Table / Non-Table mix."))
 
     st6 = "Qty (ASP master)"
     asp = load_asp()
@@ -768,7 +796,7 @@ SHEET = {"qty": "Qty - no ASP", "mrp_none": "MRP - not split", "att_off": "Off-s
          "ly_other": "LY vs Calendar (other)", "ly_lfl": "LY vs AOP base (LFL)", "ly_mix": "Dept LY vs Calendar mix",
          "aop_div": "LFL TY vs AOP", "bis_g": "Growth vs BIS", "bis_ty": "TY vs BIS formula", "new_ratio": "New dept vs preset",
          "att_season": "i - Season by attribute", "new_ratio_sum": "i - New departments", "ly_chain": "i - LY vs Calendar",
-         "aop_all": "i - TY by store group"}
+         "aop_all": "i - TY by store group", "aop_store": "AOP store plan", "dt_stores": "Stores not at UDF"}
 
 
 def export_xlsx(r: dict) -> bytes:

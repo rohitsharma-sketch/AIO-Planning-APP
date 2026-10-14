@@ -184,10 +184,31 @@ def _mix_tables() -> dict:
     return v
 
 
+def _ref_stores() -> dict:
+    """{store: the like-for-like store its split follows} for the non-SSG stores of the plan in use (dept_sales_engine
+    Step 2, 2026-10-14: "their respective ref stores plan cont % can be taken and moved forward on every step")."""
+    try:
+        from engines.grain_view import _cube
+        return {s: x["ref_used"] for s, x in (_cube().get("stores") or {}).items() if not x.get("ssg") and x.get("ref_used")}
+    except Exception:   # noqa: BLE001 - no plan: every store on its own mix
+        return {}
+
+
 def display_shares(keys: pd.DataFrame, _ref: bool = True) -> pd.DataFrame:
     """keys: store, department, mrp, month (plan month) -> one row per key x display: + pct (adds to 100 per key) and
     src (the MIX_LEVELS level it came from, or "reference": a new department with no LY takes its reference
-    department's mix, as it takes its MRP split - effective_shares). A key with no LY anywhere is not returned."""
+    department's mix, as it takes its MRP split - effective_shares). A key with no LY anywhere is not returned.
+    A non-SSG store takes its reference store's mix (the store's plan is split by that store at every step)."""
+    K = ["store", "department", "mrp", "month"]
+    rm = _ref_stores() if _ref else {}
+    if rm and keys["store"].isin(list(rm)).any():
+        k2 = keys[K].drop_duplicates().assign(_mix=lambda d: d["store"].map(lambda s: rm.get(s, s)))
+        sh = _display_shares_own(k2[["_mix", "department", "mrp", "month"]].rename(columns={"_mix": "store"}).drop_duplicates())
+        return k2.merge(sh.rename(columns={"store": "_mix"}), on=["_mix", "department", "mrp", "month"]).drop(columns="_mix")
+    return _display_shares_own(keys, _ref=_ref)
+
+
+def _display_shares_own(keys: pd.DataFrame, _ref: bool = True) -> pd.DataFrame:
     K = ["store", "department", "mrp", "month"]
     left = keys[K].drop_duplicates().reset_index(drop=True)
     out = []
@@ -205,7 +226,7 @@ def display_shares(keys: pd.DataFrame, _ref: bool = True) -> pd.DataFrame:
         lr = left[left["department"].isin(refs)]
         if len(lr):
             lr = lr.assign(orig=lr["department"], department=lr["department"].map(refs))
-            r = display_shares(lr, _ref=False)
+            r = _display_shares_own(lr, _ref=False)
             if len(r):
                 r = r.merge(lr[K + ["orig"]], on=K).assign(department=lambda d: d["orig"], src="reference")
                 out.append(r.drop(columns="orig"))
@@ -554,7 +575,9 @@ def run_plan():
 
     rows = []
     for store, sr in fp["stores"].items():
-        if not sr.get("is_ssg"): continue
+        # every planned store (2026-10-14: was the like-for-like stores only) - a non-SSG store's Table / Non-Table %
+        # is its reference store's (display_shares)
+        ssg = bool(sr.get("is_ssg"))
         divs = sr.get("divisions", {})
         for div, div_data in divs.items():
             if div not in mrp_raw: continue
@@ -568,6 +591,7 @@ def run_plan():
                     mrp_dept = mrp_raw[div][dept]
                     ty_p1 = dept_rec.get("ty_p1", 0.0)
                     ty_p2 = dept_rec.get("ty_p2", 0.0)
+                    if not ssg and not (ty_p1 or ty_p2): continue   # a non-SSG store with no plan here: no rows
                     # each half split over the MRPs by its share - the MRPs add back to the department exactly
                     s1 = split(ty_p1, {m: pm.get(f"{month} P1", 0.0) for m, pm in mrp_dept.items()})
                     s2 = split(ty_p2, {m: pm.get(f"{month} P2", 0.0) for m, pm in mrp_dept.items()})
@@ -695,7 +719,6 @@ def validate():
     fp = _dept_plan()
     if fp:
         for store, sr in fp["stores"].items():
-            if not sr.get("is_ssg"): continue
             for div, div_data in sr.get("divisions", {}).items():
                 for month, mdata in div_data.get("months", {}).items():
                     div_ty[(store, div, month)] = mdata.get("div_total_ty", 0.0)
