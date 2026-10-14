@@ -563,6 +563,12 @@ export default function MrpReapportionment() {
                       border: `1px solid ${theme.border}`, color: theme.textMuted,
                     }}>↓ Export current</a>
                   )}
+                  {status?.mapping_file_found && (
+                    <a href="/api/planning/mrp-reapportionment/mapping/converted" download title="The master as the rule reads it: every LY-sold MRP your file doesn't list added as discontinued, with the nearest listed MRP below / above and LY sales" style={{
+                      padding: '4px 10px', borderRadius: 6, fontSize: 11, textDecoration: 'none',
+                      border: `1px solid ${theme.border}`, color: theme.textMuted,
+                    }}>↓ Export as read</a>
+                  )}
                 </div>
               </div>
             </div>

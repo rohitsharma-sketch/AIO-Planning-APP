@@ -339,6 +339,7 @@ def _load_mapping(path: Optional[str] = None) -> pd.DataFrame:
         raise ValueError(f"No mapping file found in: {MAPPING_DIR}")
 
     df = _wide_master(path)
+    listed_only = False
     if df is None:
         df = _norm_cols(pd.read_excel(path))
         rename = {}
@@ -350,10 +351,42 @@ def _load_mapping(path: Optional[str] = None) -> pd.DataFrame:
                         "MRP", "RAW_MRP", "OLD_MRP"):      rename[c] = "MRP_CURRENT"
             elif cu in ("MRP_LISTED", "LISTED_MRP",
                         "NEW_MRP", "FINAL_MRP"):            rename[c] = "MRP_LISTED"
+            elif cu in ("REVISE_MRP", "REVISED_MRP", "REVISE", "REVISED"):
+                rename[c], listed_only = "MRP_LISTED", True
         df.rename(columns=rename, inplace=True)
         missing = [c for c in ("DEPARTMENT", "DISPLAY", "MRP_CURRENT", "MRP_LISTED") if c not in df.columns]
         if missing:
             raise ValueError(f"MRP Mapping Master missing columns: {missing}")
+    if listed_only:
+        return _expand_listed(_clean_master(df))
+    return _clean_master(df)
+
+
+def _expand_listed(listed: pd.DataFrame) -> pd.DataFrame:
+    """The listed-MRPs master (user, 2026-10-14: "i will give the mrp master like this from now on" - DEPARTMENT | DISPLAY
+    TYPE | MRP | REVISE MRP, only the MRPs that stay, each with its revised MRP) turned into the full master the rule
+    reads: every MRP the Department x Display sold LY (the sales engine) and the file doesn't list is discontinued (new MRP
+    0), so it splits to the nearest listed MRP below / above as before. The rule itself is unchanged."""
+    sales, month_cols, _ = _engine_sales()
+    # a department named by its old, pre-split name (KB_BERMUDA ...) - the sales engine has only its parts: the old
+    # name's MRPs apply to each part the file doesn't list itself (the suite's data-lake department split)
+    from engines.art_nm_engine import DEPT_SPLITS
+    have = set(listed["DEPARTMENT"])
+    parts = [listed[listed["DEPARTMENT"] == old].assign(DEPARTMENT=p)
+             for old, ps in DEPT_SPLITS.items() if old in have for p in ps if p != old and p not in have]
+    if parts:
+        listed = pd.concat([listed[~listed["DEPARTMENT"].isin({o for o in DEPT_SPLITS if o in have and o not in
+                                                                set(sales["DEPARTMENT"])})], *parts], ignore_index=True)
+    pairs = listed[["DEPARTMENT", "DISPLAY"]].drop_duplicates()
+    s = sales[(sales[month_cols] != 0).any(axis=1)].merge(pairs, on=["DEPARTMENT", "DISPLAY"])
+    sold = s[["DEPARTMENT", "DISPLAY", "MRP"]].drop_duplicates().rename(columns={"MRP": "MRP_CURRENT"})
+    sold = sold.merge(listed[["DEPARTMENT", "DISPLAY", "MRP_CURRENT"]], how="left", indicator=True)
+    disc = sold[sold["_merge"] == "left_only"].drop(columns="_merge").assign(MRP_LISTED=0)
+    out = pd.concat([listed, disc], ignore_index=True).astype({"MRP_CURRENT": int, "MRP_LISTED": int})
+    return out.sort_values(["DEPARTMENT", "DISPLAY", "MRP_CURRENT"]).reset_index(drop=True)
+
+
+def _clean_master(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.dropna(subset=["DEPARTMENT"])[["DEPARTMENT", "DISPLAY", "MRP_CURRENT", "MRP_LISTED"]].copy()
     df = df[pd.to_numeric(df["MRP_CURRENT"], errors="coerce").notna()]   # a blank current MRP isn't an MRP 0 (audit)
@@ -1073,6 +1106,31 @@ def upload_mapping(file: UploadFile = File(...)):
             "listed": int((new["MRP_LISTED"] > 0).sum()), "discontinued": int((new["MRP_LISTED"] == 0).sum()),
             "no_listed_groups": int(t.groupby(["DEPARTMENT", "DISPLAY"])["MRP_LISTED"].max().eq(0).sum()),
             "changes": _mapping_changes(old, new)}
+
+
+@router.get("/mapping/converted")
+def download_converted():
+    """The master as the rule reads it: a listed-MRPs file (DEPARTMENT | DISPLAY TYPE | MRP | REVISE MRP) with every LY-
+    sold MRP it doesn't list added as discontinued, and each row's nearest listed MRP below / above and LY sales."""
+    mp = _load_mapping()
+    sales, months, _ = _engine_sales()
+    t = _targets(mp)
+    ly = (sales.groupby(["DEPARTMENT", "DISPLAY", "MRP"])[months].sum().sum(axis=1).div(1e5).rename("LY_SALES_L").reset_index()
+          .rename(columns={"MRP": "MRP_CURRENT"}))
+    conv = t.merge(ly, on=["DEPARTMENT", "DISPLAY", "MRP_CURRENT"], how="left").fillna({"LY_SALES_L": 0.0})
+    conv["STATUS"] = conv["MRP_LISTED"].gt(0).map({True: "listed", False: "discontinued"})
+    conv = conv.rename(columns={"BELOW": "NEAREST_LISTED_BELOW", "ABOVE": "NEAREST_LISTED_ABOVE"})[
+        ["DEPARTMENT", "DISPLAY", "MRP_CURRENT", "MRP_LISTED", "STATUS", "NEAREST_LISTED_BELOW", "NEAREST_LISTED_ABOVE", "LY_SALES_L"]]
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as xw:
+        conv.to_excel(xw, sheet_name="Converted master", index=False)
+        ws = xw.sheets["Converted master"]
+        ws.freeze_panes(1, 0)
+        ws.autofilter(0, 0, len(conv), len(conv.columns) - 1)
+        ws.set_column(0, len(conv.columns) - 1, 18)
+    buf.seek(0)
+    name = f"MRP master as read {datetime.datetime.now():%d%b%Y_%H%M}.xlsx"
+    return StreamingResponse(buf, media_type=XLSX, headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 @router.get("/mapping/download")
