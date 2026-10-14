@@ -31,6 +31,35 @@ _RUN_LOCK = threading.Lock()
 ROWS_KEPT = 300
 
 
+# Seasons (user, 2026-10-14: "if the attributes are Winter or PreWinter then they should be avoided as neither they have
+# a Buyer's input so they donot have a plan so they can be avoided, check for SOR only since we are making for MAMJ").
+# The attributes in season per plan month; a month not listed here puts no attribute off season (nothing is excluded
+# on a guess). SalesPlan/backend/season_attributes.json overrides it: {"Mar": ["SUMMER", "OCCASIONAL", "REGULAR"], ...}.
+SEASON_PATH = os.path.join(_HERE, "..", "season_attributes.json")
+SEASON_DEFAULT = {m: ["SUMMER", "OCCASIONAL", "REGULAR"] for m in ("Mar", "Apr", "May", "Jun")}
+
+
+def season(months) -> tuple:
+    """(set of attributes in season over the plan months, or None = no rule for some month -> everything in season;
+    the rule's text)."""
+    try:
+        with open(SEASON_PATH, encoding="utf-8") as fh:
+            cfg = {k[:3].title(): [str(x).strip().upper() for x in v] for k, v in json.load(fh).items()}
+        src = "season_attributes.json"
+    except (OSError, ValueError):
+        cfg, src = SEASON_DEFAULT, "default"
+    ins = set()
+    for m in months:
+        if m[:3] not in cfg:
+            return None, f"no season rule for {m} ({src}) - every attribute counted in season"
+        ins |= set(cfg[m[:3]])
+    return ins, f"{', '.join(sorted(ins))} in season for {', '.join(months)} ({src})"
+
+
+def _in(attr, ins) -> bool:
+    return ins is None or str(attr).upper() in ins or str(attr) in ("-", "")
+
+
 class Acc:
     """Expected vs plan over many cells: count, off, largest difference and where, the first ROWS_KEPT off rows."""
 
@@ -243,7 +272,7 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
                                                         else "an input changed after the plan was made"), fix="rerun"))
     except Exception as e:   # noqa: BLE001
         out.append(_plain(st3, "inputs", "The saved plan is on today's inputs", "Division", "warn", f"could not read the stamp: {e}"))
-    return out
+    return out, (gm if gm_ok else None), new
 
 
 # ── 4-6: MRP, display type, qty ────────────────────────────────────────────────────────────────────────────────────
@@ -259,7 +288,7 @@ def _sum_by(ix: dict, levels: tuple, mask=None) -> dict:
             for k, (a, b) in zip(g.index, g.to_numpy())}
 
 
-def mrp_checks() -> list:
+def mrp_checks(gm=None, new=None) -> list:
     from engines import grain_view as gv
     from engines.final_results_engine import _load_dept_attr_map
     from engines.mrp_plan_engine import get_source
@@ -268,6 +297,7 @@ def mrp_checks() -> list:
     out = []
     cube, am = gv._cube(), _load_dept_attr_map()
     dix, mix, xix = gv._index(cube, am, False), gv._mrp_index(cube, am, False), gv._display_index(cube, am, False)
+    ins, rule = season(cube["months"])
 
     st4 = "MRP (re-apportioned)"
     promoted = _try(lambda: __import__("engines.art_nm_engine", fromlist=["x"]).promoted_shares())
@@ -319,11 +349,13 @@ def mrp_checks() -> list:
     out.append(a_ty.out(st4, "mrp_fwd", "Division × Department × Month: department TY = Σ MRPs (forward)", "MRP"))
     out.append(a_ly.out(st4, "mrp_back", "Division × Department × Month: department LY = Σ MRPs (backward)", "MRP"))
     ns = mix["c"]["mrp"] == mix["pos"]["mrp"].get(gv.NO_SPLIT, -1)
-    rows = [{"Division": k[0], "Department": k[1], "LY (₹L)": v[0], "TY not split (₹L)": v[1]}
-            for k, v in sorted(_sum_by(mix, ("division", "department"), ns).items()) if abs(v[1]) > 1e-9]
-    out.append(_plain(st4, "mrp_none", "Departments the MRP split doesn't cover", "MRP", "warn" if rows else "pass",
-                      f"₹{sum(r['TY not split (₹L)'] for r in rows):,.2f} L in {len(rows)} departments sits under 'No MRP split' - cover them in the MRP master (or a buyers' file) to split it."
-                      if rows else "every planned department is split", rows, fix="input", cells=len(D), off=len(rows)))
+    nsr = [(k, v) for k, v in sorted(_sum_by(mix, ("division", "department", "attribute"), ns).items()) if abs(v[1]) > 1e-9]
+    rows = [{"Division": k[0], "Department": k[1], "Attribute": k[2], "LY (₹L)": v[0], "TY not split (₹L)": v[1]} for k, v in nsr if _in(k[2], ins)]
+    off_s = sum(v[1] for k, v in nsr if not _in(k[2], ins))
+    out.append(_plain(st4, "mrp_none", "In-season departments the MRP split doesn't cover", "MRP", "fail" if rows else "pass",
+                      (f"₹{sum(r['TY not split (₹L)'] for r in rows):,.2f} L in {len(rows)} in-season departments sits under 'No MRP split' - cover them in the MRP master (or a buyers' file) to split it."
+                       if rows else "every in-season department is split")
+                      + (f" Off season, left out: ₹{off_s:,.2f} L ({rule})." if off_s > 1e-9 else ""), rows, fix="input", cells=len(D), off=len(rows)))
 
     st5 = "UDF (display type)"
     u_ty, u_ly = Acc(), Acc()
@@ -360,20 +392,27 @@ def mrp_checks() -> list:
 
     st6 = "Qty (ASP master)"
     asp = _load(DT_ASP_PATH)
-    proj = {k: v for k, v in _sum_by(xix, ("division", "department", "mrp", "display", "month")).items()
-            if k[3] != "-" and v[1] > 1e-9}
+    proj_all = {k: v for k, v in _sum_by(xix, ("division", "department", "attribute", "mrp", "display", "month")).items()
+                if k[4] != "-" and v[1] > 1e-9}
+    proj = {k: v for k, v in proj_all.items() if _in(k[2], ins)}
+    att = _attribute_checks(dix, mix, gm, new or {}, ins, rule, cube["months"])
     if not asp:
         out.append(_plain(st6, "qty", "Every projected value has an ASP → qty", "UDF", "fail", "no ASP imported (Display Type · ASP)", fix="input"))
-        return out
+        return att(None) + out
     data = asp["data"]
     by_dm = {}
     for r in data.values():
         by_dm.setdefault((r["dept"], str(r["mrp"])), set()).add(r["display_type"])
     depts = {r["dept"] for r in data.values()}
-    miss, qty, ok_v, miss_v = {}, {}, 0.0, 0.0
-    for (dv, dp, mr, dt, mo), (_, ty) in proj.items():
+    miss, qty, ok_v, miss_v, cov = {}, {}, 0.0, 0.0, {}
+    for (dv, dp, at, mr, dt, mo), (_, ty) in proj_all.items():
         rec = data.get(_asp_key(dp, mr, dt))
         a = (rec or {}).get("months", {}).get(mo)
+        c = cov.setdefault(at, [0.0, 0.0])
+        c[0] += ty
+        c[1] += ty if a else 0.0
+        if not _in(at, ins):
+            continue
         if a:
             ok_v += ty
             qty[dv] = qty.get(dv, 0.0) + ty * 1e5 / a
@@ -381,19 +420,71 @@ def mrp_checks() -> list:
         miss_v += ty
         why = ("no ASP for this month" if rec else "only the other display type has an ASP" if (dp, mr) in by_dm else
                "MRP not in the ASP master" if dp in depts else "department not in the ASP master")
-        k = (dv, dp, mr, dt, why)
+        k = (dv, dp, at, mr, dt, why)
         e = miss.setdefault(k, {"ty": 0.0, "months": []})
         e["ty"] += ty
         e["months"].append(mo)
-    rows = [{"Division": k[0], "Department": k[1], "MRP": k[2], "Display type": k[3], "Why": k[4],
+    rows = [{"Division": k[0], "Department": k[1], "Attribute": k[2], "MRP": k[3], "Display type": k[4], "Why": k[5],
              "Months": ", ".join(v["months"]), "TY with no qty (₹L)": v["ty"]} for k, v in sorted(miss.items(), key=lambda kv: -kv[1]["ty"])]
     note = (f"₹{ok_v + miss_v:,.2f} L projected over {len(proj):,} department × MRP × display × month cells; "
             f"₹{ok_v:,.2f} L has a qty ({sum(qty.values()):,.0f} pieces: " + ", ".join(f"{d} {q:,.0f}" for d, q in sorted(qty.items())) + ")"
             + (f"; ₹{miss_v:,.2f} L has no ASP in the ASP master ({asp.get('source')}) - fix it there and import again." if miss_v else "."))
-    out.append(_plain(st6, "qty", "Every projected value has an ASP → qty (all stores)", "UDF", "fail" if rows else "pass", note, rows[:ROWS_KEPT * 3],
+    out.append(_plain(st6, "qty", "Every projected in-season value has an ASP → qty (all stores)", "UDF", "fail" if rows else "pass",
+                      note + f" Season: {rule}.", rows[:ROWS_KEPT * 3],
                       fix="input", cells=len(proj), off=sum(len(v["months"]) for v in miss.values()), largest=miss_v))
     out[-1]["all_rows"] = len(rows)
-    return out
+    return att(cov) + out
+
+
+def _attribute_checks(dix, mix, gm, new, ins, rule, months):
+    """The Attributes (season) stage - returned as a function of the ASP coverage, which the qty step works out."""
+    from engines import grain_view as gv
+    st = "Attributes (season)"
+    D = _sum_by(dix, ("division", "department", "attribute"))
+    ns = mix["c"]["mrp"] == mix["pos"]["mrp"].get(gv.NO_SPLIT, -1)
+    NS = {k[0]: v for k, v in _sum_by(mix, ("attribute",), ns).items()}
+    by, off_rows, bis_rows = {}, [], []
+    for (dv, dp, at), (ly, ty) in D.items():
+        if ty <= 1e-9 and ly <= 1e-9:
+            continue
+        a = by.setdefault(at, {"depts": 0, "ly": 0.0, "ty": 0.0, "bis": 0})
+        a["ly"] += ly
+        a["ty"] += ty
+        if ty > 1e-9:
+            a["depts"] += 1
+        has = gm is not None and all(f"{m} P1" in (gm.get(dv, {}).get(dp) or {}) for m in months)
+        a["bis"] += 1 if (has and ty > 1e-9) else 0
+        if not _in(at, ins) and ty > 1e-9:
+            off_rows.append({"Division": dv, "Department": dp, "Attribute": at, "LY (₹L)": ly, "TY planned (₹L)": ty,
+                             "BIS growth": "yes" if has else "no"})
+        if _in(at, ins) and ty > 1e-9 and gm is not None and not has and (dv, dp) not in new:
+            miss = [m for m in months if f"{m} P1" not in (gm.get(dv, {}).get(dp) or {})]
+            bis_rows.append({"Division": dv, "Department": dp, "Attribute": at, "TY (₹L)": ty, "Months with no BIS growth": ", ".join(miss)})
+
+    def build(cov):
+        rows = []
+        for at, a in sorted(by.items(), key=lambda kv: -kv[1]["ty"]):
+            nsv = NS.get(at, [0.0, 0.0])[1]
+            c = (cov or {}).get(at)
+            rows.append({"Attribute": at, "Season": "in" if _in(at, ins) else "off", "Departments planned": a["depts"],
+                         "LY (₹L)": a["ly"], "TY (₹L)": a["ty"], "With BIS growth": f"{a['bis']} of {a['depts']}",
+                         "MRP split %": abs(round((1 - nsv / a["ty"]) * 100, 1)) if a["ty"] else None,
+                         "ASP coverage %": round(c[1] / c[0] * 100, 1) if c and c[0] else None})
+        offv = sum(r["TY planned (₹L)"] for r in off_rows)
+        return [
+            _plain(st, "att_season", "Attributes in / off season for the plan months", "Attribute", "info",
+                   rule + ". Off-season attributes are left out of the MRP-split and qty checks.", rows),
+            _plain(st, "att_off", "Off-season departments carrying a plan", "Department", "warn" if off_rows else "pass",
+                   (f"₹{offv:,.2f} L planned in {len(off_rows)} off-season departments - they have no buyer's plan for these months; "
+                    "make them inactive in the Department Master (or 0 in BIS) if they should carry none." if off_rows else "no off-season department carries a plan"),
+                   sorted(off_rows, key=lambda r: -r["TY planned (₹L)"]), fix="input", off=len(off_rows)),
+            _plain(st, "att_bis", "In-season departments with a BIS growth for every plan month", "Department",
+                   "fail" if bis_rows else ("pass" if gm is not None else "warn"),
+                   (f"{len(bis_rows)} in-season departments plan ₹{sum(r['TY (₹L)'] for r in bis_rows):,.2f} L with no BIS growth in some month (planned at LY there)"
+                    if bis_rows else "every in-season department has BIS growth" if gm is not None else "BIS not reachable"),
+                   bis_rows, fix="input", off=len(bis_rows)),
+        ]
+    return build
 
 
 def _fingerprint(ver: dict) -> str:
@@ -408,9 +499,9 @@ def run_checkup() -> dict:
     if plan is None:
         return {"ok": False, "error": "No saved plan yet - Generate Base Plan first"}
     ver = versions(source, at, plan)
-    checks = plan_checks(plan, source, ver)
+    checks, gm, new = plan_checks(plan, source, ver)
     try:
-        checks += mrp_checks()
+        checks += mrp_checks(gm, new)
     except Exception as e:   # noqa: BLE001 - the MRP / display stage not ready: say so
         checks.append(_plain("MRP (re-apportioned)", "mrp_err", "MRP / display type / qty checks", "MRP", "fail", f"could not run: {e}", fix="rerun"))
     fails = [c for c in checks if c["status"] == "fail"]

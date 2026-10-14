@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Check-up: season-aware attribute checks (Winter / PreWinter left out for MAMJ)
+- **Asked (user):** "if the attributes are Winter or PReWinter then they should be avoided as neither they have a Buyer's input so they donot have a plan so they can be avoided, check for SOR only since we are making for MAMJ. Suggest me an auto check for attributes and its respective checks similar to this."
+- Season rule: attributes in season per plan month - default Mar–Jun = SUMMER, OCCASIONAL, REGULAR; `SalesPlan/backend/season_attributes.json` overrides / adds months ({"Jul": [...], ...}); a month with no rule excludes nothing.
+- New stage "Attributes (season)": the season table (per attribute: in / off, departments planned, LY / TY, departments with BIS growth, MRP split %, ASP coverage %); off-season departments carrying a plan (your input); in-season departments with BIS growth for every plan month. The MRP-split check and the Qty check now count in-season departments only (the attribute shown per row; the off-season amount named in the note).
+- Today: in-season REGULAR 58 departments / SUMMER 46 / OCCASIONAL 12 - all with BIS growth; REGULAR and SUMMER 100% MRP-split, ASP coverage 94.4% / 93.9%; OCCASIONAL 0% split - its 12 departments (sarees, fancy frocks, indo-western, ME_BLAZER S/L, ME_KURTA PYJAMA; ₹2,554.40 L) are not in the MRP master → the MRP-split check fails on them. Off season: PREWINTER 16, LT WINTER 26, HVY WINTER 20 departments carry ₹220.58 L of plan (BIS gives them growth and the Department Master has them active) - listed as a warning, left out of the MRP / qty checks.
+
 ### Display Type ASP: the planners' file carried onto the new MRPs through the MRP master
 - **Asked (user):** "carry the ASP onto the new MRPs through the master".
 - Import of the raw VAL / QTY file now runs every row through the MRP Re-apportionment's own rule (`_redistribute`, master in use): a listed old MRP moves whole to its new MRP, a discontinued one splits to the nearest listed MRP below / above (Summer 60/40, others 40/60, by ATTRIBUTE-1); value and pieces split alike, so a new MRP's ASP = the piece-weighted mix of the old MRPs it took. An MRP the master doesn't list is treated as the sales are (listed to itself when it is a new MRP there, else discontinued); a Department × Display the master doesn't cover keeps its own MRPs. `display_type_engine._onto_new_mrps`.
