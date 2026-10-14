@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-14
 
+### Sales Plan MRP Re-apportionment: LY sales from the Calendar app, Actual / Reindexed toggle
+- **Asked (user):** "link the sales from the backend sales of the calendar app - keep the reindexed and actual toggle with this".
+- The input card is now "LY Sales · Calendar app" with an **Actual / Reindexed** switch (saved on the server, `Output/_sales_basis.json`; `GET/POST /api/planning/mrp-reapportionment/sales-basis`). The Calendar keeps no MRP detail, so the MRP x display x attribute rows still come from the Calendar engine's own data-lake reader; Actual ties them to the Calendar's `actual_dept` snapshot (LY months, as before), Reindexed puts every store x department x month onto the Calendar's reindexed `trend_shifted_dept` figure on the plan months (Mar-Jun 2027), each row keeping its LY share of that store x department (its mix over all the months when that month has none).
+- Result: Actual ₹56,646.33 L, 2,45,872 cells, max diff 0; Reindexed ₹55,786.39 L, 2,23,538 cells tie exactly (max diff 0.0 L); ₹111.71 L of reindexed sales have no LY rows at all (new stores / departments) - reported, nothing to split by MRP. The run's validation and all post-run checks pass on both. The run history records the basis; the Before -> After tree rebuilds when it changes. The setting is left on Actual.
+
 ### Sales Plan MRP Re-apportionment: Before -> After comparison with the working pop-up
 - **Asked (user):** "keep the rules intact, i will give you the master for new listed mrps against the old ones, the engine has to run true to its core working, and should be making a before and after comp for the mrp to easily identify and put all the necessary things in a similar pop up style on click just like the rest of the modules".
 - New **Before -> After** tab (no Run needed): the department Final Results tree over the re-apportionment the master in use gives, through the engine's own `_redistribute` (rules untouched - listed -> its new MRP; discontinued -> nearest listed below / above, 40/60, Summer 60/40; one side -> 100%; nothing listed -> Unmapped). Rows Department > Display > MRP (price order) by default, plus Attribute / Division / Store / Month; a filter per field; Before = LY sold at the old MRP, After = on the new MRP structure, Unmapped its own row.

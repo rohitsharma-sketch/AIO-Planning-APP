@@ -128,14 +128,49 @@ def _db():
     return SessionLocal()
 
 
-def _snapshot_stamp():
-    """When the Calendar 'actual_dept' snapshot was last written. Part of the sales cache key (audit 2026-10-08: the
+def _snapshot_stamp(kind: str = "actual_dept"):
+    """When a Calendar department snapshot was last written. Part of the sales cache key (audit 2026-10-08: the
     tie was cached on the sales file alone - a sync that refreshed the snapshot after the file left the check red
     until the server restarted, though the fix text says "wait for the sync, Refresh, Run again")."""
     from sqlalchemy import text
     with _db() as db:
         return db.execute(text("SELECT computed_at FROM calendar.sales_snapshots "
-                               "WHERE source_type='mw' AND kind='actual_dept'")).scalar()
+                               "WHERE source_type='mw' AND kind=:k"), {"k": kind}).scalar()
+
+
+# Which Calendar sales the run is on (user, 2026-10-14: "link the sales from the backend sales of the calendar app -
+# keep the reindexed and actual toggle with this"): "actual" = the LY months as sold (Calendar 'actual_dept'), or
+# "reindexed" = the Calendar's reindexed department sales on the plan months ('trend_shifted_dept'). The Calendar keeps
+# no MRP detail, so the MRP x display x attribute rows still come from the Calendar engine's own data-lake reader, and
+# for "reindexed" each store x department x month is put onto the Calendar's reindexed figure (each row keeps its LY
+# share of that store x department).
+BASIS_PATH = os.path.join(OUTPUT_DIR, "_sales_basis.json")
+BASES = {"actual": "actual_dept", "reindexed": "trend_shifted_dept"}
+
+
+def get_basis() -> str:
+    try:
+        with open(BASIS_PATH, encoding="utf-8") as f:
+            b = json.load(f).get("basis")
+    except (OSError, ValueError):
+        b = None
+    return b if b in BASES else "actual"
+
+
+def _ty_month(ly: str) -> str:
+    """'2026-03' -> '2027-03' - the plan month a reindexed LY month sits on."""
+    return f"{int(ly[:4]) + 1}{ly[4:]}"
+
+
+def _dept_snapshot(kind: str, cols: set) -> dict:
+    """{(STORE, DEPARTMENT, col): Rs} of a Calendar department snapshot, only the months asked for."""
+    from sqlalchemy import text
+    with _db() as db:
+        rows = db.execute(text(
+            "SELECT upper(trim(e->>'store')), upper(trim(e->>'DEPARTMENT')), e->>'col', sum((e->>'value')::float) "
+            "FROM calendar.sales_snapshots, jsonb_array_elements(rows) e WHERE source_type='mw' AND kind=:k "
+            "AND e->>'col' = ANY(:c) GROUP BY 1, 2, 3"), {"k": kind, "c": sorted(cols)}).fetchall()
+    return {(s, d, c): float(v) for s, d, c, v in rows}
 
 
 def _engine_check(raw: pd.DataFrame) -> dict:
@@ -157,18 +192,69 @@ def _engine_check(raw: pd.DataFrame) -> dict:
             "total_lakh": round(sum(ours.values()) / 1e5, 2), "calendar_total_lakh": round(sum(cal.values()) / 1e5, 2)}
 
 
+_RAW_CACHE: dict = {}   # the actual LY rows, whichever basis is shown (the lake read is the slow part, ~85 s)
+
+
 def _engine_sales() -> tuple:
-    """LY sales at Store x Division x Dept x MRP x Display x Attribute, one column per LY month, from the sales
-    engine's file. ponytail: one cached copy, re-read only when the data-lake file changes."""
+    """LY sales at Store x Division x Dept x MRP x Display x Attribute, one column per month, on the basis picked
+    (actual LY months, or the Calendar's reindexed plan months). ponytail: one cached copy per basis, re-read only
+    when the data-lake file or the Calendar snapshot changes."""
     scans = _calendar_scans()
     path = _find_sales_file()
     if not path:
         raise ValueError(f"Sales engine file not reachable: {scans.PARQUET_DIR}")
-    key = (path, os.path.getmtime(path), _snapshot_stamp())
+    basis = get_basis()
+    raw_key = (path, os.path.getmtime(path), _snapshot_stamp())
+    key = (*raw_key, basis, _snapshot_stamp(BASES[basis]) if basis != "actual" else None)
     with _SALES_LOCK:
+        if _RAW_CACHE.get("key") != raw_key:
+            _read_engine_sales(scans, path, raw_key)
         if _SALES_CACHE.get("key") != key:
-            _read_engine_sales(scans, path, key)
+            r = _RAW_CACHE
+            if basis == "actual":
+                _SALES_CACHE.update(key=key, df=r["df"], month_cols=r["month_cols"], check={**r["check"], "basis": basis})
+            else:
+                df, cols, check = _reindexed(r["df"], r["month_cols"])
+                _SALES_CACHE.update(key=key, df=df, month_cols=cols, check=check)
         return _SALES_CACHE["df"].copy(), list(_SALES_CACHE["month_cols"]), _SALES_CACHE["check"]
+
+
+def _reindexed(df: pd.DataFrame, month_cols: list) -> tuple:
+    """The actual LY rows put onto the Calendar's reindexed department sales: each store x department x plan month =
+    the 'trend_shifted_dept' figure, shared over its MRP x display x attribute rows by their LY month's share. A
+    reindexed figure with no LY rows of its own (nothing to share it by) is reported, not invented."""
+    lym = {datetime.date(int(m[:4]), int(m[5:]), 1).strftime("%b %Y"): m for m in LY_MONTHS}
+    snap = _dept_snapshot(BASES["reindexed"], {_ty_month(m) for m in LY_MONTHS})
+    out = df.copy()
+    cols, no_detail, cells, worst = [], 0.0, 0, 0.0
+    keys = list(zip(out["STORE"], out["DEPARTMENT"]))
+    sd = ["STORE", "DEPARTMENT"]
+    blk = out[month_cols].sum(axis=1)                      # a row's LY over all the months
+    blk_tot = blk.groupby([out["STORE"], out["DEPARTMENT"]]).transform("sum")
+    for lab in month_cols:
+        ty = _ty_month(lym[lab])
+        tot = out.groupby(sd)[lab].transform("sum")
+        target = pd.Series([snap.get((s, d, ty), 0.0) for s, d in keys], index=out.index)
+        # the month's own LY mix; a store x department with none that month takes its mix over all the months
+        share = (out[lab] / tot).where(tot != 0, (blk / blk_tot).where(blk_tot != 0, 0.0))
+        new = datetime.date(int(ty[:4]), int(ty[5:]), 1).strftime("%b %Y")
+        out[new] = target * share
+        got = out.groupby(sd)[new].sum()
+        for (s, d, c), v in snap.items():
+            if c != ty:
+                continue
+            cells += 1
+            g = got.get((s, d))
+            if g is None or (abs(g) < 1e-9 and abs(v) > 1e-9):
+                no_detail += v   # no LY rows at all for this store x department: nothing to share it by
+            else:
+                worst = max(worst, abs(g - v) / 1e5)
+        cols.append(new)
+    out = out.drop(columns=[c for c in month_cols if c not in cols])
+    total = float(out[cols].sum().sum()) / 1e5
+    return out, cols, {"basis": "reindexed", "cells": cells, "max_diff_lakh": round(float(worst), 6), "pass": bool(cells > 0 and worst <= 0.01),
+                       "total_lakh": round(total, 2), "calendar_total_lakh": round(sum(v for (s, d, c), v in snap.items()) / 1e5, 2),
+                       "no_detail_lakh": round(no_detail / 1e5, 2)}
 
 
 def _read_engine_sales(scans, path, key):
@@ -194,7 +280,7 @@ def _read_engine_sales(scans, path, key):
                                     var_name="ym", value_name="SL_V"))
     wide = wide.rename(columns=label)
     month_cols = [label[m] for m in LY_MONTHS if label[m] in wide.columns]
-    _SALES_CACHE.update(key=key, df=wide, month_cols=month_cols, check=check)
+    _RAW_CACHE.update(key=key, df=wide, month_cols=month_cols, check=check)
 
 
 def _quiet(fn):
@@ -520,7 +606,7 @@ def _pre_checks() -> list:
     try:
         sales, months, check = _mapped_sales(mp) if mp is not None else _engine_sales()
         ok = bool(check["pass"])
-        out.append(_check("sales_tie", "LY sales tie to the Calendar department sales", "ok" if ok else "fail",
+        out.append(_check("sales_tie", f"LY sales tie to the Calendar department sales ({get_basis()})", "ok" if ok else "fail",
                           f"{check['cells']:,} store x dept x month cells, max diff {check['max_diff_lakh']} L",
                           "The sales engine file and the Calendar sales differ - wait for the nightly sales sync (or "
                           "Sync now on Landing), press Refresh, then Run again."))
@@ -677,6 +763,24 @@ def get_status():
     }
 
 
+@router.get("/sales-basis")
+def get_sales_basis():
+    return {"basis": get_basis(), "bases": list(BASES)}
+
+
+@router.post("/sales-basis")
+def set_sales_basis(body: dict):
+    """Actual or reindexed Calendar sales for the next run (and the Before -> After tree)."""
+    b = body.get("basis")
+    if b not in BASES:
+        raise HTTPException(422, f"basis: one of {', '.join(BASES)}")
+    if _BUSY.locked():
+        raise HTTPException(409, "A run or an import is in progress - switch after it")
+    save_json(BASIS_PATH, {"basis": b, "at": datetime.datetime.now().isoformat(timespec="seconds")})
+    threading.Thread(target=lambda: _quiet(_compare), name="reapp-compare", daemon=True).start()   # rebuild in the background
+    return {"basis": b}
+
+
 @router.get("/sales-status")
 def get_sales_status():
     """The sales engine's file, the LY months read and the tie to the Calendar department snapshot."""
@@ -687,7 +791,9 @@ def get_sales_status():
         return {"file_found": False, "source": "Sales engine (data lake)", "error": str(e)}
     return {
         "file_found": True,
-        "source":     "Sales engine (data lake)",
+        "source":     "Calendar app sales (data lake + its department snapshot)",
+        "basis":      get_basis(),
+        "snapshot_at": str(_snapshot_stamp(BASES[get_basis()]) or "")[:16],
         "filename":   os.path.basename(f),
         "modified":   datetime.datetime.fromtimestamp(os.path.getmtime(f)).strftime("%d %b %Y %H:%M"),
         "months":     month_cols,
@@ -825,6 +931,7 @@ def _run_engine():
         "sales_file":  os.path.basename(sales_path),
         "mapping_file": os.path.basename(mapping_file),
         "sales_check": check,
+        "sales_basis": get_basis(),
         "input_rows":  len(sales_df),
         "output_rows": len(output_df),
         "unmapped":    len(unmapped_df),

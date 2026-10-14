@@ -313,6 +313,19 @@ export default function MrpReapportionment() {
     get('progress', setProgress, null)   // a run started from another tab shows its progress here too
   }, [])
 
+  // actual / reindexed Calendar sales for the run and the Before -> After tree (saved on the server)
+  const [basis, setBasis] = useState('actual')
+  const [basisBusy, setBasisBusy] = useState(false)
+  useEffect(() => { fetch('/api/planning/mrp-reapportionment/sales-basis').then(r => (r.ok ? r.json() : null)).then(d => d && setBasis(d.basis)).catch(() => {}) }, [])
+  const pickBasis = async b => {
+    if (b === basis) return
+    setBasisBusy(true)
+    try {
+      const r = await fetch('/api/planning/mrp-reapportionment/sales-basis', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ basis: b }) })
+      if (r.ok) { setBasis(b); setResult(null); reload() }
+    } finally { setBasisBusy(false) }
+  }
+
   const loadGroups = useCallback(() => {
     setGroupsErr('')
     fetch('/api/planning/mrp-reapportionment/mrp-groups')
@@ -488,20 +501,35 @@ export default function MrpReapportionment() {
                 border: `1px solid ${alpha(salesOk ? theme.accent : salesInfo ? theme.danger : theme.border,'33')}`,
               }}>
                 {/* LY actual sales come from the suite's sales engine, never an upload (user, 2026-09-29) */}
-                <div style={{ fontSize: 11, fontWeight: 700, color: salesOk ? theme.accent : salesInfo ? theme.danger : theme.textMuted, marginBottom: 3 }}>
-                  {!salesInfo ? '⟳' : salesOk ? '✓' : '✗'} LY Actual Sales · sales engine
+                {/* the Calendar app's sales, actual or reindexed (user, 2026-10-14: "link the sales from the backend sales of
+                    the calendar app - keep the reindexed and actual toggle with this") */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: salesOk ? theme.accent : salesInfo ? theme.danger : theme.textMuted, flex: 1 }}>
+                    {!salesInfo ? '⟳' : salesOk ? '✓' : '✗'} LY Sales · Calendar app · {basis === 'reindexed' ? 'Reindexed' : 'Actual'}
+                  </div>
+                  <div role="radiogroup" aria-label="Calendar sales" style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', border: `1px solid ${theme.border}` }}>
+                    {[['actual', 'Actual'], ['reindexed', 'Reindexed']].map(([k, label]) => (
+                      <button key={k} type="button" role="radio" aria-checked={basis === k} disabled={running || basisBusy} onClick={() => pickBasis(k)} style={{
+                        padding: '3px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', border: 'none',
+                        background: basis === k ? 'var(--st-btn,#A8CBB7)' : theme.surface, color: basis === k ? 'var(--st-btn-text,#1F4D3A)' : theme.textMuted }}>{label}</button>
+                    ))}
+                  </div>
                 </div>
-                {!salesInfo && <div style={{ fontSize: 11, color: theme.textMuted }}>Reading Mar–Jun 2026 from the data lake…</div>}
+                {!salesInfo && <div style={{ fontSize: 11, color: theme.textMuted }}>Reading the Calendar app's sales…</div>}
                 {salesInfo?.file_found && <>
                   <div style={{ fontSize: 11, color: theme.textPrimary }}>
                     {salesInfo.months?.join(' · ')} · ₹{(salesInfo.check?.total_lakh ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })} L
+                    {basis === 'reindexed' && <span style={{ color: theme.textMuted }}> (the plan months the Calendar reindexed LY onto)</span>}
                   </div>
                   <div style={{ fontSize: 10, color: theme.textMuted, marginTop: 2 }}>
                     {salesOk
-                      ? `Ties to the Calendar department sales: ${salesInfo.check.cells.toLocaleString('en-IN')} store × dept × month cells, max diff ${salesInfo.check.max_diff_lakh} L`
+                      ? `Ties to the Calendar's ${basis === 'reindexed' ? 'reindexed' : 'actual'} department sales: ${salesInfo.check.cells.toLocaleString('en-IN')} store × dept × month cells, max diff ${salesInfo.check.max_diff_lakh} L`
                       : `Does NOT tie to the Calendar department sales (max diff ${salesInfo.check?.max_diff_lakh} L) — run blocked`}
+                    {salesInfo.check?.no_detail_lakh > 0 && ` · ₹${salesInfo.check.no_detail_lakh.toLocaleString('en-IN')} L reindexed with no LY rows of its own (new stores / departments) - no MRP to split it by`}
                   </div>
-                  <div style={{ fontSize: 10, color: theme.textMuted, marginTop: 2, wordBreak: 'break-all', ...mono }}>{salesInfo.filename} · {salesInfo.modified}</div>
+                  <div style={{ fontSize: 10, color: theme.textMuted, marginTop: 2, wordBreak: 'break-all', ...mono }}>
+                    MRP detail: {salesInfo.filename} · {salesInfo.modified} · Calendar snapshot {salesInfo.snapshot_at}
+                  </div>
                 </>}
                 {salesInfo && !salesInfo.file_found && <div style={{ fontSize: 11, color: theme.danger }}>{salesInfo.error}</div>}
               </div>
