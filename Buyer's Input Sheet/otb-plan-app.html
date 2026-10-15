@@ -6006,14 +6006,36 @@ function _buildPaletteSwatches(){
    factor table or its inputs change. The buyer's Gr % starts from the plain AOP share (factor 1.00), so the gap
    between the two is the factor; "use" or a buyer's own entry (S.buyerSet) supersedes it.
    Value only - no quantity anywhere. */
-const PLANNER={ft:null,refs:{},fill:null,canEdit:false};
+const PLANNER={ft:null,refs:{},fill:null,canEdit:false,f1:null};
 let _plMemo={k:null,v:null};
 function _planMode(){try{return localStorage.getItem('bis_plan_mode')==='month'?'month':'block';}catch(_){return 'block';}}
 function loadPlannerConfig(){
   return fetch(SYNC_BASE+'/api/planner/config').then(r=>r.ok?r.json():null).then(j=>{
     if(!j)return;
     PLANNER.ft=j.factor_table||null;PLANNER.refs=j.refs||{};PLANNER.fill=j.fill_rate||null;PLANNER.pg=j.planner_growth||null;_plPgIdx=null;_plMemo.k=null;
+    _plannerF1Load();
   }).catch(()=>{});
+}
+/* "Planner input" (user, 2026-10-15: "go ahead with Factor 1 as a BIS planner method, and keep the name planner input") -
+   the colleague's Factor 1, worked out by sync_server from the same sell-thru (POST /api/planner/factor1, the rules of
+   Sales Plan's sellthru_factor - re-derived on their workbook with 0 differences): per department x plan month, growth =
+   FACTOR-1[the month's sell-thru vs its division's, 8 bands][its MAMJ'26 sell-thru status], 0-30%; none when the MAMJ
+   sell-thru is at most 4% and the deviation averages at most 50% over Mar-Jul'26. The plan: LY x (1 + growth), month by
+   month, each month re-balanced to the AOP over ALL divisions (their cluster cap, at chain level here). */
+function _plannerF1Load(){
+  const depts={};DVDATA.forEach(dv=>{depts[dv.nm]=dv.secs.map(x=>x.nm);});
+  return fetch(SYNC_BASE+'/api/planner/factor1',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({depts})})
+    .then(r=>r.ok?r.json():null).then(j=>{if(!j||!j.factors)return;PLANNER.f1=j;_plMemo.k=null;
+      if(_f1On()&&typeof refresh==='function')refresh();}).catch(()=>{});
+}
+const _f1On=()=>PLANNER.ft?.mode==='factor1';
+// a department's Planner input factor over months mis (one month = its own, several = their mean) and its working
+function _f1(nm,dvNm,mis){
+  const D=String(dvNm||'').toUpperCase(),N=String(nm||'').trim().toUpperCase();
+  const fs=PLANNER.f1?.factors?.[D]?.[N],inf=PLANNER.f1?.info?.[D]?.[N]||null;
+  if(!fs)return {f:1,inf};
+  const v=mis.map(mi=>fs[mi]).filter(x=>x!=null);
+  return {f:v.length?v.reduce((a,b)=>a+b,0)/v.length:1,inf};
 }
 /* Imported planner's growth (user, 2026-10-14: "planner's growth check where we lack in logic update it through back end
    and implement it into iteration 4" - the colleague's sheet, column DO = Approach 1, AOP capped at the SSG cluster over
@@ -6045,7 +6067,7 @@ function _plannerInputs(sec,mis){
     const v=mis.map(mi=>o[mi]).filter(x=>x!=null);return v.length?v.reduce((a,b)=>a+b,0)/v.length/100:null;};
   const gr=id=>{const g=_lflTot([SEC_LFL_GROWTH[id]],'yoy',mis);return g==null?null:g/100;};
   const gb=id=>{const g=_lflTot([SEC_LFL_GROWTH[id]],'base',mis);return g==null?null:g/100;};   // 19V26 (31 stores)
-  const r={st:st(sec.id),gr:gr(sec.id),gb:gb(sec.id),fill:_plannerFill(sec.nm,mis),ref:null};
+  const r={st:st(sec.id),gr:gr(sec.id),gb:gb(sec.id),fill:_plannerFill(sec.nm,mis),ref:null,nm:sec.nm};
   if(r.gb==null){const ref=_secByName(PLANNER.refs[sec.nm]);if(ref)r.gb=gb(ref.id);}
   if(r.st==null||r.gr==null||r.fill==null){
     const ref=_secByName(PLANNER.refs[sec.nm]);
@@ -6159,6 +6181,7 @@ function _fmMedians(dvId,mis){
 function _fmEval(spec,x,dvId,mis,ly){
   if(spec==null)return 1;
   if(spec==='matrix')return _matrixFactor(PLANNER.ft,x).f;
+  if(spec==='factor1'){const dv=DVDATA.find(d=>d.id===dvId);return _f1(x.nm,dv?.nm,mis).f;}
   if(spec.mode==='continuous')return _contFactor(x,_fmMedians(dvId,mis),spec.cont,spec.model,ly).f;
   return _weightedFactor(x,_fmResolve(spec.model,dvId,mis),ly).f;
 }
@@ -6217,34 +6240,51 @@ function _plannerFactor(sec,mis){
     if(!r)return {f:1,why:ft.ml?'no like-for-like history in the Ridge regression (ML) snapshot - neutral 1.00':'Ridge regression (ML) not saved yet - neutral 1.00',tags,inp:x};
     return {f:r.f,why:`Ridge regression (ML) ×${(+r.raw).toFixed(2)}${r.why?.length?` (${r.why.map(w=>w.label).join(', ')})`:''}, damped and limited to ×${(+r.f).toFixed(2)} - history check of ${String(ft.ml.built_at||'').slice(0,10)}`,tags,inp:x};
   }
+  if(ft?.mode==='factor1'){
+    const dv=DVDATA.find(d=>d.secs.includes(sec)),r=_f1(sec.nm,dv?.nm,mis),i=r.inf,pc=v=>(v*100).toFixed(1)+'%';
+    const mi=mis.length===1?mis[0]:null,mm=i&&mi!=null?i.months?.[mi]:null;
+    const why=!PLANNER.f1?'Planner input: sell-thru not loaded yet - neutral 1.00':!i?'Planner input: no sell-thru for this department - neutral 1.00'
+      :i.revised?`Planner input: MAMJ'26 sell-thru ${pc(i.tag_st)} (${i.tag}) - at most 4% and below half its division's, so no factor`
+      :mm?`Planner input: ${MO[mi]}'26 sell-thru ${pc(mm.st)} vs its division's ${pc(mm.div_st)} = ${mm.dev.toFixed(2)}× · MAMJ'26 ${pc(i.tag_st)} (${i.tag}) → +${(mm.factor*100).toFixed(0)}%`
+      :`Planner input: MAMJ'26 sell-thru ${pc(i.tag_st)} (${i.tag}); ${mis.map(m=>MO[m]+' +'+((i.months?.[m]?.factor||0)*100).toFixed(0)+'%').join(', ')}`;
+    return {f:r.f,why,tags:{st:i?.tag||null,growth:null,fill:null},inp:x};
+  }
   return {..._matrixFactor(ft,x),inp:x};
 }
 // {divId:{mi:{secId:{ly,fc,val,gr}}}} over the AOP months - recomputed only when one of its inputs changes
 function _plannerCalc(){
   const mode=_planMode();
-  const k=JSON.stringify([S.aop,[...S.hiddenSecs].sort(),mode,PLANNER.ft?.version??null,!!PLANNER.ft,PLANNER.fill?.imported_at??null,PLANNER.pg?.imported_at??null,
+  const k=JSON.stringify([S.aop,[...S.hiddenSecs].sort(),mode,PLANNER.ft?.version??null,PLANNER.ft?.mode??null,!!PLANNER.ft,PLANNER.fill?.imported_at??null,PLANNER.pg?.imported_at??null,PLANNER.f1?.file??null,
     Object.keys(PLANNER.refs).length,_lyHash(),Object.keys(window._SELLTHRU_LIVE_DEPT||{}).length,Object.keys(SEC_LFL_GROWTH).length]);
   if(_plMemo.k===k)return _plMemo.v;
   _fmCutCache=new Map();
-  const out={};
+  const out={},f1=_f1On();   // Planner input: its own factor every month (in Phase 1 too), re-balanced over all divisions
   DVDATA.forEach(dv=>{
     out[dv.id]={};
     const divAnn=dv.secs.reduce((a,s)=>a+s.ly,0);
     const act=dv.secs.filter(s=>!S.hiddenSecs.has(s.id));
-    const blockF={};if(mode==='block')act.forEach(s=>{blockF[s.id]=_plannerFactor(s,AOP_MIS);});
+    const blockF={};if(mode==='block'&&!f1)act.forEach(s=>{blockF[s.id]=_plannerFactor(s,AOP_MIS);});
     AOP_MIS.forEach(mi=>{
       const aop=S.aop[dv.id]?.[mi];if(!aop||aop<=0)return;
       let lyTot=0;const ly={};act.forEach(s=>{ly[s.id]=_secMonLY(s,dv,mi,divAnn);lyTot+=ly[s.id];});
       if(!lyTot)return;
       const m={};let raw=0;
-      act.forEach(s=>{const fc=mode==='block'?blockF[s.id]:_plannerFactor(s,[mi]);
+      act.forEach(s=>{const fc=mode==='block'&&!f1?blockF[s.id]:_plannerFactor(s,[mi]);
         const share=aop*ly[s.id]/lyTot;m[s.id]={ly:ly[s.id],fc,share,v:share*fc.f};raw+=m[s.id].v;});
       const scale=raw>0?aop/raw:0; // re-balance: the division x month lands exactly on its AOP target
       Object.values(m).forEach(o=>{o.scale=scale;o.val=o.v*scale;o.gr=o.ly>0?(o.val/o.ly-1)*100:null;});
       act.forEach(s=>{const g=_plannerImported(s),o=m[s.id];if(g==null)return;   // imported planner's growth: LY x (1 + g)
+        if(f1){o.impRef=g;return;}   // Planner input in use: worked out live; the imported figure stays as a reference
         o.imp=g;o.val=o.ly*(1+g);o.gr=o.ly>0?g*100:null;});
       out[dv.id][mi]=m;
     });
+  });
+  if(f1)AOP_MIS.forEach(mi=>{   // each month on its AOP over ALL divisions (the colleague's cap is the cluster, not the division)
+    const os=[];let tot=0,lyAll=0;
+    DVDATA.forEach(dv=>{const m=out[dv.id][mi];if(!m)return;tot+=S.aop[dv.id]?.[mi]||0;Object.values(m).forEach(o=>{os.push(o);lyAll+=o.ly;});});
+    if(!lyAll||!tot)return;
+    let raw=0;os.forEach(o=>{o.share=tot*o.ly/lyAll;o.v=o.share*o.fc.f;raw+=o.v;});
+    const scale=raw>0?tot/raw:0;os.forEach(o=>{o.scale=scale;o.val=o.v*scale;o.gr=o.ly>0?(o.val/o.ly-1)*100:null;});
   });
   _plMemo={k,v:out};
   return out;
@@ -6271,7 +6311,7 @@ function _plannerWhy(row,mis){
     const off=mis.reduce((a,mi)=>a+_offLY(row,mi),0);ly+=off;   // inactive departments' LY, plan 0 (Buyer's Plan rule)
     const cr=x=>'Rs.'+x.toFixed(2)+' Cr',f=v/sh;
     return `${lbl}: ${n} departments, factor ${f.toFixed(2)} (weighted by their AOP share)\n`+
-      `AOP share by LY cont % ${cr(sh)} × ${f.toFixed(2)} = ${cr(v)} → re-balanced ×${(v>0?val/v:0).toFixed(3)} to the division AOP = ${cr(val)}\n`+
+      `AOP share by LY cont % ${cr(sh)} × ${f.toFixed(2)} = ${cr(v)} → re-balanced ×${(v>0?val/v:0).toFixed(3)} to ${_f1On()?'the AOP of the month over all divisions':'the division AOP'} = ${cr(val)}\n`+
       `vs LY ${cr(ly)}${off>0?` (incl. ${cr(off)} of inactive departments, plan 0)`:''} = ${fP(ly>0?(val/ly-1)*100:null)} · hover a department in the Buyer's Plan for its own inputs`;
   }
   const P=_plannerCalc()[row._divId]||{},os=mis.map(mi=>P[mi]?.[row._key]).filter(Boolean);
@@ -6284,12 +6324,13 @@ function _plannerWhy(row,mis){
   const g=ly>0?(val/ly-1)*100:null;
   const fs=mis.filter(mi=>P[mi]?.[row._key]).map(mi=>[mi,P[mi][row._key].fc.f]),same=fs.every(([,f])=>Math.abs(f-fs[0][1])<5e-4),fw=sh>0?v/sh:fc.f;
   const head=same?`${lbl}: factor ${fc.f.toFixed(2)} - ${fc.why}\n`+
-      `Sell-thru ${pc(x.st)} (${t.st||'-'}) · LY growth ${pc(x.gr)} (${t.growth||'-'}) · Fill rate ${pc(x.fill)} (${t.fill||'-'})${x.ref?' - inputs from '+x.ref:''}\n`
-    :`${lbl}: factor ${fw.toFixed(2)} (the months weighted by AOP share) - Phase 2 gives each month its own: ${fs.map(([mi,f])=>MO[mi]+' ×'+f.toFixed(2)).join(' · ')}\n`+
+      (_f1On()?'':`Sell-thru ${pc(x.st)} (${t.st||'-'}) · LY growth ${pc(x.gr)} (${t.growth||'-'}) · Fill rate ${pc(x.fill)} (${t.fill||'-'})${x.ref?' - inputs from '+x.ref:''}\n`)
+    :`${lbl}: factor ${fw.toFixed(2)} (the months weighted by AOP share) - ${_f1On()?'Planner input':'Phase 2'} gives each month its own: ${fs.map(([mi,f])=>MO[mi]+' ×'+f.toFixed(2)).join(' · ')}\n`+
       `each month’s inputs and working: click the month in the department details\n`;
+  const ref=os.every(o=>o.impRef!=null)?`\nThe colleague's sheet (DO, imported): ${fP(os[0].impRef*100)}`:'';
   return head+
-    `AOP share by LY cont % ${cr(sh)} × ${fw.toFixed(2)} = ${cr(v)} → re-balanced ×${(v>0?val/v:0).toFixed(3)} to the division AOP = ${cr(val)}\n`+
-    `vs LY ${cr(ly)} = ${fP(g)}`;
+    `AOP share by LY cont % ${cr(sh)} × ${fw.toFixed(2)} = ${cr(v)} → re-balanced ×${(v>0?val/v:0).toFixed(3)} to ${_f1On()?'the AOP of the month over all divisions':'the division AOP'} = ${cr(val)}\n`+
+    `vs LY ${cr(ly)} = ${fP(g)}`+ref;
 }
 const _attr=t=>String(t).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/\n/g,'&#10;');
 
@@ -6350,7 +6391,8 @@ function openFactorTable(){
     PLANNER.canEdit=!!(me&&(me.is_admin||me.role==='admin'||me.role==='planner'));
     _fmFt=PLANNER.ft?_clone(PLANNER.ft):null;
     if(_fmFt){_fmFt.mode=_fmFt.mode||'matrix';_fmFt.model=_fmFt.model||_clone(FM_DEFAULT);_fmFt.cont=_fmFt.cont||{...FM_CONT_DEFAULT};}
-    _fmTab=_fmFt?.mode==='weighted'?'builder':_fmFt?.mode==='continuous'?'cont':_fmFt?.mode==='ml'?'ml':'matrix';_fmPrevCache=null;_fmCutCache=new Map();_fmView='preview';
+    _fmTab=_fmFt?.mode==='weighted'?'builder':_fmFt?.mode==='continuous'?'cont':_fmFt?.mode==='ml'?'ml':_fmFt?.mode==='factor1'?'factor1':'matrix';
+    if(!PLANNER.f1)_plannerF1Load().then(()=>_renderFactorTable());_fmPrevCache=null;_fmCutCache=new Map();_fmView='preview';
     _renderFactorTable();document.getElementById('factorOv').style.display='flex';
     if(!PLANNER.mla?.data)_fmLoadMla();
   });
@@ -6371,7 +6413,7 @@ function _renderFactorTable(){
   el.innerHTML=tabs+`<div class="fm-vtabs sub"><span class="fm-note">Method:</span>${meth}</div>
     <div class="fm-fill">${PLANNER.fill?`Fill rates: <b>${Object.keys(PLANNER.fill.departments||{}).length}</b> departments from ${_h(PLANNER.fill.source)} (${_h(PLANNER.fill.column)}) · ${_h(PLANNER.fill.imported_at)}`:'<span style="color:var(--ne)">Fill-rate file not loaded yet.</span>'}
       ${PLANNER.canEdit?`<label class="tbtn" style="margin-left:8px;cursor:pointer">&#x2191; Refresh fill rates<input type="file" accept=".xlsb,.xlsx,.xlsm" style="display:none" onchange="uploadFillRate(this)"></label>`:''}</div>`+
-    (_fmTab==='builder'?_fmBuilderHtml(ft.model,ed):_fmTab==='cont'?_fmContHtml(ft,ed):_fmTab==='ml'?_fmMlHtml(ft,ed):_fmMatrixHtml(ft,ed))+
+    (_fmTab==='builder'?_fmBuilderHtml(ft.model,ed):_fmTab==='cont'?_fmContHtml(ft,ed):_fmTab==='ml'?_fmMlHtml(ft,ed):_fmTab==='factor1'?_fmF1Html(ft,ed):_fmMatrixHtml(ft,ed))+
     (ft.updated_by?`<div style="padding:8px 14px;font-size:10px;color:var(--mu)">Last changed by ${_h(ft.updated_by)} · ${_h(ft.updated_at)}</div>`:'');
   if(_fmTab==='builder'&&ed)_fmWire();
 }
@@ -6380,9 +6422,10 @@ function _renderFactorTable(){
    each method card shows its factor, the department's Phase 1 plan for the AOP months (every active department of
    its division scored the same way, then re-balanced to each month's AOP - as the planner does) and the back-test.
    "Use this" sets the method (Save applies it); "Settings" opens that method's editor below. Drafts count. */
-const FM_METHODS=[['matrix','Matrix','matrix'],['weighted','Weighted builder','builder'],['continuous','Continuous','cont'],['ml','Ridge regression (ML)','ml']];
+const FM_METHODS=[['matrix','Matrix','matrix'],['weighted','Weighted builder','builder'],['continuous','Continuous','cont'],['ml','Ridge regression (ML)','ml'],['factor1','Planner input','factor1']];
 // what kind of model each method is (user, 12 Oct: "give it a proper name of the models used")
-const FM_MODEL={matrix:'rule-based lookup table',weighted:'weighted scoring model',continuous:'relative-strength power curve',ml:'weighted ridge regression'};
+const FM_MODEL={matrix:'rule-based lookup table',weighted:'weighted scoring model',continuous:'relative-strength power curve',ml:'weighted ridge regression',
+  factor1:'sell-thru deviation matrix (Factor 1)'};
 /* (user, 2026-10-08: "i needed the pop up department on which factor does what and how ill it affect the department.
    To weigh in my options not to see the ly trends") - one row per factor, one column per method: what the factor
    multiplies the department by and what that is worth in Rs for its Mar-Jun plan. The Rs split is by log share, so
@@ -6404,12 +6447,18 @@ const FM_PLAIN={
     watch:'Still moves in steps at slab edges, and the slabs need someone to set them well.'},
   continuous:{how:'Compares the department with the middle department of its own division - a little better gives a little more, smoothly.',
     good:'No band edges, so similar departments get similar factors; the strengths were tuned on past months.',
-    watch:'Harder to explain as one simple rule.'}};
+    watch:'Harder to explain as one simple rule.'},
+  factor1:{how:'The manual working\'s Factor 1: each month\'s sell-thru against its division\'s (8 bands, very weak to exceptional) and the department\'s MAMJ\'26 sell-thru status (Low / Average / High / Excellent) give a growth of 0-30%; a low seller below half its division gets none. Plan = LY × (1 + growth), each month re-balanced to the AOP over all divisions.',
+    good:'The same rule as the colleague\'s sheet, month by month.',
+    watch:'Sell-thru is chain level (the lake has no store column), and the divisions follow the factors instead of each holding its own AOP.'}};
 // for this department, in words: what each factor adds or cuts, then the division re-balance, then the net
 function _fmDeptWhy(c,x,md,dvNm){
   const pc=v=>v==null?'n/a':(v*100).toFixed(1)+'%',L=v=>Math.abs(v*100).toFixed(1)+' L',out=[];
   const nm={st:['Sell-thru','st'],growth:['25V26 growth','gr'],base:['19V26 growth','gb'],fill:['Fill rate','fill']};
-  if(c.k==='ml'){const d=c.res.r;
+  if(c.k==='factor1'){const i=c.res.r;
+    out.push(!i?'No sell-thru - neutral ×1.00.':i.revised?`Its MAMJ'26 sell-thru is ${pc(i.tag_st)} - a low seller below half its division's, so no factor.`
+      :`Its MAMJ'26 sell-thru ${pc(i.tag_st)} is ${i.tag}; month by month against its division it gets ×${c.res.f.toFixed(2)} on average.`);
+  } else if(c.k==='ml'){const d=c.res.r;
     out.push(d?`Learnt from ${_h(dvNm)} departments only, the model gives ×${(+d.ml).toFixed(2)}${d.why.length?` (${d.why.map(w=>w.label).join(', ')})`:''}; damping and limits make it ×${c.res.f.toFixed(2)}.`
       :'No like-for-like history - neutral ×1.00.');
   } else if(c.k==='matrix'){
@@ -6421,8 +6470,9 @@ function _fmDeptWhy(c,x,md,dvNm){
   ['rules','damp','clamp'].forEach(k=>{const o=c.st[k];if(o&&o.c!=null&&Math.abs(o.imp)>=5e-3)
     out.push(`${k==='rules'?'A rule':k==='damp'?'Small-department damping':'The factor limit'} ${o.imp>0?'adds':'cuts'} ${L(o.imp)}.`);});
   const b=c.st.bal;
-  if(b&&Math.abs(b.imp)>=5e-4)out.push(b.imp<0?`Other ${dvNm} departments score higher on average, so keeping ${dvNm} on its AOP takes back ${L(b.imp)}.`
-    :`Other ${dvNm} departments score lower on average, so keeping ${dvNm} on its AOP adds ${L(b.imp)}.`);
+  const onA=c.k==='factor1'?'each month on its AOP over all divisions':`${dvNm} on its AOP`,oth=c.k==='factor1'?'Other':`Other ${dvNm}`;
+  if(b&&Math.abs(b.imp)>=5e-4)out.push(b.imp<0?`${oth} departments score higher on average, so keeping ${onA} takes back ${L(b.imp)}.`
+    :`${oth} departments score lower on average, so keeping ${onA} adds ${L(b.imp)}.`);
   out.push(`Net: ${c.D>=0?'+':'−'}${L(c.D)} against its plain AOP share.`);
   return out.join(' ');
 }
@@ -6443,8 +6493,15 @@ function _fmMlGauge(ft){
     out[k]={n,both,same,gap:n?gap/n:null};});
   return out;
 }
-function _fmSpec(k,ft){return k==='plain'?null:k==='matrix'?'matrix':{mode:k,model:ft.model,cont:ft.cont};}
+function _fmSpec(k,ft){return k==='plain'?null:k==='matrix'?'matrix':k==='factor1'?'factor1':{mode:k,model:ft.model,cont:ft.cont};}
 function _fmDeptCalc(sec,dv,k,ft){
+  if(k==='factor1'){   // Planner input: LY x factor, each month re-balanced over ALL divisions (as the planner does)
+    const all=_fmPrev();let val=0;
+    AOP_MIS.forEach(mi=>{let tot=0,raw=0,mine=0;DVDATA.forEach(d=>{tot+=S.aop[d.id]?.[mi]||0;});
+      all.forEach(q=>{const w=_secMonLY(q.sec,q.dv,mi)*_f1(q.sec.nm,q.dv.nm,[mi]).f;raw+=w;if(q.sec===sec)mine=w;});
+      if(raw>0&&tot>0)val+=mine*tot/raw;});
+    const r=_f1(sec.nm,dv.nm,AOP_MIS);return {f:r.f,val,r:r.inf};
+  }
   const P=_fmPrev().filter(q=>q.dv===dv),spec=_fmSpec(k,ft);
   const fOf=q=>k==='ml'?_mlF(dv,q.sec):k==='matrix'?_matrixFactor(ft,q.x).f:_fmEval(spec,q.x,dv.id,AOP_MIS,q.ly);
   const F=new Map(P.map(q=>[q.sec.id,fOf(q)])),divAnn=dv.secs.reduce((a,s)=>a+s.ly,0);
@@ -6464,6 +6521,12 @@ function _fmDeptCalc(sec,dv,k,ft){
 // one method's steps for the department: {row: {c: multiplier or null, t: detail}}
 function _fmSteps(k,res,ft){
   const r=res.r||{},S2={},pc=v=>(v*100).toFixed(1)+'%';
+  if(k==='factor1'){const i=res.r;
+    S2.st={t:i?`MAMJ'26 ${pc(i.tag_st)} - ${i.tag}`:'no sell-thru'};S2.growth={t:'not in this method'};S2.base={t:'not in this method'};S2.fill={t:'not in this method'};
+    S2.combo={c:res.f,t:!i?'neutral 1.00':i.revised?"MAMJ'26 sell-thru at most 4% and below half its division's - no factor"
+      :AOP_MIS.map(mi=>{const m=i.months?.[mi];return m?`${MO[mi]} ${m.dev.toFixed(2)}× div → +${(m.factor*100).toFixed(0)}%`:'';}).filter(Boolean).join(', ')};
+    S2.rules={t:i?.revised?'low seller: no factor':'none apply'};S2.damp={t:'not in this method'};S2.clamp={t:'not in this method'};S2.model={t:'not in this method'};
+    return S2;}
   if(k==='ml'){const d=res.r,P=d?.parts,M=_fmMl(),sf=M?.st_fill?.by_division?.[d?._div]||{},win=_mlaMon((M?.st_fill?.window||'').replace('..',','));
     const term=(key,raw,nm)=>{if(!d)return {t:'-'};if(raw==null)return {t:`no ${nm} for this department - neutral`};
       if(!sf.on)return {t:`${pc(raw)} - not used in ${d._div}: it did not help on ${win||'the 2026 months'}`};
@@ -6509,7 +6572,7 @@ function _fmPickHtml(ft,ed){
   const plain=_fmDeptCalc(sec,dv,'plain',ft).val,saved=PLANNER.ft?.mode||'matrix';
   const MLD=_fmMl();
   const cols=FM_METHODS.map(([k,nm,tab])=>{const res=_fmDeptCalc(sec,dv,k,ft),st=_fmSteps(k,res,ft);if(!st.model)st.model={t:'not in this method'};
-    st.bal={c:plain>0&&res.f>0?res.val/(plain*res.f):1,t:'the division stays on its AOP'};
+    st.bal={c:plain>0&&res.f>0?res.val/(plain*res.f):1,t:k==='factor1'?'each month stays on its AOP over all divisions':'the division stays on its AOP'};
     const cs=Object.values(st).filter(o=>o.c!=null&&o.c>0),LS=cs.reduce((a,o)=>a+Math.log(o.c),0),D=res.val-plain;
     cs.forEach(o=>{o.imp=Math.abs(LS)>1e-9?D*Math.log(o.c)/LS:plain*Math.log(o.c);});
     return {k,nm,tab,res,st,D};});
@@ -6525,12 +6588,12 @@ function _fmPickHtml(ft,ed){
     return `<th class="${inUse?'fm-dt-use':''}"><div class="fm-mc-hd"><span>${c.nm}<div class="fm-note fm-model">${FM_MODEL[c.k]}</div></span>${inUse?`<span class="fm-badge">${saved===c.k?'In use':'Chosen - Save'}</span>`:ed?`<button type="button" class="tbtn" onclick="_fmFt.mode='${c.k}';_fmTab='${c.tab}';_renderFactorTable()">Use this</button>`:''}</div></th>`;}).join('');
   // which to pick: the method that came closest on past months (short + long back-test, averaged) - one answer for every department
   const bt=k=>{const sp=_fmSpec(k,ft),a=_fmBacktest(sp).wape,b=_fmBacktest(sp,FM_BT_LONG_IN,FM_BT_LONG_OUT).wape;return a!=null&&b!=null?(a+b)/2:null;};
-  cols.forEach(c=>{c.bt=c.k==='ml'?null:bt(c.k);});
+  cols.forEach(c=>{c.bt=c.k==='ml'||c.k==='factor1'?null:bt(c.k);});   // Planner input has no past-months sell-thru to test on
   const btP=bt('plain'),ranked=cols.filter(c=>c.bt!=null).sort((a,b)=>a.bt-b.bt),best=ranked[0];
   const vals=cols.map(c=>c.res.val),spread=Math.max(...vals)-Math.min(...vals),e=v=>(v*100).toFixed(2)+'%';
   const advice=!best?'':`<div class="fm-advice"><b>Suggested: ${best.nm}.</b>${cols.some(c=>c.k==='ml')?' <span class="fm-note">(of the three BIS methods - Ridge regression (ML) is tested on its own history check, see its column)</span>':''} ${FM_PLAIN[best.k].good} Tried on past months, its plan came closest to what actually sold - off by ${e(best.bt)}, against ${ranked.slice(1).map(c=>`${c.nm} ${e(c.bt)}`).join(', ')}${btP!=null?` and ${e(btP)} with no factor at all`:''}.
     ${ft.mode!==best.k?` You are on ${(cols.find(c=>c.k===ft.mode)||{}).nm||ft.mode} now.`:''}
-    For ${_h(sec.nm)} the ${cols.length===4?'four':'three'} choices are ${spread*100<0.5||spread<plain*0.005?'almost the same, so the choice barely matters here':`${L(spread).replace('+','')} apart (${cr(Math.min(...vals))} to ${cr(Math.max(...vals))})`}.</div>`;
+    For ${_h(sec.nm)} the ${({3:'three',4:'four',5:'five'})[cols.length]||cols.length} choices are ${spread*100<0.5||spread<plain*0.005?'almost the same, so the choice barely matters here':`${L(spread).replace('+','')} apart (${cr(Math.min(...vals))} to ${cr(Math.max(...vals))})`}.</div>`;
   return `<div class="fm-pick">
     <div class="fm-pick-hd"><label>Department <select onchange="_fmDept=this.value;_renderFactorTable()" aria-label="Department to preview">${opts}</select></label>
       <span class="fm-note">${_h(dv.nm)} · what each factor does to this department's ${MO[AOP_MIS[0]]}-${MO[AOP_MIS[AOP_MIS.length-1]]} plan. Starting point: its plain AOP share, <b>${cr(plain)}</b> (factor 1.00).</span></div>
@@ -6713,6 +6776,29 @@ const FM_ML_LBL={rel_g1:'25V26 growth vs its division',rel_g2:'2-year growth vs 
   share_ly:'its share of the division',miss_g1:'no 25V26 history',miss_g2:'no 2-year history',miss_gr:'no recent-month history',
   season_MAMJ:'Mar-Jun season',season_JASO:'Jul-Oct season',div_MENS:'MENS',div_LADIES:'LADIES'};
 const FM_DIVS=['MENS','LADIES','KIDS'];
+// the Planner input tab: its two band tables, the matrix, the rule, and every department's monthly factors (read-only - the
+// rules are Sales Plan's sellthru_factor, the colleague's FACTOR - 1 sheet)
+function _fmF1Html(ft,ed){
+  const J=PLANNER.f1;if(!J)return '<p style="padding:14px">Loading the sell-thru… (the data lake must be reachable)</p>';
+  const tags=['Low','Average','High','Excellent'],dev=[['2.0','Exceptional / outstanding',[.18,.21,.25,.30]],['1.6','Very strongly above division',[.12,.15,.18,.21]],
+    ['1.4','Strongly above division',[.10,.12,.14,.17]],['1.2','Above division',[.08,.09,.10,.12]],['0.8','Around division benchmark',[.06,.06,.06,.06]],
+    ['0.65','Below division',[.04,.05,.06,.07]],['0.5','Extremely below division',[.02,.03,.04,.05]],['below 0.5','Very weak vs division',[0,0,0,0]]];
+  const pc=v=>v==null?'-':(v*100).toFixed(1)+'%',mis=AOP_MIS.filter(mi=>J.months?.[mi]);
+  const rows=[];DVDATA.forEach(dv=>dv.secs.forEach(sec=>{if(S.hiddenSecs.has(sec.id))return;const i=J.info?.[dv.nm]?.[sec.nm.toUpperCase()];if(!i)return;
+    rows.push(`<tr><td>${_h(dv.nm)}</td><td>${_h(sec.nm)}</td><td>${pc(i.tag_st)}</td><td>${i.tag}</td>${mis.map(mi=>{const m=i.months?.[mi];
+      return `<td title="${m?`sell-thru ${pc(m.st)} vs division ${pc(m.div_st)}`:''}">${m?m.dev.toFixed(2)+'× → +'+(m.factor*100).toFixed(0)+'%':'-'}</td>`;}).join('')}<td>${i.revised?'no factor (low seller)':''}</td></tr>`);}));
+  return `<div style="padding:10px 14px">
+    <p class="fm-note">Planner input = the manual working's Factor 1 (FACTOR - 1 sheet). Sell-thru = average weekly sell-thru (sales ÷ (sales + closing stock)) of ${_h(J.file||'the lake file')}, chain level, SEASON 26, active stores. Plan = LY × (1 + growth) per month, re-balanced to the AOP of the month over all divisions.${ft.mode==='factor1'?' <b>In use.</b>':ed?' Pick it with <b>Use this</b> on the preview, then Save.':''}</p>
+    <div class="fm-row" style="gap:18px;align-items:flex-start;flex-wrap:wrap">
+      <table class="pl-ft"><thead><tr><th>MAMJ'26 sell-thru from</th><th>Status</th></tr></thead><tbody>
+        <tr><td>15.1%</td><td>Excellent</td></tr><tr><td>11.1%</td><td>High</td></tr><tr><td>7.1%</td><td>Average</td></tr><tr><td>below 7.1%</td><td>Low</td></tr></tbody></table>
+      <table class="pl-ft"><thead><tr><th>Month's sell-thru ÷ division's, from</th><th>Meaning</th>${tags.map(t=>`<th>${t}</th>`).join('')}</tr></thead><tbody>
+        ${dev.map(([lo,nm,f])=>`<tr><td>${lo}</td><td>${nm}</td>${f.map(v=>`<td>+${(v*100).toFixed(0)}%</td>`).join('')}</tr>`).join('')}</tbody></table>
+    </div>
+    <p class="fm-note">Rule: MAMJ'26 sell-thru at most 4% and the deviation averaging at most 50% over Mar-Jul'26 → no factor (0%).</p>
+    <div class="fm-hall-wrap"><table class="pl-ft fm-hall-t"><thead><tr><th>Division</th><th>Department</th><th>MAMJ'26 ST</th><th>Status</th>${mis.map(mi=>`<th>${J.months[mi]}</th>`).join('')}<th>Rule</th></tr></thead>
+      <tbody>${rows.join('')}</tbody></table></div></div>`;
+}
 function _fmMlHtml(ft,ed){
   const wait=_fmMlaWait(),pct=v=>(v*100).toFixed(2)+'%';
   if(wait)return `<div class="fm-sec"><div class="fm-note">${_h(wait)}${PLANNER.mla?.error?_fmMlaBtn():''}</div></div>`;

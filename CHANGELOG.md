@@ -7,6 +7,14 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### BIS: "Planner input" - the colleague's Factor 1 as a planner method
+- **Asked (user):** "go ahead with Factor 1 as a BIS planner method, and keep the name planner input".
+- **Method (factor table mode `factor1`, shown as "Planner input", model "sell-thru deviation matrix (Factor 1)"):** per department x plan month, growth = FACTOR-1[the month's sell-thru vs its division's - 8 bands, very weak to exceptional][its MAMJ'26 sell-thru status - Low / Average / High / Excellent] = 0-30%; no factor when MAMJ'26 sell-thru <= 4% and the deviation averages <= 50% over Mar-Jul'26. Plan = LY x (1 + growth), month by month (Phase 1 too), each month re-balanced to the AOP over ALL divisions (their cluster cap, chain level here).
+- **One copy of the rules:** sync_server POST `/api/planner/factor1` runs Sales Plan's `engines/sellthru_factor.py` (re-derived on the colleague's workbook, 0 differences) on the same lake sell-thru BIS reads; the factor table save accepts mode factor1.
+- **Screens:** fifth column in the department preview (no back-test - there is no past-months sell-thru to test it on), its own settings tab (status bands, deviation matrix, the rule, every department's monthly factors), Planner Gr% hover with the month's sell-thru vs division and the imported DO as a reference.
+- **Not switched on:** the saved method is still Matrix; an admin / planner picks "Use this" + Save. While Planner input is in use it replaces the imported DO (planner_growth.json) in the Planner column; the DO stays in the hover.
+- **Check (in memory, Iteration 4):** grand +11.06% (KIDS +10.69, LADIES +11.58, MENS +10.98); 113 departments average 1.95 points from the colleague's DO (their factor is per cluster and their DO includes Feb'27 P2).
+
 ### Sales Plan: P1 / P2 halves - the SSG plan now matches the colleague's manual working
 - **Asked (user):** "go ahead with the P1/P2 halves" + "check if the outputs match the manual working".
 - **Why it was needed (worked out on their sheet):** the last 163 L came from their cap per half-month. With one LY P1 share per cluster the half cap equals the month cap; it moves only with DEPARTMENT-level half-month LY and an AOP P1 / P2 split of its own.

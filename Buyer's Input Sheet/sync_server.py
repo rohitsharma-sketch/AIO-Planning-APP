@@ -374,6 +374,36 @@ def planner_config():
                     "fill_rate": _read_json(FILL_RATE_JSON, None), "planner_growth": _read_json(PLANNER_GROWTH_JSON, None)})
 
 
+@app.route("/api/planner/factor1", methods=["POST"])
+def planner_factor1():
+    """The "Planner input" method (user, 2026-10-15: "go ahead with Factor 1 as a BIS planner method, and keep the name
+    planner input"): the colleague's Factor 1 per department x plan month - MAMJ'26 avg weekly sell-thru status (Low /
+    Average / High / Excellent) x the month's sell-thru vs its division's (8 bands) -> growth 0-30%, no factor when the
+    MAMJ sell-thru is <= 4% and the deviation averages <= 50% over Mar-Jul'26. The rules live in Sales Plan's
+    engines/sellthru_factor.py (one copy, re-derived on the colleague's workbook with 0 differences); sell-thru is chain
+    level, from the same lake file BIS reads. Read-only. Body {depts: {DIVISION: [department names]}} ->
+    {file, months: {mi: "Mar'27"}, factors: {DIV: {DEPT: {mi: 1 + factor}}}, info: {DIV: {DEPT: {tag, tag_st, revised,
+    months: {mi: {st, div_st, dev, factor}}}}}}."""
+    import calendar as _cal
+    sp = os.path.join(_HERE, "..", "SalesPlan", "backend")
+    if sp not in sys.path:
+        sys.path.insert(0, sp)
+    from engines import sellthru_factor as sf
+    body = request.get_json(silent=True) or {}
+    depts = {str(dv).upper(): [str(d).strip().upper() for d in (ds or [])] for dv, ds in (body.get("depts") or {}).items()}
+    lbl = {mi: f"{_cal.month_abbr[MI_TO_CAL_MONTH[mi]]}'{str(PLAN_MAMJ_YEAR)[2:]}" for mi in AOP_MONTHS}
+    try:
+        st = sf.sell_thru()
+        g, info = sf.growth(depts, list(lbl.values()), st)
+    except Exception as e:   # noqa: BLE001 - the lake unreachable: the page keeps the method off (neutral)
+        return jsonify({"error": f"sell-thru not readable: {e}"}), 503
+    back = {v: k for k, v in lbl.items()}
+    fac = {dv: {d: {back[m]: f for m, f in mm.items()} for d, mm in dd.items()} for dv, dd in g.items()}
+    inf = {dv: {d: {"tag": i["tag"], "tag_st": i["tag_st"], "revised": any(x.get("revised") for x in i["months"].values()),
+                    "months": {back[m]: x for m, x in i["months"].items()}} for d, i in dd.items()} for dv, dd in info.items()}
+    return jsonify({"file": st.get("file"), "months": lbl, "factors": fac, "info": inf})
+
+
 def _planner_editor():
     """The signed-in user if they may edit the factor table (admin or planner), else None. BIS has no login of its
     own: Landing forwards the platform's session cookie, which 8010 resolves (direct :5050 has none - refused)."""
@@ -485,8 +515,9 @@ def planner_factor_table_save():
     ft = request.get_json(silent=True) or {}
     err = _factor_table_error(ft)
     mode = ft.get("mode", "matrix")
-    if not err and mode not in ("matrix", "weighted", "continuous", "ml"):
-        err = "mode must be matrix, weighted, continuous or ml"
+    # factor1 = "Planner input" (2026-10-15): the colleague's Factor 1, worked out live from the sell-thru (/api/planner/factor1)
+    if not err and mode not in ("matrix", "weighted", "continuous", "ml", "factor1"):
+        err = "mode must be matrix, weighted, continuous, ml or factor1"
     ft.pop("ml", None)   # the ML factors are taken from the server's own history check, never from the request
     if not err and mode == "ml":
         # user, 2026-10-12: "make the ml suggestion use able like the others" - Ridge regression (ML): its factors are
