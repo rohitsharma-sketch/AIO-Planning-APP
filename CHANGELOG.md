@@ -7,6 +7,20 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Re-Aligner linked to the Sales Plan (live plan or a saved version, or a file) - like Growth vs LY
+- **Asked (user):** "also link the final sales plan to nso distributor and sales plan aligner too if i want to use a pre existing plan or want to import it from external source. Make the layout similar to the Growth V LY linkage".
+- **Sales Plan publish:**
+  - Each cell now carries **qty** = value / the Sales Plan's ASP (sole ASP file), to 2 decimals (rule M3); 0 without an ASP (none today). Each store carries its **reference store**.
+  - Versions are rebuilt once for the new format, and again when the ASP master changes.
+  - Totals: 77,981.45 L / 22,923,182.37 pieces (the Qty run: 22,923,177.17 - fortnight rounding); 319 of 426 stores have a reference.
+- **Re-Aligner, step 1 "Original plan":**
+  - A **Plan** list: Sales Plan - live plan (updates by itself) / every saved Sales Plan version / Uploaded file. "Upload a file instead" (or "Replace…" for a file) stays.
+  - When linked, the card says so and the meta line shows the saved / published times.
+  - `POST /api/original/link?version=` builds the original from the published cells: Store x Department x merged MRP x Display Type, "<fortnight> Plan" (Rs lakh) + "<fortnight> Plan Qty", ATTRIBUTE (the per-attribute cap), CLUSTER, SSG TAG, REF (the re-phase chain). It is checked by the same `importer.prepare_original` as an upload and saved in the user's workspace like one. An unknown version gives a 400.
+  - The live link re-reads by itself when the Sales Plan publishes a newer plan (checked on the page's poll).
+- **Checked:** offline, without touching any workspace: the live plan and the Final version both convert with no errors (182,326 rows, 304 stores, 114 departments, 3 divisions, 8 fortnights, 77,981.45 L, 22,923,182.37 pieces, REF on every row). Bogus version refused. Re-Aligner `test_realign.py` and `test_workspaces.py` pass. The page shows the Plan list with no console errors. The "local" workspace's uploaded plan was left as it is. 8070 and 8010 restarted.
+- **NSO Plan Distributor: not linked yet.** Its months are fixed to Sep'26-Feb'27 (SEP-FEB Val/Qty columns and a fixed Division Cont % date map), while the Sales Plan is Mar-Jun'27. It needs its months made dynamic first.
+
 ### BIS: input tiles are drivers; a Re-cal Gr% column shows what the rules made of them
 - **Asked (user):** "in these tiles i guess the inputs should be there and they should be kept like that ... insert a column where the re-caliberated inputs as per buyer's show"; "Whichever is amalgmamted as per the user and locked. For now the inputs imported are to remain locked"; "keep the input tiles as text which are the driver cells so act like it til lthe time it is locked when locked except for that tile the whole unlocked plan will be auto recaliberated as wanted".
 - **Rule (RULE_BOOK B14, B9 updated):**

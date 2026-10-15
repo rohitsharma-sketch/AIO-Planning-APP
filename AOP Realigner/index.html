@@ -485,19 +485,40 @@ function sheetPicker(slot, sheets, current) {
 
 const stepNo = (n, st) => `<span class="step-no ${st}">${st === 'done' ? icon('check') : n}</span>`;
 
+// the Sales Plan link (2026-10-15, as Growth vs LY): the plan list - the live plan (updates by itself) or a saved version
+function spPick(o) {
+  const sp = S.sp || {}, src = (o && o.source) || {}, linked = src.kind === 'sales_plan';
+  if (!sp.linkable) return '';
+  const V = sp.versions || [];
+  return `<label class="row small" style="gap:6px" title="Which Sales Plan to realign: the live plan, or a version saved on the Sales Plan's Final Results page"><span class="muted">Plan</span>
+    <select class="select" id="sp-ver" onchange="linkSP(this.value)">${linked ? '' : `<option value="__file" selected>${o ? 'Uploaded file' : 'Pick…'}</option>`}
+      <option value=""${linked && !src.version ? ' selected' : ''}>Sales Plan - live plan (updates by itself)</option>
+      ${V.map(v => `<option value="${esc(v.id)}"${linked && src.version === v.id ? ' selected' : ''}>Sales Plan - ${esc(v.name)} · saved ${esc(String(v.saved).replace('T', ' ').slice(0, 16))}</option>`).join('')}
+    </select></label>`;
+}
+async function linkSP(v) {
+  if (v === '__file') return;
+  if (dataBusy()) return toast('Please wait for the current step to finish.');
+  try { await api(`api/original/link?version=${encodeURIComponent(v)}`); } catch (e) { toast(e.message); }
+  refresh();
+}
 function renderOrig() {
   const o = S.original, f = S.original_failed;
+  const src = (o && o.source) || {}, linked = src.kind === 'sales_plan';
   let h = `<div class="card-header">${stepNo(1, o ? 'done' : 'current')}<div class="grow"><h2 class="card-title" id="t-orig">Original plan
       ${o ? '<span class="badge b-success"><span class="dot"></span>Loaded</span>' : '<span class="badge b-muted">Not loaded</span>'}</h2>
-    <p class="card-desc">The full plan to realign back to — Store × Department × MRP × Display Type with “&lt;Month&gt; Plan” and “&lt;Month&gt; Plan Qty” columns. Kept between sessions, so you only upload it when it changes.</p></div></div><div class="card-content">`;
+    <p class="card-desc">${linked
+      ? `Linked to the Sales Plan’s own output — ${src.version ? 'a saved version, as it was saved' : 'the live plan updates by itself whenever the Sales Plan has a new plan'}. Every store × department × merged MRP × display type, with its plan value and pieces (value ÷ the Sales Plan’s ASP).`
+      : 'The full plan to realign back to — Store × Department × MRP × Display Type with “&lt;Month&gt; Plan” and “&lt;Month&gt; Plan Qty” columns. Kept between sessions, so you only upload it when it changes.'}</p></div>
+    <span class="end row" style="gap:8px">${spPick(o)}${o ? uploadLink('original', linked ? 'Upload a file instead' : 'Replace…', linked ? 'Use a plan file instead of the Sales Plan link' : 'Replace the original plan') : ''}</span></div><div class="card-content">`;
   if (f) h += `<div class="alert alert-error">${icon('error')}<div style="flex:1"><strong>${esc(f.name)} couldn't be loaded</strong> · ${esc(f.at)}.
       ${o ? 'The previously loaded original is still in use.' : ''}<div style="margin-top:6px">${sheetPicker('original', f.sheets)}</div></div>
       <button class="btn btn-ghost btn-sm" onclick="dismissOrig()" aria-label="Dismiss this notice">Dismiss</button></div>${report(f.report, 'rep-of', true)}<div class="sep"></div>`;
   if (o) {
     h += `<div class="file"><span class="fi">${icon('sheet')}</span><div><div class="name">${esc(o.name)}</div>
-      <div class="meta">Loaded ${esc(o.loaded_at || '—')}${o.parse_secs ? ` · read and checked in ${secs(o.parse_secs)}` : ''}${o.sheet ? ` · sheet “${esc(o.sheet)}”, header on row ${o.header_row}` : ''}</div>
+      <div class="meta">${linked ? `${src.saved ? `Saved ${esc(src.saved)} · ` : ''}published ${esc(src.built || '—')} · ` : ''}Loaded ${esc(o.loaded_at || '—')}${o.parse_secs ? ` · read and checked in ${secs(o.parse_secs)}` : ''}${o.sheet ? ` · sheet “${esc(o.sheet)}”, header on row ${o.header_row}` : ''}</div>
       <div class="meta">${N(o.rows)} rows · ${N(o.stores)} stores · ${N(o.departments)} departments · <span title="${esc((o.divisions || []).join(' · '))}">${(o.divisions || []).length} divisions</span></div></div>
-      <span class="end">${sheetPicker('original', o.sheets, o.sheet)}${uploadLink('original', 'Replace…', 'Replace the original plan')}</span></div>
+      <span class="end">${sheetPicker('original', o.sheets, o.sheet)}</span></div>
       <div class="chips" title="Locked = kept exactly as the original · click a month to lock / unlock"><span class="muted small">${icon('lock', 'xs')} Months</span>${(o.months || []).map(m => `<button class="chip lockchip${frozen(m) ? ' on' : ''}" onclick="toggleLock(this.dataset.m)" data-m="${esc(m)}" aria-pressed="${frozen(m)}" title="${frozen(m) ? 'Locked - kept exactly as the original. Click to let it change' : 'Changes with the realignment. Click to lock it'}">${frozen(m) ? icon('lock', 'xs') : ''}${esc(m)}</button>`).join('')}</div>
       ${report(o.report, 'rep-o')}`;
   } else h += dropzone('original', f ? 'Try another file' : 'Upload the original plan', !!f);

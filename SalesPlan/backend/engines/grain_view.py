@@ -154,7 +154,21 @@ def _write_published(c: dict, ix: dict, path: str, extra: dict | None = None):
     df = pd.DataFrame({k: pd.Categorical.from_codes(C[k], [str(x) for x in N[k]]) for k in lv})
     df["ly"], df["ty"] = ix["ly"], ix["ty"]
     df = df[(df["ly"].abs() > 1e-12) | (df["ty"].abs() > 1e-12)].reset_index(drop=True)
-    stores = {s: {"cluster": x["cluster"], "stype": x["stype"], "tag": (c["stores"].get(s) or {}).get("tag") or ""}
+    # pieces for the apps that need them (Re-Aligner, NSO - 2026-10-15): value / the ASP master's ASP of the department x
+    # MRP x display x period (its own, else the other display type's), to 2 decimals as the Qty run (M3); 0 without an ASP
+    import numpy as np
+    from engines.display_type_engine import load_asp, asp_lookup
+    a = (load_asp() or {}).get("data") or {}
+    df["qty"] = 0.0
+    if a and len(df):
+        k = ["department", "mrp", "display", "month"]
+        u = df[k].drop_duplicates()
+        u["asp"] = [asp_lookup(a, d, m, t, mo)[0] for d, m, t, mo in u.itertuples(index=False)]
+        df = df.merge(u, on=k, how="left")
+        df["qty"] = np.where(df["asp"].fillna(0) > 0, (df["ty"] * 1e5 / df["asp"]).round(2), 0.0)
+        df = df.drop(columns="asp")
+    stores = {s: {"cluster": x["cluster"], "stype": x["stype"], "tag": (c["stores"].get(s) or {}).get("tag") or "",
+                  "ref": (c["stores"].get(s) or {}).get("ref") or (c["stores"].get(s) or {}).get("ref_used") or ""}
               for s, x in _sinfo(c).items()}
     src = c.get("source") or {}
     out = {"built": time.strftime("%d %b %Y %H:%M"), "plan": src.get("note") or src.get("name") or "the Sales Plan",
@@ -181,7 +195,9 @@ def publish_versions() -> int:
     from engines.mrp_plan_engine import effective_shares_key
     from engines.display_type_engine import mix_key
     from engines import plan_file_mix as pfm
-    rules = repr((effective_shares_key(), mix_key(), (pfm.load() or {}).get("imported_at")))
+    from engines.display_type_engine import DT_ASP_PATH
+    asp_mt = os.path.getmtime(DT_ASP_PATH) if os.path.exists(DT_ASP_PATH) else None
+    rules = repr((effective_shares_key(), mix_key(), (pfm.load() or {}).get("imported_at"), asp_mt, "fmt2-qty"))
     try:
         with open(VERSIONS_PATH, encoding="utf-8") as f:
             done = {r["id"]: r for r in json.load(f)}

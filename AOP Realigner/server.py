@@ -39,7 +39,12 @@ USERS_DIR = os.path.join(CACHE_DIR, "users")
 AUTH_ME = "http://127.0.0.1:8010/api/auth/me"   # who a Landing session cookie belongs to
 IDLE_UNLOAD = 2 * 3600   # an untouched workspace frees its plan from memory after this long (reloads on next visit)
 MAX_BODY = 400 * 1024 * 1024
-KB_JSON = os.path.join(HERE, "..", "Listing Delisting", "app", "kb.json")  # Listing / Delisting Analyser app's listing history
+KB_JSON = os.path.join(HERE, "..", "Listing Delisting", "app", "kb.json")
+# the Sales Plan's own output (user, 2026-10-15: "link the final sales plan to ... sales plan aligner too") - published by
+# 8010's warmer (grain_view.publish_display / publish_versions): the live plan and every saved Sales Plan version
+SP_DIR = os.path.join(HERE, "..", "SalesPlan", "backend")
+SP_LIVE = os.path.join(SP_DIR, "sales_plan_display.pkl")
+SP_VERSIONS = os.path.join(SP_DIR, "sales_plan_display_versions.json")  # Listing / Delisting Analyser app's listing history
 # the three ways to revise an existing plan (engine.py); each has its own step-2 file and template
 METHODS = {"listing": "Store listing changes", "dept": "Existing department changes", "newdept": "New or split departments",
            "shift": "Listing / delisting shifted to a target", "growth": "Growth changes"}
@@ -416,6 +421,87 @@ def _fail(report, what):
     raise UserError(f"{what}: {errs[0]}" + (f" (+{len(errs) - 1} more problem(s) - see the card)" if len(errs) > 1 else ""))
 
 
+def sp_versions():
+    """The Sales Plan's saved versions it has published: [{id, name, saved}]."""
+    try:
+        with open(SP_VERSIONS, encoding="utf-8") as fh:
+            return [{k: r[k] for k in ("id", "name", "saved")} for r in json.load(fh)]
+    except (OSError, ValueError, KeyError):
+        return []
+
+
+def sp_path(version=""):
+    if not version:
+        return SP_LIVE
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", version) or version not in {v["id"] for v in sp_versions()}:
+        raise UserError("Unknown Sales Plan version - pick one from the list.")
+    return os.path.join(SP_DIR, f"sales_plan_display.{version}.pkl")
+
+
+def sp_original_frame(sp):
+    """The published cells -> an original plan as the importer expects it: one row per Store x Department x MRP x
+    Display Type with "<fortnight> Plan" (Rs lakh) and "<fortnight> Plan Qty" (value / the Sales Plan's ASP), plus
+    ATTRIBUTE, CLUSTER, SSG TAG (SSG / NSO / Others) and REF (the store's reference) for the caps and the re-phase."""
+    months, c = list(sp["months"]), sp["cells"]
+    keys = ["store", "division", "attribute", "department", "mrp", "display"]
+    cols = ["ty"] + (["qty"] if "qty" in c.columns else [])
+    g = c.groupby(keys + ["month"], observed=True, sort=False)[cols].sum()
+    wide = {}
+    for k in cols:
+        w = g[k].unstack("month")
+        w.columns = w.columns.astype(str)
+        wide[k] = w.reindex(columns=months).fillna(0.0)
+    v = wide["ty"]
+    keep = (v.abs() > 1e-12).any(axis=1)   # departments not planned (LY only, "Not planned") are not plan rows
+    v = v[keep]
+    df = v.index.to_frame(index=False).astype(str).rename(columns={"store": "Store Name", "division": "DIVISION",
+         "attribute": "ATTRIBUTE", "department": "DEPARTMENT", "mrp": "MRP", "display": "DISPLAY TYPE"})
+    st = sp.get("stores") or {}
+    df["CLUSTER"] = df["Store Name"].map(lambda x: (st.get(x) or {}).get("cluster", ""))
+    df["SSG TAG"] = df["Store Name"].map(lambda x: (st.get(x) or {}).get("stype", ""))
+    df["REF"] = df["Store Name"].map(lambda x: (st.get(x) or {}).get("ref", ""))
+    q = wide["qty"][keep] if "qty" in wide else None
+    for m in months:
+        df[f"{m} Plan"] = v[m].to_numpy()
+        df[f"{m} Plan Qty"] = q[m].to_numpy() if q is not None else 0.0
+    return df
+
+
+def job_original_sp(job, version=""):
+    """The original plan = the Sales Plan's live plan or one of its saved versions (no upload)."""
+    path = sp_path(version)
+    if not os.path.exists(path):
+        raise UserError("The Sales Plan hasn't published its output yet - it does within a minute of 8010 starting.")
+    with job.step("Read the Sales Plan's output", "read:sp", 1):
+        mt = os.path.getmtime(path)
+        sp = pd.read_pickle(path)   # written by this suite's Sales Plan server only
+    v = sp.get("version") or {}
+    name = f"Sales Plan - {v['name']}" if v else "Sales Plan - live plan"
+    with job.step("Check columns and values", "check:original", len(sp["cells"])):
+        df = sp_original_frame(sp)
+        info = {"file": name, "bytes": 0, "sheets": [], "sheet": None, "header_row": None, "colmap": {c: c for c in df.columns}}
+        df, months, info, rep = importer.prepare_original(df, info, importer.Report())
+    info.update(name=name, loaded_at=stamp(), parse_secs=round(job.elapsed(), 1),
+                source={"kind": "sales_plan", "version": version, "mtime": mt, "built": sp.get("built"),
+                        "saved": (v.get("saved") or "").replace("T", " ")[:16]})
+    if not rep.ok:
+        _fail(rep, name)
+    _set_original(job, df, months, info, rep, None)
+
+
+def _sp_autolink():
+    """Linked to the Sales Plan's live plan: re-read it when the Sales Plan has published a newer one (the page polls)."""
+    with lock:
+        src = (state["orig_info"] or {}).get("source") or {}
+    if src.get("kind") != "sales_plan" or src.get("version"):
+        return   # an uploaded file, or a saved version (as saved - it does not change)
+    try:
+        if os.path.getmtime(SP_LIVE) != src.get("mtime"):
+            start_job("data", "original", "Updating from the Sales Plan", job_original_sp, "")
+    except (OSError, UserError):
+        pass   # not published yet, or a step is running - next poll
+
+
 def job_original(job, data, name, sheet=None):
     with job.step("Read workbook", "read:original", len(data)):
         df, info, rep = importer.read_table(data, name, importer.NEED_ORIGINAL, "original plan", sheet)
@@ -423,12 +509,17 @@ def job_original(job, data, name, sheet=None):
     if df is not None:
         with job.step("Check columns and values", "check:original", len(df)):
             df, months, info, rep = importer.prepare_original(df, info, rep)
-    info.update(name=name, loaded_at=stamp(), parse_secs=round(job.elapsed(), 1))
+    info.update(name=name, loaded_at=stamp(), parse_secs=round(job.elapsed(), 1), source={"kind": "file"})
     if not rep.ok:
         with lock:
             state["orig_failed"] = {"name": name, "at": stamp(), "report": rep.items, "sheets": info.get("sheets", [])}
             state["orig_upload"] = (data, name) if len(info.get("sheets", [])) > 1 else None
         _fail(rep, name)
+    _set_original(job, df, months, info, rep, (data, name) if len(info["sheets"]) > 1 else None)
+
+
+def _set_original(job, df, months, info, rep, upload):
+    """The checked original plan in use (an upload or the Sales Plan link): saved for the next session, results reset."""
     with job.step("Save for next session", "save:original", len(df)):
         pkl = _tl.ws.path("original.pkl")
         with open(pkl + ".tmp", "wb") as fh:
@@ -438,7 +529,7 @@ def job_original(job, data, name, sheet=None):
         # a month the previous plan also had keeps the user's lock choice; a new month starts on the default
         _set_locks(months, _load_json(_tl.ws.path("locks.json"), {}).get("chosen"))
         state.update(orig=df, months=months, orig_info=info, orig_report=rep.items, orig_failed=None,
-                     orig_upload=(data, name) if len(info["sheets"]) > 1 else None, **NO_RESULT)
+                     orig_upload=upload, **NO_RESULT)
         rev = state["rev_upload"]
     if rev:  # the revised plan was checked against the old original - check it again
         with contextlib.suppress(UserError):  # its problems show on its own card; the original itself loaded fine
@@ -615,6 +706,7 @@ def public_state():
         "method": s["method"], "listing_app": os.path.exists(KB_JSON), "locks": s["locks"],
         "ly_departments": ly_departments() if o is not None and s["method"] == "dept" else [],
         "user": _tl.ws.name,   # whose workspace this is
+        "sp": {"linkable": os.path.exists(SP_LIVE), "versions": sp_versions()},   # the Sales Plan link (2026-10-15)
         "rephase_overrides": (lambda v: v and {"name": v["name"], "loaded_at": v["loaded_at"], "stores": len(v["stores"]),
                                                "ref_old": sum("ref_old" in x for x in v["stores"].values()),
                                                "mix": sum(len(x.get("mix") or {}) if all(isinstance(y, dict) for y in (x.get("mix") or {}).values()) else 0
@@ -658,6 +750,7 @@ class Handler(BaseHTTPRequestHandler):
             with open(os.path.join(HERE, "rules.js"), "rb") as fh:
                 return self._send(200, fh.read(), "text/javascript; charset=utf-8")
         if path == "/api/state":
+            _sp_autolink()
             return self._send(200, public_state())
         if path == "/api/download":
             with lock:
@@ -744,6 +837,10 @@ class Handler(BaseHTTPRequestHandler):
                 raise UserError("Unknown revision method.")
             if path == "/api/original":
                 job = start_job("data", "original", "Loading original plan", job_original, data, name)
+            elif path == "/api/original/link":   # the Sales Plan's live plan (version="") or a saved version
+                version = q.get("version") or ""
+                sp_path(version)   # unknown id -> 400 before a job starts
+                job = start_job("data", "original", "Linking the Sales Plan", job_original_sp, version)
             elif path == "/api/revised":
                 job = start_job("data", "revised", f"Checking {METHODS[method].lower()}", job_revised, data, name, None, method)
             elif path == "/api/sheet":  # re-read the last upload of a slot from a different sheet
