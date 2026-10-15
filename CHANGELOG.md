@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Sales Plan Display Type: the "ASP · company level" card expands and collapses
+- **Asked (user):** "give a ticker to expand and collapse here" (screenshot of the ASP card).
+- A ▸ / ▾ toggle on the card's title. Collapsed shows only the header line: title, rows / file / date, Import / Add missing / Export, and any import message. Expanded adds the template note, the filters and the ASP table. It starts collapsed (the table is long) and is remembered per browser (`sp.dt.asp.open`). Keyboard: it is a button with aria-expanded.
+- **Checked** in the sandbox: collapsed -> no body; click -> template, filters and table (604 rows); click -> collapsed again and remembered. Frontend rebuilt.
+
 ### Every app: a "← Landing" way back
 - **Asked (user):** "how can i navigate from the sales planengine to ladning, the landing arrow button should be there in every app core - additional - ALL".
 - **How:** `RS Planning Platform/backend/static/suite-home.js`, served inside `GET /api/suite-theme.js` (like the undo pill), so every page that loads the suite theme gets it with no change to the apps:

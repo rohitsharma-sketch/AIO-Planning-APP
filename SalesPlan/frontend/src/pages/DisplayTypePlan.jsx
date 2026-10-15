@@ -73,6 +73,9 @@ function AspCard({ status, onDone }) {
   const [d, setD] = useState(null)
   const [f, setF] = useState({})
   const [edit, setEdit] = useState(null)
+  // expand / collapse (user, 2026-10-15: "give a ticker to expand and collapse here") - remembered per browser
+  const [open, setOpen] = useState(() => { try { return localStorage.getItem('sp.dt.asp.open') === '1' } catch { return false } })
+  const toggle = () => setOpen(o => { try { localStorage.setItem('sp.dt.asp.open', o ? '0' : '1') } catch { /* ignore */ } return !o })
   const load = () => fetch(`${API}/asp`).then(r => (r.ok ? r.json() : null)).then(setD).catch(() => setD(null))
   useEffect(() => { if (status?.asp_imported) load() }, [status?.asp_imported, status?.asp_date])   // eslint-disable-line react-hooks/exhaustive-deps
   const upload = async file => {
@@ -98,7 +101,11 @@ function AspCard({ status, onDone }) {
   return (
     <div style={{ background: theme.surface, border: `1px solid ${status?.asp_imported ? theme.success : theme.border}`, borderRadius: 10, padding: '16px 18px', marginBottom: 22 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 13, fontWeight: 700 }}>ASP · company level</div>
+        <button type="button" onClick={toggle} aria-expanded={open} aria-controls="asp-card-body" title={open ? 'Collapse' : 'Expand: the template, filters and the ASP table'}
+          style={{ all: 'unset', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 700 }}>
+          <span aria-hidden="true" style={{ display: 'inline-block', width: 12, color: theme.textMuted, transition: 'transform .15s', transform: open ? 'rotate(90deg)' : 'none' }}>▸</span>
+          ASP · company level
+        </button>
         <span style={{ fontSize: 11.5, color: status?.asp_imported ? theme.success : theme.textMuted }}>
           {status?.asp_imported ? `${status.asp_rows} rows · ${d?.source || ''} · ${status.asp_date}` : 'Not imported yet'}
         </span>
@@ -111,12 +118,13 @@ function AspCard({ status, onDone }) {
           {status?.asp_imported ? 'Export ↓' : 'Template ↓'}
         </button>
       </div>
+      {err && <div style={{ fontSize: 12, color: theme.danger, marginTop: 6 }}>{err}</div>}
+      {msg && <div style={{ fontSize: 12, color: theme.success, marginTop: 6 }}>{msg}</div>}
+      {open && <div id="asp-card-body">
       <div style={{ fontSize: 11.5, color: theme.textMuted, marginTop: 6, lineHeight: 1.6 }}>
         Template: Division | Department | MRP | Display Type | Mar'27 P1 | Mar'27 P2 | Mar'27 | … (₹ per piece). The planners' file with P1 / P2 VAL and QTY
         by cluster and article is converted on import: carried onto the new MRPs through the MRP master (the re-apportionment's rule - listed MRPs move whole, discontinued ones split to the nearest listed below / above), added up per Department × MRP × Display Type, ASP = value ÷ pieces, the month weighted by pieces.
       </div>
-      {err && <div style={{ fontSize: 12, color: theme.danger, marginTop: 6 }}>{err}</div>}
-      {msg && <div style={{ fontSize: 12, color: theme.success, marginTop: 6 }}>{msg}</div>}
       {d && (
         <>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', margin: '12px 0 8px' }}>
@@ -150,6 +158,7 @@ function AspCard({ status, onDone }) {
           </div>
         </>
       )}
+      </div>}
     </div>
   )
 }
