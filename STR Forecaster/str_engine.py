@@ -485,8 +485,13 @@ def build(articles=False):
     fxd = fx   # by display type (display_frame); the department frame sums it
     fx = fx.groupby(["month", "store", "division", "department"], as_index=False)[["fixtures", "mdq"]].sum()
     pld = pd.DataFrame()
+    ahead = pd.DataFrame(columns=["store", "department", "month", "plan_rs", "plan_qty_file"])
     if len(pl):
         pl["month"] = _period(pl.month)
+        # the plan's months after the last fixture month (user, 2026-10-15: "you have plan visibility till Feb use it in the
+        # STR calculation for July, Donot show any other months in tabular format after July") - kept apart: no columns,
+        # only the forward cover sells into them
+        ahead = pl[pl.month > max(months)]
         pl = pl[pl.month.isin(months)]
         pl = split_depts(pl.astype({"plan_rs": float, "plan_qty_file": float}), {"plan_rs": "sl_v", "plan_qty_file": "sl_q"}, ly_sh)
     if len(pl) == 0 and pu:
@@ -524,6 +529,10 @@ def build(articles=False):
                   "left_out_mdq": float(fx.loc[~fx.store.isin(both_), "mdq"].sum()),
                   "left_out_rs": float(pl.loc[~pl.store.isin(both_), "plan_rs"].sum())}
         fx, pl = fx[fx.store.isin(both_)], pl[pl.store.isin(both_)]
+        if len(ahead):
+            ahead = split_depts(ahead[ahead.store.isin(both_)].astype({"plan_rs": float, "plan_qty_file": float}),
+                                {"plan_rs": "sl_v", "plan_qty_file": "sl_q"}, ly_sh)
+            ahead = ahead.groupby(["store", "department", "month"], as_index=False)[["plan_rs", "plan_qty_file"]].sum(min_count=1)
         art = pl[pl.article.ne("")] if "article" in pl else pl.iloc[0:0]
         pld = pl.groupby(KEY + ["display"], as_index=False)[["plan_rs", "plan_qty_file"]].sum(min_count=1) if "display" in pl else pd.DataFrame()
         pl = pl.groupby(KEY + ["division"], as_index=False)[["plan_rs", "plan_qty_file"]].sum(min_count=1)   # department total
@@ -589,7 +598,40 @@ def build(articles=False):
             "base_band": [BAND_MIN, BAND_MAX]}
     info["articles"] = int(art.article.nunique()) if len(art) else 0
     info["displays"] = sorted(set(fxd.display) - {""})
-    return (df.reset_index(drop=True), info, art, (fxd, pld)) if articles else (df.reset_index(drop=True), info)
+    # look-ahead qty: the file's qty, else its Rs at the store x department's price of the last fixture month
+    if len(ahead):
+        last = df[df.month == max(months)]
+        price = dict(zip(zip(last.store, last.department), last.asp))
+        q = ahead.plan_qty_file
+        rs_q = [r / p if r and p and p > 0 else 0.0 for r, p in
+                zip(ahead.plan_rs.fillna(0.0), [price.get(k) for k in zip(ahead.store, ahead.department)])]
+        ahead = ahead.assign(plan_qty=np.where(q.fillna(0.0) > 0, q.fillna(0.0), rs_q))[["store", "department", "month", "plan_qty"]]
+        ahead = ahead[ahead.plan_qty > 0]
+    else:
+        ahead = pd.DataFrame(columns=["store", "department", "month", "plan_qty"])
+    info["ahead_months"] = [str(m) for m in sorted(ahead.month.unique())]
+    info["ahead_qty"] = float(ahead.plan_qty.sum()) if len(ahead) else 0.0
+    return (df.reset_index(drop=True), info, art, (fxd, pld), ahead) if articles else (df.reset_index(drop=True), info)
+
+
+def with_ahead(f, ahead):
+    """f (store x department (x display / article) x month rows) + its look-ahead rows (user, 2026-10-15: the plan's
+    months after the fixture months feed the forward cover, never a column): each row of f's last month with a plan
+    gets the later months' planned qty of its store x department in proportion to its share of that month's plan (so a
+    display type / article split carries on as it was); no fixtures / MDQ / LY on them. _ahead marks them."""
+    if ahead is None or not len(ahead) or not len(f):
+        return f
+    last = f.month.max()
+    base = f[(f.month == last) & (f.plan_qty > 0)]
+    if not len(base):
+        return f
+    base = base.assign(_sh=base.plan_qty / base.groupby(["store", "department"]).plan_qty.transform("sum"))
+    m = base.merge(ahead.rename(columns={"month": "_m", "plan_qty": "_q"}), on=["store", "department"])
+    if not len(m):
+        return f
+    zero = {c: 0.0 for c in ("mdq", "mdq_base", "fixtures", "fixtures_file", "plan_rs", "ly_q", "ly_v") if c in f}
+    rows = m.assign(month=m._m, plan_qty=m._q * m._sh, _ahead=True, **zero).drop(columns=["_m", "_q", "_sh"])
+    return pd.concat([f.assign(_ahead=False), rows[list(f.columns) + ["_ahead"]]], ignore_index=True)
 
 
 ART_STOCK, ART_LY = ("fixtures", "fixtures_file", "mdq", "mdq_base"), ("ly_q", "ly_v")
@@ -870,7 +912,11 @@ def rollup(df, by, months, has_plan=True):
     # a per-group loop. Forecast: rows with both a plan and fixtures (plan with no fixtures = 100%, fixtures with no plan
     # = 0% - both reported apart in info, never inside a total); no plan loaded -> MDQ shown, STR None (never a false 0%).
     # LY: store-months that sold last year, in departments with LY sales under their name (else not open / renamed).
-    both = ((df.mdq > 0) & (df.plan_qty > 0)) if has_plan else pd.Series(False, index=df.index)
+    # look-ahead rows (with_ahead): their planned qty extends the forward cover past the last month; no cells of their own
+    ah = df["_ahead"].astype(bool).values if "_ahead" in df else np.zeros(len(df), bool)
+    nw = len(months)
+    months = list(months) + sorted(m for m in df.month[ah].unique() if m > months[-1]) if ah.any() and len(months) else list(months)
+    both = (((df.mdq > 0) & (df.plan_qty > 0)) | ah) if has_plan else pd.Series(False, index=df.index)
     lyv = df.ly_known.astype(bool) & (df.ly_q > 0)
     a = pd.DataFrame({k: df[k].values for k in by})
     a["mi"] = pd.Index(months).get_indexer(df.month)
@@ -921,17 +967,18 @@ def rollup(df, by, months, has_plan=True):
 
     for keys, ms in acc.items():
         row = dict(zip(by, keys))
-        cells = [cell(s, dim[i], 1 if s[2] else 0, ldim[i], 1 if s[5] else 0) for i, s in enumerate(ms)]
+        cells = [cell(s, dim[i], 1 if s[2] else 0, ldim[i], 1 if s[5] else 0) for i, s in enumerate(ms[:nw])]
         for i, c in enumerate(cells):
             if ms[i][2]:
-                forward(c, i, ms, 0, 1, dim, "days", "band")
+                forward(c, i, ms, 0, 1, dim, "days", "band")   # sold down into the look-ahead months too
                 c["base_band"] = str_band(c["days"])
                 c["cover"] = cover_walk(ms[i][1], [s[0] for s in ms[i:]], dim[i:], [str(m) for m in months[i:]])
             if ms[i][5]:
-                forward(c, i, ms, 3, 4, ldim, "ly_days", "ly_band")
+                forward(c, i, ms[:nw], 3, 4, ldim[:nw], "ly_days", "ly_band")   # LY: the shown months only, as before
                 c["ly_base_band"] = str_band(c["ly_days"])
         for i, c in enumerate(cells):
             c["stores"] = int(sc.get(tuple(keys) + (i,), 0))
+        ms = ms[:nw]
         tot = [sum(s[j] for s in ms) for j in range(len(V))]
         pm, lm = [i for i, s in enumerate(ms) if s[2]], [i for i, s in enumerate(ms) if s[5]]
         tc = cell(tot, sum(dim[i] for i in pm), len(pm), sum(ldim[i] for i in lm), len(lm))
@@ -1044,4 +1091,15 @@ if __name__ == "__main__":   # self-check of the maths on tiny frames (no DB)
     ad = article_frame(dv.reset_index(), ar.assign(display="TABLE", plan_qty_file=[1.0, 1.0])).set_index(["store", "display", "article"])
     t = ad.sort_index().loc[("S1", "TABLE")]
     assert ((t.mdq / t.plan_qty) <= 400.0 / 10.0 + 1e-9).all()
+    # look-ahead (2026-10-15): Jul MDQ 100, Jul plan 31 (1/day); Aug plan 62 (2/day) in the look-ahead only -> Jul 31 days
+    # (69 left), Aug 31 days (7 left), then 7 at Aug's 2/day = 3.5 -> 65.5 days; Aug is no column / cell; without it 100
+    jl = pd.DataFrame({"month": [P("2027-07")], "store": ["S1"], "department": ["A"], "division": ["MENS"], "cluster": ["C"],
+                       "mdq": [100.0], "mdq_base": [100.0], "plan_qty": [31.0], "plan_rs": [3100.0], "fixtures": [1.0], "edited": [""],
+                       "ly_q": [0.0], "ly_known": [False]})
+    xa = with_ahead(jl, pd.DataFrame({"store": ["S1"], "department": ["A"], "month": [P("2027-08")], "plan_qty": [62.0]}))
+    assert len(xa) == 2 and xa._ahead.tolist() == [False, True] and xa.mdq.tolist() == [100.0, 0.0]
+    assert abs(forward_days(xa, "plan_qty", "mdq", ["store", "department"])[0] - 65.5) < 1e-9
+    ro = rollup(xa, ["department"], [P("2027-07")])[0]
+    assert len(ro["months"]) == 1 and abs(ro["months"][0]["days"] - 65.5) < 1e-9 and ro["months"][0]["cover"][1]["month"] == "2027-08"
+    assert abs(rollup(jl, ["department"], [P("2027-07")])[0]["months"][0]["days"] - 100.0) < 1e-9
     print("str_engine self-check: OK")

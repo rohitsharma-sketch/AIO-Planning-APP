@@ -63,9 +63,9 @@ def frame():
         with lock:
             if not state["dirty"] and state.get("ver") == ver:
                 return state["df"], state["info"]
-        df, info, art, disp = se.build(articles=True)
+        df, info, art, disp, ahead = se.build(articles=True)
         with lock:
-            state.update(df=df, info=info, art=art, disp=disp, af=None, dfd=None, dirty=False, ver=ver)
+            state.update(df=df, info=info, art=art, disp=disp, ahead=ahead, af=None, dfd=None, dirty=False, ver=ver)
         return df, info
 
 
@@ -92,6 +92,14 @@ def _base(df, q, keys=()):
     d = (article_df() if "article" in keys or q.get("article") else
          display_df() if "display" in keys or q.get("display") else df)
     return _with_tags(d) if any(k in keys or q.get(k) for k in TAG_KEYS) else d
+
+
+def _fwd(d, keys):
+    """(the frame with its look-ahead rows, plan STR days of d's rows): each month's MDQ sold down by its own and the later
+    months' plan - past the last shown month into the sales plan's later months (user, 2026-10-15: "you have plan
+    visibility till Feb use it in the STR calculation for July")"""
+    x = se.with_ahead(d, state.get("ahead"))
+    return x, se.forward_days(x, "plan_qty", "mdq", keys)[:len(d)]
 
 
 def _dirty():
@@ -219,7 +227,7 @@ def workbook(df, months, has_plan, layers, info, filters):
     lyok = df.ly_known & (df.ly_q > 0)
     # STR days by forward cover (2026-10-14): each month's MDQ sold down by its own and the later months' sales
     fk = [c for c in ("store", "department", "display", "article") if c in df]
-    days = np.where(ok, se.forward_days(df, "plan_qty", "mdq", fk), np.nan) if has_plan else np.full(len(df), np.nan)
+    days = np.where(ok, _fwd(df, fk)[1], np.nan) if has_plan else np.full(len(df), np.nan)
     ly_days = np.where(lyok, se.forward_days(df.assign(_lq=df.ly_q.where(lyok, 0.0)), "_lq", "mdq_base", fk,
                                              dim_of=lambda m: (m - 12).days_in_month), np.nan)
     d = pd.DataFrame({
@@ -251,7 +259,7 @@ def workbook(df, months, has_plan, layers, info, filters):
     readme = [("What", "STR Forecaster - full working behind the page"), ("Built", time.strftime("%d %b %Y %H:%M")),
               ("Filters", filters or "none"), ("Months", ", ".join(str(m) for m in months)),
               ("Stores", f"{df.store.nunique()} (every month in both the fixture plan and the sales plan)"),
-              ("STR days", "forward cover: a month's MDQ sold down by that month's planned qty, then the next months', till none is left (past the last plan month at its selling rate); the all-months figure = the months' STR days weighted by their MDQ; only rows with both a plan and fixtures"),
+              ("STR days", "forward cover: a month's MDQ sold down by that month's planned qty, then the next months', till none is left - past the last month shown into the sales plan's later months (" + (", ".join(info.get("ahead_months") or []) or "none loaded") + "; not shown as columns), then at the last selling rate; the all-months figure = the months' STR days weighted by their MDQ; only rows with both a plan and fixtures"),
               ("LY days", "the file MDQ / (last year's qty / days in that month), store-months that sold last year"),
               ("Season", f"year index = the cluster's festival-free sales curve (day-wise sales 2022-25: the month vs the department's average month of the year) raised by the month's festival days at the cluster x department festival lift; season index = that month vs the same cluster x department's average month of the plan window ({', '.join(str(m) for m in months)}), so a tag shows which months stand out for that cluster; peak >= {se.SEASON_CUT[0]}, off <= {se.SEASON_CUT[1]}; built {info.get('season_built')}"),
               ("Band", f"STR days rounded to the nearest {se.BAND_STEP}, kept inside the season's limits ({bands}); never under {se.BAND_MIN} or over {se.BAND_MAX}"),
@@ -280,7 +288,8 @@ def workbook(df, months, has_plan, layers, info, filters):
         if "department" in by and "division" not in by:
             by.insert(by.index("department"), "division")
         rows = []
-        for r in se.rollup(df, by, months, has_plan):
+        dfa = se.with_ahead(df, state.get("ahead"))   # the look-ahead months feed the STR days, never a column
+        for r in se.rollup(dfa, by, months, has_plan):
             row = {LAYER_LABEL.get(x, x.title()): _safe(str(r.get(x, ""))) for x in by}
             row.update(_cells_wide(_avg_cell(r), f"{len(months)}-month avg"))
             for m, c in zip(months, r["months"]):
@@ -293,7 +302,7 @@ def workbook(df, months, has_plan, layers, info, filters):
         long = []
         for by, nm in ((["cluster"], "cluster"), (["division"], "division"), (["division", "department"], "department"),
                        (["cluster", "division", "department"], "cluster x department"), (["cluster", "store"], "store")):
-            for r in se.rollup(df, by, months, has_plan):
+            for r in se.rollup(dfa, by, months, has_plan):
                 base = {"level": nm, **{k: _safe(r[k]) for k in by}}
                 for m, c in [(f"{len(months)}-month avg", _avg_cell(r))] + [(str(m), c) for m, c in zip(months, r["months"])]:
                     long.append({**base, "month": m, **{k.split(" ", 1)[1]: v for k, v in _cells_wide(c, "x").items()}})
@@ -399,7 +408,7 @@ class H(BaseHTTPRequestHandler):
                     by.insert(by.index("department"), "division")
                 d = _base(df, q, by)
                 d, hp = _filter(d, q), bool(info.get("sales_plan"))
-                rows = se.rollup(d, by, months, hp)
+                rows = se.rollup(se.with_ahead(d, state.get("ahead")), by, months, hp)
                 if len(rows) > 6000:
                     return self._send(413, {"error": f"{len(rows):,} rows at that level - open rows one at a time instead."})
                 if "department" in by:
@@ -416,7 +425,8 @@ class H(BaseHTTPRequestHandler):
                 mi = {m: i for i, m in enumerate(months)}
                 # STR days by forward cover (2026-10-14), per store (and per display type for the display rows)
                 hp_ = bool(info.get("sales_plan"))
-                d = d.assign(fwd_days=se.forward_days(d, "plan_qty", "mdq", ["store"]) if hp_ else np.nan,
+                dx, fd_ = _fwd(d, ["store"])
+                d = d.assign(fwd_days=fd_ if hp_ else np.nan,
                              fwd_ly_days=se.forward_days(d.assign(_lq=d.ly_q.where(d.ly_known, 0.0)), "_lq", "mdq_base", ["store"],
                                                   dim_of=lambda m: (m - 12).days_in_month))
 
@@ -448,7 +458,8 @@ class H(BaseHTTPRequestHandler):
                 # and a read-only row per display type with its own STR
                 dv = display_df()
                 dv = dv[dv.department == dept]
-                dv = dv.assign(fwd_days=se.forward_days(dv, "plan_qty", "mdq", ["store", "display"]) if hp_ else np.nan,
+                dvx, fdv_ = _fwd(dv, ["store", "display"])
+                dv = dv.assign(fwd_days=fdv_ if hp_ else np.nan,
                                fwd_ly_days=se.forward_days(dv.assign(_lq=dv.ly_q.where(dv.ly_known, 0.0)), "_lq", "mdq_base",
                                                     ["store", "display"], dim_of=lambda m: (m - 12).days_in_month))
                 kinds = dv.groupby("store").display.unique()
@@ -457,10 +468,10 @@ class H(BaseHTTPRequestHandler):
                     if r.month in mi:
                         ks = kinds.get(r.store, [se.NO_DISP])
                         key = (r.store, ks[0] if len(ks) == 1 else "All")
-                        by.setdefault(key, [None] * len(months))[mi[r.month]] = cell(r, d)
+                        by.setdefault(key, [None] * len(months))[mi[r.month]] = cell(r, dx)
                 for r in dv.itertuples():
                     if r.month in mi and len(kinds.get(r.store, [])) > 1:
-                        by.setdefault((r.store, r.display), [None] * len(months))[mi[r.month]] = cell(r, dv, True)
+                        by.setdefault((r.store, r.display), [None] * len(months))[mi[r.month]] = cell(r, dvx, True)
                 cl = dict(zip(d.store, d.cluster))
                 order = {"All": 0, "TABLE": 1, "NON_TABLE": 2}
                 rows = [{"store": st, "display": k, "edit": k == "All" or len(kinds.get(st, [])) <= 1, "cluster": cl.get(st),

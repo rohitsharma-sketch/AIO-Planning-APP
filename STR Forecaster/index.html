@@ -133,7 +133,7 @@ tr.lv0 td.l1{font-weight:700}tr.lv1 td,tr.lv3 td{background:#FCFBF8}tr.lv1 td.l1
   <div class="panel" id="p-fc">
   <section class="card">
     <div class="card-h"><div class="grow"><h2>1 &middot; Inputs</h2>
-      <p class="desc">MENS, LADIES and KIDS by store, department and month. Minimum display stock (MDQ) = fixtures × qty per fixture, from the fixture plan; planned qty = the sales plan's qty (else planned sales ÷ last year's average selling price). <b>STR in days</b> = how long a month's MDQ lasts: it is sold down by that month's planned sales, then the next months', till none is left (past the last plan month at its selling rate) - fewer days, faster sell-through. <b>Band</b> = the actual days rounded to the nearest 15, kept between 60 and 120; <b>Peak / Off</b> = a month that stands out / lags inside the plan window for that cluster (✦ = festival-driven) (54 → 60, 74 → 75, 82 → 75, 104 → 105, 250 → 120); every season (peak, normal, off) 60–120; seasons from the Listing - Delisting Analyser&#39;s seasonality. Only stores with every month in both files are compared. Click any figure to see how it is worked out.</p></div></div>
+      <p class="desc">MENS, LADIES and KIDS by store, department and month. Minimum display stock (MDQ) = fixtures × qty per fixture, from the fixture plan; planned qty = the sales plan's qty (else planned sales ÷ last year's average selling price). <b>STR in days</b> = how long a month's MDQ lasts: it is sold down by that month's planned sales, then the next months', till none is left - past July into the sales plan's later months (Aug–Feb, used for the working only, not shown as columns; the pop-up walks through them), then at the last selling rate - fewer days, faster sell-through. <b>Band</b> = the actual days rounded to the nearest 15, kept between 60 and 120; <b>Peak / Off</b> = a month that stands out / lags inside the plan window for that cluster (✦ = festival-driven) (54 → 60, 74 → 75, 82 → 75, 104 → 105, 250 → 120); every season (peak, normal, off) 60–120; seasons from the Listing - Delisting Analyser&#39;s seasonality. Only stores with every month in both files are compared. Click any figure to see how it is worked out.</p></div></div>
     <div class="card-c"><div class="inputs">
       <div class="in" id="in-fixture"></div>
       <div class="in" id="in-sales_plan"></div>
@@ -529,7 +529,7 @@ function flat(cols){   // the rows on screen: top layer filtered + sorted, open 
   return out;
 }
 const FIG=[['band','Band','actual STR days rounded to the nearest 15, kept between 60 and 120'],
-  ['days','STR days',"days the month's MDQ lasts: sold down by that month's planned sales, then the next months', till none is left (rows with both a plan and fixtures)"],
+  ['days','STR days',"days the month's MDQ lasts: sold down by that month's planned sales, then the next months' - past July into the plan's Aug–Feb - till none is left (rows with both a plan and fixtures)"],
   ['qty','Plan qty','planned qty: the sales plan’s own, else planned sales ÷ LY selling price'],['mdq','MDQ','fixtures × qty per fixture']];
 const cellOf=(r,i)=>i==='t'?r.total:r.months[i];
 const avgOf=(r,f)=>{const v=(r.months||[]).map(c=>c?.[f]||0).filter(x=>x>0);return v.length?v.reduce((a,b)=>a+b,0)/v.length:0;};   // the average month

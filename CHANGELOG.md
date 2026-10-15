@@ -7,6 +7,15 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### STR Forecaster: July's STR days sell into the Aug-Feb plan (look-ahead, no new columns)
+- **Asked (user):** "In STR forecaster, July calculation is not to be restricted till July since you have plan visibility till Feb use it in the STR calculation for July, Donot show any other months in tabular format after July but the remainder of STR can be adjusted with future months in the pop up".
+- **Data:** sales-plan upload 10 = upload 9 (MAMJ + July) + the AUG, SEP and "OCt - Feb" sheets of "month wise sales plan - julyu - feb.xlsx" (store x department x display; value in Rs lakh like July; Jan / Feb P1 + P2 summed; shift +12 -> Aug'27-Feb'28; Rs 75-200 Cr a month, 199-264 stores). Append-only - Rollback switches back to 9. Fixture upload 7 untouched, so the STR months stay Mar'27-Jul'27.
+- **Engine:** build() keeps the plan months after the last fixture month as a look-ahead table (compared stores only; the file's qty, else Rs at the store x department's July price); with_ahead() adds them as rows with no fixtures / MDQ / LY, split like the last month's plan (display type / article frames carry on); rollup() and forward_days() sell every month's MDQ into them before falling back to the last selling rate - cells, totals and N-month averages stay on the shown months; LY days unchanged. Pop-up cover walk lists the later months (Jul -> Aug -> Sep ...). Self-check: Jul MDQ 100 / plan 31 + Aug 62 -> 65.5 days (100 without).
+- **Effect (division STR days, July):** KIDS 96.5 -> 92.7, LADIES 68.7 -> 68.1, MENS 56.8 -> 55.8 (bands 90 / 75 / 60 unchanged); June moves a little where its MDQ outlives July; 5-month avg KIDS 74.5 -> 73.1.
+
+### BIS: Iteration 4 saved (user: "save iteration 4")
+- Saved in place from the loaded Iteration 4 (screen = saved, divisions locked): K 133.93 / L 130.35 / M 171.79 Cr, 944 growth rows sent to Sales Plan, no new iteration. Backup: SalesPlan/backend/backups/bis_plan_versions.before-iter4-save-15Oct2026.json.
+
 ### BIS: "Planner input" - the colleague's Factor 1 as a planner method
 - **Asked (user):** "go ahead with Factor 1 as a BIS planner method, and keep the name planner input".
 - **Method (factor table mode `factor1`, shown as "Planner input", model "sell-thru deviation matrix (Factor 1)"):** per department x plan month, growth = FACTOR-1[the month's sell-thru vs its division's - 8 bands, very weak to exceptional][its MAMJ'26 sell-thru status - Low / Average / High / Excellent] = 0-30%; no factor when MAMJ'26 sell-thru <= 4% and the deviation averages <= 50% over Mar-Jul'26. Plan = LY x (1 + growth), month by month (Phase 1 too), each month re-balanced to the AOP over ALL divisions (their cluster cap, chain level here).
