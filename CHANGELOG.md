@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Landing: side bars hide and show on drag
+- **Asked (user):** "Make these bars hide and show on drag".
+- Drag a bar outward to show it and back to hide it, with a mouse, a finger or a pen (Pointer Events). The bar follows the pointer and snaps once you let go 40 px or more from where it started; a shorter drag springs back. The toggle buttons, Esc and a tap outside still work.
+- A drag that starts on a tool never opens it. Up / down still scrolls the list (`touch-action: pan-y`), and links and icons don't leave a drag ghost. Desktop keeps remembering open / closed per side; on phones you pull the edge tab out.
+- **Fix found while testing:** a mouse leaves the 64 px rail at once, so the drag is followed on the window, not on the bar.
+- **Checked** on the static copy: desktop 1280 px with real mouse drags (left out to 280 px and back to 64 px, right out, page pushed over, state remembered, no tool opened); phone 390 px with touch pointer events (edge tab pulled out with the drawer following the finger, swiped shut from a card); tap toggle and the Lagan pop-up still open; no script errors.
+
 ### Landing: Additional tools in two retractable side bars (left light, right heavier)
 - **Asked (user):** "Take these apps to the retractable side bar from which these apps can be accessed. Also, make sure the click and touch functions are working they should not be hard set"; then "split into 2 sidebars with prioritising from light to heavy workflow related tasks. make it on both sides left and right".
 - **Left, Quick tools (light: look-ups and reports):** Lagan Calendar, Growth vs LY, Listing / Delisting Analyser. **Right, Planning tools (heavier: build and rework plans):** STR Forecaster, NSO Plan Distributor, Sales Plan Re-Aligner. Light to heavy runs down the left, then down the right. The Additional tools section is gone from the page body; core workflow and data sync are unchanged.

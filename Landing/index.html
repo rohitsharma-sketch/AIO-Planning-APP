@@ -401,7 +401,10 @@
   .side-name { font-size: 11.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--char); }
   .side-note { font-size: 11.5px; color: var(--faint); }
   .side-list { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-  .side .card { padding: 12px 14px 10px; border-radius: 12px; touch-action: manipulation; }
+  .side .card { padding: 12px 14px 10px; border-radius: 12px; }
+  /* drag to show / hide (2026-10-15): the bar takes sideways drags, its list still scrolls up and down */
+  .side, .side * { touch-action: pan-y; -webkit-user-drag: none; }
+  .side.dragging { transition: none; user-select: none; cursor: grabbing; }
   .side .card-top { margin-bottom: 8px; }
   .side .card h2 { font-size: 14px; margin-bottom: 4px; }
   .side .card p.desc { font-size: 12px; line-height: 1.45; margin-bottom: 10px; }
@@ -747,6 +750,52 @@
     ['l', 'r'].forEach(function (s) {
       el(s).querySelector('.side-tog').addEventListener('click', function () { toggle(s); });
       el(s).querySelector('.side-list').addEventListener('click', function (e) { if (e.target.closest('.card')) closeDrawers(); });
+    });
+    // Drag (mouse, touch or pen - Pointer Events, 2026-10-15): pull a bar out to show it, push it back to hide it.
+    // The bar follows the pointer; let go 40 px or more from where it started and it snaps the other way.
+    // A drag never counts as a click, so a tool doesn't open by accident.
+    var dragEnded = 0;
+    ['l', 'r'].forEach(function (s) {
+      var side = el(s), dir = s === 'l' ? 1 : -1, d = null;
+      function mini() { return window.matchMedia('(max-width: 620px)').matches ? 0 : 64; }
+      function end(e) {
+        if (!d) return;
+        var g = d; d = null;
+        if (!g.moved) return;
+        side.classList.remove('dragging'); side.style.width = ''; side.style.transform = '';
+        document.body.style.removeProperty('--lw'); document.body.style.removeProperty('--rw');
+        var open = e.type === 'pointercancel' ? g.open : g.open ? g.w > g.full - 40 : g.w > g.lo + 40;
+        set(s, g.open);                                   // drop the live preview, then a real toggle (remembers + backdrop)
+        if (open !== g.open) toggle(s); else sync();
+        dragEnded = Date.now();
+      }
+      side.addEventListener('pointerdown', function (e) {
+        if (e.button > 0) return;
+        var lo = mini();
+        d = { x: e.clientX, y: e.clientY, id: e.pointerId, open: side.classList.contains('open'), moved: false,
+              lo: lo, full: lo ? 280 : side.offsetWidth, w: 0 };
+      });
+      window.addEventListener('pointermove', function (e) {   // on window: a mouse leaves the 64 px rail at once
+        if (!d || e.pointerId !== d.id) return;
+        var dx = (e.clientX - d.x) * dir;
+        if (!d.moved) {
+          if (Math.abs(dx) < 8) return;
+          if (Math.abs(e.clientY - d.y) > Math.abs(dx)) { d = null; return; }   // up / down = scrolling the list
+          d.moved = true; side.classList.add('dragging'); try { side.setPointerCapture(e.pointerId); } catch (x) {}
+          if (!d.open && !wide.matches) set(s === 'l' ? 'r' : 'l', false);
+        }
+        var w = d.w = Math.max(d.lo, Math.min(d.full, (d.open ? d.full : d.lo) + dx));
+        side.classList.toggle('open', w > d.lo + (d.full - d.lo) * 0.3);   // labels show once it is a third out
+        if (d.lo) side.style.width = w + 'px';
+        else side.style.transform = 'translateX(' + (-dir * (1 - w / d.full) * 100) + '%)';
+        if (wide.matches) document.body.style.setProperty(s === 'l' ? '--lw' : '--rw', w + 'px');
+      });
+      window.addEventListener('pointerup', end);
+      window.addEventListener('pointercancel', end);
+      side.addEventListener('dragstart', function (e) { e.preventDefault(); });   // links / icons: no native drag ghost
+      side.addEventListener('click', function (e) {                                  // the click a drag leaves behind
+        if (Date.now() - dragEnded < 350) { e.preventDefault(); e.stopPropagation(); }
+      }, true);
     });
     bd.addEventListener('click', closeDrawers);
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !bd.hidden) closeDrawers(); });
