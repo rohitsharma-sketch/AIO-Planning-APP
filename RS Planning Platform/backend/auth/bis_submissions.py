@@ -84,7 +84,7 @@ def post_submission(body: dict = Body(...), user: dict = Depends(require_login))
     with _lock:
         items = _load()
         try:
-            item = submit(items, user, divisions_of(user["id"], bool(user.get("is_admin"))), body)
+            item = submit(items, user, divisions_of(user["id"], bool(user.get("is_admin")), user.get("role")), body)
         except PermissionError as e:
             raise HTTPException(403, str(e))
         except ValueError as e:
@@ -96,7 +96,7 @@ def post_submission(body: dict = Body(...), user: dict = Depends(require_login))
 @router.get("/submissions")
 def list_submissions(status: str | None = None, user: dict = Depends(require_login)):
     """A buyer sees their own; a planner sees everyone's (newest first)."""
-    mine = divisions_of(user["id"], bool(user.get("is_admin")))
+    mine = divisions_of(user["id"], bool(user.get("is_admin")), user.get("role"))
     items = [i for i in _load() if (not mine or i["by_id"] == user["id"]) and (not status or i["status"] == status)]
     return {"items": items[::-1][:100], "buyer_divisions": mine}
 
@@ -107,7 +107,7 @@ def review_submission(sid: str, body: dict = Body(...), user: dict = Depends(req
     st = body.get("status")
     if st not in ("applied", "dismissed"):
         raise HTTPException(422, "status must be applied or dismissed")
-    if divisions_of(user["id"], bool(user.get("is_admin"))) or "buyer_push" not in rights_for(user["id"]):
+    if divisions_of(user["id"], bool(user.get("is_admin")), user.get("role")) or "buyer_push" not in rights_for(user["id"]):
         raise HTTPException(403, "Only a planner who can send the plan to Sales Plan reviews buyer inputs.")
     with _lock:
         items = _load()

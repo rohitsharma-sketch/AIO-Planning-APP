@@ -169,7 +169,7 @@
       <h2 id="h-roles">What the roles mean</h2>
       <ul class="roles">
         <li><b>Planner</b> - builds and edits plans: Calendar, AOP Forecaster, Buyer's Input Sheet, Sales Plan, Re-Aligner.</li>
-        <li><b>Buyer</b> - works on the buyer's input for the plan cycles sent to them.</li>
+        <li><b>Buyer</b> - types the Block Growth % input tiles of the divisions ticked under BIS divisions, in the Buyer's Input Sheet only; their Save goes to the planner for review.</li>
         <li><b>Reviewer</b> - reviews submitted plan cycles and approves or sends them back.</li>
         <li><b>Approver</b> - gives the final approval on reviewed plan cycles.</li>
         <li><b>Admin</b> (with any role) - can open this page and manage people.</li>
@@ -222,7 +222,7 @@ function render() {
       <td><span class="uname">${esc(u.username)}</span>${self ? '<span class="you">you</span>' : ''}<br><button type="button" class="linkbtn" data-act="rename" aria-label="Rename ${esc(u.username)}">Rename</button>${!self && !u.is_admin && u.is_active ? ` <span class="sep">·</span> <button type="button" class="linkbtn" data-act="as" aria-label="Sign in as ${esc(u.username)}">Sign in as</button>` : ''}</td>
       <td><input type="email" value="${esc(u.email || '')}" placeholder="no email - can't reset by email" aria-label="Email for ${esc(u.username)}" data-f="email"></td>
       <td><select data-f="role" aria-label="Role for ${esc(u.username)}">${ROLES.map(r => `<option value="${r}" ${r === u.role ? 'selected' : ''}>${r[0].toUpperCase() + r.slice(1)}</option>`).join('')}</select></td>
-      <td>${u.is_admin ? '<span class="note" title="Admins are never limited to divisions">all (admin)</span>' : `<div class="divchips">${(rights.bis_divisions || []).map(d => `<label class="chk" title="Buyer for ${d} in BIS"><input type="checkbox" data-div="${d}" ${(rights.divisions?.[u.id] || []).includes(d) ? 'checked' : ''} aria-label="${esc(u.username)}: buyer for ${d}"> ${d[0] + d.slice(1).toLowerCase()}</label>`).join('')}</div>${(rights.divisions?.[u.id] || []).length ? '<span class="badge amber" title="Sees only the Buyer&#39;s Input Sheet, these divisions, the input tiles; Save goes to the planner">BIS buyer only</span>' : ''}`}</td>
+      <td>${u.is_admin ? '<span class="note" title="Admins are never limited to divisions">all (admin)</span>' : u.role !== 'buyer' ? `<span class="note" title="Only the Buyer role is limited to divisions - set the role to Buyer to choose them">all (${esc(u.role)})</span>` : `<div class="divchips">${(rights.bis_divisions || []).map(d => `<label class="chk" title="Buyer for ${d} in BIS"><input type="checkbox" data-div="${d}" ${(rights.divisions?.[u.id] || []).includes(d) ? 'checked' : ''} aria-label="${esc(u.username)}: buyer for ${d}"> ${d[0] + d.slice(1).toLowerCase()}</label>`).join('')}</div>${(rights.divisions?.[u.id] || []).length ? '<span class="badge amber" title="Sees only the Buyer&#39;s Input Sheet, these divisions, the input tiles; Save goes to the planner">BIS buyer only</span>' : ''}`}</td>
       <td><input type="checkbox" data-f="is_admin" ${u.is_admin ? 'checked' : ''} ${self ? 'disabled title="You can\'t remove your own admin rights"' : ''} aria-label="Admin: ${esc(u.username)}"></td>
       <td><input type="checkbox" data-f="is_active" ${u.is_active ? 'checked' : ''} ${self ? 'disabled title="You can\'t switch off your own account"' : ''} aria-label="Can sign in: ${esc(u.username)}"></td>
       <td>${u.must_change_password ? '<span class="badge amber">Must set own password</span>' : !u.is_active ? '<span class="badge grey">Switched off</span>' : !u.email ? '<span class="badge grey">No email</span>' : ''}</td>
@@ -247,7 +247,7 @@ function renderRights() {
   $('#rights').innerHTML = sorted.map(u => {
     const off = rights.revoked[u.id] || [];
     const body = u.is_admin ? '<span class="note">Admin - always has every action.</span>'
-      : (rights.divisions?.[u.id] || []).length ? `<span class="note">BIS buyer for ${esc(rights.divisions[u.id].join(', '))} - none of these actions; only the Buyer's Input Sheet input tiles, Saved to the planner for review.</span>`
+      : u.role === 'buyer' && (rights.divisions?.[u.id] || []).length ? `<span class="note">BIS buyer for ${esc(rights.divisions[u.id].join(', '))} - none of these actions; only the Buyer's Input Sheet input tiles, Saved to the planner for review.</span>`
       : !u.is_active ? '<span class="note">Switched off - cannot sign in, so has none of these.</span>'
       : `<div class="chips">${keys.map(k => `<label class="chk ${off.includes(k) ? 'revoked' : ''}"><input type="checkbox" data-right="${k}" ${off.includes(k) ? '' : 'checked'}> ${esc(rights.labels[k])}</label>`).join('')}</div>`;
     return `<div class="rrow" data-id="${esc(u.id)}"><div><span class="uname">${esc(u.username)}</span>${off.length && !u.is_admin ? `<br><span class="badge amber">${off.length} switched off</span>` : ''}</div>${body}</div>`;

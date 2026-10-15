@@ -7,6 +7,17 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Sales Plan: non-SSG stores split their months by the reference store's P1 / P2 - all stores now match the manual
+- **Asked (user):** "give me manual vs portal diff on every level with all stores" -> "yes, use the reference store's P1 P2".
+- **Found:** the manual's store-level Mar-Jun figures are its AOP sheet (every store x division x P1 / P2). Every non-SSG store's split there = its reference store's split for the same division x month (1,707 of 1,707) - the **month-mix** reference (manual STORE MASTER REFF_STORE_MONTH_MIX = the AOP sheet's Ref Name, 87 of 88; NLD/NEG: master FGN, sheet BGI - the sheet is used). The portal followed REF_STORE (the merchandise-mix reference; the database has no month-mix column) and its plan split, so 906 of 2,224 non-SSG store-month halves differed.
+- **Change:** `aop_halves.json` gains `div_shares` (store x division x month P1 share from the AOP sheet) and `month_ref` (the month-mix references); 0 / 1 shares kept (the same both-halves bug as the LY halves). A non-SSG store's division x month P1 = its month-mix reference's share (else its REF_STORE's); its departments keep their reference-plan shape inside it (`dept_sales_engine.fit_halves`, two-way fit; test `test_fit_halves`). Department mix and month totals unchanged.
+- **Result (saved plan, Version 1 re-saved):** all stores vs the manual's AOP sheet: store x month 0 off (SSG 592, others 1,112); non-SSG store x division x month x half 0 of 6,672 off; 64 of 128 combinations 0.00 everywhere - the other 64 all include Division (the SSG division split follows the buyer's growth by design). SSG department level vs COMPARISON still 0.00 in all 14,040 cells. Display Type + Qty re-run (658,233 rows, 0 without an ASP); check-up all pass. Backups `SalesPlan/backend/backups/*before-ref-halves-15Oct2026*`. Workbook: Downloads `Manual vs Portal - all stores, every level - 15 Oct 2026 (reference fortnights).xlsx`.
+
+### Buyer profiles: role-aware, greyed cards on Landing
+- **Asked (user):** "these cells should be greyed out for buyers" (Calendar, AOP Forecaster, Planning Engine, Data sync).
+- Landing: for a buyer those cards and the Data sync strip are greyed out and not clickable (no link, not focusable); the side tools and admin items stay hidden.
+- Only the **Buyer** role is limited by BIS divisions: Planning01 / Planning02 (Planner) and SK-Planning (Reviewer) had all three ticked, which would have locked them into BIS - for a non-buyer the column now shows "all (role)" and has no effect.
+
 ### Buyer profiles: a BIS buyer per division - BIS only, input tiles only, Save goes to the planner for review
 - **Asked (user):** "designate which division sees what ... delegate the BIS function for the specific division only the rest of the things get locked for the buyer only the inputs should be open for them to do in the input tile"; "Save for the planner to review, then send"; "only the BIS app should be visible for him/her to click on and other responsibilities are to be revoked".
 - **Users & access:** new **BIS divisions** column (KIDS / LADIES / MENS) per person; none ticked = planner (every division). A buyer shows "BIS buyer only" and, under Access to important actions, has none of them. `PUT /api/auth/admin/bis-divisions/{id}`; `/api/auth/me` and `/api/auth/rights` carry `bis_divisions` (data/bis_divisions.json, gitignored). Admins are never limited.

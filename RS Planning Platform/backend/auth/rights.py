@@ -97,9 +97,12 @@ def rights_for(user_id: str) -> list:
         u = session.execute(select(User).where(User.id == uuid.UUID(user_id))).scalar_one_or_none()
     finally:
         session.close()
-    return [] if u is None else effective(u.is_admin, u.is_active, load_revoked().get(user_id, []), divisions_of(user_id, u.is_admin))
+    return [] if u is None else effective(u.is_admin, u.is_active, load_revoked().get(user_id, []), divisions_of(user_id, u.is_admin, u.role))
 
 
-def divisions_of(user_id: str, is_admin: bool = False) -> list:
-    """The BIS divisions this person is the buyer for; [] = a planner (admins are never scoped)."""
-    return [] if is_admin else list(load_divisions().get(user_id, []))
+def divisions_of(user_id: str, is_admin: bool = False, role: str | None = None) -> list:
+    """The BIS divisions this person is the buyer for; [] = not limited. Only the Buyer role is limited (user, 2026-10-15:
+    planners had all three ticked - that must not lock a planner into BIS); admins never are."""
+    if is_admin or (role or "").lower() != "buyer":
+        return []
+    return list(load_divisions().get(user_id, []))

@@ -180,7 +180,7 @@ def _half_shares() -> dict:
     the colleague's sheet (COMPARISON H:O), the SSG cluster x department; "store": {(STORE, "Mar'26"): share} - the
     Calendar's actual store x day sales; "ts": {(STORE, "Mar'27"): share} - the Calendar's LY moved onto the plan
     calendar, which splits each store's monthly AOP plan into its halves; "src": what was read}. Missing -> {}."""
-    out = {"dept": {}, "store": {}, "ts": {}, "src": []}
+    out = {"dept": {}, "store": {}, "ts": {}, "div": {}, "mref": {}, "src": []}
     try:
         with open(LY_HALVES_PATH, encoding="utf-8") as fh:
             j = json.load(fh)
@@ -206,10 +206,44 @@ def _half_shares() -> dict:
         for st, mm in (j.get("shares") or {}).items():
             for m, v in (mm or {}).items():
                 out["ts"][(canon_store(st), m)] = float(v)   # renamed stores (2026-10-15)
+        # per store x division too: a non-SSG store's month splits by its reference store's (user, 2026-10-15)
+        for st, dd in (j.get("div_shares") or {}).items():
+            for dv, mm in (dd or {}).items():
+                for m, v in (mm or {}).items():
+                    out["div"][(canon_store(st), str(dv).strip().upper(), m)] = float(v)
+        # each store's month-mix reference (the manual's REFF_STORE_MONTH_MIX; the store master's Ref Store is the
+        # merchandise-mix one) - whose P1 / P2 a non-SSG store's month follows
+        for st, rf in (j.get("month_ref") or {}).items():
+            out["mref"][canon_store(st)] = canon_store(rf)
         out["src"].append("AOP halves: " + str(j.get("source")))
     except (OSError, ValueError):
         pass
     return out
+
+
+def fit_halves(ty: dict, seed_p1: dict, share: float) -> dict:
+    """{dept: P1} so the P1s add to share x the total and each department keeps its total (P1 within 0..ty), nearest to
+    the seed's split - a two-way fit (rows = departments, columns = P1 / P2). Used for a non-SSG store: its division x
+    month P1 share = its reference store's (user, 2026-10-15: "use the reference store's P1 P2"), the departments keep
+    their reference-plan shape inside it."""
+    T = sum(ty.values())
+    P1 = share * T
+    x1 = {d: min(max(seed_p1.get(d, ty[d] / 2.0), 0.0), ty[d]) for d in ty}
+    x2 = {d: ty[d] - x1[d] for d in ty}
+    if sum(x1.values()) <= 0 or sum(x2.values()) <= 0:   # nothing to keep: the share on every department
+        return {d: ty[d] * share for d in ty}
+    for _ in range(500):
+        s1, s2 = sum(x1.values()), sum(x2.values())
+        x1 = {d: v * P1 / s1 for d, v in x1.items()} if s1 > 0 else x1
+        x2 = {d: v * (T - P1) / s2 for d, v in x2.items()} if s2 > 0 else x2
+        for d in ty:
+            t = x1[d] + x2[d]
+            if t > 0:
+                x1[d] *= ty[d] / t
+                x2[d] *= ty[d] / t
+        if abs(sum(x1.values()) - P1) < 1e-9:
+            break
+    return x1
 
 
 def _aop_store_plan() -> dict:
@@ -752,6 +786,15 @@ def run_dept_plan():
                                        "cont_pct": 0.0, "active": False}
                 # nothing to split by at all (no ref share and no own LY by department): the division carries no plan
                 div_total_ty = sum(v["ty"] for v in dept_vals.values() if v.get("active"))
+                # P1 / P2 = the reference store's split of this division x month on the AOP (the manual's AOP sheet: every
+                # non-SSG store x division x month = its reference's share - user, 2026-10-15 "use the reference store's P1 P2")
+                mref = hs["mref"].get(canon_store(store)) or str(ref_used.get(store, "")).strip().upper()   # month-mix ref first
+                p_ref = hs["div"].get((mref, div, ty_month)) if mref else None
+                if p_ref is not None and div_total_ty > 0:
+                    act = {d: v for d, v in dept_vals.items() if v.get("active")}
+                    p1s = fit_halves({d: v["ty"] for d, v in act.items()}, {d: v["ty_p1"] for d, v in act.items()}, p_ref)
+                    for d, v in act.items():
+                        v["ty_p1"], v["ty_p2"] = p1s[d], v["ty"] - p1s[d]
 
                 nsg_p1 = sum(v.get("ty_p1", v["ty"]/2.0) for v in dept_vals.values() if v.get("active"))
                 nsg_p2 = sum(v.get("ty_p2", v["ty"]/2.0) for v in dept_vals.values() if v.get("active"))

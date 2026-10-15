@@ -189,14 +189,14 @@ def change_password(request: Request, body: dict = Body(...), user: dict = Depen
 @router.get("/me")
 def me(user: dict = Depends(require_login)):
     # + the BIS divisions this person is the buyer for ([] = planner): Landing reads it to keep a buyer to BIS only
-    return {**user, "bis_divisions": divisions_of(user["id"], bool(user.get("is_admin")))}
+    return {**user, "bis_divisions": divisions_of(user["id"], bool(user.get("is_admin")), user.get("role"))}
 
 
 @router.get("/rights")
 def my_rights(user: dict = Depends(require_login)):
     """The signed-in person's rights right now (Landing checks this before a guarded action) + what each means."""
     return {"rights": rights_for(user["id"]), "labels": RIGHTS,
-            "bis_divisions": divisions_of(user["id"], bool(user.get("is_admin")))}   # [] = planner (2026-10-15)
+            "bis_divisions": divisions_of(user["id"], bool(user.get("is_admin")), user.get("role"))}   # [] = not limited (2026-10-15)
 
 
 SIGN_IN_AS_LOG = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "sign_in_as.log")

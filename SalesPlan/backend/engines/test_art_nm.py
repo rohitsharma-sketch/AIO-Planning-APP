@@ -119,3 +119,13 @@ def test_month_aop_unrounded():
     assert month_aop(12994.77, 12994.7705, 3) == 12994.7705   # Mar'27, publish 119 vs its store plan
     assert month_aop(100.0, 120.0, 3) == 100.0                # a real gap: the published AOP stays
     assert month_aop(0.0, 5.0, 3) == 0.0                      # nothing published: unchanged
+
+
+def test_fit_halves():
+    """A non-SSG store's month: P1 total = the reference's share, each department keeps its total and its own shape."""
+    from engines.dept_sales_engine import fit_halves
+    ty, seed = {"A": 10.0, "B": 30.0}, {"A": 8.0, "B": 9.0}   # A mostly P1, B mostly P2
+    p1 = fit_halves(ty, seed, 0.5)
+    assert abs(sum(p1.values()) - 20.0) < 1e-6 and all(0 <= p1[d] <= ty[d] for d in ty)
+    assert p1["A"] / ty["A"] > p1["B"] / ty["B"]                       # the shape kept
+    assert fit_halves({"A": 4.0}, {"A": 0.0}, 0.25) == {"A": 1.0}       # no seed split: the share on every department
