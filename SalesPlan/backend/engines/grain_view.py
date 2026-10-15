@@ -58,8 +58,9 @@ def build_cube(plan: dict, source: dict) -> dict:
                     ly, ty = float(x.get("ly") or 0.0), float(x.get("ty") or 0.0)
                     p1 = float(x.get("ty_p1", ty / 2) or 0.0)
                     p2 = float(x.get("ty_p2", ty / 2) or 0.0)
+                    l1 = float(x["ly_p1"]) if x.get("ly_p1") is not None else ly / 2   # its LY in P1 (half-month LY, 2026-10-15)
                     tl, tt = tl + ly, tt + ty
-                    dept.setdefault(dv, {}).setdefault(dp, {}).setdefault(s, {})[m] = (ly, ty, p1, p2)
+                    dept.setdefault(dv, {}).setdefault(dp, {}).setdefault(s, {})[m] = (ly, ty, p1, p2, l1)
                     # the growth index a like-for-like store's department was planned on (100 = flat) - the same in
                     # every LFL store; kept for the "how is this number made" pop-up (2026-10-13)
                     if sd.get("is_ssg") and "g_p1" in x and m not in grow.get(dv, {}).get(dp, {}):
@@ -217,7 +218,7 @@ def build_methods(cube: dict, aop: dict, growth: dict, aop_clusters: dict | None
         w_s, w_c, ly_c = {}, {}, {}
         for dp, ss in deps.items():
             for s, ms in ss.items():
-                for m, (ly, _, _, _) in ms.items():
+                for m, (ly, *_) in ms.items():
                     if ly > 0:
                         w = ly * g(dp, m)
                         w_s.setdefault((s, m), {})[dp] = w
@@ -361,7 +362,7 @@ def get_methods(grain: str = "cluster", division: str = "ALL", dept: str = ""):
         names = [dept] if dept else sorted(set(deps) | set(mp))
         for dp in names:
             for s, ms in deps.get(dp, {}).items():
-                for m, (ly, ty, _, _) in ms.items():
+                for m, (ly, ty, *_) in ms.items():
                     if m in months:
                         _add(per.setdefault(s, {}).setdefault(m, {}), {"ly": ly, "ty": ty})
             for s, ms in mp.get(dp, {}).items():
@@ -423,7 +424,7 @@ def get_department(grain: str = "cluster", division: str = "MENS", dept: str = "
     if not order:
         raise HTTPException(404, f"No departments for {dv} in the plan")
     d = dept if dept in deps else order[0]
-    per = {s: {m: {"ly": ly, "ty": ty} for m, (ly, ty, _, _) in ms.items()} for s, ms in deps[d].items()}
+    per = {s: {m: {"ly": ly, "ty": ty} for m, (ly, ty, *_) in ms.items()} for s, ms in deps[d].items()}
     return {**rows(per, c["stores"], g, c["months"]), "fields": ["ly", "ty"], "source": c["source"], "division": dv,
             "dept": d, "departments": [{"dept": x, "ty": round(tot[x], 4)} for x in order]}
 
@@ -451,7 +452,7 @@ def get_mrp(grain: str = "cluster", division: str = "MENS", dept: str = ""):
     months = [m for m in c["months"] if any(mrp[d][k].get(f"{m} P1") or mrp[d][k].get(f"{m} P2") for k in bands)]
     per = {}
     for s, ms in deps[d].items():
-        for m, (_, ty, p1, p2) in ms.items():
+        for m, (_, ty, p1, p2, *_) in ms.items():
             if m not in months:
                 continue
             b = {}
@@ -502,7 +503,7 @@ def _sinfo(cube: dict) -> dict:
 def _cells(cube: dict, attr_map: dict, want: dict, sinfo: dict, filt: dict | None = None, p12: bool = False):
     """Every (division, department, attribute, store, month, LY, TY) cell of the node want = {level: value}, inside the
     filters filt = {level: set of values} (user, 2026-10-13: "filters required"). p12: each cell also carries its TY P1 /
-    TY P2 (an inactive department's 0, 0) - what the P1 / P2 index is made of (_halve)."""
+    TY P2 (an inactive department's 0, 0) and its LY in P1 - what the P1 / P2 index is made of (_halve)."""
     f = filt or {}
     fit = lambda lv, v: want.get(lv, v) == v and (lv not in f or v in f[lv])   # noqa: E731
     ok = {s for s, x in sinfo.items() if all(fit(k, v) for k, v in x.items())}
@@ -519,7 +520,8 @@ def _cells(cube: dict, attr_map: dict, want: dict, sinfo: dict, filt: dict | Non
                     continue
                 for m, v in mm.items():
                     if fit("month", m):
-                        yield (dv, dp, at, s, m, v[0], v[1], v[2], v[3]) if p12 else (dv, dp, at, s, m, v[0], v[1])
+                        yield ((dv, dp, at, s, m, v[0], v[1], v[2], v[3], v[4] if len(v) > 4 else v[0] / 2) if p12
+                               else (dv, dp, at, s, m, v[0], v[1]))
     for dv, dmap in (cube.get("off") or {}).items():   # inactive departments: LY, plan 0
         if not fit("division", dv):
             continue
@@ -532,7 +534,7 @@ def _cells(cube: dict, attr_map: dict, want: dict, sinfo: dict, filt: dict | Non
                 if s in ok:
                     for m, ly in mm.items():
                         if fit("month", m):
-                            yield (dv, dp, at, s, m, ly, 0.0, 0.0, 0.0) if p12 else (dv, dp, at, s, m, ly, 0.0)
+                            yield (dv, dp, at, s, m, ly, 0.0, 0.0, 0.0, ly / 2) if p12 else (dv, dp, at, s, m, ly, 0.0)
 
 
 def parse_filters(raw: str, allowed=HIER_LEVELS) -> dict:
@@ -602,17 +604,20 @@ _ix: dict = {"key": None, "v": None}   # v = {False: by month, True: by P1 / P2}
 _ix_lock = threading.Lock()
 
 
-def _halve(ix: dict, p12) -> dict:
-    """The month index as fortnights: every cell twice - "Mar'27 P1" with half its LY and its TY P1, "Mar'27 P2" with
-    the other half and its TY P2 (the plan engine's LY half x BIS P1 / P2 growth). numpy only, so the P1 / P2 view
-    costs milliseconds once the month index is there (user, 2026-10-14: "decrease the latency for such views")."""
+def _halve(ix: dict, p12, l1=None) -> dict:
+    """The month index as fortnights: every cell twice - "Mar'27 P1" with its LY in P1 (l1; half its LY without one) and
+    its TY P1, "Mar'27 P2" with the rest of its LY and its TY P2 (the plan engine's LY half x BIS P1 / P2 growth). numpy
+    only, so the P1 / P2 view costs milliseconds once the month index is there (user, 2026-10-14: "decrease the latency
+    for such views")."""
     import numpy as np
     n = len(ix["ly"])
     months = [f"{m} {h}" for m in ix["names"]["month"] for h in ("P1", "P2")]
     c = {lv: np.repeat(a, 2) for lv, a in ix["c"].items()}
     c["month"] = (np.repeat(ix["c"]["month"], 2) * 2 + np.tile(np.array([0, 1], dtype=np.int32), n)).astype(np.int32)
     return {"names": {**ix["names"], "month": months}, "pos": {**ix["pos"], "month": {v: i for i, v in enumerate(months)}},
-            "c": c, "ly": np.repeat(ix["ly"] / 2, 2), "ty": np.asarray(p12, dtype=float).reshape(-1)}
+            "c": c, "ly": (np.repeat(ix["ly"] / 2, 2) if l1 is None else
+                           np.column_stack([np.asarray(l1, dtype=float), ix["ly"] - np.asarray(l1, dtype=float)]).reshape(-1)),
+            "ty": np.asarray(p12, dtype=float).reshape(-1)}
 
 
 def _index(cube: dict, attr_map: dict, halves: bool = False) -> dict:
@@ -621,15 +626,16 @@ def _index(cube: dict, attr_map: dict, halves: bool = False) -> dict:
         if _ix["key"] == key:
             return _ix["v"][halves]
         sinfo = _sinfo(cube)
-        p12 = []
+        p12, l1 = [], []
 
         def cells():
-            for dv, dp, at, st, m, a, t, p1, p2 in _cells(cube, attr_map, {}, sinfo, p12=True):
+            for dv, dp, at, st, m, a, t, p1, p2, a1 in _cells(cube, attr_map, {}, sinfo, p12=True):
                 p12.append((p1, p2))
+                l1.append(a1)
                 yield ({"division": dv, "department": dp, "attribute": at, "month": m, "store": st,
                         "cluster": sinfo[st]["cluster"], "stype": sinfo[st]["stype"]}, a, t)
         mon = make_index(cells(), HIER_LEVELS)
-        _ix.update(key=key, v={False: mon, True: _halve(mon, p12)})
+        _ix.update(key=key, v={False: mon, True: _halve(mon, p12, l1)})
         return _ix["v"][halves]
 
 
@@ -941,7 +947,8 @@ def explain_half(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: l
     per = sorted(((ix["names"]["month"][i], float(Lm[i]), float(Tm[i])) for i in np.unique(g)), key=lambda x: month_key(x[0]))
     out["months"] = [{"month": k, "ly": a, "ty": b} for k, a, b in per]
     note = {"h": "P1 / P2", "t": "P1 = days 1-15 of the month, P2 = the 16th to the month end. Each store x department's "
-            "month LY is split in two halves and each half grows by BIS's own P1 / P2 growth (the plan engine's working); "
+            "month LY is split into its own halves (actual half-month LY) and each half grows by BIS's own P1 / P2 growth "
+            "(the plan engine's working); "
             "TY P1 + TY P2 = the month's TY."}
     head = [x for x in out["lines"] if x["h"] == "Filters on"]
     rest = [x for x in out["lines"] if x["h"] != "Filters on"]
@@ -1213,9 +1220,9 @@ def _mrp_index(cube: dict, attr_map: dict, halves: bool) -> dict:
             d = len(dkeys)
             dkeys.append((dv, dp, (attr_map.get(dv, {}) or {}).get(dp) or "-"))
             for st, mm in ss.items():
-                for m, (ly, _ty, p1, p2) in mm.items():
-                    base.append((st, d, m, ly, p1, p2))
-    b = pd.DataFrame(base, columns=["store", "d", "month", "ly", "p1", "p2"])
+                for m, (ly, _ty, p1, p2, *rest) in mm.items():
+                    base.append((st, d, m, ly, p1, p2, rest[0] if rest else ly / 2))
+    b = pd.DataFrame(base, columns=["store", "d", "month", "ly", "p1", "p2", "l1"])
     off = []
     for dv, deps in (cube.get("off") or {}).items():
         for dp, ss in deps.items():
@@ -1244,7 +1251,7 @@ def _mrp_index(cube: dict, attr_map: dict, halves: bool) -> dict:
     cols = ["store", "d", "month", "mrp", "ly", "ty", "ly_mix", "ly_sh", "ns"]
     parts = []
     for h, pc in (("P1", "p1"), ("P2", "p2")):
-        x = b.assign(ly=b["ly"] / 2, t=b[pc])
+        x = b.assign(ly=b["l1"] if h == "P1" else b["ly"] - b["l1"], t=b[pc])   # the plan's LY halves (2026-10-15)
         if halves:
             x = x.assign(month=x["month"] + " " + h)
         sh_h = S[S["h"] == h].drop(columns="h")

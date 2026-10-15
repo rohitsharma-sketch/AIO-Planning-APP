@@ -158,6 +158,12 @@ def _plain(stage, key, title, level, status, note, rows=None, fix=None, cells=0,
             "largest": largest, "where": where, "note": note, "rows": rows or [], "fix": fix if status == "fail" else None}
 
 
+def _ly_h(x: dict, h: str) -> float:
+    """A department's LY in half h ("p1" / "p2"): its actual half-month LY (2026-10-15), else LY / 2 (older plans)."""
+    v = x.get("ly_" + h)
+    return float(v) if v is not None else float(x.get("ly") or 0.0) / 2
+
+
 def _lym(m: str) -> str:
     """Plan month "Mar'27" -> its LY month "Mar'26"."""
     return f"{m[:3]}'{int(m[-2:]) - 1:02d}"
@@ -293,14 +299,15 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
                                 b_g.add(float(gm.get(dv, {}).get(dp, {}).get(f"{m} {h}", 100.0)), float(x.get(f"g_{h.lower()}", 100.0)),
                                         Division=dv, Department=dp, Month=f"{m} {h}")
                         if (dv, dp) not in new and (dv, dp) not in refs and x.get("ly"):
-                            bb = float(x["ly"]) / 2 * float(x["g_p1"]) / 100 * float(x.get("bal", 1.0))
-                            if bb > 1e-6:
-                                ratios.setdefault((cl, m), []).append(float(x["ty_p1"]) / bb)
+                            for h in ("p1", "p2"):   # each half on its own LY half and factor (P1 / P2, 2026-10-15)
+                                bb = _ly_h(x, h) * float(x["g_" + h]) / 100 * float(x.get("bal_" + h, 1.0))
+                                if bb > 1e-6:
+                                    ratios.setdefault((cl, m, h), []).append(float(x["ty_" + h]) / bb)
                         if (dv, dp) not in new:
                             dg = dept_gr.setdefault((dv, dp), [0.0, 0.0, 0.0])
                             dg[0] += float(x.get("ly") or 0.0)
                             dg[1] += float(x.get("ty") or 0.0)
-                            dg[2] += float(x.get("ly") or 0.0) / 2 * (float(x["g_p1"]) + float(x.get("g_p2", x["g_p1"]))) / 100
+                            dg[2] += sum(_ly_h(x, h) * float(x.get("g_" + h, x["g_p1"])) / 100 for h in ("p1", "p2"))
                         lfl_rows.append((store, dv, m, dp, x, deps, cl))
                 elif cal_ok:
                     c_oth.add(cal, ly, **w)
@@ -393,23 +400,25 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
         out.append(_plain(st3, "bis_g", "BIS growth", "-", "fail", f"BIS growth not reachable: {gm}", fix="input"))
     F = {k: sorted(r)[len(r) // 2] for k, r in ratios.items() if r}
     for store, dv, m, dp, x, deps, cl in lfl_rows:
-        f = F.get((cl, m))
-        if f is None or (not x.get("ly") and (dv, dp) not in new):
+        if not x.get("ly") and (dv, dp) not in new:
             continue
         for h in ("p1", "p2"):
+            f = F.get((cl, m, h))
+            if f is None:
+                continue
             if (dv, dp) in new:
                 c = new[(dv, dp)]
                 r = deps.get(c["ref_dept"])
                 if not r or "g_" + h not in r:
                     continue
-                exp = (float(r["ly"]) / 2 * float(r["g_" + h]) / 100 * f * float(c.get("new_dept_pct", c.get("alloc_pct", 0)) or 0) / 100
-                       * float(r.get("bal", 1.0)))
+                exp = (_ly_h(r, h) * float(r["g_" + h]) / 100 * f * float(c.get("new_dept_pct", c.get("alloc_pct", 0)) or 0) / 100
+                       * float(r.get("bal_" + h, 1.0)))
             else:
-                exp = float(x["ly"]) / 2 * float(x["g_" + h]) / 100 * f * refs.get((dv, dp), 1.0) * float(x.get("bal", 1.0))
+                exp = _ly_h(x, h) * float(x["g_" + h]) / 100 * f * refs.get((dv, dp), 1.0) * float(x.get("bal_" + h, 1.0))
             b_ty.add(exp, float(x.get("ty_" + h) or 0.0), Store=store, Division=dv, Department=dp, Month=f"{m} {h.upper()}")
     fs = sorted(F.values())
-    fn = f"{len(fs)} cluster × month factors, {fs[0]:.4f} to {fs[-1]:.4f}" if fs else "none"
-    out.append(b_ty.out(st3, "bis_ty", "Store × Department × Period (like-for-like): TY = LY/2 × BIS growth × one cluster-month factor × the store balance", "Department",
+    fn = f"{len(fs)} cluster × month × half factors, {fs[0]:.4f} to {fs[-1]:.4f}" if fs else "none"
+    out.append(b_ty.out(st3, "bis_ty", "Store × Department × Period (like-for-like): TY = LY half × BIS growth × one cluster-month-half factor × the store balance", "Department",
                         fix="rerun" if not corrected else "input",
                         note=("A corrected plan (" + source + ") moves TY on purpose. " if corrected else "") +
                         "New departments = their % of the reference's plan; references keep their share. Factors: " + fn))

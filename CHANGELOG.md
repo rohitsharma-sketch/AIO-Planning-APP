@@ -5,6 +5,17 @@ Newest first. Each entry names its commit.
 
 ---
 
+## 2026-10-15
+
+### Sales Plan: P1 / P2 halves - the SSG plan now matches the colleague's manual working
+- **Asked (user):** "go ahead with the P1/P2 halves" + "check if the outputs match the manual working".
+- **Why it was needed (worked out on their sheet):** the last 163 L came from their cap per half-month. With one LY P1 share per cluster the half cap equals the month cap; it moves only with DEPARTMENT-level half-month LY and an AOP P1 / P2 split of its own.
+- **Engine (dept_sales_engine):** LY P1 / P2 = the department's own half-month LY share in its cluster (`ly_halves.json`, imported from their COMPARISON H:O - Mar-Jun'26 history; pre-split names to their parts), else the store's (Calendar store x day snapshot, `actuals_manager.day_halves`), else 50/50; TY P1 = LY P1 x g P1, P2 alike; the SSG cluster cap per month x HALF (each store's monthly AOP split by its P1 share - `aop_halves.json`, their AOP sheet's "Mar'27 P1 AOP".., else the Calendar's 2027-dated days); the store balance per half (`bal_p1` / `bal_p2`; both halves add to the store's month plan); the new-department carve re-balanced per half. Meta `lfl_hold_cluster` = {cluster: {month: {P1, P2}}}, `halves` names the sources.
+- **Check-up:** TY half = LY half x growth x cluster-month-half factor x store balance (135,226 cells, 0 off); cluster x month and store x month on the AOP (0 off). Journey: "LY halves" step, cap and balance per half; export columns AOP cap P1 / P2, Store balance P1 / P2. Grain views (P1 / P2, MRP): the plan's LY halves instead of LY / 2.
+- **Result vs the manual working (SSG Mar-Jun'27, Rs L):** KIDS 13,116.0 / 13,115.5, LADIES 13,079.8 / 13,079.5, MENS 16,992.3 / 16,991.8; all 108 departments within 1% (largest 0.14 L); total -1.3 L = the AOP version itself. The ±3 point flag names the same 3 departments as their sheet (KB_INDO WESTERN, KB_Y_JEANS, KI_AP_TROUSER). With the Calendar's own AOP split instead of theirs: ±3 L by division.
+- **Pending:** Display type + qty re-run - the data lake (10.0.1.85) was unreachable, and the display mix needs it; the check-up's MRP stage says so. Re-run Display Type when the lake is back.
+- Backups: SalesPlan/backend/backups/final_dept_plan.before-halves-15Oct2026.json.
+
 ## 2026-10-14
 
 ### Sales Plan + BIS: the colleague's department method adopted (cluster cap, actual LY, store balance, ±3 point flag)

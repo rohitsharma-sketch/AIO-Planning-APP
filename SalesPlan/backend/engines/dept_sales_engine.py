@@ -83,72 +83,131 @@ def _store_aop(aop_store: dict, store: str, divs, m: str) -> float:
     return sum(float((sp.get(dv) or {}).get(m) or 0.0) for dv in divs)
 
 
-def _store_balance(stores: dict, aop_store: dict, cluster_of: dict, tie=None) -> dict:
+HALVES = (("ty_p1", "bal_p1"), ("ty_p2", "bal_p2"))
+
+
+def _store_balance(stores: dict, aop_store: dict, cluster_of: dict, tie=None, ts=None) -> dict:
     """Every like-for-like store x month onto its AOP Forecaster store plan (all its divisions), every department of the
     cluster keeping its total (user's colleague, 2026-10-14: "used the buyer total value growth and at stores level used
     the planned growth ... store sales plan for the upcoming month that has to same val after all the working one stores
-    contain multiple department"): a two-way balance (RAS / iterative proportional fitting) of each SSG cluster x month's
-    store x (division, department) grid - stores onto their AOP store plans (scaled onto what they carry now), columns
-    onto their own totals. stores = {store: {div: {"months": ...}}}; each record's factor is multiplied into v["bal"].
-    tie {(div, new_dept): ref_dept} moves a new department with its reference, so it stays its preset % of it in every
-    store. A store with no AOP store plan (or no plan) is left as it is. Returns {cluster: {month: stats}}."""
+    contain multiple department"): a two-way balance (RAS / iterative proportional fitting) of each SSG cluster x month
+    x HALF's store x (division, department) grid (2026-10-15, P1 / P2 halves) - stores onto their AOP store plan's half
+    (the month's plan x the store's P1 share on the plan calendar, ts {(STORE, "Mar'27"): share}; without one, the store's
+    own current split), scaled onto what the cluster carries in that half; columns onto their own totals. Both halves
+    add to the store's month plan. stores = {store: {div: {"months": ...}}}; each record's factors go to v["bal_p1"] /
+    v["bal_p2"]. tie {(div, new_dept): ref_dept} moves a new department with its reference, so it stays its preset % of
+    it in every store. A store with no AOP store plan (or no plan) is left as it is. Returns {cluster: {month: stats}}."""
     import numpy as np
-    tie, stats, groups = tie or {}, {}, {}
-    for s, divs in stores.items():
+    tie, ts, stats, groups = tie or {}, ts or {}, {}, {}
+    for s_, divs in stores.items():
         for dv, dd in divs.items():
             for m, md in ((dd or {}).get("months") or {}).items():
-                groups.setdefault((cluster_of.get(s) or "", m), {}).setdefault(s, []).append((dv, md))
+                groups.setdefault((cluster_of.get(s_) or "", m), {}).setdefault(s_, []).append((dv, md))
     for (cl, m), by_store in sorted(groups.items()):
-        rows, cols, cells = list(by_store), {}, []
-        fixed = np.zeros(len(by_store))   # a negative plan (negative LY - returns) is not moved; it stays in its store's total
-        for i, s in enumerate(rows):
-            for dv, md in by_store[s]:
-                for d, v in md["departments"].items():
-                    if v.get("active", True) and v.get("ty", 0.0) > 0:
-                        cells.append((i, cols.setdefault((dv, tie.get((dv, d), d)), len(cols)), v))
-                    elif v.get("active", True):
-                        fixed[i] += v.get("ty", 0.0)
-        if not cells:
-            continue
-        X = np.zeros((len(rows), len(cols)))
-        for i, j, v in cells:
-            X[i, j] += v["ty"]
-        a = np.array([_store_aop(aop_store, s, [dv for dv, _ in by_store[s]], m) for s in rows])
-        free = (a > 0) & (X.sum(1) > 0)
-        if free.sum() < 2:
-            continue
-        A0 = X[free]
-        # the store plans, scaled onto what these stores carry now, less each store's unmoved negative cells
-        r = a[free] * (A0.sum() + fixed[free].sum()) / a[free].sum() - fixed[free]
-        if (r <= 0).any():
-            continue
-        c = A0.sum(0)                            # every (division, department) keeps its cluster total
-        A, it = A0.copy(), 0
-        for it in range(1, 5001):
-            cs = A.sum(0)
-            A *= np.where(cs > 0, c / np.where(cs > 0, cs, 1.0), 1.0)[None, :]
-            A *= (r / A.sum(1))[:, None]          # stores last: exact
-            if np.abs(A.sum(0) - c).max() <= 1e-10 * c.sum():
-                break
-        F = np.ones_like(X)
-        F[free] = np.where(A0 > 0, A / np.where(A0 > 0, A0, 1.0), 1.0)
-        for i, j, v in cells:
-            f = float(F[i, j])
-            v["ty"], v["ty_p1"], v["ty_p2"] = v["ty"] * f, v.get("ty_p1", 0.0) * f, v.get("ty_p2", 0.0) * f
-            v["bal"] = v.get("bal", 1.0) * f
-        for s in rows:
-            for _, md in by_store[s]:
+        rows = list(by_store)
+        month_a = np.array([_store_aop(aop_store, s_, [dv for dv, _ in by_store[s_]], m) for s_ in rows])
+        cur = {fld: np.array([sum(v.get(fld, 0.0) for _, md in by_store[s_] for v in md["departments"].values()
+                                  if v.get("active", True)) for s_ in rows]) for fld, _ in HALVES}
+        tot = cur["ty_p1"] + cur["ty_p2"]
+        p1 = np.array([ts.get((str(s_).strip().upper(), m), cur["ty_p1"][i] / tot[i] if tot[i] else 0.5) for i, s_ in enumerate(rows)])
+        st_ = {}
+        for h, (fld, bf) in enumerate(HALVES):
+            cols, cells = {}, []
+            fixed = np.zeros(len(rows))   # a negative plan (negative LY - returns) is not moved; it stays in its store's total
+            for i, s_ in enumerate(rows):
+                for dv, md in by_store[s_]:
+                    for d, v in md["departments"].items():
+                        if v.get("active", True) and v.get(fld, 0.0) > 0:
+                            cells.append((i, cols.setdefault((dv, tie.get((dv, d), d)), len(cols)), v))
+                        elif v.get("active", True):
+                            fixed[i] += v.get(fld, 0.0)
+            if not cells:
+                continue
+            X = np.zeros((len(rows), len(cols)))
+            for i, j, v in cells:
+                X[i, j] += v[fld]
+            a = month_a * (p1 if h == 0 else 1 - p1)
+            free = (a > 0) & (X.sum(1) > 0)
+            if free.sum() < 2:
+                continue
+            A0 = X[free]
+            # the store plans' half, scaled onto what these stores carry in it now, less each store's unmoved negatives
+            r = a[free] * (A0.sum() + fixed[free].sum()) / a[free].sum() - fixed[free]
+            if (r <= 0).any():
+                continue
+            c = A0.sum(0)                            # every (division, department) keeps its cluster total
+            A, it = A0.copy(), 0
+            for it in range(1, 5001):
+                cs = A.sum(0)
+                A *= np.where(cs > 0, c / np.where(cs > 0, cs, 1.0), 1.0)[None, :]
+                A *= (r / A.sum(1))[:, None]          # stores last: exact
+                if np.abs(A.sum(0) - c).max() <= 1e-10 * c.sum():
+                    break
+            F = np.ones_like(X)
+            F[free] = np.where(A0 > 0, A / np.where(A0 > 0, A0, 1.0), 1.0)
+            for i, j, v in cells:
+                f = float(F[i, j])
+                v[fld] = v[fld] * f
+                v[bf] = v.get(bf, 1.0) * f
+            st_[fld[-2:]] = {"stores": int(free.sum()), "left_as_is": int((~free).sum()), "iterations": it,
+                             "max_dept_off_pct": float(np.abs(A.sum(0) / np.where(c > 0, c, 1.0) - 1).max() * 100),
+                             "max_store_move_pct": float((np.abs(r / A0.sum(1) - 1) * 100).max())}
+        for s_ in rows:
+            for _, md in by_store[s_]:
                 act = {d: v for d, v in md["departments"].items() if v.get("active", True)}
+                for v in act.values():
+                    v["ty"] = v.get("ty_p1", 0.0) + v.get("ty_p2", 0.0)
                 md["div_total_ty"] = sum(v["ty"] for v in act.values())
                 md["div_total_p1"] = sum(v.get("ty_p1", 0.0) for v in act.values())
                 md["div_total_p2"] = sum(v.get("ty_p2", 0.0) for v in act.values())
                 pcts = shares_pct({d: v["ty"] for d, v in act.items()})
                 for d, v in md["departments"].items():
                     v["cont_pct"] = pcts.get(d, 0.0)
-        stats.setdefault(cl, {})[m] = {"stores": int(free.sum()), "left_as_is": int((~free).sum()), "iterations": it,
-                                       "max_dept_off_pct": float(np.abs(A.sum(0) / np.where(c > 0, c, 1.0) - 1).max() * 100),
-                                       "max_store_move_pct": float((np.abs(r / A0.sum(1) - 1) * 100).max())}
+        if st_:
+            stats.setdefault(cl, {})[m] = st_
     return stats
+
+
+LY_HALVES_PATH = os.path.join(_BASE, "..", "ly_halves.json")
+AOP_HALVES_PATH = os.path.join(_BASE, "..", "aop_halves.json")
+
+
+def _half_shares() -> dict:
+    """The P1 shares of the half-month working (user, 2026-10-15: "go ahead with the P1/P2 halves"; P1 = days 1-15, P2 =
+    16th to month end): {"dept": {(CLUSTER, DEPT, "Mar'26"): share of the department's actual LY in P1} - ly_halves.json,
+    the colleague's sheet (COMPARISON H:O), the SSG cluster x department; "store": {(STORE, "Mar'26"): share} - the
+    Calendar's actual store x day sales; "ts": {(STORE, "Mar'27"): share} - the Calendar's LY moved onto the plan
+    calendar, which splits each store's monthly AOP plan into its halves; "src": what was read}. Missing -> {}."""
+    out = {"dept": {}, "store": {}, "ts": {}, "src": []}
+    try:
+        with open(LY_HALVES_PATH, encoding="utf-8") as fh:
+            j = json.load(fh)
+        for cl, deps in (j.get("shares") or {}).items():
+            for d, mm in (deps or {}).items():
+                for m, v in (mm or {}).items():
+                    out["dept"][(str(cl).strip().upper(), str(d).strip().upper(), m)] = float(v)
+        out["src"].append("department LY halves: " + str(j.get("source")))
+    except (OSError, ValueError):
+        pass
+    try:
+        from actuals_manager import day_halves
+        st_, ts_ = day_halves()
+        out["store"], out["ts"] = st_, dict(ts_)   # a copy: the AOP's own split goes on top below
+        out["src"].append("store LY halves and AOP halves: the Calendar's store x day snapshots")
+    except Exception:   # noqa: BLE001 - no day snapshot: LY / 2 and the plan's own split, as before
+        pass
+    # the AOP's own P1 / P2 split where one was given (aop_halves.json - the colleague's AOP sheet; the AOP Forecaster's
+    # store plan is monthly): it wins over the Calendar's (user, 2026-10-15: "check if the outputs match the manual working")
+    try:
+        with open(AOP_HALVES_PATH, encoding="utf-8") as fh:
+            j = json.load(fh)
+        for st, mm in (j.get("shares") or {}).items():
+            for m, v in (mm or {}).items():
+                out["ts"][(str(st).strip().upper(), m)] = float(v)
+        out["src"].append("AOP halves: " + str(j.get("source")))
+    except (OSError, ValueError):
+        pass
+    return out
 
 
 def _aop_store_plan() -> dict:
@@ -211,7 +270,9 @@ def apply_new_dept_adjustments(plan_result: dict, new_dept_map: dict) -> dict:
 
     # in place: every caller passes a fresh run_dept_plan() (a deep copy of the ~350 MB plan cost ~5 s, 2026-10-01)
     result = plan_result
-    tot = lambda depts: sum(v.get("ty", 0.0) for v in depts.values() if v.get("active", True))   # noqa: E731
+    # (P1, P2) totals: the carve is put back per half (2026-10-15), so each cluster's halves stay on the AOP
+    tot = lambda depts: (sum(v.get("ty_p1", 0.0) for v in depts.values() if v.get("active", True)),   # noqa: E731
+                         sum(v.get("ty_p2", 0.0) for v in depts.values() if v.get("active", True)))
     # key -> total before / after the carve; each group is put back on its own total, so the LFL clusters stay exactly on
     # the AOP (2026-10-13: over all stores together LADIES' LFL moved 2.4 L)
     pre, post = {}, {}
@@ -230,7 +291,7 @@ def apply_new_dept_adjustments(plan_result: dict, new_dept_map: dict) -> dict:
                 continue
             for ty_month, month_data in div_data.get("months", {}).items():
                 depts, k_ = month_data["departments"], key(store, sdata, div, ty_month)
-                pre[k_] = pre.get(k_, 0.0) + tot(depts)
+                pre[k_] = [a + b for a, b in zip(pre.get(k_, (0.0, 0.0)), tot(depts))]
                 for new_dept, cfg in entries.items():
                     ref_dept = cfg["ref_dept"]
                     # Support both old alloc_pct and new split fields
@@ -246,7 +307,7 @@ def apply_new_dept_adjustments(plan_result: dict, new_dept_map: dict) -> dict:
                     ref_p1 = ref_d.get("ty_p1", ref_ty / 2.0) if ref_ok else 0.0
                     ref_p2 = ref_ty - ref_p1
                     carve = {"ty": ref_ty * new_dept_pct, "ty_p1": ref_p1 * new_dept_pct, "ty_p2": ref_p2 * new_dept_pct,
-                             "bal": ref_d.get("bal", 1.0) if ref_ok else 1.0}
+                             "bal_p1": ref_d.get("bal_p1", 1.0) if ref_ok else 1.0, "bal_p2": ref_d.get("bal_p2", 1.0) if ref_ok else 1.0}
                     if ref_ok:
                         keep = 1.0 - ref_reduction_pct   # ref dept loses ref_reduction_pct (independent of the carve)
                         depts[ref_dept].update(ty=ref_ty * keep, ty_p1=ref_p1 * keep, ty_p2=ref_p2 * keep)
@@ -261,20 +322,19 @@ def apply_new_dept_adjustments(plan_result: dict, new_dept_map: dict) -> dict:
                             "new_dept_pct": cfg.get("new_dept_pct", legacy),
                             "ref_reduction_pct": cfg.get("ref_reduction_pct", legacy),
                         }
-                post[k_] = post.get(k_, 0.0) + tot(depts)
+                post[k_] = [a + b for a, b in zip(post.get(k_, (0.0, 0.0)), tot(depts))]
 
     # one factor per SSG cluster x month (other stores: per store x division x month): back on the pre-carve total,
     # mix (and new / ref) kept exactly
-    f = {k: (pre[k] / post[k]) if post.get(k) else 1.0 for k in pre}
+    f = {k: tuple(a / b if b else 1.0 for a, b in zip(pre[k], post.get(k, (0.0, 0.0)))) for k in pre}
     for store, sdata in result["stores"].items():
         for div in (sdata["divisions"] if sdata.get("is_ssg") else new_dept_map):
             for ty_month, month_data in sdata["divisions"].get(div, {}).get("months", {}).items():
-                depts, k = month_data["departments"], f.get(key(store, sdata, div, ty_month), 1.0)
+                depts, (k1, k2) = month_data["departments"], f.get(key(store, sdata, div, ty_month), (1.0, 1.0))
                 act = {d: v for d, v in depts.items() if v.get("active", True)}
                 for v in act.values():
-                    for fld in ("ty", "ty_p1", "ty_p2"):
-                        if fld in v:
-                            v[fld] *= k
+                    v["ty_p1"], v["ty_p2"] = v.get("ty_p1", 0.0) * k1, v.get("ty_p2", 0.0) * k2
+                    v["ty"] = v["ty_p1"] + v["ty_p2"]
                 month_data["div_total_ty"] = sum(v["ty"] for v in act.values())
                 month_data["div_total_p1"] = sum(v.get("ty_p1", 0.0) for v in act.values())
                 month_data["div_total_p2"] = sum(v.get("ty_p2", 0.0) for v in act.values())
@@ -287,7 +347,7 @@ def apply_new_dept_adjustments(plan_result: dict, new_dept_map: dict) -> dict:
     if aop_store:
         ssg = {s: sd["divisions"] for s, sd in result["stores"].items() if sd.get("is_ssg")}
         tie = {(dv, n): c["ref_dept"] for dv, e in new_dept_map.items() for n, c in (e or {}).items()}
-        st = _store_balance(ssg, aop_store, {s: result["stores"][s].get("cluster") or "" for s in ssg}, tie)
+        st = _store_balance(ssg, aop_store, {s: result["stores"][s].get("cluster") or "" for s in ssg}, tie, ts=_half_shares()["ts"])
         result.setdefault("meta", {})["lfl_store_balance_after_new_depts"] = st
     return result
 
@@ -454,6 +514,7 @@ def run_dept_plan():
     # the AOP publish the plan sits on (its id only: since 2026-10-14 the LY is actual sales and the plan is capped at the
     # cluster's AOP, so the publish's LY base no longer enters)
     aop_pid, _ = _aop_lfl_base()
+    hs = _half_shares()
 
     results_ssg = {}
 
@@ -474,18 +535,24 @@ def run_dept_plan():
                 asum = sum(v.get(ly_month, 0.0) for v in act.values() if isinstance(v, dict))
                 mix_data = act if asum > 0 else store_dept_data
                 k_base = 1.0
+                # LY into its halves (2026-10-15): the department's own P1 share in its cluster (the colleague's actual
+                # half-month LY), else the store's (the Calendar's day sales), else half and half
+                cl_u = str((store_info.get(store) or {}).get("Cluster") or "").strip().upper()
+                s_store = hs["store"].get((str(store).strip().upper(), ly_month), 0.5)
+                half = lambda d: hs["dept"].get((cl_u, d, ly_month), s_store)   # noqa: E731
 
                 for dept in active:
                     ly_val = mix_data.get(dept, {}).get(ly_month, 0.0) * k_base
                     g_p1, g_p2 = _growth_p1_p2(growth_matrix, div, dept, ty_month)
                     g = (g_p1 + g_p2) / 2.0
-                    ly_half = ly_val / 2.0
+                    ly_p1 = ly_val * half(dept)
+                    ly_p2 = ly_val - ly_p1
                     # full precision - never rounded before summing (2026-09-30, "least apportioned difference")
-                    ty_p1 = ly_half * g_p1 / 100.0
-                    ty_p2 = ly_half * g_p2 / 100.0
+                    ty_p1 = ly_p1 * g_p1 / 100.0
+                    ty_p2 = ly_p2 * g_p2 / 100.0
                     ty_val = ty_p1 + ty_p2
                     dept_vals[dept] = {
-                        "ly": ly_val, "ly_p1": ly_half, "ly_p2": ly_half,
+                        "ly": ly_val, "ly_p1": ly_p1, "ly_p2": ly_p2,
                         "ty": ty_val, "ty_p1": ty_p1, "ty_p2": ty_p2,
                         "growth_pct": g, "g_p1": g_p1, "g_p2": g_p2,
                         "active": True,
@@ -496,7 +563,7 @@ def run_dept_plan():
                 for dept in all_depts - active:
                     ly_val = mix_data.get(dept, {}).get(ly_month, 0.0) * k_base
                     dept_vals[dept] = {
-                        "ly": ly_val, "ly_p1": ly_val / 2.0, "ly_p2": ly_val / 2.0,
+                        "ly": ly_val, "ly_p1": ly_val * half(dept), "ly_p2": ly_val * (1 - half(dept)),
                         "ty": 0.0, "ty_p1": 0.0, "ty_p2": 0.0,
                         "growth_pct": 0.0, "g_p1": 0.0, "g_p2": 0.0, "active": False,
                     }
@@ -532,10 +599,12 @@ def run_dept_plan():
     cluster_of = {s: (store_info.get(s) or {}).get("Cluster") or "" for s in results_ssg}
     hold, hold_cl = {}, {}
 
-    def _scale(md, f):
+    def _scale(md, f, f2=None):
+        f2 = f if f2 is None else f2
         for v in md["departments"].values():
             if v["active"]:
-                v["ty"], v["ty_p1"], v["ty_p2"] = v["ty"] * f, v["ty_p1"] * f, v["ty_p2"] * f
+                v["ty_p1"], v["ty_p2"] = v["ty_p1"] * f, v["ty_p2"] * f2
+                v["ty"] = v["ty_p1"] + v["ty_p2"]
         act = [v for v in md["departments"].values() if v["active"]]
         md["div_total_ty"] = sum(v["ty"] for v in act)
         md["div_total_p1"] = sum(v["ty_p1"] for v in act)
@@ -553,14 +622,30 @@ def run_dept_plan():
                         g_ = groups.setdefault(cluster_of[st_], [[], set()])
                         g_[0].append(md)
                         g_[1].add((st_, dv_))
-            tgt = {cl: sum(_store_aop(aop_store, s, [dv], ty_month) for s, dv in g_[1]) for cl, g_ in groups.items()}
-            k = T / sum(tgt.values()) if T and sum(tgt.values()) > 0 else 1.0   # the clusters add to the AOP plan
+            # P1 / P2 (2026-10-15): each store's month plan split by its P1 share on the plan calendar (the Calendar's
+            # LY moved onto 2027 dates; without one, the plan's own split) - the cluster is capped in each half
+            tgt = {}
+            for cl, g_ in groups.items():
+                t1 = t2 = 0.0
+                for s_ in {x for x, _ in g_[1]}:
+                    a_ = _store_aop(aop_store, s_, [dv for x, dv in g_[1] if x == s_], ty_month)
+                    p_ = hs["ts"].get((str(s_).strip().upper(), ty_month))
+                    if p_ is None:
+                        c1 = sum(v["ty_p1"] for dv in results_ssg[s_] for v in (results_ssg[s_][dv]["months"].get(ty_month) or {}).get("departments", {}).values() if v["active"])
+                        c2 = sum(v["ty_p2"] for dv in results_ssg[s_] for v in (results_ssg[s_][dv]["months"].get(ty_month) or {}).get("departments", {}).values() if v["active"])
+                        p_ = c1 / (c1 + c2) if c1 + c2 else 0.5
+                    t1, t2 = t1 + a_ * p_, t2 + a_ * (1 - p_)
+                tgt[cl] = (t1, t2)
+            ta = sum(a + b for a, b in tgt.values())
+            k = T / ta if T and ta > 0 else 1.0   # the clusters add to the AOP plan of the month
             for cl, (mds, _) in groups.items():
-                cur = cur_ty(mds)
-                if cur > 0 and tgt[cl] > 0:
-                    f = hold_cl.setdefault(cl, {})[ty_month] = tgt[cl] * k / cur
+                c1 = sum(v["ty_p1"] for md in mds for v in md["departments"].values() if v["active"])
+                c2 = sum(v["ty_p2"] for md in mds for v in md["departments"].values() if v["active"])
+                if c1 > 0 and c2 > 0 and sum(tgt[cl]) > 0:
+                    f1, f2 = tgt[cl][0] * k / c1, tgt[cl][1] * k / c2
+                    hold_cl.setdefault(cl, {})[ty_month] = {"P1": f1, "P2": f2}
                     for md in mds:
-                        _scale(md, f)
+                        _scale(md, f1, f2)
     else:
         for div, months in targets.items():
             for ty_month, T in months.items():
@@ -572,7 +657,7 @@ def run_dept_plan():
                         _scale(md, f)
 
     # ── Step 1c: every SSG store on its AOP store plan (the department totals of its cluster kept) ──────────────────
-    balance = _store_balance(results_ssg, aop_store, cluster_of) if aop_store else {}
+    balance = _store_balance(results_ssg, aop_store, cluster_of, ts=hs["ts"]) if aop_store else {}
 
     # ── Step 2: Non-SSG stores ────────────────────────────────────────────────
     # (user, 2026-10-14: "plan should come for the 309 stores or whatever count it is for the sales in the aop
@@ -698,7 +783,8 @@ def run_dept_plan():
             "aop_publish": f"AOP publish {aop_pid}" if aop_pid else None,   # the AOP the cap and the store plans come from
             "lfl_dept_mix": "actual LY sales" if dept_actual else "reindexed LY sales (no actual snapshot)",
             "lfl_cap": "SSG cluster x month, all divisions" if hold_cl else "division x month (AOP store plan unreadable)",
-            "lfl_hold_cluster": hold_cl,   # {cluster: {month: factor}} - the cap (2026-10-14)
+            "lfl_hold_cluster": hold_cl,   # {cluster: {month: {"P1": factor, "P2": factor}}} - the cap (2026-10-14, halves 10-15)
+            "halves": hs["src"] or ["LY / 2 (no half-month source)"],
             "lfl_hold_on_aop": hold,       # {div: {month: factor}} - only when the store plan can't be read
             "lfl_store_balance": balance,  # {cluster: {month: stats}} - stores onto their AOP store plans
             "buyer_band_pct": BUYER_BAND_PCT,

@@ -168,6 +168,36 @@ def load_store_div_actuals(kind: str = "reindexed") -> dict:
     return out
 
 
+_dw = {}
+
+
+def day_halves() -> tuple[dict, dict]:
+    """P1 shares (P1 = days 1-15, P2 = 16th to month end; user, 2026-10-15: "go ahead with the P1/P2 halves") from the
+    Calendar's store x day snapshots: ({(STORE, LY label "Mar'26"): P1 share of actual sales on their own dates},
+    {(STORE, TY label "Mar'27"): P1 share of LY sales moved onto the plan calendar}). Store level only - the day
+    snapshot has no division or department. Read once per snapshot."""
+    from sqlalchemy import text
+    from db.base import SessionLocal
+    out = []
+    with SessionLocal() as s:
+        for k in ("actual", "trend_shifted"):
+            at = s.execute(text("SELECT computed_at FROM calendar.sales_snapshots WHERE source_type = 'dw' AND kind = :k"), {"k": k}).scalar()
+            if _dw.get(k, (None,))[0] != at:
+                rows = s.execute(text("SELECT rows FROM calendar.sales_snapshots WHERE source_type = 'dw' AND kind = :k"),
+                                 {"k": k}).scalar() or []
+                h = {}
+                for r in rows:
+                    c = str(r.get("col") or "")
+                    if len(c) < 10:
+                        continue
+                    key = (str(r.get("store") or "").strip().upper(), f"{_cal.month_abbr[int(c[5:7])]}'{c[2:4]}")
+                    e = h.setdefault(key, [0.0, 0.0])
+                    e[0 if int(c[8:10]) <= 15 else 1] += float(r.get("value") or 0.0)
+                _dw[k] = (at, {kk: a / (a + b) for kk, (a, b) in h.items() if a > 0 and b > 0})
+            out.append(_dw[k][1])
+    return out[0], out[1]
+
+
 _aop_m = {"t": 0.0, "v": None}
 
 
