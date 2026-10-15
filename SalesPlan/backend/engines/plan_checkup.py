@@ -510,6 +510,16 @@ def mrp_checks(gm=None, new=None) -> list:
     _prog_mark(CHECK_STEPS[3])
 
     st4 = "MRP (re-apportioned)"
+    # the buyers' plan file (plan_file_mix, user 2026-10-15): its departments' MRP x display type split is the file's mix
+    # per cluster; the re-apportionment check below covers the other departments only
+    from engines import plan_file_mix as pfm
+    fdep = pfm.departments()
+    if fdep:
+        fm = pfm.load() or {}
+        out.append(_plain(st4, "mrp_file", "MRP x display type of the buyers' plan file's departments = the file's mix", "MRP", "pass",
+                          f"{len(fdep)} departments split by {fm.get('source')} (imported {fm.get('imported_at')}): each store by its "
+                          f"cluster's like-for-like mix (a non-SSG store by its reference store's cluster), the chain's where the "
+                          f"file has no such cluster; shares add to 100% per cluster x department x half by construction"))
     promoted = _try(lambda: __import__("engines.art_nm_engine", fromlist=["x"]).promoted_shares())
     rs = read_shares() or {}
     mf = _find_mapping_file()
@@ -552,7 +562,7 @@ def mrp_checks(gm=None, new=None) -> list:
         acc = Acc(1e-6)
         seen = set()
         for (dp, mr, pm), v in pct.items():
-            if v != v or v <= 0:
+            if v != v or v <= 0 or dp in fdep:   # the file's departments follow the file (mrp_file above)
                 continue
             dv = dept_div.get(dp, "-")
             seen.add((dv, dp, mr, pm))
@@ -560,6 +570,8 @@ def mrp_checks(gm=None, new=None) -> list:
                     Division=dv, Department=dp, MRP=mr, Month=pm)
         for dv, d in sh.items():
             for dp, ks in d.items():
+                if dp in fdep:
+                    continue
                 for mr, ps in ks.items():
                     for pk, v in ps.items():
                         if pk.endswith(" P1") and (dv, dp, mr, pk[:-3]) not in seen:

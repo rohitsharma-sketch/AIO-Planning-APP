@@ -124,7 +124,8 @@ MIX_LEVELS = (("store-month", ["store", "department", "mrp", "month"]),
               ("chain", ["department", "mrp"]),
               ("department-month", ["department", "month"]),
               ("department", ["department"]))
-MIX_NOTE = {"store-month": "the store's own LY mix of that MRP that month",
+MIX_NOTE = {"file": "the buyers' plan file's mix (for ASP MAMJ 2.xlsx: the store's cluster, a non-SSG store its reference store's cluster; plan_file_mix)",
+            "store-month": "the store's own LY mix of that MRP that month",
             "store": "the store's own LY mix of that MRP over all the months (none sold that month)",
             "chain-month": "the chain's LY mix of that MRP that month (the store didn't sell it)",
             "chain": "the chain's LY mix of that MRP over all the months",
@@ -458,6 +459,48 @@ async def import_asp(file: UploadFile = File(...), mode: str = "replace"):
     return {"ok": True, "rows": len(records), "months": periods, "level": level}
 
 
+@router.post("/import/plan-file")
+async def import_plan_file(file: UploadFile = File(...)):
+    """The buyers' plan file (CLUSTER TAG | CLUSTER | ... | NEW MRP | NEW DISPLAY TYPE | NEW ARTICLE NAME | <Mon>'yy P1 / P2
+    VAL / QTY; user 2026-10-15: 'keep "for ASP MAMJ 2.xlsx" as sole ASP file and the file for which plan should be matched
+    on MRP and ART & UDF level'): one upload is both the sole ASP master (VAL / QTY on its new MRP / display type) and
+    the plan's article x MRP x display mix (plan_file_mix). Run Display Type + Qty after it."""
+    from engines import plan_file_mix as pfm
+    raw = await file.read()
+    try:
+        df = pd.read_excel(io.BytesIO(raw)) if not file.filename.endswith(".csv") else pd.read_csv(io.BytesIO(raw))
+        df.columns = [str(c).strip() for c in df.columns]
+        mix = pfm.build(df, file.filename)
+    except Exception as e:   # noqa: BLE001
+        raise HTTPException(400, f"Parse error: {e}")
+    records, periods, level = asp_from_frame(df)
+    if not records or not mix["mix"]:
+        raise HTTPException(400, "No ASP / like-for-like rows in the file")
+    _save(DT_ASP_PATH, {"imported_at": _ts(), "source": f"{file.filename} (sole ASP file)", "count": len(records),
+                        "level": level, "months": periods, "data": records})
+    pfm.save(mix)
+    return {"ok": True, "asp_rows": len(records), "departments": len(mix["mix"].get(pfm.CHAIN, {})),
+            "clusters": len(mix["mix"]) - 1, "periods": mix["periods"]}
+
+
+@router.get("/export/article-plan")
+def export_article_plan():
+    """The department plan down to article x MRP x display type at the plan file's grain (plan_file_mix.article_plan)."""
+    from engines import plan_file_mix as pfm
+    ap = pfm.article_plan(_dept_plan() or {"stores": {}})
+    if ap is None:
+        raise HTTPException(404, "No buyers' plan file imported (Display Type - import plan file)")
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as xw:
+        ap.sort_values(["Group", "Cluster", "Department", "Article", "MRP", "Display type", "Month", "Half"]).to_excel(
+            xw, sheet_name="Article plan", index=False)
+        xw.sheets["Article plan"].set_column(0, 9, 16)
+        xw.sheets["Article plan"].freeze_panes(1, 0)
+    from fastapi.responses import Response
+    return Response(buf.getvalue(), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": 'attachment; filename="Article plan.xlsx"'})
+
+
 _OTHER_DT = {"TABLE": "NON_TABLE", "NON_TABLE": "TABLE"}
 
 
@@ -572,6 +615,12 @@ def run_plan():
     if not mrp_raw: raise HTTPException(400, "No MRP split - MRP Plan · Buyer's Input")
 
     months = _derive_months(mrp_raw)
+    # the buyers' plan file's departments (plan_file_mix, user 2026-10-15): each half split over MRP x display type by the
+    # file's mix of the store's cluster (a non-SSG store: its reference store's) - the same split as the Final Results trees
+    from engines import plan_file_mix as pfm
+    fdep = pfm.departments()
+    mk_of = pfm.store_keys(fp["stores"]) if fdep else {}
+    frows = []
 
     rows = []
     for store, sr in fp["stores"].items():
@@ -586,8 +635,27 @@ def run_plan():
                 if month not in months: continue   # a month with no MRP shares has nothing to split by
                 depts_data = month_data.get("departments", {})
                 for dept, dept_rec in depts_data.items():
-                    if dept not in mrp_raw.get(div, {}): continue
                     if not dept_rec.get("active", True): continue   # inactive (e.g. off season): plan 0, nothing to split (2026-10-14)
+                    if dept in fdep:
+                        mk = mk_of.get(store, pfm.CHAIN)
+                        ty_p1, ty_p2 = dept_rec.get("ty_p1", 0.0), dept_rec.get("ty_p2", 0.0)
+                        if not ssg and not (ty_p1 or ty_p2): continue
+                        h1, h2 = pfm.md_shares(mk, dept, f"{month} P1"), pfm.md_shares(mk, dept, f"{month} P2")
+                        if h1 and h2:
+                            cells = {}   # MRP -> display -> plan (each half x its own share)
+                            for hv, hs in ((ty_p1, h1), (ty_p2, h2)):
+                                for (m, dsp), w in hs.items():
+                                    c_ = cells.setdefault(m, {})
+                                    c_[dsp] = c_.get(dsp, 0.0) + hv * w
+                            for m, dd in cells.items():
+                                t, n = dd.get("TABLE", 0.0), dd.get("NON_TABLE", 0.0)
+                                frows.append({"store": store, "division": div, "dept": dept, "mrp": m, "month": month,
+                                              "ty_p1": ty_p1, "ty_p2": ty_p2, "mrp_plan": t + n,
+                                              "table_contrib": t / (t + n) * 100 if t + n else 0.0,
+                                              "nontable_contrib": n / (t + n) * 100 if t + n else 0.0,
+                                              "table_plan": t, "nontable_plan": n, "has_contrib": True, "contrib_from": "file"})
+                            continue
+                    if dept not in mrp_raw.get(div, {}): continue
                     mrp_dept = mrp_raw[div][dept]
                     ty_p1 = dept_rec.get("ty_p1", 0.0)
                     ty_p2 = dept_rec.get("ty_p2", 0.0)
@@ -619,8 +687,10 @@ def run_plan():
         dt = split(r["mrp_plan"], {"t": tbl_pct, "n": ntbl_pct})
         r.update(table_contrib=tbl_pct, nontable_contrib=ntbl_pct, table_plan=dt["t"], nontable_plan=dt["n"],
                  has_contrib=(tbl_pct + ntbl_pct) > 0, contrib_from=c.get("src", "none"))
+    rows += frows
 
-    out = {"run_at": _ts(), "months": months, "rows": rows, "contrib_from": mix_about()}
+    out = {"run_at": _ts(), "months": months, "rows": rows, "contrib_from": mix_about()
+           + (f"; the {len(fdep)} departments of the buyers' plan file by its mix ({(pfm.load() or {}).get('source')})" if fdep else "")}
     _save(DT_RESULT_PATH, out)
     return {"ok": True, "rows": len(rows), "months": months}
 

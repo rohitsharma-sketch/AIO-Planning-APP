@@ -1211,7 +1211,10 @@ def _mrp_index(cube: dict, attr_map: dict, halves: bool) -> dict:
     except (OSError, ValueError):
         sh = {}
     mix, about, mid = _reapp_mix()
-    key = (id(cube), json.dumps(attr_map, sort_keys=True, default=str), json.dumps(sh, sort_keys=True), mid)
+    from engines import plan_file_mix as pfm   # the buyers' plan file's mix (2026-10-15)
+    fmix = pfm.load()
+    key = (id(cube), json.dumps(attr_map, sort_keys=True, default=str), json.dumps(sh, sort_keys=True), mid,
+           (fmix or {}).get("imported_at"))
     with _mx_lock:
         if _mx.get("key") == key:
             return _mx["v"][halves]
@@ -1236,16 +1239,31 @@ def _mrp_index(cube: dict, attr_map: dict, halves: bool) -> dict:
                 for m, ly in mm.items():
                     for h in (("P1", "P2") if halves else ("",)):
                         off.append((st, d, f"{m} {h}" if h else m, NOT_PLANNED, ly / 2 if h else ly, 0.0, 0.0, 0.0, 0.0))
+    # mk = the share table a row takes: the buyers' plan file's departments (plan_file_mix, user 2026-10-15) by the mix of
+    # the store's cluster (a non-SSG store: its reference store's), the chain's where the file has no such cluster; every
+    # other department by the chain MRP split (effective_shares) as before
+    fdep = pfm.departments() if fmix else set()
+    mk_of = pfm.store_keys(cube["stores"]) if fdep else {}
     srows = []
     for d, (dv, dp, _) in enumerate(dkeys):
+        if dp in fdep:
+            for mk in set(mk_of.values()) | {pfm.CHAIN}:
+                for p in fmix["periods"]:
+                    m, _, h = p.partition(" ")
+                    for k, v in (pfm.mrp_shares(mk, dp, p) or {}).items():
+                        if v > 0:
+                            srows.append((mk, d, m, k, h, float(v)))
+            continue
         for k, per in (sh.get(dv, {}).get(dp) or {}).items():
             for pk, v in (per or {}).items():
                 m, _, h = str(pk).partition(" ")
                 if h in ("P1", "P2") and v and float(v) > 0:
-                    srows.append((d, m, str(k), h, float(v)))
-    S = pd.DataFrame(srows, columns=["d", "month", "mrp", "h", "w"])
+                    srows.append((pfm.CHAIN, d, m, str(k), h, float(v)))
+    S = pd.DataFrame(srows, columns=["mk", "d", "month", "mrp", "h", "w"])
     if len(S):
-        S["w"] = S["w"] / S.groupby(["d", "month", "h"])["w"].transform("sum")
+        S["w"] = S["w"] / S.groupby(["mk", "d", "month", "h"])["w"].transform("sum")
+    fd = {d for d, (_, dp, _) in enumerate(dkeys) if dp in fdep}
+    b["mk"] = [mk_of.get(s, pfm.CHAIN) if d in fd else pfm.CHAIN for s, d in zip(b["store"], b["d"])]
     dept_of = {}
     for d, (_, dp, _) in enumerate(dkeys):
         dept_of.setdefault(dp, []).append(d)
@@ -1259,11 +1277,11 @@ def _mrp_index(cube: dict, attr_map: dict, halves: bool) -> dict:
         if halves:
             x = x.assign(month=x["month"] + " " + h)
         sh_h = S[S["h"] == h].drop(columns="h")
-        has = x[["d", "month"]].assign(month=x["month"].str.partition(" ")[0]).merge(
-            sh_h[["d", "month"]].drop_duplicates(), how="left", indicator=True)["_merge"].eq("both").to_numpy()
+        has = x[["mk", "d", "month"]].assign(month=x["month"].str.partition(" ")[0]).merge(
+            sh_h[["mk", "d", "month"]].drop_duplicates(), how="left", indicator=True)["_merge"].eq("both").to_numpy()
         xs, xn = x[has], x[~has]
         xs = xs.assign(mo=xs["month"].str.partition(" ")[0])
-        ty = xs.merge(sh_h.rename(columns={"month": "mo"}), on=["d", "mo"])
+        ty = xs.merge(sh_h.rename(columns={"month": "mo"}), on=["mk", "d", "mo"])
         ty = ty.assign(ty=ty["t"] * ty["w"], ly=0.0, ly_mix=0.0, ly_sh=0.0, ns=0.0)
         if mix is not None and len(mix):
             mk = mix[["store", "d", "month"]].drop_duplicates().rename(columns={"month": "mo"})
@@ -1274,7 +1292,7 @@ def _mrp_index(cube: dict, attr_map: dict, halves: bool) -> dict:
             xs_sh = xs[~inm]
         else:
             lm, xs_sh = None, xs
-        ls = xs_sh.merge(sh_h.rename(columns={"month": "mo"}), on=["d", "mo"])
+        ls = xs_sh.merge(sh_h.rename(columns={"month": "mo"}), on=["mk", "d", "mo"])
         ls = ls.assign(ly=ls["ly"] * ls["w"], ty=0.0, ly_mix=0.0, ns=0.0)
         ls["ly_sh"] = ls["ly"]
         ns = xn.assign(mrp=NO_SPLIT, ty=xn["t"], ly_mix=0.0, ly_sh=0.0, ns=1.0)
@@ -1485,9 +1503,20 @@ def _display_index(cube: dict, attr_map: dict, halves: bool) -> dict:
     df = pd.DataFrame({lv: np.asarray(N[lv], dtype=object)[mi["c"][lv]] for lv in ("store", "department", "mrp", "month")})
     df["mo"] = df["month"].str.partition(" ")[0]
     df["i"] = np.arange(len(df))
+    # the buyers' plan file's departments: its display type % of the MRP, per the store's mix cluster x half (plan_file_mix,
+    # 2026-10-15); the rest by the store's LY mix as before
+    from engines import plan_file_mix as pfm
+    F = pfm.display_table()
+    fj = None
+    if F is not None and len(F):
+        df["mk"] = df["store"].map(pfm.store_keys(cube["stores"])).fillna(pfm.CHAIN)
+        fj = df.merge(F, on=["mk", "department", "month", "mrp"], how="inner").assign(src="file").drop(columns="mk")
+        df = df[~df["i"].isin(fj["i"])].drop(columns="mk")
     keys = df.loc[~df["mrp"].isin([NO_SPLIT, NOT_PLANNED]), ["store", "department", "mrp", "mo"]].drop_duplicates()
     sh = display_shares(keys.rename(columns={"mo": "month"})).rename(columns={"month": "mo"})
     j = df.merge(sh, on=["store", "department", "mrp", "mo"], how="left")
+    if fj is not None:
+        j = pd.concat([fj, j], ignore_index=True)
     j["display"] = j["display"].fillna("-")
     j["pct"] = j["pct"].fillna(100.0)
     j["src"] = j["src"].fillna("none")

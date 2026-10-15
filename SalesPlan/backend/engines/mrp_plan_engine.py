@@ -157,6 +157,14 @@ def effective_shares() -> tuple:
     if pr is not None:
         return {dv: dict(d) for dv, d in pr.items()}, {}
     mrp = _load()
+    try:   # the buyers' plan file's departments (plan_file_mix, user 2026-10-15): the chain MRP split from that file
+        from engines import plan_file_mix as pfm
+        if pfm.load():
+            from engines.display_type_engine import _plan_divisions
+            for dv, d in pfm.chain_mrp_pct(_plan_divisions()).items():
+                mrp = {**mrp, dv: {**mrp.get(dv, {}), **d}}
+    except Exception:   # noqa: BLE001 - an unreadable file mix: the split in use as before
+        pass
     out = {dv: dict(d) for dv, d in mrp.items()}
     inherited = {}
     try:
