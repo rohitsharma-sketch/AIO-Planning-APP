@@ -1643,6 +1643,138 @@ def _display_index(cube: dict, attr_map: dict, halves: bool) -> dict:
     return both[halves]
 
 
+# ── Built on cluster (preview) ────────────────────────────────────────────────────────────────────────────────────
+# user, 2026-10-15: "in sales plan if the plan was made on Cluster then it should break on Store too keeping the LY cont %
+# for department and making the same working auto for it. New MRPs should be given way in this case as per LY actual
+# cont % and the same for display and in case for store to cluster it should be just a sum of the stores as per the
+# clusters mentioned" / "both views should be availble for preview" (choice: the Sales Plan builds on cluster).
+# From the Display tree's cells (store x department x merged MRP x display x fortnight), for the SSG (like-for-like)
+# stores of each cluster:
+#   1. the cluster's department plan = the sum of its stores' (cluster x department x fortnight - the same totals the
+#      plan has now: the cluster cap and the store balance both keep them);
+#   2. it goes to the cluster's stores by each store's LY share of that department in the cluster (LY cont %); a
+#      department with no LY in the cluster by the store's share of the cluster's division LY, else equally;
+#   3. inside the cluster x department x fortnight, the merged MRPs (new MRPs included, through the Re-apportionment) x
+#      display types go to the stores by a two-way fit (the store balance's RAS): each store keeps step 2's department
+#      plan and the cluster keeps its MRP x display plan exactly as now (the buyers' plan file / the MRP split), each
+#      store's mix as close to its own LY as both allow; an MRP x display (or a store) with no LY starts from the store's
+#      department share of the cluster's plan, so a new MRP is given way by LY cont %.
+# Non-SSG stores keep their plan (they follow their reference store). Store -> cluster is the plain sum, so every cluster
+# total at every level stays exactly as it is. A preview: nothing is written, the plan in use stays store-built.
+_cbx: dict = {}
+
+
+def _cluster_built(cube: dict, attr_map: dict, halves: bool) -> dict:
+    import numpy as np
+    import pandas as pd
+    ix = _display_index(cube, attr_map, True)
+    if _cbx.get("ix") is ix:
+        return _cbx["v"][halves]
+    N, C = ix["names"], ix["c"]
+    keys = ["store", "cluster", "stype", "division", "attribute", "department", "mrp", "display", "month"]
+    df = pd.DataFrame({k: C[k] for k in keys})
+    df["ly"], df["ty"] = ix["ly"], ix["ty"]
+    ssg = N["stype"].index("SSG") if "SSG" in N["stype"] else -1
+    on = df["stype"].to_numpy() == ssg
+    R, S = df[~on], df[on].copy()
+    S["lyp"] = S["ly"].clip(lower=0)
+    K = ["cluster", "department", "month"]
+    cty = S.groupby(K, sort=False)["ty"].sum().rename("cty")
+    cly = S.groupby(K, sort=False)["lyp"].sum().rename("cly")
+    sly = S.groupby(["store"] + K, sort=False)["lyp"].sum().rename("sly")
+    T = pd.concat([cty, cly], axis=1).reset_index()
+    T = T[T["cty"].abs() > 1e-12]
+    # 2. the department plan to the stores
+    t1 = T[T["cly"] > 0].merge(sly[sly > 0].reset_index(), on=K)
+    t1["tsd"] = t1["cty"] * t1["sly"] / t1["cly"]
+    t2 = T[~(T["cly"] > 0)]
+    parts = [t1[["store"] + K + ["tsd"]]]
+    if len(t2):
+        d2v = S[["department", "division"]].drop_duplicates("department")
+        DK = ["cluster", "division", "month"]
+        sdl = S.groupby(["store"] + DK, sort=False)["lyp"].sum().rename("sdl").reset_index()
+        cdl = S.groupby(DK, sort=False)["lyp"].sum().rename("cdl").reset_index()
+        t2 = t2.merge(d2v, on="department").merge(cdl, on=DK, how="left").fillna({"cdl": 0.0})
+        a = t2[t2["cdl"] > 0].merge(sdl[sdl["sdl"] > 0], on=DK)
+        a["tsd"] = a["cty"] * a["sdl"] / a["cdl"]
+        parts.append(a[["store"] + K + ["tsd"]])
+        b = t2[~(t2["cdl"] > 0)].merge(S[["store", "cluster"]].drop_duplicates(), on="cluster")
+        b["tsd"] = b["cty"] / b.groupby(K)["store"].transform("count")
+        parts.append(b[["store"] + K + ["tsd"]])
+    TS = pd.concat(parts, ignore_index=True).merge(sly.reset_index(), on=["store"] + K, how="left").fillna({"sly": 0.0})
+    TS = TS[TS["tsd"].abs() > 1e-12]
+    # 3. the cluster's MRP x display plan (column) to its stores (row): a two-way fit seeded on the store's own LY
+    colk = K + ["mrp", "display", "division", "attribute"]
+    col = S.groupby(colk, sort=False)["ty"].sum().rename("colT").reset_index()
+    col = col[col["colT"].abs() > 1e-12].merge(cty.reset_index(), on=K)
+    seed_own = S[S["lyp"] > 0].merge(TS[["store"] + K + ["tsd"]], on=["store"] + K).merge(col[colk], on=colk)[["store"] + colk + ["lyp"]]
+    seed_own = seed_own.rename(columns={"lyp": "seed"})
+    # no own-LY start: every store x column of the cluster x department x fortnight from the store's department share
+    full = TS[["store"] + K + ["tsd"]].merge(col, on=K)
+    full["seed0"] = full["tsd"] * full["colT"] / full["cty"]
+    have_r = seed_own.groupby(["store"] + K, sort=False)["seed"].sum().rename("hr").reset_index()
+    have_c = seed_own.groupby(colk, sort=False)["seed"].sum().rename("hc").reset_index()
+    full = full.merge(have_r, on=["store"] + K, how="left").merge(have_c, on=colk, how="left").fillna({"hr": 0.0, "hc": 0.0})
+    need = full[(full["hr"] <= 0) | (full["hc"] <= 0)][["store"] + colk + ["seed0"]].rename(columns={"seed0": "seed"})
+    E = pd.concat([seed_own, need], ignore_index=True).groupby(["store"] + colk, sort=False, as_index=False)["seed"].sum()
+    E = E.merge(TS[["store"] + K + ["tsd"]], on=["store"] + K).merge(col[colk + ["colT"]], on=colk)
+    rid = E.groupby(["store"] + K, sort=False).ngroup().to_numpy()
+    cid = E.groupby(colk, sort=False).ngroup().to_numpy()
+    rT = np.bincount(rid, weights=E["tsd"].to_numpy()) / np.bincount(rid)
+    cT = np.bincount(cid, weights=E["colT"].to_numpy()) / np.bincount(cid)
+    w = E["seed"].to_numpy(float).clip(min=0)
+    for _ in range(60):   # ponytail: fixed RAS rounds, ample here (the check reports the residual)
+        rs = np.bincount(rid, weights=w, minlength=len(rT))
+        w = w * np.divide(rT, rs, out=np.zeros_like(rT), where=rs > 0)[rid]
+        cs = np.bincount(cid, weights=w, minlength=len(cT))
+        w = w * np.divide(cT, cs, out=np.zeros_like(cT), where=cs > 0)[cid]   # columns last: the cluster's plan exact
+    rs = np.bincount(rid, weights=w, minlength=len(rT))
+    _cbx["residual"] = float(np.abs(rs - rT).max()) if len(rT) else 0.0   # store department plan off its LY share, L
+    fit = E.assign(ty=w, ly=0.0, stype=ssg)[keys + ["ly", "ty"]]
+    base = S.assign(ty=0.0)[keys + ["ly", "ty"]]
+    SS = pd.concat([base, fit], ignore_index=True).groupby(keys, sort=False, as_index=False)[["ly", "ty"]].sum()
+    out = pd.concat([R[keys + ["ly", "ty"]], SS], ignore_index=True)
+    out = out[(out["ly"].abs() > 1e-12) | (out["ty"].abs() > 1e-12)]
+    v = {"names": N, "pos": ix["pos"], "c": {k: out[k].to_numpy(np.int32) for k in keys},
+         "ly": out["ly"].to_numpy(float), "ty": out["ty"].to_numpy(float), "x": {}, "about": ix.get("about"),
+         "source": ix.get("source"), "store_built": ix}
+    both = {True: v, False: _unhalve(v)}
+    _cbx.update(ix=ix, v=both)
+    return both[halves]
+
+
+def _dt_ix(build: str, halves: bool) -> dict:
+    """The Display tree's index: the plan in use (store-built), or built on cluster (preview)."""
+    if build not in ("", "store", "cluster"):
+        raise HTTPException(422, "build: store or cluster")
+    c, am = _cube(), _load_attr()
+    return _cluster_built(c, am, halves) if build == "cluster" else _display_index(c, am, halves)
+
+
+CB_NOTE = ("built on cluster (preview): each SSG cluster's department plan to its stores by their LY share of the "
+           "department, its MRP x display plan to the stores by their own LY (a two-way fit - both totals kept) - "
+           "non-SSG stores as they are")
+
+
+def explain_cluster_built(cb: dict, sb: dict, levels: list, path: list, filt: dict | None) -> dict:
+    """Pure. The ⓘ of a row of the cluster-built preview: its numbers, the store-built plan's at the same row, the rule."""
+    want = dict(zip(levels, path))
+    m, ms = _mask(cb, want, filt), _mask(sb, want, filt)
+    ly, ty, ts = float(cb["ly"][m].sum()), float(cb["ty"][m].sum()), float(sb["ty"][ms].sum())
+    up = _mask(cb, dict(zip(levels, path[:-1])), filt) if path else None
+    cont = (ty / float(cb["ty"][up].sum()) * 100) if path and float(cb["ty"][up].sum()) else None
+    lines = [{"h": "Built on cluster", "t": "the SSG cluster's department plan (the same as the plan in use) goes to its stores by each "
+              "store's LY share of that department in the cluster - a department with no LY there by the store's share of the "
+              "cluster's division LY. The cluster's MRP x display plan (also as in use) goes to the stores by a two-way fit: "
+              "each store keeps its department plan, the cluster keeps its MRP x display plan, and each store's mix stays as "
+              "close to its own LY on the merged MRPs as both allow - a new MRP is given way by the store's LY cont %. "
+              "Non-SSG stores keep their plan."},
+             {"h": "Plan in use (store-built)", "t": f"Rs {ts:,.2f} L here - built on cluster is {ty - ts:+,.2f} L."},
+             {"h": "Check", "t": "store to cluster is the plain sum: every cluster total, at every level, is the same in both builds"
+              + (" - this row is a cluster-level total, so the two agree." if "store" not in want and abs(ty - ts) < 0.005 else ".")}]
+    return {"ly": round(ly, 4), "ty": round(ty, 4), "growth": (ty / ly - 1) * 100 if ly else None, "cont": cont, "lines": lines}
+
+
 def _dt_lv_path(levels: str, path: str, longest: int = 0):
     lv = [x for x in levels.split(",") if x]
     if not lv or len(set(lv)) != len(lv) or any(x not in DT_LEVELS for x in lv):
@@ -1662,31 +1794,32 @@ def _dt_about() -> str:
 
 
 @router.get("/display-view/hierarchy")
-def get_dt_hierarchy(levels: str, path: str = "[]", filters: str = "{}", period: str = "month"):
+def get_dt_hierarchy(levels: str, path: str = "[]", filters: str = "{}", period: str = "month", build: str = ""):
     lv, pth = _dt_lv_path(levels, path)
-    ix = _display_index(_cube(), _load_attr(), _halves(period))
+    ix = _dt_ix(build, _halves(period))
     return {**rows_of(ix, lv, pth, parse_filters(filters, DT_LEVELS)),
-            "source": {"kind": "display", "name": "Display Type plan",
-                       "note": f"the MRP plan split by display type on the {_dt_about()}"}}
+            "source": {"kind": "display", "name": "Display Type plan" + (" - built on cluster (preview)" if build == "cluster" else ""),
+                       "note": CB_NOTE if build == "cluster" else f"the MRP plan split by display type on the {_dt_about()}"}}
 
 
 @router.get("/display-view/hierarchy-options")
-def get_dt_hierarchy_options(filters: str = "{}", level: str = "", period: str = "month"):
+def get_dt_hierarchy_options(filters: str = "{}", level: str = "", period: str = "month", build: str = ""):
     if level and level not in DT_LEVELS:
         raise HTTPException(422, f"level: one of {', '.join(DT_LEVELS)}")
-    return values_of(_display_index(_cube(), _load_attr(), _halves(period)), parse_filters(filters, DT_LEVELS),
+    return values_of(_dt_ix(build, _halves(period)), parse_filters(filters, DT_LEVELS),
                      [level] if level else DT_LEVELS)
 
 
 @router.get("/display-view/hierarchy-export")
-def get_dt_hierarchy_export(levels: str, filters: str = "{}", period: str = "month"):
+def get_dt_hierarchy_export(levels: str, filters: str = "{}", period: str = "month", build: str = ""):
     lv, _ = _dt_lv_path(levels, "[]")
     f = parse_filters(filters, DT_LEVELS)
-    ix = _display_index(_cube(), _load_attr(), _halves(period))
-    data = tree_xlsx(ix, lv, DT_LEVEL_NAME, f, ("LY (₹L)", "TY (₹L)", "Growth %"), "Display Type plan",
-                     export_about(lv, DT_LEVEL_NAME, f, period, f"the MRP plan (split by {ix['source']})",
+    ix = _dt_ix(build, _halves(period))
+    cb = build == "cluster"
+    data = tree_xlsx(ix, lv, DT_LEVEL_NAME, f, ("LY (₹L)", "TY (₹L)", "Growth %"), "Display Type plan" + (" - built on cluster (preview)" if cb else ""),
+                     export_about(lv, DT_LEVEL_NAME, f, period, CB_NOTE if cb else f"the MRP plan (split by {ix['source']})",
                                   [("Display type %", f"each store x department x MRP x month's LY mix by display type - {_dt_about()}")]))
-    return xlsx_response(data, f"Display Type plan{' P1-P2' if period == 'half' else ''}.xlsx")
+    return xlsx_response(data, f"Display Type plan{' built on cluster' if cb else ''}{' P1-P2' if period == 'half' else ''}.xlsx")
 
 
 def explain_display(ix: dict, mx: dict, levels: list, path: list, filt: dict | None, halves: bool) -> dict:
@@ -1748,9 +1881,11 @@ def explain_display(ix: dict, mx: dict, levels: list, path: list, filt: dict | N
 
 
 @router.get("/display-view/explain")
-def get_dt_explain(levels: str, path: str = "[]", filters: str = "{}", period: str = "month"):
+def get_dt_explain(levels: str, path: str = "[]", filters: str = "{}", period: str = "month", build: str = ""):
     lv, pth = _dt_lv_path(levels, path, longest=1)
     c, am, hv = _cube(), _load_attr(), _halves(period)
+    if build == "cluster":
+        return explain_cluster_built(_cluster_built(c, am, hv), _display_index(c, am, hv), lv, pth, parse_filters(filters, DT_LEVELS))
     return explain_display(_display_index(c, am, hv), _mrp_index(c, am, hv), lv, pth, parse_filters(filters, DT_LEVELS), hv)
 
 

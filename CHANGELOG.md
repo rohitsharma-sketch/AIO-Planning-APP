@@ -7,6 +7,15 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Sales Plan: the Display tree "Built on: Store / Cluster" - a cluster-built plan broken to stores, as a preview
+- **Asked (user):** "in sales plan if the plan was made on Cluster then it should break on Store too keeping the LY cont % for department and making the same working auto for it. New MRPs should be given way in this case as per LY actual cont % and the same for display and in case for store to cluster it should be just a sum of the stores as per the clusters mentioned"; "both views should be availble for preview". Choice: "Sales Plan builds on cluster".
+- **Rule (RULE_BOOK P9, `grain_view._cluster_built`):** for the SSG stores of each cluster:
+  - The cluster x department x fortnight plan (the same totals as now) goes to its stores by their LY cont % of that department in the cluster. No LY there: the store's share of the cluster's division LY, else equally.
+  - The cluster's MRP x display plan goes to the stores by a two-way fit (RAS, as the store balance) seeded on each store's own LY on the merged MRPs. Store department plan and cluster MRP x display plan are both kept; a new MRP / a store with no LY starts from the store's department share.
+  - Non-SSG stores keep their plan. Store -> cluster is the plain sum.
+- **Preview, not in use:** Display Type -> "Built on: Store - the plan in use | Cluster - preview" (kept per browser, `sp.dt.build`). Every Display tree call (rows, filters, Excel export, ⓘ) takes `?build=cluster`; ⓘ shows the rule and the store-built number at the same row. Nothing is written; the plan in use stays store-built.
+- **Checked (live plan, read-only script + sandbox API/page):** total 77,981.45 = 77,981.45 L, LY 46,334.97 both. Cluster x department x fortnight and cluster x department x MRP: 0 difference. Non-SSG identical. A store's department share = its LY share (largest fit residual 0.89 L). SSG stores move by a median 7.7 L (max 57.3 L) against the store-built plan, since stores are no longer balanced onto their own store AOP. Built in 2.7 s once, 0.03 s cached. API: cluster BH 18,719.56 L in both builds, store BTA 577.87 store-built vs 635.17 cluster-built; bad `build` -> 422. Page: switch toggles and remembers, and the tree requests carry `build=cluster`. Frontend rebuilt; 8010 restarted.
+
 ### BIS: sync pill (summaries = Buyer's Plan, apparel = AOP, Sales Plan got the Save); Matrix removed from the factor table
 - **Asked (user):** "also check if the summaries sync in BIS to the buyer's plan"; "and add a check somehwere similar to an indicator that the syncs are through"; "remove this from the factor table" + "and working" (screenshot: "Matrix - rule-based lookup table - Use this", "band High 10-15%").
 - **Summaries checked:** Division / Department / Attribute Summary vs the Buyer's Plan, every division x month: 0 difference. Grand total TY 431.8803 Cr / LY 388.8432 Cr in all four.

@@ -160,6 +160,10 @@ export default function DisplayTypePlan() {
   const [prom, setProm] = useState(null)
   useEffect(() => { fetch('/api/planning/art-nm/promote').then(r => (r.ok ? r.json() : null)).then(setProm).catch(() => {}) }, [])
   const [status,   setStatus]   = useState(null)
+  // built on store (the plan in use) or on cluster (preview) - user, 2026-10-15: "if the plan was made on Cluster then it
+  // should break on Store too ... both views should be availble for preview" (GET display-view/*?build=cluster)
+  const [build, setBuild] = useState(() => { try { return localStorage.getItem('sp.dt.build') || '' } catch { return '' } })
+  const pickBuild = b => { setBuild(b); try { localStorage.setItem('sp.dt.build', b) } catch { /* ignore */ } }
   const [tab,      setTab]      = useState('plan')   // plan | qty (Validation tab removed - user, 2026-10-14: "remove validation";
                                                      // its checks run in Reconciliation's full check-up)
   const [running,  setRunning]  = useState(false)
@@ -329,10 +333,23 @@ export default function DisplayTypePlan() {
       )}
 
       {/* ── PLAN TAB ── */}
-      {tab === 'plan' && (
-        <HierarchyView api="/api/planning/grain/display-view" levels={DT_FIELDS} defaults={['division', 'department', 'mrp', 'display']}
-          store="sp.dt" versions={false} halves />
-      )}
+      {tab === 'plan' && (<>
+        <div role="group" aria-label="Built on" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 10, fontSize: 12.5 }}>
+          <span style={{ fontWeight: 700, color: theme.textMuted }}>Built on</span>
+          {[['', 'Store - the plan in use'], ['cluster', 'Cluster - preview']].map(([k, t]) => (
+            <button key={k || 'store'} type="button" aria-pressed={build === k} onClick={() => pickBuild(k)}
+              style={{ padding: '5px 12px', borderRadius: 999, border: `1px solid ${theme.border}`, cursor: 'pointer', fontSize: 12.5, fontWeight: 600,
+                       background: build === k ? 'var(--st-btn,#A8CBB7)' : theme.surface, color: build === k ? 'var(--st-btn-text,#1F4D3A)' : theme.textSecondary }}>{t}</button>
+          ))}
+          <span style={{ color: theme.textMuted, flex: '1 1 320px' }}>
+            {build === 'cluster'
+              ? 'Each SSG cluster’s department plan goes to its stores by their LY share of the department; its MRP x display plan by the stores’ own LY (a two-way fit - store and cluster totals both kept). Cluster rows = the sum of their stores, as in use. Non-SSG stores as they are. Preview only.'
+              : 'Each store’s own plan, balanced onto its store AOP. Add Cluster or Store to Rows to see either level.'}
+          </span>
+        </div>
+        <HierarchyView key={build || 'store'} api="/api/planning/grain/display-view" levels={DT_FIELDS} defaults={['division', 'department', 'mrp', 'display']}
+          store="sp.dt" versions={false} halves query={build ? { build } : {}} />
+      </>)}
 
       {/* ── QTY TAB ── */}
       {tab === 'qty' && qtyErr && <div style={{ fontSize: 12.5, color: theme.danger }}>{qtyErr}</div>}
