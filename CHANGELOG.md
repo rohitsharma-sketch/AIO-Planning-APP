@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Growth vs LY: Sales Plan version selector
+- **Asked (user):** "can i have a version selector from this".
+- **Growth vs LY:** a "Plan" list on card 1 offers "Live plan (updates by itself)" plus every version saved on the Sales Plan's Final Results page (name and saved time). Picking one rebuilds the comparison on it in ~3 s, at the same Division -> Attribute -> Department -> MRP -> Display depth. An uploaded file shows as "Uploaded file", and picking a plan links back to the Sales Plan. `POST api/link?version=<id>` refuses an id the Sales Plan hasn't published.
+- **Sales Plan:** 8010's warmer also publishes each saved version (`grain_view.publish_versions` -> `sales_plan_display.<id>.pkl` + `sales_plan_display_versions.json`, gitignored). It builds a version once (~8 s), and again only when the version is saved over or the MRP / display split's inputs change. It is built to the side, so the live views' caches are untouched (checked: same object before and after). A version keeps its department plan as saved; its MRP / display split uses today's rules, the same split the live plan takes.
+- **Checked:** Version 1 (saved 13 Oct 17:14) = TY 51,484.13 L / LY 46,333.86 L, the same as the version's own totals (plan_versions); live = 77,981.45 L. SSG stores are the same in both (43,188.03 vs 38,885.41 L); the versions differ on the other stores. Switching live -> Version 1 -> live via the page list and the API; unknown id refused; `test_gr.py` passing. 8010 and 8075 restarted.
+
 ### Landing: hover slides the whole side bar out, and back when the mouse leaves
 - **Asked (user):** "hover should make the whole tile come out and go back if the mouse hover is not there".
 - With a mouse on the (invisible) edge strip, the whole bar slides out over the page, with a shadow; the page doesn't move. It stays while the mouse is on it and slides back 250 ms after the mouse leaves. Clicking its arrow pins it open: the page moves over and the open state is remembered, as before. Dragging still works; a touch screen still taps or swipes, since it has no hover.

@@ -121,6 +121,7 @@ def warm_views():
         _mrp_index(c, am, h)
         _display_index(c, am, h)
     publish_display(c, am)
+    publish_versions()
     from engines.display_type_engine import _qty_frame
     _qty_frame()
     from engines.plan_checkup import checkup
@@ -136,12 +137,18 @@ _pub: dict = {"ix": None}
 
 
 def publish_display(c: dict | None = None, am: dict | None = None) -> bool:
-    import time
-    import pandas as pd
     c = c if c is not None else _cube()
     ix = _display_index(c, am if am is not None else _load_attr(), True)
     if _pub["ix"] is ix and os.path.exists(PUBLISH_PATH):
         return False
+    _write_published(c, ix, PUBLISH_PATH)
+    _pub["ix"] = ix
+    return True
+
+
+def _write_published(c: dict, ix: dict, path: str, extra: dict | None = None):
+    import time
+    import pandas as pd
     N, C = ix["names"], ix["c"]
     lv = ("store", "division", "attribute", "department", "mrp", "display", "month")
     df = pd.DataFrame({k: pd.Categorical.from_codes(C[k], [str(x) for x in N[k]]) for k in lv})
@@ -152,12 +159,60 @@ def publish_display(c: dict | None = None, am: dict | None = None) -> bool:
     src = c.get("source") or {}
     out = {"built": time.strftime("%d %b %Y %H:%M"), "plan": src.get("note") or src.get("name") or "the Sales Plan",
            "months": sorted({str(m) for m in N["month"]}, key=month_key), "stores": stores, "cells": df,
-           "about": {"mrp": ix.get("source"), "split": ix.get("about")}}
-    tmp = f"{PUBLISH_PATH}.{os.getpid()}.tmp"
+           "about": {"mrp": ix.get("source"), "split": ix.get("about")}, **(extra or {})}
+    tmp = f"{path}.{os.getpid()}.tmp"
     pd.to_pickle(out, tmp)
-    os.replace(tmp, PUBLISH_PATH)
-    _pub["ix"] = ix
-    return True
+    os.replace(tmp, path)
+
+
+# Saved versions too (user, 2026-10-15: "can i have a version selector from this"): each saved Sales Plan version
+# (plan_versions) published the same way, so Growth vs LY can pick it. A version freezes the department plan; its MRP /
+# display split is today's rules (the same split the live plan takes). Built once, again only when the version is saved
+# over or the split's inputs change; built off to the side, so the live views' caches stay as they are.
+VERSIONS_PATH = os.path.join(_HERE, "..", "sales_plan_display_versions.json")
+
+
+def version_path(vid: str) -> str:
+    return os.path.join(_HERE, "..", f"sales_plan_display.{vid}.pkl")
+
+
+def publish_versions() -> int:
+    from engines import plan_versions as pv
+    from engines.mrp_plan_engine import effective_shares_key
+    from engines.display_type_engine import mix_key
+    from engines import plan_file_mix as pfm
+    rules = repr((effective_shares_key(), mix_key(), (pfm.load() or {}).get("imported_at")))
+    try:
+        with open(VERSIONS_PATH, encoding="utf-8") as f:
+            done = {r["id"]: r for r in json.load(f)}
+    except (OSError, ValueError):
+        done = {}
+    out, built = [], 0
+    for r in pv._index():
+        if r.get("removed"):
+            continue
+        vid, key = r["id"], repr((r["updated_at"], rules))
+        row = {"id": vid, "name": r["name"], "saved": r["updated_at"], "key": key}
+        if done.get(vid, {}).get("key") != key or not os.path.exists(version_path(vid)):
+            snap = pv.snapshot(vid)
+            with _mx_lock:
+                keep_mx = dict(_mx)
+            keep_dx = dict(_dx)
+            try:
+                ix = _display_index(snap["cube"], snap.get("attr_map") or {}, True)
+                _write_published(snap["cube"], ix, version_path(vid), {"version": {"id": vid, "name": r["name"], "saved": r["updated_at"]}})
+            finally:   # the live plan's MRP / Display caches back as they were
+                with _mx_lock:
+                    _mx.clear()
+                    _mx.update(keep_mx)
+                _dx.clear()
+                _dx.update(keep_dx)
+            built += 1
+        out.append(row)
+    if built or len(out) != len(done):
+        from plan_cache import save_json
+        save_json(VERSIONS_PATH, out, indent=1)
+    return built
 
 
 def _cube_all() -> dict:

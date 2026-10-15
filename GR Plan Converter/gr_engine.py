@@ -173,6 +173,28 @@ SP_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "SalesP
 MRP, DISP = "MRP", "DISPLAY"
 
 
+SP_VERSIONS = os.path.join(os.path.dirname(SP_PATH), "sales_plan_display_versions.json")
+
+
+def sp_versions():
+    """The Sales Plan's saved versions it has published (grain_view.publish_versions): [{id, name, saved}]."""
+    import json
+    try:
+        with open(SP_VERSIONS, encoding="utf-8") as f:
+            return [{k: r[k] for k in ("id", "name", "saved")} for r in json.load(f)]
+    except (OSError, ValueError):
+        return []
+
+
+def sp_path(version=""):
+    """The live plan's output, or a saved version's ("v1" -> sales_plan_display.v1.pkl)."""
+    if not version:
+        return SP_PATH
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", version):
+        raise ValueError("Unknown version.")
+    return os.path.join(os.path.dirname(SP_PATH), f"sales_plan_display.{version}.pkl")
+
+
 def load_sales_plan(path=SP_PATH):
     if not os.path.exists(path):
         raise FileNotFoundError("The Sales Plan hasn't published its output yet - it does within a minute of 8010 starting.")

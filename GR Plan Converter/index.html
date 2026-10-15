@@ -64,6 +64,8 @@ tr.Division td{font-weight:800}tr.Attribute td{font-weight:600}tr.Grand td{font-
 /* declutter 2026-10-07: small ghost button, collapsible chart card */
 .btn.sm{padding:4px 11px;font-size:12px;font-weight:600}
 th.grp[title]{cursor:help}
+.ver{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--muted-foreground)}
+.ver select{font:inherit;font-size:13px;font-weight:600;color:var(--foreground);background:#fff;border:1px solid var(--input);border-radius:999px;padding:5px 10px;cursor:pointer;max-width:260px}
 details.card>summary{list-style:none;cursor:pointer;padding-bottom:16px}
 details.card>summary::-webkit-details-marker{display:none}
 details.card>summary h2::before{content:'\25B8';display:inline-block;width:16px;color:var(--muted-foreground)}
@@ -79,8 +81,10 @@ details.card[open]>summary{padding-bottom:0}details.card[open]>summary h2::befor
 <main class="wrap">
   <section class="card">
     <div class="card-h"><div class="grow"><h2>1 &middot; Final sales plan</h2>
-      <p class="desc" id="linked" hidden>Linked to the Sales Plan&rsquo;s own output &mdash; it updates by itself whenever the Sales Plan has a new plan. Every store &times; department &times; merged MRP (the MRP Re-apportionment&rsquo;s new MRPs) &times; display type, against the plan&rsquo;s own LY on the same split.</p>
+      <p class="desc" id="linked" hidden>Linked to the Sales Plan&rsquo;s own output &mdash; <span id="verNote">the live plan updates by itself whenever the Sales Plan has a new plan</span>. Every store &times; department &times; merged MRP (the MRP Re-apportionment&rsquo;s new MRPs) &times; display type, against the plan&rsquo;s own LY on the same split.</p>
       <p class="desc" id="intro">Upload the final plan (Store &times; Department &times; MRP &times; Display Type with &ldquo;&lt;Month&gt; Plan&rdquo; and &ldquo;&lt;Month&gt; Plan Qty&rdquo; columns, e.g. the Re-Aligner&rsquo;s final plan). Last year comes from the data lake&rsquo;s day-wise sales by itself &mdash; the same months a year earlier, P1 = 1st to the middle day (15th; Feb 14th), P2 = the rest.</p></div>
+      <label class="ver" id="verWrap" hidden title="Which Sales Plan to compare with last year: the live plan, or a version saved on the Sales Plan's Final Results page">Plan
+        <select id="ver" aria-label="Sales Plan version"></select></label>
       <button class="btn ghost sm" type="button" id="link" hidden title="Go back to the Sales Plan's own output (updates by itself)">Use the Sales Plan</button>
       <label class="btn ghost sm" id="replace" hidden tabindex="0" title="Upload a final sales plan file instead (LY then from the data lake)">Upload a file instead<input type="file" id="file" accept=".xlsx,.xlsb,.xls,.csv" hidden></label></div>
     <div class="card-c">
@@ -128,8 +132,15 @@ async function refresh() {
   if (j && j.status === 'running') { clearTimeout(poll); poll = setTimeout(refresh, 1500); }
   const p = S.plan, l = S.ly, linked = S.source === 'sales_plan';
   $('linked').hidden = !linked;
-  $('link').hidden = linked || !S.linkable;
-  $('meta').innerHTML = p ? [`<span>Plan <b>${esc(p.name)}</b>${p.built ? ` · published ${esc(p.built)}` : ''}</span>`, `<span>${p.rows.toLocaleString('en-IN')} rows · ${p.stores} stores · ${p.departments} departments</span>`,
+  $('link').hidden = true;   // the version list below switches back to the Sales Plan (2026-10-15)
+  const V = S.versions || [];
+  $('verWrap').hidden = !S.linkable;
+  $('ver').innerHTML = (linked ? '' : '<option value="__file" selected>Uploaded file</option>')
+    + `<option value=""${linked && !S.version ? ' selected' : ''}>Live plan (updates by itself)</option>`
+    + V.map(v => `<option value="${esc(v.id)}"${linked && S.version === v.id ? ' selected' : ''}>${esc(v.name)} · saved ${esc(String(v.saved).replace('T', ' ').slice(0, 16))}</option>`).join('');
+  $('verNote').textContent = linked && S.version ? 'a saved version, as it was saved (its MRP / display split by today’s rules)'
+    : 'the live plan updates by itself whenever the Sales Plan has a new plan';
+  $('meta').innerHTML = p ? [`<span>Plan <b>${esc(p.name)}</b>${p.saved ? ` · saved ${esc(p.saved)}` : ''}${p.built ? ` · published ${esc(p.built)}` : ''}</span>`, `<span>${p.rows.toLocaleString('en-IN')} rows · ${p.stores} stores · ${p.departments} departments</span>`,
     `<span>Months <b>${esc(S.months[0])} – ${esc(S.months[S.months.length - 1])}</b></span>`,
     l ? `<span>LY <b>${esc(l.months[0])} – ${esc(l.months[l.months.length - 1])}</b> · ${l.src ? esc(l.src) : 'data lake export ' + esc(l.exported)}</span>` : '',
     `<span>Built ${esc(p.loaded_at)}</span>`].join('') : '';
@@ -234,6 +245,11 @@ async function upload(f) {
   sel = null; refresh();
 }
 $('file').onchange = e => upload(e.target.files[0]);
+$('ver').onchange = async e => {
+  const v = e.target.value; if (v === '__file') return;
+  try { await api('api/link?version=' + encodeURIComponent(v), {method: 'POST'}); } catch (err) { $('status').className = 'status err'; $('status').textContent = err.message; return; }
+  sel = null; open.clear(); refresh();
+};
 $('link').onclick = async () => {
   try { await api('api/link', {method: 'POST'}); } catch (e) { $('status').className = 'status err'; $('status').textContent = e.message; return; }
   sel = null; open.clear(); refresh();

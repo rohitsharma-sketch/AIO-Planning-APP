@@ -26,8 +26,9 @@ CACHE = os.path.join(HERE, ".cache")
 LAST = os.path.join(CACHE, "last.pkl")
 MAX_BODY = 400 * 1024 * 1024
 # ponytail: one shared result for everyone (last plan built wins) - per-user workspaces if several planners use it at once
-state = {"plan": None, "months": [], "ly": None, "main": None, "job": None, "source": "sales_plan", "sp_mtime": None}
-KEEP = ("plan", "months", "ly", "main", "source", "sp_mtime")   # what survives a restart (LAST)
+state = {"plan": None, "months": [], "ly": None, "main": None, "job": None, "source": "sales_plan", "sp_mtime": None,
+         "version": ""}   # version: "" = the live plan, else a saved Sales Plan version's id (2026-10-15)
+KEEP = ("plan", "months", "ly", "main", "source", "sp_mtime", "version")   # what survives a restart (LAST)
 lock = threading.Lock()
 
 
@@ -59,9 +60,9 @@ def _job(data, name):
         _fail(e)
 
 
-def _done(plan, months, ly_info, main, source, sp_mtime):
+def _done(plan, months, ly_info, main, source, sp_mtime, version=""):
     with lock:
-        state.update(plan=plan, months=months, ly=ly_info, main=main, source=source, sp_mtime=sp_mtime)
+        state.update(plan=plan, months=months, ly=ly_info, main=main, source=source, sp_mtime=sp_mtime, version=version)
         state["job"].update(status="done", step="Done", ended=_stamp())
     os.makedirs(CACHE, exist_ok=True)
     with open(LAST + ".tmp", "wb") as fh:
@@ -75,22 +76,24 @@ def _fail(e):
         state["job"].update(status="error", error=str(e) or e.__class__.__name__, ended=_stamp())
 
 
-def _job_sp(mtime):
+def _job_sp(mtime, version=""):
     """The Sales Plan's published output -> MAIN (Store x Department x merged MRP x Display type)."""
     try:
         with lock:
             state["job"]["step"] = "Reading the Sales Plan's output"
-        sp = ge.load_sales_plan()
+        sp = ge.load_sales_plan(ge.sp_path(version))
         months = list(sp["months"])
         with lock:
             state["job"]["step"] = "Building growth vs LY"
         main = ge.build_main_sp(sp)
-        plan = {"name": "Sales Plan (linked)", "loaded_at": _stamp(), "rows": int(len(main)), "built": sp["built"],
+        v = sp.get("version") or {}
+        plan = {"name": f"Sales Plan - {v['name']}" if v else "Sales Plan - live plan", "loaded_at": _stamp(),
+                "rows": int(len(main)), "built": sp["built"], "saved": (v.get("saved") or "").replace("T", " ")[:16],
                 "about": sp["plan"], "stores": int(main["STORE NAME"].nunique()),
                 "departments": int(main["DEPARTMENT"].nunique()), "notes": []}
         ly_info = {"months": [ge.ly_label(m) for m in months], "exported": sp["built"],
                    "src": "the Sales Plan's own LY, on the same merged MRPs and display types"}
-        _done(plan, months, ly_info, main, "sales_plan", mtime)
+        _done(plan, months, ly_info, main, "sales_plan", mtime, version)
     except Exception as e:  # noqa: BLE001 - shown on the page
         _fail(e)
 
@@ -100,15 +103,15 @@ def _link():
     if state["source"] != "sales_plan" or (state["job"] and state["job"]["status"] == "running"):
         return
     try:
-        mt = os.path.getmtime(ge.SP_PATH)
-    except OSError:
+        mt = os.path.getmtime(ge.sp_path(state["version"]))
+    except (OSError, ValueError):
         return
     if mt == state["sp_mtime"] and state["main"] is not None:
         return
     if state["job"] and state["job"]["status"] == "error" and state["job"].get("sp_mtime") == mt:
         return   # this output failed already - shown on the page; wait for the next one
     state["job"] = {"status": "running", "step": "Starting", "name": "Sales Plan", "started": _stamp(), "error": None, "sp_mtime": mt}
-    threading.Thread(target=_job_sp, args=(mt,), daemon=True).start()
+    threading.Thread(target=_job_sp, args=(mt, state["version"]), daemon=True).start()
 
 
 def _tags(q):
@@ -176,6 +179,7 @@ class H(BaseHTTPRequestHandler):
                             if main is not None else {})   # stores per tag
                     return self._send(200, {"job": state["job"], "plan": state["plan"], "ly": state["ly"], "months": state["months"],
                                             "source": state["source"], "linkable": os.path.exists(ge.SP_PATH),
+                                            "version": state["version"], "versions": ge.sp_versions(),
                                             "blocks": [b for b, _ in ge.blocks(state["months"])] if state["months"] else [],
                                             "tags": {str(k): int(v) for k, v in tags.items()}})
             if path in ("/api/pivot", "/api/download"):
@@ -197,11 +201,14 @@ class H(BaseHTTPRequestHandler):
         if n > MAX_BODY:
             return self._send(413, {"error": "File too large (400 MB max)."})
         data = self.rfile.read(n) if n else b""
-        if path == "/api/link":   # back to the Sales Plan's own output after an uploaded file
+        if path == "/api/link":   # the Sales Plan's own output - its live plan or a saved version (?version=v1)
+            version = (urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("version") or [""])[0]
+            if version and version not in {v["id"] for v in ge.sp_versions()}:
+                return self._send(400, {"error": "Unknown version - pick one from the list."})
             with lock:
                 if state["job"] and state["job"]["status"] == "running":
                     return self._send(409, {"error": "A plan is already being built - wait for it to finish."})
-                state.update(source="sales_plan", sp_mtime=None)
+                state.update(source="sales_plan", sp_mtime=None, version=version)
                 _link()
             return self._send(202, {"ok": True})
         if path != "/api/plan":
