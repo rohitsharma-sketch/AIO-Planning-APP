@@ -5,7 +5,11 @@ row with the merged fields, so store history (cluster/status/tag changes over
 time) stays queryable.
 """
 import datetime
+import os
+import sys
 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))   # repo root: rs_common
+from rs_common.stores import canon_store  # noqa: E402
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -20,7 +24,13 @@ TRACKED_FIELDS = [
 
 def upsert_store_fields(session: Session, store_id: str, changes: dict, as_of: datetime.date):
     """changes: subset of TRACKED_FIELDS this sync source owns. Fields not in
-    `changes` are carried forward unchanged from the current row, if any."""
+    `changes` are carried forward unchanged from the current row, if any.
+    Renamed stores (2026-10-15, rs_common.stores): an old code in store_id / store_name / ref_store lands on the new one."""
+    store_id = canon_store(store_id)
+    changes = dict(changes)
+    for k in ("store_name", "ref_store"):
+        if changes.get(k):
+            changes[k] = canon_store(changes[k])
     current = session.execute(
         select(Store).where(Store.store_id == store_id, Store.valid_to.is_(None))
     ).scalar_one_or_none()

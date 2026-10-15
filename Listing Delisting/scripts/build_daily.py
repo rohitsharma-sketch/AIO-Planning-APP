@@ -40,6 +40,7 @@ DAILY_FROM = datetime.datetime(2022, 1, 1)  # benchmark years start here (festiv
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))  # repo root
 from rs_common.lake_files import latest_path  # noqa: E402 - the one "which file" rule (29 Sep 2026)
+from rs_common.stores import canon_series  # noqa: E402 - renamed store codes (15 Oct 2026)
 
 
 def latest(folder):
@@ -112,6 +113,7 @@ def build(force=False):
         t = t[t["BILLDATE"] >= DAILY_FROM].dropna(subset=["STORE_NAME", "DEPARTMENT"])
         t = t[t["DEPARTMENT"].str.split("_", n=1).str[0].isin(ALLOWED_TOKENS)]
         if len(t):
+            t["STORE_NAME"] = canon_series(t["STORE_NAME"])   # renamed stores (2026-10-15)
             t["BILLDATE"] = t["BILLDATE"].dt.normalize()
             frames.append(t.groupby(["STORE_NAME", "DEPARTMENT", "BILLDATE"], as_index=False)["SL_V"].sum())
         if i % 50 == 0:

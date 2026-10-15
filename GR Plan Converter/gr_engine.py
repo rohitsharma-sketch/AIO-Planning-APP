@@ -13,10 +13,15 @@ import pickle
 import re
 from datetime import datetime
 
+import sys
+
 import numpy as np
 import pandas as pd
 
-LAKE = r"\\10.0.1.85\Users\Citykart\Desktop\AI_WORK\INVENTORY AUTOMATION\data_lake\raw"
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))   # repo root: rs_common
+from rs_common.stores import canon_series  # noqa: E402 - renamed store codes (15 Oct 2026)
+
+LAKE =r"\\10.0.1.85\Users\Citykart\Desktop\AI_WORK\INVENTORY AUTOMATION\data_lake\raw"
 DAYWISE = os.path.join(LAKE, "rs_19_to_26_day_wise_sales_data_compiled")
 STORE, DIV, DEPT = "Store Name", "DIVISION", "DEPARTMENT"   # the plan's columns once read by the Re-Aligner's importer
 LABEL = re.compile(r"^([A-Z][a-z]{2})'(\d{2})(?: (P[12]))?$")
@@ -73,6 +78,7 @@ def load_ly(months, cache_dir, path=None):
                                    filter=(pc.field("BILLDATE") >= lo) & (pc.field("BILLDATE") < hi)).to_pandas()
     for c in ("STORE_NAME", "DIVISION", "DEPARTMENT", "ATTRIBUTE1"):   # one space, as the plan reader writes names
         df[c] = df[c].astype(str).str.replace(r"\s+", " ", regex=True).str.strip()   # (2026-10-02: KI_AP_BABA SUIT NEW BORN  F/S)
+    df["STORE_NAME"] = canon_series(df["STORE_NAME"])   # renamed stores (NLD -> NEG, KGP -> MKG, 2026-10-15)
     d = df.pop("BILLDATE")
     mo, yr, day = d.dt.month.to_numpy(), d.dt.year.to_numpy(), d.dt.day.to_numpy()
     lab = pd.Series(d.dt.strftime("%b'%y").to_numpy(), index=df.index)

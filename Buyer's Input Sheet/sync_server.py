@@ -17,6 +17,7 @@ from datetime import datetime
 import sys  # noqa: E402
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))  # repo root
 from rs_common.lake_files import latest_path  # noqa: E402 - the one "which file" rule (29 Sep 2026)
+from rs_common.stores import canon_series  # noqa: E402 - renamed store codes (15 Oct 2026)
 
 app = Flask(__name__)
 # audit 2026-10-07: CORS(app) let any page open in a browser on this machine POST here (no cookie needed on :5050);
@@ -748,6 +749,8 @@ def _run_sales_job(src: str, sig: str = ""):
                     + ([store_col] if store_col else []) \
                     + ([c for c in (open_col, stat_col) if c] if store_col else [])                     + ([dept_col] if dept_col else [])
         df = pd.read_parquet(src, columns=read_cols)
+        if store_col:
+            df[store_col] = canon_series(df[store_col])   # renamed stores (NLD -> NEG, KGP -> MKG, 2026-10-15)
         _sales_job["progress"] = 70
         df[date_col] = parse_date_col(df[date_col])
         df = df.dropna(subset=[date_col])
@@ -1058,6 +1061,8 @@ def _run_history_job(src: str, sig: str = ""):
                     + ([c for c in (open_col, tag_col) if c] if store_col else [])
 
         df = pd.read_parquet(src, columns=read_cols, filters=row_filter)
+        if store_col:
+            df[store_col] = canon_series(df[store_col])   # an old code in old years = the same store (LFL, 2026-10-15)
         df[date_col] = parse_date_col(df[date_col])
         df = df.dropna(subset=[date_col])
         df["_ym"]  = list(zip(df[date_col].dt.year, df[date_col].dt.month))

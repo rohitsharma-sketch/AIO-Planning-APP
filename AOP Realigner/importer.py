@@ -15,9 +15,13 @@ import io
 import os
 import re
 
+import sys
+
 import numpy as np
 import pandas as pd
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))   # repo root: rs_common
+from rs_common.stores import canon_series  # noqa: E402 - renamed store codes (15 Oct 2026)
 from engine import (DEPT, DISP, DIV, MRP, STORE, locked, growth_targets, listing_targets, ly_groups, ly_label, parent_for,
                     shift_targets, split_targets)
 
@@ -210,6 +214,8 @@ def _keys(df, cols, rep, what):
         s = s.where(~_blank(s), "").astype(object)
         s[whole] = num[whole].astype("int64").astype(str)
         df[c] = s.astype(str).str.replace(r"\s+", " ", regex=True).str.strip().str.upper()
+        if c == STORE:
+            df[c] = canon_series(df[c])   # renamed stores (NLD -> NEG, KGP -> MKG, 2026-10-15)
     empty = (df[cols] == "").all(axis=1)
     partial = (df[cols] == "").any(axis=1) & ~empty
     if partial.any():

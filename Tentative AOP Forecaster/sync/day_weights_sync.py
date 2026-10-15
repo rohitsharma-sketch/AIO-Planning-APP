@@ -25,6 +25,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))   # repo root: rs_common
+from rs_common.stores import canon_series  # noqa: E402
 
 SOURCE_KEY = "data_lake_day_weights"
 DAYWISE_DIR = ("//10.0.1.85/Users/Citykart/Desktop/AI_WORK/INVENTORY AUTOMATION"
@@ -91,6 +93,7 @@ def _read_store_days(path, window_start):
         rows_read += len(df)
         df = df[df["BILLDATE"] >= pd.Timestamp(lo)]
         if len(df):
+            df["STORE_NAME"] = canon_series(df["STORE_NAME"])   # renamed stores (2026-10-15)
             df["BILLDATE"] = df["BILLDATE"].dt.normalize()
             frames.append(df.groupby(["STORE_NAME", "BILLDATE"], as_index=False)["SL_V"].sum())
     return frames, rows_read

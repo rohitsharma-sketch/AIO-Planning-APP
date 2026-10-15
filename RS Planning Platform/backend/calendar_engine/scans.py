@@ -162,6 +162,7 @@ def _latest_daywise_files():
 import sys  # noqa: E402
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))  # repo root
 from rs_common.lake_files import latest_path  # noqa: E402 - the one "which file" rule (29 Sep 2026)
+from rs_common.stores import canon_series  # noqa: E402 - renamed store codes (15 Oct 2026)
 
 
 def _latest_monthwise_files():
@@ -545,6 +546,8 @@ def _read_file_filtered(fp, columns, date_col, lo, hi, progress=None):
         mask = (cdf[date_col] >= lo_cmp) & (cdf[date_col] < hi_cmp)
         cdf = cdf.loc[mask]
         if not cdf.empty:
+            if "STORE_NAME" in cdf.columns:   # renamed stores (NLD -> NEG, KGP -> MKG, 2026-10-15)
+                cdf["STORE_NAME"] = canon_series(cdf["STORE_NAME"])
             frames.append(cdf)
     if not frames:
         return None

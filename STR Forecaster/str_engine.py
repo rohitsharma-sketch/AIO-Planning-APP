@@ -28,6 +28,7 @@ for p in (ROOT, os.path.join(ROOT, "Tentative AOP Forecaster")):
         sys.path.insert(0, p)
 from db.base import SessionLocal  # noqa: E402 - the suite's planning DB session (.env in the AOP folder)
 from rs_common.divisions import plan_division  # noqa: E402 - the one division roll-up
+from rs_common.stores import canon_series, canon_store  # noqa: E402 - renamed store codes (15 Oct 2026)
 
 DIVS = ("MENS", "LADIES", "KIDS")
 FIX_COLS = ("MC_FIX", "FINAL FIXTURE", "FIXTURES", "FIXTURE")
@@ -73,7 +74,7 @@ def read_fixture(data):
                 continue
             month = pd.Series([pm] * len(df), index=df.index)
         frames.append(pd.DataFrame({
-            "month": month, "store": df["STORE"].astype(str).str.strip().str.upper(),
+            "month": month, "store": canon_series(df["STORE"].astype(str).str.strip().str.upper()),
             "division": df["DIVISION"].map(plan_division), "department": df["DEPARTMENT"].astype(str).str.strip(),
             "fixtures": pd.to_numeric(df[fix], errors="coerce").fillna(0.0),
             "mdq": pd.to_numeric(df["MDQ"], errors="coerce").fillna(0.0),
@@ -124,7 +125,7 @@ def read_sales_plan(data, name=""):
         if not months:
             notes.append(f"{sh}: no month value / qty columns (like \"Mar'26 _V\") - skipped")
             continue
-        base = pd.DataFrame({"store": df[sc].astype(str).str.strip().str.upper(), "division": df[up["DIVISION"]].map(plan_division),
+        base = pd.DataFrame({"store": canon_series(df[sc].astype(str).str.strip().str.upper()), "division": df[up["DIVISION"]].map(plan_division),
                              "department": df[up["DEPARTMENT"]].astype(str).str.strip()})
         ac = next((c for k, c in up.items() if "ARTICLE" in k), None)
         if ac is not None:   # ARTICLE NAME, e.g. "02-ECO [KB02]"
@@ -252,7 +253,7 @@ def store_clusters():
     """store -> cluster from the AOP Forecaster's Store Master (user, 9 Oct: "Add Clusters to Stores from AOP forecaster")"""
     try:
         import config_store   # Tentative AOP Forecaster/config_store.py (on sys.path above)
-        return {str(s["store"]).strip().upper(): s["cluster"] for s in config_store.get_stores()["stores"] if s.get("cluster")}
+        return {canon_store(s["store"]): s["cluster"] for s in config_store.get_stores()["stores"] if s.get("cluster")}
     except Exception:  # noqa: BLE001 - the AOP config is optional here
         return {}
 

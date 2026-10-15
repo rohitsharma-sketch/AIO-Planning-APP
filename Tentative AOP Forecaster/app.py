@@ -986,7 +986,8 @@ def put_store_master_config(body: dict = Body(...)):
             ).scalar_one_or_none()
             if current:
                 if "ref_store" in row:
-                    new_ref = row["ref_store"] if row["ref_store"] != "" else None
+                    from db.editor import canon_store   # renamed stores (NLD -> NEG, KGP -> MKG, 2026-10-15)
+                    new_ref = canon_store(row["ref_store"]) if row["ref_store"] != "" else None
                     # Logged BEFORE the mutation below overwrites current.ref_store -
                     # this is the only history a ref_store change gets (Store's own
                     # effective-dating isn't used for this field, see the model's

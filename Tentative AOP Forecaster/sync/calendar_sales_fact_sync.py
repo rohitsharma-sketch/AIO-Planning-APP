@@ -32,6 +32,7 @@ import pandas as pd
 from sqlalchemy import text
 
 from rs_common.divisions import plan_division
+from rs_common.stores import canon_series
 from sync.common import call_with_timeout, latest_file, sync_run
 
 SOURCE_KEY = "calendar_sales_fact"
@@ -68,6 +69,7 @@ def read_monthwise(src, lo, hi):
             df = df[(df["ym"] >= lo) & (df["ym"] <= hi) & df["STORE_NAME"].notna()]
             if df.empty:
                 continue
+            df["STORE_NAME"] = canon_series(df["STORE_NAME"])   # renamed stores (NLD -> NEG, KGP -> MKG, 2026-10-15)
             for c in COLS[1:]:
                 df[c] = _clean(df[c])
             parts.append(df.groupby(COLS + ["ym"], observed=True, sort=False)[["SL_V", "SL_Q"]].sum().reset_index())

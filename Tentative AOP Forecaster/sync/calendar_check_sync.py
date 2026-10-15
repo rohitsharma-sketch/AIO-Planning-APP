@@ -44,6 +44,9 @@ from sqlalchemy import text
 
 from sync.common import call_with_timeout, sync_run
 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))   # repo root: rs_common
+from rs_common.stores import canon_series  # noqa: E402
+
 SOURCE_KEY = "calendar_check"
 TOL_L = 0.01
 LAKH = 1e5
@@ -138,6 +141,7 @@ def raw_monthwise(session, months):
     t["col"] = pd.to_datetime(t["BILLMONTH"]).dt.strftime("%Y-%m")
     t = t[t["col"].isin(months) & t["STORE_NAME"].notna()]
     t["DIVISION"] = t["DIVISION"].fillna("(none)")
+    t["STORE_NAME"] = canon_series(t["STORE_NAME"])   # renamed stores, as the loader does (2026-10-15)
     return t.rename(columns={"STORE_NAME": "store", "DIVISION": "division", "SL_V": "v"})[KEYS + ["v"]], os.path.basename(src)
 
 
@@ -160,6 +164,7 @@ def raw_monthwise_all(session, lo, hi):
             parts.append(t.group_by(["store", "division", "col"]).aggregate([("v", "sum")]).to_pandas())
     df = pd.concat(parts).rename(columns={"v_sum": "v"})
     df.loc[df["division"].astype(str).str.strip() == "", "division"] = "(none)"
+    df["store"] = canon_series(df["store"])   # renamed stores, as the loader does (2026-10-15)
     return df.groupby(KEYS, as_index=False)["v"].sum(), os.path.basename(src)
 
 

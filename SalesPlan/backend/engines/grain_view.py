@@ -9,11 +9,15 @@ sidebar summary - every response says which (`source`). Values are Rs lakh, as i
 """
 import json
 import os
+import sys
 import threading
 
 from fastapi import APIRouter, HTTPException
 
 from apportion import split
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))   # repo root: rs_common
+from rs_common.stores import canon_store  # noqa: E402 - renamed store codes (15 Oct 2026)
 
 router = APIRouter()
 NO_CLUSTER = "(no cluster)"
@@ -281,7 +285,7 @@ def _aop_by_store():
             base[m] = base.get(m, 0.0) + float(r.get(f"{m} | Base") or 0.0)
     covered = {m for m, v in base.items() if v > 0}
     for r in recs:
-        s, dv = str(r.get("Store") or "").strip().upper(), str(r.get("Division") or "").strip().upper()
+        s, dv = canon_store(str(r.get("Store") or "")), str(r.get("Division") or "").strip().upper()   # a publish from before a rename
         if s and r.get("Cluster"):
             cl[s] = str(r["Cluster"]).strip()
         for m in TY_MONTHS:

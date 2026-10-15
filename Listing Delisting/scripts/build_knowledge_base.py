@@ -12,6 +12,8 @@ import openpyxl
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _paths import DATA_DIR  # noqa: E402
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))  # repo root
+from rs_common.stores import canon_store  # noqa: E402 - renamed store codes (15 Oct 2026)
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FILES = {
     '23': "Directories/2023/Directory - Listing'23.xlsx",
@@ -68,6 +70,7 @@ def build():
             store, dept, rev, month = r[idx['STORE_NAME']], r[idx['DEPARTMENT']], r[idx['MC_LISTING(Rev)']], r[idx['Month']]
             if store is None or dept is None or month is None:
                 continue
+            store = canon_store(store)   # renamed stores (2026-10-15)
             key = (store, dept, month)
             if key in seen_keys:
                 raise ValueError(f"Duplicate {key} found while building KB (from {relpath})")

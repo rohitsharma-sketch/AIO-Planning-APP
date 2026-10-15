@@ -33,6 +33,8 @@ from actuals_manager import (
 from store_master import load_store_master as _universal_store_master, is_ssg as _universal_is_ssg
 from apportion import shares_pct, split
 from plan_cache import save_json  # noqa: E402 - atomic JSON writes (audit 2026-10-06)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))   # repo root: rs_common
+from rs_common.stores import canon_store  # noqa: E402 - renamed store codes (15 Oct 2026)
 
 router = APIRouter()
 
@@ -203,7 +205,7 @@ def _half_shares() -> dict:
             j = json.load(fh)
         for st, mm in (j.get("shares") or {}).items():
             for m, v in (mm or {}).items():
-                out["ts"][(str(st).strip().upper(), m)] = float(v)
+                out["ts"][(canon_store(st), m)] = float(v)   # renamed stores (2026-10-15)
         out["src"].append("AOP halves: " + str(j.get("source")))
     except (OSError, ValueError):
         pass

@@ -5,6 +5,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "Tentative AOP Forecaster"))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))   # repo root: rs_common
+from rs_common.stores import canon_store  # noqa: E402 - renamed store codes (15 Oct 2026)
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -500,10 +502,11 @@ def put_store_cluster_map(body: dict = Body(...), actor: dict = Depends(require_
         ).scalars().all()
         aliases = body.get("aliases") or {}
         after_rows = [
-            {"store": s["store"].strip(), "cluster": resolve_cluster_name(s["cluster"].strip(), profile_names, aliases)}
+            {"store": canon_store(s["store"]), "cluster": resolve_cluster_name(s["cluster"].strip(), profile_names, aliases)}
             for s in body.get("stores", []) if s.get("store") and s.get("cluster")
         ]
         after = {r["store"]: r["cluster"] for r in after_rows}
+        after_rows = [{"store": k, "cluster": v} for k, v in after.items()]   # an old + new code in one upload = one row
 
         added = sorted(set(after) - set(before))
         removed = sorted(set(before) - set(after))

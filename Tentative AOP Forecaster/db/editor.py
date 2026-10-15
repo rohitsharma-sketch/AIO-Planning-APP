@@ -12,7 +12,11 @@ the "not applicable" sentinel (never NULL — see db/models/planning_inputs.py
 for why: a nullable identity column silently breaks ON CONFLICT dedup).
 """
 import datetime
+import os
+import sys
 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))   # repo root: rs_common
+from rs_common.stores import canon_store  # noqa: E402 - renamed store codes (15 Oct 2026)
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
@@ -130,7 +134,7 @@ def put_nso(session: Session, rows: list, actor_id, actor_role: str) -> list:
     existing_rows = {n.store_id: n for n in session.execute(select(NsoOpening)).scalars().all()}
     keep_ids = set()
     for row in rows:
-        sid = (row.get("store_id") or "").strip()
+        sid = canon_store(row.get("store_id") or "")
         label = row.get("opening_month")
         if not sid or not label or "'" not in label:
             continue
@@ -193,7 +197,7 @@ def put_aop_overrides(session: Session, rows: list, actor_id, actor_role: str) -
     }
     upsert_rows, delete_keys = [], []
     for row in rows:
-        sid = (row.get("store_id") or "").strip()
+        sid = canon_store(row.get("store_id") or "")
         div = (row.get("division") or "").strip().upper()
         label = row.get("month")
         if not sid or div not in DIVS or label not in FY28_AOP_M or label not in periods:
@@ -282,7 +286,7 @@ def parse_aop_overrides_import(session: Session, file_bytes: bytes, filename: st
     rows, skipped = [], []
     for i, r in df.iterrows():
         excel_row = i + 2  # header is row 1, data starts at row 2 in both CSV and XLSX
-        sid = str(r.get("store_id") or "").strip().upper()
+        sid = canon_store(str(r.get("store_id") or ""))
         div = str(r.get("division") or "").strip().upper()
         month = str(r.get("month") or "").strip()
         raw_val = r.get("value")
