@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Landing: closed side bars hide fully, drag the handle to show
+- **Asked (user):** "why is the bars retracting and expnding on drag"; picked "Fully hide, drag to show".
+- A closed bar is now fully off the screen (no 64 px icon strip). Only a thin 24 px handle with an arrow stays at the edge, inside the page's gutter. Drag the handle inward (mouse, finger or pen) and the whole bar slides in with it; drag the bar back out to hide it. A click or tap on the handle or arrow still toggles it.
+- Unchanged: on wide screens an open bar pushes the page over and the state is remembered per side; on narrower screens it opens as a drawer that closes on a tap outside / Esc / picking a tool.
+- **Checked** on the static copy: desktop 1280 px with real mouse drags (left handle in: bar 0 to 280, page content moves to 308; dragged out: bar back to -280, stored closed; right handle in and the arrow click closes it); phone 390 px with touch pointer events (right handle swiped in, backdrop tap closes).
+
 ### Growth vs LY linked to the Sales Plan's output, down to merged MRP -> Display
 - **Asked (user):** "link the growth V LY to the output of the Sales Plan and make the template till Display on Merged MRP Sales comparison".
 - **Sales Plan publishes its output:** 8010's minute warmer now writes `SalesPlan/backend/sales_plan_display.pkl` (`grain_view.publish_display`, gitignored, ~34 MB). It holds the Display tree's cells: every store x department x merged MRP (the MRP Re-apportionment's new MRPs) x display type x fortnight, with TY plan and the plan's own LY on the same split. It is rewritten only when the Display tree is rebuilt, so a minute with no change costs nothing. No Sales Plan figure changes.

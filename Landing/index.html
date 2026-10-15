@@ -381,17 +381,19 @@
   .meta { border-top-color: var(--st-surface-3, #F0ECE2); }
 
   /* ── Side bars: Quick tools (left) / Planning tools (right), retractable (user, 2026-10-15) ──
-     wide (>=1040): a 64px icon rail; open pushes the page over, nothing is covered.
-     narrower: open = drawer over the page with a backdrop; phones (<=620) get an edge tab only. */
-  body { --lw: 64px; --rw: 64px; }
+     closed = fully off the screen, only a thin handle at the edge (user, 2026-10-15: "Fully hide, drag to show");
+     open on wide screens (>=1040) pushes the page over, nothing is covered; narrower: a drawer over the page. */
+  body { --lw: 0px; --rw: 0px; }
   body.side-l-open { --lw: 280px; }  body.side-r-open { --rw: 280px; }
   main { max-width: calc(1160px + var(--lw) + var(--rw)); padding-left: calc(var(--lw) + 28px); padding-right: calc(var(--rw) + 28px); transition: padding .2s, max-width .2s; }
-  .side { position: fixed; top: 60px; bottom: 0; z-index: 35; width: var(--lw); display: flex; flex-direction: column;
-    background: var(--white); border-right: 1px solid var(--border); transition: width .2s, transform .2s; }
+  .side { position: fixed; top: 60px; bottom: 0; z-index: 35; width: min(280px, calc(100vw - 48px)); display: flex; flex-direction: column;
+    background: var(--white); border-right: 1px solid var(--border); transition: transform .2s; }
   .side-l { left: 0; }
-  .side-r { right: 0; width: var(--rw); border-right: 0; border-left: 1px solid var(--border); }
+  .side-r { right: 0; border-right: 0; border-left: 1px solid var(--border); }
+  .side-l:not(.open) { transform: translateX(-100%); }
+  .side-r:not(.open) { transform: translateX(100%); }
   .side-tog { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 10px 20px; border: 0;
-    border-bottom: 1px solid var(--border); background: none; color: var(--muted); cursor: pointer; text-align: left; touch-action: manipulation; }
+    border-bottom: 1px solid var(--border); background: none; color: var(--muted); cursor: pointer; text-align: left; }
   .side-tog:hover { color: var(--accent); }
   .side-tog svg.i { transition: transform .2s; }
   .side-r .side-tog { flex-direction: row-reverse; text-align: right; }
@@ -402,38 +404,26 @@
   .side-note { font-size: 11.5px; color: var(--faint); }
   .side-list { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
   .side .card { padding: 12px 14px 10px; border-radius: 12px; }
-  /* drag to show / hide (2026-10-15): the bar takes sideways drags, its list still scrolls up and down */
-  .side, .side * { touch-action: pan-y; -webkit-user-drag: none; }
-  .side.dragging { transition: none; user-select: none; cursor: grabbing; }
   .side .card-top { margin-bottom: 8px; }
   .side .card h2 { font-size: 14px; margin-bottom: 4px; }
   .side .card p.desc { font-size: 12px; line-height: 1.45; margin-bottom: 10px; }
   .side .meta { padding-top: 8px; font-size: 11.5px; }
-  /* closed rail: icon only, status as a dot on the icon */
-  .side:not(.open) .side-hd, .side:not(.open) .card h2, .side:not(.open) .card p.desc,
-  .side:not(.open) .open-link, .side:not(.open) .status-label { display: none; }
-  .side:not(.open) .side-tog { justify-content: center; padding: 10px 0; }
-  .side:not(.open) .side-list { padding: 10px 8px; }
-  .side:not(.open) .card { align-items: center; padding: 12px 0; }
-  .side:not(.open) .card-top { margin: 0; }
-  .side:not(.open) .meta { position: absolute; top: 6px; right: 6px; border: 0; padding: 0; }
+  /* drag to show / hide: the bar and its handle take sideways drags, the list still scrolls up and down */
+  .side, .side * { touch-action: pan-y; -webkit-user-drag: none; }
+  .side.dragging { transition: none; user-select: none; cursor: grabbing; }
+  /* the handle: the toggle sticks out of the closed bar at the screen edge (fits the page's 28 px gutter) */
+  .side:not(.open) .side-hd { display: none; }
+  .side:not(.open) .side-tog { position: absolute; top: 12px; width: 24px; min-height: 64px; padding: 0; justify-content: center;
+    border: 1px solid var(--border); background: var(--white); cursor: grab; }
+  .side-l:not(.open) .side-tog { left: 100%; border-left: 0; border-radius: 0 10px 10px 0; }
+  .side-r:not(.open) .side-tog { right: 100%; border-right: 0; border-radius: 10px 0 0 10px; }
   .side-backdrop { position: fixed; inset: 60px 0 0; z-index: 34; background: rgba(var(--st-ink-rgb,30,39,35),.35); }
   .side-backdrop[hidden] { display: none; }
   @media (max-width: 1039px) {
-    body.side-l-open { --lw: 64px; }  body.side-r-open { --rw: 64px; }   /* page stays put; the drawer covers it */
-    .side.open { width: min(280px, calc(100vw - 48px)); box-shadow: var(--shadow-lg); }
+    body.side-l-open, body.side-r-open { --lw: 0px; --rw: 0px; }   /* page stays put; the drawer covers it */
+    .side.open { box-shadow: var(--shadow-lg); }
   }
-  @media (max-width: 620px) {
-    body, body.side-l-open, body.side-r-open { --lw: 0px; --rw: 0px; }
-    main { padding-left: 16px; padding-right: 16px; }
-    .side, .side.open { width: min(280px, calc(100vw - 48px)); }
-    .side-l:not(.open) { transform: translateX(-100%); }
-    .side-r:not(.open) { transform: translateX(100%); }
-    /* the toggle sticks out of the closed drawer as an edge tab */
-    .side:not(.open) .side-tog { position: absolute; top: 12px; width: 32px; min-height: 56px; border: 1px solid var(--border); background: var(--white); }
-    .side-l:not(.open) .side-tog { left: 100%; border-left: 0; border-radius: 0 10px 10px 0; }
-    .side-r:not(.open) .side-tog { right: 100%; border-right: 0; border-radius: 10px 0 0 10px; }
-  }
+  @media (max-width: 620px) { main { padding-left: 16px; padding-right: 16px; } }
 </style>
 </head>
 <body>
@@ -757,25 +747,23 @@
     var dragEnded = 0;
     ['l', 'r'].forEach(function (s) {
       var side = el(s), dir = s === 'l' ? 1 : -1, d = null;
-      function mini() { return window.matchMedia('(max-width: 620px)').matches ? 0 : 64; }
       function end(e) {
         if (!d) return;
         var g = d; d = null;
         if (!g.moved) return;
-        side.classList.remove('dragging'); side.style.width = ''; side.style.transform = '';
+        side.classList.remove('dragging'); side.style.transform = '';
         document.body.style.removeProperty('--lw'); document.body.style.removeProperty('--rw');
-        var open = e.type === 'pointercancel' ? g.open : g.open ? g.w > g.full - 40 : g.w > g.lo + 40;
+        var open = e.type === 'pointercancel' ? g.open : g.open ? g.w > g.full - 40 : g.w > 40;
         set(s, g.open);                                   // drop the live preview, then a real toggle (remembers + backdrop)
         if (open !== g.open) toggle(s); else sync();
         dragEnded = Date.now();
       }
       side.addEventListener('pointerdown', function (e) {
         if (e.button > 0) return;
-        var lo = mini();
         d = { x: e.clientX, y: e.clientY, id: e.pointerId, open: side.classList.contains('open'), moved: false,
-              lo: lo, full: lo ? 280 : side.offsetWidth, w: 0 };
+              full: side.offsetWidth, w: 0 };
       });
-      window.addEventListener('pointermove', function (e) {   // on window: a mouse leaves the 64 px rail at once
+      window.addEventListener('pointermove', function (e) {   // on window: a mouse leaves the thin handle at once
         if (!d || e.pointerId !== d.id) return;
         var dx = (e.clientX - d.x) * dir;
         if (!d.moved) {
@@ -784,10 +772,9 @@
           d.moved = true; side.classList.add('dragging'); try { side.setPointerCapture(e.pointerId); } catch (x) {}
           if (!d.open && !wide.matches) set(s === 'l' ? 'r' : 'l', false);
         }
-        var w = d.w = Math.max(d.lo, Math.min(d.full, (d.open ? d.full : d.lo) + dx));
-        side.classList.toggle('open', w > d.lo + (d.full - d.lo) * 0.3);   // labels show once it is a third out
-        if (d.lo) side.style.width = w + 'px';
-        else side.style.transform = 'translateX(' + (-dir * (1 - w / d.full) * 100) + '%)';
+        var w = d.w = Math.max(0, Math.min(d.full, (d.open ? d.full : 0) + dx));
+        side.classList.toggle('open', w > d.full * 0.3);   // the heading shows once it is a third out
+        side.style.transform = 'translateX(' + (-dir * (1 - w / d.full) * 100) + '%)';
         if (wide.matches) document.body.style.setProperty(s === 'l' ? '--lw' : '--rw', w + 'px');
       });
       window.addEventListener('pointerup', end);
