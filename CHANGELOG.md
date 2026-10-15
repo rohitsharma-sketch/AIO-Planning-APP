@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Off-season departments inactive in BIS; GBG / GKT / GRK in UP 2
+- **Asked (user):** "make the 56 off-season departments inactive in BIS and add CORD SETS"; "keep it in up2".
+- **BIS Iteration 4:** the 56 departments BIS planned but the Sales Plan (and the manual sheet) leave at 0 - full-sleeve (F/S), winter (MW_ / LWW_ / KBW_ / KGW_ / KIW_) and KI_AP_PYJAMA, Rs 97.26 L - made inactive; apparel re-capped on the AOP (431.88 Cr each month = AOP) and saved in place; 944 rows to Sales Plan (inactive = -100%).
+- **Store master:** GBG, GKT, GRK -> UP 2 - (NP) in `Store Master/Store Master.xlsx` (the store-master sync's source - backup `SalesPlan/backend/backups/Store Master.before-UP2-15Oct2026.xlsx`) and synced (new rows from 15 Oct). 8010 caches the store master: restarted so the plan regenerated on it.
+- **Result (LFL apparel MAMJ):** Sales Plan = AOP = BIS = 43,188.03 L (manual 43,188.04); Sales Plan vs manual by department: 2.14 -> 0.17 L in all (largest 0.03 L). BIS vs Sales Plan by department still 420 L apart: LW_U_CORD SETS (192 L) is a Sales Plan new department with no BIS row - BIS keeps that value in the other departments.
+- **Open:** CORD SETS in BIS (no LY of its own - BIS rows are LY x growth); the MRP Cont % was rebuilt for all 224 departments by a check-up Rectify at 12:19 (it was 104 from the 14 Oct run + the buyers' file for the rest), so 463 MRP x display cells (Rs 2,067.88 L) have no ASP - qty check fails until the ASP master covers them or the 104-department split comes back.
+
 ### Store rename NLD -> NEG, KGP -> MKG (same stores, merged; permanent alias)
 - **Asked (user):** "change the names of 2 stores in all databases - NLD to NEG KGP to MKG"; "Same stores - merge"; "Yes - permanent alias"; "go ahead with the store rename".
 - **Alias:** `rs_common/stores.py` (`ALIAS`, `canon_store`, `canon_series`) - add a row there for any future rename. Applied where store codes enter the suite: the shared lake reader (`scans._read_file_filtered`, also SalesPlan art_nm / MRP), `db/upsert.upsert_store_fields` (store id / name / ref store), `calendar_sales_fact_sync.read_monthwise`, the store -> calendar cluster upload, day weights, the calendar check (8a), BIS sales + history jobs (LFL "traded in both years" keeps the store), STR fixture / plan / cluster readers, Listing build_sales / build_daily / build_knowledge_base, Sales Plan `_aop_by_store` (a publish made before the rename) and `aop_halves.json`, the Re-Aligner plan importer, GR LY, AOP overrides / NSO / ref-store editors. BIS static store tables renamed.
