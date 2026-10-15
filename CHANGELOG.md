@@ -7,6 +7,23 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### NSO Plan Distributor: months follow the plan, and linked to the Sales Plan (live / saved versions / file)
+- **Asked (user):** "also link the final sales plan to nso distributor ... Make the layout similar to the Growth V LY linkage"; choice "Make its months follow the plan".
+- **Months follow the inputs** (were fixed to Sep'26-Feb'27):
+  - The plan months are the plan's "<MON> - Val" columns.
+  - NSO Details and Division Cont % date headers are read as their month, any year (two dates on one month keep the first).
+  - The distribution, the output columns, the "NSO AOP Targets" and "Monthly Summary" sheets (the summary was fixed to NOV-FEB), the preview and the page's AOP targets table all use those months.
+  - Unchanged: the Attribute Grid rule (Sep / Oct openers) and the J1/J2, F1/F2 splits. A plan whose months NSO Details has no targets for stops with a plain message.
+- **Sales Plan link (Section 1, a "Sales plan" list, as Growth vs LY):** Sales Plan - live plan (updates by itself) / every saved Sales Plan version / From the folder ("Sales Plan*.xlsx").
+  - Linked: the published cells' fortnights are added up to months (Mar'27 P1 + P2 = MAR). Value (Rs lakh) and pieces (value / the Sales Plan's ASP) per store x CAT (APPS for KIDS / LADIES / MENS) x division x department x merged MRP x display type.
+  - NSO Details and Division Cont % still come from the folder, for the plan's months.
+  - `GET /api/sp`; `/api/start` takes `sp_version` (unknown -> 400).
+- **Checked:**
+  - New `Buyer's Input Sheet/test_nso_distributor.py` passes: 2027 dated headers -> MAR..JUN, a Mar-Jun plan distributed to its targets with the 25 / 75 division split and pieces from the reference ASP, the link's fortnights -> months.
+  - Real link, offline: 182,326 rows, MAR-JUN, 77,981.45 L / 22,923,182.37 pieces. A made-up NSO on reference BTA meets its targets (Apr 30.00 / May 40.00 / Jun 35.00 L, 30 / 30 / 40 by division); GM / RETAIL logged as no plan rows (the Sales Plan is apparel).
+  - End-to-end `/api/start` on 8060 with the link: 605 rows; workbook sheets on MAR-JUN.
+  - Page: the Sales plan list (live / Final version / folder file), no console errors. 8060 restarted.
+
 ### Re-Aligner linked to the Sales Plan (live plan or a saved version, or a file) - like Growth vs LY
 - **Asked (user):** "also link the final sales plan to nso distributor and sales plan aligner too if i want to use a pre existing plan or want to import it from external source. Make the layout similar to the Growth V LY linkage".
 - **Sales Plan publish:**

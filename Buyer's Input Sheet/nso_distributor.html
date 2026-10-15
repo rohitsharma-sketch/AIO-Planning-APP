@@ -182,6 +182,13 @@ code{background:rgba(var(--st-accent-rgb,79,122,102),.12);padding:1px 5px;border
       <button class="btn btn-quiet" id="btn-clr" type="button" onclick="resetAll()" style="display:none">Reset</button>
     </div>
 
+    <!-- the Sales Plan link (2026-10-15, as Growth vs LY): the plan from the Sales Plan, or the folder's file -->
+    <div class="folder-row" id="sp-row" style="margin-top:10px;display:none">
+      <label style="font-size:12.5px;font-weight:700;color:var(--mu)" for="sp-src">Sales plan</label>
+      <select id="sp-src" class="folder-input" style="flex:1" onchange="pickSP(this.value)"></select>
+    </div>
+    <div id="sp-note" style="font-size:12px;color:var(--mu);margin-top:4px"></div>
+
     <!-- One-line file status after a scan; click to show the tiles -->
     <button type="button" class="files-sum" id="files-sum" aria-expanded="false" aria-controls="file-tiles" onclick="toggleTiles()" hidden></button>
     <div class="file-grid" id="file-tiles" style="display:none"></div>
@@ -276,6 +283,30 @@ const FILES = [
 ];
 
 const STAGES = [20, 30, 72, 92, 100];
+
+// ── The Sales Plan link (2026-10-15): live plan / saved version / the folder's "Sales Plan*.xlsx" ──
+S.sp = '';   // '' = the Sales Plan's live plan, a version id, or '__file'
+async function loadSP() {
+  let d = {linkable: false, versions: []};
+  try { d = await (await fetch('api/sp')).json(); } catch (e) {}
+  const sel = document.getElementById('sp-src');
+  try { S.sp = localStorage.getItem('nso.sp') ?? (d.linkable ? '' : '__file'); } catch (e) { S.sp = d.linkable ? '' : '__file'; }
+  if (!d.linkable && S.sp !== '__file') S.sp = '__file';
+  sel.innerHTML = (d.linkable ? `<option value="">Sales Plan - live plan (updates by itself)</option>` + d.versions.map(v =>
+      `<option value="${v.id}">Sales Plan - ${v.name} · saved ${String(v.saved).replace('T', ' ').slice(0, 16)}</option>`).join('') : '')
+    + `<option value="__file">From the folder - "Sales Plan*.xlsx" file</option>`;
+  sel.value = S.sp;
+  document.getElementById('sp-row').style.display = '';
+  spNote();
+}
+function pickSP(v) { S.sp = v; try { localStorage.setItem('nso.sp', v); } catch (e) {} spNote(); if (S.found) renderTiles(); }
+function spLinked() { return S.sp !== '__file'; }
+function spNote() {
+  document.getElementById('sp-note').textContent = spLinked()
+    ? "Linked to the Sales Plan's own output: every store x department x merged MRP x display type, its fortnights added up to months, value and pieces (value / the Sales Plan's ASP). NSO Details and Division Cont % still come from the folder - for the same months as the plan."
+    : 'The Sales Plan file in the scanned folder ("Sales Plan*.xlsx", header on row 3, "<MON> - Val / Qty" columns).';
+}
+loadSP();
 
 // ── Folder scan ────────────────────────────────────────────────────
 async function scanFolder() {
@@ -377,13 +408,13 @@ async function loadNSOFromFolder(folder, fname) {
     if (!r.ok) throw new Error('Could not parse NSO Details');
     const d = await r.json();
     if (d.error) throw new Error(d.error);
+    S.months = d.months || [];   // the targets' months, as the file has them (2026-10-15: any season)
     S.nsoRows = d.stores.map(s => ({
       storeCode: s.storeCode,
       refCode:   s.refCode,
       grade:     s.grade || s.type || '',
       zone:      s.zone  || '',
-      sep: s.sep||0, oct: s.oct||0,
-      nov: s.nov||0, dec: s.dec||0, jan: s.jan||0, feb: s.feb||0,
+      t: {...(s.t || {})},
     }));
     document.getElementById('aop-loading').style.display = 'none';
     buildAOPTable();
@@ -397,27 +428,25 @@ async function loadNSOFromFolder(folder, fname) {
 function buildAOPTable() {
   const wrap = document.getElementById('aop-table-wrap');
   if (!S.nsoRows.length) { wrap.innerHTML = '<p style="color:var(--mu);font-size:12px">No stores found.</p>'; return; }
-  // Show SEP/OCT columns only if at least one store has a non-zero value
-  const hasSep = S.nsoRows.some(r => r.sep > 0);
-  const hasOct = S.nsoRows.some(r => r.oct > 0);
-  const allMonths = [...(hasSep?['sep']:[]), ...(hasOct?['oct']:[]), 'nov','dec','jan','feb'];
+  // the months that carry a target for any store (2026-10-15: any season); Zone only for Sep / Oct openers (Attribute Grid)
+  const allMonths = (S.months || []).filter(m => S.nsoRows.some(r => (r.t[m] || 0) > 0));
   const tot = {}; allMonths.forEach(m => tot[m] = 0);
-  const LABELS = {sep:'SEP',oct:'OCT',nov:'NOV',dec:'DEC',jan:'JAN',feb:'FEB'};
-  const hasSepOct = hasSep || hasOct;
+  const LABELS = Object.fromEntries(allMonths.map(m => [m, m]));
+  const hasSepOct = S.nsoRows.some(r => (r.t.SEP || 0) > 0 || (r.t.OCT || 0) > 0);
   let html = `<table class="aop-table"><thead><tr>
     <th>Store Code</th><th>Ref Store</th><th>Grade</th>
     ${hasSepOct ? '<th>Zone</th>' : ''}
     ${allMonths.map(m=>`<th class="num">${LABELS[m]} (L)</th>`).join('')}
     <th class="num">Total</th></tr></thead><tbody>`;
   S.nsoRows.forEach((r, i) => {
-    const total = allMonths.reduce((s,m)=>s+r[m],0);
-    allMonths.forEach(m => tot[m] += r[m]);
+    const total = allMonths.reduce((s,m)=>s+(r.t[m]||0),0);
+    allMonths.forEach(m => tot[m] += r.t[m] || 0);
     html += `<tr>
       <td><strong>${r.storeCode}</strong></td>
       <td style="color:var(--mu)">${r.refCode}</td>
       <td><span class="grade-badge">${r.grade||'—'}</span></td>
       ${hasSepOct ? `<td><input class="aop-input zone-input" type="text" placeholder="e.g. NORTH" value="${r.zone||''}" data-i="${i}" onchange="updZone(this)" style="width:80px;text-transform:uppercase"></td>` : ''}
-      ${allMonths.map(m=>`<td class="num"><input class="aop-input" type="number" step="0.01" value="${r[m]}" data-i="${i}" data-m="${m}" onchange="updAOP(this)"></td>`).join('')}
+      ${allMonths.map(m=>`<td class="num"><input class="aop-input" type="number" step="0.01" value="${r.t[m]||0}" data-i="${i}" data-m="${m}" onchange="updAOP(this)"></td>`).join('')}
       <td class="num" id="arow-${i}" style="font-weight:600">${fmt(total)}</td></tr>`;
   });
   const grand = allMonths.reduce((s,m)=>s+tot[m],0);
@@ -432,15 +461,15 @@ function buildAOPTable() {
 
 function updAOP(inp) {
   const i = +inp.dataset.i, m = inp.dataset.m;
-  S.nsoRows[i][m] = parseFloat(inp.value) || 0;
-  const allMonths = ['sep','oct','nov','dec','jan','feb'].filter(mm => document.getElementById(`atot-${mm}`));
+  S.nsoRows[i].t[m] = parseFloat(inp.value) || 0;
+  const allMonths = (S.months || []).filter(mm => document.getElementById(`atot-${mm}`));
   const r = S.nsoRows[i];
-  const rc = document.getElementById(`arow-${i}`); if (rc) rc.textContent = fmt(allMonths.reduce((s,mm)=>s+r[mm],0));
+  const rc = document.getElementById(`arow-${i}`); if (rc) rc.textContent = fmt(allMonths.reduce((s,mm)=>s+(r.t[mm]||0),0));
   allMonths.forEach(mm => {
-    const ct = S.nsoRows.reduce((s,x) => s+(x[mm]||0), 0);
+    const ct = S.nsoRows.reduce((s,x) => s+(x.t[mm]||0), 0);
     const el = document.getElementById(`atot-${mm}`); if (el) el.innerHTML = `<strong>${fmt(ct)}</strong>`;
   });
-  const gt = S.nsoRows.reduce((s,r2) => allMonths.reduce((a,mm)=>a+(r2[mm]||0),s), 0);
+  const gt = S.nsoRows.reduce((s,r2) => allMonths.reduce((a,mm)=>a+(r2.t[mm]||0),s), 0);
   const ge = document.getElementById('atot-grand'); if (ge) ge.innerHTML = `<strong>${fmt(gt)}</strong>`;
 }
 
@@ -455,7 +484,7 @@ function hideAOP() { S.nsoRows = []; document.getElementById('sec-aop').style.di
 
 // ── Generate ───────────────────────────────────────────────────────
 async function generate() {
-  const req = FILES.filter(f => f.req);
+  const req = FILES.filter(f => f.req && !(f.key === 'sales_plan' && spLinked()));
   if (!S.folder) { alert('Scan a folder first.'); return; }
   const miss = req.filter(f => !S.found[f.key]).map(f => f.label);
   if (miss.length) { alert('Missing required files: ' + miss.join(', ')); return; }
@@ -470,10 +499,11 @@ async function generate() {
   setProgress(0, 'Starting…'); resetStages();
 
   const overrides = {};
-  S.nsoRows.forEach(r => { overrides[r.storeCode] = {zone:r.zone||'',SEP:r.sep||0,OCT:r.oct||0,NOV:r.nov||0,DEC:r.dec||0,JAN:r.jan||0,FEB:r.feb||0}; });
+  S.nsoRows.forEach(r => { overrides[r.storeCode] = {zone: r.zone || '', ...r.t}; });   // every target month (2026-10-15)
 
   const fd = new FormData();
   fd.append('folder', S.folder);
+  if (spLinked()) fd.append('sp_version', S.sp);
   fd.append('files', JSON.stringify(S.found));
   fd.append('aop_overrides', JSON.stringify(overrides));
 

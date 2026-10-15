@@ -27,9 +27,26 @@ app = Flask(__name__)
 PORT = 8060
 
 # ── Column helpers ──────────────────────────────────────────────────────────────
-PLAN_MONTHS = ['SEP', 'OCT', 'NOV', 'DEC', 'JAN', 'FEB']
-VAL = {m: f'{m} - Val' for m in PLAN_MONTHS}
-QTY = {m: f'{m} - Qty' for m in PLAN_MONTHS}
+# Months follow the inputs (2026-10-15, user: "Make its months follow the plan"): the plan's "<MON> - Val" columns are
+# the plan months (Sep-Feb, Mar-Jun, any season); NSO Details / Division Cont % date columns are read as their month.
+CAL = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+VAL = {m: f'{m} - Val' for m in CAL}
+QTY = {m: f'{m} - Qty' for m in CAL}
+_VAL_RE = re.compile(r'^([A-Z]{3}) - Val$')
+
+
+def plan_months(plan_df):
+    """The plan's months, in its column order: every "<MON> - Val" column."""
+    return [m.group(1) for m in (_VAL_RE.match(str(c)) for c in plan_df.columns) if m and m.group(1) in CAL]
+
+
+def _month_label(col):
+    """A date-like header ("2027-03-01 00:00:00" / a datetime) -> 'MAR'; a month label stays; anything else None."""
+    t = str(col).strip()
+    m = re.match(r'^(\d{4})-(\d{2})', t)
+    if m and 1 <= int(m.group(2)) <= 12:
+        return CAL[int(m.group(2)) - 1]
+    return t.upper() if t.upper() in CAL else None
 
 # Sales Plan CAT → Division Cont % CAT mapping
 # In Sales Plan: CAT = GM | APPS | RETAIL
@@ -44,12 +61,6 @@ PLAN_CAT_MAP = {
     'RETAIL':('RETAIL', None),
 }
 
-# Division Cont % datetime-column → short month label
-DIVCONT_DATE_MAP = {
-    '2026-09': 'SEP', '2026-10': 'OCT',
-    '2026-11': 'NOV', '2026-12': 'DEC',
-    '2027-01': 'JAN', '2027-02': 'FEB', '2027-03': 'MAR',
-}
 
 # ── File scan patterns ───────────────────────────────────────────────────────────
 FILE_PATTERNS = {
@@ -61,6 +72,69 @@ FILE_PATTERNS = {
     'attr_master':    ['Attribute Master*.xlsx', 'Att Master*.xlsx', 'att master*.xlsx',
                        'ATT MASTER*.xlsx', 'ATTRIBUTE MASTER*.xlsx'],
 }
+
+# ── The Sales Plan's own output (2026-10-15, as Growth vs LY) ────────────────────
+# published by 8010's warmer (grain_view.publish_display / publish_versions): the live plan and every saved version -
+# store x division x department x merged MRP x display x fortnight, value (Rs lakh) and qty (value / the Sales Plan's ASP)
+SP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'SalesPlan', 'backend')
+SP_LIVE = os.path.join(SP_DIR, 'sales_plan_display.pkl')
+SP_VERSIONS = os.path.join(SP_DIR, 'sales_plan_display_versions.json')
+APPS_DIVS = {'KIDS', 'LADIES', 'MENS'}
+
+
+def sp_versions():
+    try:
+        with open(SP_VERSIONS, encoding='utf-8') as fh:
+            return [{k: r[k] for k in ('id', 'name', 'saved')} for r in json.load(fh)]
+    except (OSError, ValueError, KeyError):
+        return []
+
+
+def sp_path(version=''):
+    if not version:
+        return SP_LIVE
+    if not re.fullmatch(r'[A-Za-z0-9_-]{1,40}', version) or version not in {v['id'] for v in sp_versions()}:
+        raise ValueError('Unknown Sales Plan version - pick one from the list.')
+    return os.path.join(SP_DIR, f'sales_plan_display.{version}.pkl')
+
+
+def plan_df_from_sp(sp):
+    """The published cells -> the plan this tool reads (one row per Store x CAT x Division x Department x MRP x Display
+    Type, "<MON> - Val" Rs lakh / "<MON> - Qty" pieces): each fortnight added to its month (Mar'27 P1 + P2 = MAR)."""
+    c = sp['cells']
+    mon = c['month'].astype(str).str.slice(0, 3).str.upper()
+    keys = ['store', 'division', 'department', 'mrp', 'display']
+    cols = ['ty'] + (['qty'] if 'qty' in c.columns else [])
+    g = c.assign(MON=mon.to_numpy()).groupby(keys + ['MON'], observed=True, sort=False)[cols].sum()
+    order = list(dict.fromkeys(str(m)[:3].upper() for m in sp['months']))
+    out = None
+    for k, suf in (('ty', 'Val'), ('qty', 'Qty')):
+        if k not in cols:
+            continue
+        w = g[k].unstack('MON').reindex(columns=order).fillna(0.0)
+        w.columns = [f'{m} - {suf}' for m in order]
+        out = w if out is None else out.join(w)
+    out = out[(out[[f'{m} - Val' for m in order]].abs() > 1e-12).any(axis=1)].reset_index()
+    out = out.rename(columns={'store': 'Store Name', 'division': 'Division', 'department': 'Department', 'mrp': 'MRP',
+                              'display': 'Display Type'})
+    for k in ('Store Name', 'Division', 'Department', 'MRP', 'Display Type'):
+        out[k] = out[k].astype(str)
+    out.insert(1, 'CAT', out['Division'].map(lambda d: 'APPS' if d.upper() in APPS_DIVS else d.upper()))
+    for m in order:
+        if f'{m} - Qty' not in out.columns:
+            out[f'{m} - Qty'] = 0.0
+    return out
+
+
+def load_sales_plan_link(version=''):
+    """-> (plan_df, label) from the Sales Plan's live plan or a saved version."""
+    path = sp_path(version)
+    if not os.path.exists(path):
+        raise ValueError("The Sales Plan hasn't published its output yet - it does within a minute of 8010 starting.")
+    sp = pd.read_pickle(path)   # written by this suite's Sales Plan server only
+    v = sp.get('version') or {}
+    return plan_df_from_sp(sp), (f"Sales Plan - {v['name']}" if v else 'Sales Plan - live plan') + f" (published {sp.get('built')})"
+
 
 # ── GM Listing Master (bundled, loaded once at startup) ──────────────────────────
 _GM_MASTER_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'GM Listing Master(Excl).xlsx')
@@ -105,17 +179,12 @@ _load_gm_master()   # Now safe to call: _clean_xa0 is defined above
 def load_nso_details(file_bytes):
     df = pd.read_excel(BytesIO(file_bytes), header=0)
     _clean_xa0(df)
-    # Rename datetime month columns
-    rename = {}
+    # month columns (dates or labels) -> 'MAR' ... (2026-10-15: any season); two dates on one month keep the first
+    df = df.rename(columns={c: _month_label(c) for c in df.columns
+                            if _month_label(c) and (not isinstance(c, str) or re.match(r'^\d{4}-\d{2}', c))})
+    df = df.loc[:, ~df.columns.duplicated()]
     for col in df.columns:
-        s = str(col)[:7]
-        if s in DIVCONT_DATE_MAP:
-            rename[col] = DIVCONT_DATE_MAP[s]
-    df = df.rename(columns=rename)
-    # Convert month cols to numeric
-    month_labels = list(DIVCONT_DATE_MAP.values()) + ['APR', 'MAY', 'JUN', 'JUL', 'AUG']
-    for col in df.columns:
-        if col in month_labels:
+        if col in CAL:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
     return df
 
@@ -124,13 +193,11 @@ def load_div_cont(file_bytes):
     # Row 1 is blank; header is row 2 (index 1)
     df = pd.read_excel(BytesIO(file_bytes), header=1)
     _clean_xa0(df)
-    rename = {}
-    for col in df.columns:
-        s = str(col)[:7]
-        if s in DIVCONT_DATE_MAP:
-            rename[col] = DIVCONT_DATE_MAP[s]
-    df = df.rename(columns=rename)
-    num_cols = list(DIVCONT_DATE_MAP.values()) + ['J1 %', 'J2 %', 'F1 %', 'F2 %']
+    # month columns (dates or labels) -> 'MAR' ... (2026-10-15: any season); two dates on one month keep the first
+    df = df.rename(columns={c: _month_label(c) for c in df.columns
+                            if _month_label(c) and (not isinstance(c, str) or re.match(r'^\d{4}-\d{2}', c))})
+    df = df.loc[:, ~df.columns.duplicated()]
+    num_cols = CAL + ['J1 %', 'J2 %', 'F1 %', 'F2 %']
     for c in num_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
@@ -144,7 +211,7 @@ def load_sales_plan(file_bytes):
     except Exception:
         df = pd.read_excel(BytesIO(file_bytes), header=2)
     df = df[df['Store Name'].notna()].copy()
-    for m in PLAN_MONTHS:
+    for m in plan_months(df):
         for c in [VAL[m], QTY[m]]:
             if c in df.columns:
                 df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
@@ -371,8 +438,8 @@ def generate_plan(nso_df, div_df, plan_df, attr_df=None, gm_excl_df=None, apps_e
     Returns (output_rows list, log list).
     output_rows: list of dicts matching Sales Plan column structure.
     """
-    TARGET_MONTHS = ['SEP', 'OCT', 'NOV', 'DEC', 'JAN', 'FEB']
-    log = []
+    TARGET_MONTHS = plan_months(plan_df)   # the plan's months (2026-10-15: any season)
+    log = [f"Plan months: {', '.join(TARGET_MONTHS)}"]
     all_rows = []
 
     for _, nso in nso_df.iterrows():
@@ -384,11 +451,11 @@ def generate_plan(nso_df, div_df, plan_df, attr_df=None, gm_excl_df=None, apps_e
         nso_grade = str(nso.get('Store Type', nso.get('Type', nso.get('Grade', '')))).strip()
         nso_zone  = str(nso.get('Zone', '')).strip()
 
-        # Month total targets (Rs Lakh) — all 6 plan months
+        # Month total targets (Rs Lakh) - the plan's months
         month_targets = {m: float(nso.get(m, 0) or 0) for m in TARGET_MONTHS}
 
         # Determine opening month (first month with a non-zero target)
-        opening_month = next((m for m in TARGET_MONTHS if month_targets.get(m, 0) > 0), 'NOV')
+        opening_month = next((m for m in TARGET_MONTHS if month_targets.get(m, 0) > 0), TARGET_MONTHS[0] if TARGET_MONTHS else '')
 
         log.append(f"NSO: {store}  Ref: {ref}  StoreType: {nso_grade}  Opens: {opening_month}  Targets: {month_targets}")
 
@@ -520,8 +587,8 @@ def generate_plan(nso_df, div_df, plan_df, attr_df=None, gm_excl_df=None, apps_e
                         str(ref_row.get('Display Type', '')),
                     )
                     if key not in out_acc:
-                        out_acc[key] = {f'{m}-Val': 0.0 for m in PLAN_MONTHS}
-                        out_acc[key].update({f'{m}-Qty': 0.0 for m in PLAN_MONTHS})
+                        out_acc[key] = {f'{m}-Val': 0.0 for m in TARGET_MONTHS}
+                        out_acc[key].update({f'{m}-Qty': 0.0 for m in TARGET_MONTHS})
 
                     out_acc[key][f'{month}-Val'] += pdh_val
                     out_acc[key][f'{month}-Qty'] += pdh_qty
@@ -538,25 +605,20 @@ def generate_plan(nso_df, div_df, plan_df, attr_df=None, gm_excl_df=None, apps_e
                 'MRP':          mrp,
                 'Display Type': disp,
                 '.':            None,
-                'SEP - Val':    round(vals.get('SEP-Val', 0), 4),
-                'OCT - Val':    round(vals.get('OCT-Val', 0), 4),
-                'NOV - Val':    round(vals.get('NOV-Val', 0), 4),
-                'DEC - Val':    round(vals.get('DEC-Val', 0), 4),
-                'JAN - Val':    round(vals.get('JAN-Val', 0), 4),
-                'FEB - Val':    round(vals.get('FEB-Val', 0), 4),
+                **{f'{m} - Val': round(vals.get(f'{m}-Val', 0), 4) for m in TARGET_MONTHS},
                 '..1':          None,
-                'SEP - Qty':    round(vals.get('SEP-Qty', 0), 4),
-                'OCT - Qty':    round(vals.get('OCT-Qty', 0), 4),
-                'NOV - Qty':    round(vals.get('NOV-Qty', 0), 4),
-                'DEC - Qty':    round(vals.get('DEC-Qty', 0), 4),
-                'JAN - Qty':    round(vals.get('JAN-Qty', 0), 4),
-                'FEB - Qty':    round(vals.get('FEB-Qty', 0), 4),
+                **{f'{m} - Qty': round(vals.get(f'{m}-Qty', 0), 4) for m in TARGET_MONTHS},
             }
             all_rows.append(row)
 
         log.append(f"  Output rows for {store}: {len(out_acc)}")
 
     return all_rows, log
+
+
+def _row_months(rows):
+    """The months in the output rows ("<MON> - Val" keys, in order)."""
+    return [m.group(1) for m in (_VAL_RE.match(k) for k in (rows[0].keys() if rows else [])) if m]
 
 
 def build_xlsx(rows, log, nso_df=None):
@@ -570,8 +632,9 @@ def build_xlsx(rows, log, nso_df=None):
     ws0 = wb.active
     ws0.title = 'NSO AOP Targets'
     if nso_df is not None and not nso_df.empty:
-        aop_show = ['Store Code', 'Ref Code', 'Grade', 'Type', 'SEP', 'OCT', 'NOV', 'DEC', 'JAN', 'FEB']
-        aop_month_cols = {'SEP', 'OCT', 'NOV', 'DEC', 'JAN', 'FEB'}
+        months_out = _row_months(rows) or [c for c in nso_df.columns if c in CAL]
+        aop_show = ['Store Code', 'Ref Code', 'Grade', 'Type'] + months_out
+        aop_month_cols = set(months_out)
         aop_cols = [c for c in aop_show if c in nso_df.columns]
         for ci, col in enumerate(aop_cols, 1):
             cell = ws0.cell(row=1, column=ci, value=col)
@@ -630,7 +693,7 @@ def build_xlsx(rows, log, nso_df=None):
 
     # ── Summary sheet ────────────────────────────────────────────
     ws2 = wb.create_sheet('Monthly Summary')
-    val_months = ['NOV', 'DEC', 'JAN', 'FEB']
+    val_months = _row_months(rows)   # the plan's months (were NOV-FEB fixed)
     sum_cols = ['Store Name', 'Ref Store', 'Store Type', 'CAT', 'Division'] + \
                [f'{m} - Val' for m in val_months] + ['Total Val'] + \
                [f'{m} - Qty' for m in val_months] + ['Total Qty']
@@ -709,7 +772,7 @@ def _apply_overrides(nso_df, overrides):
 
 
 def _run_job(job_id, nso_bytes, div_bytes, plan_bytes, attr_bytes,
-             gm_excl_bytes, apps_excl_bytes, attr_master_bytes, aop_overrides):
+             gm_excl_bytes, apps_excl_bytes, attr_master_bytes, aop_overrides, sp_version=None):
     try:
         _job_set(job_id, pct=5, msg='Parsing NSO Details...')
         nso_df = load_nso_details(nso_bytes)
@@ -723,7 +786,13 @@ def _run_job(job_id, nso_bytes, div_bytes, plan_bytes, attr_bytes,
         gm_excl_df   = load_gm_exclusion(gm_excl_bytes)    if gm_excl_bytes   else None
         apps_excl_df = load_apps_exclusion(apps_excl_bytes) if apps_excl_bytes else None
 
-        _job_set(job_id, pct=22, msg='Reading Sales Plan (large file — ~30s)...')
+        if sp_version is not None:   # linked to the Sales Plan (2026-10-15): no file to read
+            _job_set(job_id, pct=22, msg='Reading the Sales Plan output...')
+            plan_df, label = load_sales_plan_link(sp_version)
+            _job_set(job_id, pct=70, msg=f'{label}: {len(plan_df):,} rows, months {", ".join(plan_months(plan_df))}')
+            plan_bytes = None
+        else:
+            _job_set(job_id, pct=22, msg='Reading Sales Plan (large file — ~30s)...')
         # Ticker thread: animates bar 22→70 over ~30s while calamine reads
         _plan_done = threading.Event()
         def _ticker():
@@ -732,18 +801,24 @@ def _run_job(job_id, nso_bytes, div_bytes, plan_bytes, attr_bytes,
                 elapsed = time.time() - t0
                 pct = min(69, int(22 + (elapsed / 30) * 48))
                 _job_set(job_id, pct=pct, msg='Reading Sales Plan (large file — ~30s)...')
-        _tick_t = threading.Thread(target=_ticker, daemon=True)
-        _tick_t.start()
-        try:
-            plan_df = load_sales_plan(plan_bytes)
-        finally:
-            _plan_done.set()
+        if plan_bytes is not None:
+            _tick_t = threading.Thread(target=_ticker, daemon=True)
+            _tick_t.start()
+            try:
+                plan_df = load_sales_plan(plan_bytes)
+            finally:
+                _plan_done.set()
 
         _job_set(job_id, pct=72, msg='Parsing Attribute Grid...')
         attr_df        = load_attr_grid(attr_bytes)     if attr_bytes         else None
         attr_master_df = load_attr_master(attr_master_bytes) if attr_master_bytes else None
 
         _job_set(job_id, pct=76, msg='Running distribution algorithm...')
+        miss = [m for m in plan_months(plan_df) if m not in nso_df.columns]
+        if len(miss) == len(plan_months(plan_df)):
+            _job_set(job_id, status='error', pct=0, msg=f"NSO Details has no targets for the plan's months "
+                     f"({', '.join(plan_months(plan_df))}) - use NSO Details / Division Cont % files for this plan's season.")
+            return
         rows, log = generate_plan(nso_df, div_df, plan_df, attr_df, gm_excl_df, apps_excl_df, attr_master_df)
 
         if not rows:
@@ -847,8 +922,9 @@ def api_preview():
         summary = []
         if rows:
             df = pd.DataFrame(rows)
-            val_cols = ['NOV - Val', 'DEC - Val', 'JAN - Val', 'FEB - Val']
-            qty_cols = ['NOV - Qty', 'DEC - Qty', 'JAN - Qty', 'FEB - Qty']
+            mo = _row_months(rows)
+            val_cols = [f'{m} - Val' for m in mo]
+            qty_cols = [f'{m} - Qty' for m in mo]
             grp = df.groupby(['Store Name', 'CAT'])[val_cols + qty_cols].sum().reset_index()
             for _, r in grp.iterrows():
                 summary.append({
@@ -857,8 +933,8 @@ def api_preview():
                     'months': {m.replace(' - Val','').replace(' - Val',''): {
                         'val': round(r.get(f'{m} - Val', 0), 2),
                         'qty': round(r.get(f'{m} - Qty', 0), 0)
-                    } for m in ['NOV', 'DEC', 'JAN', 'FEB']},
-                    'total_val': round(sum(r.get(f'{m} - Val', 0) for m in ['NOV', 'DEC', 'JAN', 'FEB']), 2),
+                    } for m in mo},
+                    'total_val': round(sum(r.get(f'{m} - Val', 0) for m in mo), 2),
                 })
 
         nso_names = nso_df['Store Code'].tolist()
@@ -897,6 +973,12 @@ def api_start():
     job_id = uuid.uuid4().hex[:8]
 
     use_folder = 'folder' in request.form and request.form['folder'].strip()
+    sp_version = request.form.get('sp_version')   # present = linked to the Sales Plan ('' = its live plan)
+    if sp_version is not None:
+        try:
+            sp_path(sp_version)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
 
     try:
         aop_overrides = json.loads(request.form.get('aop_overrides', '{}'))
@@ -919,24 +1001,24 @@ def api_start():
 
         nso_bytes         = _read('nso_details')
         div_bytes         = _read('div_cont')
-        plan_bytes        = _read('sales_plan')
+        plan_bytes        = _read('sales_plan') if sp_version is None else None
         attr_bytes        = _read('attr_grid')
         attr_master_bytes = _read('attr_master')
         gm_bytes   = request.files['gm_exclusion'].read()   if 'gm_exclusion'   in request.files else _read('gm_exclusion')
         apps_bytes = request.files['apps_exclusion'].read() if 'apps_exclusion'  in request.files else _read('apps_exclusion')
     else:
-        for key in ('nso_details', 'div_cont', 'sales_plan'):
+        for key in ('nso_details', 'div_cont') + (() if sp_version is not None else ('sales_plan',)):
             if key not in request.files:
                 return jsonify({'error': f'Missing required file: {key}'}), 400
         nso_bytes         = request.files['nso_details'].read()
         div_bytes         = request.files['div_cont'].read()
-        plan_bytes        = request.files['sales_plan'].read()
+        plan_bytes        = request.files['sales_plan'].read() if 'sales_plan' in request.files else None
         attr_bytes        = request.files['attr_grid'].read()        if 'attr_grid'      in request.files else None
         attr_master_bytes = request.files['attr_master'].read()      if 'attr_master'    in request.files else None
         gm_bytes          = request.files['gm_exclusion'].read()     if 'gm_exclusion'   in request.files else None
         apps_bytes        = request.files['apps_exclusion'].read()   if 'apps_exclusion' in request.files else None
 
-    if not nso_bytes or not div_bytes or not plan_bytes:
+    if not nso_bytes or not div_bytes or (not plan_bytes and sp_version is None):
         return jsonify({'error': 'Required files (NSO Details, Sales Plan, Division Cont %) missing'}), 400
 
     with JOBS_LOCK:
@@ -947,7 +1029,7 @@ def api_start():
     t = threading.Thread(
         target=_run_job,
         args=(job_id, nso_bytes, div_bytes, plan_bytes, attr_bytes,
-              gm_bytes, apps_bytes, attr_master_bytes, aop_overrides),
+              gm_bytes, apps_bytes, attr_master_bytes, aop_overrides, sp_version),
         daemon=True
     )
     t.start()
@@ -1052,6 +1134,7 @@ def api_parse_nso():
         with open(path, 'rb') as f:
             data = f.read()
         df = load_nso_details(data)
+        months = [c for c in df.columns if c in CAL]   # the targets' months, in the file's order
         stores = []
         for _, row in df.iterrows():
             sc = str(row.get('Store Code', '')).strip()
@@ -1063,16 +1146,17 @@ def api_parse_nso():
                 'grade':     str(row.get('Grade', '')).strip(),
                 'type':      str(row.get('Type', row.get('Store Type', ''))).strip(),
                 'zone':      str(row.get('Zone', '')).strip(),
-                'sep': float(row.get('SEP', 0) or 0),
-                'oct': float(row.get('OCT', 0) or 0),
-                'nov': float(row.get('NOV', 0) or 0),
-                'dec': float(row.get('DEC', 0) or 0),
-                'jan': float(row.get('JAN', 0) or 0),
-                'feb': float(row.get('FEB', 0) or 0),
+                't':         {m: float(row.get(m, 0) or 0) for m in months},
             })
-        return jsonify({'stores': stores})
+        return jsonify({'stores': stores, 'months': months})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/sp')
+def api_sp():
+    """The Sales Plan link: whether it has published, and its saved versions."""
+    return jsonify({'linkable': os.path.exists(SP_LIVE), 'versions': sp_versions()})
 
 
 if __name__ == '__main__':
