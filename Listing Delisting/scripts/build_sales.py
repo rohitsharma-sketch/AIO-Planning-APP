@@ -20,7 +20,8 @@ from _paths import sales_dir  # noqa: E402  - same data-lake setting as the core
 SALES_DIR = sales_dir()
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))  # repo root
 from rs_common.lake_files import latest_path  # noqa: E402 - the one "which file" rule (29 Sep 2026)
-from rs_common.stores import canon_store  # noqa: E402 - renamed store codes (15 Oct 2026)
+from rs_common.stores import ALIAS  # noqa: E402 - renamed store codes (15 Oct 2026)
+import pyarrow.compute as pc  # noqa: E402
 
 # Same apparel-only scope as extract_one.py / build_knowledge_base.py.
 ALLOWED_TOKENS = {
@@ -55,7 +56,10 @@ def build():
     print(f"Using {path}")
     table = pq.ParquetFile(path).read(columns=['STORE_NAME', 'DEPARTMENT', 'BILLMONTH', 'SL_V'])
 
-    stores = [canon_store(s) for s in table.column('STORE_NAME').to_pylist()]   # renamed stores (2026-10-15)
+    col = table.column('STORE_NAME')
+    for old, new in ALIAS.items():   # renamed stores (2026-10-15), in Arrow - no second Python list of ~30M codes
+        col = pc.if_else(pc.equal(col, old), new, col)
+    stores = col.to_pylist()
     depts = table.column('DEPARTMENT').to_pylist()
     bmonths = table.column('BILLMONTH').to_pylist()
     values = table.column('SL_V').to_pylist()

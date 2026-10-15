@@ -28,7 +28,19 @@ def load_json(path):
 def save_json(path, obj, **kw):
     """Write JSON atomically: a .tmp file, then os.replace (audit 2026-10-06). The ~350 MB plan and the small state files
     were written in place, so a reader mid-write got a truncated file (500) and a crash mid-write left a corrupt plan."""
-    tmp = f"{path}.tmp"
+    # one .tmp per writer (2026-10-15: the server and a script regenerating at the same moment both wrote "<path>.tmp"
+    # and the interleaved file became the saved plan - invalid JSON); the last os.replace still wins, but whole
+    import threading
+    tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
     with open(tmp, "w") as f:
         json.dump(obj, f, **kw)
-    os.replace(tmp, path)
+    import time
+    for i in range(40):   # Windows refuses the swap while another writer swaps or a reader holds the file (WinError 5 / 32)
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if i == 39:
+                os.remove(tmp)
+                raise
+            time.sleep(0.25)
