@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Landing: side-bar handles invisible until hovered
+- **Asked (user):** "make it visible on hover the rest should be invisible".
+- A closed bar's handle is now an invisible 16 px strip down each screen edge, inside the page's gutter. It shows (white strip, small arrow) only while the pointer is over it, or when it has keyboard focus. Click it or drag from it to open the bar, as before.
+- Touch screens have no hover: the strip stays invisible there but still answers a tap or a swipe in from the edge.
+- **Checked** on the static copy at 1280 px: opacity 0 away from the edge, 1 over the strip (full height 60 to 800 px, x -1 to 15); a mouse drag from the invisible strip opened the bar; no other change.
+
 ### Landing: closed side bars hide fully, drag the handle to show
 - **Asked (user):** "why is the bars retracting and expnding on drag"; picked "Fully hide, drag to show".
 - A closed bar is now fully off the screen (no 64 px icon strip). Only a thin 24 px handle with an arrow stays at the edge, inside the page's gutter. Drag the handle inward (mouse, finger or pen) and the whole bar slides in with it; drag the bar back out to hide it. A click or tap on the handle or arrow still toggles it.

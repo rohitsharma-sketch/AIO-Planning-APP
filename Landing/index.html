@@ -411,12 +411,16 @@
   /* drag to show / hide: the bar and its handle take sideways drags, the list still scrolls up and down */
   .side, .side * { touch-action: pan-y; -webkit-user-drag: none; }
   .side.dragging { transition: none; user-select: none; cursor: grabbing; }
-  /* the handle: the toggle sticks out of the closed bar at the screen edge (fits the page's 28 px gutter) */
+  /* the handle: the toggle sticks out of the closed bar as a 16 px strip down the screen edge (inside the page's gutter).
+     Invisible until the pointer is over it (user, 2026-10-15: "make it visible on hover the rest should be invisible");
+     keyboard focus shows it too. Still there when invisible: a tap or a swipe from the edge opens the bar on touch screens. */
   .side:not(.open) .side-hd { display: none; }
-  .side:not(.open) .side-tog { position: absolute; top: 12px; width: 24px; min-height: 64px; padding: 0; justify-content: center;
-    border: 1px solid var(--border); background: var(--white); cursor: grab; }
-  .side-l:not(.open) .side-tog { left: 100%; border-left: 0; border-radius: 0 10px 10px 0; }
-  .side-r:not(.open) .side-tog { right: 100%; border-right: 0; border-radius: 10px 0 0 10px; }
+  .side:not(.open) .side-tog { position: absolute; top: 0; bottom: 0; width: 16px; min-height: 0; padding: 0; justify-content: center;
+    border: 0; background: transparent; opacity: 0; cursor: grab; transition: opacity .15s, background .15s; }
+  .side:not(.open) .side-tog svg.i { width: 14px; height: 14px; }
+  .side:not(.open) .side-tog:hover, .side:not(.open) .side-tog:focus-visible { opacity: 1; background: var(--white); }
+  .side-l:not(.open) .side-tog { left: 100%; border-right: 1px solid var(--border); }
+  .side-r:not(.open) .side-tog { right: 100%; border-left: 1px solid var(--border); }
   .side-backdrop { position: fixed; inset: 60px 0 0; z-index: 34; background: rgba(var(--st-ink-rgb,30,39,35),.35); }
   .side-backdrop[hidden] { display: none; }
   @media (max-width: 1039px) {
