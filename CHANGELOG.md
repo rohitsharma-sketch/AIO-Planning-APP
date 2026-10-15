@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Growth vs LY linked to the Sales Plan's output, down to merged MRP -> Display
+- **Asked (user):** "link the growth V LY to the output of the Sales Plan and make the template till Display on Merged MRP Sales comparison".
+- **Sales Plan publishes its output:** 8010's minute warmer now writes `SalesPlan/backend/sales_plan_display.pkl` (`grain_view.publish_display`, gitignored, ~34 MB). It holds the Display tree's cells: every store x department x merged MRP (the MRP Re-apportionment's new MRPs) x display type x fortnight, with TY plan and the plan's own LY on the same split. It is rewritten only when the Display tree is rebuilt, so a minute with no change costs nothing. No Sales Plan figure changes.
+- **Growth vs LY reads it by default:** no upload. It rebuilds by itself whenever the Sales Plan publishes a newer plan (checked on every page load, ~3 s). "Upload a file instead" still takes a plan file (LY then from the data lake as before); "Use the Sales Plan" switches back.
+- **Template to Display:** MAIN = Store x Department x MRP x Display (192,325 rows, plus DIVISION / ATTRIBUTE / ST TAG / SSG TAG / CLUSTER), with TY and LY value by fortnight, block and season totals and growth %. The pivot and the page tree go Division -> Attribute -> Department -> MRP (price order; Not planned / No MRP split last) -> Display. Value only: that output has no qty. LY here is the Sales Plan's own LY, so TY and LY compare like for like at every level.
+- **Checked:** all stores TY 77,981.45 L (= AOP) vs LY 46,334.97 L; SSG stores TY 43,188.03 L vs LY 38,885.41 L (+11.1%); every level adds up to the grand total. Tags by store: SSG 148, Others 73, NSO 83. Workbook: MAIN + PIVOT SSG + PIVOT ALL, 49 MB in 14 s. `test_gr.py` extended (Sales Plan path, MRP order, 5-level pivot) and passing. Page tree opens Division -> ... -> Display (e.g. LADIES > HVY WINTER > REGULAR > LW_U_CORD SETS > MRP 649 > NON-TABLE 25.54 L for SSG). 8075 and 8010 restarted; 8010 republished the file by itself 2 min after its restart.
+
 ### Landing: side bars hide and show on drag
 - **Asked (user):** "Make these bars hide and show on drag".
 - Drag a bar outward to show it and back to hide it, with a mouse, a finger or a pen (Pointer Events). The bar follows the pointer and snaps once you let go 40 px or more from where it started; a shorter drag springs back. The toggle buttons, Esc and a tap outside still work.

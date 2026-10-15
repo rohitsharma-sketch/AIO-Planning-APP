@@ -1,5 +1,7 @@
-"""Growth vs LY - upload the final sales plan, get it against last year by the plan's hierarchy (Division -> Attribute
--> Department), on screen and as the GR % PLAN workbook (MAIN + PIVOT). LY comes from the data lake (gr_engine).
+"""Growth vs LY - the final sales plan against last year by the plan's hierarchy (Division -> Attribute -> Department),
+on screen and as the GR % PLAN workbook (MAIN + PIVOT). Linked to the Sales Plan's own output by default (user,
+2026-10-15): down to merged MRP -> Display type, TY and the plan's LY, rebuilt by itself whenever the Sales Plan publishes
+a new plan. An uploaded plan file still works (LY then comes from the data lake, gr_engine.load_ly).
 Run: python server.py  ->  http://127.0.0.1:8075  (on Landing: /growth/)."""
 import json
 import os
@@ -24,7 +26,8 @@ CACHE = os.path.join(HERE, ".cache")
 LAST = os.path.join(CACHE, "last.pkl")
 MAX_BODY = 400 * 1024 * 1024
 # ponytail: one shared result for everyone (last plan built wins) - per-user workspaces if several planners use it at once
-state = {"plan": None, "months": [], "ly": None, "main": None, "job": None}
+state = {"plan": None, "months": [], "ly": None, "main": None, "job": None, "source": "sales_plan", "sp_mtime": None}
+KEEP = ("plan", "months", "ly", "main", "source", "sp_mtime")   # what survives a restart (LAST)
 lock = threading.Lock()
 
 
@@ -51,17 +54,61 @@ def _job(data, name):
         main = ge.build_main(df, months, ly)
         plan = {"name": name, "loaded_at": _stamp(), "rows": int(len(df)), "stores": int(df[ge.STORE].nunique()),
                 "departments": int(df[ge.DEPT].nunique()), "notes": [i["msg"] for i in rep.items if i["level"] == "warning"][:5]}
-        with lock:
-            state.update(plan=plan, months=months, ly=ly_info, main=main)
-            state["job"].update(status="done", step="Done", ended=_stamp())
-        os.makedirs(CACHE, exist_ok=True)
-        with open(LAST + ".tmp", "wb") as fh:
-            pickle.dump({k: state[k] for k in ("plan", "months", "ly", "main")}, fh)
-        os.replace(LAST + ".tmp", LAST)
+        _done(plan, months, ly_info, main, "upload", None)
     except Exception as e:  # noqa: BLE001 - shown on the page
-        traceback.print_exc()
+        _fail(e)
+
+
+def _done(plan, months, ly_info, main, source, sp_mtime):
+    with lock:
+        state.update(plan=plan, months=months, ly=ly_info, main=main, source=source, sp_mtime=sp_mtime)
+        state["job"].update(status="done", step="Done", ended=_stamp())
+    os.makedirs(CACHE, exist_ok=True)
+    with open(LAST + ".tmp", "wb") as fh:
+        pickle.dump({k: state[k] for k in KEEP}, fh)
+    os.replace(LAST + ".tmp", LAST)
+
+
+def _fail(e):
+    traceback.print_exc()
+    with lock:
+        state["job"].update(status="error", error=str(e) or e.__class__.__name__, ended=_stamp())
+
+
+def _job_sp(mtime):
+    """The Sales Plan's published output -> MAIN (Store x Department x merged MRP x Display type)."""
+    try:
         with lock:
-            state["job"].update(status="error", error=str(e) or e.__class__.__name__, ended=_stamp())
+            state["job"]["step"] = "Reading the Sales Plan's output"
+        sp = ge.load_sales_plan()
+        months = list(sp["months"])
+        with lock:
+            state["job"]["step"] = "Building growth vs LY"
+        main = ge.build_main_sp(sp)
+        plan = {"name": "Sales Plan (linked)", "loaded_at": _stamp(), "rows": int(len(main)), "built": sp["built"],
+                "about": sp["plan"], "stores": int(main["STORE NAME"].nunique()),
+                "departments": int(main["DEPARTMENT"].nunique()), "notes": []}
+        ly_info = {"months": [ge.ly_label(m) for m in months], "exported": sp["built"],
+                   "src": "the Sales Plan's own LY, on the same merged MRPs and display types"}
+        _done(plan, months, ly_info, main, "sales_plan", mtime)
+    except Exception as e:  # noqa: BLE001 - shown on the page
+        _fail(e)
+
+
+def _link():
+    """Linked to the Sales Plan (not an uploaded file): rebuild when it has published a newer output. Call under lock."""
+    if state["source"] != "sales_plan" or (state["job"] and state["job"]["status"] == "running"):
+        return
+    try:
+        mt = os.path.getmtime(ge.SP_PATH)
+    except OSError:
+        return
+    if mt == state["sp_mtime"] and state["main"] is not None:
+        return
+    if state["job"] and state["job"]["status"] == "error" and state["job"].get("sp_mtime") == mt:
+        return   # this output failed already - shown on the page; wait for the next one
+    state["job"] = {"status": "running", "step": "Starting", "name": "Sales Plan", "started": _stamp(), "error": None, "sp_mtime": mt}
+    threading.Thread(target=_job_sp, args=(mt,), daemon=True).start()
 
 
 def _tags(q):
@@ -82,9 +129,11 @@ def pivot_json(tags):
     for r in p.to_dict("records"):
         rows.append({"level": r["Level"], "div": r["Division"], "attr": r["ATTRIBUTE"], "dept": r["DEPARTMENT"],
                      "ty": [_num(r[m]) for m in months], "ly": [_num(r[m]) for m in lm],
+                     "mrp": r.get(ge.MRP, ""), "disp": r.get(ge.DISP, ""),
                      "blocks": {b: [_num(r[f"TTL {b} Val TY"]), _num(r[f"TTL {b} Val LY"]), _num(r[f"{b} Growth %"])] for b in bl},
                      "ttl": [_num(r["TTL Val TY"]), _num(r["TTL Val LY"]), _num(r["TTL Growth %"])]})
-    return {"months": months, "ly_months": lm, "blocks": bl, "rows": rows}
+    return {"months": months, "ly_months": lm, "blocks": bl, "rows": rows,
+            "levels": [n for c, n in ge.LEVELS if c in p.columns]}
 
 
 def workbook(tags):
@@ -121,9 +170,12 @@ class H(BaseHTTPRequestHandler):
                     return self._send(200, fh.read(), "text/html; charset=utf-8")
             if path == "/api/state":
                 with lock:
+                    _link()
                     main = state["main"]
-                    tags = main["SSG TAG"].replace("", "(blank)").value_counts().to_dict() if main is not None else {}
+                    tags = (main.assign(t=main["SSG TAG"].replace("", "(blank)")).groupby("t")["STORE NAME"].nunique().to_dict()
+                            if main is not None else {})   # stores per tag
                     return self._send(200, {"job": state["job"], "plan": state["plan"], "ly": state["ly"], "months": state["months"],
+                                            "source": state["source"], "linkable": os.path.exists(ge.SP_PATH),
                                             "blocks": [b for b, _ in ge.blocks(state["months"])] if state["months"] else [],
                                             "tags": {str(k): int(v) for k, v in tags.items()}})
             if path in ("/api/pivot", "/api/download"):
@@ -145,6 +197,13 @@ class H(BaseHTTPRequestHandler):
         if n > MAX_BODY:
             return self._send(413, {"error": "File too large (400 MB max)."})
         data = self.rfile.read(n) if n else b""
+        if path == "/api/link":   # back to the Sales Plan's own output after an uploaded file
+            with lock:
+                if state["job"] and state["job"]["status"] == "running":
+                    return self._send(409, {"error": "A plan is already being built - wait for it to finish."})
+                state.update(source="sales_plan", sp_mtime=None)
+                _link()
+            return self._send(202, {"ok": True})
         if path != "/api/plan":
             return self._send(404, {"error": "Not found"})
         if not data:

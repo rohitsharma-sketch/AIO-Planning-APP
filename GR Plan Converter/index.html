@@ -55,6 +55,7 @@ td.l,th.l{text-align:left;position:sticky;left:0;background:#fff}
 th.l{background:var(--muted);z-index:2}
 td.b{border-left:1px solid var(--border)}
 tr.r{cursor:pointer}tr.r:hover td{background:var(--muted)}tr.sel td{background:#EEF4F0}
+tr.Department td{font-weight:500}tr.Display td{color:var(--muted-foreground)}
 tr.Division td{font-weight:800}tr.Attribute td{font-weight:600}tr.Grand td{font-weight:800;border-top:2px solid var(--input)}
 .tg{display:inline-block;width:14px;color:var(--muted-foreground)}
 .up{color:var(--up)}.down{color:var(--down)}
@@ -78,8 +79,10 @@ details.card[open]>summary{padding-bottom:0}details.card[open]>summary h2::befor
 <main class="wrap">
   <section class="card">
     <div class="card-h"><div class="grow"><h2>1 &middot; Final sales plan</h2>
+      <p class="desc" id="linked" hidden>Linked to the Sales Plan&rsquo;s own output &mdash; it updates by itself whenever the Sales Plan has a new plan. Every store &times; department &times; merged MRP (the MRP Re-apportionment&rsquo;s new MRPs) &times; display type, against the plan&rsquo;s own LY on the same split.</p>
       <p class="desc" id="intro">Upload the final plan (Store &times; Department &times; MRP &times; Display Type with &ldquo;&lt;Month&gt; Plan&rdquo; and &ldquo;&lt;Month&gt; Plan Qty&rdquo; columns, e.g. the Re-Aligner&rsquo;s final plan). Last year comes from the data lake&rsquo;s day-wise sales by itself &mdash; the same months a year earlier, P1 = 1st to the middle day (15th; Feb 14th), P2 = the rest.</p></div>
-      <label class="btn ghost sm" id="replace" hidden tabindex="0" title="Upload a different final sales plan">Replace plan<input type="file" id="file" accept=".xlsx,.xlsb,.xls,.csv" hidden></label></div>
+      <button class="btn ghost sm" type="button" id="link" hidden title="Go back to the Sales Plan's own output (updates by itself)">Use the Sales Plan</button>
+      <label class="btn ghost sm" id="replace" hidden tabindex="0" title="Upload a final sales plan file instead (LY then from the data lake)">Upload a file instead<input type="file" id="file" accept=".xlsx,.xlsb,.xls,.csv" hidden></label></div>
     <div class="card-c">
       <label class="drop" id="drop" for="file">
         <b>Drop the final sales plan here or click to browse</b><small>.xlsx, .xlsb, .xls or .csv &middot; up to 400 MB</small></label>
@@ -123,13 +126,15 @@ async function refresh() {
   st.className = 'status' + (j && j.status === 'error' ? ' err' : '');
   st.textContent = !j ? '' : j.status === 'running' ? `${j.name}: ${j.step}…` : j.status === 'error' ? `${j.name}: ${j.error}` : '';
   if (j && j.status === 'running') { clearTimeout(poll); poll = setTimeout(refresh, 1500); }
-  const p = S.plan, l = S.ly;
-  $('meta').innerHTML = p ? [`<span>Plan <b>${esc(p.name)}</b></span>`, `<span>${p.rows.toLocaleString('en-IN')} rows · ${p.stores} stores · ${p.departments} departments</span>`,
+  const p = S.plan, l = S.ly, linked = S.source === 'sales_plan';
+  $('linked').hidden = !linked;
+  $('link').hidden = linked || !S.linkable;
+  $('meta').innerHTML = p ? [`<span>Plan <b>${esc(p.name)}</b>${p.built ? ` · published ${esc(p.built)}` : ''}</span>`, `<span>${p.rows.toLocaleString('en-IN')} rows · ${p.stores} stores · ${p.departments} departments</span>`,
     `<span>Months <b>${esc(S.months[0])} – ${esc(S.months[S.months.length - 1])}</b></span>`,
-    l ? `<span>LY <b>${esc(l.months[0])} – ${esc(l.months[l.months.length - 1])}</b> · data lake export ${esc(l.exported)}</span>` : '',
+    l ? `<span>LY <b>${esc(l.months[0])} – ${esc(l.months[l.months.length - 1])}</b> · ${l.src ? esc(l.src) : 'data lake export ' + esc(l.exported)}</span>` : '',
     `<span>Built ${esc(p.loaded_at)}</span>`].join('') : '';
   $('res').hidden = !p;
-  $('intro').hidden = $('drop').hidden = !!p; $('replace').hidden = !p;   // plan loaded: meta line + Replace plan only
+  $('intro').hidden = $('drop').hidden = !!p || linked; $('replace').hidden = !p && !linked;   // plan loaded / linked: meta line + buttons only
   if (p) {
     const all = Object.keys(S.tags);
     if (!tags || !tags.every(t => all.includes(t))) tags = all.includes('SSG') ? ['SSG'] : [];
@@ -153,25 +158,33 @@ function draw() {
   P.months.forEach((m, i) => { if (!grp.length || yr(P.months[grp[grp.length - 1][0]]) !== yr(m)) grp.push([]); grp[grp.length - 1].push(i); });
   grp.push(P.months.map((_, i) => i));
   const span = (a, ix) => { const f = a[ix[0]].replace(/ P\d$/, ''), l = a[ix[ix.length - 1]].replace(/ P\d$/, ''); return f === l ? f : `${f}–${l}`; };
-  $('th').innerHTML = `<tr><th class="l" rowspan="2" title="Click a row to see it month by month; Division and Attribute rows open and close">Division › Attribute › Department</th>${B.map((b, k) =>
+  $('th').innerHTML = `<tr><th class="l" rowspan="2" title="Click a row to see it month by month; click a name to open or close it">${esc(P.levels.join(' › '))}</th>${B.map((b, k) =>
     `<th class="grp" colspan="3" title="TY ${esc(span(P.months, grp[k]))} plan vs LY ${esc(span(P.ly_months, grp[k]))} sales">${b}</th>`).join('')}</tr>
     <tr>${B.map(() => '<th class="grp">TY</th><th>LY</th><th>Growth</th>').join('')}</tr>`;
+  const L = P.levels, depth = r => L.indexOf(r.level);
   $('tb').innerHTML = P.rows.map((r, i) => {
-    const show = r.level === 'Division' || r.level === 'Grand Total' || (r.level === 'Attribute' && open.has(r.div))
-      || (r.level === 'Department' && open.has(r.div) && open.has(r.div + '|' + r.attr));
-    if (!show) return '';
-    const key = r.level === 'Division' ? r.div : r.level === 'Attribute' ? r.div + '|' + r.attr : '';
-    const name = r.level === 'Grand Total' ? 'Grand Total' : r.level === 'Division' ? r.div : r.level === 'Attribute' ? r.attr : r.dept;
-    const pad = {Division: 0, Attribute: 18, Department: 36}[r.level] || 0;
+    const k = depth(r), path = rowPath(r);
+    // a row shows when every level above it is open (Division always; Grand Total always)
+    if (k > 0 && !path.slice(0, k).every((_, j) => open.has(path.slice(0, j + 1).join('|')))) return '';
+    const key = k >= 0 && k < L.length - 1 ? path.join('|') : '';
+    const name = k < 0 ? 'Grand Total' : label(r, k);
     const tg = `<span class="tg">${key ? (open.has(key) ? '▾' : '▸') : ''}</span>`;
     const cells = [...P.blocks.map(b => r.blocks[b]), r.ttl].map(([t, l, g]) => `<td class="b">${f2(t)}</td><td>${f2(l)}</td><td>${pct(g)}</td>`).join('');
-    return `<tr class="r ${r.level.split(' ')[0]}${sel === i ? ' sel' : ''}" data-i="${i}" data-k="${esc(key)}"><td class="l" style="padding-left:${9 + pad}px">${tg}${esc(name)}</td>${cells}</tr>`;
+    return `<tr class="r ${r.level.split(' ')[0]}${sel === i ? ' sel' : ''}" data-i="${i}" data-k="${esc(key)}"><td class="l" style="padding-left:${9 + 18 * Math.max(0, k)}px">${tg}${esc(name)}</td>${cells}</tr>`;
   }).join('');
+}
+const FIELD = {Division: 'div', Attribute: 'attr', Department: 'dept', MRP: 'mrp', Display: 'disp'};
+function rowPath(r) { const k = P.levels.indexOf(r.level); return P.levels.slice(0, k + 1).map(l => r[FIELD[l]]); }
+function label(r, k) {
+  const v = r[FIELD[P.levels[k]]];
+  if (P.levels[k] === 'MRP') return /^\d/.test(v) ? 'MRP ' + v : v;
+  if (P.levels[k] === 'Display') return v === '-' ? 'No display split' : v.replace('_', '-');
+  return v;
 }
 function chart(r) {
   $('chartCard').hidden = !r;
   if (!r) return;
-  $('ctitle').textContent = r.level === 'Grand Total' ? 'Grand total' : [r.div, r.attr, r.dept].filter(Boolean).join(' › ');
+  $('ctitle').textContent = r.level === 'Grand Total' ? 'Grand total' : rowPath(r).map((_, k) => label(r, k)).join(' › ');
   $('csub').innerHTML = `${tags.length ? 'Stores tagged ' + esc(tags.join(', ')) : 'All stores'} · TTL ${f2(r.ttl[0])} vs ${f2(r.ttl[1])} L · ${pct(r.ttl[2])}`;
   const M = P.months, n = M.length, W = 980, H = 300, L = 56, Bm = 46, T = 30;
   const max = Math.max(1e-9, ...r.ty.map(v => v || 0), ...r.ly.map(v => v || 0));
@@ -210,7 +223,7 @@ $('tags').addEventListener('click', e => {
 });
 $('expand').onclick = () => {
   const any = open.size; open.clear();
-  if (!any) P.rows.forEach(r => { if (r.level === 'Division') open.add(r.div); if (r.level === 'Attribute') open.add(r.div + '|' + r.attr); });
+  if (!any) P.rows.forEach(r => { if (r.level === 'Division' || r.level === 'Attribute') open.add(rowPath(r).join('|')); });   // to Department
   $('expand').textContent = any ? 'Expand all' : 'Collapse all'; draw();
 };
 async function upload(f) {
@@ -221,6 +234,10 @@ async function upload(f) {
   sel = null; refresh();
 }
 $('file').onchange = e => upload(e.target.files[0]);
+$('link').onclick = async () => {
+  try { await api('api/link', {method: 'POST'}); } catch (e) { $('status').className = 'status err'; $('status').textContent = e.message; return; }
+  sel = null; open.clear(); refresh();
+};
 $('replace').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } };   // a label is not keyboard-activatable by itself
 const d = $('drop');
 ['dragenter', 'dragover'].forEach(ev => d.addEventListener(ev, e => { e.preventDefault(); d.classList.add('over'); }));

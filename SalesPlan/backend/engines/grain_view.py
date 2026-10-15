@@ -120,10 +120,44 @@ def warm_views():
         _index(c, am, h)
         _mrp_index(c, am, h)
         _display_index(c, am, h)
+    publish_display(c, am)
     from engines.display_type_engine import _qty_frame
     _qty_frame()
     from engines.plan_checkup import checkup
     checkup(False)
+
+
+# Growth vs LY reads the Sales Plan's output from this file (user, 2026-10-15: "link the growth V LY to the output of the
+# Sales Plan and make the template till Display on Merged MRP Sales comparison"): the Display tree's cells - every store x
+# department x merged MRP (the MRP Re-apportionment's new MRPs) x display type x fortnight, TY plan and the plan's own LY
+# on the same split. Rewritten only when the Display tree is rebuilt (the warmer calls it every minute).
+PUBLISH_PATH = os.path.join(_HERE, "..", "sales_plan_display.pkl")
+_pub: dict = {"ix": None}
+
+
+def publish_display(c: dict | None = None, am: dict | None = None) -> bool:
+    import time
+    import pandas as pd
+    c = c if c is not None else _cube()
+    ix = _display_index(c, am if am is not None else _load_attr(), True)
+    if _pub["ix"] is ix and os.path.exists(PUBLISH_PATH):
+        return False
+    N, C = ix["names"], ix["c"]
+    lv = ("store", "division", "attribute", "department", "mrp", "display", "month")
+    df = pd.DataFrame({k: pd.Categorical.from_codes(C[k], [str(x) for x in N[k]]) for k in lv})
+    df["ly"], df["ty"] = ix["ly"], ix["ty"]
+    df = df[(df["ly"].abs() > 1e-12) | (df["ty"].abs() > 1e-12)].reset_index(drop=True)
+    stores = {s: {"cluster": x["cluster"], "stype": x["stype"], "tag": (c["stores"].get(s) or {}).get("tag") or ""}
+              for s, x in _sinfo(c).items()}
+    src = c.get("source") or {}
+    out = {"built": time.strftime("%d %b %Y %H:%M"), "plan": src.get("note") or src.get("name") or "the Sales Plan",
+           "months": sorted({str(m) for m in N["month"]}, key=month_key), "stores": stores, "cells": df,
+           "about": {"mrp": ix.get("source"), "split": ix.get("about")}}
+    tmp = f"{PUBLISH_PATH}.{os.getpid()}.tmp"
+    pd.to_pickle(out, tmp)
+    os.replace(tmp, PUBLISH_PATH)
+    _pub["ix"] = ix
+    return True
 
 
 def _cube_all() -> dict:

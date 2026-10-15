@@ -138,13 +138,23 @@ def build_main(plan, months, ly):
            "ST TAG": s.map(first(STORE, st_tag)) if st_tag else "", "ATTRIBUTE": att,
            "SSG TAG": s.map(first(STORE, ssg)) if ssg else ""}
     lm = [ly_label(m) for m in months]
-    bl = blocks(months)
     zero = np.zeros(len(idx))
-    for what, cols, vals in (
-            ("Val TY", months, [ty[m + " Plan"].to_numpy() for m in months]),
-            ("Qty TY", [m + " Q" for m in months], [ty[m + " Plan Qty"].to_numpy() if m + " Plan Qty" in ty else zero for m in months]),
-            ("Val LY", lm, [lyk[m].to_numpy() if m in lyk else zero for m in lm]),   # LY rows not sold: 0
-            ("Qty LY", [m + " Q" for m in lm], [lyk[m + " Q"].to_numpy() if m + " Q" in lyk else zero for m in lm])):
+    _measures(out, months, [ty[m + " Plan"].to_numpy() for m in months],
+              [lyk[m].to_numpy() if m in lyk else zero for m in lm],   # LY rows not sold: 0
+              [ty[m + " Plan Qty"].to_numpy() if m + " Plan Qty" in ty else zero for m in months],
+              [lyk[m + " Q"].to_numpy() if m + " Q" in lyk else zero for m in lm])
+    return pd.DataFrame(out).sort_values(["Division", "STORE NAME", "DEPARTMENT"]).reset_index(drop=True)
+
+
+def _measures(out, months, val_ty, val_ly, qty_ty=None, qty_ly=None):
+    """TY value, TY qty, LY value, LY qty by month (qty only when given), each with its block (SOND / JF) and season
+    totals, then growth % per block and season (TY / LY - 1) - into the MAIN columns `out`."""
+    lm, bl = [ly_label(m) for m in months], blocks(months)
+    sets = [("Val TY", months, val_ty), ("Qty TY", [m + " Q" for m in months], qty_ty),
+            ("Val LY", lm, val_ly), ("Qty LY", [m + " Q" for m in lm], qty_ly)]
+    for what, cols, vals in sets:
+        if vals is None:
+            continue
         out.update(zip(cols, vals))
         for name, ms in bl:
             out[f"TTL {name} {what}"] = sum(vals[months.index(m)] for m in ms)
@@ -152,27 +162,85 @@ def build_main(plan, months, ly):
     for name, _ in bl:
         out[f"{name} Growth % Val"] = _growth(out[f"TTL {name} Val TY"], out[f"TTL {name} Val LY"])
     out["TTL Growth % Val"] = _growth(out["TTL Val TY"], out["TTL Val LY"])
-    return pd.DataFrame(out).sort_values(["Division", "STORE NAME", "DEPARTMENT"]).reset_index(drop=True)
+
+
+# ── The Sales Plan's own output (user, 2026-10-15: "link the growth V LY to the output of the Sales Plan and make the
+# template till Display on Merged MRP Sales comparison") ─────────────────────────────────────────────────────────────
+# 8010's warmer publishes the Display tree's cells (grain_view.publish_display): store x department x merged MRP (the MRP
+# Re-apportionment's new MRPs) x display type x fortnight, TY plan and LY - the plan's own LY, split on the same merged
+# MRPs and display types, so TY and LY compare like for like at every level. Value only (no qty in that output).
+SP_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "SalesPlan", "backend", "sales_plan_display.pkl")
+MRP, DISP = "MRP", "DISPLAY"
+
+
+def load_sales_plan(path=SP_PATH):
+    if not os.path.exists(path):
+        raise FileNotFoundError("The Sales Plan hasn't published its output yet - it does within a minute of 8010 starting.")
+    return pd.read_pickle(path)   # written by this suite's Sales Plan server only
+
+
+def build_main_sp(sp):
+    """MAIN from the Sales Plan's output: one row per Store x Department x merged MRP x Display type, with Division,
+    Attribute, the store's ST TAG, SSG TAG (SSG / the plan's store group) and cluster, then TY and LY value by fortnight,
+    block and season totals and growth %."""
+    months, c = list(sp["months"]), sp["cells"]
+    keys = ["store", "division", "attribute", "department", "mrp", "display"]
+    g = c.groupby(keys + ["month"], observed=True, sort=False)[["ty", "ly"]].sum()
+    wide = {k: g[k].unstack("month") for k in ("ty", "ly")}
+    for k, w in wide.items():
+        w.columns = w.columns.astype(str)
+        wide[k] = w.reindex(columns=months).fillna(0.0)
+    idx = wide["ty"].index.union(wide["ly"].index)
+    ty, ly = wide["ty"].reindex(idx).fillna(0.0), wide["ly"].reindex(idx).fillna(0.0)
+    lv = {k: idx.get_level_values(k).astype(str) for k in keys}
+    st = sp["stores"]
+    s, d, div = lv["store"], lv["department"], lv["division"]
+    out = {"Div Conc": s + div, "Dep Conc": s + d, "Division": div, "STORE NAME": s, "DEPARTMENT": d,
+           MRP: lv["mrp"], DISP: lv["display"],
+           "ST TAG": s.map(lambda x: (st.get(x) or {}).get("tag", "")), "ATTRIBUTE": lv["attribute"],
+           "SSG TAG": s.map(lambda x: (st.get(x) or {}).get("stype", "")),
+           "CLUSTER": s.map(lambda x: (st.get(x) or {}).get("cluster", ""))}
+    _measures(out, months, [ty[m].to_numpy() for m in months], [ly[m].to_numpy() for m in months])
+    return (pd.DataFrame(out).sort_values(["Division", "STORE NAME", "DEPARTMENT", MRP, DISP], key=_order)
+            .reset_index(drop=True))
+
+
+def _order(col):
+    """Sort key: MRPs as numbers (No MRP split / Not planned after them), everything else as text; "" (a parent row's
+    empty deeper level) first."""
+    col = col.astype(str)
+    if col.name != MRP:
+        return col
+    num = pd.to_numeric(col, errors="coerce")
+    text = sorted(x for x in col[num.isna()].unique() if x)
+    return num.fillna(col.map({x: 1e15 + i for i, x in enumerate(text)})).fillna(-np.inf)
+
+
+LEVELS = (("Division", "Division"), ("ATTRIBUTE", "Attribute"), ("DEPARTMENT", "Department"), (MRP, "MRP"), (DISP, "Display"))
 
 
 def pivot(main, months, tags=None):
-    """Division -> Attribute -> Department (the plan's hierarchy) over the stores whose SSG TAG is in `tags` (None =
-    every store): TY, LY and growth % per month, block and season, then the grand total."""
+    """Division -> Attribute -> Department (the plan's hierarchy), then merged MRP -> Display type when MAIN has them (the
+    Sales Plan's output), over the stores whose SSG TAG is in `tags` (None = every store): TY, LY and growth % per month,
+    block and season, then the grand total."""
     # the page shows untagged stores as "(blank)" and sends that label back (audit 2026-10-06: it matched nothing)
     tags = tags and ["" if t == "(blank)" else t for t in tags]
     m = main if not tags else main[main["SSG TAG"].fillna("").isin(tags)]
     lm = [ly_label(x) for x in months]
     bl = blocks(months)
     val = months + lm + [f"TTL {b} Val {w}" for b, _ in bl for w in ("TY", "LY")] + ["TTL Val TY", "TTL Val LY"]
+    cols = [c for c, _ in LEVELS if c in m.columns]
+    name = dict(LEVELS)
     parts = []
-    for div, gd in m.groupby("Division", sort=True):
-        parts.append({"Level": "Division", "Division": div, "ATTRIBUTE": "", "DEPARTMENT": "", **gd[val].sum()})
-        for at, ga in gd.groupby("ATTRIBUTE", sort=True):
-            parts.append({"Level": "Attribute", "Division": div, "ATTRIBUTE": at, "DEPARTMENT": "", **ga[val].sum()})
-            for dp, gp in ga.groupby("DEPARTMENT", sort=True):
-                parts.append({"Level": "Department", "Division": div, "ATTRIBUTE": at, "DEPARTMENT": dp, **gp[val].sum()})
-    parts.append({"Level": "Grand Total", "Division": "", "ATTRIBUTE": "", "DEPARTMENT": "", **m[val].sum()})
-    p = pd.DataFrame(parts, columns=["Level", "Division", "ATTRIBUTE", "DEPARTMENT", *val])
+    for k in range(1, len(cols) + 1):   # one groupby per level (ms), parents sorted ahead of their children below
+        g = m.groupby(cols[:k], sort=False)[val].sum().reset_index()
+        g.insert(0, "Level", name[cols[k - 1]])
+        for c in cols[k:]:
+            g[c] = ""
+        parts.append(g[["Level", *cols, *val]])
+    p = pd.concat(parts, ignore_index=True).sort_values(cols, key=_order, kind="stable")
+    tot = pd.DataFrame([{"Level": "Grand Total", **{c: "" for c in cols}, **m[val].sum()}])
+    p = pd.concat([p, tot], ignore_index=True)[["Level", *cols, *val]]
     for t, l in zip(months, lm):
         p[f"{t} Growth %"] = _growth(p[t], p[l])
     for b, _ in bl:

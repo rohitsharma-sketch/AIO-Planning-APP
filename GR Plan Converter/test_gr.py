@@ -56,4 +56,19 @@ assert np.isclose(p3["TTL Val TY"], 15 + 20) and np.isclose(p3["TTL Val LY"], 17
 # "(blank)" from the page = the untagged stores
 mb = main.copy(); mb.loc[mb["STORE NAME"] == "S2", "SSG TAG"] = ""
 assert np.isclose(ge.pivot(mb, M, ["(blank)"])["TTL Val LY"].iloc[-1], ge.pivot(mb, M)["TTL Val LY"].iloc[-1] - ge.pivot(mb, M, ["SSG"])["TTL Val LY"].iloc[-1])
+# the Sales Plan's own output (2026-10-15): Store x Department x merged MRP x Display, value only; MRPs in price order
+SM = ["Mar'27 P1", "Mar'27 P2"]
+cells = pd.DataFrame([("S1", "KIDS", "REG", "A", "999", "TABLE", "Mar'27 P1", 1.0, 2.0), ("S1", "KIDS", "REG", "A", "199", "TABLE", "Mar'27 P2", 1.0, 1.0),
+                      ("S1", "KIDS", "REG", "A", "999", "NON_TABLE", "Mar'27 P1", 0.0, 3.0), ("S2", "KIDS", "REG", "B", "Not planned", "-", "Mar'27 P1", 4.0, 0.0)],
+                     columns=["store", "division", "attribute", "department", "mrp", "display", "month", "ly", "ty"])
+sp = {"months": SM, "cells": cells, "stores": {"S1": {"stype": "SSG", "tag": "x", "cluster": "C"}, "S2": {"stype": "NSO", "tag": "", "cluster": "C"}}}
+ms = ge.build_main_sp(sp)
+assert len(ms) == 4 and np.isclose(ms["TTL Val TY"].sum(), 6) and np.isclose(ms["TTL Val LY"].sum(), 6) and "Qty TY" not in " ".join(ms.columns)
+ps = ge.pivot(ms, SM)
+assert list(ps.Level) == ["Division", "Attribute", "Department", "MRP", "Display", "MRP", "Display", "Display",
+                          "Department", "MRP", "Display", "Grand Total"], list(ps.Level)
+assert list(ps[ps.Level == "MRP"]["MRP"]) == ["199", "999", "Not planned"]
+for lv in ("Division", "Department", "MRP", "Display"):
+    assert np.isclose(ps[ps.Level == lv]["TTL Val TY"].sum(), 6)
+assert np.isclose(ge.pivot(ms, SM, ["SSG"]).iloc[-1]["TTL Val LY"], 2)
 print("all growth-vs-LY checks passed")
