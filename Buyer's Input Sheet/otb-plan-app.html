@@ -85,6 +85,12 @@ button{font-family:inherit}
 .snav-status{padding:6px 10px;font-size:11px;color:rgba(255,255,255,.6);display:flex;align-items:center;gap:7px}
 .status-dot{width:7px;height:7px;border-radius:50%;background:var(--po);flex-shrink:0;animation:pulse 2.4s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+/* sync check (2026-10-15): one pill under the save status - summaries = Buyer's Plan, apparel = AOP, Sales Plan got the Save */
+.sync-chk{display:flex;align-items:center;gap:7px;width:100%;margin-top:4px;padding:5px 10px;border:1px solid rgba(255,255,255,.14);border-radius:8px;background:transparent;font:inherit;font-size:11px;font-weight:600;color:rgba(255,255,255,.7);cursor:pointer;text-align:left}
+.sync-chk:hover{border-color:rgba(255,255,255,.3)}
+.sync-chk.ok{color:#86EFAC}.sync-chk.warn{color:#FCD34D}
+.sync-chk-det{margin:6px 2px 0;padding:0 0 0 16px;font-size:11px;line-height:1.45;color:rgba(255,255,255,.75)}
+.sync-chk-det li{margin-bottom:4px}.sync-chk-det li.ok::marker{content:'\2713  ';color:#86EFAC}.sync-chk-det li.warn::marker{content:'!  ';color:#FCD34D}.sync-chk-det li.na::marker{content:'\2013  '}
 
 /* ── TOP BAR ────────────────────────────────────────────────────────── */
 .tbar{height:var(--TH);flex-shrink:0;background:var(--topbar-bg);display:flex;align-items:center;padding:0 18px;gap:0;position:relative;box-shadow:0 1px 0 rgba(255,255,255,.04),0 2px 10px rgba(var(--st-ink-rgb,30,39,35),.18)}
@@ -710,6 +716,8 @@ tr:hover .blk-lock,.blk-lock:focus-visible{opacity:1}
       <div class="snav-status">
         <span class="status-dot"></span><span id="autosave-lbl">Not saved</span>
       </div>
+      <button type="button" id="syncChk" class="sync-chk" aria-expanded="false" aria-controls="syncChkDet" onclick="_syncChkToggle()" title="Checking the syncs..."><span id="syncChkLbl">Checking the syncs...</span></button>
+      <ul id="syncChkDet" class="sync-chk-det" hidden></ul>
     </div>
   </nav>
 
@@ -4640,7 +4648,7 @@ function _drwMonthHtml(dv,sec,mi){
   if(!o)return `<div class="drw-why">${M}: no planner value - ${!(aop>0)?'there is no AOP for this month':'the department has no LY sales this month'}.</div>`;
   const cr=v=>'Rs.'+v.toFixed(3)+' Cr',fc=o.fc,x=fc.inp||{},t=fc.tags||{},pc=v=>v==null?'n/a':(v*100).toFixed(1)+'%';
   const cont=aop>0?o.share/aop:0,raw=o.scale>0?aop/o.scale:0,bg=S.inputs[sec.id+'__'+mi];
-  const meth=(FM_METHODS.find(m=>m[0]===(PLANNER.ft?.mode||'matrix'))||FM_METHODS[0])[1],blk=_planMode()==='block';
+  const meth=(FM_METHODS.find(m=>m[0]===(PLANNER.ft?.mode||'factor1'))||FM_METHODS[0])[1],blk=_planMode()==='block';
   const step=(h,b)=>`<li><b>${h}</b><span>${b}</span></li>`;
   return `<ol class="drw-steps">
     ${step(`Factor ×${fc.f.toFixed(2)}`,`${_attr(meth)}: ${_attr(fc.why||'-')}. Inputs: sell-thru ${pc(x.st)} (${_attr(t.st||'-')}) · LY growth ${pc(x.gr)} (${_attr(t.growth||'-')}) · fill rate ${pc(x.fill)} (${_attr(t.fill||'-')})${x.ref?' - from '+_attr(x.ref):''}. `+
@@ -5517,8 +5525,9 @@ function saveState(logVersion=false){
 // explicit = the Save button: always say what happened (2026-09-29: a Save that sent nothing looked like a success)
 async function pushBuyerGrowthLive(explicit=false){
   const note=m=>{if(explicit)toast(m);};
+  const mark=(ok,msg)=>{if(explicit)_spPushSet(ok,msg);};   // the sync pill remembers what the last Save did
   try{
-    if(!S.aopLocked){note('Saved in this browser only — NOT sent to Sales Plan: no AOP synced');return;}
+    if(!S.aopLocked){mark(false,'NOT sent to Sales Plan: no AOP synced');note('Saved in this browser only — NOT sent to Sales Plan: no AOP synced');return;}
     const recorded=new Set();
     Object.keys(S.aopSeeds).concat([...S.locked]).forEach(k=>recorded.add(+k.split('__').pop()));
     const rows=[];
@@ -5535,20 +5544,71 @@ async function pushBuyerGrowthLive(explicit=false){
         }
       });
     });
-    if(!rows.length){note('Saved in this browser only — NOT sent to Sales Plan: no growth entered');return;}
+    if(!rows.length){mark(false,'NOT sent to Sales Plan: no growth entered');note('Saved in this browser only — NOT sent to Sales Plan: no growth entered');return;}
     await fetch('/api/config/buyer-department-growth',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({rows,aop_publish_id:S.aopSeededFrom??null}),
     }).then(async r=>{
       if(!r.ok||r.redirected){
         const why=r.status===403?(await r.json().catch(()=>({}))).detail||'no access':r.status===401||r.redirected?'sign in again':r.status;
-        toast('Growth NOT sent to Sales Plan ('+why+')');return;}
+        mark(false,'NOT sent to Sales Plan ('+why+')');toast('Growth NOT sent to Sales Plan ('+why+')');return;}
       // audit 2026-10-07: success was shown on r.ok alone - the server stores only valid rows (none -> nothing changes)
       const got=(await r.json().catch(()=>({}))).updated;
-      if(got!=null&&got!==rows.length)toast('Growth NOT fully sent to Sales Plan (stored '+got+' of '+rows.length+')');
-      else note('Saved ✓ — '+rows.length+' growth rows sent to Sales Plan');});
-  }catch(e){toast('Growth NOT sent to Sales Plan (AOP unreachable)');} // never block the buyer's own save on this
+      if(got!=null&&got!==rows.length){mark(false,'NOT fully sent to Sales Plan (stored '+got+' of '+rows.length+')');toast('Growth NOT fully sent to Sales Plan (stored '+got+' of '+rows.length+')');}
+      else{mark(true,'Sales Plan got the last Save ('+rows.length+' growth rows)');note('Saved ✓ — '+rows.length+' growth rows sent to Sales Plan');}});
+  }catch(e){mark(false,'NOT sent to Sales Plan (AOP unreachable)');toast('Growth NOT sent to Sales Plan (AOP unreachable)');} // never block the buyer's own save on this
 }
+/* Sync check (user, 2026-10-15: "also check if the summaries sync in BIS to the buyer's plan" ... "and add a check
+   somehwere similar to an indicator that the syncs are through"). One pill under the save status, re-checked after every
+   refresh: (1) the Division / Department / Attribute summaries add up to the Buyer's Plan, division by division and month
+   by month (built over every division with the filters off, so all cover the same scope); (2) apparel = AOP every month;
+   (3) the last Save from this browser reached Sales Plan in full; (4) the plan on screen = the saved version. Read only. */
+let _spPush=null;
+try{_spPush=JSON.parse(localStorage.getItem('bis.sp_push')||'null');}catch(e){}
+function _spPushSet(ok,msg){_spPush={ok,msg,at:new Date().toISOString()};try{localStorage.setItem('bis.sp_push',JSON.stringify(_spPush));}catch(e){}_syncChkSoon();}
+function _syncChecks(){
+  const out=[],keep={report:S.report,divTab:S.divTab,filters:S.filters};
+  const leaf=r=>r._key&&r._divId&&!r._isGrpHd&&!r._isTot&&!r._isGrand;
+  const agg=rows=>{const t={};rows.forEach(r=>AOP_MIS.forEach(mi=>{const k=r._divId+'|'+mi;t[k]=(t[k]||0)+(+r._tyByMon?.[mi]||0);}));return t;};
+  let worst=0,where='';
+  try{
+    S.divTab=null;S.filters={...S.filters,div:new Set(),attr:new Set(),sec:new Set(),dept:null};
+    S.report='buyers';const base=agg(getRows().filter(leaf));
+    [['summary','Division Summary',r=>r._isSumDiv],['dept','Department Summary',leaf],['attr','Attribute Summary',r=>leaf(r)&&_parseAttrKey(r._key)]].forEach(([rep,nm,pick])=>{
+      S.report=rep;const seen=new Set();
+      const t=agg(getRows().filter(r=>pick(r)&&!(rep==='summary'&&(seen.has(r._divId)||!seen.add(r._divId)))));
+      Object.keys({...base,...t}).forEach(k=>{const d=Math.abs((t[k]||0)-(base[k]||0));if(d>worst){worst=d;where=nm+' ('+k.replace('|',' month ')+')';}});
+    });
+  }catch(e){worst=NaN;where='the summary check could not run';}
+  finally{S.report=keep.report;S.divTab=keep.divTab;S.filters=keep.filters;}
+  out.push(worst<=0.00005?{ok:true,t:"Summaries = Buyer's Plan: Division, Department and Attribute, every division and month"}
+    :{ok:false,t:where+" is off the Buyer's Plan"+(isFinite(worst)?' by Rs.'+(worst*100).toFixed(2)+' L':'')});
+  if(!S.aopLocked)out.push({ok:false,t:'AOP not synced & locked - Save sends nothing to Sales Plan'});
+  else{
+    const off=AOP_MIS.map(mi=>({mi,..._apparelTot(mi)})).filter(r=>r.aop>0&&Math.abs(r.ty-r.aop)>0.00005);
+    out.push(off.length?{ok:false,t:'Apparel off the AOP in '+off.map(r=>MO[r.mi]+' '+(r.ty>r.aop?'+':'')+((r.ty-r.aop)*100).toFixed(2)+' L').join(', ')+' - Save caps it'}
+      :{ok:true,t:'Apparel = AOP every month'+(_aopCache?.version_label?' ('+_aopCache.version_label+')':'')});
+  }
+  out.push(_spPush?{ok:_spPush.ok,t:_spPush.msg+' - '+_vlShort(_spPush.at)}:{ok:null,t:'Sales Plan: no Save from this browser yet - it keeps the last Save made'});
+  const v=_vlLoad().find(x=>x.id===_vlActiveId());
+  if(v){
+    const same=_vlSame(v.snapshot,{inputs:S.inputs,locked:[...S.locked],hiddenSecs:[...S.hiddenSecs]});
+    out.push(same?{ok:true,t:'On screen = the saved version "'+_vlName(v)+'"'}:{ok:false,t:'Changed since "'+_vlName(v)+'" - Save to keep it and send it to Sales Plan'});
+  }else out.push({ok:null,t:'No saved version picked'});
+  return out;
+}
+let _scT=null;
+function _syncChkSoon(){clearTimeout(_scT);_scT=setTimeout(_syncChkRender,300);}
+function _syncChkRender(){
+  const b=document.getElementById('syncChk'),l=document.getElementById('syncChkLbl'),d=document.getElementById('syncChkDet');
+  if(!b||typeof DVDATA==='undefined'||!DVDATA.length)return;
+  const c=_syncChecks(),bad=c.filter(x=>x.ok===false);
+  b.classList.toggle('ok',!bad.length);b.classList.toggle('warn',!!bad.length);
+  l.textContent=bad.length?'\u26A0 Check '+bad.length+' of '+c.length:'\u2713 In sync';
+  b.title=c.map(x=>(x.ok===true?'\u2713 ':x.ok===false?'! ':'\u2013 ')+x.t).join('\n');
+  d.innerHTML=c.map(x=>'<li class="'+(x.ok===true?'ok':x.ok===false?'warn':'na')+'">'+_attr(x.t)+'</li>').join('');
+}
+function _syncChkToggle(){const b=document.getElementById('syncChk'),d=document.getElementById('syncChkDet');d.hidden=!d.hidden;b.setAttribute('aria-expanded',String(!d.hidden));}
 function _updateSaveLabel(d){
   const el=document.getElementById('autosave-lbl');
   if(!el||!d)return;
@@ -5982,6 +6042,7 @@ function _autoInactive100(){
   return true;
 }
 function refresh(){
+  _syncChkSoon();   // the sync pill (2026-10-15)
   _autoInactive100();
   syncRange();
   // sync divtabs visibility + active button
@@ -6196,11 +6257,6 @@ function _plannerImported(sec){
       if(to&&to.some(t=>t!==id))to.forEach(t=>{_plPgIdx[t]=+g;parent[t]=1;});else if(!parent[id])_plPgIdx[id]=+g;});}
   const g=_plPgIdx[sec.id];return g==null||!isFinite(g)?null:g;
 }
-function _band(list,x){
-  if(x==null||!list)return null;
-  let hit=null;list.forEach(b=>{if(b.from==null||x>=b.from)hit=b;});
-  return hit;
-}
 function _secByName(nm){if(!nm)return null;for(const dv of DVDATA){const s=dv.secs.find(x=>x.nm===nm);if(s)return s;}return null;}
 // fill_rate.json (fill_rate_import.py, the user's PLAN vs FILL RATE pivot, NEW FILL RATE % (W_CAP)) - one rate per
 // department for the block and every month; null = not in the pivot (then the reference department's, else 1.00)
@@ -6219,18 +6275,6 @@ function _plannerInputs(sec,mis){
     if(ref){r.ref=ref.nm;r.st=r.st??st(ref.id);r.gr=r.gr??gr(ref.id);r.fill=r.fill??_plannerFill(ref.nm,mis);}
   }
   return r;
-}
-// The 36-row matrix (sell-thru tag x LY-growth tag x fill-rate tag -> factor), as set by hand
-function _matrixFactor(ft,x){
-  const b=ft?.bands||{};
-  const tags={st:_band(b.st,x.st)?.tag||null,growth:_band(b.growth,x.gr)?.tag||null,fill:_band(b.fill,x.fill)?.tag||null};
-  let f=1,why;
-  if(!ft)why='no factor table';
-  else if(x.fill==null)why=PLANNER.fill?'not in the fill-rate pivot - neutral 1.00':'fill rate pending - neutral 1.00';
-  else if(!tags.st||!tags.growth)why='no '+(!tags.st?'sell-thru':'LY growth')+' history - neutral 1.00';
-  else{const row=(ft.factors||[]).find(r=>r.st===tags.st&&r.growth===tags.growth&&r.fill===tags.fill);
-    if(row){f=+row.factor;why=row.reason;}else why='no matching row - neutral 1.00';}
-  return {f,why,tags};
 }
 /* Weighted factor model (user, 2026-10-07: "a dynamic factor table ... a drag and drop structure on which the slabs
    can be changed and their weightage too" / "a definitive derivative co-efficient in case of single and multi factor
@@ -6322,10 +6366,9 @@ function _fmMedians(dvId,mis){
   const md=inp=>_fmQuant(xs.map(x=>x[inp]).filter(v=>v!=null).sort((a,b)=>a-b),50);
   const r={st:md('st'),gr:md('gr'),gb:md('gb'),fill:md('fill')};_fmCutCache.set(k,r);return r;
 }
-// one department's factor under a method: null = plain share, 'matrix' = the saved matrix, or a factor-table draft
+// one department's factor under a method: null = plain share, 'factor1' = Planner input, or a factor-table draft
 function _fmEval(spec,x,dvId,mis,ly){
   if(spec==null)return 1;
-  if(spec==='matrix')return _matrixFactor(PLANNER.ft,x).f;
   if(spec==='factor1'){const dv=DVDATA.find(d=>d.id===dvId);return _f1(x.nm,dv?.nm,mis).f;}
   if(spec.mode==='continuous')return _contFactor(x,_fmMedians(dvId,mis),spec.cont,spec.model,ly).f;
   return _weightedFactor(x,_fmResolve(spec.model,dvId,mis),ly).f;
@@ -6385,7 +6428,7 @@ function _plannerFactor(sec,mis){
     if(!r)return {f:1,why:ft.ml?'no like-for-like history in the Ridge regression (ML) snapshot - neutral 1.00':'Ridge regression (ML) not saved yet - neutral 1.00',tags,inp:x};
     return {f:r.f,why:`Ridge regression (ML) ×${(+r.raw).toFixed(2)}${r.why?.length?` (${r.why.map(w=>w.label).join(', ')})`:''}, damped and limited to ×${(+r.f).toFixed(2)} - history check of ${String(ft.ml.built_at||'').slice(0,10)}`,tags,inp:x};
   }
-  if(ft?.mode==='factor1'){
+  if(ft?.mode==='factor1'||!ft?.mode||ft.mode==='matrix'){   // Matrix removed 2026-10-15: an old 'matrix' table reads as Planner input
     const dv=DVDATA.find(d=>d.secs.includes(sec)),r=_f1(sec.nm,dv?.nm,mis),i=r.inf,pc=v=>(v*100).toFixed(1)+'%';
     const mi=mis.length===1?mis[0]:null,mm=i&&mi!=null?i.months?.[mi]:null;
     const why=!PLANNER.f1?'Planner input: sell-thru not loaded yet - neutral 1.00':!i?'Planner input: no sell-thru for this department - neutral 1.00'
@@ -6394,7 +6437,7 @@ function _plannerFactor(sec,mis){
       :`Planner input: MAMJ'26 sell-thru ${pc(i.tag_st)} (${i.tag}); ${mis.map(m=>MO[m]+' +'+((i.months?.[m]?.factor||0)*100).toFixed(0)+'%').join(', ')}`;
     return {f:r.f,why,tags:{st:i?.tag||null,growth:null,fill:null},inp:x};
   }
-  return {..._matrixFactor(ft,x),inp:x};
+  return {f:1,why:'no planner method - neutral 1.00',tags:{st:null,growth:null,fill:null},inp:x};
 }
 // {divId:{mi:{secId:{ly,fc,val,gr}}}} over the AOP months - recomputed only when one of its inputs changes
 function _plannerCalc(){
@@ -6529,14 +6572,14 @@ const FM_DEFAULT={drivers:[
   {key:'fill',on:true,weight:25,slabs:[{from:null,label:'Low',mult:1.05},{from:0.5,label:'Avg',mult:1},{from:0.7,label:'Good',mult:0.97}]}],
   rules:[{driver:'fill',op:'below',value:0.5,kind:'min',f:0.95}],shrink_k:0.05,clamp:[0.8,1.2]};
 const FM_CONT_DEFAULT={st:0.25,growth:0.2,base:0,fill:0,agree:false}; // from the 7 Oct back-tests: gentle sell-thru, modest momentum, no fill driver
-let _fmFt=null,_fmTab='matrix',_fmPrevCache=null,_fmView='preview';   // _fmView: 'preview' | 'table' (pop-up tabs)
+let _fmFt=null,_fmTab='factor1',_fmPrevCache=null,_fmView='preview';   // _fmView: 'preview' | 'table' (pop-up tabs)
 const _clone=o=>JSON.parse(JSON.stringify(o));
 function openFactorTable(){
   fetch('/api/auth/me').then(r=>r.ok?r.json():null).catch(()=>null).then(me=>{
     PLANNER.canEdit=!!(me&&(me.is_admin||me.role==='admin'||me.role==='planner'));
     _fmFt=PLANNER.ft?_clone(PLANNER.ft):null;
-    if(_fmFt){_fmFt.mode=_fmFt.mode||'matrix';_fmFt.model=_fmFt.model||_clone(FM_DEFAULT);_fmFt.cont=_fmFt.cont||{...FM_CONT_DEFAULT};}
-    _fmTab=_fmFt?.mode==='weighted'?'builder':_fmFt?.mode==='continuous'?'cont':_fmFt?.mode==='ml'?'ml':_fmFt?.mode==='factor1'?'factor1':'matrix';
+    if(_fmFt){_fmFt.mode=(!_fmFt.mode||_fmFt.mode==='matrix')?'factor1':_fmFt.mode;_fmFt.model=_fmFt.model||_clone(FM_DEFAULT);_fmFt.cont=_fmFt.cont||{...FM_CONT_DEFAULT};}
+    _fmTab=_fmFt?.mode==='weighted'?'builder':_fmFt?.mode==='continuous'?'cont':_fmFt?.mode==='ml'?'ml':'factor1';
     if(!PLANNER.f1)_plannerF1Load().then(()=>_renderFactorTable());_fmPrevCache=null;_fmCutCache=new Map();_fmView='preview';
     _renderFactorTable();document.getElementById('factorOv').style.display='flex';
     if(!PLANNER.mla?.data)_fmLoadMla();
@@ -6558,7 +6601,7 @@ function _renderFactorTable(){
   el.innerHTML=tabs+`<div class="fm-vtabs sub"><span class="fm-note">Method:</span>${meth}</div>
     <div class="fm-fill">${PLANNER.fill?`Fill rates: <b>${Object.keys(PLANNER.fill.departments||{}).length}</b> departments from ${_h(PLANNER.fill.source)} (${_h(PLANNER.fill.column)}) · ${_h(PLANNER.fill.imported_at)}`:'<span style="color:var(--ne)">Fill-rate file not loaded yet.</span>'}
       ${PLANNER.canEdit?`<label class="tbtn" style="margin-left:8px;cursor:pointer">&#x2191; Refresh fill rates<input type="file" accept=".xlsb,.xlsx,.xlsm" style="display:none" onchange="uploadFillRate(this)"></label>`:''}</div>`+
-    (_fmTab==='builder'?_fmBuilderHtml(ft.model,ed):_fmTab==='cont'?_fmContHtml(ft,ed):_fmTab==='ml'?_fmMlHtml(ft,ed):_fmTab==='factor1'?_fmF1Html(ft,ed):_fmMatrixHtml(ft,ed))+
+    (_fmTab==='builder'?_fmBuilderHtml(ft.model,ed):_fmTab==='cont'?_fmContHtml(ft,ed):_fmTab==='ml'?_fmMlHtml(ft,ed):_fmF1Html(ft,ed))+
     (ft.updated_by?`<div style="padding:8px 14px;font-size:10px;color:var(--mu)">Last changed by ${_h(ft.updated_by)} · ${_h(ft.updated_at)}</div>`:'');
   if(_fmTab==='builder'&&ed)_fmWire();
 }
@@ -6567,15 +6610,15 @@ function _renderFactorTable(){
    each method card shows its factor, the department's Phase 1 plan for the AOP months (every active department of
    its division scored the same way, then re-balanced to each month's AOP - as the planner does) and the back-test.
    "Use this" sets the method (Save applies it); "Settings" opens that method's editor below. Drafts count. */
-const FM_METHODS=[['matrix','Matrix','matrix'],['weighted','Weighted builder','builder'],['continuous','Continuous','cont'],['ml','Ridge regression (ML)','ml'],['factor1','Planner input','factor1']];
+const FM_METHODS=[['weighted','Weighted builder','builder'],['continuous','Continuous','cont'],['ml','Ridge regression (ML)','ml'],['factor1','Planner input','factor1']];
 // what kind of model each method is (user, 12 Oct: "give it a proper name of the models used")
-const FM_MODEL={matrix:'rule-based lookup table',weighted:'weighted scoring model',continuous:'relative-strength power curve',ml:'weighted ridge regression',
+const FM_MODEL={weighted:'weighted scoring model',continuous:'relative-strength power curve',ml:'weighted ridge regression',
   factor1:'sell-thru deviation matrix (Factor 1)'};
 /* (user, 2026-10-08: "i needed the pop up department on which factor does what and how ill it affect the department.
    To weigh in my options not to see the ly trends") - one row per factor, one column per method: what the factor
    multiplies the department by and what that is worth in Rs for its Mar-Jun plan. The Rs split is by log share, so
    the rows add up exactly to plan - plain AOP share (plan = plain share x factor x division re-balance). */
-const FM_STEP_ROWS=[['st','Sell-thru'],['growth','25V26 growth'],['base','19V26 growth'],['fill','Fill rate'],['combo','Matrix lookup'],['model','History model (ML)'],
+const FM_STEP_ROWS=[['st','Sell-thru'],['growth','25V26 growth'],['base','19V26 growth'],['fill','Fill rate'],['model','History model (ML)'],
   ['rules','Rules'],['damp','Small-department damping'],['clamp','Factor limits']];
 // plain-words guide per method (user, 2026-10-08: "add a proper reason in simple terms to aid the user to select the right model")
 const _fmPlainMl=M=>{const pct=v=>(v*100).toFixed(2)+'%',ok=M.ridge.mean<M.plain.mean-FM_NOISE;
@@ -6606,10 +6649,6 @@ function _fmDeptWhy(c,x,md,dvNm){
   } else if(c.k==='ml'){const d=c.res.r;
     out.push(d?`Learnt from ${_h(dvNm)} departments only, the model gives ×${(+d.ml).toFixed(2)}${d.why.length?` (${d.why.map(w=>w.label).join(', ')})`:''}; damping and limits make it ×${c.res.f.toFixed(2)}.`
       :'No like-for-like history - neutral ×1.00.');
-  } else if(c.k==='matrix'){
-    const o=c.st.combo;
-    out.push(`Its bands (${['st','growth','fill'].map(k=>({st:'sell-thru',growth:'25V26 growth',fill:'fill rate'})[k]+' '+(c.st[k].t||'').replace(/^band /,'')).join(', ')}) point to factor ×${c.res.f.toFixed(2)}`+
-      (o.imp!=null&&Math.abs(o.imp)>=5e-4?` - ${o.imp>0?'adds':'cuts'} ${L(o.imp)}`:'')+'.');
   } else Object.keys(nm).forEach(k=>{const o=c.st[k];if(!o||o.c==null||!(Math.abs(o.imp)>=5e-4))return;
     out.push(`${nm[k][0]} ${pc(x[nm[k][1]])} (division ${pc(md[nm[k][1]])}) ${o.imp>0?'adds':'cuts'} ${L(o.imp)}.`);});
   ['rules','damp','clamp'].forEach(k=>{const o=c.st[k];if(o&&o.c!=null&&Math.abs(o.imp)>=5e-3)
@@ -6633,12 +6672,12 @@ function _fmMlGauge(ft){
   const P=_fmPrev(),out={};
   FM_METHODS.filter(([k])=>k!=='ml').forEach(([k])=>{const sp=_fmSpec(k,ft);let both=0,same=0,gap=0,n=0;
     P.forEach(q=>{const d=_mlRec(q.dv,q.sec);if(!d)return;
-      const m=d.ml_guarded,f=k==='matrix'?_matrixFactor(ft,q.x).f:_fmEval(sp,q.x,q.dv.id,AOP_MIS,q.ly);
+      const m=d.ml_guarded,f=_fmEval(sp,q.x,q.dv.id,AOP_MIS,q.ly);
       n++;gap+=Math.abs(f-m);if(Math.abs(f-1)>0.02&&Math.abs(m-1)>0.02){both++;if((f-1)*(m-1)>0)same++;}});
     out[k]={n,both,same,gap:n?gap/n:null};});
   return out;
 }
-function _fmSpec(k,ft){return k==='plain'?null:k==='matrix'?'matrix':k==='factor1'?'factor1':{mode:k,model:ft.model,cont:ft.cont};}
+function _fmSpec(k,ft){return k==='plain'?null:k==='factor1'?'factor1':{mode:k,model:ft.model,cont:ft.cont};}
 function _fmDeptCalc(sec,dv,k,ft){
   if(k==='factor1'){   // Planner input: LY x factor, each month re-balanced over ALL divisions (as the planner does)
     const all=_fmPrev();let val=0;
@@ -6648,7 +6687,7 @@ function _fmDeptCalc(sec,dv,k,ft){
     const r=_f1(sec.nm,dv.nm,AOP_MIS);return {f:r.f,val,r:r.inf};
   }
   const P=_fmPrev().filter(q=>q.dv===dv),spec=_fmSpec(k,ft);
-  const fOf=q=>k==='ml'?_mlF(dv,q.sec):k==='matrix'?_matrixFactor(ft,q.x).f:_fmEval(spec,q.x,dv.id,AOP_MIS,q.ly);
+  const fOf=q=>k==='ml'?_mlF(dv,q.sec):_fmEval(spec,q.x,dv.id,AOP_MIS,q.ly);
   const F=new Map(P.map(q=>[q.sec.id,fOf(q)])),divAnn=dv.secs.reduce((a,s)=>a+s.ly,0);
   let val=0;
   AOP_MIS.forEach(mi=>{const aop=S.aop[dv.id]?.[mi];if(!aop||aop<=0)return;
@@ -6658,7 +6697,6 @@ function _fmDeptCalc(sec,dv,k,ft){
     if(raw>0)val+=mine*aop/raw;});
   const q=P.find(o=>o.sec===sec),x=q?.x;let r=null;
   if(k==='ml'){r=_mlRec(dv,sec);if(r)r={...r,_div:dv.nm};}
-  else if(x&&k==='matrix')r=_matrixFactor(ft,x);
   else if(x&&k==='weighted')r=_weightedFactor(x,_fmResolve(ft.model,dv.id,AOP_MIS),q.ly);
   else if(x&&k==='continuous')r=_contFactor(x,_fmMedians(dv.id,AOP_MIS),ft.cont,ft.model,q.ly);
   return {f:F.get(sec.id)??1,val,r};
@@ -6684,13 +6722,6 @@ function _fmSteps(k,res,ft){
     S2.damp=d&&d.ml>0?{c:d.ml_guarded/d.ml,t:'the BIS small-department damping and 0.8-1.2 limits'}:{t:'-'};
     S2.clamp={t:'in the row above'};
     return S2;}
-  if(k==='matrix'){
-    const tg=r.tags||{},b=ft.bands||{},lb=(key,t)=>t?`band ${t} ${(b[key]||[]).find(z=>z.tag===t)?.label||''}`:'no data';
-    S2.st={t:lb('st',tg.st)};S2.growth={t:lb('growth',tg.growth)};S2.fill={t:lb('fill',tg.fill)};S2.base={t:'not in this method'};
-    S2.combo={c:res.f,t:r.why||'all three bands looked up together'};
-    S2.rules=S2.damp=S2.clamp={t:'not in this method'};
-    return S2;
-  }
   const parts=r.parts||[],W=parts.reduce((a,q)=>a+(q.w||0),0);
   ['st','growth','base','fill'].forEach(key=>{const q=parts.find(p=>p.key===key);
     if(!q){
@@ -6714,7 +6745,7 @@ function _fmPickHtml(ft,ed){
   const pc=v=>v==null?'n/a':(v*100).toFixed(1)+'%',L=v=>(v>=0?'+':'−')+Math.abs(v*100).toFixed(1)+' L',cr=v=>'Rs '+v.toFixed(2)+' Cr';
   const opts=DVDATA.map(d=>{const o=P.filter(q=>q.dv===d).sort((a,b)=>a.sec.nm.localeCompare(b.sec.nm));
     return o.length?`<optgroup label="${_h(d.nm)}">${o.map(q=>`<option value="${_h(q.sec.id)}"${q.sec.id===_fmDept?' selected':''}>${_h(q.sec.nm)}</option>`).join('')}</optgroup>`:'';}).join('');
-  const plain=_fmDeptCalc(sec,dv,'plain',ft).val,saved=PLANNER.ft?.mode||'matrix';
+  const plain=_fmDeptCalc(sec,dv,'plain',ft).val,saved=PLANNER.ft?.mode||'factor1';
   const MLD=_fmMl();
   const cols=FM_METHODS.map(([k,nm,tab])=>{const res=_fmDeptCalc(sec,dv,k,ft),st=_fmSteps(k,res,ft);if(!st.model)st.model={t:'not in this method'};
     st.bal={c:plain>0&&res.f>0?res.val/(plain*res.f):1,t:k==='factor1'?'each month stays on its AOP over all divisions':'the division stays on its AOP'};
@@ -6777,7 +6808,7 @@ function _fmHistAllHtml(ft){
   const M=PLANNER.mla?.data;if(!M||!M.plan.ready)return '';
   const spec=_fmSpec(ft.mode,ft),meth=(FM_METHODS.find(m=>m[0]===ft.mode)||FM_METHODS[0])[1];
   const rows=_fmPrev().map(q=>{const d=M.departments[q.dv.nm+'|'+q.sec.nm];if(!d)return null;
-    const f=ft.mode==='ml'?_mlF(q.dv,q.sec):ft.mode==='matrix'?_matrixFactor(ft,q.x).f:_fmEval(spec,q.x,q.dv.id,AOP_MIS,q.ly);
+    const f=ft.mode==='ml'?_mlF(q.dv,q.sec):_fmEval(spec,q.x,q.dv.id,AOP_MIS,q.ly);
     const bg=d.band_g!=null?_bandsOf(M,'bands_growth',q.dv.nm)[d.band_g]:null,br=d.band_r!=null?_bandsOf(M,'bands_recent',q.dv.nm)[d.band_r]:null,flags=[];
     if(d.band_g===0&&f<0.98)flags.push('collapsed last year but cut');
     if(br&&Math.abs(f-1)>0.02&&Math.abs(br.rel_perf-1)>0.03&&(f-1)*(br.rel_perf-1)<0)flags.push('recent momentum leans the other way');
@@ -7076,23 +7107,12 @@ function _fmMlBreakHtml(ft){
     <div class="fm-note" style="margin-top:6px">Main reasons = the inputs that moved the history part most for this department (each against its own division). ${_fmMlaBtn()}</div>${_fmMlaErr()}
   </div>`;
 }
-function _fmMatrixHtml(ft,ed){
-  const lbl=(k,t)=>_h((ft.bands[k].find(b=>b.tag===t)||{}).label||t);
-  const bands=k=>ft.bands[k].map(b=>`<span class="pl-tag">${_h(b.tag)} ${_h(b.label)}</span>`).join(' ');
-  return `<div style="padding:10px 14px;font-size:11px;line-height:2">
-      <b>Avg Weekly Sell-Thru %</b> ${bands('st')}<br><b>LY Growth</b> (25V26, MAMJ'26 vs MAMJ'25, value) ${bands('growth')}<br><b>Fill Rate</b> ${bands('fill')}</div>
-    <table class="pl-ft"><thead><tr><th>Sell-Thru</th><th>LY Growth</th><th>Fill Rate</th><th>Factor</th><th style="text-align:left">Reason</th></tr></thead><tbody>${
-      ft.factors.map((r,i)=>`<tr><td>${_h(r.st)} ${lbl('st',r.st)}</td><td>${_h(r.growth)} ${lbl('growth',r.growth)}</td><td>${_h(r.fill)} ${lbl('fill',r.fill)}</td>
-        <td>${ed?`<input class="gi has" type="number" step="0.01" min="0.01" max="3" value="${+r.factor}" onchange="_fmFt.factors[${i}].factor=+this.value" style="width:64px" aria-label="Factor row ${i+1}">`:(+r.factor).toFixed(2)}</td>
-        <td style="text-align:left">${_h(r.reason)}</td></tr>`).join('')}</tbody></table>`;
-}
-// every active department's inputs + block LY per month, once per opening (the preview re-scores them on each edit)
 function _fmPrev(){
   if(_fmPrevCache)return _fmPrevCache;
   const out=[];
   DVDATA.forEach(dv=>dv.secs.forEach(sec=>{if(S.hiddenSecs.has(sec.id))return;
     const x=_plannerInputs(sec,AOP_MIS),ly=AOP_MIS.reduce((a,mi)=>a+_secMonLY(sec,dv,mi),0)/AOP_MIS.length;
-    out.push({sec,dv,x,ly,mx:_matrixFactor(PLANNER.ft,x).f});}));
+    out.push({sec,dv,x,ly});}));
   return _fmPrevCache=out;
 }
 const _fmPctMode=d=>d.by==='pct';
@@ -7156,14 +7176,14 @@ function _fmBuilderHtml(m,ed){
 // back-test (both windows, every method) + a preview of the method on this tab - shared by Continuous and the builder
 function _fmEvalHtml(spec){
   const P=_fmPrev(),pct=v=>v==null?'-':(v*100).toFixed(2)+'%';
-  const ft=_fmFt,specs=[['Plain AOP share (factor 1.00)',null],['Matrix (saved)','matrix'],['Weighted builder (draft)',{mode:'weighted',model:ft.model}],['Continuous (draft)',{mode:'continuous',model:ft.model,cont:ft.cont}]];
+  const ft=_fmFt,specs=[['Plain AOP share (factor 1.00)',null],['Weighted builder (draft)',{mode:'weighted',model:ft.model}],['Continuous (draft)',{mode:'continuous',model:ft.model,cont:ft.cont}]];
   const bt=specs.map(([t,sp])=>{const a=_fmBacktest(sp),b=_fmBacktest(sp,FM_BT_LONG_IN,FM_BT_LONG_OUT);
-    return {t,a:a.wape,b:b.wape,avg:a.wape!=null&&b.wape!=null?(a.wape+b.wape)/2:null,n:a.n,cur:sp&&sp!=='matrix'&&sp.mode===spec.mode};});
+    return {t,a:a.wape,b:b.wape,avg:a.wape!=null&&b.wape!=null?(a.wape+b.wape)/2:null,n:a.n,cur:sp&&sp.mode===spec.mode};});
   const base=bt[0].avg;
   const rows=bt.map(r=>`<tr${r.cur?' style="font-weight:700"':''}><td style="text-align:left">${r.t}</td><td>${pct(r.a)}</td><td>${pct(r.b)}</td><td><b>${pct(r.avg)}</b></td>
     <td class="${r.avg!=null&&base!=null&&r!==bt[0]?gCls(base-r.avg):''}">${r===bt[0]||r.avg==null||base==null?'-':((base-r.avg)>=0?'better by ':'worse by ')+Math.abs((base-r.avg)*100).toFixed(2)+' pts'}</td></tr>`).join('');
   const res=P.map(q=>({q,f:_fmEval(spec,q.x,q.dv.id,AOP_MIS,q.ly)})),fs=res.map(o=>o.f).sort((a,b)=>a-b),med=fs.length?fs[Math.floor(fs.length/2)]:1;
-  const lst=arr=>arr.map(o=>`<li>${_h(o.q.sec.nm)} <span class="fm-note">${_h(o.q.dv.nm)}</span> <b>${o.f.toFixed(2)}</b> <span class="fm-note">matrix ${o.q.mx.toFixed(2)}</span></li>`).join('');
+  const lst=arr=>arr.map(o=>`<li>${_h(o.q.sec.nm)} <span class="fm-note">${_h(o.q.dv.nm)}</span> <b>${o.f.toFixed(2)}</b></li>`).join('');
   const by=res.slice().sort((a,b)=>b.f-a.f);
   return `<div class="fm-sec"><h4>Back-test - would it have called the plan?</h4>
       <div class="fm-note">Each department's share of its division predicted from the same months a year earlier (same stores), re-balanced like the planner, then compared with what sold, using only data from before the months predicted. <b>Short</b>: Mar-Apr 2026 inputs -> May-Jun 2026. <b>Long</b>: Jul-Oct 2025 inputs -> Mar-Jun 2026 (closer to the planner's year-ahead step). Error = how far off, as a % of sales - lower is better. ${bt[0].n} departments.</div>
@@ -7675,7 +7695,7 @@ function _vlShort(iso){return new Date(iso).toLocaleString('en-IN',{day:'2-digit
    on, the apparel cap, the division locks, the season rule and the new departments. The full rule book:
    docs/business-rules/RULE_BOOK.md. */
 function _vlRules(){
-  const meth=(FM_METHODS.find(m=>m[0]===(PLANNER.ft?.mode||'matrix'))||FM_METHODS[0])[1];
+  const meth=(FM_METHODS.find(m=>m[0]===(PLANNER.ft?.mode||'factor1'))||FM_METHODS[0])[1];
   const sec=id=>DVDATA.flatMap(d=>d.secs).find(s=>s.id===id),nm=id=>sec(id)?.nm||id;
   return {
     planner_growth:meth,

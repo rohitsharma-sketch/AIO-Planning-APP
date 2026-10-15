@@ -7,6 +7,17 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### BIS: sync pill (summaries = Buyer's Plan, apparel = AOP, Sales Plan got the Save); Matrix removed from the factor table
+- **Asked (user):** "also check if the summaries sync in BIS to the buyer's plan"; "and add a check somehwere similar to an indicator that the syncs are through"; "remove this from the factor table" + "and working" (screenshot: "Matrix - rule-based lookup table - Use this", "band High 10-15%").
+- **Summaries checked:** Division / Department / Attribute Summary vs the Buyer's Plan, every division x month: 0 difference. Grand total TY 431.8803 Cr / LY 388.8432 Cr in all four.
+- **Sync pill (sidebar, under "Saved ..."):** "✓ In sync" or "⚠ Check n of 4". Hover or click lists the four checks:
+  1. The three summaries add up to the Buyer's Plan, built over every division with the filters off so all cover the same scope.
+  2. Apparel = AOP every month.
+  3. The last Save from this browser reached Sales Plan in full. `pushBuyerGrowthLive` now records its outcome, kept in localStorage `bis.sp_push`.
+  4. The plan on screen = the saved version.
+  It re-checks 300 ms after every refresh (~6 ms) and is read only. Checked: green on the saved plan; an in-memory nudge of one department flags "Apparel off the AOP in Apr +8.23 L" and "Changed since Plan Iteration - 01", then green again when the value is put back.
+- **Matrix removed:** gone from the method list and the comparison table (with its "band ..." working and the "Matrix lookup" row), the method tabs, the back-test list, the ML comparison and the department list. `_matrixFactor`, `_fmMatrixHtml` and `_band` are deleted. A factor table saved with no method, or with 'matrix', now reads as Planner input (factor1), which is the method in use, so no number moves: planner total 431.8803 Cr and apparel 43,188.03 L before and after. The saved factor table's bands / factors fields are left in its JSON untouched. Both script blocks parse; the page loads with no console errors.
+
 ### BIS: "Buyer's input" description per department; BIS / Sales Plan / Manual checked on the single versions
 - **Asked (user):** "now check if BIS, Sales Plan and manual all match"; "Can i have a buyer's input description too so that we can know that the input is adjusted due to New Department too or if the new department is set primarily then if the other departments are made and kept unloced then the details will be adjusted as per the input."
 - **Check (SSG, apparel, Mar-Jun'27, Rs lakh; file `Buyer's Input Sheet/BIS vs Sales Plan vs Manual - 15 Oct (final versions).xlsx`):** BIS "Plan Iteration - 01" re-read off the page, identical to the 13:13 read (114 departments). Total: Sales Plan 43,188.03 = BIS 43,188.03 = AOP 43,188.03, Manual 43,188.04. Every month equal (Jun manual +0.01). Sales Plan vs Manual by department: 106 of 108 within 0.01 L, sum |diff| 0.17 L. BIS vs both by department: sum |diff| 172 L (largest MSE_PYJAMA 12.3 L), and by division up to 46 L. This is by design: BIS plans each department at chain level, then the Sales Plan, like the manual, caps each SSG cluster x month on the cluster's AOP.
