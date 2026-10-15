@@ -23,9 +23,22 @@ export default function ExcelFilter({ title, anchor, load, picked, onDone, numer
     document.addEventListener('keydown', esc)
     return () => { document.removeEventListener('mousedown', out); document.removeEventListener('keydown', esc) }
   }, [])   // eslint-disable-line react-hooks/exhaustive-deps
-  const rc = anchor ? anchor.getBoundingClientRect() : { left: 100, bottom: 100 }
+  // placement (user, 2026-10-15: "screen is cutting the filter"): below the button when it fits, else above - whichever
+  // side has more room - and the value list shrinks to that room, so OK / Cancel never fall off the screen. It follows
+  // its button when the page scrolls or the window resizes.
+  const [, reflow] = useState(0)
+  useEffect(() => {
+    const on = e => { if (!(box.current && e && e.target instanceof Node && box.current.contains(e.target))) reflow(n => n + 1) }
+    window.addEventListener('scroll', on, true)
+    window.addEventListener('resize', on)
+    return () => { window.removeEventListener('scroll', on, true); window.removeEventListener('resize', on) }
+  }, [])
+  const rc = anchor ? anchor.getBoundingClientRect() : { left: 100, top: 100, bottom: 100 }
   const left = Math.max(8, Math.min(rc.left, window.innerWidth - 276))
-  const top = Math.min(rc.bottom + 2, window.innerHeight - 160)
+  const below = window.innerHeight - rc.bottom - 10, above = rc.top - 10
+  const down = below >= 360 || below >= above
+  const room = Math.max(160, down ? below : above)
+  const place = down ? { top: rc.bottom + 2 } : { bottom: window.innerHeight - rc.top + 2 }
   const shown = (vals || []).filter(v => String(v).toLowerCase().includes(q.trim().toLowerCase()))
   const all = shown.length > 0 && shown.every(v => sel.has(v))
   const some = shown.some(v => sel.has(v))
@@ -40,7 +53,7 @@ export default function ExcelFilter({ title, anchor, load, picked, onDone, numer
   const sep = <div style={{ borderTop: `1px solid ${theme.border}`, margin: '5px 0' }} />
   return (
     <div ref={box} data-no-undo role="dialog" aria-label={`Filter ${title}`}
-      style={{ position: 'fixed', top, left, width: 260, zIndex: 1000, background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 4, boxShadow: '0 8px 24px rgba(0,0,0,.18)', padding: 6, textTransform: 'none', letterSpacing: 0, fontWeight: 400, color: theme.textPrimary, textAlign: 'left', fontSize: 12 }}>
+      style={{ position: 'fixed', ...place, left, width: 260, maxHeight: room, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', zIndex: 1000, background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 4, boxShadow: '0 8px 24px rgba(0,0,0,.18)', padding: 6, textTransform: 'none', letterSpacing: 0, fontWeight: 400, color: theme.textPrimary, textAlign: 'left', fontSize: 12 }}>
       {fields && (
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 4px 6px' }}>
           Select field:
@@ -63,7 +76,7 @@ export default function ExcelFilter({ title, anchor, load, picked, onDone, numer
       {err && <div style={{ color: theme.danger, fontSize: 12, padding: 4 }}>Could not load the list: {err}</div>}
       {!vals && !err && <div style={{ color: theme.textMuted, fontSize: 12, padding: '6px 4px' }}>Loading…</div>}
       {vals && (
-        <div style={{ maxHeight: 230, overflow: 'auto', border: `1px solid ${theme.border}`, borderRadius: 3, padding: '3px 6px' }}>
+        <div style={{ maxHeight: 230, minHeight: 48, flex: '0 1 auto', overflow: 'auto', border: `1px solid ${theme.border}`, borderRadius: 3, padding: '3px 6px' }}>
           <label style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', padding: '1px 0' }}>
             <input type="checkbox" checked={all} ref={el => { if (el) el.indeterminate = some && !all }} onChange={flipAll} />
             {q ? '(Select All Search Results)' : '(Select All)'}

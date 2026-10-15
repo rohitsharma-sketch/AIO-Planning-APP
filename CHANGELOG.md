@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Sales Plan: filter dropdowns never cut off by the screen
+- **Asked (user):** "screen is cutting the filter. Try to revamp it in the most minimalistic and efficient way possible" (Display Type, the Cluster filter near the bottom of the window).
+- **Fix (one shared component, `ExcelFilter.jsx`, so every Sales Plan filter gets it):** the dropdown opens below its button when there is room (360 px, or more room than above), else above. Its height is capped to that room and the value list shrinks first, so the search box and OK / Cancel always stay on screen. It follows its button when the page scrolls or the window resizes. Nothing else changed: same Excel-style list, same OK / Cancel.
+- **Checked** in the sandbox (window 582 px tall), Cluster filter with its button at the bottom (opens above, panel 398-537), the top (below, 25-164) and the middle (below, 299-439): the whole panel and OK on screen every time.
+
 ### Sales Plan Display Type: the "ASP · company level" card expands and collapses
 - **Asked (user):** "give a ticker to expand and collapse here" (screenshot of the ASP card).
 - A ▸ / ▾ toggle on the card's title. Collapsed shows only the header line: title, rows / file / date, Import / Add missing / Export, and any import message. Expanded adds the template note, the filters and the ASP table. It starts collapsed (the table is long) and is remembered per browser (`sp.dt.asp.open`). Keyboard: it is a button with aria-expanded.
