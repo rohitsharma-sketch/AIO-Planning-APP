@@ -734,6 +734,7 @@ tr:hover .blk-lock,.blk-lock:focus-visible{opacity:1}
           <div class="tbtn" onclick="toggleMenu('planMenu',event)">Plan tools <span class="caret">&#x25BE;</span></div>
           <div class="tmenu-pop">
             <button class="tmenu-item" onclick="closeMenus();openImportGrowth()">Import block growth %<small>Paste DEPARTMENT + growth % from Excel - preview, then set each department's Phase 1 block % (Save keeps it)</small></button>
+            <button class="tmenu-item" onclick="closeMenus();capToApparelAop()">Cap on apparel AOP<small>KIDS + LADIES + MENS summed to the AOP each month - one factor over every department, the buyer's mix kept; a division may differ from its own AOP</small></button>
             <button class="tmenu-item" onclick="closeMenus();recalibrateToAop()">Re-calibrate to AOP<small>Put MENS, LADIES and KIDS back on their AOP in one go, keeping the buyer's mix - every department scaled together; your own locks stay fixed</small></button>
             <button class="tmenu-item" onclick="closeMenus();resetPlanToAop()">Reset to AOP share<small>Every unlocked division back to the plain AOP share; its locks and buyer entries cleared</small></button>
             <button class="tmenu-item" onclick="closeMenus();revertToLyCont()">Re-apportion by LY Cont%<small>Split each division's AOP by LY contribution</small></button>
@@ -2322,6 +2323,36 @@ function recalibrateToAop(){
   const still=off.filter(dv=>Math.abs(tot(dv)-aop(dv))>0.005);
   toast(off.map(dv=>`${dv.nm} Rs.${before[dv.id].toFixed(1)} -> ${tot(dv).toFixed(1)} Cr`).join(' · ')+(still.length?` - ${still.map(d=>d.nm).join(', ')} still off AOP: your own locks hold more than its AOP`:' - on AOP. Save to keep it.'));
 }
+/* The apparel cap (user, 2026-10-15: "Cap it on overall APPS (Kids+LAdies and Mens) that should be summed to the AOP
+   forecaster AOP, while it can differ on the basis of Divisions from BIS" / "AOP Forecaster AOP cumulative will be equal
+   to BIS and Sales Plan but thier respective Division Cumulative will never match with each other"): each AOP month, every
+   active department of the three divisions is scaled by ONE factor so they add up to the month's AOP over the three - the
+   buyer's mix (across divisions too) is kept, division locks stay (they keep the typed shape, now on the apparel total).
+   Sales Plan's own cap (SSG cluster x month) lands on the same total. Nothing is sent until Save. */
+function _apparelTot(mi){
+  let ty=0,aop=0;
+  DVDATA.filter(dv=>AOP_DIVS.some(d=>d.id===dv.id)).forEach(dv=>{aop+=S.aop[dv.id]?.[mi]||0;
+    dv.secs.forEach(sec=>{if(!S.hiddenSecs.has(sec.id))ty+=_secMonLY(sec,dv,mi)*(1+(S.inputs[sec.id+'__'+mi]??0)/100);});});
+  return {ty,aop};
+}
+function capToApparelAop(silent){
+  if(!S.aopLocked){toast('Sync & lock the AOP first - there is no AOP target to cap to');return false;}
+  const dvs=DVDATA.filter(dv=>AOP_DIVS.some(d=>d.id===dv.id));
+  const rows=AOP_MIS.map(mi=>({mi,..._apparelTot(mi)})).filter(r=>r.aop>0&&r.ty>0);
+  const off=rows.filter(r=>Math.abs(r.ty-r.aop)>0.00005);
+  const sum=k=>rows.reduce((a,r)=>a+r[k],0);
+  if(!off.length){if(!silent)toast(`Apparel already on AOP (Rs.${sum('aop').toFixed(2)} Cr)`);return false;}
+  if(!silent&&!confirm(`Cap on apparel AOP?\n\nKIDS + LADIES + MENS: Rs.${sum('ty').toFixed(2)} Cr -> AOP Rs.${sum('aop').toFixed(2)} Cr\n`+
+    off.map(r=>`${MO[r.mi]}: ×${(r.aop/r.ty).toFixed(4)}`).join('  ')+
+    `\n\nEvery department of the three divisions is scaled by the same factor each month, so the buyer's mix is kept; a division may end up off its own AOP. Nothing is sent until you Save.`))return false;
+  _planEvent('Cap on apparel AOP');
+  off.forEach(r=>{const f=r.aop/r.ty;
+    dvs.forEach(dv=>dv.secs.forEach(sec=>{if(S.hiddenSecs.has(sec.id))return;const k=sec.id+'__'+r.mi;
+      if(_secMonLY(sec,dv,r.mi)>0)S.inputs[k]=((1+(S.inputs[k]??0)/100)*f-1)*100;}));});
+  refresh();
+  if(!silent)toast(`Apparel Rs.${rows.reduce((a,r)=>a+r.ty,0).toFixed(2)} -> ${AOP_MIS.reduce((a,mi)=>a+_apparelTot(mi).ty,0).toFixed(2)} Cr = AOP. Save to keep it.`);
+  return true;
+}
 /* Import block growth % (user, 2026-10-13: "if i want to import this type of data for growth % for the block update ...
    give a provision to import such changes"). Paste DEPARTMENT + growth % from Excel; Preview shows what lands where;
    Apply sets each matched department's Phase 1 block % (flat over Mar-Jun) as a buyer entry on the plan on screen.
@@ -3095,8 +3126,13 @@ function renderKPI(rows){
     (gr!=null?`<b class="${gCls(gr)}">${fP(gr)}</b>`:'');
   const chk=_aopCheck();
   if(chk.length){
-    h+='<span class="ks-sep"></span>'+chk.map(x=>x.off.length
-      ?`<span class="rule off" title="${_attr(x.nm+' is off its AOP: '+x.off.join(', ')+'. Unlock a department or re-balance (Plan tools).')}">&#x2717; ${x.nm} off AOP</span>`
+    // the rule is the apparel total (2026-10-15): KIDS + LADIES + MENS = the AOP every month; a division may differ
+    const ap=AOP_MIS.map(mi=>({mi,..._apparelTot(mi)})).filter(r=>r.aop>0),apOff=ap.filter(r=>Math.abs(r.ty-r.aop)*100>0.01);
+    h+='<span class="ks-sep"></span>'+(apOff.length
+      ?`<span class="rule off" title="${_attr('KIDS + LADIES + MENS is off the AOP: '+apOff.map(r=>`${MO[r.mi]} ${r.ty>r.aop?'+':''}${((r.ty-r.aop)*100).toFixed(2)} L`).join(', ')+'. Plan tools → Cap on apparel AOP.')}">&#x2717; Apparel off AOP</span>`
+      :`<span class="rule" title="${_attr('KIDS + LADIES + MENS: every AOP month equals the AOP over the three divisions')}">&#x2713; Apparel = AOP</span>`)+
+      chk.map(x=>x.off.length
+      ?`<span class="rule" style="opacity:.75" title="${_attr(x.nm+' differs from its own AOP: '+x.off.join(', ')+' - allowed: the AOP holds on the apparel total (KIDS + LADIES + MENS), not per division.')}">${x.nm} ≠ div AOP${x.locked?' &#x1F512;':''}</span>`
       :`<span class="rule" title="${_attr(x.nm+': every AOP month equals its AOP target'+(x.locked?' - division locked':''))}">&#x2713; ${x.nm} = AOP${x.locked?' &#x1F512;':''}</span>`).join('');
     const lk=new Set([...S.locked].filter(k=>AOP_MIS.some(mi=>k.endsWith('__'+mi))).map(k=>k.slice(0,k.lastIndexOf('__')))).size;
     const own=S.buyerSet.size;

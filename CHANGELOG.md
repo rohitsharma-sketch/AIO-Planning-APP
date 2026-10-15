@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### BIS: the AOP holds on the apparel total (KIDS + LADIES + MENS), not per division - Iteration 4 capped
+- **Asked (user):** "keep the iteration 4 saved. Cap it on overall APPS (Kids+LAdies and Mens) that should be summed to the AOP forecaster AOP, while it can differ on the basis of Divisions from BIS" and "AOP Forecaster AOP cumulative will be equal to BIS and Sales Plan but thier respective Division Cumulative will never match with each other".
+- **Rule:** AOP Forecaster AOP = BIS = Sales Plan on the apparel total (each AOP month); division totals may differ between the three.
+- **BIS:** Plan tools -> "Cap on apparel AOP" (`capToApparelAop`): each AOP month, one factor over every active department of the three divisions so they add up to the month's AOP over the three; the buyer's mix kept, division locks kept. The AOP check line: "Apparel = AOP" is the rule; a division off its own AOP shows as "<div> != div AOP" (information, not an error).
+- **Iteration 4:** capped and saved in place (still Iteration 4): K 133.93 -> 132.74, L 130.35 -> 128.98, M 171.79 -> 170.15 = 431.87 Cr = AOP (Mar x1.0157, Apr x0.9792, May x0.9807, Jun x0.9797); 944 growth rows to Sales Plan. Backup: SalesPlan/backend/backups/bis_plan_versions.before-apparel-cap-15Oct2026.json.
+- **Sales Plan:** regenerated - unchanged (its SSG cluster cap absorbs a uniform month factor): 431.87 Cr, still within 0.5 L by division of the manual working, 23,361,012 pieces; check-up passes with no warning (the ±3 point flag cleared - the buyer's growth now sits on the apparel AOP).
+
 ### STR Forecaster: July's STR days sell into the Aug-Feb plan (look-ahead, no new columns)
 - **Asked (user):** "In STR forecaster, July calculation is not to be restricted till July since you have plan visibility till Feb use it in the STR calculation for July, Donot show any other months in tabular format after July but the remainder of STR can be adjusted with future months in the pop up".
 - **Data:** sales-plan upload 10 = upload 9 (MAMJ + July) + the AUG, SEP and "OCt - Feb" sheets of "month wise sales plan - julyu - feb.xlsx" (store x department x display; value in Rs lakh like July; Jan / Feb P1 + P2 summed; shift +12 -> Aug'27-Feb'28; Rs 75-200 Cr a month, 199-264 stores). Append-only - Rollback switches back to 9. Fixture upload 7 untouched, so the STR months stay Mar'27-Jul'27.
