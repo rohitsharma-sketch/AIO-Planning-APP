@@ -7,6 +7,16 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### BIS: plan basis selector - Buyer's input / Planner's input / Blend (default)
+- **Asked (user):** "add the basis selector for buyer, planner and blend"; "make the Blend As default".
+- **Toolbar "Basis"** next to the Phase button:
+  - Blend (default, 50% buyer / 50% planner, weight editable) / Buyer's input (the tiles) / Planner's input (the planner's growth per month).
+  - Apply (with a confirm) re-seeds every unlocked month from the basis, releases the import's division locks (cells you locked stay held), re-calibrates each division to its AOP and locks the basis. Unlock to change it.
+  - The tiles keep the buyer's text; Re-cal Gr% and its hover name the basis; the iteration rules record it.
+  - Saved in this browser's state and in each version. Nothing goes to Sales Plan until Save.
+- **Today's saved plan does not move:** a plan saved before this shows "Blend 50/50 · not applied" and stays as imported until Apply.
+- **Checked (5050, in memory, state restored after):** Apply Blend 50/50 -> MENS / LADIES / KIDS = their AOP in each of Mar-Jun (e.g. MENS Mar 51.69 -> 48.76 Cr = AOP), tiles unchanged, division locks released, basis locked. Script blocks pass `node --check`; no new console errors.
+
 ### NSO Plan Distributor: months follow the plan, and linked to the Sales Plan (live / saved versions / file)
 - **Asked (user):** "also link the final sales plan to nso distributor ... Make the layout similar to the Growth V LY linkage"; choice "Make its months follow the plan".
 - **Months follow the inputs** (were fixed to Sep'26-Feb'27):
