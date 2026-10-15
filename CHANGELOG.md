@@ -7,6 +7,23 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### BIS: input tiles are drivers; a Re-cal Gr% column shows what the rules made of them
+- **Asked (user):** "in these tiles i guess the inputs should be there and they should be kept like that ... insert a column where the re-caliberated inputs as per buyer's show"; "Whichever is amalgmamted as per the user and locked. For now the inputs imported are to remain locked"; "keep the input tiles as text which are the driver cells so act like it til lthe time it is locked when locked except for that tile the whole unlocked plan will be auto recaliberated as wanted".
+- **Rule (RULE_BOOK B14, B9 updated):**
+  - The Block Growth% tile now shows the department's input as typed or imported (`S.drv`), and no rule rewrites it. Typing a tile no longer rewrites the other tiles.
+  - A new **Re-cal Gr%** column next to it shows the plan's block growth after the rules. It is amber when it differs from the tile, and its hover gives the input -> plan and why (division locked / locked / new department / re-calibrated with the division to its AOP and the apparel cap).
+  - Unlocked: the tile drives and the plan re-calibrates. Lock a tile: the plan takes it exactly and the unlocked rest re-calibrates around it.
+  - The apparel cap on Save now scales only the unlocked departments (locked tiles and locked divisions held); a month with everything locked is left as is, with a toast.
+  - An import sets the drivers (the pasted %).
+  - Drivers are kept in the browser state and in every saved version. A department never typed has an empty tile (AOP share).
+  - The Buyer's input drawer gives "Input X% - plan Y% - why".
+- **Nothing moved:** plans saved before this seed each buyer department's driver from its block % then. On the saved "Plan Iteration - 01" (all three divisions locked) all 113 tiles = their Re-cal; apparel still 43,188.03 L; sync pill green.
+- **Checked** in the browser (in memory, then discarded by reloading the saved version):
+  - Ladies unlocked, LW_U_TEES typed 20: tile 20, plan 17.52 (re-calibrated with the division); KURTI / JEANS tiles kept 1.79 / 8.76, plans -1.74 / 5.02; Ladies = its AOP.
+  - TEES locked: plan 20.00 exactly, the others re-calibrated (-2.04 / 4.69), Ladies = its AOP.
+  - Cap: TEES untouched, apparel = AOP 43,188.03.
+  - Afterwards the page is back on the saved version; a fresh tab has no script errors; both script blocks parse (node --check).
+
 ### Sales Plan ⓘ: a new department is explained on its reference
 - **Asked (user):** "in such cases it should give the ref angle also as calirifcation that LY is not the key factor whiw 10% is taken out of ref dep and whatever" (screenshot: LADIES -> LW_U_CORD SETS, Growth +181,033.0%).
 - **What changed (`grain_view._ref_angle`, Final Results ⓘ, month and P1 / P2):** for a row that is one new department:

@@ -1828,6 +1828,7 @@ const DEPT_TO_SEC = {
 /* ── STATE ─────────────────────────────────────── */
 let S = {
   report: 'buyers',
+  drv: {},   // driver inputs: each department's block % as typed / imported (2026-10-15) - the rules never change it
   selM: new Set([0,1,2,3,4,5,6,7,8,9,10,11]),
   viewMode: 'detail',  // 'detail' | 'summary'
   showSTDetail:   true,  // toggle month-wise ST% columns in buyers view (default expanded)
@@ -2366,11 +2367,19 @@ function capToApparelAop(silent){
   if(!off.length){if(!silent)toast(`Apparel already on AOP (Rs.${sum('aop').toFixed(2)} Cr)`);return false;}
   if(!silent&&!confirm(`Cap on apparel AOP?\n\nKIDS + LADIES + MENS: Rs.${sum('ty').toFixed(2)} Cr -> AOP Rs.${sum('aop').toFixed(2)} Cr\n`+
     off.map(r=>`${MO[r.mi]}: ×${(r.aop/r.ty).toFixed(4)}`).join('  ')+
-    `\n\nEvery department of the three divisions is scaled by the same factor each month, so the buyer's mix is kept; a division may end up off its own AOP. Nothing is sent until you Save.`))return false;
+    `\n\nEvery UNLOCKED department of the three divisions is scaled by the same factor each month (locked tiles and locked divisions stay as they are), so the buyer's mix is kept; a division may end up off its own AOP. Nothing is sent until you Save.`))return false;
   _planEvent('Cap on apparel AOP');
-  off.forEach(r=>{const f=r.aop/r.ty;
-    dvs.forEach(dv=>dv.secs.forEach(sec=>{if(S.hiddenSecs.has(sec.id))return;const k=sec.id+'__'+r.mi;
+  // locked tiles and locked divisions are held (2026-10-15: "when locked except for that tile the whole unlocked plan
+  // will be auto recaliberated"): the unlocked departments carry the whole month's gap, by one factor
+  const held=(sec,dv,mi)=>S.divLocked.has(dv.id)||S.locked.has((_ndNoLy(sec)?_ndOf(sec.id).ref:sec.id)+'__'+mi);
+  let stuck=0;
+  off.forEach(r=>{let fixed=0,free=0;
+    dvs.forEach(dv=>dv.secs.forEach(sec=>{if(S.hiddenSecs.has(sec.id))return;const t=_secTy(sec,dv,r.mi);if(held(sec,dv,r.mi))fixed+=t;else free+=t;}));
+    if(!(free>0)){stuck++;return;}
+    const f=Math.max(r.aop-fixed,0)/free;
+    dvs.forEach(dv=>dv.secs.forEach(sec=>{if(S.hiddenSecs.has(sec.id)||held(sec,dv,r.mi))return;const k=sec.id+'__'+r.mi;
       if(_secMonLY(sec,dv,r.mi)>0&&!_ndNoLy(sec))S.inputs[k]=((1+(S.inputs[k]??0)/100)*f-1)*100;}));});   // a new department without LY follows its reference
+  if(stuck)toast(`Apparel not capped in ${stuck} month${stuck>1?'s':''}: everything is locked there - unlock departments to let them re-calibrate`);
   refresh();
   if(!silent)toast(`Apparel Rs.${rows.reduce((a,r)=>a+r.ty,0).toFixed(2)} -> ${AOP_MIS.reduce((a,mi)=>a+_apparelTot(mi).ty,0).toFixed(2)} Cr = AOP. Save to keep it.`);
   return true;
@@ -2418,7 +2427,7 @@ function _impMatch(rows){
   return {apply,inactive,unmatched,noRow};
 }
 function _impApply(m,mode){
-  m.apply.forEach(x=>{AOP_MIS.forEach(mi=>{S.inputs[x.sec.id+'__'+mi]=x.g;});S.buyerSet.add(x.sec.id);});
+  m.apply.forEach(x=>{AOP_MIS.forEach(mi=>{S.inputs[x.sec.id+'__'+mi]=x.g;});S.buyerSet.add(x.sec.id);S.drv[x.sec.id]=x.g;});   // driver = the pasted %
   AOP_DIVS.forEach(d=>{const dv=DVDATA.find(x=>x.id===d.id);if(!dv)return;
     if(mode==='exact'){
       if(S.divLocked.has(dv.id))return;
@@ -2433,7 +2442,7 @@ function _impApply(m,mode){
 }
 // the plan's division totals after an import, worked out on the real plan and put back
 function _impTry(m,mode){
-  const keep={inputs:{...S.inputs},locked:new Set(S.locked),buyerSet:new Set(S.buyerSet),divLocked:new Set(S.divLocked),divLockAdded:JSON.parse(JSON.stringify(S.divLockAdded||{}))};
+  const keep={drv:{...S.drv},inputs:{...S.inputs},locked:new Set(S.locked),buyerSet:new Set(S.buyerSet),divLocked:new Set(S.divLocked),divLockAdded:JSON.parse(JSON.stringify(S.divLockAdded||{}))};
   const before=_vlCurrentTotals();
   try{_impApply(m,mode);return {before,after:_vlCurrentTotals(),bg:new Map(m.apply.map(x=>[x.sec.id,_blockGrowth(x.sec,x.dv)]))};}
   finally{Object.assign(S,keep);}
@@ -2588,8 +2597,12 @@ function _sortVal(row,def){
     case 'dept_st':
     case 'avg_st':   return row._avgST??0;
     case 'block_input':{
-      const v=S.inputs[row._key+'__'+(def.mi??'')];
+      const v=S.drv[row._key];   // sorts on the driver, as shown (2026-10-15)
       return v!=null?parseFloat(v):-Infinity;
+    }
+    case 'recal':{
+      const dv=DVDATA.find(d=>d.secs.some(s=>s.id===row._key)),sec=dv?.secs.find(s=>s.id===row._key);
+      return sec&&AOP_MIS.every(mi=>S.inputs[sec.id+'__'+mi]!=null)?_blockGrowth(sec,dv):-Infinity;
     }
     case 'attr_label': return (row._attr||'').toLowerCase();
     default:         return 0;
@@ -3064,6 +3077,7 @@ function buildColDefs(){
       defs.push({block:'plan',group:"Planner's input",id:'pl_gr',sub:'Planner Gr%',type:'pl_gr',hasAop:hasAopBlk});
       if(ctx)defs.push({block:'plan',group:"Planner's input",id:'pl_val',sub:'Planner Value',type:'pl_val',sum:true});
       defs.push({block:'plan',group:"Buyer's input",id:'block_input',sub:'Block Growth%',type:'block_input',hasAop:hasAopBlk});
+      defs.push({block:'plan',group:"Buyer's input",id:'recal',sub:'Re-cal Gr%',type:'recal',hasAop:hasAopBlk});   // 2026-10-15
     }
     // Optional monthly plan breakdown (read-only auto-apportioned)
     if(S.showPlanDetail){
@@ -3280,8 +3294,8 @@ function buildHeader(defs,noC1=false){
   return `<thead>${hr0}${hr1}${hr2}</thead>`;
 }
 
-const _INACT_BUYER_PLAN_TYPES=['ty','gr','tot_ty','growth','aop_mon','block_input','lfl_yoy','lfl_base','period_lfl_yoy','period_lfl_base','contrib'];
-const _ND_NOLY_DASH=['gr','growth','input','block_input','pl_fac','pl_gr','pl_val','pl_gr_m','p1_gr','buyer_gr_m'];
+const _INACT_BUYER_PLAN_TYPES=['ty','gr','tot_ty','growth','aop_mon','block_input','recal','lfl_yoy','lfl_base','period_lfl_yoy','period_lfl_base','contrib'];
+const _ND_NOLY_DASH=['gr','growth','input','block_input','recal','pl_fac','pl_gr','pl_val','pl_gr_m','p1_gr','buyer_gr_m'];
 function cellVal(row,def){
   if(row._inactive)return '<span style="color:var(--mu)">—</span>';
   if(row._inactiveBuyer&&_INACT_BUYER_PLAN_TYPES.includes(def.type))return '<span style="color:var(--mu)">—</span>';
@@ -3314,6 +3328,11 @@ function cellVal(row,def){
       const isLk=S.locked.has(k);
       const cls='gi'+(v==null?'':v<0?' neg':' has');
       return `<input class="${cls}" data-key="${k}" type="number" step="1" placeholder="%" value="${v!=null?+(+v).toFixed(2):''}" oninput="setGrowth('${row._key}',${def.mi},this.value)" onblur="refresh()">`;
+    }
+    case 'recal': {   // the plan's block growth after the rules (2026-10-15); groups: their departments added up
+      if(row._key==null||row._isGrand||_parseAttrKey(row._key)){const g=_effGrowth(row,AOP_MIS);return g==null?'<span style="color:var(--mu)">—</span>':`<span class="${gCls(g)}">${fP(g)}</span>`;}
+      const dv=DVDATA.find(d=>d.secs.some(s=>s.id===row._key)),sec=dv?.secs.find(s=>s.id===row._key);
+      return sec?_recalHtml(sec,dv):'<span style="color:var(--mu)">—</span>';
     }
     case 'block_input': {
       // Division grphd row — show effective block growth% (read-only summary)
@@ -3370,7 +3389,8 @@ function cellVal(row,def){
       // user, 2026-10-13: "it should be 0 by default if the new tag is there" - no buyer growth of its own; its plan is the
       // New departments % of its reference (Plan Total / vs LY show what it gets)
       if(nd&&!isLkDiv)return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center" title="${_attr(`New department: no buyer growth of its own (0) - its plan is ${+(nd.np*100).toFixed(2)}% of ${nd.refNm}'s (${bg!=null?(bg>=0?'+':'')+bg+'% on its own LY':'-'}), then the division is re-balanced to AOP. Set in New departments, not here.`)}"><span class="nd-tag">NEW</span><input class="gi" data-bk="${sec.id}" type="number" value="0" disabled></span>`;
-      return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="${cls}" data-bk="${sec.id}" type="number" step="0.01" placeholder="%" value="${bg!=null?bg:''}" ${isLkDiv?'disabled title="Division locked"':`title="${_attr(_blockWhy(row))}"`} oninput="setBlockGrowth('${sec.id}',this.value)" onblur="refresh()"></span>`;
+      const dvl=S.drv[sec.id],dcls='gi'+(dvl==null?'':dvl<0?' neg':' has')+(isLkSec?' lkd':'')+anim;   // the driver, as typed (2026-10-15)
+      return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="${dcls}" data-bk="${sec.id}" type="number" step="0.01" placeholder="${bg!=null?'AOP':'%'}" value="${dvl!=null?+dvl:''}" ${isLkDiv?'disabled title="Division locked"':`title="${_attr((dvl!=null?'Your input (driver) - the plan uses Re-cal Gr% next to it':'No input typed: the plain AOP share (Re-cal Gr% next to it) - type a % to drive it')+'\n'+_blockWhy(row))}"`} oninput="setBlockGrowth('${sec.id}',this.value)" onblur="refresh()"></span>`;
     }
     case 'pl_fac': {
       if(row._key==null||row._isGrand||_parseAttrKey(row._key)){ // a group: its departments' factors weighted by AOP share
@@ -4481,7 +4501,7 @@ function renderTable(){
       const lockBtn=(dvId&&S.report==='buyers')?`<span class="div-lock-btn${dvIsLocked?' locked':''}" onclick="event.stopPropagation();toggleDivLock('${dvId}')" title="${dvIsLocked?'Unlock division':'Lock division — freeze buyer inputs'}">${dvIsLocked?'🔒 Locked':'🔓 Lock'}</span>`:'';
       tbody+=`<tr class="grphd"><td class="c0 l" colspan="${dimCols}">${dot}${r._name}${lockBtn}</td>`;
       defs.forEach((d,di)=>{
-        const DEPT_TYPES=['dept_st','lfl_yoy','lfl_base','avg_st','period_lfl_yoy','period_lfl_base','ty','aop_mon','block_input','attr_label','pl_gr','pl_val','pl_gr_m','buyer_gr_m','p1_gr'];
+        const DEPT_TYPES=['dept_st','lfl_yoy','lfl_base','avg_st','period_lfl_yoy','period_lfl_base','ty','aop_mon','block_input','recal','attr_label','pl_gr','pl_val','pl_gr_m','buyer_gr_m','p1_gr'];
         const v=d.type==='tot_ly'?`<b>${fCr(r._ly)} Cr</b>`:
                  DEPT_TYPES.includes(d.type)?cellVal(r,d):
                  d.type==='tot_ty'||d.type==='growth'||d.type==='contrib'?cellVal(r,d):'';
@@ -4619,7 +4639,8 @@ function _inputWhy(dv,sec){
     :'Plain AOP share (no buyer entry), re-balanced with the division to its AOP.'];
   if(nd)head.push(`New department: its plan is ${pc(nd.np)} of ${nd.refNm}'s plan every month`+(_ndNoLy(sec)?` (no LY of its own, so no growth input - it moves with ${nd.refNm}).`
     :' - its growth is set to land there, so a growth typed here is replaced.')+(dl?` ${dv.nm} is locked, so it adds on top - no department makes room.`:` It is set first; the unlocked departments of ${dv.nm} make room for it.`));
-  if(S.aopLocked)head.push('Every Save holds apparel (KIDS + LADIES + MENS) on the AOP: all departments are scaled by one factor a month, so the growth % here already include that cap.');
+  {const w=_recalWhy(sec,dv);if(w.e!=null)head.push((w.d!=null?`Input (Block Growth% tile, as typed): ${fP(w.d)} - plan (Re-cal Gr%): ${fP(w.e)}`:`No input typed - plan (Re-cal Gr%): ${fP(w.e)}, the AOP share`)+` - ${w.why}.`);}
+  if(S.aopLocked)head.push('Every Save holds apparel (KIDS + LADIES + MENS) on the AOP: the unlocked departments are scaled by one factor a month (locked tiles and divisions are held), so the plan growth includes that cap.');
   if(refOf.length)head.push(`Reference for ${refOf.map(([id,x])=>`${nmOf(id)} (${pc(x.np)} of this plan)`).join(', ')}: when this department moves, ${refOf.length>1?'they move':'it moves'} with it.`);
   let adj=0;
   const months=AOP_MIS.map(mi=>{
@@ -4722,11 +4743,45 @@ function _blockGrowth(sec,dv){
 // then reapportions each month so division AOP targets are preserved.
 // NOTE: does NOT add to S.locked — that is reserved for explicit 🔒 freezes only.
 // The edited section is passed as tempLock so _divReapp treats it as anchor for this call.
+/* Driver tiles (user, 2026-10-15: "keep the input tiles as text which are the driver cells so act like it til lthe
+   time it is locked when locked except for that tile the whole unlocked plan will be auto recaliberated as wanted").
+   A department's Block Growth% tile shows its input as typed / imported (S.drv) - no rule rewrites it. The plan's own
+   growth after the rules (re-balance to the division's AOP, new departments, the apparel cap) is the Re-cal Gr% column
+   next to it. Unlocked: the tile drives, the rules re-calibrate. Locked: the plan takes the tile exactly and the rest
+   of the unlocked plan re-calibrates around it. A department the buyer never typed has no driver (tile empty, AOP
+   share). Plans saved before this: each buyer department's driver = its block % then (_drvSeed), so nothing moves. */
+function _drvSeed(){
+  DVDATA.forEach(dv=>dv.secs.forEach(sec=>{
+    if(S.drv[sec.id]!=null||!S.buyerSet.has(sec.id)||S.hiddenSecs.has(sec.id))return;
+    if(AOP_MIS.every(mi=>S.inputs[sec.id+'__'+mi]!=null))S.drv[sec.id]=_blockGrowth(sec,dv);
+  }));
+}
+function _recalWhy(sec,dv){
+  const d=S.drv[sec.id],e=AOP_MIS.every(mi=>S.inputs[sec.id+'__'+mi]!=null)?_blockGrowth(sec,dv):null;
+  const lk=AOP_MIS.every(mi=>S.locked.has(sec.id+'__'+mi)),nd=_ndOf(sec.id);
+  const why=S.divLocked.has(dv.id)?'division locked - held as entered':lk?'locked - held as typed, the unlocked departments re-calibrate around it'
+    :nd?`new department - ${Math.round(nd.np*100)}% of ${nd.refNm}'s plan`
+    :`unlocked - re-calibrated with ${dv.nm} to its AOP (and the apparel cap on Save)`;
+  return {d,e,why,off:d!=null&&e!=null&&Math.abs(e-d)>0.005};
+}
+function _recalCells(){   // refresh the Re-cal Gr% cells in place (no full redraw while typing)
+  document.querySelectorAll('[data-rc]').forEach(el=>{
+    const sk=el.dataset.rc,dv=DVDATA.find(d=>d.secs.some(s=>s.id===sk)),sec=dv?.secs.find(s=>s.id===sk);
+    if(sec)el.outerHTML=_recalHtml(sec,dv);
+  });
+}
+function _recalHtml(sec,dv){
+  const w=_recalWhy(sec,dv);
+  if(w.e==null)return `<span data-rc="${sec.id}" style="color:var(--mu)">—</span>`;
+  const t=(w.d!=null?`Input ${fP(w.d)} → plan ${fP(w.e)}`:`No input typed - plan ${fP(w.e)} (AOP share)`)+`\n${w.why}`;
+  return `<span data-rc="${sec.id}" class="${gCls(w.e)}" style="cursor:help;${w.off?'background:var(--wa-b);border:1px solid var(--wa-br);border-radius:6px;padding:1px 6px;':''}" title="${_attr(t)}">${fP(w.e)}</span>`;
+}
 function setBlockGrowth(secKey,val){
   const dv=DVDATA.find(d=>d.secs.some(s=>s.id===secKey));
   if(!dv||S.divLocked.has(dv.id))return;
   _touchDept(secKey);
   const v=parseFloat(val);
+  if(!isNaN(v))S.drv[secKey]=v;else delete S.drv[secKey];   // the driver: as typed
   if(!isNaN(v)){
     AOP_MIS.forEach(mi=>{S.inputs[secKey+'__'+mi]=v;});
     S.buyerSet.add(secKey);
@@ -4736,19 +4791,8 @@ function setBlockGrowth(secKey,val){
     S.buyerSet.delete(secKey);
     AOP_MIS.forEach(mi=>_divReapp(dv,mi,null));
   }
-  // Update all block-input fields in the table (reapportion changes sibling sections' values)
-  document.querySelectorAll('input[data-bk]').forEach(inp=>{
-    if(inp===document.activeElement)return;
-    const sk=inp.dataset.bk;
-    const dv2=DVDATA.find(d=>d.secs.some(s=>s.id===sk));
-    const sec2=dv2?.secs.find(s=>s.id===sk);
-    if(sec2&&dv2){
-      const allSet2=AOP_MIS.every(mi=>S.inputs[sec2.id+'__'+mi]!=null);
-      const bg2=allSet2?_blockGrowth(sec2,dv2):null;
-      inp.value=bg2!=null?bg2:'';
-      inp.className='gi'+(bg2==null?'':bg2<0?' neg':' has');
-    }
-  });
+  // the other tiles keep their driver text; what the re-balance did shows in their Re-cal Gr% cells (2026-10-15)
+  _recalCells();
   const rows=getRows();
   renderKPI(rows);
   _flashLiveBadges();
@@ -4823,8 +4867,10 @@ function toggleSecLock(secKey){
   if(allLocked){
     AOP_MIS.forEach(mi=>S.locked.delete(secKey+'__'+mi));
   } else {
+    const d=S.drv[secKey];   // locked = the typed input exactly (2026-10-15)
     AOP_MIS.forEach(mi=>{
-      if(S.inputs[secKey+'__'+mi]==null)S.inputs[secKey+'__'+mi]=0;
+      if(d!=null)S.inputs[secKey+'__'+mi]=d;
+      else if(S.inputs[secKey+'__'+mi]==null)S.inputs[secKey+'__'+mi]=0;
       S.locked.add(secKey+'__'+mi);
     });
   }
@@ -5503,7 +5549,7 @@ function saveState(logVersion=false){
   // default rule (user, 2026-10-15): every Save holds the apparel total on the AOP - one factor a month over the three
   // divisions (capToApparelAop), the divisions free to differ from their own AOP
   if(logVersion&&S.aopLocked)capToApparelAop(true);
-  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopVersionId:S.aopVersionId,aopUnit:S.aopUnit,locked:[...S.locked],buyerSet:[...S.buyerSet],divLocked:[...S.divLocked],divLockAdded:S.divLockAdded,aopSeeds:S.aopSeeds,aopSeededFrom:S.aopSeededFrom,aopSeedFp:S.aopSeedFp,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],seasonOff:[...S.seasonOff],customDepts:S.customDepts,deptSplit:1,at:now.toISOString()}))}catch(e){}
+  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopVersionId:S.aopVersionId,aopUnit:S.aopUnit,locked:[...S.locked],buyerSet:[...S.buyerSet],divLocked:[...S.divLocked],divLockAdded:S.divLockAdded,aopSeeds:S.aopSeeds,aopSeededFrom:S.aopSeededFrom,aopSeedFp:S.aopSeedFp,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],seasonOff:[...S.seasonOff],drv:S.drv,customDepts:S.customDepts,deptSplit:1,at:now.toISOString()}))}catch(e){}
   _updateSaveLabel(now);
   if(logVersion){_maybeSaveVersion(now,_vlNext);_vlNext=null;_renderVerSel();}
   _mainSnapTake('saved');   // the main sheet's before / after starts again from what was just saved
@@ -5728,6 +5774,7 @@ function loadState(){
     if(p.hiddenSecs)S.hiddenSecs=new Set(p.hiddenSecs);
     if(p.manualInactive)S.manualInactive=new Set(p.manualInactive);
     if(p.seasonOff)S.seasonOff=new Set(p.seasonOff);
+    if(p.drv)S.drv=p.drv;
     if(p.customDepts)S.customDepts=p.customDepts;
     if(!p.deptSplit)_deptMigrated=_migrateDeptIds(S); // once: saved state is stamped deptSplit from then on
     _applyCustomDepts();
@@ -6042,6 +6089,7 @@ function _autoInactive100(){
   return true;
 }
 function refresh(){
+  _drvSeed();       // driver tiles for plans saved before 15 Oct
   _syncChkSoon();   // the sync pill (2026-10-15)
   _autoInactive100();
   syncRange();
@@ -7838,7 +7886,8 @@ function _vlSnapshot(){
     buyerSet:[...S.buyerSet],
     divLocked:[...S.divLocked],
     divLockAdded:JSON.parse(JSON.stringify(S.divLockAdded||{})),
-    seasonOff:[...S.seasonOff]
+    seasonOff:[...S.seasonOff],
+    drv:{...S.drv}
   };
 }
 let _vlNext=null;   // {name} = the next save is a new iteration whatever changed (Save as / New iteration, 2026-10-13)
@@ -7988,6 +8037,7 @@ function loadVersion(idx){
   if(snap.buyerSet)S.buyerSet=new Set(snap.buyerSet);   // versions saved before 12 Oct have neither: left as they are
   if(snap.divLocked){S.divLocked=new Set(snap.divLocked);S.divLockAdded=snap.divLockAdded||{};}
   S.seasonOff=new Set(snap.seasonOff||[]);
+  S.drv=snap.drv?{...snap.drv}:{};   // older versions: seeded from their plan below (_drvSeed)
   if(!snap.deptSplit)_migrateDeptIds(S);
   _vlSetActive(v.id);
   saveState();
