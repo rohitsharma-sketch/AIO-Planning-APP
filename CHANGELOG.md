@@ -7,6 +7,14 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Finalised: no pop-up without a change, Plan Iteration - 01 confirmed final, the manual parity gate
+- **Asked (user):** "i want this to be done and finalised i donot want to see a pop up anywhere unless changes were made. Save the iteration to the most relevant one which passes all checks. And ensure the rules adopted now should give me accurate results in whichever type of variable session ... against the manual one made by any human"; "i want foolproof rules ... unless i add a rule or subtract a rule this should not be deviating on every iteration".
+- **The pop-up** ("The plan on screen is not Plan Iteration - 01 as saved ... Rs.431.88 Cr - saved Rs.431.88 Cr"): same numbers - it fired on the division locks alone (the buyer view unlocks the buyer's division in that browser on purpose). Now it shows only when the plan numbers (division totals) or the department inputs (active departments) differ from the saved version; never for a buyer.
+- **Plan Iteration - 01 is the final iteration** (the only one, the Original): Rs 431.88 Cr = AOP; Sales Plan holds exactly its 944 growth rows (0 missing / different / extra); summaries = plan; on screen = saved. Nothing to re-save.
+- **BIS sync pill, any browser:** "Sales Plan has exactly this plan (944 growth rows)" - it now compares the plan's growth rows with what Sales Plan stores (was "no Save from this browser yet" in every browser but the one that saved). One copy of the rows a Save sends (`_pushRows`).
+- **Manual parity gate** `SalesPlan/backend/tools/manual_parity.py <manual.xlsx> [--import] [--xlsx out]`: reads a manual workbook by header text (any months; a moved / renamed layout stops with the reason), `--import` loads its half-month inputs, then checks P1-P4 and exits 1 on a fail. Today: PASS P1 0 of 14,040, P2 0 of 1,704, P3 0 of 6,672, P4 0 of 5; `--import` rebuilds exactly today's ly_halves.json / aop_halves.json. Test `tools/test_manual_parity.py`.
+- **RULE_BOOK section R (rule change control):** rules change only when the user adds / removes one (code + book + changelog together); inputs (BIS growth, AOP, MRP split / ASP, plan file, new departments, store master, sales) vary without touching a rule; same inputs -> same plan; "final" = check-up + BIS pill + manual parity all pass; no pop-up without a change.
+
 ### Sales Plan Journey: "What moved this number" - the deviation journey in plain words, and the missing steps
 - **Asked (user):** "get the deviation journey too to explain in simplest words what affected to arrive at this number. Plain words. If any other steps are missing inculcate them too".
 - **What moved this number** (new card above the steps; `GET /display-type/journey` returns `deviation` + `story`): one short paragraph, then each thing that set or moved the number with its change in Rs and % and why, in plain words:

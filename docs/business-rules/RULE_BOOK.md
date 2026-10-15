@@ -81,12 +81,22 @@ Check that the system follows the manual: like-for-like apparel Mar-Jun = AOP in
 | M3 | **Qty = value / ASP, to 2 decimals (not whole pieces)** from the sole ASP file (its VAL / QTY on its new MRP / display type); every in-season value needs an ASP (check-up fails otherwise). | `display_type_engine.run_qty`, check `Qty (ASP master)` |
 | M4 | **Article plan** = each store x file department x half's plan x the file's article x MRP x display share of its mix, at the file's grain (cluster x group x department x article x MRP x display x half) — downloadable (`GET /export/article-plan`). Check: inside every like-for-like cluster x department x half the split equals the file's (15 Oct: 39,314 rows, 0 differ). | `plan_file_mix.article_plan` |
 
+## R — Rule change control (user, 15 Oct 2026: "i want foolproof rules and regulations intact, mrps can be variable and other rules too unless i add a rule or subtract a rule this should not be deviating on every iteration")
+
+| # | Rule | Where |
+|---|------|-------|
+| R1 | The rules are this book. They change only when the user adds or removes one - then the code, this book and CHANGELOG change together, and the history line below records it. Nothing else changes a rule. | this file |
+| R2 | **Inputs vary, rules don't:** BIS growth (typed / imported / basis), the AOP version, the MRP split and ASPs, the plan file's mix, new departments and their %, the store master, the Calendar sales, the manual's half-month inputs. A new iteration = new inputs through the same rules. | - |
+| R3 | **Same inputs -> same plan**, every run: the saved plan is regenerated whenever an input file or table changes (the inputs key includes the half-month files), never on a timer or by hand edits. | `dept_sales_engine._plan_inputs_key` |
+| R4 | **Final = passes everything:** Sales Plan check-up all pass; BIS sync pill green (summaries = plan, apparel = AOP, Sales Plan holds exactly this plan, screen = saved); and, when a manual is given, manual parity P1-P4 all 0.00. | X2, X3, BIS sync pill |
+| R5 | **No pop-up without a change:** BIS's "not as saved" bar shows only when the plan's numbers or department inputs differ from the saved version (not for locks alone, never for a buyer). | BIS `_vlStaleCheck` |
+
 ## X — Reconciliation checks (run after every change)
 
 | # | Check | Pass |
 |---|-------|------|
 | X1 | Like-for-like apparel per AOP month: AOP Forecaster = BIS = Sales Plan | equal to 0.01 L |
-| X2 | Sales Plan vs the manual's COMPARISON (BK:BR) by department, split departments under the manual's names | within 0.2 L total |
+| X2 | **Manual parity** - `SalesPlan/backend/tools/manual_parity.py <manual.xlsx>`: P1 SSG cluster x department x month x half = the manual's buyers'-input plan (COMPARISON, block "CAPPED AT CLUSTER (BUYERS INPUT)"); P2 every store x month = its AOP sheet; P3 every non-SSG store x division x month x half = its AOP sheet; P4 the SSG total and each month. Columns found by header text, any months; a layout that doesn't match stops with the reason. `--import` loads the manual's half-month inputs (LY halves, AOP halves, month-mix references) first. | every cell 0.00 (15 Oct: 0 of 14,040 / 1,704 / 6,672 / 5) |
 | X3 | Sales Plan check-up | pass (the ±3 point flag is a warning) |
 | X5 | Sales Plan article x MRP x display split vs the buyers' plan file, like-for-like cluster x department x half | equal shares (M4) |
 | X6 | **Rules in force** — every check-up records the rule settings the engines read (planner growth, AOP publish, season, new departments, ±3 band, plan file, ASP, MRP source) and logs any change with its time | `rules_log.json`; check-up line "Rules in force" |

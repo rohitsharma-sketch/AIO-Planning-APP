@@ -4872,6 +4872,7 @@ function _buyerLockDom(){
 function _buyerEnter(divs){
   BUYER=new Set(divs.map(d=>String(d).toLowerCase()));
   document.body.classList.add('buyer-mode');
+  document.getElementById('vlStale')?.remove();   // no version bar for a buyer
   document.querySelectorAll('#divtabs .dtab').forEach(b=>{if(b.dataset.div==='all'?BUYER.size<2:!BUYER.has(b.dataset.div))b.remove();});
   const no=()=>toast('Buyers type only the Block Growth % input tiles - the planner does the rest');
   _BUYER_NO.forEach(n=>{if(typeof window[n]==='function')window[n]=no;});
@@ -5750,28 +5751,52 @@ function saveState(logVersion=false){
 // The server replaces the whole set, so a month that stops being recorded drops out; hence no push until the AOP
 // has been applied (a partial picture would wipe the MAMJ rows). Each row carries the AOP publish it was seeded from.
 // explicit = the Save button: always say what happened (2026-09-29: a Save that sent nothing looked like a success)
+// the rows a Save sends to Sales Plan (one copy: the Save and the sync check use it)
+function _pushRows(){
+  const recorded=new Set();
+  Object.keys(S.aopSeeds).concat([...S.locked]).forEach(k=>recorded.add(+k.split('__').pop()));
+  const rows=[];
+  DVDATA.forEach(dv=>{
+    dv.secs.forEach(sec=>{
+      if(_ndNoLy(sec))return;   // a new department without LY: Sales Plan plans it from the New departments list
+      // Inactive dept: sent as plan 0 (-100% -> Sales Plan growth index 0), not left out - Sales Plan otherwise
+      // planned it on its saved / 100 fallback growth, so LADIES ran over AOP with L_EW_BLOUSE (user choice 29 Sep)
+      if(S.hiddenSecs.has(sec.id)){recorded.forEach(mi=>rows.push({division:dv.nm,department:sec.nm,mi,growth_pct:-100}));return;}
+      for(let mi=0;mi<12;mi++){
+        const v=S.inputs[sec.id+'__'+mi];
+        if(v==null||v===''||!recorded.has(mi))continue;
+        rows.push({division:dv.nm,department:sec.nm,mi,growth_pct:Number(v)});
+      }
+    });
+  });
+  return rows;
+}
+/* Does Sales Plan hold exactly what this plan sends? (user, 2026-10-15: "i donot want to see a pop up anywhere unless
+   changes were made" - the sync pill said "no Save from this browser yet" in every other browser). Asks Sales Plan's
+   stored buyer growth and compares it with _pushRows(), row by row; the pill shows the answer, any browser. */
+let _spServer=null;
+const _MI_MON=['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
+function _spServerCheck(){
+  if(BUYER||!S.aopLocked)return Promise.resolve();
+  return fetch('/api/config/buyer-department-growth',{credentials:'same-origin',cache:'no-store'}).then(r=>r.ok?r.json():null).then(j=>{
+    if(!j)return;
+    const sp={};(j.rows||[]).forEach(r=>{sp[`${r.division}|${r.department}|${String(r.month||'').slice(0,3)}`.toUpperCase()]=+r.growth_pct;});
+    const mine=_pushRows();let off=0;const seen=new Set();
+    mine.forEach(r=>{const k=`${r.division}|${r.department}|${_MI_MON[r.mi]}`.toUpperCase();seen.add(k);
+      if(!(k in sp)||Math.abs(sp[k]-r.growth_pct)>1e-4)off++;});
+    const extra=Object.keys(sp).filter(k=>!seen.has(k)).length;
+    _spServer=off||extra?{ok:false,t:`Sales Plan differs from this plan: ${off} of ${mine.length} growth rows${extra?`, ${extra} extra there`:''} - Save to send it`}
+      :{ok:true,t:`Sales Plan has exactly this plan (${mine.length} growth rows)`};
+    _syncChkSoon();
+  }).catch(()=>{});
+}
 async function pushBuyerGrowthLive(explicit=false){
   if(BUYER)return;   // buyers never send to Sales Plan - the planner does, after review
   const note=m=>{if(explicit)toast(m);};
   const mark=(ok,msg)=>{if(explicit)_spPushSet(ok,msg);};   // the sync pill remembers what the last Save did
   try{
     if(!S.aopLocked){mark(false,'NOT sent to Sales Plan: no AOP synced');note('Saved in this browser only — NOT sent to Sales Plan: no AOP synced');return;}
-    const recorded=new Set();
-    Object.keys(S.aopSeeds).concat([...S.locked]).forEach(k=>recorded.add(+k.split('__').pop()));
-    const rows=[];
-    DVDATA.forEach(dv=>{
-      dv.secs.forEach(sec=>{
-        if(_ndNoLy(sec))return;   // a new department without LY: Sales Plan plans it from the New departments list
-        // Inactive dept: sent as plan 0 (-100% -> Sales Plan growth index 0), not left out - Sales Plan otherwise
-        // planned it on its saved / 100 fallback growth, so LADIES ran over AOP with L_EW_BLOUSE (user choice 29 Sep)
-        if(S.hiddenSecs.has(sec.id)){recorded.forEach(mi=>rows.push({division:dv.nm,department:sec.nm,mi,growth_pct:-100}));return;}
-        for(let mi=0;mi<12;mi++){
-          const v=S.inputs[sec.id+'__'+mi];
-          if(v==null||v===''||!recorded.has(mi))continue;
-          rows.push({division:dv.nm,department:sec.nm,mi,growth_pct:Number(v)});
-        }
-      });
-    });
+    const rows=_pushRows();
     if(!rows.length){mark(false,'NOT sent to Sales Plan: no growth entered');note('Saved in this browser only — NOT sent to Sales Plan: no growth entered');return;}
     await fetch('/api/config/buyer-department-growth',{
       method:'POST',headers:{'Content-Type':'application/json'},
@@ -5783,7 +5808,8 @@ async function pushBuyerGrowthLive(explicit=false){
       // audit 2026-10-07: success was shown on r.ok alone - the server stores only valid rows (none -> nothing changes)
       const got=(await r.json().catch(()=>({}))).updated;
       if(got!=null&&got!==rows.length){mark(false,'NOT fully sent to Sales Plan (stored '+got+' of '+rows.length+')');toast('Growth NOT fully sent to Sales Plan (stored '+got+' of '+rows.length+')');}
-      else{mark(true,'Sales Plan got the last Save ('+rows.length+' growth rows)');note('Saved ✓ — '+rows.length+' growth rows sent to Sales Plan');}});
+      else{mark(true,'Sales Plan got the last Save ('+rows.length+' growth rows)');note('Saved ✓ — '+rows.length+' growth rows sent to Sales Plan');}
+      _spServerCheck();});
   }catch(e){mark(false,'NOT sent to Sales Plan (AOP unreachable)');toast('Growth NOT sent to Sales Plan (AOP unreachable)');} // never block the buyer's own save on this
 }
 /* Sync check (user, 2026-10-15: "also check if the summaries sync in BIS to the buyer's plan" ... "and add a check
@@ -5817,7 +5843,7 @@ function _syncChecks(){
     out.push(off.length?{ok:false,t:'Apparel off the AOP in '+off.map(r=>MO[r.mi]+' '+(r.ty>r.aop?'+':'')+((r.ty-r.aop)*100).toFixed(2)+' L').join(', ')+' - Save caps it'}
       :{ok:true,t:'Apparel = AOP every month'+(_aopCache?.version_label?' ('+_aopCache.version_label+')':'')});
   }
-  out.push(_spPush?{ok:_spPush.ok,t:_spPush.msg+' - '+_vlShort(_spPush.at)}:{ok:null,t:'Sales Plan: no Save from this browser yet - it keeps the last Save made'});
+  out.push(_spServer||(_spPush?{ok:_spPush.ok,t:_spPush.msg+' - '+_vlShort(_spPush.at)}:{ok:null,t:'Sales Plan: checking what it holds...'}));
   const v=_vlLoad().find(x=>x.id===_vlActiveId());
   if(v){
     const same=_vlSame(v.snapshot,{inputs:S.inputs,locked:[...S.locked],hiddenSecs:[...S.hiddenSecs]});
@@ -7952,7 +7978,7 @@ function _vlRulesText(r){
 }
 function _vlSame(a,b){
   const k=s=>JSON.stringify([Object.entries(s?.inputs||{}).filter(([,x])=>x!=null).map(([c,x])=>[c,+(+x).toFixed(4)]).sort((x,y)=>x[0]<y[0]?-1:1),
-    [...(s?.locked||[])].sort(),[...(s?.hiddenSecs||[])].sort()]);
+    s?.locked?[...s.locked].sort():[],[...(s?.hiddenSecs||[])].sort()]);
   return k(a)===k(b);
 }
 // the toolbar selector: Original first, then the iterations in order; the version on screen is selected
@@ -8244,13 +8270,17 @@ function loadVersion(idx){
 // until it is clicked (unsaved work of this browser is not touched).
 function _vlStaleCheck(){
   const old=document.getElementById('vlStale');if(old)old.remove();
+  if(BUYER)return;   // a buyer doesn't keep versions - their division is unlocked in their browser on purpose (2026-10-15)
   const vers=_vlLoad(),v=vers.find(x=>x.id===_vlActiveId());
   if(!v||!v.snapshot||!v.divisionTotals)return;
   const cur=_vlCurrentTotals(),sv=v.divisionTotals,D=['MENS','LADIES','KIDS'];
   const totOff=D.some(d=>Math.abs((cur[d]||0)-(sv[d]||0))>0.01);
-  const lk=x=>JSON.stringify([...(x||[])].sort());
-  const lockOff=!!v.snapshot.divLocked&&lk(v.snapshot.divLocked)!==lk(S.divLocked);
-  if(!totOff&&!lockOff)return;
+  // only a real change shows the bar (user, 2026-10-15: "i donot want to see a pop up anywhere unless changes were made"):
+  // the plan numbers or the department inputs - locks alone (same numbers) are not a change
+  const act=o=>{const h=new Set(v.snapshot.hiddenSecs||[]);S.hiddenSecs.forEach(x=>h.add(x));   // inactive ones: page load seeds them
+    return Object.fromEntries(Object.entries(o||{}).filter(([k])=>!h.has(k.split('__')[0])));};
+  const inOff=!_vlSame({inputs:act(S.inputs),hiddenSecs:[...S.hiddenSecs]},{inputs:act(v.snapshot.inputs),hiddenSecs:v.snapshot.hiddenSecs});
+  if(!totOff&&!inOff)return;
   const sum=t=>D.reduce((a,d)=>a+(t[d]||0),0).toFixed(2);
   const bar=document.createElement('div');bar.id='vlStale';bar.setAttribute('role','alert');
   bar.style.cssText='position:fixed;top:66px;left:50%;transform:translateX(-50%);z-index:900;max-width:min(860px,94vw);display:flex;gap:10px;align-items:center;flex-wrap:wrap;'+
@@ -8264,7 +8294,7 @@ function _vlStaleCheck(){
 }
 // page load: this browser's copy at once, then the shared list (here, after the version-log consts exist)
 // ponytail: the check waits 1.5 s for the AOP seeding of page load to settle; hook it to that seeding's end if it races
-_renderVerSel();_vlPull().then(()=>setTimeout(_vlStaleCheck,1500));
+_renderVerSel();_vlPull().then(()=>setTimeout(()=>{_vlStaleCheck();_spServerCheck();},1500));
 _ndLoadMap();   // new departments follow their reference in the plan (2026-10-13)
 
 </script>
