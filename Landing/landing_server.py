@@ -370,16 +370,53 @@ class Handler(SimpleHTTPRequestHandler):
         return True
 
     def _is_authenticated(self):
-        """Forward the incoming cookies to 8010's /api/auth/me; return True if 200."""
+        """Forward the incoming cookies to 8010's /api/auth/me; return True if 200 (the person is kept in self._me)."""
+        self._me = None   # one handler serves several requests on a kept-alive connection
         try:
             req = urllib.request.Request('http://127.0.0.1:8010/api/auth/me')
             cookie = self.headers.get('Cookie', '')
             if cookie:
                 req.add_header('Cookie', cookie)
             with urllib.request.urlopen(req, timeout=2) as resp:
-                return resp.status == 200
+                ok = resp.status == 200
+                try:
+                    self._me = json.load(resp)
+                except ValueError:
+                    pass
+                return ok
         except Exception:
             return False
+
+    # A BIS buyer (Users & access > BIS divisions; user, 2026-10-15: "only the BIS app should be visible for him/her to
+    # click on and other responsibilities are to be revoked") reaches Landing's own page, the BIS app and what BIS reads;
+    # writes only: their own account, Save to the planner (/api/bis/submissions) and BIS's export / sell-thru factor maths.
+    _BUYER_GET = re.compile(r"^/(buyer(/.*)?|api/(auth|bis)/.*|api/suite-theme\.js|api/status|api/config/aop-(division-targets|versions)"
+                            r"|api/planning/dept-sales/new-depts|static/.*|auth/.*|login|change-password|reset-password)$")
+    _BUYER_WRITE = re.compile(r"^/(api/auth/.*|api/bis/submissions|buyer/api/export/xlsx|buyer/api/planner/factor1)$")
+
+    def _buyer_refused(self):
+        """True (and the answer sent) when a BIS buyer asks for anything outside BIS - a page goes to /buyer/, a call gets 403."""
+        if not (getattr(self, '_me', None) or {}).get('bis_divisions'):
+            return False
+        path = urllib.parse.unquote(self.path.split('?')[0])
+        if self.command in ('GET', 'HEAD'):
+            if _find_proxy(path)[0] is None or self._BUYER_GET.match(path):   # Landing's own page / files, or BIS
+                return False
+        elif self._BUYER_WRITE.match(path):
+            return False
+        if self.command == 'GET' and 'text/html' in (self.headers.get('Accept') or ''):
+            self.send_response(302)
+            self.send_header('Location', '/buyer/')
+            self.end_headers()
+            return True
+        why = "Buyers use only the Buyer's Input Sheet - an admin set this in Users & access."
+        body = json.dumps({"detail": why, "error": why}).encode()
+        self.send_response(403)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(body)))
+        SimpleHTTPRequestHandler.end_headers(self)
+        self.wfile.write(body)
+        return True
 
     # ── verb handlers ──────────────────────────────────────────────────────────
 
@@ -409,6 +446,8 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header('Location', dest)
             self.end_headers()
             return
+        if self._requires_auth() and self._buyer_refused():
+            return
 
         if self.path.split('?')[0] in _SLASH_REDIRECT:
             q = self.path[len(self.path.split('?')[0]):]
@@ -435,6 +474,9 @@ class Handler(SimpleHTTPRequestHandler):
         # BIS Save -> Sales Plan: one POST replaces every division's buyer growth (audit 2026-10-07: any signed-in
         # person could send it; now an admin can switch it off per person, e.g. reviewers / approvers)
         ("POST", re.compile(r"/config/buyer-department-growth$"), "buyer_push"),
+        # BIS versions and the factor table change the plan for everyone - planners only (2026-10-15, BIS buyers)
+        ("POST", re.compile(r"/config/bis-plan-versions$"), "buyer_push"),
+        ("POST", re.compile(r"/planner/factor-table$"), "buyer_push"),
         # Sales Plan MRP master import: the new version replaces the one every run uses (user, 2026-10-08)
         ("POST", re.compile(r"/mrp-reapportionment/mapping/upload$"), "mrp_master"),
     ]
@@ -477,6 +519,8 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header('Content-Length', str(len(body)))
             SimpleHTTPRequestHandler.end_headers(self)
             self.wfile.write(body)
+            return True
+        if self._requires_auth() and self._buyer_refused():
             return True
         refusal = self._right_refusal()
         if refusal:

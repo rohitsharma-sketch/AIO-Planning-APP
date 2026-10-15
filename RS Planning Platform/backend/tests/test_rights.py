@@ -12,6 +12,17 @@ def test_effective_rights():
     assert "servers" not in effective(False, True, ["servers"]) and "data_sync" in effective(False, True, ["servers"])
     assert effective(True, True, ["servers"]) == list(RIGHTS)          # admins always keep everything
     assert effective(False, False, []) == [] and effective(True, False, []) == []   # switched off: nothing
+    assert effective(False, True, [], ["MENS"]) == []                    # a BIS buyer: none of the actions
+    assert effective(True, True, [], ["MENS"]) == list(RIGHTS)           # admins are never scoped
+
+
+def test_bis_divisions():
+    from auth.rights import load_divisions, save_divisions
+    p = os.path.join(tempfile.mkdtemp(), "data", "d.json")
+    assert save_divisions("u1", ["mens", "MENS", "kids"], p) == ["KIDS", "MENS"] and load_divisions(p) == {"u1": ["KIDS", "MENS"]}
+    assert save_divisions("u1", [], p) == [] and load_divisions(p) == {}   # none = a planner again
+    with pytest.raises(ValueError):
+        save_divisions("u1", ["GM"], p)
 
 
 def test_save_and_restore():

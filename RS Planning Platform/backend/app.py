@@ -39,6 +39,8 @@ app.add_middleware(GZipMiddleware, minimum_size=2000)
 app.include_router(auth_router, prefix="/api/auth")
 app.include_router(workflow_router, prefix="/api/aop/plan-cycles")
 app.include_router(audit_router, prefix="/api/audit")
+from auth.bis_submissions import router as bis_submissions_router  # noqa: E402 - BIS buyer inputs for review (2026-10-15)
+app.include_router(bis_submissions_router, prefix="/api/bis")
 
 from calendar_engine.router import router as calendar_router  # noqa: E402
 

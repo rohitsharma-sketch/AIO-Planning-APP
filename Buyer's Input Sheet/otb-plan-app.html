@@ -674,6 +674,12 @@ tr:hover .blk-lock,.blk-lock:focus-visible{opacity:1}
 .st-hi,.st-mid,.st-lo{color:var(--t2);font-weight:500}
 .pl-use{border-radius:999px;background:transparent;border-color:var(--ac-b);color:var(--ac-h);font-weight:600;padding:3px 10px}
 .pl-use:hover{background:var(--ac-l)}
+/* BIS buyer (2026-10-15): only the Buyer's Plan, their divisions and the input tiles */
+body.buyer-mode #planMenu,body.buyer-mode #basisMenu,body.buyer-mode #aop-btn,body.buyer-mode #mode-btn,body.buyer-mode #dataMenu,
+body.buyer-mode #verSel,body.buyer-mode .tbar-sep,body.buyer-mode #ni-summary,body.buyer-mode #ni-dept,body.buyer-mode #ni-attr,
+body.buyer-mode #ni-inactive,body.buyer-mode .add-dept-ni,body.buyer-mode .blk-lock,body.buyer-mode #bsub-btn,body.buyer-mode #cmp-btn,
+body.buyer-mode #lfl-tog,body.buyer-mode #syncChk,body.buyer-mode #syncChkDet{display:none!important}
+.buyer-banner{margin:8px 16px 0;padding:8px 12px;border-radius:8px;background:color-mix(in srgb,var(--ac) 10%,var(--sf));border:1px solid color-mix(in srgb,var(--ac) 35%,transparent);font-size:12.5px;color:var(--tx)}
 </style>
 
 <!-- ─── APP ─────────────────────────────────────── -->
@@ -780,8 +786,9 @@ tr:hover .blk-lock,.blk-lock:focus-visible{opacity:1}
         </div>
         <select class="tbtn ver-sel" id="verSel" onchange="onVerSelChange(this.value)" onmousedown="_vlPull()" aria-label="Plan version"
           title="Plan version (shared - kept in the database, so every machine sees the same list). The Original is the first saved plan and never changes; every changed save after it is a new iteration. Pick one to load it - or, at the bottom: New iteration (a fresh sheet), Save as new iteration, Rename, Remove."></select>
-        <div class="tbtn" onclick="openMainCompare()" title="What changed since the last save, department by department - with Undo">Before / after</div>
-        <div class="tbtn pri" onclick="saveState(true)">Save</div>
+        <div class="tbtn" id="bsub-btn" style="display:none" onclick="openBuyerSubs()" title="Inputs the buyers Saved for your review - apply one to the plan, then Save to send it to Sales Plan">Buyer inputs <span id="bsub-n" class="nbdg" style="background:var(--wa);color:#000"></span></div>
+        <div class="tbtn" id="cmp-btn" onclick="openMainCompare()" title="What changed since the last save, department by department - with Undo">Before / after</div>
+        <div class="tbtn pri" id="save-btn" onclick="saveState(true)">Save</div>
       </div>
     </div>
 
@@ -4835,9 +4842,123 @@ function applyBasis(){
   saveState();refresh();closeMenus();
   toast(`${nm}: ${n} departments re-seeded and re-calibrated to AOP - Save to send it to Sales Plan`);
 }
+/* BIS buyer mode (user, 2026-10-15: "delegate the BIS function for the specific division only the rest of the things get
+   locked for the buyer only the inputs should be open for them to do in the input tile"; "Save for the planner to review,
+   then send"). Users & access > BIS divisions makes a person the buyer for some divisions; /api/auth/rights says which.
+   They see the Buyer's Plan of those divisions only (Phase 1), type only the Block Growth% tiles, and Save sends the
+   tiles to the planner (/api/bis/submissions) - never to Sales Plan. Landing's server refuses everything else for them.
+   The planner: "Buyer inputs" in the toolbar -> apply one to the plan (or dismiss), check, then Save sends it as usual. */
+var BUYER=null;   // (var: read by refresh / saveState before this line runs) Set of division ids ('mens', ...) this person is the buyer for; null = a planner
+const _BUYER_NO=['toggleSecLock','toggleDivLock','usePlannerGr','clearAllInputs','applyBasis','capToApparelAop','recalibrateToAop',
+  'resetPlanToAop','revertToLyCont','toggleLockAllMAMJ','lockAllMAMJ','unlockAllMAMJ','openImportGrowth','applyImportGrowth','previewImportGrowth',
+  'openAopModal','syncFromAop','syncAll','seedPlanFromAop','revertToAop','clearAop','togglePlanPhase','setGrowth','setAttrMonGrowth',
+  'setAttrBlockGrowth','toggleAttrEdit','openNewDeptModal','openAddDeptModal','addCustomDept','deleteCustomDept','openFactorTable',
+  'saveFactorTable','onVerSelChange','loadVersion','renameVersion','removeIteration','onAopVersionChange','magRevertAop','magReapportion',
+  'magLive','magCommit','_ndSet','_ndSave','_ndDel','_ndAdd','_ndUpload','openVersionLog','openMainCompare','undoMainEdits','undoAttrEdits',
+  'openBuyerSubs','uploadFillRate'];
+function _buyerHold(){
+  if(!BUYER)return;
+  S.report='buyers';S.filters.div=new Set(BUYER);if(S.divTab&&!BUYER.has(S.divTab))S.divTab=null;
+  if(!S.divTab&&BUYER.size===1)S.divTab=[...BUYER][0];
+  // their divisions open in this browser (the plan's division locks hold the imported plan for the planner)
+  BUYER.forEach(id=>{if(S.divLocked.has(id)){S.divLocked.delete(id);(S.divLockAdded[id]||[]).forEach(k=>S.locked.delete(k));delete S.divLockAdded[id];}});
+  try{localStorage.setItem('bis_plan_mode','block');}catch(_){}
+}
+function _buyerLockDom(){
+  const mine=id=>BUYER.has(DVDATA.find(d=>d.secs.some(x=>x.id===id))?.id);
+  document.querySelectorAll('#dtbl input,#dtbl select,#dtbl button,#dtbl textarea').forEach(el=>{
+    if(!(el.matches('input[data-bk]')&&mine(el.dataset.bk)))el.disabled=true;});
+}
+function _buyerEnter(divs){
+  BUYER=new Set(divs.map(d=>String(d).toLowerCase()));
+  document.body.classList.add('buyer-mode');
+  document.querySelectorAll('#divtabs .dtab').forEach(b=>{if(b.dataset.div==='all'?BUYER.size<2:!BUYER.has(b.dataset.div))b.remove();});
+  const no=()=>toast('Buyers type only the Block Growth % input tiles - the planner does the rest');
+  _BUYER_NO.forEach(n=>{if(typeof window[n]==='function')window[n]=no;});
+  const sr=window.setReport,sd=window.setDivTab;
+  window.setReport=r=>{if(r==='buyers')sr(r);};
+  window.setDivTab=id=>{if(id==='all'?BUYER.size>1:BUYER.has(id))sd(id);};
+  const sb=document.getElementById('save-btn');
+  if(sb){sb.textContent='Send to planner';sb.title='Sends your input tiles to the planner for review - they apply them and send the plan to Sales Plan';}
+  const ws=document.querySelector('.cstrip');
+  if(ws&&!document.getElementById('buyer-banner')){
+    const b=document.createElement('div');b.id='buyer-banner';b.className='buyer-banner';
+    b.textContent=`Buyer view - ${divs.join(', ')}: type your Block Growth % in the input tiles; Re-cal Gr% shows what the plan makes of it. "Send to planner" sends your tiles for review - the planner applies them and sends the plan to Sales Plan.`;
+    ws.parentNode.insertBefore(b,ws);
+  }
+  refresh();
+}
+async function _buyerSubmit(){
+  saveState(false);   // kept in this browser too
+  const out=[];
+  for(const id of BUYER){
+    const dv=DVDATA.find(d=>d.id===id);if(!dv)continue;
+    const tiles={};
+    dv.secs.forEach(sec=>{if(!S.hiddenSecs.has(sec.id)&&!_ndNoLy(sec))tiles[sec.nm]=S.drv[sec.id]??null;});
+    try{
+      const r=await fetch('/api/bis/submissions',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({division:dv.nm,tiles})});
+      const j=await r.json().catch(()=>({}));
+      out.push(r.ok?`${dv.nm} sent (${Object.values(tiles).filter(v=>v!=null).length} inputs)`:`${dv.nm} NOT sent (${j.detail||r.status})`);
+    }catch(e){out.push(`${dv.nm} NOT sent (server unreachable)`);}
+  }
+  toast(out.join(' · ')+' - the planner reviews it before it goes to Sales Plan');
+}
+// the planner's side: pending buyer inputs -> review -> apply / dismiss
+let _bsubs=[];
+function _bsubLoad(){
+  if(BUYER||location.port==='5050')return Promise.resolve();
+  return fetch('/api/bis/submissions?status=pending',{credentials:'same-origin',cache:'no-store'}).then(r=>r.ok?r.json():null).then(j=>{
+    _bsubs=(j&&j.items)||[];
+    const b=document.getElementById('bsub-btn');
+    if(b){b.style.display=_bsubs.length?'':'none';document.getElementById('bsub-n').textContent=_bsubs.length||'';}
+  }).catch(()=>{});
+}
+function _bsubRows(it){
+  const dv=DVDATA.find(d=>d.nm===it.division);if(!dv)return [];
+  return Object.entries(it.tiles).map(([nm,v])=>{const sec=dv.secs.find(x=>x.nm===nm);const now=sec?S.drv[sec.id]??null:null;
+    return {nm,sec,now,v,chg:v!=null&&(now==null||Math.abs(now-v)>1e-9)};}).filter(r=>r.chg||!r.sec);
+}
+function openBuyerSubs(){
+  let ov=document.getElementById('bsubOv');
+  if(!ov){ov=document.createElement('div');ov.id='bsubOv';ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:2000;display:flex;align-items:flex-start;justify-content:center;padding:48px 16px;overflow:auto';
+    ov.onclick=e=>{if(e.target===ov)ov.remove();};document.body.appendChild(ov);}
+  const f=x=>x==null?'-':(+x).toFixed(2)+'%';
+  ov.innerHTML=`<div style="background:var(--sf);border:1px solid var(--bd);border-radius:12px;max-width:760px;width:100%;padding:16px 18px;box-shadow:var(--shadow-lg)">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><b style="font-size:15px">Buyer inputs for review</b><span style="flex:1"></span><button class="tbtn" onclick="document.getElementById('bsubOv').remove()">Close</button></div>
+    <div style="font-size:12px;color:var(--mu);margin-bottom:10px">Apply puts the buyer's Block Growth % into those departments' input tiles (their division is unlocked for it) and re-calibrates the plan; nothing reaches Sales Plan until you Save. Dismiss leaves the plan as it is.</div>
+    ${_bsubs.length?_bsubs.map(it=>{const rows=_bsubRows(it);return `<div style="border:1px solid var(--bd);border-radius:10px;padding:10px 12px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><b>${_h(it.division)}</b><span style="color:var(--mu);font-size:12px">from ${_h(it.by)} · ${_h(_vlShort(it.at))} · ${rows.filter(r=>r.sec).length} changed of ${Object.keys(it.tiles).length}</span><span style="flex:1"></span>
+        <button class="tbtn" onclick="_bsubReview('${it.id}','dismissed')">Dismiss</button><button class="tbtn pri" onclick="_bsubApply('${it.id}')">Apply to plan</button></div>
+      ${rows.length?`<table class="dtbl" style="width:100%"><thead><tr><th class="l">Department</th><th>Tile now</th><th>Buyer's input</th><th>Change</th></tr></thead><tbody>
+        ${rows.map(r=>`<tr><td class="l">${_h(r.nm)}${r.sec?'':' <small style="color:var(--wa)">(not in the plan - skipped)</small>'}</td><td>${f(r.now)}</td><td><b>${f(r.v)}</b></td><td>${r.now==null||r.v==null?'-':((r.v-r.now)>0?'+':'')+(r.v-r.now).toFixed(2)+' pts'}</td></tr>`).join('')}</tbody></table>`
+        :'<div style="font-size:12px;color:var(--mu)">Same as the plan - nothing to change.</div>'}</div>`;}).join(''):'<div style="font-size:12.5px">Nothing waiting.</div>'}
+  </div>`;
+}
+function _bsubReview(id,status){
+  return fetch(`/api/bis/submissions/${id}/review`,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})})
+    .then(async r=>{if(!r.ok){toast('Not marked: '+((await r.json().catch(()=>({}))).detail||r.status));return false;}
+      await _bsubLoad();_bsubs.length?openBuyerSubs():document.getElementById('bsubOv')?.remove();return true;});
+}
+function _bsubApply(id){
+  const it=_bsubs.find(x=>x.id===id);if(!it)return;
+  const dv=DVDATA.find(d=>d.nm===it.division),rows=_bsubRows(it).filter(r=>r.sec);
+  if(!dv)return;
+  if(!confirm(`Apply ${it.by}'s ${rows.length} input${rows.length===1?'':'s'} to ${it.division}?${S.divLocked.has(dv.id)?`\n\n${it.division} is locked - it is unlocked for this.`:''}\n\nThe plan re-calibrates around them; nothing goes to Sales Plan until you Save.`))return;
+  if(S.divLocked.has(dv.id)){S.divLocked.delete(dv.id);(S.divLockAdded[dv.id]||[]).forEach(k=>S.locked.delete(k));delete S.divLockAdded[dv.id];}
+  rows.forEach(r=>setBlockGrowth(r.sec.id,r.v));
+  refresh();
+  _bsubReview(id,'applied').then(ok=>{if(ok)toast(`${it.division}: ${rows.length} buyer inputs applied - check the plan, then Save to send it to Sales Plan`);});
+}
+function _buyerInit(){
+  if(location.port==='5050')return;   // the standalone page has no sign-in
+  fetch('/api/auth/rights',{credentials:'same-origin',cache:'no-store'}).then(r=>r.ok?r.json():null).then(d=>{
+    if(d&&(d.bis_divisions||[]).length)_buyerEnter(d.bis_divisions);else _bsubLoad();
+  }).catch(()=>{});
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>setTimeout(_buyerInit,0));else setTimeout(_buyerInit,0);
 function setBlockGrowth(secKey,val){
   const dv=DVDATA.find(d=>d.secs.some(s=>s.id===secKey));
-  if(!dv||S.divLocked.has(dv.id))return;
+  if(!dv||S.divLocked.has(dv.id)||(BUYER&&!BUYER.has(dv.id)))return;
   _touchDept(secKey);
   const v=parseFloat(val);
   if(!isNaN(v))S.drv[secKey]=v;else delete S.drv[secKey];   // the driver: as typed
@@ -5604,6 +5725,7 @@ function resetPlanToAop(){
 
 /* ── SAVE & EXPORT ─────────────────────────────── */
 function saveState(logVersion=false){
+  if(BUYER&&logVersion){_buyerSubmit();return;}   // a buyer's Save goes to the planner for review (2026-10-15)
   const now=new Date();
   // default rule (user, 2026-10-15): every Save holds the apparel total on the AOP - one factor a month over the three
   // divisions (capToApparelAop), the divisions free to differ from their own AOP
@@ -5629,6 +5751,7 @@ function saveState(logVersion=false){
 // has been applied (a partial picture would wipe the MAMJ rows). Each row carries the AOP publish it was seeded from.
 // explicit = the Save button: always say what happened (2026-09-29: a Save that sent nothing looked like a success)
 async function pushBuyerGrowthLive(explicit=false){
+  if(BUYER)return;   // buyers never send to Sales Plan - the planner does, after review
   const note=m=>{if(explicit)toast(m);};
   const mark=(ok,msg)=>{if(explicit)_spPushSet(ok,msg);};   // the sync pill remembers what the last Save did
   try{
@@ -6149,6 +6272,7 @@ function _autoInactive100(){
   return true;
 }
 function refresh(){
+  _buyerHold();     // a BIS buyer: their divisions, Phase 1, the Buyer's Plan (2026-10-15)
   _drvSeed();       // driver tiles for plans saved before 15 Oct
   _renderBasis();   // the Basis button's label (2026-10-15)
   _syncChkSoon();   // the sync pill (2026-10-15)
@@ -6168,6 +6292,7 @@ function refresh(){
   _syncChips();
   buildFP(); // keep sidebar counts in sync with divTab + filters
   renderTable();
+  if(BUYER)_buyerLockDom();
 }
 
 /* ── INIT ──────────────────────────────────────── */

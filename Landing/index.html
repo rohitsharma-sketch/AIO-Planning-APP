@@ -431,6 +431,9 @@
     .side.open { box-shadow: var(--shadow-lg); }
   }
   @media (max-width: 620px) { main { padding-left: 16px; padding-right: 16px; } }
+/* BIS buyer: only the Buyer's Input card (2026-10-15) */
+body.buyer-only .side, body.buyer-only .side-backdrop, body.buyer-only #sync-card, body.buyer-only .grid > .card:not([href="/buyer/"]),
+body.buyer-only #sync-all-btn, body.buyer-only #launch-all-btn, body.buyer-only #theme-btn, body.buyer-only #sys-pill { display: none !important; }
 </style>
 </head>
 <body>
@@ -1355,6 +1358,13 @@ fetch('/api/auth/me', {credentials: 'include', cache: 'no-store'}).then(r => r.o
    Landing's server refuses them anyway - this just says so up front. */
 fetch('/api/auth/rights', {credentials: 'include', cache: 'no-store'}).then(r => r.ok ? r.json() : null).then(d => {
   if (!d) return;
+  /* A BIS buyer (Users & access > BIS divisions, 2026-10-15: "only the BIS app should be visible for him/her to click on"):
+     only the Buyer's Input card; Landing's server refuses every other app for them anyway. */
+  if ((d.bis_divisions || []).length) {
+    document.body.classList.add('buyer-only');
+    const l = document.querySelector('main .lede');
+    if (l) l.textContent = 'You are the buyer for ' + d.bis_divisions.join(', ') + ' - open the Buyer's Input Sheet to type your inputs; Save sends them to the planner.';
+  }
   [['launch-all-btn', 'servers'], ['sync-now-btn', 'data_sync'], ['sync-all-btn', 'data_sync']].forEach(([id, k]) => {
     const b = document.getElementById(id);
     if (b && !d.rights.includes(k)) { b.disabled = true; b.style.opacity = '.45'; b.title = 'An admin has switched this off for you: ' + d.labels[k]; }

@@ -21,4 +21,12 @@ assert need("GET", "/api/config/buyer-department-growth") is None              #
 assert need("POST", "/api/planning/mrp-reapportionment/mapping/upload") == "mrp_master"
 assert need("GET", "/api/planning/mrp-reapportionment/mapping/download") is None   # export stays open
 assert need("POST", "/api/planning/mrp-reapportionment/run") is None
+assert need("POST", "/buyer/api/config/bis-plan-versions") == need("POST", "/buyer/api/planner/factor-table") == "buyer_push"
+assert need("GET", "/buyer/api/config/bis-plan-versions") is None             # reading versions stays open
+# a BIS buyer (2026-10-15): what they may reach
+G, W = Handler._BUYER_GET.match, Handler._BUYER_WRITE.match
+assert G("/buyer/") and G("/buyer/api/sync/sales") and G("/api/auth/me") and G("/api/bis/submissions") and G("/api/suite-theme.js")
+assert not G("/aop/") and not G("/calendar/") and not G("/planning/") and not G("/api/planning/dept-sales/plan-summary") and not G("/nso/")
+assert W("/api/bis/submissions") and W("/api/auth/logout") and W("/buyer/api/export/xlsx")
+assert not W("/buyer/api/config/bis-plan-versions") and not W("/api/config/buyer-department-growth") and not W("/api/bis/submissions/x/review")
 print("all rights-guard checks passed")

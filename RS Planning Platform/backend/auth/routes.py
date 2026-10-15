@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 
 from auth.deps import REMEMBER_COOKIE, require_admin, require_login
 from auth.email import send_reset_email, smtp_configured
-from auth.rights import RIGHTS, load_revoked, rights_for, save_revoked
+from auth.rights import BIS_DIVISIONS, RIGHTS, divisions_of, load_divisions, load_revoked, rights_for, save_divisions, save_revoked
 from auth.security import (CODE_WINDOW, REMEMBER_MAX_AGE, check_reset_code, hash_password, make_remember_token,
                            make_reset_code, make_reset_token, read_reset_token, verify_password)
 from db.base import SessionLocal
@@ -188,13 +188,15 @@ def change_password(request: Request, body: dict = Body(...), user: dict = Depen
 
 @router.get("/me")
 def me(user: dict = Depends(require_login)):
-    return user
+    # + the BIS divisions this person is the buyer for ([] = planner): Landing reads it to keep a buyer to BIS only
+    return {**user, "bis_divisions": divisions_of(user["id"], bool(user.get("is_admin")))}
 
 
 @router.get("/rights")
 def my_rights(user: dict = Depends(require_login)):
     """The signed-in person's rights right now (Landing checks this before a guarded action) + what each means."""
-    return {"rights": rights_for(user["id"]), "labels": RIGHTS}
+    return {"rights": rights_for(user["id"]), "labels": RIGHTS,
+            "bis_divisions": divisions_of(user["id"], bool(user.get("is_admin")))}   # [] = planner (2026-10-15)
 
 
 SIGN_IN_AS_LOG = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "sign_in_as.log")
@@ -277,7 +279,17 @@ def sign_in_as_log(_admin: dict = Depends(require_admin)):
 
 @router.get("/admin/rights")
 def all_rights(_admin: dict = Depends(require_admin)):
-    return {"labels": RIGHTS, "revoked": load_revoked()}
+    return {"labels": RIGHTS, "revoked": load_revoked(), "bis_divisions": list(BIS_DIVISIONS), "divisions": load_divisions()}
+
+
+@router.put("/admin/bis-divisions/{user_id}")
+def set_bis_divisions(user_id: str, body: dict = Body(...), _admin: dict = Depends(require_admin)):
+    """body {"divisions": ["MENS", ...]} - the BIS divisions this person is the buyer for ([] = planner, every division)."""
+    try:
+        uid = str(uuid.UUID(user_id))
+        return {"divisions": save_divisions(uid, body.get("divisions") or [])}
+    except ValueError as e:
+        raise HTTPException(422, str(e))
 
 
 @router.put("/admin/rights/{user_id}")

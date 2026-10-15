@@ -56,6 +56,8 @@ Listing Delisting/app/festival_trend/
 STR Forecaster/season_cluster.json
 Landing/keep_alive.log
 RS Planning Platform/backend/data/user_rights.json
+RS Planning Platform/backend/data/bis_divisions.json
+RS Planning Platform/backend/data/bis_submissions.json
 RS Planning Platform/backend/data/sign_in_as.log
 
 # logs / backups / generated outputs (cleanup 2026-10-05)

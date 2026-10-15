@@ -20,10 +20,15 @@ RIGHTS = {   # key -> what the admin sees
     "calendar_reindex": "Run Reindex (Calendar)",
     "realigner_run": "Run the Re-Aligner (Run, Re-phase & run)",
     "suite_theme": "Change the colour theme for everyone",
-    "buyer_push": "Send the Buyer's plan to Sales Plan (Save in BIS)",   # audit 2026-10-07: one POST replaces everyone's
+    "buyer_push": "Send the Buyer's plan to Sales Plan (Save in BIS, BIS versions and factor table)",   # audit 2026-10-07: one POST replaces everyone's
     "mrp_master": "Import a new MRP master (Sales Plan, MRP Re-apportionment)",   # user 2026-10-08: replaces it for everyone
 }
 _FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "user_rights.json")
+# BIS buyer divisions (user, 2026-10-15: "designate which division sees what ... delegate the BIS function for the
+# specific division only"): {user id: ["MENS", ...]}. None = a planner (every division). A buyer works only the input
+# tiles of their divisions, their Save goes to the planner for review (bis_submissions) - never straight to Sales Plan.
+_DIV_FILE = os.path.join(os.path.dirname(_FILE), "bis_divisions.json")
+BIS_DIVISIONS = ("KIDS", "LADIES", "MENS")
 
 
 def load_revoked(path=None) -> dict:
@@ -50,10 +55,39 @@ def save_revoked(user_id: str, revoked, path=None) -> list:
     return allr.get(user_id, [])
 
 
-def effective(is_admin: bool, is_active: bool, revoked) -> list:
+def load_divisions(path=None) -> dict:
+    try:
+        with open(path or _DIV_FILE, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return {}
+
+
+def save_divisions(user_id: str, divisions, path=None) -> list:
+    path = path or _DIV_FILE
+    divs = sorted({str(d).strip().upper() for d in divisions or []})
+    unknown = set(divs) - set(BIS_DIVISIONS)
+    if unknown:
+        raise ValueError(f"Unknown division(s): {', '.join(sorted(unknown))}")
+    alld = load_divisions(path)
+    alld[user_id] = divs
+    if not divs:
+        del alld[user_id]
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path + ".tmp", "w", encoding="utf-8") as fh:
+        json.dump(alld, fh, indent=1)
+    os.replace(path + ".tmp", path)
+    return divs
+
+
+def effective(is_admin: bool, is_active: bool, revoked, divisions=()) -> list:
     if not is_active:
         return []
-    return list(RIGHTS) if is_admin else [r for r in RIGHTS if r not in set(revoked)]
+    if is_admin:
+        return list(RIGHTS)
+    if divisions:   # a BIS buyer (user, 2026-10-15: "other responsibilities are to be revoked"): none of these
+        return []
+    return [r for r in RIGHTS if r not in set(revoked)]
 
 
 def rights_for(user_id: str) -> list:
@@ -63,4 +97,9 @@ def rights_for(user_id: str) -> list:
         u = session.execute(select(User).where(User.id == uuid.UUID(user_id))).scalar_one_or_none()
     finally:
         session.close()
-    return [] if u is None else effective(u.is_admin, u.is_active, load_revoked().get(user_id, []))
+    return [] if u is None else effective(u.is_admin, u.is_active, load_revoked().get(user_id, []), divisions_of(user_id, u.is_admin))
+
+
+def divisions_of(user_id: str, is_admin: bool = False) -> list:
+    """The BIS divisions this person is the buyer for; [] = a planner (admins are never scoped)."""
+    return [] if is_admin else list(load_divisions().get(user_id, []))

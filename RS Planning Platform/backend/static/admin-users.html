@@ -92,6 +92,7 @@
   .rrow .chips { display: flex; flex-wrap: wrap; gap: 8px 18px; }
   .rrow .note { font-size: 13px; color: var(--muted); }
   label.chk.revoked { color: var(--red); text-decoration: line-through; }
+  .divchips { display: flex; gap: 4px 10px; flex-wrap: wrap; font-size: 13px; margin-bottom: 4px; }
   @media (max-width: 640px) { .rrow { grid-template-columns: 1fr; } .topbar { padding: 10px 16px; } .brand-sub, .who { display: none; } main { padding: 20px 16px 48px; } }
 </style>
 </head>
@@ -124,8 +125,8 @@
       <p class="desc">Change a role, email or admin rights here - it saves as soon as you change it. Switch an account off to stop it signing in without deleting it. <b>Rename</b> changes the username they sign in with. <b>Sign in as</b> opens the suite as that person - without their password - to see or fix their work; a banner on every page takes you back, and each use is logged below. <b>Set password</b> gives someone a temporary password; they choose their own the next time they sign in.</p>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>User</th><th>Email (for password resets)</th><th>Role</th><th>Admin</th><th>Can sign in</th><th>Status</th><th></th></tr></thead>
-          <tbody id="rows"><tr><td colspan="7">Loading…</td></tr></tbody>
+          <thead><tr><th>User</th><th>Email (for password resets)</th><th>Role</th><th title="Buyer's Input Sheet: tick the divisions this person is the buyer for. They then see only BIS, only these divisions, can type only the input tiles, and their Save goes to the planner for review. Nothing ticked = planner (every division).">BIS divisions</th><th>Admin</th><th>Can sign in</th><th>Status</th><th></th></tr></thead>
+          <tbody id="rows"><tr><td colspan="8">Loading…</td></tr></tbody>
         </table>
       </div>
       <div class="msg" id="table-msg" role="status"></div>
@@ -221,12 +222,13 @@ function render() {
       <td><span class="uname">${esc(u.username)}</span>${self ? '<span class="you">you</span>' : ''}<br><button type="button" class="linkbtn" data-act="rename" aria-label="Rename ${esc(u.username)}">Rename</button>${!self && !u.is_admin && u.is_active ? ` <span class="sep">·</span> <button type="button" class="linkbtn" data-act="as" aria-label="Sign in as ${esc(u.username)}">Sign in as</button>` : ''}</td>
       <td><input type="email" value="${esc(u.email || '')}" placeholder="no email - can't reset by email" aria-label="Email for ${esc(u.username)}" data-f="email"></td>
       <td><select data-f="role" aria-label="Role for ${esc(u.username)}">${ROLES.map(r => `<option value="${r}" ${r === u.role ? 'selected' : ''}>${r[0].toUpperCase() + r.slice(1)}</option>`).join('')}</select></td>
+      <td>${u.is_admin ? '<span class="note" title="Admins are never limited to divisions">all (admin)</span>' : `<div class="divchips">${(rights.bis_divisions || []).map(d => `<label class="chk" title="Buyer for ${d} in BIS"><input type="checkbox" data-div="${d}" ${(rights.divisions?.[u.id] || []).includes(d) ? 'checked' : ''} aria-label="${esc(u.username)}: buyer for ${d}"> ${d[0] + d.slice(1).toLowerCase()}</label>`).join('')}</div>${(rights.divisions?.[u.id] || []).length ? '<span class="badge amber" title="Sees only the Buyer&#39;s Input Sheet, these divisions, the input tiles; Save goes to the planner">BIS buyer only</span>' : ''}`}</td>
       <td><input type="checkbox" data-f="is_admin" ${u.is_admin ? 'checked' : ''} ${self ? 'disabled title="You can\'t remove your own admin rights"' : ''} aria-label="Admin: ${esc(u.username)}"></td>
       <td><input type="checkbox" data-f="is_active" ${u.is_active ? 'checked' : ''} ${self ? 'disabled title="You can\'t switch off your own account"' : ''} aria-label="Can sign in: ${esc(u.username)}"></td>
       <td>${u.must_change_password ? '<span class="badge amber">Must set own password</span>' : !u.is_active ? '<span class="badge grey">Switched off</span>' : !u.email ? '<span class="badge grey">No email</span>' : ''}</td>
       <td><button class="btn small" data-act="pw">Set password</button></td>
     </tr>`;
-  }).join('') || '<tr><td colspan="7">No accounts yet.</td></tr>';
+  }).join('') || '<tr><td colspan="8">No accounts yet.</td></tr>';
   renderRights();
 }
 
@@ -245,6 +247,7 @@ function renderRights() {
   $('#rights').innerHTML = sorted.map(u => {
     const off = rights.revoked[u.id] || [];
     const body = u.is_admin ? '<span class="note">Admin - always has every action.</span>'
+      : (rights.divisions?.[u.id] || []).length ? `<span class="note">BIS buyer for ${esc(rights.divisions[u.id].join(', '))} - none of these actions; only the Buyer's Input Sheet input tiles, Saved to the planner for review.</span>`
       : !u.is_active ? '<span class="note">Switched off - cannot sign in, so has none of these.</span>'
       : `<div class="chips">${keys.map(k => `<label class="chk ${off.includes(k) ? 'revoked' : ''}"><input type="checkbox" data-right="${k}" ${off.includes(k) ? '' : 'checked'}> ${esc(rights.labels[k])}</label>`).join('')}</div>`;
     return `<div class="rrow" data-id="${esc(u.id)}"><div><span class="uname">${esc(u.username)}</span>${off.length && !u.is_admin ? `<br><span class="badge amber">${off.length} switched off</span>` : ''}</div>${body}</div>`;
@@ -274,7 +277,18 @@ async function save(id, patch, label) {
   } catch (e) { say(msg, e.message); render(); }
 }
 
-$('#rows').addEventListener('change', e => {
+$('#rows').addEventListener('change', async e => {
+  if (e.target.dataset.div) {   // BIS divisions (2026-10-15): saves the person's ticked divisions at once
+    const tr = e.target.closest('tr'), u = users.find(x => x.id === tr.dataset.id), msg = $('#table-msg');
+    const divisions = [...tr.querySelectorAll('input[data-div]')].filter(i => i.checked).map(i => i.dataset.div);
+    if (divisions.length && !(rights.divisions?.[u.id] || []).length && !confirm(`Make ${u.username} a BIS buyer for ${divisions.join(', ')}? They will see only the Buyer's Input Sheet, only these divisions and only the input tiles, and every other action is switched off for them. Their Save goes to the planner for review.`)) { render(); return; }
+    try {
+      const r = await api(`/admin/bis-divisions/${u.id}`, {method: 'PUT', body: JSON.stringify({divisions})});
+      rights.divisions = {...(rights.divisions || {}), [u.id]: r.divisions};
+      say(msg, r.divisions.length ? `${u.username} is the BIS buyer for ${r.divisions.join(', ')} - BIS only, input tiles only.` : `${u.username} is a planner again (every division, their own access).`, true);
+    } catch (err) { say(msg, err.message); }
+    render(); return;
+  }
   const f = e.target.dataset.f, tr = e.target.closest('tr');
   if (!f || !tr) return;
   const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value.trim();
