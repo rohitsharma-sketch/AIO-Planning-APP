@@ -390,8 +390,11 @@
     background: var(--white); border-right: 1px solid var(--border); transition: transform .2s; }
   .side-l { left: 0; }
   .side-r { right: 0; border-right: 0; border-left: 1px solid var(--border); }
-  .side-l:not(.open) { transform: translateX(-100%); }
-  .side-r:not(.open) { transform: translateX(100%); }
+  .side-l:not(.open):not(.peek) { transform: translateX(-100%); }
+  .side-r:not(.open):not(.peek) { transform: translateX(100%); }
+  /* hover peek (user, 2026-10-15: "hover should make the whole tile come out and go back if the mouse hover is not there"):
+     the mouse on the edge strip slides the whole bar out over the page; leaving it slides it back. A click pins it open. */
+  .side.peek:not(.open) { box-shadow: var(--shadow-lg); }
   .side-tog { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 10px 20px; border: 0;
     border-bottom: 1px solid var(--border); background: none; color: var(--muted); cursor: pointer; text-align: left; }
   .side-tog:hover { color: var(--accent); }
@@ -414,13 +417,13 @@
   /* the handle: the toggle sticks out of the closed bar as a 16 px strip down the screen edge (inside the page's gutter).
      Invisible until the pointer is over it (user, 2026-10-15: "make it visible on hover the rest should be invisible");
      keyboard focus shows it too. Still there when invisible: a tap or a swipe from the edge opens the bar on touch screens. */
-  .side:not(.open) .side-hd { display: none; }
-  .side:not(.open) .side-tog { position: absolute; top: 0; bottom: 0; width: 16px; min-height: 0; padding: 0; justify-content: center;
+  .side:not(.open):not(.peek) .side-hd { display: none; }
+  .side:not(.open):not(.peek) .side-tog { position: absolute; top: 0; bottom: 0; width: 16px; min-height: 0; padding: 0; justify-content: center;
     border: 0; background: transparent; opacity: 0; cursor: grab; transition: opacity .15s, background .15s; }
-  .side:not(.open) .side-tog svg.i { width: 14px; height: 14px; }
-  .side:not(.open) .side-tog:hover, .side:not(.open) .side-tog:focus-visible { opacity: 1; background: var(--white); }
-  .side-l:not(.open) .side-tog { left: 100%; border-right: 1px solid var(--border); }
-  .side-r:not(.open) .side-tog { right: 100%; border-left: 1px solid var(--border); }
+  .side:not(.open):not(.peek) .side-tog svg.i { width: 14px; height: 14px; }
+  .side:not(.open):not(.peek) .side-tog:hover, .side:not(.open):not(.peek) .side-tog:focus-visible { opacity: 1; background: var(--white); }
+  .side-l:not(.open):not(.peek) .side-tog { left: 100%; border-right: 1px solid var(--border); }
+  .side-r:not(.open):not(.peek) .side-tog { right: 100%; border-left: 1px solid var(--border); }
   .side-backdrop { position: fixed; inset: 60px 0 0; z-index: 34; background: rgba(var(--st-ink-rgb,30,39,35),.35); }
   .side-backdrop[hidden] { display: none; }
   @media (max-width: 1039px) {
@@ -742,20 +745,35 @@
     function closeDrawers() { if (wide.matches) return; set('l', false); set('r', false); sync(); }
     function layout() { ['l', 'r'].forEach(function (s) { set(s, wide.matches && stored(s) === '1'); }); sync(); }
     ['l', 'r'].forEach(function (s) {
-      el(s).querySelector('.side-tog').addEventListener('click', function () { toggle(s); });
+      el(s).querySelector('.side-tog').addEventListener('click', function () {
+        var peek = el(s).classList.contains('peek'); el(s).classList.remove('peek');
+        if (peek) { set(s, true); if (wide.matches) remember(s, '1'); sync(); } else toggle(s);   // a peek's arrow pins it open
+      });
       el(s).querySelector('.side-list').addEventListener('click', function (e) { if (e.target.closest('.card')) closeDrawers(); });
     });
     // Drag (mouse, touch or pen - Pointer Events, 2026-10-15): pull a bar out to show it, push it back to hide it.
     // The bar follows the pointer; let go 40 px or more from where it started and it snaps the other way.
     // A drag never counts as a click, so a tool doesn't open by accident.
     var dragEnded = 0;
+    ['l', 'r'].forEach(function (s) {   // hover peek - mouse only (a touch screen has no hover: tap / swipe instead)
+      var side = el(s), t = null;
+      side.querySelector('.side-tog').addEventListener('pointerenter', function (e) {
+        if (e.pointerType !== 'mouse' || side.classList.contains('open')) return;
+        clearTimeout(t); side.classList.add('peek');
+      });
+      side.addEventListener('pointerenter', function (e) { if (e.pointerType === 'mouse') clearTimeout(t); });
+      side.addEventListener('pointerleave', function (e) {
+        if (e.pointerType !== 'mouse') return;
+        clearTimeout(t); t = setTimeout(function () { side.classList.remove('peek'); }, 250);
+      });
+    });
     ['l', 'r'].forEach(function (s) {
       var side = el(s), dir = s === 'l' ? 1 : -1, d = null;
       function end(e) {
         if (!d) return;
         var g = d; d = null;
         if (!g.moved) return;
-        side.classList.remove('dragging'); side.style.transform = '';
+        side.classList.remove('dragging', 'peek'); side.style.transform = '';
         document.body.style.removeProperty('--lw'); document.body.style.removeProperty('--rw');
         var open = e.type === 'pointercancel' ? g.open : g.open ? g.w > g.full - 40 : g.w > 40;
         set(s, g.open);                                   // drop the live preview, then a real toggle (remembers + backdrop)
@@ -764,7 +782,7 @@
       }
       side.addEventListener('pointerdown', function (e) {
         if (e.button > 0) return;
-        d = { x: e.clientX, y: e.clientY, id: e.pointerId, open: side.classList.contains('open'), moved: false,
+        d = { x: e.clientX, y: e.clientY, id: e.pointerId, open: side.classList.contains('open') || side.classList.contains('peek'), moved: false,
               full: side.offsetWidth, w: 0 };
       });
       window.addEventListener('pointermove', function (e) {   // on window: a mouse leaves the thin handle at once

@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Landing: hover slides the whole side bar out, and back when the mouse leaves
+- **Asked (user):** "hover should make the whole tile come out and go back if the mouse hover is not there".
+- With a mouse on the (invisible) edge strip, the whole bar slides out over the page, with a shadow; the page doesn't move. It stays while the mouse is on it and slides back 250 ms after the mouse leaves. Clicking its arrow pins it open: the page moves over and the open state is remembered, as before. Dragging still works; a touch screen still taps or swipes, since it has no hover.
+- **Checked** on the static copy at 1280 px with real mouse moves: left bar out (0 to 280, page content stays at 88), still out while on the bar, back to -280 after leaving; right bar out (1000 to 1280); its arrow click pinned it (content right edge 972, stored open).
+
 ### Landing: side-bar handles invisible until hovered
 - **Asked (user):** "make it visible on hover the rest should be invisible".
 - A closed bar's handle is now an invisible 16 px strip down each screen edge, inside the page's gutter. It shows (white strip, small arrow) only while the pointer is over it, or when it has keyboard focus. Click it or drag from it to open the bar, as before.
