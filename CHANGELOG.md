@@ -7,6 +7,17 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Sales Plan Journey: "What moved this number" - the deviation journey in plain words, and the missing steps
+- **Asked (user):** "get the deviation journey too to explain in simplest words what affected to arrive at this number. Plain words. If any other steps are missing inculcate them too".
+- **What moved this number** (new card above the steps; `GET /display-type/journey` returns `deviation` + `story`): one short paragraph, then each thing that set or moved the number with its change in Rs and % and why, in plain words:
+  - like-for-like store: last year -> the buyer's growth (BIS) -> the AOP cap of its cluster (why up / down, and why P1 and P2 moved differently: the AOP spreads the month over its halves differently from last year's sales) -> the store balance -> the new-department re-balance; "so the plan is X, +y% on last year - z points from what BIS planned";
+  - new department: its reference department x its % (no last year);
+  - NSO / other store: the AOP target -> its department's share like the reference store;
+  - then MRP share, Table / Non-Table share and pieces (value / ASP).
+- **Missing steps now in:** which LY-halves source the department used (its cluster's half-month sales / the store's day sales / half and half); the cap on the AOP store plan's own total; the non-SSG month split by the month-mix reference (was described as the reference's plan split); why a department is inactive; that BIS growth is BIS's re-calibrated plan growth, not necessarily the typed %; a non-SSG store keeps the share it was split by when the new-department step later nudges its reference (the journey had flagged every NSO department as not landing - it now lands, 0.0002 L was this).
+- **Excel (this journey):** new sheet "What moved it" (the paragraph + one row per effect: before, after, change, %, why).
+- **Checked:** `python -m engines.journey` - an SSG, an NSO and an Others store land on their saved numbers down to pieces; CORD SETS (new) reads "10% of its reference department L_EW_KURTI SET: Rs 3.14 L x 10% = Rs 0.31 L". Page: a "Loading..." note while the pickers fill (they are empty while the platform re-reads the plan after a restart).
+
 ### Landing: Account menu items back (Users, Sync all, Sign out)
 - **Reported (user):** "where are the users ? and the rest of the dropdowns" - the Account menu showed only Theme and Servers.
 - **Cause:** the buyer-profile change (`b2a290e`) put an unescaped apostrophe ("Buyer's") in a JavaScript string on the Landing page, so that whole script block stopped: no Users & access link, no Sync all, no Sign out, no rights greying (and no buyer greying).

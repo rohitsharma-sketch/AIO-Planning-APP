@@ -109,12 +109,21 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
         raise HTTPException(404, f"{dept} has no plan at {store} in {month}")
     rec = sd["divisions"][div]["months"][month]["departments"][dept]
     ssg, group = bool(sd.get("is_ssg")), _group(sd)
-    steps = []
+    steps, dev = [], []
+    from engines.dept_sales_engine import _half_shares
+    hs = _half_shares()
 
     def step(stage, title, text, value=None, formula="", unit="₹ L", **extra):
         steps.append({"stage": stage, "title": title, "text": text, "formula": formula, "value": value, "unit": unit, **extra})
 
+    # the deviation journey (user, 2026-10-15: "explain in simplest words what affected to arrive at this number"):
+    # kind "start" = where the number starts, "change" = something that moved it up or down, "split" = a share taken of it
+    def move(kind, what, before, after, why):
+        dev.append({"kind": kind, "what": what, "before": before, "after": after, "change": after - before,
+                    "pct": (after / before - 1) * 100 if before else None, "why": why})
+
     L = lambda v: f"₹{v:,.4f} L"   # noqa: E731
+    pc = lambda f: f"{(f - 1) * 100:+.2f}%"   # noqa: E731
     step("Store", f"{store} · {group}",
          f"Cluster {sd.get('cluster') or '-'}, tag {sd.get('tag') or '-'}. " +
          ("A like-for-like (SSG) store: planned on its own LY with BIS's growth." if ssg else
@@ -124,7 +133,11 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
     lym = f"{month[:3]}'{int(month[-2:]) - 1:02d}"
     derived = None
     if not rec.get("active", True):
-        step("Department", f"{dept} is inactive", "An inactive department carries its LY with a plan of 0.", 0.0)
+        step("Department", f"{dept} is inactive", "An inactive department carries its LY with a plan of 0: BIS sent it as switched "
+             "off (-100%: off season, switched off by the buyer / planner, or every month at -100%) or the Department Master has it "
+             "inactive.", 0.0)
+        move("start", "Last year", ly, ly, f"{dept} sold {L(ly)} at {store} in {lym}.")
+        move("change", "Department switched off", ly, 0.0, "It is inactive this month, so its plan is 0.")
         derived = 0.0
     elif ssg:
         from actuals_manager import load_actuals
@@ -141,23 +154,44 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
         g1, g2 = float(rec.get("g_p1") or 0.0), float(rec.get("g_p2") or 0.0)
         step("Department", "Actual LY", f"{dept} at {store} in {lym}: its actual sales (Calendar, own dates) - the plan's LY.", ly,
              formula="Calendar actual snapshot" + ("" if abs(cal - ly) < TOL else f" (reindexed {L(ly)}: no actual sales that month)"))
-        step("Department", "LY halves", "P1 = days 1-15, P2 = 16th to month end: the department's own half-month LY share in its "
-             "cluster (actual sales), else the store's (Calendar day sales).", ly,
+        src_h = ("its own half-month sales in cluster " + (cl or "-") + " last year (the manual's LY halves)"
+                 if (cl.strip().upper(), dept.strip().upper(), lym) in hs["dept"] else
+                 f"{store}'s own day-by-day sales last year (the Calendar)" if (str(store).strip().upper(), lym) in hs["store"]
+                 else "half and half (no half-month sales to go by)")
+        step("Department", "LY halves", f"P1 = days 1-15, P2 = 16th to month end. Split by {src_h}.", ly,
              formula=f"P1 {L(l1)} ({l1 / ly * 100 if ly else 0:.2f}%) + P2 {L(l2)}")
         pre1, pre2 = l1 * g1 / 100, l2 * g2 / 100
-        step("Department", "× BIS growth", f"BIS growth in use: P1 {g1 - 100:+.2f}%, P2 {g2 - 100:+.2f}% (each half = its LY × its growth).",
-             pre1 + pre2, formula=f"{L(l1)} × {g1 / 100:.4f} + {L(l2)} × {g2 / 100:.4f}")
+        step("Department", "× BIS growth", f"The growth BIS sent for {dept}: P1 {g1 - 100:+.2f}%, P2 {g2 - 100:+.2f}% (each half = its LY × "
+             "its growth). It is BIS's plan growth after BIS's own re-calibration to the division AOP (Re-cal Gr% in BIS), not "
+             "necessarily the % the buyer typed.", pre1 + pre2, formula=f"{L(l1)} × {g1 / 100:.4f} + {L(l2)} × {g2 / 100:.4f}")
+        move("start", "Last year", ly, ly, f"{dept} sold {L(ly)} at {store} in {lym} (actual sales).")
+        move("change", "Buyer's growth (BIS)", ly, pre1 + pre2,
+             f"BIS planned {((pre1 + pre2) / ly - 1) * 100 if ly else 0:+.2f}% on last year for {dept} "
+             f"(P1 {g1 - 100:+.2f}%, P2 {g2 - 100:+.2f}%).")
         a1, a2 = pre1 * h1, pre2 * h2
+        fc = (a1 + a2) / (pre1 + pre2) if pre1 + pre2 else 1.0
         step("Department", "× AOP cap (SSG cluster × month × half)", f"Every like-for-like department of cluster {cl or '-'} in each half "
              f"of {month}, all divisions together, is scaled by one factor so the cluster lands exactly on the AOP's plan for its SSG "
-             "stores in that half - the buyer's mix kept, the division totals free (the colleague's method).", a1 + a2,
-             formula=f"P1 × {h1:.6f}, P2 × {h2:.6f}", factor=(a1 + a2) / (pre1 + pre2) if pre1 + pre2 else 1.0)
+             "stores in that half (the AOP store plan's own total, not the 2-decimal published figure) - the buyer's mix kept, the "
+             "division totals free (the colleague's method).", a1 + a2, formula=f"P1 × {h1:.6f}, P2 × {h2:.6f}", factor=fc)
+        move("change", "AOP cap (cluster)", pre1 + pre2, a1 + a2,
+             f"All the buyers' plans in cluster {cl or '-'} together came to {'more' if fc < 1 else 'less'} than the AOP target for "
+             f"its like-for-like stores in {month}, so every department there (all divisions) was scaled {pc(fc)} "
+             f"(P1 {pc(h1)}, P2 {pc(h2)}) to land on it." +
+             (f" P1 and P2 moved differently because the AOP spreads {month} over its two halves differently from last year's "
+              f"sales: it wants {'more' if h2 > h1 else 'less'} of the month in the second half (16th to month end)."
+              if abs(h1 - h2) > 0.02 else ""))
         after = a1 + a2
         if abs(b1 - 1) > 1e-12 or abs(b2 - 1) > 1e-12:
             after = a1 * b1 + a2 * b2
+            fb = after / (a1 + a2) if a1 + a2 else 1.0
             step("Department", "× store balance", f"{store} is put on its AOP store plan (all divisions; each half by the AOP's P1 / P2 "
                  "split) while every department keeps its cluster total in that half (a two-way balance).", after,
-                 formula=f"P1 × {b1:.6f}, P2 × {b2:.6f}", factor=after / (a1 + a2) if a1 + a2 else 1.0)
+                 formula=f"P1 × {b1:.6f}, P2 × {b2:.6f}", factor=fb)
+            move("change", "Store balance", a1 + a2, after,
+                 f"{store} on its own came out {'above' if fb < 1 else 'below'} its AOP target, so its departments were moved "
+                 f"{pc(fb)} (P1 {pc(b1)}, P2 {pc(b2)}) to land the store on it; the other stores of the cluster moved the other way "
+                 "so each department keeps its cluster total.")
         derived = after
         if _load_new_dept_map():   # the carve + re-balance: per SSG cluster over all divisions (2026-10-14), so every division
             f = ty / after if after else 1.0
@@ -171,6 +205,17 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
             step("Department", "× new-department step", (_new_dept_note(div, dept) + " " if _new_dept_note(div, dept) else "") +
                  "New departments take their % of their reference; the cluster's like-for-like departments are then re-balanced by "
                  "one factor so the cluster stays on the AOP, and the stores back onto their store plans.", ty, formula=fml, factor=f)
+            if c:   # a new department: no last year - its number IS its reference's share (the LY / growth lines are 0)
+                dev[:] = []
+                move("start", f"Reference {c.get('ref_dept')}", rty, rty, f"{dept} is a new department with no last year, so it "
+                     f"is planned off its reference department {c.get('ref_dept')}: {L(rty)} at {store} in {month}.")
+                move("split", f"{pct:g}% of the reference", rty, ty, f"{dept} = {pct:g}% of {c.get('ref_dept')} (the New "
+                     f"departments setting) = {L(ty)}.")
+            elif abs(ty - after) > TOL:
+                move("change", "New departments", after, ty, (_new_dept_note(div, dept) + " " if c else "") +
+                     ("Its plan is its reference's share." if c else
+                      f"New departments were carved out of their references and the cluster re-balanced back onto the AOP, "
+                      f"which moved {dept} {pc(f)}."))
             derived = ty if abs(f - 1) < 0.25 or _new_dept_note(div, dept) else after   # a large factor on a plain department = not explained
     else:
         from engines.dept_sales_engine import _aop_store_plan
@@ -178,15 +223,32 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
         ref = sd.get("ref_used") or ""
         ract = _active((((p["stores"].get(ref) or {}).get("divisions") or {}).get(div) or {}).get("months", {}).get(month) or {})
         rdiv, rdept = sum(v["ty"] for v in ract.values()), ract.get(dept) or {}
-        share = rdept.get("ty", 0.0) / rdiv if rdiv else 0.0
+        rshare = rdept.get("ty", 0.0) / rdiv if rdiv else 0.0
+        own = _active(sd["divisions"][div]["months"][month])
+        odiv = sum(v["ty"] for v in own.values())
+        share = ty / odiv if odiv else rshare   # the share the store was split by (its reference's mix at that point)
         step("Department", "AOP Forecaster store plan", f"{store}'s {div} plan for {month} in the AOP version BIS plans on.", D,
              formula="AOP store × division × month")
         derived = D * share
-        step("Department", f"× {ref}'s department share", f"{dept} is {share * 100:.4f}% of {ref}'s {div} plan in {month} "
-             "(the reference store's mix, new departments included).", derived, formula=f"{L(D)} × {share:.6f}", factor=share)
-        p1s = rdept.get("ty_p1", 0.0) / rdept["ty"] if rdept.get("ty") else 0.5
-        step("Department", "P1 / P2 like the reference", f"The halves follow {ref}: P1 {p1s * 100:.2f}% / P2 {100 - p1s * 100:.2f}% of the month.",
-             ty1 + ty2, formula=f"P1 {L(ty1)} + P2 {L(ty2)}")
+        late = abs(share - rshare) > 1e-9
+        step("Department", f"× {ref}'s department share", f"{dept} is {share * 100:.4f}% of {store}'s {div} plan in {month} - "
+             f"{ref}'s mix when {store} was split" + (f" (the new-department step then re-balanced {ref}'s cluster, which moved "
+             f"{dept} at {ref} to {rshare * 100:.4f}% - {store} keeps the share it was split by)" if late else "") + ".",
+             derived, formula=f"{L(D)} × {share:.6f}", factor=share)
+        move("start", "AOP target for the store", D, D, f"The AOP gives {store} {L(D)} for {div} in {month} - a store outside the "
+             "like-for-like 148 is planned on that target, not on its own last year.")
+        move("split", f"{dept}'s share, like {ref}", D, derived, f"{dept} takes {share * 100:.2f}% of it - the share it has in "
+             f"{div} at the reference store {ref} (the merchandise-mix reference).")
+        mref = hs["mref"].get(str(store).strip().upper()) or str(ref).strip().upper()
+        pdv = hs["div"].get((mref, div, month))
+        if pdv is not None:
+            step("Department", f"P1 / P2 like {mref}", f"The month splits into halves like the month-mix reference {mref}'s {div} AOP: "
+                 f"P1 {pdv * 100:.2f}% / P2 {100 - pdv * 100:.2f}% for the whole division (the manual's AOP sheet does the same); "
+                 f"{dept} keeps its own shape inside it - P1 {ty1 / ty * 100 if ty else 0:.2f}%.", ty1 + ty2, formula=f"P1 {L(ty1)} + P2 {L(ty2)}")
+        else:
+            p1s = rdept.get("ty_p1", 0.0) / rdept["ty"] if rdept.get("ty") else 0.5
+            step("Department", "P1 / P2 like the reference", f"No month-mix split for {store}: the halves follow {ref}'s plan - "
+                 f"P1 {p1s * 100:.2f}% / P2 {100 - p1s * 100:.2f}%.", ty1 + ty2, formula=f"P1 {L(ty1)} + P2 {L(ty2)}")
         if ly > 0:
             step("Department", "Growth on its own LY", f"Its own LY {L(ly)} (Calendar, split like the reference): {(ty / ly - 1) * 100:+.2f}%.", unit="")
     ok = derived is not None and abs(derived - ty) <= TOL
@@ -205,6 +267,8 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
         x = next(r for r in mrps if r["mrp"] == mrp)
         step("MRP", f"× MRP {mrp} share", f"From {src}: {month} P1 {x['p1_pct']:.4f}%, P2 {x['p2_pct']:.4f}%.", x["ty"],
              formula=f"{L(ty1)} × {x['p1_pct'] / 100:.6f} + {L(ty2)} × {x['p2_pct'] / 100:.6f}")
+        move("split", f"MRP {mrp}", ty, x["ty"], f"MRP {mrp} gets {x['ty'] / ty * 100 if ty else 0:.2f}% of {dept} this month "
+             f"(P1 {x['p1_pct']:.2f}%, P2 {x['p2_pct']:.2f}%) - from {src}.")
         q, row = dte._qty_frame(), None
         if q:
             df = q["df"]
@@ -222,18 +286,57 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
                 pc, pl, a, qq = float(row.get(pc_k) or 0), float(row.get(pl_k) or 0), row.get(asp_k), row.get(q_k)
                 step("Display type", f"× {nm} share", f"{pc:.4f}% of the MRP - {who}{dte.MIX_NOTE.get(how, how)} (re-apportioned LY sales).", pl,
                      formula=f"{L(x['ty'])} × {pc / 100:.6f}")
+                move("split", nm, x["ty"], pl, f"{nm} gets {pc:.2f}% of MRP {mrp} - {who}{dte.MIX_NOTE.get(how, how)}.")
                 a = float(a) if a is not None and a == a else 0.0
                 how_a = dte.asp_lookup(asp_data, dept, mrp, dt, month)[1] if a else None
                 whose = "its own" if how_a == "own" else "the other display type's (fallback)" if how_a else "-"
                 step("Qty", f"{nm} ÷ ASP = pieces", (f"ASP ₹{a:,.2f} per piece - {whose} ASP for {dept} × {mrp} × {month} in the ASP master."
                                                     if a else "No ASP - no qty."),
                      float(qq) if qq is not None and qq == qq else None, formula=f"{L(pl)} × 1e5 ÷ ₹{a:,.2f}" if a else "", unit="pieces")
+                dev.append({"kind": "qty", "what": f"{nm} pieces", "before": pl, "after": float(qq) if qq is not None and qq == qq else None,
+                            "change": None, "pct": None,
+                            "why": (f"{L(pl)} at ₹{a:,.2f} a piece ({whose} ASP) = {float(qq):,.0f} pieces." if a and qq is not None and qq == qq
+                                    else "No ASP for this MRP and display type, so no pieces.")})
         elif x["ty"] <= 1e-9:
             step("Display type", "No plan on this MRP here", "Nothing to split into Table / Non-Table, so no qty.", unit="")
         else:
             step("Display type", "Not in the Display Type run", "Run Display Type (Plan Run) to split this MRP into Table / Non-Table.", unit="")
     return {"store": store, "group": group, "division": div, "dept": dept, "month": month, "mrp": mrp, "display": display,
-            "steps": steps, "ok": ok, "mrps": sorted(mrps, key=lambda r: -r["ty"]), "mrp_source": src if bands else None}
+            "steps": steps, "ok": ok, "mrps": sorted(mrps, key=lambda r: -r["ty"]), "mrp_source": src if bands else None,
+            "deviation": dev, "story": _story(dev, dept, store, month, ly, ty, ssg)}
+
+
+def _story(dev: list, dept: str, store: str, month: str, ly: float, ty: float, ssg: bool) -> str:
+    """The deviation journey as one short paragraph."""
+    L = lambda v: f"₹{v:,.2f} L"   # noqa: E731
+    ch = [d for d in dev if d["kind"] == "change"]
+    st0 = next((d for d in dev if d["kind"] == "start"), None)
+    if st0 and st0["what"].startswith("Reference "):   # a new department
+        sp = next((d for d in dev if d["kind"] == "split"), None)
+        return (f"{dept} is a new department with no last year, so it is planned as {sp['what'].split(' of')[0]} of its reference "
+                f"department {st0['what'][10:]} at {store} in {month}: {L(st0['after'])} x {sp['what'].split(' of')[0]} = {L(ty)}."
+                if sp else f"{dept} is a new department with no last year: plan {L(ty)}.")
+    if not ssg:
+        st = next((d for d in dev if d["kind"] == "start"), None)
+        out = f"{store} is not a like-for-like store, so {dept} in {month} is planned on the AOP target: " + \
+              (f"{L(st['after'])} for the division, of which {dept} takes its reference store's share = {L(ty)}." if st else f"{L(ty)}.")
+        return out + (f" That is {(ty / ly - 1) * 100:+.1f}% on its own last year ({L(ly)})." if ly > 0 else "")
+    if not ch:
+        return f"{dept} at {store} in {month}: {L(ty)}."
+    bis = next((d for d in ch if d["what"].startswith("Buyer")), None)
+    parts = [f"Last year {dept} sold {L(ly)} at {store} in {month[:3]}."]
+    if bis and bis["pct"] is not None:
+        parts.append(f"The buyer's plan (BIS) {'raised' if bis['change'] >= 0 else 'cut'} it {bis['pct']:+.1f}% to {L(bis['after'])}.")
+    for d in ch:
+        if d is bis or abs(d["change"]) < 1e-9:
+            continue
+        parts.append(f"{d['what']}: {'+' if d['change'] >= 0 else '-'}{L(abs(d['change']))}" + (f" ({d['pct']:+.1f}%)." if d["pct"] is not None else "."))
+    tot = (ty / ly - 1) * 100 if ly else None
+    if tot is not None and bis and bis["pct"] is not None:
+        parts.append(f"So the plan is {L(ty)}, {tot:+.1f}% on last year - {tot - bis['pct']:+.1f} points from what BIS planned.")
+    else:
+        parts.append(f"So the plan is {L(ty)}.")
+    return " ".join(parts)
 
 
 def journey_xlsx(store: str, dept: str, month: str, mrp: str = "", display: str = "") -> tuple:
@@ -257,6 +360,14 @@ def journey_xlsx(store: str, dept: str, month: str, mrp: str = "", display: str 
     with pd.ExcelWriter(buf, engine="xlsxwriter") as xw:
         pd.DataFrame(head, columns=["", ""]).to_excel(xw, sheet_name="Journey", index=False, header=False)
         steps.to_excel(xw, sheet_name="Journey", index=False, startrow=len(head) + 1)
+        mv = pd.DataFrame([{"#": i + 1, "What": d["what"], "Kind": {"start": "starts at", "change": "moved it", "split": "share taken",
+                                                                     "qty": "pieces"}[d["kind"]],
+                            "Before": d["before"], "After": d["after"], "Change": d["change"], "Change %": d["pct"], "Why, in plain words": d["why"]}
+                           for i, d in enumerate(j["deviation"])])
+        pd.DataFrame([[j["story"]]], columns=["What moved this number"]).to_excel(xw, sheet_name="What moved it", index=False)
+        mv.to_excel(xw, sheet_name="What moved it", index=False, startrow=3)
+        wm, wrap2 = xw.sheets["What moved it"], xw.book.add_format({"text_wrap": True, "valign": "top"})
+        wm.set_column(0, 0, 100, wrap2); wm.set_column(1, 1, 28); wm.set_column(2, 6, 14); wm.set_column(7, 7, 100, wrap2)
         allm.to_excel(xw, sheet_name="All MRPs to UDF", index=False)
         ws = xw.sheets["Journey"]
         wrap = xw.book.add_format({"text_wrap": True, "valign": "top"})

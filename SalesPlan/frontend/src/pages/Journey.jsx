@@ -103,8 +103,39 @@ export default function Journey() {
       </div>
 
       {err && <div style={{ color: theme.danger, fontSize: 13 }}>{err}</div>}
+      {!opt && !err && <div style={{ fontSize: 12.5, color: theme.textMuted }}>Loading the stores and departments… (the first time after the platform restarts it reads the whole plan - up to a minute)</div>}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: 16, alignItems: 'start' }}>
         <div style={{ display: 'grid', gap: 0, opacity: busy ? 0.6 : 1 }} aria-busy={busy}>
+          {/* the deviation journey (user, 2026-10-15: "explain in simplest words what affected to arrive at this number") */}
+          {j?.deviation?.length > 0 && (
+            <div style={{ ...card, padding: '12px 16px', marginBottom: 14, borderLeft: `4px solid ${theme.navy}` }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.4 }}>What moved this number - in plain words</div>
+              <div style={{ fontSize: 13.5, color: theme.textPrimary, margin: '6px 0 10px', lineHeight: 1.55 }}>{j.story}</div>
+              <div style={{ display: 'grid', gap: 6 }}>
+                {j.deviation.map((d, i) => {
+                  const up = d.change != null && d.change > 1e-9, down = d.change != null && d.change < -1e-9
+                  const tag = d.kind === 'start' ? 'starts at' : d.kind === 'split' ? 'share' : d.kind === 'qty' ? 'pieces' : up ? 'pushed up' : down ? 'pulled down' : 'no change'
+                  const col = d.kind === 'change' ? (up ? theme.success || '#15803d' : down ? theme.danger : theme.textMuted) : theme.textMuted
+                  return (
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '170px minmax(0, 1fr) 150px', gap: 10, alignItems: 'baseline',
+                      padding: '6px 0', borderTop: i ? `1px solid ${theme.border}` : 'none' }}>
+                      <div>
+                        <b style={{ fontSize: 13, color: theme.textPrimary }}>{d.what}</b>
+                        <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: col }}>{tag}</div>
+                      </div>
+                      <div style={{ fontSize: 12.5, color: theme.textSecondary, lineHeight: 1.5 }}>{d.why}</div>
+                      <div style={{ textAlign: 'right', fontFamily: theme.fontMono, fontSize: 12.5 }}>
+                        {d.kind === 'change' && <div style={{ color: col, fontWeight: 700 }}>{up ? '+' : down ? '−' : ''}{L(Math.abs(d.change))}{d.pct != null ? ` (${d.pct >= 0 ? '+' : ''}${d.pct.toFixed(2)}%)` : ''}</div>}
+                        {d.kind === 'qty'
+                          ? <b>{d.after != null ? `${Math.round(d.after).toLocaleString('en-IN')} pcs` : '-'}</b>
+                          : <b style={{ color: theme.navy }}>{L(d.after)}</b>}
+                      </div>
+                    </div>)
+                })}
+              </div>
+            </div>
+          )}
+          {j?.steps?.length > 0 && <div style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.4, margin: '0 0 8px' }}>Every step, worked out again</div>}
           {(j?.steps || []).map((s, i) => (
             <div key={i}>
               {i > 0 && <div aria-hidden="true" style={{ textAlign: 'center', color: theme.textMuted, lineHeight: '18px' }}>↓</div>}
