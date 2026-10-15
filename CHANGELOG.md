@@ -7,6 +7,14 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Sales Plan ⓘ: a new department is explained on its reference
+- **Asked (user):** "in such cases it should give the ref angle also as calirifcation that LY is not the key factor whiw 10% is taken out of ref dep and whatever" (screenshot: LADIES -> LW_U_CORD SETS, Growth +181,033.0%).
+- **What changed (`grain_view._ref_angle`, Final Results ⓘ, month and P1 / P2):** for a row that is one new department:
+  - The Growth tile reads "Growth % · as <reference>" with the reference's growth in the same scope (CORD SETS: as L_EW_KURTI SET, ₹1,620.7 -> ₹1,920.2 L = +18.5%). The month / fortnight table shows the reference's growth too. Its own growth on its tiny LY is kept in the text only ("₹0.1 L - +181,033.0% on it says nothing").
+  - A new line "Where its ₹192.0 L comes from": the reference is not cut (its New departments cut is 0%); the 10% comes on top and LADIES is scaled back onto its AOP by one factor a month, so every LADIES department gives up a little, not the reference alone. When a cut % is set, it says how much the reference gives up instead.
+  - Numbers are unchanged. Other rows are unchanged.
+- **Checked** in the sandbox API (filters SSG + LADIES, as in the screenshot): month and P1 / P2 both give TY 192.02, tile +18.48% as L_EW_KURTI SET (LY 1,620.73 / TY 1,920.17, cut 0%), months Mar +20.8 / Apr +17.3 / May +17.7 / Jun +17.4.
+
 ### Sort on every header of the plan trees (Sales Plan + Growth vs LY)
 - **Asked (user):** "sort functions in all headers where such tables exist" (screenshot: the DIVISION › DEPARTMENT › MONTH / LY / TY / GROWTH % / CONT % header).
 - **Sales Plan (`HierarchyView.jsx`: Final Results, MRP output, Display Type, Article Name route, MRP Re-apportionment):** every header is a sort button: the row name (A to Z first), LY, TY, Growth %, Cont % (largest first). A second click reverses; a third goes back to the plan's own order. It sorts the rows inside every open branch, so the tree stays and Grand Total stays last. `aria-sort` on the header; kept per page and browser (`<store>.sort`). Sorting is on screen only; the Excel export keeps the plan's order.

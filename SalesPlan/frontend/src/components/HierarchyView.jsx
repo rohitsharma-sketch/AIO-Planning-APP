@@ -55,7 +55,8 @@ function Explain({ api, LV, query, cols = COLS, levels, path, filters, version, 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
               <div style={tile}><div style={cap}>{cols.ly}</div><div style={big}>{L(d.ly)}</div></div>
               <div style={tile}><div style={cap}>{cols.ty}</div><div style={big}>{L(d.ty)}</div></div>
-              <div style={tile}><div style={cap}>{cols.growth}</div><div style={{ ...big, color: (d.growth ?? 0) >= 0 ? theme.success : theme.danger }}>{P(d.growth)}</div></div>
+              <div style={tile} title={d.ref ? `A new department grows as its reference: ${d.ref.pct}% of ${d.ref.dept}'s plan (its own LY is not the base)` : undefined}>
+                <div style={cap}>{d.growth_label || cols.growth}</div><div style={{ ...big, color: (d.growth ?? 0) >= 0 ? theme.success : theme.danger }}>{P(d.growth)}</div></div>
               <div style={tile}><div style={cap}>Cont %</div><div style={big}>{d.cont == null ? (path.length ? '–' : '100%') : `${d.cont.toFixed(1)}%`}</div></div>
             </div>
             <div style={{ display: 'grid', gap: 8 }}>
@@ -78,13 +79,13 @@ function Explain({ api, LV, query, cols = COLS, levels, path, filters, version, 
             )}
             {d.months?.length > 1 && !d.table && (
               <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12, fontSize: 12 }}>
-                <thead><tr>{['Month', cols.ly, cols.ty, cols.growth].map((h, i) => <th key={h} style={{ textAlign: i ? 'right' : 'left', padding: '5px 8px', color: theme.textMuted, fontSize: 10.5, borderBottom: `1px solid ${theme.border}` }}>{h}</th>)}</tr></thead>
+                <thead><tr>{['Month', cols.ly, cols.ty, d.ref ? `Growth · as ${d.ref.dept}` : cols.growth].map((h, i) => <th key={h} style={{ textAlign: i ? 'right' : 'left', padding: '5px 8px', color: theme.textMuted, fontSize: 10.5, borderBottom: `1px solid ${theme.border}` }}>{h}</th>)}</tr></thead>
                 <tbody>{d.months.map(m => (
                   <tr key={m.month}>
                     <td style={{ padding: '4px 8px' }}>{m.month}</td>
                     <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: theme.fontMono }}>{L(m.ly)}</td>
                     <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: theme.fontMono, fontWeight: 600 }}>{L(m.ty)}</td>
-                    <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: theme.fontMono }}>{P(gr(m.ty, m.ly))}</td>
+                    <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: theme.fontMono }}>{P(d.ref ? m.growth_ref : gr(m.ty, m.ly))}</td>
                   </tr>))}</tbody>
               </table>
             )}

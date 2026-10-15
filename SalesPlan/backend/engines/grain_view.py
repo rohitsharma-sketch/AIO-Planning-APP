@@ -1033,7 +1033,51 @@ def explain(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: list, 
     out["lines"] = lines
     out["parts"] = {k: {"ly": P["ly"], "ty": P["ty"], "stores": len(P["stores"])} for k, P in parts.items()}
     out["months"] = [{"month": m, "ly": mon[m][0], "ty": mon[m][1]} for m in TY_MONTHS if m in mon]
+    if one_dp and next(iter(depts)) in new:
+        _ref_angle(out, cube, attr_map, sinfo, want, filt, next(iter(depts)), new[next(iter(depts))], pct, keep)
     return out
+
+
+def _ref_angle(out, cube, attr_map, sinfo, want, filt, key, c, pct, keep):
+    """A new department's ⓘ on its reference (user, 2026-10-15: "in such cases it should give the ref angle also as
+    calirifcation that LY is not the key factor"): its plan is New dept % of the reference's plan, so the growth that
+    means something is the reference's - its own LY (little or none) is not what the plan is built on. Growth tile and
+    month table go on the reference's growth; its own growth stays in the text."""
+    dv, dp = key
+    ref = c["ref_dept"]
+    rw = {**want, "department": ref}
+    rw.pop("attribute", None)
+    rf = {k: v for k, v in (filt or {}).items() if k not in ("department", "attribute")}
+    rm = {}
+    for _dv, _dp, _at, _s, m, ly, ty in _cells(cube, attr_map, rw, sinfo, rf):
+        a = rm.setdefault(m, [0.0, 0.0])
+        a[0] += ly
+        a[1] += ty
+    rly, rty = sum(v[0] for v in rm.values()), sum(v[1] for v in rm.values())
+    g = (rty / rly - 1) * 100 if rly else None
+    npct, kp = pct(c, "new_dept_pct"), keep.get((dv, ref), 1.0)
+    own = out.get("growth")
+    out.update(growth_own=own, growth=g, growth_label=f"Growth % · as {ref}",
+               ref={"dept": ref, "ly": rly, "ty": rty, "growth": g, "pct": npct * 100, "cut_pct": (1 - kp) * 100})
+    for x in out["months"]:
+        r = rm.get(x["month"])
+        x["growth_ref"] = (r[1] / r[0] - 1) * 100 if r and r[0] else None
+    t = (f"a new department is not measured on its own LY (₹{_inr(out['ly'])} L"
+         + (f" - {own:+,.1f}% on it says nothing" if own is not None else "") + f"): its plan is {npct * 100:g}% of "
+         f"{ref}'s plan, so it grows as {ref} does - ₹{_inr(rly)} → ₹{_inr(rty)}"
+         + (f" = {g:+.1f}%." if g is not None else "."))
+    src = (f"{ref} is not cut (its New departments cut is 0%): the {npct * 100:g}% comes on top of it, and {dv} is then "
+           f"scaled back onto its AOP by one factor a month - so every {dv} department gives up a little to make room, "
+           f"not {ref} alone." if kp >= 1 else
+           f"{ref} gives up {(1 - kp) * 100:g}% of its plan to it; {dv} is then scaled back onto its AOP by one factor a month.")
+    lines = out["lines"]
+    i = next((j for j, x in enumerate(lines) if x["h"] == "Growth %"), None)
+    if i is None:
+        i = next((j for j, x in enumerate(lines) if x["h"] == "The number"), -1) + 1
+        lines.insert(i, {"h": "Growth %", "t": t})
+    else:
+        lines[i] = {"h": "Growth %", "t": t}
+    lines.insert(i + 1, {"h": f"Where its ₹{_inr(out['ty'])} L comes from", "t": src})
 
 
 def _whole(m: str) -> str:
@@ -1055,6 +1099,17 @@ def explain_half(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: l
     Tm = np.bincount(g, weights=ix["ty"][m], minlength=n)
     per = sorted(((ix["names"]["month"][i], float(Lm[i]), float(Tm[i])) for i in np.unique(g)), key=lambda x: month_key(x[0]))
     out["months"] = [{"month": k, "ly": a, "ty": b} for k, a, b in per]
+    rg = None
+    if out.get("ref"):   # a new department: its fortnights on its reference's growth too (_ref_angle)
+        rw = {**dict(zip(levels, path)), "department": out["ref"]["dept"]}
+        rw.pop("attribute", None)
+        rmk = _mask(ix, rw, {k: v for k, v in (filt or {}).items() if k not in ("department", "attribute")})
+        RL = np.bincount(ix["c"]["month"][rmk], weights=ix["ly"][rmk], minlength=n)
+        RT = np.bincount(ix["c"]["month"][rmk], weights=ix["ty"][rmk], minlength=n)
+        for x in out["months"]:
+            i = ix["pos"]["month"].get(x["month"])
+            x["growth_ref"] = (RT[i] / RL[i] - 1) * 100 if i is not None and RL[i] else None
+        rg = (RT.sum() / RL.sum() - 1) * 100 if RL.sum() else None
     note = {"h": "P1 / P2", "t": "P1 = days 1-15 of the month, P2 = the 16th to the month end. Each store x department's "
             "month LY is split into its own halves (actual half-month LY) and each half grows by BIS's own P1 / P2 growth "
             "(the plan engine's working); "
@@ -1065,11 +1120,14 @@ def explain_half(cube: dict, attr_map: dict, nd_map: dict, levels: list, path: l
         label = out["label"] if not path else " · ".join(str(x) for x in path)
         note["t"] += (f" The working below is for the whole month{'s' if len(per) > 2 else ''}: ₹{_inr(out['ty'])} L, "
                       f"of which this row is ₹{_inr(TY)} L.")
-        out.update(label=label, ly=LY, ty=TY, growth=(TY / LY - 1) * 100 if LY else None)
+        ref_line = next((x for x in rest if x["h"] == "Growth %"), None) if out.get("ref") else None
+        out.update(label=label, ly=LY, ty=TY, growth=rg if out.get("ref") else (TY / LY - 1) * 100 if LY else None)
         rest = [x for x in rest if x["h"] not in ("The number", "Growth %", "Cont %")]
         top = [{"h": "The number", "t": f"{label} plans ₹{_inr(TY)} L this year against ₹{_inr(LY)} L last year, in "
                 f"{', '.join(k for k, _, _ in per)}."}]
-        if LY:
+        if ref_line:
+            top.append({"h": "Growth %", "t": ref_line["t"] + f" This row's fortnights: {rg:+.1f}% as the reference." if rg is not None else ref_line["t"]})
+        elif LY:
             top.append({"h": "Growth %", "t": f"₹{_inr(TY)} ÷ ₹{_inr(LY)} − 1 = {out['growth']:+.1f}%."})
         if path:
             pty = float(ix["ty"][_mask(ix, dict(zip(levels, path[:-1])), filt)].sum())
