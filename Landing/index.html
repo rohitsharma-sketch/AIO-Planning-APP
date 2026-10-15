@@ -379,6 +379,58 @@
   @media (max-width: 1040px) { .grid:not(.tools) { gap: 16px; } .grid:not(.tools) .card::after { display: none; } }
   .grid.tools .card p.desc { -webkit-line-clamp: 1; }
   .meta { border-top-color: var(--st-surface-3, #F0ECE2); }
+
+  /* ── Side bars: Quick tools (left) / Planning tools (right), retractable (user, 2026-10-15) ──
+     wide (>=1040): a 64px icon rail; open pushes the page over, nothing is covered.
+     narrower: open = drawer over the page with a backdrop; phones (<=620) get an edge tab only. */
+  body { --lw: 64px; --rw: 64px; }
+  body.side-l-open { --lw: 280px; }  body.side-r-open { --rw: 280px; }
+  main { max-width: calc(1160px + var(--lw) + var(--rw)); padding-left: calc(var(--lw) + 28px); padding-right: calc(var(--rw) + 28px); transition: padding .2s, max-width .2s; }
+  .side { position: fixed; top: 60px; bottom: 0; z-index: 35; width: var(--lw); display: flex; flex-direction: column;
+    background: var(--white); border-right: 1px solid var(--border); transition: width .2s, transform .2s; }
+  .side-l { left: 0; }
+  .side-r { right: 0; width: var(--rw); border-right: 0; border-left: 1px solid var(--border); }
+  .side-tog { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 10px 20px; border: 0;
+    border-bottom: 1px solid var(--border); background: none; color: var(--muted); cursor: pointer; text-align: left; touch-action: manipulation; }
+  .side-tog:hover { color: var(--accent); }
+  .side-tog svg.i { transition: transform .2s; }
+  .side-r .side-tog { flex-direction: row-reverse; text-align: right; }
+  .side-r .side-tog svg.i, .side-l.open .side-tog svg.i { transform: rotate(180deg); }
+  .side-r.open .side-tog svg.i { transform: none; }
+  .side-hd { display: flex; flex-direction: column; min-width: 0; }
+  .side-name { font-size: 11.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--char); }
+  .side-note { font-size: 11.5px; color: var(--faint); }
+  .side-list { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .side .card { padding: 12px 14px 10px; border-radius: 12px; touch-action: manipulation; }
+  .side .card-top { margin-bottom: 8px; }
+  .side .card h2 { font-size: 14px; margin-bottom: 4px; }
+  .side .card p.desc { font-size: 12px; line-height: 1.45; margin-bottom: 10px; }
+  .side .meta { padding-top: 8px; font-size: 11.5px; }
+  /* closed rail: icon only, status as a dot on the icon */
+  .side:not(.open) .side-hd, .side:not(.open) .card h2, .side:not(.open) .card p.desc,
+  .side:not(.open) .open-link, .side:not(.open) .status-label { display: none; }
+  .side:not(.open) .side-tog { justify-content: center; padding: 10px 0; }
+  .side:not(.open) .side-list { padding: 10px 8px; }
+  .side:not(.open) .card { align-items: center; padding: 12px 0; }
+  .side:not(.open) .card-top { margin: 0; }
+  .side:not(.open) .meta { position: absolute; top: 6px; right: 6px; border: 0; padding: 0; }
+  .side-backdrop { position: fixed; inset: 60px 0 0; z-index: 34; background: rgba(var(--st-ink-rgb,30,39,35),.35); }
+  .side-backdrop[hidden] { display: none; }
+  @media (max-width: 1039px) {
+    body.side-l-open { --lw: 64px; }  body.side-r-open { --rw: 64px; }   /* page stays put; the drawer covers it */
+    .side.open { width: min(280px, calc(100vw - 48px)); box-shadow: var(--shadow-lg); }
+  }
+  @media (max-width: 620px) {
+    body, body.side-l-open, body.side-r-open { --lw: 0px; --rw: 0px; }
+    main { padding-left: 16px; padding-right: 16px; }
+    .side, .side.open { width: min(280px, calc(100vw - 48px)); }
+    .side-l:not(.open) { transform: translateX(-100%); }
+    .side-r:not(.open) { transform: translateX(100%); }
+    /* the toggle sticks out of the closed drawer as an edge tab */
+    .side:not(.open) .side-tog { position: absolute; top: 12px; width: 32px; min-height: 56px; border: 1px solid var(--border); background: var(--white); }
+    .side-l:not(.open) .side-tog { left: 100%; border-left: 0; border-radius: 0 10px 10px 0; }
+    .side-r:not(.open) .side-tog { right: 100%; border-right: 0; border-radius: 10px 0 0 10px; }
+  }
 </style>
 </head>
 <body>
@@ -394,6 +446,7 @@
     <symbol id="i-listing" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18h2"/></symbol>
     <symbol id="i-growth" viewBox="0 0 24 24"><path d="M3 3v18h18M7 15l4-4 3 3 6-6M15 8h5v5"/></symbol>
     <symbol id="i-str" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2M14 7l3-3 3 3M17 4v7"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
     <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 3v18M5 21h14M6 7h12M6 7l-3 7a3 3 0 0 0 6 0zM18 7l-3 7a3 3 0 0 0 6 0z"/></symbol>
   </svg>
 
@@ -438,6 +491,61 @@
   </header>
   <div id="launch-all-msg" class="corner-msg" role="status" aria-live="polite"></div>
 
+  <!-- Additional tools in two retractable side bars (user, 2026-10-15: "split into 2 sidebars with prioritising from light to
+       heavy workflow related tasks ... on both sides left and right"). Light -> heavy runs down the left, then down the right.
+       Same cards as before (links, status checks, Lagan pop-up unchanged); open / closed is remembered per side. -->
+  <div class="side-backdrop" id="side-backdrop" hidden></div>
+  <aside class="side side-l" id="side-l" aria-label="Quick tools">
+    <button class="side-tog" type="button" aria-expanded="false" aria-controls="side-l-list" title="Quick tools - show / hide">
+      <svg class="i"><use href="#i-chev"/></svg><span class="side-hd"><span class="side-name">Quick tools</span><span class="side-note">Light · look-ups and reports</span></span>
+    </button>
+    <nav class="side-list" id="side-l-list">
+      <div class="card" title="Lagan Calendar" id="lagan-card" role="button" tabindex="0" aria-haspopup="dialog">
+        <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-lagan"/></svg></span></div>
+        <h2>Lagan Calendar</h2>
+        <p class="desc">Wedding and ceremony dates, 2000–2030.</p>
+        <div class="meta"><span class="open-link" style="margin-left:auto">Look up</span></div>
+      </div>
+      <a class="card" title="Growth vs LY" href="/growth/" target="_blank" data-check="/api/port-status/8075">
+        <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-growth"/></svg></span></div>
+        <h2>Growth vs LY</h2>
+        <p class="desc">The final sales plan against last year, by division, attribute and department.</p>
+        <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
+      </a>
+      <a class="card" title="Listing / Delisting Analyser" href="/listing/" target="_blank" data-check="/api/port-status/8123">
+        <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-listing"/></svg></span></div>
+        <h2>Listing / Delisting Analyser</h2>
+        <p class="desc">Listing history and delist / relist suggestions.</p>
+        <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
+      </a>
+    </nav>
+  </aside>
+  <aside class="side side-r" id="side-r" aria-label="Planning tools">
+    <button class="side-tog" type="button" aria-expanded="false" aria-controls="side-r-list" title="Planning tools - show / hide">
+      <svg class="i"><use href="#i-chev"/></svg><span class="side-hd"><span class="side-name">Planning tools</span><span class="side-note">Heavier · build and rework plans</span></span>
+    </button>
+    <nav class="side-list" id="side-r-list">
+      <a class="card" title="STR Forecaster" href="/str/" target="_blank" data-check="/api/port-status/8085">
+        <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-str"/></svg></span></div>
+        <h2>STR Forecaster</h2>
+        <p class="desc">Forecast sell-thru by store, department and month from the fixture plan and the sales plan.</p>
+        <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
+      </a>
+      <a class="card" title="NSO Plan Distributor" href="/nso/" target="_blank" data-check="/api/port-status/8060" id="nso-card">
+        <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-store"/></svg></span></div>
+        <h2>NSO Plan Distributor</h2>
+        <p class="desc">Month-wise plans for new stores.</p>
+        <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
+      </a>
+      <a class="card" title="Sales Plan Re-Aligner" href="/realigner/" target="_blank" data-check="/api/port-status/8070">
+        <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-scale"/></svg></span></div>
+        <h2>Sales Plan Re-Aligner</h2>
+        <p class="desc">Rebalance a finished plan after listing or department changes.</p>
+        <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
+      </a>
+    </nav>
+  </aside>
+
   <main>
     <span class="eyebrow">FY 2027–28 · Planning suite</span>
     <h1>Planning Suite</h1>
@@ -478,53 +586,6 @@
       <div class="sync-strip-title">Data sync &amp; flow</div>
       <span class="gap"></span>
       <span class="status"><span class="dot" id="sync-summary-dot"></span><span class="status-label checking" id="sync-summary-label">checking…</span></span>
-    </div>
-
-    <div class="sec-hd">
-      <span class="sec-title">Additional tools</span>
-      <span class="sec-note">Specialised utilities outside the core workflow</span>
-    </div>
-    <div class="grid tools">
-      <div class="card" id="lagan-card" role="button" tabindex="0" aria-haspopup="dialog">
-        <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-lagan"/></svg></span></div>
-        <h2>Lagan Calendar</h2>
-        <p class="desc">Wedding and ceremony dates, 2000–2030.</p>
-        <div class="meta"><span class="open-link" style="margin-left:auto">Look up</span></div>
-      </div>
-      <!-- one address (2026-09-26): every app is a path on this Landing origin -->
-      <a class="card" href="/nso/" target="_blank" data-check="/api/port-status/8060" id="nso-card">
-        <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-store"/></svg></span></div>
-        <h2>NSO Plan Distributor</h2>
-        <p class="desc">Month-wise plans for new stores.</p>
-        <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
-      </a>
-      <a class="card" href="/realigner/" target="_blank" data-check="/api/port-status/8070">
-        <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-scale"/></svg></span></div>
-        <h2>Sales Plan Re-Aligner</h2>
-        <p class="desc">Rebalance a finished plan after listing or department changes.</p>
-        <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
-      </a>
-      <!-- Growth vs LY (2026-10-02): final sales plan against last year, by the plan's hierarchy -->
-      <a class="card" href="/growth/" target="_blank" data-check="/api/port-status/8075">
-        <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-growth"/></svg></span></div>
-        <h2>Growth vs LY</h2>
-        <p class="desc">The final sales plan against last year, by division, attribute and department.</p>
-        <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
-      </a>
-      <!-- STR Forecaster (2026-10-09): sell-thru from the fixture plan (fixtures x qty per fixture) and the sales plan -->
-      <a class="card" href="/str/" target="_blank" data-check="/api/port-status/8085">
-        <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-str"/></svg></span></div>
-        <h2>STR Forecaster</h2>
-        <p class="desc">Forecast sell-thru by store, department and month from the fixture plan and the sales plan.</p>
-        <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
-      </a>
-      <!-- Listing/Delisting (joined the suite 2026-09-26): data rebuilt by the daily data-lake sync -->
-      <a class="card" href="/listing/" target="_blank" data-check="/api/port-status/8123">
-        <div class="card-top"><span class="card-icon"><svg class="i"><use href="#i-listing"/></svg></span></div>
-        <h2>Listing / Delisting Analyser</h2>
-        <p class="desc">Listing history and delist / relist suggestions.</p>
-        <div class="meta"><span class="status"><span class="dot"></span><span class="status-label checking">checking…</span></span><span class="open-link">Open ↗</span></div>
-      </a>
     </div>
 
     <footer>
@@ -658,6 +719,40 @@
   }
   checkAllStatuses();
   setInterval(checkAllStatuses, 8000);
+
+  // ── Side bars (2026-10-15): one toggle per side; click / tap / Enter / Space all reach it (it is a <button>).
+  // Wide screens remember open / closed per side; on narrow screens a drawer covers the page, so one opens
+  // at a time, it closes on the backdrop, Esc or after picking a tool, and it always starts closed.
+  (function () {
+    var wide = window.matchMedia('(min-width: 1040px)');
+    var bd = document.getElementById('side-backdrop');
+    function el(s) { return document.getElementById('side-' + s); }
+    function stored(s) { try { return localStorage.getItem('rs-landing-side-' + s); } catch (e) { return null; } }
+    function remember(s, v) { try { localStorage.setItem('rs-landing-side-' + s, v); } catch (e) {} }
+    function set(s, open) {
+      el(s).classList.toggle('open', open);
+      el(s).querySelector('.side-tog').setAttribute('aria-expanded', String(open));
+      document.body.classList.toggle('side-' + s + '-open', open);
+    }
+    function sync() { bd.hidden = wide.matches || !(el('l').classList.contains('open') || el('r').classList.contains('open')); }
+    function toggle(s) {
+      var open = !el(s).classList.contains('open');
+      if (open && !wide.matches) set(s === 'l' ? 'r' : 'l', false);
+      set(s, open);
+      if (wide.matches) remember(s, open ? '1' : '0');
+      sync();
+    }
+    function closeDrawers() { if (wide.matches) return; set('l', false); set('r', false); sync(); }
+    function layout() { ['l', 'r'].forEach(function (s) { set(s, wide.matches && stored(s) === '1'); }); sync(); }
+    ['l', 'r'].forEach(function (s) {
+      el(s).querySelector('.side-tog').addEventListener('click', function () { toggle(s); });
+      el(s).querySelector('.side-list').addEventListener('click', function (e) { if (e.target.closest('.card')) closeDrawers(); });
+    });
+    bd.addEventListener('click', closeDrawers);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !bd.hidden) closeDrawers(); });
+    if (wide.addEventListener) wide.addEventListener('change', layout); else wide.addListener(layout);
+    layout();
+  })();
 
   // ── Master Switch ───────────────────────────────────────────────────────────
   (function () {

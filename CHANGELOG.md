@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Landing: Additional tools in two retractable side bars (left light, right heavier)
+- **Asked (user):** "Take these apps to the retractable side bar from which these apps can be accessed. Also, make sure the click and touch functions are working they should not be hard set"; then "split into 2 sidebars with prioritising from light to heavy workflow related tasks. make it on both sides left and right".
+- **Left, Quick tools (light: look-ups and reports):** Lagan Calendar, Growth vs LY, Listing / Delisting Analyser. **Right, Planning tools (heavier: build and rework plans):** STR Forecaster, NSO Plan Distributor, Sales Plan Re-Aligner. Light to heavy runs down the left, then down the right. The Additional tools section is gone from the page body; core workflow and data sync are unchanged.
+- **Retractable:** each side has its own toggle button (click, tap, Enter or Space). On wide screens (1040 px and up) a closed bar is a 64 px icon rail with each tool's status dot, and an open bar pushes the page over (nothing covered); open / closed is remembered per side in this browser. Narrower screens: the bar opens as a drawer over the page, one at a time; it closes on a tap outside, Esc or after picking a tool, and always starts closed. Phones get an edge tab only.
+- **Not hard-set:** the items are the same cards as before, real links to the Landing paths (`/growth/`, `/listing/`, `/str/`, `/nso/`, `/realigner/`) plus the Lagan pop-up; status checks and the "N of N modules online" count still include them.
+- **Checked** on a static copy (Landing itself needs a sign-in): phone 427 px (tap open, swap sides, backdrop closes, Lagan pop-up opens from the drawer), tablet 800 px (drawer over the rail), desktop 1440 px (both open: page content 308 to 1132 px, rails 0 to 280 and 1160 to 1440, remembered after a reload); no script errors. No Landing restart needed (it reads index.html per request).
+
 ### Sales Plan pages: no redundant plan run, views built ahead
 - **Asked (user):** "reduce the population redunduncy and latency issues speed the population of view faster".
 - **Measured (cold / next call):** plan cube 1.9 s / 0.0, MRP tree 5.3 / 0.06, Display tree 2.7 / 0.07, check-up 9.7 / 0.0, MRP split (effective_shares) 1.6 / 0.06 - the first page after any change (BIS save, restart) waited for all of it; BIS itself loads in 0.9 s (all its requests < 0.1 s).
