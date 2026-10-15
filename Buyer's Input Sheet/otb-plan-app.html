@@ -966,6 +966,7 @@ const DVDATA = [
     {id:'lw_u_crop_tees',nm:'LW_U_CROP TEES',attr:'SUMMER',ly:0.9},
     {id:'lw_u_dress',nm:'LW_U_DRESS',attr:'REGULAR',ly:7.3},
     {id:'lw_u_ethnic_dress',nm:'LW_U_ETHNIC DRESS',attr:'REGULAR',ly:0.94},
+    {id:'lw_u_cord_sets',nm:'LW_U_CORD SETS',attr:'REGULAR',ly:0,_nd:true},   // new department, no LY: plan = New dept % x its reference (2026-10-15)
     {id:'lw_u_f_o_top',nm:'LW_U_F.O TOP',attr:'REGULAR',ly:5.31},
     {id:'lw_u_raincoat',nm:'LW_U_RAINCOAT',attr:'OCCASIONAL',ly:0.02},
     {id:'lw_u_sets',nm:'LW_U_SETS',attr:'REGULAR',ly:0.06},
@@ -1755,7 +1756,7 @@ const DEPT_TO_SEC = {
   'lw_l_shorts':'L_WESTERN_LOWER','lw_l_skirt':'L_WESTERN_LOWER','lw_l_trouser':'L_WESTERN_LOWER',
   // LADIES - WESTERN UPPER
   'lw_u_accessories':'L_WESTERN_UPPER','lw_u_crop_tees':'L_WESTERN_UPPER','lw_u_dress':'L_WESTERN_UPPER',
-  'lw_u_ethnic_dress':'L_WESTERN_UPPER','lw_u_f_o_top':'L_WESTERN_UPPER','lw_u_raincoat':'L_WESTERN_UPPER',
+  'lw_u_ethnic_dress':'L_WESTERN_UPPER','lw_u_cord_sets':'L_WESTERN_UPPER','lw_u_f_o_top':'L_WESTERN_UPPER','lw_u_raincoat':'L_WESTERN_UPPER',
   'lw_u_sets':'L_WESTERN_UPPER','lw_u_tees':'L_WESTERN_UPPER','lw_u_tees_f_s':'L_WESTERN_UPPER',
   'lw_u_t_top':'L_WESTERN_UPPER','lw_u_t_top_f_s':'L_WESTERN_UPPER',
   // LADIES - WINTER
@@ -1979,6 +1980,18 @@ function _ndBuildIdx(m){
   _ndIdx=idx;
 }
 function _ndOf(id){return _ndIdx[id]||null;}
+/* A new department with no LY of its own (user, 2026-10-15: CORD SETS - "Value row, LY 0"): LY shows 0 and its plan is
+   New dept % x its reference's plan every month (L_EW_KURTI SET x 10%), so it moves with the reference through every
+   re-balance and the apparel cap. No growth input of its own; Sales Plan plans it from the same list (not pushed). */
+function _ndNoLy(sec){const x=sec&&sec._nd?_ndOf(sec.id):null;return x&&!(sec.ly>0)?x:null;}
+// a department's plan for one month (Rs Cr): LY x (1 + growth), or the share of the reference above; inactive = 0
+function _secTy(sec,dv,mi){
+  if(S.hiddenSecs.has(sec.id))return 0;
+  const x=_ndNoLy(sec);
+  if(x){const ref=dv.secs.find(z=>z.id===x.ref);
+    return ref&&!S.hiddenSecs.has(ref.id)?x.np*_secMonLY(ref,dv,mi)*(1+(S.inputs[ref.id+'__'+mi]??0)/100):0;}
+  return _secMonLY(sec,dv,mi)*(1+(S.inputs[sec.id+'__'+mi]??0)/100);
+}
 function _ndSettle(dv,mi){
   if(_ndBusy||S.divLocked.has(dv.id))return;
   const list=Object.entries(_ndIdx).filter(([,x])=>x.div===dv.id);
@@ -2307,7 +2320,7 @@ function _afterVisChange(dvs){
 function recalibrateToAop(){
   if(!S.aopLocked){toast('Sync & lock the AOP first - there is no AOP target to re-calibrate to');return;}
   const dvs=DVDATA.filter(dv=>AOP_DIVS.some(d=>d.id===dv.id));   // user, 2026-10-13: always all three in one click, whatever tab is open
-  const tot=dv=>AOP_MIS.reduce((a,mi)=>a+dv.secs.reduce((b,s)=>S.hiddenSecs.has(s.id)?b:b+_secMonLY(s,dv,mi)*(1+(S.inputs[s.id+'__'+mi]??0)/100),0),0);
+  const tot=dv=>AOP_MIS.reduce((a,mi)=>a+dv.secs.reduce((b,s)=>b+_secTy(s,dv,mi),0),0);
   const aop=dv=>AOP_MIS.reduce((a,mi)=>a+(S.aop[dv.id]?.[mi]||0),0);
   const off=dvs.filter(dv=>Math.abs(tot(dv)-aop(dv))>0.005);
   if(!off.length){toast(`${dvs.map(d=>d.nm).join(', ')} already on AOP`);return;}
@@ -2332,7 +2345,7 @@ function recalibrateToAop(){
 function _apparelTot(mi){
   let ty=0,aop=0;
   DVDATA.filter(dv=>AOP_DIVS.some(d=>d.id===dv.id)).forEach(dv=>{aop+=S.aop[dv.id]?.[mi]||0;
-    dv.secs.forEach(sec=>{if(!S.hiddenSecs.has(sec.id))ty+=_secMonLY(sec,dv,mi)*(1+(S.inputs[sec.id+'__'+mi]??0)/100);});});
+    dv.secs.forEach(sec=>{ty+=_secTy(sec,dv,mi);});});
   return {ty,aop};
 }
 function capToApparelAop(silent){
@@ -2348,7 +2361,7 @@ function capToApparelAop(silent){
   _planEvent('Cap on apparel AOP');
   off.forEach(r=>{const f=r.aop/r.ty;
     dvs.forEach(dv=>dv.secs.forEach(sec=>{if(S.hiddenSecs.has(sec.id))return;const k=sec.id+'__'+r.mi;
-      if(_secMonLY(sec,dv,r.mi)>0)S.inputs[k]=((1+(S.inputs[k]??0)/100)*f-1)*100;}));});
+      if(_secMonLY(sec,dv,r.mi)>0&&!_ndNoLy(sec))S.inputs[k]=((1+(S.inputs[k]??0)/100)*f-1)*100;}));});   // a new department without LY follows its reference
   refresh();
   if(!silent)toast(`Apparel Rs.${rows.reduce((a,r)=>a+r.ty,0).toFixed(2)} -> ${AOP_MIS.reduce((a,mi)=>a+_apparelTot(mi).ty,0).toFixed(2)} Cr = AOP. Save to keep it.`);
   return true;
@@ -2465,10 +2478,13 @@ function _divRescale0(dv,mi){
   if(!aopMon)return;
   let lockedTY=0,freeTY=0;const free=[];
   dv.secs.forEach(sec=>{
-    if(S.hiddenSecs.has(sec.id))return;
+    if(S.hiddenSecs.has(sec.id)||_ndNoLy(sec))return;   // a new department without LY is added below, with its reference
     const ly=_secMonLY(sec,dv,mi),k=sec.id+'__'+mi,ty=ly*(1+(S.inputs[k]??0)/100);
     if(S.locked.has(k))lockedTY+=ty;else if(ly>0){freeTY+=ty;free.push({k,ly,ty});}
   });
+  // a new department without LY moves with its reference (2026-10-15): its plan sits on the reference's side
+  dv.secs.forEach(sec=>{const x=_ndNoLy(sec);if(!x)return;const t=_secTy(sec,dv,mi);
+    if(S.locked.has(x.ref+'__'+mi))lockedTY+=t;else freeTY+=t;});
   if(!freeTY)return;
   const f=Math.max(aopMon-lockedTY,0)/freeTY; // never below -100% (audit 2026-10-07)
   free.forEach(({k,ly,ty})=>{S.inputs[k]=(ty*f/ly-1)*100;});
@@ -2477,7 +2493,7 @@ function applyAutoInactive(){
   // Auto-mark depts with no LY sales as inactive — missing ST% alone is not enough (dept may still need planning)
   let changed=false;
   DVDATA.forEach(dv=>dv.secs.forEach(sec=>{
-    if(sec._custom)return; // user-added depts are always kept active
+    if(sec._custom||sec._nd)return; // user-added depts and new departments without LY (CORD SETS) are always kept active
     if(S.hiddenSecs.has(sec.id))return; // already inactive; respect it
     const noLY=!sec.ly||sec.ly<=0;
     if(noLY){S.hiddenSecs.add(sec.id);changed=true;}
@@ -3104,7 +3120,7 @@ function _aopCheck(){
     const off=[];
     AOP_MIS.forEach(mi=>{
       const tgt=S.aop[dv.id]?.[mi];if(!tgt)return;
-      let ty=0;dv.secs.forEach(sec=>{if(!S.hiddenSecs.has(sec.id))ty+=_secMonLY(sec,dv,mi)*(1+(S.inputs[sec.id+'__'+mi]??0)/100);});
+      let ty=0;dv.secs.forEach(sec=>{ty+=_secTy(sec,dv,mi);});
       const d=(ty-tgt)*100;if(Math.abs(d)>0.01)off.push(`${MO[mi]} ${d>0?'+':''}${d.toFixed(2)} L`);
     });
     return {id:dv.id,nm:dv.nm,off,locked:S.divLocked.has(dv.id)};
@@ -3223,9 +3239,16 @@ function buildHeader(defs,noC1=false){
 }
 
 const _INACT_BUYER_PLAN_TYPES=['ty','gr','tot_ty','growth','aop_mon','block_input','lfl_yoy','lfl_base','period_lfl_yoy','period_lfl_base','contrib'];
+const _ND_NOLY_DASH=['gr','growth','input','block_input','pl_fac','pl_gr','pl_val','pl_gr_m','p1_gr','buyer_gr_m'];
 function cellVal(row,def){
   if(row._inactive)return '<span style="color:var(--mu)">—</span>';
   if(row._inactiveBuyer&&_INACT_BUYER_PLAN_TYPES.includes(def.type))return '<span style="color:var(--mu)">—</span>';
+  // a new department without LY (CORD SETS, 2026-10-15): no growth of its own - LY, plan and contribution show, growth
+  // and planner / buyer inputs read "—" (its plan is New dept % x its reference's)
+  if(_ND_NOLY_DASH.includes(def.type)&&row._key&&!row._isGrand&&!row._isGrpHd){
+    const s=DVDATA.find(d=>d.id===row._divId)?.secs.find(x=>x.id===row._key),x=_ndNoLy(s);
+    if(x)return `<span style="color:var(--mu)" title="${_attr(`New department, no LY of its own: its plan is ${Math.round(x.np*100)}% of ${x.refNm}'s every month (New departments)`)}">—</span>`;
+  }
   const c=cols();
   switch(def.type){
     case 'ly': {
@@ -3650,7 +3673,7 @@ function buildRows_dept(){
         c.forEach(mi=>{
           const mly=monLY(sec.ly,mi,slyMo);
           const g=S.inputs[sec.id+'__'+mi];
-          tyByMon[mi]=g!=null?mly*(1+g/100):mly;
+          tyByMon[mi]=_ndNoLy(sec)?_secTy(sec,dv,mi):g!=null?mly*(1+g/100):mly;
           secTY+=tyByMon[mi];
         });
         dvLY+=secLY;anyDv=true;dvTY+=secTY; // always contributes
@@ -3674,7 +3697,7 @@ function buildRows_dept(){
         if(S.hiddenSecs.has(sec.id)){mly+=_secMonLY(sec,dv,mi);return;} // inactive: its LY counts, its plan is 0 (2026-10-13)
         const ml=_secMonLY(sec,dv,mi); mly+=ml;
         const g=S.inputs[sec.id+'__'+mi];
-        mty+=g!=null?ml*(1+g/100):ml; // default 0% baseline
+        mty+=_ndNoLy(sec)?_secTy(sec,dv,mi):g!=null?ml*(1+g/100):ml; // default 0% baseline
       });
       dvLYByMon[mi]=mly;
       dvTYByMon[mi]=mty; // always generated
@@ -3766,7 +3789,7 @@ function buildRows_attr(){
             const sMly=_secMonLY(sec,dv,mi,divAnnual);
             mly+=sMly;
             const g=S.inputs[sec.id+'__'+mi];
-            mty+=g!=null?sMly*(1+g/100):sMly;
+            mty+=_ndNoLy(sec)?_secTy(sec,dv,mi):g!=null?sMly*(1+g/100):sMly;
           });
           secLY+=mly;tyByMon[mi]=mty;secTY+=mty;
         });
@@ -3791,7 +3814,7 @@ function buildRows_attr(){
         if(S.hiddenSecs.has(sec.id)){mly+=_secMonLY(sec,dv,mi);return;}   // inactive: LY counts, plan 0 (as the Buyer's Plan)
         const ml=_secMonLY(sec,dv,mi);mly+=ml;
         const g=S.inputs[sec.id+'__'+mi];
-        mty+=g!=null?ml*(1+g/100):ml;
+        mty+=_ndNoLy(sec)?_secTy(sec,dv,mi):g!=null?ml*(1+g/100):ml;
       });
       dvLYByMon[mi]=mly;dvTYByMon[mi]=mty;
     });
@@ -4191,7 +4214,7 @@ function buildRows_summary(){
         mLY+=mly;
         if(S.hiddenSecs.has(sec.id))return;   // inactive: its LY counts, its plan is 0 - the Buyer's Plan's rule (2026-10-14)
         const g=S.inputs[sec.id+'__'+mi];
-        mTY+=g!=null?mly*(1+g/100):mly;anyM=true;   // no growth typed = plan at LY, as the Buyer's Plan
+        mTY+=_ndNoLy(sec)?_secTy(sec,dv,mi):g!=null?mly*(1+g/100):mly;anyM=true;   // no growth typed = plan at LY, as the Buyer's Plan
       });
       dvLY+=mLY;dvLYByMon[mi]=mLY;
       gLYByMon[mi]=(gLYByMon[mi]||0)+mLY;
@@ -4572,6 +4595,8 @@ function _flashLiveBadges(){
   });
 }
 function setGrowth(key,mi,val){
+  const _nds=DVDATA.flatMap(d=>d.secs).find(s=>s.id===key),_ndx=_ndNoLy(_nds);
+  if(_ndx){toast(`${_nds.nm} has no LY - its plan is ${Math.round(_ndx.np*100)}% of ${_ndx.refNm} (change it in New departments)`);renderTable();return;}
   const k=key+'__'+mi, v=parseFloat(val);
   _touchDept(key);
   if(_planMode()==='month'&&S.aopLocked&&AOP_MIS.includes(mi)){ // Phase 2: same lock rules as Phase 1, no auto-lock
@@ -5417,6 +5442,7 @@ async function pushBuyerGrowthLive(explicit=false){
     const rows=[];
     DVDATA.forEach(dv=>{
       dv.secs.forEach(sec=>{
+        if(_ndNoLy(sec))return;   // a new department without LY: Sales Plan plans it from the New departments list
         // Inactive dept: sent as plan 0 (-100% -> Sales Plan growth index 0), not left out - Sales Plan otherwise
         // planned it on its saved / 100 fallback growth, so LADIES ran over AOP with L_EW_BLOUSE (user choice 29 Sep)
         if(S.hiddenSecs.has(sec.id)){recorded.forEach(mi=>rows.push({division:dv.nm,department:sec.nm,mi,growth_pct:-100}));return;}
@@ -7413,7 +7439,7 @@ function _autoApplyAop(){
   else{
     const off=AOP_DIVS.filter(d=>AOP_MIS.some(mi=>{
       const dv=DVDATA.find(x=>x.id===d.id);if(!dv||!S.aop[d.id]?.[mi]||S.divLocked.has(d.id))return false;
-      const ty=dv.secs.reduce((a,s)=>S.hiddenSecs.has(s.id)?a:a+_secMonLY(s,dv,mi)*(1+(S.inputs[s.id+'__'+mi]??0)/100),0);
+      const ty=dv.secs.reduce((a,s)=>a+_secTy(s,dv,mi),0);
       return Math.abs(ty-S.aop[d.id][mi])>1e-6;   // Rs Cr: 0.0001 L
     }));
     if(off.length){
@@ -7646,7 +7672,7 @@ function _divPlanMAMJTotal(divId){
     dv.secs.filter(s=>!S.hiddenSecs.has(s.id)).forEach(sec=>{
       const ly=_secMonLY(sec,dv,mi,divAnn);
       const g=S.inputs[sec.id+'__'+mi]??0;
-      total+=ly*(1+g/100);
+      total+=_ndNoLy(sec)?_secTy(sec,dv,mi):ly*(1+g/100);   // a new department without LY: its share of the reference
     });
   });
   return +total.toFixed(3);

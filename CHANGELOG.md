@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### BIS: CORD SETS as a value row (new department without LY) - Iteration 5
+- **Asked (user):** "add CORD SETS"; choice "Value row, LY 0".
+- **Rule:** a department on the New departments list with no LY of its own (`_nd` row, `_ndNoLy`) shows LY 0 and plans New dept % x its reference's plan every month - LW_U_CORD SETS = 10% of L_EW_KURTI SET (Rs 192.2 L Mar-Jun). One helper `_secTy` (a department's plan for a month) is used by the apparel total / cap, the AOP check, recalibrate, the division re-balance (it moves with its reference: counted on the reference's free / locked side, skipped as its own cell), the version totals and the table rows; growth, planner and buyer cells read "—" with the reason; typing on it explains instead of saving; not pushed (Sales Plan plans it from the same list); never auto-inactive. "Re-apportion by LY Cont%" spreads the AOP over LY departments only - cap on apparel after it.
+- **Saved:** Iteration 5 (Iteration 4 kept = before CORD SETS): apparel 431.88 Cr = AOP each month, 944 rows to Sales Plan.
+- **Result vs Sales Plan by department:** 467 L this morning -> 420 L (off-season inactive) -> 172 L (CORD SETS); left = BIS caps the chain-level apparel total, Sales Plan each cluster x month x half (divisions: BIS KIDS +46 L, LADIES -27 L, MENS -19 L). Sales Plan vs manual: 0.17 L.
+- **MRP Cont %:** the 14 Oct run's split (104 departments) was put back on the user's choice, but it failed the "MRP Cont % = re-apportioned LY mix" check (2,362 cells) and qty still lacked ASPs -> the current 224-department split was restored; the 179 MRP x display rows without an ASP (Rs 2,067.88 L) went to the user as "Missing ASPs - MRP split 15 Oct.xlsx".
+
 ### Off-season departments inactive in BIS; GBG / GKT / GRK in UP 2
 - **Asked (user):** "make the 56 off-season departments inactive in BIS and add CORD SETS"; "keep it in up2".
 - **BIS Iteration 4:** the 56 departments BIS planned but the Sales Plan (and the manual sheet) leave at 0 - full-sleeve (F/S), winter (MW_ / LWW_ / KBW_ / KGW_ / KIW_) and KI_AP_PYJAMA, Rs 97.26 L - made inactive; apparel re-capped on the AOP (431.88 Cr each month = AOP) and saved in place; 944 rows to Sales Plan (inactive = -100%).
