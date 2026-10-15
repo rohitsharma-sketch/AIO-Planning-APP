@@ -7,12 +7,13 @@ a copy in the browser for instant reads and for when this server can't be reache
 The server owns the numbering, so two machines can't both make an Original or the same iteration number:
   - a new version is the Original when there is none, else the next iteration (numbers never move);
   - a known version keeps its kind / number, and the Original is never overwritten;
-  - the cap keeps the Original and the newest iterations (10 versions in all).
+  - every saved version is kept (user, 2026-10-15: "save all the iterations which are being saved" - the old cap of 10
+    dropped the oldest iterations); MAX_VERSIONS = None = no cap.
 `data` is the BIS entry as-is: {id, kind, iter, label, savedAt, divisionTotals, snapshot, name?} - name = the user's own
 name for it (user, 2026-10-13: "a rename button to rename existing iterations"); label stays "Original" / "Iteration N"."""
 import json
 
-MAX_VERSIONS = 10
+MAX_VERSIONS = None   # no cap: every saved iteration is kept (2026-10-15)
 _ready = False
 
 
@@ -33,6 +34,8 @@ def apply_save(rows, body):
     else:
         v["kind"], v["iter"] = "iteration", max([r.get("iter") or 0 for r in rows] + [0]) + 1
     v["label"] = "Original" if v["kind"] == "original" else f"Iteration {v['iter']}"
+    if MAX_VERSIONS is None:
+        return v, []
     keep = [v] + [r for r in rows if str(r["id"]) != str(v["id"])]
     room = MAX_VERSIONS - (1 if any(r.get("kind") == "original" for r in keep) else 0)
     drop = [r["id"] for r in keep if r.get("kind") != "original"][room:]
@@ -112,7 +115,7 @@ def import_versions(db, versions):
     from sqlalchemy import text
     if list_versions(db):
         return None
-    for v in versions[:MAX_VERSIONS]:
+    for v in (versions if MAX_VERSIONS is None else versions[:MAX_VERSIONS]):
         v = {k: x for k, x in v.items() if not k.startswith("_")}
         db.execute(text("""
             INSERT INTO planning_inputs.bis_plan_versions (id, data, last_modified_at)

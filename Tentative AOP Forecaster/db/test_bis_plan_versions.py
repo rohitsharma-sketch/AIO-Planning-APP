@@ -24,11 +24,12 @@ assert "_pending" not in rows[1]
 # a known iteration refreshes in place, keeping its number, and moves to the top
 rows = save(rows, {"id": 2, "snapshot": "b", "kind": "original"})
 assert [(r["id"], r["label"], r.get("snapshot")) for r in rows][:1] == [(2, "Iteration 1", "b")], rows
-# the cap: 10 in all, the oldest iterations go, the Original stays; numbers never move
+# every saved iteration is kept (2026-10-15: no cap), the Original stays; numbers never move
+assert MAX_VERSIONS is None
 for i in range(4, 20):
     rows = save(rows, {"id": i})
-assert len(rows) == MAX_VERSIONS and sum(r["kind"] == "original" for r in rows) == 1, rows
-assert [r["label"] for r in rows if r["kind"] != "original"] == [f"Iteration {n}" for n in range(18, 9, -1)], rows
+assert len(rows) == 19 and sum(r["kind"] == "original" for r in rows) == 1, rows
+assert sorted(r["iter"] for r in rows if r["kind"] != "original") == list(range(1, 19)), rows
 # string / number ids are the same version
 assert apply_save([{"id": 5, "kind": "iteration", "iter": 3}], {"id": "5"})[0]["iter"] == 3
 print("test_bis_plan_versions: OK")

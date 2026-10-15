@@ -7606,7 +7606,7 @@ function syncAopLockStatus(){
 }
 /* ── VERSION LOG ────────────────────────────────── */
 const _VL_KEY='bis.plan_versions';
-const _VL_MAX=10;
+const _VL_MAX=Infinity;   // every saved iteration is kept (user, 2026-10-15: "save all the iterations which are being saved")
 function _vlLoad(){let v;try{v=JSON.parse(localStorage.getItem(_VL_KEY)||'[]');}catch(e){v=[];}return _vlTag(v);}
 // 2026-10-12 (user): "a version selector just like AOP forecaster ... 1 original version where the others are
 // iterations". The first saved plan is the Original: never changed in place and never dropped by the cap - a changed

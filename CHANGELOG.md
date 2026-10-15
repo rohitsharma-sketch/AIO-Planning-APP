@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Every iteration kept; rules register; ASP cached
+- **Asked (user):** "save all the iterations which are being saved and update the rules wherever they are being changed, update the ASP and save it in cache memory. I want the run through to be as smooth and as accurate to its manual counterpart as it can be unless i change or update the rules."
+- **Iterations:** the cap of 10 versions (server `bis_plan_versions.MAX_VERSIONS`, BIS `_VL_MAX`) silently deleted the oldest iteration - now none is dropped (test updated: 18 iterations + Original kept). Each iteration keeps its rules (B10).
+- **Rules register:** every Sales Plan check-up records the rules in force (planner growth, AOP publish, season, new departments, ±3 band, plan file, ASP, MRP source of other departments) as its first line and appends a change to `SalesPlan/backend/rules_log.json` (time + which rules changed). Rule book: X6, B10, intro.
+- **ASP:** the sole ASP file is the ASP master (653 rows), held in memory by the engine (re-read only when the file changes); the Qty view cache rebuilt (658,233 rows, 0 without ASP). 8000 / 8010 restarted on the new code; check-up pass.
+
 ### Sales Plan stitched to the buyers' plan file - article x MRP x UDF + sole ASP file
 - **Asked (user):** 'keep "for ASP MAMJ 2.xlsx" as sole ASP file and the file for which plan should be matched on MRP and ART & UDF level. match it and stitch the department progress with it'. Choices: department totals stay ours (BIS buyer growth = the colleague's comparison sheet); non-SSG stores take their reference store's (cluster's) mix.
 - **The file:** 17,793 rows, cluster tag x cluster x department x article x MRP x display (+ new MRP / display / article), VAL / QTY per half Mar-Jul'27; same totals as our plan (77,981.5 L; like-for-like per month exact), department totals differ (111 of 117 like-for-like departments, 1,424 L) and its NSO / OTHER tags follow no store tag of ours.

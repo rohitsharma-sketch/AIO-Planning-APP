@@ -771,6 +771,55 @@ def run_checkup() -> dict:
             _prog_end()
 
 
+# The rules in force, recorded on every check-up (user, 2026-10-15: "update the rules wherever they are being changed ...
+# I want the run through to be as smooth and as accurate to its manual counterpart as it can be unless i change or update
+# the rules"): each rule setting the engines read, with the time any of them last changed (SalesPlan/backend/
+# rules_log.json, newest first, business data). The rule book: docs/business-rules/RULE_BOOK.md.
+RULES_LOG = os.path.join(_HERE, "..", "rules_log.json")
+
+
+def rules_in_force(plan: dict) -> dict:
+    from engines.mrp_plan_engine import get_source
+    from engines import plan_file_mix as pfm
+    from engines.display_type_engine import load_asp
+    from engines.dept_sales_engine import _load_new_dept_map, BUYER_BAND_PCT
+    ft = _try(lambda: json.load(open(os.path.join(_HERE, "..", "..", "..", "Buyer's Input Sheet", "factor_table.json"), encoding="utf-8")), {})
+    nd = _try(_load_new_dept_map, {}) or {}
+    asp = _try(load_asp, None) or {}
+    fm = _try(pfm.load, None) or {}
+    ins, rule = season((plan or {}).get("months") or ["Mar'27", "Apr'27", "May'27", "Jun'27"])
+    meta = (plan or {}).get("meta") or {}
+    return {
+        "planner_growth": {"matrix": "Matrix", "weighted": "Weighted builder", "continuous": "Continuous", "ml": "Ridge regression (ML)",
+                           "factor1": "Planner input (Factor 1)"}.get((ft or {}).get("mode") if isinstance(ft, dict) else None, "Matrix"),
+        "aop_publish": meta.get("aop_publish"),
+        "season": rule,
+        "new_departments": sorted(f"{n} = {c.get('new_dept_pct')}% of {c.get('ref_dept')}" for e in nd.values() for n, c in (e or {}).items()),
+        "buyer_band_pts": BUYER_BAND_PCT,
+        "plan_file_mix": f"{fm.get('source')} ({fm.get('imported_at')})" if fm else None,
+        "asp": f"{asp.get('source')} ({asp.get('imported_at')}, {asp.get('count')} rows)" if asp else None,
+        "mrp_split_other_depts": get_source(),
+    }
+
+
+def _log_rules(r: dict) -> tuple:
+    """(when the rules last changed, the keys that changed then) - appends to rules_log.json when they differ."""
+    log = _try(lambda: json.load(open(RULES_LOG, encoding="utf-8")), []) or []
+    if not isinstance(log, list):
+        log = []
+    last = log[0] if log else None
+    if not last or last.get("rules") != r:
+        changed = sorted(k for k in r if not last or (last.get("rules") or {}).get(k) != r[k])
+        log.insert(0, {"at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "changed": changed, "rules": r})
+        try:
+            from plan_cache import save_json
+            save_json(RULES_LOG, log[:500])
+        except OSError:
+            pass
+        last = log[0]
+    return last["at"], last.get("changed") or []
+
+
 def _run_checkup() -> dict:
     from engines.reconciliation import _active_plan
     t0 = time.time()
@@ -784,6 +833,14 @@ def _run_checkup() -> dict:
         checks += mrp_checks(gm, new)
     except Exception as e:   # noqa: BLE001 - the MRP / display stage not ready: say so
         checks.append(_plain("MRP (re-apportioned)", "mrp_err", "MRP / display type / qty checks", "MRP", "fail", f"could not run: {e}", fix="rerun"))
+    try:
+        rr = rules_in_force(plan)
+        at_, ch = _log_rules(rr)
+        checks.insert(0, _plain("Rules", "rules", "Rules in force (docs/business-rules/RULE_BOOK.md)", "Rules", "info",
+                                f"last changed {at_}" + (f" ({', '.join(ch)})" if ch else "") + " - log: rules_log.json",
+                                [{"Rule": k, "In force": ", ".join(v) if isinstance(v, list) else v} for k, v in rr.items()]))
+    except Exception as e:   # noqa: BLE001 - never block the check-up on the register
+        checks.insert(0, _plain("Rules", "rules", "Rules in force", "Rules", "info", f"could not read: {e}"))
     fails = [c for c in checks if c["status"] == "fail"]
     status = "fail" if fails else "warn" if any(c["status"] == "warn" for c in checks) else "pass"
     try:

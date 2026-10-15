@@ -9,7 +9,7 @@ rule engines in the system for future prospects also by default."*
 the department plan per SSG cluster x P1 / P2, BK:BR; the AOP sheet: store x division x P1 / P2) and its back-working
 *"MAMJ'27 DEPARTMENT - AOP (NEW APPROACH).xlsx"* (MAIN DATA - 1, FACTOR - 1).
 
-Every rule below is **on by default** in the engines named. A rule changes only on the user's say: change it here,
+Every rule below is **on by default** in the engines named, and the run-through follows the manual as closely as it can unless the user changes a rule (user, 15 Oct 2026). A rule changes only on the user's say: change it here,
 in the code, and in `CHANGELOG.md` together. Each BIS iteration also keeps the rules it was saved under (rule B10).
 
 Check that the system follows the manual: like-for-like apparel Mar-Jun = AOP in AOP Forecaster, BIS and Sales Plan
@@ -49,7 +49,7 @@ Check that the system follows the manual: like-for-like apparel Mar-Jun = AOP in
 | B7 | **A new department with no LY of its own is a value row**: LY 0, plan = its % of the reference's plan every month, no growth of its own (CORD SETS). | `_ndNoLy`, `_secTy` |
 | B8 | **Split departments keep their new names; the parent's growth is copied to the children.** | `DEPT_SPLITS` |
 | B9 | **Every Save holds the apparel total on the AOP**: one factor a month over the three divisions' departments (the buyer's mix kept); divisions may end off their own AOP. | `saveState` -> `capToApparelAop` |
-| B10 | **Each iteration keeps its rules**: planner growth method, AOP version, apparel = AOP, division locks, the season rule, off-season / inactive counts, the new departments — shown on the version picker. A save within 0.5 Cr of the loaded iteration updates it; a bigger change is a new iteration. | `_vlRules`, `_maybeSaveVersion` |
+| B10 | **Each iteration keeps its rules**: planner growth method, AOP version, apparel = AOP, division locks, the season rule, off-season / inactive counts, the new departments — shown on the version picker. A save within 0.5 Cr of the loaded iteration updates it; a bigger change is a new iteration. **Every saved iteration is kept** (no cap - 15 Oct). | `_vlRules`, `_maybeSaveVersion`, `bis_plan_versions.MAX_VERSIONS = None` |
 | B11 | Only **Save** sends the plan to the Sales Plan (opening the page sends nothing). | `pushBuyerGrowthLive` |
 
 ## P — Sales Plan (department plan)
@@ -83,6 +83,7 @@ Check that the system follows the manual: like-for-like apparel Mar-Jun = AOP in
 | X2 | Sales Plan vs the manual's COMPARISON (BK:BR) by department, split departments under the manual's names | within 0.2 L total |
 | X3 | Sales Plan check-up | pass (the ±3 point flag is a warning) |
 | X5 | Sales Plan article x MRP x display split vs the buyers' plan file, like-for-like cluster x department x half | equal shares (M4) |
+| X6 | **Rules in force** — every check-up records the rule settings the engines read (planner growth, AOP publish, season, new departments, ±3 band, plan file, ASP, MRP source) and logs any change with its time | `rules_log.json`; check-up line "Rules in force" |
 | X4 | BIS vs Sales Plan by department | differs only by the cluster x half cap (Sales Plan) vs the chain-level apparel cap (BIS) — 172 L on 15 Oct |
 
 ---
