@@ -25,7 +25,7 @@ def build_reset_link(token: str) -> str:
     return f"{FRONTEND_BASE_URL.rstrip('/')}/reset-password?token={token}"
 
 
-def send_reset_email(to_email: str, username: str, token: str) -> None:
+def send_reset_email(to_email: str, username: str, token: str, code: str = "") -> None:
     """Raises on any SMTP failure — the caller decides how to surface that
     (the route below turns it into a 500 rather than silently pretending the
     email went out)."""
@@ -35,7 +35,9 @@ def send_reset_email(to_email: str, username: str, token: str) -> None:
         f"A password reset was requested for your RS Planning Platform account.\n"
         f"Click the link below to set a new password (expires in 30 minutes):\n\n"
         f"{link}\n\n"
-        f"If you didn't request this, you can ignore this email.\n"
+        + (f"Or open {FRONTEND_BASE_URL.rstrip('/')}/reset-password and enter your username with this code "
+           f"(valid about 15 minutes, one use):\n\n    {code}\n\n" if code else "")
+        + "If you didn't request this, you can ignore this email.\n"
     )
     msg = MIMEText(body)
     msg["Subject"] = "RS Planning Platform — Password reset"

@@ -4,7 +4,10 @@ Uses the `bcrypt` library directly rather than passlib's CryptContext —
 passlib 1.7.4 (its last release, unmaintained) breaks against bcrypt>=4.1's
 API (it probes `bcrypt.__about__`, removed upstream), so passlib is not used
 here despite being the more commonly-reached-for wrapper."""
+import hashlib
+import hmac
 import os
+import time
 import warnings
 
 import bcrypt
@@ -76,3 +79,25 @@ def read_reset_token(token: str) -> str | None:
     except (BadSignature, SignatureExpired):
         return None
     return data.get("uid")
+
+
+# A 6-digit code in the same email (user, 2026-10-15: "try to send a temp password or code to their respective email
+# address"), typed on /reset-password with the username - no link needed. Stateless: HMAC of the user, their CURRENT
+# password hash and a 15-minute window, so it dies once used (the hash changes) and after 15-30 minutes. Guessing is
+# capped by the route's attempt counter.
+CODE_WINDOW = 15 * 60
+
+
+def _code(user_id: str, password_hash: str, window: int) -> str:
+    d = hmac.new(SESSION_SECRET.encode(), f"code|{user_id}|{password_hash}|{window}".encode(), hashlib.sha256).digest()
+    return f"{int.from_bytes(d[:8], 'big') % 1_000_000:06d}"
+
+
+def make_reset_code(user_id: str, password_hash: str, now: float | None = None) -> str:
+    return _code(user_id, password_hash, int((time.time() if now is None else now) // CODE_WINDOW))
+
+
+def check_reset_code(user_id: str, password_hash: str, code: str, now: float | None = None) -> bool:
+    w = int((time.time() if now is None else now) // CODE_WINDOW)
+    code = (code or "").strip().replace(" ", "")
+    return any(hmac.compare_digest(_code(user_id, password_hash, x), code) for x in (w, w - 1))

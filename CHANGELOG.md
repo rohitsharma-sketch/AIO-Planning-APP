@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Platform sign-in: reset code by email; a password the user sets stays set
+- **Asked (user):** "once users fix their passwords keep them saved" and "try to send a temp password or code to thier respective email address".
+- **Bug fixed:** a password set through the emailed reset link left "must set own password" on, so the next sign-in forced yet another change. /api/auth/reset-password now clears it (change-password already did).
+- **Code by email:** the forgot-password email carries the link and a 6-digit code. /reset-password without a link asks for username (or email) + code + new password. The code is stateless (HMAC of the user, their current password hash and a 15-minute window): one use, valid 15-30 minutes, 5 wrong tries lock it until the next window (in-memory counter). No temporary password is mailed - a request can't lock anyone out of their current password.
+- **Browser saves the password:** sign-in, change-password and reset pages hand the account + password to the browser's password manager (PasswordCredential; change-password gained the hidden username field it lacked). Not for a temporary admin-issued password.
+- **Needs (not set on this machine):** SMTP_HOST / SMTP_USER / SMTP_PASSWORD (+ SMTP_FROM) and FRONTEND_BASE_URL = the shared Landing address, in Tentative AOP Forecaster/.env - until then forgot-password answers "not configured - contact an admin". Check: tests/test_reset_code.py (no database).
+
 ### BIS: the AOP holds on the apparel total (KIDS + LADIES + MENS), not per division - Iteration 4 capped
 - **Asked (user):** "keep the iteration 4 saved. Cap it on overall APPS (Kids+LAdies and Mens) that should be summed to the AOP forecaster AOP, while it can differ on the basis of Divisions from BIS" and "AOP Forecaster AOP cumulative will be equal to BIS and Sales Plan but thier respective Division Cumulative will never match with each other".
 - **Rule:** AOP Forecaster AOP = BIS = Sales Plan on the apparel total (each AOP month); division totals may differ between the three.

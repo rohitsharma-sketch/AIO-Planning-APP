@@ -125,13 +125,14 @@
 
     <form class="card" id="forgot-form" style="display:none">
       <h1>Reset your password</h1>
-      <p class="sub">Enter your username. If the account has an email on file, we'll send a reset link.</p>
+      <p class="sub">Enter your username. If the account has an email on file, we'll send a reset link and a 6-digit code.</p>
       <label for="forgot-username">Username</label>
       <input id="forgot-username" name="username" autocomplete="username" required>
       <button type="submit" id="forgot-submit-btn">Send reset link</button>
       <div class="error" id="forgot-error" role="alert"></div>
       <div class="notice" id="forgot-notice" role="status"></div>
       <div class="divider"></div>
+      <a class="link-btn" id="have-code" href="/reset-password">Have a code? Enter it here</a>
       <button type="button" class="link-btn" id="show-login">← Back to sign in</button>
     </form>
   </main>
@@ -172,6 +173,11 @@
           throw new Error(body.detail || 'Login failed');
         }
         const user = await res.json();
+        // offer the browser's "save password" for this account (2026-10-15: "keep them saved") - not for a temporary one
+        if (!user.must_change_password && window.PasswordCredential) {
+          try { await navigator.credentials.store(new PasswordCredential({ id: document.getElementById('username').value.trim(),
+                                                                        password: document.getElementById('password').value })); } catch (_) {}
+        }
         const params = new URLSearchParams(window.location.search);
         window.location.href = user.must_change_password
           ? '/change-password'
@@ -205,8 +211,9 @@
           const body = await res.json().catch(() => ({}));
           throw new Error(body.detail || 'Could not send reset link');
         }
-        forgotNotice.textContent = 'If that account has an email on file, a reset link is on its way.';
+        forgotNotice.textContent = 'If that account has an email on file, a reset link and code are on their way.';
         forgotNotice.style.display = 'block';
+        try { sessionStorage.setItem('reset_user', document.getElementById('forgot-username').value.trim()); } catch (_) {}
       } catch (err) {
         forgotErrorBox.textContent = err.message;
         forgotErrorBox.style.display = 'block';

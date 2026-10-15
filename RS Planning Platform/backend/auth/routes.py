@@ -9,7 +9,8 @@ from sqlalchemy import func, select
 from auth.deps import REMEMBER_COOKIE, require_admin, require_login
 from auth.email import send_reset_email, smtp_configured
 from auth.rights import RIGHTS, load_revoked, rights_for, save_revoked
-from auth.security import REMEMBER_MAX_AGE, hash_password, make_remember_token, make_reset_token, read_reset_token, verify_password
+from auth.security import (CODE_WINDOW, REMEMBER_MAX_AGE, check_reset_code, hash_password, make_remember_token,
+                           make_reset_code, make_reset_token, read_reset_token, verify_password)
 from db.base import SessionLocal
 from db.models.auth import ROLES, User
 
@@ -85,32 +86,65 @@ def forgot_password(body: dict = Body(...)):
             return {"ok": True}
         if not smtp_configured():
             raise HTTPException(503, "Password reset email is not configured yet (SMTP_HOST/SMTP_USER/SMTP_PASSWORD) — contact an admin.")
-        send_reset_email(user.email, user.username, make_reset_token(str(user.id)))
+        send_reset_email(user.email, user.username, make_reset_token(str(user.id)),
+                         make_reset_code(str(user.id), user.password_hash))
         return {"ok": True}
     finally:
         session.close()
 
 
+# wrong codes per user - 5 and the code stops working until the next 15-minute window (a 6-digit code must not be
+# guessable). ponytail: in memory, a restart clears it; move to the DB if the platform runs more than one process.
+_CODE_FAILS: dict[str, tuple[int, int]] = {}
+CODE_MAX_FAILS = 5
+
+
+def _code_locked(uid: str) -> bool:
+    n = _CODE_FAILS.get(uid)
+    return bool(n) and n[1] >= CODE_MAX_FAILS and n[0] >= int(time.time() // CODE_WINDOW) - 1
+
+
+def _code_fail(uid: str) -> None:
+    w = int(time.time() // CODE_WINDOW)
+    n = _CODE_FAILS.get(uid)
+    _CODE_FAILS[uid] = (w, n[1] + 1) if n and n[0] >= w - 1 else (w, 1)
+
+
 @router.post("/reset-password")
 def reset_password(body: dict = Body(...)):
+    """Either the emailed link's token, or (2026-10-15) the username + the 6-digit code from the same email."""
     token, new_password = body.get("token"), body.get("new_password")
-    if not token or not new_password:
-        raise HTTPException(422, "token and new_password required")
-    raw_user_id = read_reset_token(token)
-    if raw_user_id is None:
-        raise HTTPException(400, "This reset link is invalid or has expired — request a new one.")
-    try:
-        user_id = uuid.UUID(raw_user_id)
-    except ValueError:
-        raise HTTPException(400, "This reset link is invalid or has expired — request a new one.")
+    username, code = (body.get("username") or "").strip(), (body.get("code") or "").strip()
+    if not new_password or not (token or (username and code)):
+        raise HTTPException(422, "new_password and either the link token or username + code required")
+    bad = "This reset link or code is invalid or has expired — request a new one."
     session = SessionLocal()
     try:
-        user = session.execute(select(User).where(User.id == user_id, User.is_active.is_(True))).scalar_one_or_none()
+        if token:
+            try:
+                user_id = uuid.UUID(read_reset_token(token) or "")
+            except ValueError:
+                raise HTTPException(400, bad)
+            user = session.execute(select(User).where(User.id == user_id, User.is_active.is_(True))).scalar_one_or_none()
+        else:
+            user = find_login_user(session, username)
+            if user is not None:
+                uid = str(user.id)
+                if _code_locked(uid):
+                    raise HTTPException(429, "Too many wrong codes — request a new one in 15 minutes.")
+                if check_reset_code(uid, user.password_hash, code):
+                    _CODE_FAILS.pop(uid, None)
+                else:
+                    _code_fail(uid)
+                    user = None
         if user is None:
-            raise HTTPException(400, "This reset link is invalid or has expired — request a new one.")
+            raise HTTPException(400, bad)
         user.password_hash = hash_password(new_password)
+        # the user chose this one themselves - keep it (user, 2026-10-15: "once users fix their passwords keep them
+        # saved": the flag stayed on after a reset, so the next sign-in forced yet another change)
+        user.must_change_password = False
         session.commit()
-        return {"ok": True}
+        return {"ok": True, "username": user.username}
     finally:
         session.close()
 
