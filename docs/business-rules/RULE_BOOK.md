@@ -61,7 +61,7 @@ Check that the system follows the manual: like-for-like apparel Mar-Jun = AOP in
 | # | Rule | Where |
 |---|------|-------|
 | P1 | **SSG LY = actual LY sales** of the same months a year earlier, store x department. | `dept_sales_engine` Step 1 |
-| P2 | **P1 / P2 halves**: P1 = days 1-15, P2 = 16th to month end. LY split by the department's own half-month share in its SSG cluster (manual COMPARISON H:O), else the store's, else 50/50; plan half = LY half x BIS growth. | `ly_halves.json`, `actuals_manager.day_halves` |
+| P2 | **P1 / P2 halves**: P1 = days 1-15, P2 = 16th to month end. LY split by the department's own half-month share in its SSG cluster (manual COMPARISON H:O), else the store's, else 50/50; plan half = LY half x BIS growth. A month whose LY sits wholly in one half keeps that split (share 0 or 1 - 15 Oct fix; they had been dropped). The SSG cap's month AOP = the AOP store plan's own total when the publish's 2-decimal division totals agree with it within rounding (`month_aop`). | `ly_halves.json`, `actuals_manager.day_halves` |
 | P3 | **Cap per SSG cluster x month x half over ALL divisions** on that cluster's AOP (sum of its SSG stores' AOP store plans, P1 share from the manual's AOP sheet); clusters scaled to the month's AOP. Division totals float. | Step 1b, `aop_halves.json` |
 | P4 | **Store balance**: each SSG store x month x half = its AOP store plan; each (division, department) keeps its cluster total (RAS); negative-LY cells fixed; new departments tied to their reference. | `_store_balance` (Step 1c) |
 | P5 | **New departments** carved at store level (rule B6), re-balanced per cluster x half. | `apply_new_dept_adjustments` |

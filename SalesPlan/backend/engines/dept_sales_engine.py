@@ -409,6 +409,13 @@ def _aop_lfl_base():
         return None, {}
 
 
+def month_aop(published: float, store_plan: float, n_values: int) -> float:
+    """The month's AOP for the SSG cap. The publish keeps each division x month total rounded to 2 decimals
+    (publish_aop_targets), the store plan it came from is not; when the two agree within that rounding the store plan's
+    own total is the AOP (user, 2026-10-15: the manual works on it - the rounded total left the plan 0.011 L under it)."""
+    return store_plan if published and abs(published - store_plan) <= 0.005 * max(n_values, 1) + 1e-9 else published
+
+
 def _aop_lfl_targets() -> dict:
     """{DIVISION: {TY month: L}} - the AOP plan BIS spreads each division onto (division_plan._bis_aop); {} if unread."""
     try:
@@ -639,6 +646,7 @@ def run_dept_plan():
                     t1, t2 = t1 + a_ * p_, t2 + a_ * (1 - p_)
                 tgt[cl] = (t1, t2)
             ta = sum(a + b for a, b in tgt.values())
+            T = month_aop(T, ta, len(targets))
             k = T / ta if T and ta > 0 else 1.0   # the clusters add to the AOP plan of the month
             for cl, (mds, _) in groups.items():
                 c1 = sum(v["ty_p1"] for md in mds for v in md["departments"].values() if v["active"])
@@ -1192,8 +1200,10 @@ def _plan_inputs_key() -> str:
     from actuals_manager import _snapshot
     from engines.department_plan import _load_state
     import datetime as _dt
+    # the half-month files too (2026-10-15: a fixed ly_halves.json left the saved plan and its views on the old halves)
+    halves = [os.path.getmtime(p) if os.path.exists(p) else None for p in (LY_HALVES_PATH, AOP_HALVES_PATH)]
     return json.dumps([_load_growth_matrix(), _load_dept_config(), _load_state(), locked_ly_months(),
-                       _snapshot("reindexed")[0], _dt.date.today(), list(_load_store_master()), _aop_lfl_base()[0]],
+                       _snapshot("reindexed")[0], _dt.date.today(), list(_load_store_master()), _aop_lfl_base()[0], halves],
                       sort_keys=True, default=str)
 
 

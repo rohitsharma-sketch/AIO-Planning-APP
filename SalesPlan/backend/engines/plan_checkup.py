@@ -226,7 +226,7 @@ def versions(source, at, plan) -> dict:
 # ── 1-3: Calendar, AOP, BIS - one pass over the plan ───────────────────────────────────────────────────────────────
 def plan_checks(plan: dict, source: str, ver: dict) -> list:
     from actuals_manager import load_actuals, load_store_div_actuals
-    from engines.dept_sales_engine import _aop_lfl_targets, _load_new_dept_map, _store_aop, DIVISIONS, BUYER_BAND_PCT
+    from engines.dept_sales_engine import _aop_lfl_targets, _load_new_dept_map, _store_aop, DIVISIONS, BUYER_BAND_PCT, month_aop
     out = []
     corrected = source != "final_dept_plan.json"
     cal_div = _try(load_store_div_actuals)
@@ -349,7 +349,7 @@ def plan_checks(plan: dict, source: str, ver: dict) -> list:
         a_ = _store_aop(aop_st, store, DIVISIONS, m) if aop_st else 0.0
         cl_a[(cl, m)] = cl_a.get((cl, m), 0.0) + a_
         mon_a[m] = mon_a.get(m, 0.0) + a_
-    mon_t = {m: sum(float(mm.get(m) or 0.0) for mm in tg.values()) for m in mon_a}
+    mon_t = {m: month_aop(sum(float(mm.get(m) or 0.0) for mm in tg.values()), mon_a[m], len(tg)) for m in mon_a}
     for (cl, m), a_ in sorted(cl_a.items()):
         k_ = mon_t[m] / mon_a[m] if mon_a.get(m) and mon_t.get(m) else 1.0
         a1.add(a_ * k_, cl_ty.get((cl, m), 0.0), Cluster=cl, Month=m)

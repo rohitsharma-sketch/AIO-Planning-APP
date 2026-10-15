@@ -111,3 +111,11 @@ def test_post_check(monkeypatch):
     assert s["aop_cells"] == 2 and s["aop_off"] == 1   # Apr'27: like-for-like plan 10 vs AOP 9
     b["rows"][0]["arts"]["01-EPP [ML04]"]["Mar'27"] += 0.5
     assert A.post_check(b)["summary"]["dept_off"] == 1
+
+
+def test_month_aop_unrounded():
+    """The publish rounds each division x month to 2 decimals; within that rounding the store plan's own total wins."""
+    from engines.dept_sales_engine import month_aop
+    assert month_aop(12994.77, 12994.7705, 3) == 12994.7705   # Mar'27, publish 119 vs its store plan
+    assert month_aop(100.0, 120.0, 3) == 100.0                # a real gap: the published AOP stays
+    assert month_aop(0.0, 5.0, 3) == 0.0                      # nothing published: unchanged

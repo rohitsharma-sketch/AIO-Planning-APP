@@ -7,6 +7,14 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Sales Plan: the final plan now = the manual at every level (0.00 in all 128 combinations)
+- **Asked (user):** "Trace and rectify if possible" (the 24 manual vs final cells in NE - (NP) / KASHMIR - (NP)).
+- **Cause 1 - LY halves:** the import of the manual's half-month LY (COMPARISON H:O -> `ly_halves.json`) kept a cluster x department x month only when BOTH halves had sales, so 157 splits where the LY sat wholly in one half (e.g. L_EW_SAREE_SILK NE - (NP) Mar'26: all in P2; ME_KURTA PYJAMA KASHMIR - (NP) Jun'26: all in P1) fell back to the store's Calendar split; the store balance per half then moved other departments of the same store-half (ML_JEANS, L_EW_KURTI SET, MSE T-shirts). Re-imported with shares 0 and 1 kept (4,353 -> 4,510 shares; backup `SalesPlan/backend/backups/ly_halves.before-0-1-shares-15Oct2026.json`).
+- **Cause 2 - AOP rounding:** the SSG cap scaled the clusters to the publish's division x month totals, which the publish rounds to 2 decimals (43,188.03 L); the store plan they come from - and the manual - is 43,188.0413 L. New `dept_sales_engine.month_aop`: when the two agree within that rounding the store plan's own total is used (engine + check-up `aop_div`); a real gap keeps the published figure. Test `test_month_aop_unrounded`.
+- **Also:** the plan's input key now includes the `ly_halves.json` / `aop_halves.json` file times, so a new half-month file regenerates the saved plan and its views (it did not).
+- **Re-run:** department plan regenerated, Display Type + Qty (658,233 rows, 0 without an ASP, validation 0 errors), Version 1 "Final - matches manual (15 Oct)" re-saved from it (backup `SalesPlan/backend/backups/plan_versions_before_halves_fix_15Oct2026`). Chain apparel Mar-Jun 77,981.46 L = the AOP store plan (77,981.4639) exactly.
+- **Checked:** manual vs final, SSG apparel Mar-Jun'27: 14,040 of 14,040 cluster x department x month x half cells and all 128 combinations of Division / Sub-division / Department / Attribute / Cluster / Month / Fortnight show 0.00 (largest 0.0007 L); grand total 43,188.04 = 43,188.04. Check-up: every check passes (cluster x month 0 / 36, store x month 0 / 592, TY = LY half x growth 0 / 135,226 off). Workbook: Downloads `Manual vs Final Sales Plan - every level - 15 Oct 2026 (rectified).xlsx`.
+
 ### BIS: plan basis selector - Buyer's input / Planner's input / Blend (default)
 - **Asked (user):** "add the basis selector for buyer, planner and blend"; "make the Blend As default".
 - **Toolbar "Basis"** next to the Phase button:
