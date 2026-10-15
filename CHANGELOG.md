@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Rule book + the manual's rules on by default
+- **Asked (user):** "Keep the different rules in the iteration for planner growth and keep the rules in generic rule book for the engines. Make sure that every step is in accordance to the sales plan manual which is shared. So make it all the rule engines in the system for future prospects also by default." The manual = the colleague's working file (user's choice).
+- **Rule book:** `docs/business-rules/RULE_BOOK.md` - every engine's default rules (stores, AOP Forecaster, BIS, Sales Plan, MRP / display / qty) with where each lives and the reconciliation checks (apparel = AOP everywhere; Sales Plan vs the manual by department).
+- **Defaults switched on:** BIS planner growth = "Planner input" (the manual's Factor 1; `factor_table.json` mode `factor1`, backup `SalesPlan/backend/backups/factor_table.before-factor1-default-15Oct2026.json`); off-season departments inactive on open and back on in season (`_applySeason`, the Sales Plan's season rule through new `GET /api/planner/season`; MAMJ'27: 77 winter-attribute departments, 6 more than before - all with no plan); every Save caps the apparel total on the AOP (`capToApparelAop` in `saveState`); each saved iteration keeps its rules (`_vlRules`, on the version picker; Iteration 5 re-saved with them).
+
 ### BIS: CORD SETS as a value row (new department without LY) - Iteration 5
 - **Asked (user):** "add CORD SETS"; choice "Value row, LY 0".
 - **Rule:** a department on the New departments list with no LY of its own (`_nd` row, `_ndNoLy`) shows LY 0 and plans New dept % x its reference's plan every month - LW_U_CORD SETS = 10% of L_EW_KURTI SET (Rs 192.2 L Mar-Jun). One helper `_secTy` (a department's plan for a month) is used by the apparel total / cap, the AOP check, recalibrate, the division re-balance (it moves with its reference: counted on the reference's free / locked side, skipped as its own cell), the version totals and the table rows; growth, planner and buyer cells read "—" with the reason; typing on it explains instead of saving; not pushed (Sales Plan plans it from the same list); never auto-inactive. "Re-apportion by LY Cont%" spreads the AOP over LY departments only - cap on apparel after it.

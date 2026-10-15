@@ -508,6 +508,22 @@ def _cont_error(c):
         return f"malformed strengths: {e}"
 
 
+@app.route("/api/planner/season")
+def planner_season():
+    """The attributes in season for BIS's plan months - the Sales Plan's one rule (engines/plan_checkup.season:
+    season_attributes.json, else SUMMER / OCCASIONAL / REGULAR for Mar-Jun; a month without a rule = every attribute in
+    season -> in_season null). BIS makes a department inactive while its attribute is off season (user, 2026-10-15:
+    every rule of the manual by default). Read-only."""
+    import calendar as _cal
+    sp = os.path.join(_HERE, "..", "SalesPlan", "backend")
+    if sp not in sys.path:
+        sys.path.insert(0, sp)
+    from engines.plan_checkup import season
+    months = [f"{_cal.month_abbr[MI_TO_CAL_MONTH[mi]]}'{str(PLAN_MAMJ_YEAR)[2:]}" for mi in AOP_MONTHS]
+    ins, why = season(months)
+    return jsonify({"months": months, "in_season": sorted(ins) if ins is not None else None, "why": why})
+
+
 @app.route("/api/planner/factor-table", methods=["POST"])
 def planner_factor_table_save():
     me = _planner_editor()

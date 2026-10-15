@@ -1,0 +1,89 @@
+# RS Planning — Rule Book (the default rules of every engine)
+
+User, 15 Oct 2026: *"Keep the different rules in the iteration for planner growth and keep the rules in generic rule book
+for the engines. Make sure that every step is in accordance to the sales plan manual which is shared. So make it all the
+rule engines in the system for future prospects also by default."*
+
+**The manual** = the colleague's working file *"MAMJ'27 DEPARTMENT - AOP (NEW APPROACH) - FOR BUYERS INPUT - UPDATED.xlsx"*
+(DEPT INPUT: D department, DO planner growth, DR buyer growth, DS / DT new-department reference + cont %; COMPARISON:
+the department plan per SSG cluster x P1 / P2, BK:BR; the AOP sheet: store x division x P1 / P2) and its back-working
+*"MAMJ'27 DEPARTMENT - AOP (NEW APPROACH).xlsx"* (MAIN DATA - 1, FACTOR - 1).
+
+Every rule below is **on by default** in the engines named. A rule changes only on the user's say: change it here,
+in the code, and in `CHANGELOG.md` together. Each BIS iteration also keeps the rules it was saved under (rule B10).
+
+Check that the system follows the manual: like-for-like apparel Mar-Jun = AOP in AOP Forecaster, BIS and Sales Plan
+(rule X1), and the Sales Plan by department within 0.2 L of the manual's COMPARISON sheet (rule X2) — 15 Oct 2026:
+43,188.03 L everywhere, 0.17 L by department.
+
+---
+
+## S — Stores
+
+| # | Rule | Where |
+|---|------|-------|
+| S1 | **Like-for-like (SSG) stores** = the AOP Forecaster's LFL tags (`032 / 080 / 095 / 125 / 3 - Stores`, `FY26 - Q1..Q3`) — 148 stores. Ramp = `FY26 - Q4`, `FY27 - Q1..Q2`; NSO = `NSO`, `MAMJ-NSO`. | `engine_v3.LFL_TAGS`, `store_master.is_ssg` |
+| S2 | **Store cluster, reference store and tag come from `Store Master/Store Master.xlsx`** (the store-master sync's source). Change the file, not only the database — the nightly sync puts the file's values back. 8010 caches the store master: restart it after a change. | `sync/store_master_xlsx_sync.py` |
+| S3 | **A renamed store is one store**: the old code is an alias of the new one everywhere a store code comes in (lake, uploads, editors); the database holds only the new code. Today NLD -> NEG, KGP -> MKG. | `rs_common/stores.py` (`ALIAS`, `canon_store`) |
+| S4 | GBG, GKT, GRK are in **UP 2 - (NP)** (as the manual). | Store Master.xlsx |
+
+## A — AOP Forecaster
+
+| # | Rule | Where |
+|---|------|-------|
+| A1 | The plan sits on one saved AOP version (today **Version 2 = publish 119**). BIS and Sales Plan read the publish stamped on BIS's last growth push. | `aop_publish_history`, `division_plan._bis_aop` |
+| A2 | **Apparel total = AOP**: KIDS + LADIES + MENS of every plan month is the AOP in AOP Forecaster, BIS and Sales Plan. Division totals may differ between them. | rule X1 |
+| A3 | A store's AOP is **overwritten by the AOP (Optional) overrides** (store x division x month) — they win outright over the engine's figure. To put a user's AOP sheet into a saved version without moving its LY bases: overrides into the database and into that version's session sheet (file time kept), re-run that session, re-save the version. | `engine_v3.build_df`, `db/editor.put_aop_overrides` |
+| A4 | A forecast month shows once its base month (one year earlier) is **closed** (`closed_through` from the month-wise lake export). | `sync/common.get_closed_through` |
+
+## B — Buyer's Input Sheet (BIS)
+
+| # | Rule | Where |
+|---|------|-------|
+| B1 | **Buyer's growth** = the manual's DR: one % per department, flat over the MAMJ block (Phase 1 - Block). | BIS inputs |
+| B2 | **Planner's growth = "Planner input"** (the manual's Factor 1, default method): per department x month, FACTOR-1[the month's sell-thru vs its division's — 8 deviation bands][MAMJ'26 sell-thru status — Low / Average / High / Excellent] = 0-30%; **no factor when MAMJ sell-thru <= 4% and the deviation averages <= 50% over Mar-Jul**; inactive = -100%. The other methods (Matrix, Weighted, Continuous, ML) stay selectable. | `factor_table.json` mode `factor1`, `SalesPlan/backend/engines/sellthru_factor.py` |
+| B3 | **Buyer within ±3 points of the planner** is flagged, not capped. | Sales Plan check-up `buyer_band` (`BUYER_BAND_PCT = 3.0`) |
+| B4 | **-100% buyer input = inactive** (the department goes to the Inactive sheet). An inactive department's LY counts, its plan is 0. | `_autoInactive100` |
+| B5 | **Off-season departments are inactive**: a department whose attribute is out of season for the plan months is switched off, and back on when its season comes (PEAK SUMMER counts as SUMMER). Season per month = the Sales Plan's one rule: `SalesPlan/backend/season_attributes.json`, else SUMMER / OCCASIONAL / REGULAR for Mar-Jun; a month with no rule = every attribute in season. MAMJ'27: the PREWINTER / LT WINTER / HVY WINTER departments (77). | `_applySeason`, `/api/planner/season`, `plan_checkup.season` |
+| B6 | **New departments** keep their cont % from the manual (DT) of their reference (DS); the reference is **not** cut: L_EW_SAREE_JAIPURI = 25% of L_EW_SAREE_FNCY, LW_U_ETHNIC DRESS = 35% of LW_U_DRESS, LW_U_CORD SETS = 10% of L_EW_KURTI SET. | `SalesPlan/backend/new_dept_mapping.json` (one list, edited from BIS → New departments) |
+| B7 | **A new department with no LY of its own is a value row**: LY 0, plan = its % of the reference's plan every month, no growth of its own (CORD SETS). | `_ndNoLy`, `_secTy` |
+| B8 | **Split departments keep their new names; the parent's growth is copied to the children.** | `DEPT_SPLITS` |
+| B9 | **Every Save holds the apparel total on the AOP**: one factor a month over the three divisions' departments (the buyer's mix kept); divisions may end off their own AOP. | `saveState` -> `capToApparelAop` |
+| B10 | **Each iteration keeps its rules**: planner growth method, AOP version, apparel = AOP, division locks, the season rule, off-season / inactive counts, the new departments — shown on the version picker. A save within 0.5 Cr of the loaded iteration updates it; a bigger change is a new iteration. | `_vlRules`, `_maybeSaveVersion` |
+| B11 | Only **Save** sends the plan to the Sales Plan (opening the page sends nothing). | `pushBuyerGrowthLive` |
+
+## P — Sales Plan (department plan)
+
+| # | Rule | Where |
+|---|------|-------|
+| P1 | **SSG LY = actual LY sales** of the same months a year earlier, store x department. | `dept_sales_engine` Step 1 |
+| P2 | **P1 / P2 halves**: P1 = days 1-15, P2 = 16th to month end. LY split by the department's own half-month share in its SSG cluster (manual COMPARISON H:O), else the store's, else 50/50; plan half = LY half x BIS growth. | `ly_halves.json`, `actuals_manager.day_halves` |
+| P3 | **Cap per SSG cluster x month x half over ALL divisions** on that cluster's AOP (sum of its SSG stores' AOP store plans, P1 share from the manual's AOP sheet); clusters scaled to the month's AOP. Division totals float. | Step 1b, `aop_halves.json` |
+| P4 | **Store balance**: each SSG store x month x half = its AOP store plan; each (division, department) keeps its cluster total (RAS); negative-LY cells fixed; new departments tied to their reference. | `_store_balance` (Step 1c) |
+| P5 | **New departments** carved at store level (rule B6), re-balanced per cluster x half. | `apply_new_dept_adjustments` |
+| P6 | **Non-SSG stores** (NSO / Ramp / placeholders) = the AOP store plan x the reference store's department cont % (ref chain to an SSG store). | `grain_view._aop_by_store`, `store_group` |
+| P7 | **Active departments** = BIS active and in season (rule B5); inactive ones are planned at 0. | `run_dept_plan` |
+| P8 | The saved plan follows its inputs on its own (BIS growth, AOP publish, store master, LY): 8010 regenerates it within a minute of a change. | `refresh_saved_plan` |
+
+## M — MRP, display type, quantity
+
+| # | Rule | Where |
+|---|------|-------|
+| M1 | **MRP Cont % = the re-apportioned LY sales on the MRP master in use** (default), the buyers' MRP file for departments it does not cover. The check-up's Rectify rebuilds it for every department. | `mrp_plan_engine._load`, `_reapp_shares.json` |
+| M2 | **Display type (Table / Non-Table) %** = each store x department x MRP x month's own LY mix, falling back store -> chain -> department. | `display_type_engine.MIX_LEVELS` |
+| M3 | **Qty = value / ASP** from the ASP master; every in-season value needs an ASP (check-up fails otherwise — fill the missing MRP x display ASPs and import). | `display_type_engine.run_qty`, check `Qty (ASP master)` |
+
+## X — Reconciliation checks (run after every change)
+
+| # | Check | Pass |
+|---|-------|------|
+| X1 | Like-for-like apparel per AOP month: AOP Forecaster = BIS = Sales Plan | equal to 0.01 L |
+| X2 | Sales Plan vs the manual's COMPARISON (BK:BR) by department, split departments under the manual's names | within 0.2 L total |
+| X3 | Sales Plan check-up | pass (the ±3 point flag is a warning) |
+| X4 | BIS vs Sales Plan by department | differs only by the cluster x half cap (Sales Plan) vs the chain-level apparel cap (BIS) — 172 L on 15 Oct |
+
+---
+
+### Rule history
+- 14 Oct 2026 — the colleague's department method (cluster cap over all divisions, actual LY, store balance, ±3 flag): `f7b6ba3`, `638e82f`.
+- 15 Oct 2026 — P1 / P2 halves `5ae7b3a`; Planner input (Factor 1) as a BIS method; apparel total = AOP; store alias `9282094`; AOP Version 2 = the user's store AOP (publish 119); off-season departments inactive + GBG / GKT / GRK in UP 2 `4ef726b`; CORD SETS value row `d6aeaa3`; defaults switched on (B2 Planner input, B5 season, B9 cap on Save, B10 iteration rules) and this rule book.

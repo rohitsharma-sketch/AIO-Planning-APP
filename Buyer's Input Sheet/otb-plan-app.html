@@ -1851,6 +1851,7 @@ let S = {
   divTab: null,
   hiddenSecs: new Set(),
   manualInactive: new Set(), // Phase 2: user-toggled inactive (has LY); Phase 1 = auto (no LY)
+  seasonOff: new Set(),      // inactive because their attribute is off season for the plan months (_applySeason, 2026-10-15)
   sortCol: null,   // column def id to sort by, null = no sort
   sortAsc: true,   // true = ascending
   colWidths:  {},  // keyed as "report:ci" → px
@@ -2503,6 +2504,39 @@ function applyAutoInactive(){
     _syncInactiveBadge();
     buildFP();refresh();
   }
+}
+
+/* Off-season departments (user, 2026-10-15: the 56 winter departments made inactive, then "make sure that every step is in
+   accordance to the sales plan manual ... make it all the rule engines in the system ... by default"): a department whose
+   attribute is off season for the plan months is inactive - the Sales Plan's one rule, read through /api/planner/season
+   (SalesPlan season_attributes.json, else SUMMER / OCCASIONAL / REGULAR for Mar-Jun; a month with no rule = all in
+   season). PEAK SUMMER counts as SUMMER (any word of the attribute). It comes back on its own when its season does:
+   S.seasonOff holds the ones this rule switched off. On open it changes this browser's plan only (Save sends it). */
+let _season=null;
+function _inSeason(attr){
+  const A=String(attr||'').trim().toUpperCase();
+  return !_season||!A||A==='-'||_season.ins.some(w=>A===w||A.split(/\s+/).includes(w));
+}
+function _seasonLoad(){
+  return fetch(SYNC_BASE+'/api/planner/season',{cache:'no-store'}).then(r=>r.ok?r.json():null)
+    .then(j=>{_season=j&&Array.isArray(j.in_season)?{ins:j.in_season.map(x=>String(x).toUpperCase()),why:j.why||''}:null;_applySeason();})
+    .catch(()=>{});
+}
+function _applySeason(){
+  if(!_season)return false;
+  const off=[],on=[];
+  DVDATA.forEach(dv=>dv.secs.forEach(sec=>{
+    if(!_inSeason(sec.attr)){
+      if(!S.hiddenSecs.has(sec.id)){S.hiddenSecs.add(sec.id);AOP_MIS.forEach(mi=>S.locked.delete(sec.id+'__'+mi));off.push(sec.nm);}
+      S.seasonOff.add(sec.id);S.manualInactive.delete(sec.id);   // the season rule owns it now
+    }else if(S.seasonOff.has(sec.id)){S.seasonOff.delete(sec.id);S.hiddenSecs.delete(sec.id);on.push(sec.nm);}
+  }));
+  if(!off.length&&!on.length)return false;
+  if(S.aopLocked)capToApparelAop(true);
+  _syncDivTabs(document.getElementById('divtabs'));_syncInactiveBadge();saveState();refresh();
+  toast((off.length?`Off season, made inactive: ${off.length} department${off.length>1?'s':''}`:'')+(off.length&&on.length?' · ':'')+
+    (on.length?`back in season: ${on.slice(0,4).join(', ')}${on.length>4?` and ${on.length-4} more`:''}`:'')+' - Save to send it');
+  return true;
 }
 
 /* ── AOP HELPERS ─────────────────────────────────── */
@@ -5413,7 +5447,10 @@ function resetPlanToAop(){
 /* ── SAVE & EXPORT ─────────────────────────────── */
 function saveState(logVersion=false){
   const now=new Date();
-  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopVersionId:S.aopVersionId,aopUnit:S.aopUnit,locked:[...S.locked],buyerSet:[...S.buyerSet],divLocked:[...S.divLocked],divLockAdded:S.divLockAdded,aopSeeds:S.aopSeeds,aopSeededFrom:S.aopSeededFrom,aopSeedFp:S.aopSeedFp,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],customDepts:S.customDepts,deptSplit:1,at:now.toISOString()}))}catch(e){}
+  // default rule (user, 2026-10-15): every Save holds the apparel total on the AOP - one factor a month over the three
+  // divisions (capToApparelAop), the divisions free to differ from their own AOP
+  if(logVersion&&S.aopLocked)capToApparelAop(true);
+  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopVersionId:S.aopVersionId,aopUnit:S.aopUnit,locked:[...S.locked],buyerSet:[...S.buyerSet],divLocked:[...S.divLocked],divLockAdded:S.divLockAdded,aopSeeds:S.aopSeeds,aopSeededFrom:S.aopSeededFrom,aopSeedFp:S.aopSeedFp,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],seasonOff:[...S.seasonOff],customDepts:S.customDepts,deptSplit:1,at:now.toISOString()}))}catch(e){}
   _updateSaveLabel(now);
   if(logVersion){_maybeSaveVersion(now,_vlNext);_vlNext=null;_renderVerSel();}
   _mainSnapTake('saved');   // the main sheet's before / after starts again from what was just saved
@@ -5585,6 +5622,7 @@ function loadState(){
     if(p.divTab!=null)S.divTab=p.divTab;
     if(p.hiddenSecs)S.hiddenSecs=new Set(p.hiddenSecs);
     if(p.manualInactive)S.manualInactive=new Set(p.manualInactive);
+    if(p.seasonOff)S.seasonOff=new Set(p.seasonOff);
     if(p.customDepts)S.customDepts=p.customDepts;
     if(!p.deptSplit)_deptMigrated=_migrateDeptIds(S); // once: saved state is stamped deptSplit from then on
     _applyCustomDepts();
@@ -7223,7 +7261,7 @@ loadSyncCache();
 // the planner's factor table first (local, fast) so a seed made on open already uses it (2026-10-05)
 loadPlannerConfig().finally(()=>fetchAopTargets().then(()=>{
   if(_aopCache&&_aopCache.targets)_autoApplyAop();
-}).catch(()=>{}));
+}).catch(()=>{}).finally(()=>_seasonLoad()));   // off-season departments inactive (default rule, 2026-10-15)
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',_syncModeBtn);else _syncModeBtn();
 seedPlanDefaults(false);
 setTimeout(syncAopLockUI, 0); // fill any un-saved slots with division LFL YoY growth
@@ -7585,6 +7623,31 @@ function _vlBase(v){return v.kind==='original'?'Original':'Iteration '+v.iter;}
 function _vlName(v){return v.name?`${v.name} (${_vlBase(v)})`:_vlBase(v);}   // own name (2026-10-13), the number kept
 function _vlShort(iso){return new Date(iso).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'numeric',minute:'2-digit'});}
 // same plan inputs (growth %, locks, hidden departments) - rounded so a re-save's float noise is not a change
+/* The rules an iteration was made under (user, 2026-10-15: "Keep the different rules in the iteration for planner growth"):
+   kept with the version when it is saved and shown on the version picker - the planner growth method, the AOP it sits
+   on, the apparel cap, the division locks, the season rule and the new departments. The full rule book:
+   docs/business-rules/RULE_BOOK.md. */
+function _vlRules(){
+  const meth=(FM_METHODS.find(m=>m[0]===(PLANNER.ft?.mode||'matrix'))||FM_METHODS[0])[1];
+  const sec=id=>DVDATA.flatMap(d=>d.secs).find(s=>s.id===id),nm=id=>sec(id)?.nm||id;
+  return {
+    planner_growth:meth,
+    aop:_aopCache?.version_label?`${_aopCache.version_label} (publish ${_aopCache.version_id})`:null,
+    apparel_on_aop:S.aopLocked&&AOP_MIS.every(mi=>{const t=_apparelTot(mi);return !(t.aop>0)||Math.abs(t.ty-t.aop)<=0.00005;}),
+    divisions_locked:[...S.divLocked],
+    season:_season?.why||null,
+    off_season:S.seasonOff.size,
+    inactive:S.hiddenSecs.size,
+    new_departments:Object.entries(_ndIdx).map(([id,x])=>`${nm(id)} = ${Math.round(x.np*100)}% of ${x.refNm}${_ndNoLy(sec(id))?' (no LY)':''}`),
+  };
+}
+function _vlRulesText(r){
+  if(!r)return 'Rules not recorded (saved before 15 Oct 2026)';
+  return [`Planner growth: ${r.planner_growth}`,`AOP: ${r.aop||'-'}${r.apparel_on_aop?' · apparel = AOP':''}`,
+    `Divisions locked: ${(r.divisions_locked||[]).map(x=>x.toUpperCase()).join(', ')||'none'}`,
+    `Season: ${r.season||'-'} (${r.off_season||0} off season)`,`Inactive departments: ${r.inactive}`,
+    `New departments: ${(r.new_departments||[]).join('; ')||'none'}`].join('\n');
+}
 function _vlSame(a,b){
   const k=s=>JSON.stringify([Object.entries(s?.inputs||{}).filter(([,x])=>x!=null).map(([c,x])=>[c,+(+x).toFixed(4)]).sort((x,y)=>x[0]<y[0]?-1:1),
     [...(s?.locked||[])].sort(),[...(s?.hiddenSecs||[])].sort()]);
@@ -7599,7 +7662,7 @@ function _renderVerSel(){
   el.disabled=false;
   const list=[...vers].sort((a,b)=>(a.kind==='original'?-1:b.kind==='original'?1:a.iter-b.iter));
   el.innerHTML=(list.some(v=>v.id===act)?'':'<option value="" selected disabled>Pick a version</option>')
-    +list.map(v=>`<option value="${v.id}"${v.id===act?' selected':''}>${_vlName(v)} · ${_vlShort(v.savedAt)}</option>`).join('')
+    +list.map(v=>`<option value="${v.id}"${v.id===act?' selected':''} title="${_attr(_vlRulesText(v.rules))}">${_vlName(v)} · ${_vlShort(v.savedAt)}</option>`).join('')
     // user, 2026-10-13: "add a save as button for new iteration, a new iteration button to create a new BIS sheet, a
     // rename button to rename existing iterations" - here, as the remover is: the toolbar has no room left at 1366 px
     +'<option disabled>──────────</option>'
@@ -7707,7 +7770,8 @@ function _vlSnapshot(){
     // 2026-10-12: kept too, so a loaded version re-balances as it did when saved (buyer entries held, locked divisions frozen)
     buyerSet:[...S.buyerSet],
     divLocked:[...S.divLocked],
-    divLockAdded:JSON.parse(JSON.stringify(S.divLockAdded||{}))
+    divLockAdded:JSON.parse(JSON.stringify(S.divLockAdded||{})),
+    seasonOff:[...S.seasonOff]
   };
 }
 let _vlNext=null;   // {name} = the next save is a new iteration whatever changed (Save as / New iteration, 2026-10-13)
@@ -7727,7 +7791,7 @@ function _maybeSaveVersion(now,force=null){
   }else if(vers.length&&Math.abs(curSum-_vlTotalSum(vers[i].divisionTotals))<=0.5){
     // same plan (minor drift) - refresh that version in place and make it the latest
     const [v]=vers.splice(i,1);
-    Object.assign(v,{savedAt:now.toISOString(),divisionTotals:cur,snapshot:snap,_pending:true});
+    Object.assign(v,{savedAt:now.toISOString(),divisionTotals:cur,snapshot:snap,rules:_vlRules(),_pending:true});
     vers.unshift(v);
     _vlSave(vers);
     _vlSetActive(v.id);
@@ -7737,7 +7801,7 @@ function _maybeSaveVersion(now,force=null){
   // new version - store summary totals + full state snapshot for Load
   const id=Date.now();
   const v=vers.length?{id,kind:'iteration',iter:Math.max(0,...vers.map(x=>x.iter||0))+1}:{id,kind:'original'};
-  Object.assign(v,{label:`${_vlName(v)} — ${_vlFmtDate(now)}`,savedAt:now.toISOString(),divisionTotals:cur,snapshot:snap,_pending:true});
+  Object.assign(v,{label:`${_vlName(v)} — ${_vlFmtDate(now)}`,savedAt:now.toISOString(),divisionTotals:cur,snapshot:snap,rules:_vlRules(),_pending:true});
   if(force?.name)v.name=force.name;
   vers.unshift(v);
   while(vers.length>_VL_MAX)vers.splice(vers.map(x=>x.kind).lastIndexOf('iteration'),1);   // the cap drops the oldest iteration, never the Original
@@ -7856,6 +7920,7 @@ function loadVersion(idx){
   if(snap.aopSeeds)S.aopSeeds=snap.aopSeeds;
   if(snap.buyerSet)S.buyerSet=new Set(snap.buyerSet);   // versions saved before 12 Oct have neither: left as they are
   if(snap.divLocked){S.divLocked=new Set(snap.divLocked);S.divLockAdded=snap.divLockAdded||{};}
+  S.seasonOff=new Set(snap.seasonOff||[]);
   if(!snap.deptSplit)_migrateDeptIds(S);
   _vlSetActive(v.id);
   saveState();
