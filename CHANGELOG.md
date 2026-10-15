@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### BIS: the 25 Sep Original removed; "Plan Iteration - 01" is now the Original (the only version)
+- **Asked (user):** "remove original plan from bis"; "before deletion i want to know keep the only version which is correct and matching all checks and remove the former"; then "run it".
+- **Checks (SSG, Mar-Jun'27):** "Plan Iteration - 01" (Iteration 5, 15 Oct 08:34) = 43,188.03 L = AOP V2 (publish 119) = Manual 43,188.04; every month on the AOP within 0.0004 L; the Sales Plan is built from it (431.88 Cr); its rules are recorded. The 25 Sep Original = 37,726 L (5,462 L short), with no rules recorded. Its division split differs from the manual by up to ~46 L by design: BIS plans at chain level, and the Sales Plan / manual cap each SSG cluster x month, after which the Sales Plan = manual within 0.06 L.
+- **Done (DB, planning_inputs.bis_plan_versions):** row 1790318516075 (Original, 25 Sep) deleted. Row 1792049332051 set to kind / label Original, keeping its name "Plan Iteration - 01" and iter 5, so the next save is Iteration 6. BIS's API now lists 1 version (431.88 Cr, snapshot kept). Every browser takes the server list on its next load (_vlPull).
+- **Backup:** both rows (data + last_modified_at) in `SalesPlan/backend/backups/bis_plan_versions_before_remove_original_15Oct2026.json` (266 KB). To roll back, re-insert both rows from it.
+
 ### Sales Plan: Version 1 overwritten with the plan that matches the manual
 - **Asked (user):** "why is it different ? Which is the correct version. Keep that version only which is true to the Manual working and matching completely the rest of the plan can be remobed", then "overwrite Version 1 and make the changes as per it".
 - **Why they differed:** Version 1 was saved 13 Oct 17:14, before the 15 Oct fixes. It planned 188 stores (148 SSG + 40 of 83 NSO; the 73 "Others" stores had no plan), and SSG was 1.25 L under the AOP: TY 51,484.13 L. The live plan has all 304 stores: SSG 43,188.03 + NSO 22,880.34 + Others 11,913.09 = 77,981.45 L, which is the AOP and the manual (77,981.46 / SSG 43,188.04).
