@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Sales Plan: Version 1 overwritten with the plan that matches the manual
+- **Asked (user):** "why is it different ? Which is the correct version. Keep that version only which is true to the Manual working and matching completely the rest of the plan can be remobed", then "overwrite Version 1 and make the changes as per it".
+- **Why they differed:** Version 1 was saved 13 Oct 17:14, before the 15 Oct fixes. It planned 188 stores (148 SSG + 40 of 83 NSO; the 73 "Others" stores had no plan), and SSG was 1.25 L under the AOP: TY 51,484.13 L. The live plan has all 304 stores: SSG 43,188.03 + NSO 22,880.34 + Others 11,913.09 = 77,981.45 L, which is the AOP and the manual (77,981.46 / SSG 43,188.04).
+- **Done:** the live plan saved over Version 1 through the Sales Plan's own Save, then renamed "Final - matches manual (15 Oct)" (TY 77,981.45 / LY 46,334.97, Mar'27 to Jun'27). It is the only version. The first version can't be removed by design, hence overwrite. Its history keeps the save and rename lines.
+- **Backup:** the old Version 1 (index.json, v1.json.gz, state.json) is in `SalesPlan/backend/backups/plan_versions_before_final_15Oct2026/`. To roll back, copy them back into `plan_versions/`.
+- **Growth vs LY:** 8010 republished it 30 s later; Growth vs LY is set to it. All stores 77,981.45 vs 46,334.97 L (+68.3%); SSG 43,188.03 vs 38,885.41 L (+11.1%). The "Live plan" choice is still in the list.
+
 ### Growth vs LY: Sales Plan version selector
 - **Asked (user):** "can i have a version selector from this".
 - **Growth vs LY:** a "Plan" list on card 1 offers "Live plan (updates by itself)" plus every version saved on the Sales Plan's Final Results page (name and saved time). Picking one rebuilds the comparison on it in ~3 s, at the same Division -> Attribute -> Department -> MRP -> Display depth. An uploaded file shows as "Uploaded file", and picking a plan links back to the Sales Plan. `POST api/link?version=<id>` refuses an id the Sales Plan hasn't published.
