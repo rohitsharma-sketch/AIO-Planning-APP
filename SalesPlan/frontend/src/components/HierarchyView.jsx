@@ -129,6 +129,21 @@ export default function HierarchyView({ api = '/api/planning/grain', levels: LV 
   const [version, setVersion] = useState(() => { try { return (versions && localStorage.getItem(`${store}.version`)) || '' } catch { return '' } })
   const qx = JSON.stringify(query)
   const fkey = JSON.stringify(filters)
+  // header sort (user, 2026-10-15: "sort functions in all headers where such tables exist"): {k: name|ly|ty|gr|cont, d: 1 / -1}
+  // or null = the plan's own order; sorts the rows inside every branch (the tree stays), kept per browser
+  const [sort, setSort] = useState(() => { try { return JSON.parse(localStorage.getItem(`${store}.sort`) || 'null') } catch { return null } })
+  const pickSort = k => setSort(s => {
+    const first = k === 'name' ? 1 : -1   // names A to Z first, numbers largest first; a third click = the plan's order
+    const n = !s || s.k !== k ? { k, d: first } : s.d === first ? { k, d: -first } : null
+    try { localStorage.setItem(`${store}.sort`, JSON.stringify(n)) } catch { /* ignore */ }
+    return n
+  })
+  const sorted = (rows, parentTy) => {
+    if (!sort) return rows
+    const v = r => sort.k === 'name' ? String(r.key) : sort.k === 'ly' ? r.ly : sort.k === 'ty' ? r.ty
+      : sort.k === 'gr' ? (gr(r.ty, r.ly) ?? -Infinity) : (parentTy ? r.ty / parentTy : 0)
+    return [...rows].sort((a, b) => { const x = v(a), y = v(b); return (typeof x === 'string' ? x.localeCompare(y, undefined, { numeric: true }) : x - y) * sort.d })
+  }
   const [why, setWhy] = useState(null)            // path of the row whose numbers are being explained
   const back = useRef(null)                       // the ⓘ that opened it - focus goes back there on close
   const lastLv = useRef(null)
@@ -204,7 +219,7 @@ export default function HierarchyView({ api = '/api/planning/grain', levels: LV 
     if (node.err) return <tr><td colSpan={5} style={{ ...td, textAlign: 'left', paddingLeft: 16 + depth * 22, color: theme.danger }}>{node.err}</td></tr>
     if (!node.rows.length && depth === 0) return <tr><td colSpan={5} style={{ ...td, textAlign: 'left', color: theme.textMuted }}>Nothing inside these filters.</td></tr>
     const parentTy = node.total?.ty || 0
-    return node.rows.map(r => {
+    return sorted(node.rows, parentTy).map(r => {
       const p = [...path, r.key], k = JSON.stringify(p), leaf = p.length >= levels.length, isOpen = open.has(k)
       return (
         <Fragment key={k}>
@@ -305,8 +320,19 @@ export default function HierarchyView({ api = '/api/planning/grain', levels: LV 
       <div style={{ background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 12, overflow: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead><tr>
-            <th style={{ ...th, textAlign: 'left' }}>{levels.map(x => LV[x]).join(' › ')}</th>
-            <th style={th}>{cols.ly}</th><th style={th}>{cols.ty}</th><th style={th}>{cols.growth}</th><th style={th}>Cont %</th>
+            {[['name', levels.map(x => LV[x]).join(' › ')], ['ly', cols.ly], ['ty', cols.ty], ['gr', cols.growth], ['cont', 'Cont %']].map(([k, t]) => {
+              const on = sort?.k === k
+              return (
+                <th key={k} aria-sort={on ? (sort.d > 0 ? 'ascending' : 'descending') : 'none'} style={{ ...th, ...(k === 'name' ? { textAlign: 'left' } : {}), padding: 0 }}>
+                  <button type="button" onClick={() => pickSort(k)} data-no-undo
+                    title={on ? (sort.d === (k === 'name' ? 1 : -1) ? 'Sorted - click to reverse' : 'Click for the plan’s own order') : `Sort by ${t}`}
+                    style={{ all: 'unset', boxSizing: 'border-box', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, width: '100%', padding: '8px 12px',
+                             justifyContent: k === 'name' ? 'flex-start' : 'flex-end', color: on ? theme.textPrimary : 'inherit' }}>
+                    {t}<span aria-hidden="true" style={{ fontSize: 9, opacity: on ? 1 : 0.35 }}>{on ? (sort.d > 0 ? '▲' : '▼') : '⇅'}</span>
+                  </button>
+                </th>
+              )
+            })}
           </tr></thead>
           <tbody>
             {renderRows([], 0)}

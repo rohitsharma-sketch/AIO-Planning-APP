@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Sort on every header of the plan trees (Sales Plan + Growth vs LY)
+- **Asked (user):** "sort functions in all headers where such tables exist" (screenshot: the DIVISION › DEPARTMENT › MONTH / LY / TY / GROWTH % / CONT % header).
+- **Sales Plan (`HierarchyView.jsx`: Final Results, MRP output, Display Type, Article Name route, MRP Re-apportionment):** every header is a sort button: the row name (A to Z first), LY, TY, Growth %, Cont % (largest first). A second click reverses; a third goes back to the plan's own order. It sorts the rows inside every open branch, so the tree stays and Grand Total stays last. `aria-sort` on the header; kept per page and browser (`<store>.sort`). Sorting is on screen only; the Excel export keeps the plan's order.
+- **Growth vs LY:** the same on its tree: the name and every block's TY / LY / Growth (MAMJ and TTL), kept in `gr-sort`.
+- **Checked:** Display Type tree, TY largest first MENS 30,726.1 / KIDS 24,046.3 / LADIES 23,209.0, then smallest first, then the plan's order; Growth %; names A to Z; Grand Total last. Growth vs LY: 7 header buttons, TTL TY 16,992.25 / 13,115.94 / 13,079.84, then smallest first, then back; with KIDS open its attributes sort inside it; no console errors.
+
 ### Sales Plan: filter dropdowns never cut off by the screen
 - **Asked (user):** "screen is cutting the filter. Try to revamp it in the most minimalistic and efficient way possible" (Display Type, the Cluster filter near the bottom of the window).
 - **Fix (one shared component, `ExcelFilter.jsx`, so every Sales Plan filter gets it):** the dropdown opens below its button when there is room (360 px, or more room than above), else above. Its height is capped to that room and the value list shrinks first, so the search box and OK / Cancel always stay on screen. It follows its button when the page scrolls or the window resizes. Nothing else changed: same Excel-style list, same OK / Cancel.

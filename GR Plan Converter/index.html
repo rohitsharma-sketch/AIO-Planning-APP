@@ -70,6 +70,10 @@ details.card>summary{list-style:none;cursor:pointer;padding-bottom:16px}
 details.card>summary::-webkit-details-marker{display:none}
 details.card>summary h2::before{content:'\25B8';display:inline-block;width:16px;color:var(--muted-foreground)}
 details.card[open]>summary{padding-bottom:0}details.card[open]>summary h2::before{content:'\25BE'}
+/* header sort buttons (2026-10-15) - look like the header text */
+button.sb{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:4px;font:inherit;font-weight:700}
+button.sb i{font-style:normal;font-size:9px;opacity:.4}th[aria-sort=ascending] button.sb i,th[aria-sort=descending] button.sb i{opacity:1}
+button.sb:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
 </style>
 </head>
 <body>
@@ -169,11 +173,16 @@ function draw() {
   P.months.forEach((m, i) => { if (!grp.length || yr(P.months[grp[grp.length - 1][0]]) !== yr(m)) grp.push([]); grp[grp.length - 1].push(i); });
   grp.push(P.months.map((_, i) => i));
   const span = (a, ix) => { const f = a[ix[0]].replace(/ P\d$/, ''), l = a[ix[ix.length - 1]].replace(/ P\d$/, ''); return f === l ? f : `${f}–${l}`; };
-  $('th').innerHTML = `<tr><th class="l" rowspan="2" title="Click a row to see it month by month; click a name to open or close it">${esc(P.levels.join(' › '))}</th>${B.map((b, k) =>
+  // header sort (user, 2026-10-15: "sort functions in all headers where such tables exist"): the name, or any block's
+  // TY / LY / Growth; inside every branch, the tree kept, Grand Total last; a third click = the plan's order
+  const sb = (k, b, t) => { const on = srt && srt.k === k && srt.b === b;
+    return `<button type="button" class="sb" data-k="${k}" data-b="${esc(b)}" aria-label="Sort by ${esc(t)}${b ? ' ' + esc(b) : ''}">${esc(t)}<i>${on ? (srt.d > 0 ? '▲' : '▼') : '⇅'}</i></button>`; };
+  const as = (k, b) => srt && srt.k === k && srt.b === b ? (srt.d > 0 ? 'ascending' : 'descending') : 'none';
+  $('th').innerHTML = `<tr><th class="l" rowspan="2" aria-sort="${as('name', '')}" title="Click a row to see it month by month; click a name to open or close it">${sb('name', '', P.levels.join(' › '))}</th>${B.map((b, k) =>
     `<th class="grp" colspan="3" title="TY ${esc(span(P.months, grp[k]))} plan vs LY ${esc(span(P.ly_months, grp[k]))} sales">${b}</th>`).join('')}</tr>
-    <tr>${B.map(() => '<th class="grp">TY</th><th>LY</th><th>Growth</th>').join('')}</tr>`;
+    <tr>${B.map(b => `<th class="grp" aria-sort="${as('ty', b)}">${sb('ty', b, 'TY')}</th><th aria-sort="${as('ly', b)}">${sb('ly', b, 'LY')}</th><th aria-sort="${as('g', b)}">${sb('g', b, 'Growth')}</th>`).join('')}</tr>`;
   const L = P.levels, depth = r => L.indexOf(r.level);
-  $('tb').innerHTML = P.rows.map((r, i) => {
+  $('tb').innerHTML = ordered().map(([r, i]) => {
     const k = depth(r), path = rowPath(r);
     // a row shows when every level above it is open (Division always; Grand Total always)
     if (k > 0 && !path.slice(0, k).every((_, j) => open.has(path.slice(0, j + 1).join('|')))) return '';
@@ -184,6 +193,29 @@ function draw() {
     return `<tr class="r ${r.level.split(' ')[0]}${sel === i ? ' sel' : ''}" data-i="${i}" data-k="${esc(key)}"><td class="l" style="padding-left:${9 + 18 * Math.max(0, k)}px">${tg}${esc(name)}</td>${cells}</tr>`;
   }).join('');
 }
+let srt = null;
+try { srt = JSON.parse(localStorage.getItem('gr-sort') || 'null'); } catch (e) {}
+// the rows in tree order with every branch's children sorted (srt = {k: name|ty|ly|g, b: block|'TTL', d: 1 / -1})
+function ordered() {
+  const all = P.rows.map((r, i) => [r, i]);
+  if (!srt) return all;
+  const kids = new Map(), tail = [];
+  all.forEach(e => { const k = P.levels.indexOf(e[0].level);
+    if (k < 0) { tail.push(e); return; }
+    const pk = rowPath(e[0]).slice(0, -1).join('|'); if (!kids.has(pk)) kids.set(pk, []); kids.get(pk).push(e); });
+  const v = ([r]) => srt.k === 'name' ? String(label(r, P.levels.indexOf(r.level))) : ((srt.b === 'TTL' ? r.ttl : r.blocks[srt.b]) || [])[{ty: 0, ly: 1, g: 2}[srt.k]] ?? -Infinity;
+  const cmp = (a, b) => { const x = v(a), y = v(b); return (typeof x === 'string' ? x.localeCompare(y, undefined, {numeric: true}) : x - y) * srt.d; };
+  const out = [], walk = pk => (kids.get(pk) || []).slice().sort(cmp).forEach(e => { out.push(e); walk(rowPath(e[0]).join('|')); });
+  walk('');
+  return out.concat(tail);
+}
+$('th').addEventListener('click', e => {
+  const b = e.target.closest('button.sb'); if (!b) return;
+  const k = b.dataset.k, bk = b.dataset.b, first = k === 'name' ? 1 : -1;   // names A to Z first, numbers largest first
+  srt = !srt || srt.k !== k || srt.b !== bk ? {k, b: bk, d: first} : srt.d === first ? {k, b: bk, d: -first} : null;
+  try { localStorage.setItem('gr-sort', JSON.stringify(srt)); } catch (e2) {}
+  draw();
+});
 const FIELD = {Division: 'div', Attribute: 'attr', Department: 'dept', MRP: 'mrp', Display: 'disp'};
 function rowPath(r) { const k = P.levels.indexOf(r.level); return P.levels.slice(0, k + 1).map(l => r[FIELD[l]]); }
 function label(r, k) {
