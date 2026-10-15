@@ -4514,7 +4514,8 @@ function renderTable(){
       // Buyer's Plan / Department Summary: the name opens the department's details (month view is one click from there)
       const canDrw=canMag&&r._divId&&!_parseAttrKey(r._key);
       const magBtn=canMag&&!canDrw?`<button class="mag-trig" title="Open magnified view" onclick="event.stopPropagation();openMag('${r._key}','${r._divId||''}')">⤢</button>`:'';
-      const nmHtml=canDrw?`<button type="button" class="rn-btn" onclick="openDrawer('${r._key}','${r._divId}')" title="Details: month by month, sell-thru, history, factor">${r._name}</button>`:r._name;
+      const iw=canDrw?(()=>{const dv=DVDATA.find(d=>d.id===r._divId),sc=dv?.secs.find(x=>x.id===r._key);return sc?_inputWhy(dv,sc).short:'';})():'';
+      const nmHtml=canDrw?`<button type="button" class="rn-btn" onclick="openDrawer('${r._key}','${r._divId}')" title="${_attr("Buyer's input: "+iw+'\nClick for details: the input month by month, sell-thru, history, factor')}">${r._name}</button>`:r._name;
       const togLbl=isInact?(phase==='p2'?'Inactive':'No Data'):'Active';
       const togCls=isInact?(phase==='p2'?' p2':' p1'):' on';
       const togBtn=(r._key&&!_parseAttrKey(r._key))?`<button class="row-act-btn${togCls}" onclick="event.stopPropagation();toggleSecVis('${r._key}')" title="${phase==='p1'?'Auto-inactive: no LY data found':phase==='p2'?'Manually deactivated — click to re-activate':''}">${togLbl}</button>`:'';
@@ -4558,7 +4559,7 @@ function _renderDrawer(){
   const st=c.map(mi=>`<td>${cellVal(row,{type:'dept_st',id:'st_'+mi,mi})}</td>`).join('');
   let L=0,T=0;
   const mons=AOP_MIS.map(mi=>{
-    const ly=_secMonLY(sec,dv,mi),g=S.inputs[sec.id+'__'+mi],ty=ly*(1+(g??0)/100),p=_plannerRowAgg(row,[mi]);L+=ly;T+=ty;
+    const ly=_secMonLY(sec,dv,mi),g=S.inputs[sec.id+'__'+mi],ty=_secTy(sec,dv,mi),p=_plannerRowAgg(row,[mi]);L+=ly;T+=ty;   // _secTy: a new department without LY is its share of the reference (2026-10-15)
     return `<tr class="drw-m${_drw.mi===mi?' sel':''}" tabindex="0" aria-pressed="${_drw.mi===mi}" title="How the planner worked out ${MO[mi]}" onclick="_drwMonth(${mi})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();_drwMonth(${mi})}"><td>${MO[mi]}${S.locked.has(sec.id+'__'+mi)?' &#x1F512;':''}</td><td>${f2(ly)}</td><td class="${gCls(g)}">${fP(g)}</td><td>${f2(ty)}</td><td>${fP(p?.gr)}</td></tr>`;
   }).join('');
   const hb=_lflHdr('base',c).sub,hy=_lflHdr('yoy',c).sub;
@@ -4572,6 +4573,7 @@ function _renderDrawer(){
         <div><span>LY sales</span><b>${f2(L)} Cr</b></div><div><span>Plan</span><b>${f2(T)} Cr</b></div>
         <div><span>Buyer Gr%</span><b class="${gCls(bg)}">${fP(bg)}</b></div><div><span>Planner Gr% · factor ${_plannerFactorAgg(row,AOP_MIS)?.toFixed(2)??'-'}</span><b class="${gCls(pl?.gr)}">${fP(pl?.gr)}</b></div>
       </div></div>
+      ${(()=>{const w=_inputWhy(dv,sec);return `<div class="drw-sec"><h4>Buyer's input${w.adj>0?' · gave up Rs.'+w.adj.toFixed(3)+' Cr to new departments':''}</h4><div class="drw-why">${_attr(w.head.join('\n'))}</div>${w.months.length?`<ol class="drw-steps" style="margin-top:8px">${w.months.map(t=>`<li><span>${_attr(t)}</span></li>`).join('')}</ol>`:''}</div>`;})()}
       <div class="drw-sec"><h4>Month by month</h4><table class="drw-tb"><thead><tr><th>Month</th><th>LY Cr</th><th>Buyer Gr%</th><th>Plan Cr</th><th>Planner Gr%</th></tr></thead>
         <tbody>${mons}</tbody><tfoot><tr class="drw-m${_drw.mi==null?' sel':''}" tabindex="0" aria-pressed="${_drw.mi==null}" title="The block summary" onclick="_drwMonth(null)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();_drwMonth(null)}"><td>Block</td><td>${f2(L)}</td><td>${fP(L>0?(T/L-1)*100:null)}</td><td>${f2(T)}</td><td>${fP(pl?.gr)}</td></tr></tfoot></table><div class="drw-hint">Click a month to see how its planner growth was worked out, step by step.</div></div>
       <div class="drw-sec" id="drwHow"><h4>How the planner's growth is built · ${_drw.mi==null?'Block '+_attr(MO[AOP_MIS[0]]+'-'+MO[AOP_MIS[AOP_MIS.length-1]]):MO[_drw.mi]}</h4>${_drw.mi==null?`<div class="drw-why">${_attr(_plannerWhy(row,AOP_MIS))}</div>`:_drwMonthHtml(dv,sec,_drw.mi)}</div>
@@ -4581,6 +4583,49 @@ function _renderDrawer(){
       </div>${c.length?`<table class="drw-tb" style="margin-top:8px"><thead><tr><th>Sell-thru</th>${c.map(mi=>`<th>${MO[mi]}</th>`).join('')}</tr></thead><tbody><tr><td>ST%</td>${st}</tr></tbody></table>`:''}</div>
     </div>
     <div class="drw-ft"><button type="button" class="fpbtn" onclick="const d=_drw;closeDrawer();openMag(d.secId,d.dvId)">Edit month by month &#x2922;</button></div>`;
+}
+
+/* Buyer's input description (user, 2026-10-15: "Can i have a buyer's input description too so that we can know that the
+   input is adjusted due to New Department too or if the new department is set primarily then if the other departments are
+   made and kept unlocked then the details will be adjusted as per the input"). Display only - what set a department's plan
+   and how far the division's new departments moved it. The rule it describes (_ndSettle / _divRescale0): a new department
+   is set first, at its % of its reference's plan; then the division goes back to its AOP and every UNLOCKED department
+   gives up its share of what the new departments take (each by plan x new / unlocked others); a locked month, or a locked
+   division, stays as typed. */
+function _ndRoom(dv,mi){   // this month's new departments in the division: their plan (Cr), names, and the unlocked rest
+  let N=0,R=0;const names=[];
+  dv.secs.forEach(s=>{
+    if(S.hiddenSecs.has(s.id))return;
+    const t=_secTy(s,dv,mi);
+    if(_ndOf(s.id)){if(t>0){N+=t;names.push(s.nm);}}
+    else if(!S.locked.has(s.id+'__'+mi)&&_secMonLY(s,dv,mi)>0)R+=t;
+  });
+  return {N,R,names};
+}
+function _inputWhy(dv,sec){
+  const pc=x=>Math.round(x*100)+'%',cr=v=>'Rs.'+v.toFixed(3)+' Cr',nmOf=id=>dv.secs.find(z=>z.id===id)?.nm||id;
+  if(S.hiddenSecs.has(sec.id))return {head:['Inactive - not planned.'],months:[],adj:0,short:'Inactive'};
+  const nd=_ndOf(sec.id),refOf=Object.entries(_ndIdx).filter(([,x])=>x.ref===sec.id&&x.div===dv.id),dl=S.divLocked.has(dv.id);
+  const head=nd?[]:[dl?'Division locked: departments stay as entered - no re-balance to the division AOP, so new departments do not take from them (they add on top).'
+    :S.buyerSet.has(sec.id)?"Buyer's own growth, then re-balanced with the division to its AOP in the unlocked months."
+    :'Plain AOP share (no buyer entry), re-balanced with the division to its AOP.'];
+  if(nd)head.push(`New department: its plan is ${pc(nd.np)} of ${nd.refNm}'s plan every month`+(_ndNoLy(sec)?` (no LY of its own, so no growth input - it moves with ${nd.refNm}).`
+    :' - its growth is set to land there, so a growth typed here is replaced.')+(dl?` ${dv.nm} is locked, so it adds on top - no department makes room.`:` It is set first; the unlocked departments of ${dv.nm} make room for it.`));
+  if(S.aopLocked)head.push('Every Save holds apparel (KIDS + LADIES + MENS) on the AOP: all departments are scaled by one factor a month, so the growth % here already include that cap.');
+  if(refOf.length)head.push(`Reference for ${refOf.map(([id,x])=>`${nmOf(id)} (${pc(x.np)} of this plan)`).join(', ')}: when this department moves, ${refOf.length>1?'they move':'it moves'} with it.`);
+  let adj=0;
+  const months=AOP_MIS.map(mi=>{
+    const k=sec.id+'__'+mi,g=S.inputs[k],ty=_secTy(sec,dv,mi),M=MO[mi];
+    if(nd)return `${M}: ${cr(ty)} = ${pc(nd.np)} of ${nd.refNm}${S.locked.has(k)?' (locked)':''}`;
+    if(dl||!(S.aop[dv.id]?.[mi]>0))return `${M}: ${fP(g)} as entered - ${dl?'division locked':'no AOP this month'}, not re-balanced`;
+    const {N,R,names}=_ndRoom(dv,mi);
+    if(S.locked.has(k))return `${M}: locked at ${fP(g)} - not moved`+(N>0?`; the unlocked departments make room for ${names.join(', ')}`:'');
+    if(!(N>0)||!(R>0))return `${M}: ${fP(g)} - no new department in ${dv.nm} this month`;
+    const a=ty*N/R;adj+=a;
+    return `${M}: ${fP(g)} = ${cr(ty)} after giving up ${cr(a)} (${(a/(ty+a)*100).toFixed(1)}%) to ${names.join(', ')}`;
+  });
+  const short=nd?`New department - ${pc(nd.np)} of ${nd.refNm}`:adj>0?`gave up ${cr(adj)} to new departments`:dl?'Division locked - as entered':(S.buyerSet.has(sec.id)?"Buyer's own growth":'Plain AOP share');
+  return {head,months,adj,short};
 }
 
 // user, 12 Oct: "if i click on any month i want to see the working of how the factor was derived" - the drawer's month

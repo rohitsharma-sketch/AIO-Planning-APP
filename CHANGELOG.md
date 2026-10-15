@@ -7,6 +7,18 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### BIS: "Buyer's input" description per department; BIS / Sales Plan / Manual checked on the single versions
+- **Asked (user):** "now check if BIS, Sales Plan and manual all match"; "Can i have a buyer's input description too so that we can know that the input is adjusted due to New Department too or if the new department is set primarily then if the other departments are made and kept unloced then the details will be adjusted as per the input."
+- **Check (SSG, apparel, Mar-Jun'27, Rs lakh; file `Buyer's Input Sheet/BIS vs Sales Plan vs Manual - 15 Oct (final versions).xlsx`):** BIS "Plan Iteration - 01" re-read off the page, identical to the 13:13 read (114 departments). Total: Sales Plan 43,188.03 = BIS 43,188.03 = AOP 43,188.03, Manual 43,188.04. Every month equal (Jun manual +0.01). Sales Plan vs Manual by department: 106 of 108 within 0.01 L, sum |diff| 0.17 L. BIS vs both by department: sum |diff| 172 L (largest MSE_PYJAMA 12.3 L), and by division up to 46 L. This is by design: BIS plans each department at chain level, then the Sales Plan, like the manual, caps each SSG cluster x month on the cluster's AOP.
+- **Buyer's input (BIS department drawer + the name's hover):** what set the department's plan: buyer's own growth / plain AOP share / locked months / division locked, plus the apparel cap every Save applies (already inside the stored growth %).
+  - A new department says it is X% of its reference's plan, set first (or "adds on top" when its division is locked).
+  - A reference says which new departments follow it.
+  - Month by month, an unlocked department shows what it gave up to the division's new departments. Its share is its plan x new / unlocked others, the same rule as `_ndSettle` / `_divRescale0`. A locked month says it was not moved.
+  - The hover line on the name gives the one-line summary, e.g. "gave up Rs.0.825 Cr to new departments".
+  - Display only: nothing is saved or pushed.
+- **Fix found on the way:** the drawer's "Plan" for a new department without LY read Rs.0.00 Cr (LY x growth). It now uses the grid's own `_secTy` (CORD SETS Rs.1.92 Cr, KURTI SET 19.22 Cr).
+- **Checked in the browser (5050):** on the saved plan (all three divisions locked), every department reads "as entered". In-memory test with Ladies unlocked and LW_U_TEES locked, then discarded without saving: L_EW_KURTI SET gives up Rs.0.279 Cr (4.6%) in March. What the unlocked departments give up = what the new departments take (Mar 1.4515 / Apr 1.3772 / May 1.0683 / Jun 0.8272 Cr), and Ladies = its AOP each month. LW_U_TEES (locked) "not moved". After reload the page is still the saved version. Both script blocks parse (node --check).
+
 ### BIS: the 25 Sep Original removed; "Plan Iteration - 01" is now the Original (the only version)
 - **Asked (user):** "remove original plan from bis"; "before deletion i want to know keep the only version which is correct and matching all checks and remove the former"; then "run it".
 - **Checks (SSG, Mar-Jun'27):** "Plan Iteration - 01" (Iteration 5, 15 Oct 08:34) = 43,188.03 L = AOP V2 (publish 119) = Manual 43,188.04; every month on the AOP within 0.0004 L; the Sales Plan is built from it (431.88 Cr); its rules are recorded. The 25 Sep Original = 37,726 L (5,462 L short), with no rules recorded. Its division split differs from the manual by up to ~46 L by design: BIS plans at chain level, and the Sales Plan / manual cap each SSG cluster x month, after which the Sales Plan = manual within 0.06 L.
