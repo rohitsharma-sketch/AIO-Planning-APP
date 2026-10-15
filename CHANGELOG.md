@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Sales Plan pages: no redundant plan run, views built ahead
+- **Asked (user):** "reduce the population redunduncy and latency issues speed the population of view faster".
+- **Measured (cold / next call):** plan cube 1.9 s / 0.0, MRP tree 5.3 / 0.06, Display tree 2.7 / 0.07, check-up 9.7 / 0.0, MRP split (effective_shares) 1.6 / 0.06 - the first page after any change (BIS save, restart) waited for all of it; BIS itself loads in 0.9 s (all its requests < 0.1 s).
+- **Redundancy removed:** the plan views (summary / cluster panels) ran the whole department plan a second time after every change, and without the new-department step - they now reuse the saved base plan when it is on the same inputs (`_saved_plan_on`; 0.5 s instead of a plan run, same numbers as Final Results). `effective_shares` is kept until one of its input files changes (`effective_shares_key`; 20 calls 0.002 s) and the MRP tree keys its cache on those file times instead of serialising the split on every request.
+- **Views built ahead:** 8010's warmer (every minute and right after the plan regenerates) now refreshes the saved plan first, then the views, then `grain_view.warm_views()` - cube, Final Results / MRP / Display trees (month and half), the Qty view and the check-up: ~17 s once in the background after a change, 0.03 s a minute otherwise, so pages open on built caches.
+
 ### Renamed iterations show their name only; qty to 2 decimals
 - **Asked (user):** "i renamed and still itertation is coming it should not happen. Let the user choose to have the space for name only"; "Donot round numbers let it be as is round till 2 decimals".
 - **BIS:** a renamed version shows only its name in the picker (`_vlName`); its "Iteration N" stays in the hover with its rules.

@@ -1115,7 +1115,10 @@ def plan_views() -> dict:
     key = _plan_inputs_key()
     with _views_lock:
         if _views.get("key") != key or any(n not in _views for n in VIEW_BUILDERS):
-            plan = run_dept_plan()
+            # the saved base plan when it is on these same inputs (user, 2026-10-15: "reduce the population redundancy" -
+            # the views ran the whole plan a second time, and without the new-department step the saved plan has);
+            # a live run only when the saved plan is behind its inputs
+            plan = _saved_plan_on(key) or run_dept_plan()
             v = {"key": key, "summary": _plan_summary(plan), "cluster": _cluster_plan(plan)}
             for n, fn in VIEW_BUILDERS.items():
                 v[n] = fn(plan)
@@ -1129,9 +1132,21 @@ FINAL_STAMP_PATH = os.path.join(_BASE, "..", "final_dept_plan.inputs.json")   # 
 _CORRECTED = ("attr_corrected_plan.json", "base_corrected_plan.json")
 
 
-def _inputs_stamp() -> str:
+def _inputs_stamp(key: str | None = None) -> str:
     import hashlib
-    return hashlib.sha1(_plan_inputs_key().encode()).hexdigest()
+    return hashlib.sha1((key if key is not None else _plan_inputs_key()).encode()).hexdigest()
+
+
+def _saved_plan_on(key: str):
+    """final_dept_plan.json when its stamp says it was made on these inputs (read through the plan file cache), else None."""
+    try:
+        with open(FINAL_STAMP_PATH, encoding="utf-8") as fh:
+            if json.load(fh).get("inputs") != _inputs_stamp(key):
+                return None
+        from plan_cache import load_json
+        return load_json(FINAL_PLAN_PATH)
+    except (OSError, ValueError):
+        return None
 
 
 def refresh_saved_plan() -> bool:
@@ -1159,8 +1174,12 @@ def refresh_saved_plan() -> bool:
 def warm_plan_views(every: int = 60):
     """Background: keep plan_views() current so no page waits for the plan run, and the saved base plan on its inputs
     (refresh_saved_plan) - 8010 starts this at boot."""
+    def views():   # the Final Results / MRP / Display / Qty pages and the check-up (2026-10-15 latency)
+        from engines.grain_view import warm_views
+        warm_views()
     while True:
-        for job in (plan_views, refresh_saved_plan):
+        # the saved plan first, so the views reuse it instead of a second plan run
+        for job in (refresh_saved_plan, plan_views, views):
             try:
                 job()
             except Exception:   # noqa: BLE001 - a bad input file must not kill the warmer; the page shows the error itself

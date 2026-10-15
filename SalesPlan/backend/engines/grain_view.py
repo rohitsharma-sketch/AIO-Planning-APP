@@ -110,6 +110,22 @@ def _cube() -> dict:
     return _only_cache["cube"]
 
 
+def warm_views():
+    """Background, from 8010's warmer every minute (user, 2026-10-15: "speed the population of view faster"): build what
+    the Final Results / MRP / Display / Qty pages and the check-up read, so the first page after a change doesn't wait for
+    it (cold: cube ~2 s, MRP tree ~5 s, Display tree ~3 s, check-up ~10 s). Each is cached on its inputs, so a minute
+    with no change costs ~0.2 s."""
+    c, am = _cube(), _load_attr()
+    for h in (False, True):
+        _index(c, am, h)
+        _mrp_index(c, am, h)
+        _display_index(c, am, h)
+    from engines.display_type_engine import _qty_frame
+    _qty_frame()
+    from engines.plan_checkup import checkup
+    checkup(False)
+
+
 def _cube_all() -> dict:
     """The active plan as a cube, cached on the file's mtime, or on the live run's inputs."""
     from engines.final_results_engine import _pipeline_status
@@ -1213,7 +1229,9 @@ def _mrp_index(cube: dict, attr_map: dict, halves: bool) -> dict:
     mix, about, mid = _reapp_mix()
     from engines import plan_file_mix as pfm   # the buyers' plan file's mix (2026-10-15)
     fmix = pfm.load()
-    key = (id(cube), json.dumps(attr_map, sort_keys=True, default=str), json.dumps(sh, sort_keys=True), mid,
+    from engines.mrp_plan_engine import effective_shares_key
+    # the split's input file times, not the split serialised on every request (2026-10-15 latency)
+    key = (id(cube), json.dumps(attr_map, sort_keys=True, default=str), effective_shares_key(), mid,
            (fmix or {}).get("imported_at"))
     with _mx_lock:
         if _mx.get("key") == key:

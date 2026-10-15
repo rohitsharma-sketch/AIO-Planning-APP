@@ -142,7 +142,33 @@ def _resolve_col(headers: list, key: str) -> str | None:
     return None
 
 
+_ES: dict = {}
+
+
+def effective_shares_key() -> tuple:
+    """What effective_shares reads - the files' save times (no work done). The views key their caches on it instead of
+    serialising the whole split on every request (user, 2026-10-15: "reduce the population redundancy and latency")."""
+    from engines.art_nm_engine import ROUTE_PATH, PROMOTED_PATH
+    from engines.mrp_reapportionment_engine import SHARES_PATH
+    from engines.dept_sales_engine import NEW_DEPT_MAP_PATH, FINAL_PLAN_PATH
+    from engines.plan_file_mix import FILE_MIX_PATH
+    mt = lambda p: os.path.getmtime(p) if os.path.exists(p) else None   # noqa: E731
+    return tuple(mt(p) for p in (DATA_PATH, SOURCE_PATH, SHARES_PATH, FILE_MIX_PATH, NEW_DEPT_MAP_PATH, FINAL_PLAN_PATH,
+                                 ROUTE_PATH, PROMOTED_PATH))
+
+
 def effective_shares() -> tuple:
+    """The split below, kept until one of its input files changes (callers read it, never change it)."""
+    try:
+        k = effective_shares_key()
+    except Exception:   # noqa: BLE001 - a path not importable: no memo
+        return _effective_shares()
+    if _ES.get("k") != k:
+        _ES.update(k=k, v=_effective_shares())
+    return _ES["v"]
+
+
+def _effective_shares() -> tuple:
     """(shares {div: {dept: {mrp: {period: %}}}}, {"DIV|DEPT": reference}) - the buyers' MRP split, plus a NEW department
     without one of its own taking its reference department's split (New departments template), as its plan is a share
     of that reference (user, 2026-10-13: "take the department plan to the MRP stage" - LW_U_CORD SETS, 221 L, had no
