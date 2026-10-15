@@ -7,6 +7,15 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Every app: a "← Landing" way back
+- **Asked (user):** "how can i navigate from the sales planengine to ladning, the landing arrow button should be there in every app core - additional - ALL".
+- **How:** `RS Planning Platform/backend/static/suite-home.js`, served inside `GET /api/suite-theme.js` (like the undo pill), so every page that loads the suite theme gets it with no change to the apps:
+  - Calendar, AOP Forecaster, BIS and Sales Plan had no link. They get a small "← Landing" pill bottom-left; the undo pill moves right of it (`suite-undo.js`, left 124 px).
+  - Re-Aligner, NSO, Growth vs LY, Listing and STR keep their own "← Landing" link. Its address is fixed here: it was a bare "/", which only worked when the app was opened through Landing.
+  - Address: "/" on Landing's own origin (7800, or a tunnel), else this host's :7800, so an app opened on its own port still gets back.
+  - Not on Landing itself or the sign-in pages.
+- **Checked:** the script is served by 8010 and through Landing. BIS on 5050: pill -> http://127.0.0.1:7800/, undo pill at 124 px. Growth vs LY on 8075: its own link -> http://127.0.0.1:7800/, no second pill. Sales Plan (React) in the sandbox: pill -> :7800, undo at 124 px. 8010 restarted.
+
 ### Sales Plan: the Display tree "Built on: Store / Cluster" - a cluster-built plan broken to stores, as a preview
 - **Asked (user):** "in sales plan if the plan was made on Cluster then it should break on Store too keeping the LY cont % for department and making the same working auto for it. New MRPs should be given way in this case as per LY actual cont % and the same for display and in case for store to cluster it should be just a sum of the stores as per the clusters mentioned"; "both views should be availble for preview". Choice: "Sales Plan builds on cluster".
 - **Rule (RULE_BOOK P9, `grain_view._cluster_built`):** for the SSG stores of each cluster:

@@ -154,6 +154,7 @@
     var has = past.length || future.length
       || (!document.querySelector('input[type=password]') && Array.prototype.some.call(document.querySelectorAll(SEL), editable));
     ui.style.display = has ? 'flex' : 'none';
+    ui.style.left = document.querySelector('[data-suite-home]') ? '124px' : '16px';   // right of the "← Landing" pill (suite-home.js)
     [[ui.u, past, 'Undo', ' (Ctrl+Z)'], [ui.r, future, 'Redo', ' (Ctrl+Y)']].forEach(function (x) {
       var r = x[1][x[1].length - 1];
       x[0].disabled = !r;

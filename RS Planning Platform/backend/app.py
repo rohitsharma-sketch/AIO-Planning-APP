@@ -185,6 +185,9 @@ def suite_theme_js():
     # suite-wide undo / redo rides along: every app page already loads this script
     with open(os.path.join(_HERE, "static", "suite-undo.js"), encoding="utf-8") as f:
         runtime += "\n" + f.read()
+    # and the "← Landing" way back (2026-10-15: "the landing arrow button should be there in every app")
+    with open(os.path.join(_HERE, "static", "suite-home.js"), encoding="utf-8") as f:
+        runtime += "\n" + f.read()
     body = (f"window.__SUITE_THEMES__={json.dumps(themes)};"
             f"window.__SUITE_THEME__={json.dumps(_suite_theme_choice(themes))};\n{runtime}")
     return Response(body, media_type="application/javascript", headers=_NO_CACHE_HEADERS)
