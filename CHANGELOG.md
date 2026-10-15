@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Landing: Account menu items back (Users, Sync all, Sign out)
+- **Reported (user):** "where are the users ? and the rest of the dropdowns" - the Account menu showed only Theme and Servers.
+- **Cause:** the buyer-profile change (`b2a290e`) put an unescaped apostrophe ("Buyer's") in a JavaScript string on the Landing page, so that whole script block stopped: no Users & access link, no Sync all, no Sign out, no rights greying (and no buyer greying).
+- **Fix:** the string quoted properly - all three script blocks pass `node --check`. The page also asks `/api/auth/me` and `/api/auth/rights` again for ~30 s when the platform is restarting or busy, so a page opened mid-restart doesn't lose them either.
+
 ### Sales Plan: non-SSG stores split their months by the reference store's P1 / P2 - all stores now match the manual
 - **Asked (user):** "give me manual vs portal diff on every level with all stores" -> "yes, use the reference store's P1 P2".
 - **Found:** the manual's store-level Mar-Jun figures are its AOP sheet (every store x division x P1 / P2). Every non-SSG store's split there = its reference store's split for the same division x month (1,707 of 1,707) - the **month-mix** reference (manual STORE MASTER REFF_STORE_MONTH_MIX = the AOP sheet's Ref Name, 87 of 88; NLD/NEG: master FGN, sheet BGI - the sheet is used). The portal followed REF_STORE (the merchandise-mix reference; the database has no month-mix column) and its plan split, so 906 of 2,224 non-SSG store-month halves differed.

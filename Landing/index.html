@@ -1328,7 +1328,12 @@ body.buyer-only #sync-all-btn, body.buyer-only #launch-all-btn, body.buyer-only 
   })();
 </script>
 <script>/* Users & access link - shown to admins only (2026-09-30) */
-fetch('/api/auth/me', {credentials: 'include', cache: 'no-store'}).then(r => r.ok ? r.json() : null)
+/* Who is signed in - asked again for ~30 s when the platform is restarting or busy (2026-10-15: a page opened during an
+   8010 restart lost Users / Sync all / Sign out from the Account menu, and a buyer's greyed cards, until reloaded) */
+const _authGet = (url, n = 10) => fetch(url, {credentials: 'include', cache: 'no-store'})
+  .then(r => r.ok ? r.json() : r.status === 401 || r.status === 403 ? null : Promise.reject(r.status))
+  .catch(() => n > 0 ? new Promise(res => setTimeout(res, 3000)).then(() => _authGet(url, n - 1)) : null);
+_authGet('/api/auth/me')
   .then(u => {
     if (!u) return;
     if (u.is_admin) document.getElementById('admin-link').style.display = 'inline-flex';
@@ -1357,7 +1362,7 @@ fetch('/api/auth/me', {credentials: 'include', cache: 'no-store'}).then(r => r.o
   }).catch(() => {});
 /* Actions an admin switched off for this person (Users & access > Access to important actions): grey the button out.
    Landing's server refuses them anyway - this just says so up front. */
-fetch('/api/auth/rights', {credentials: 'include', cache: 'no-store'}).then(r => r.ok ? r.json() : null).then(d => {
+_authGet('/api/auth/rights').then(d => {
   if (!d) return;
   /* A BIS buyer (Users & access > BIS divisions, 2026-10-15: "only the BIS app should be visible for him/her to click on"):
      only the Buyer's Input card; Landing's server refuses every other app for them anyway. */
@@ -1367,7 +1372,7 @@ fetch('/api/auth/rights', {credentials: 'include', cache: 'no-store'}).then(r =>
       c.setAttribute('aria-disabled', 'true'); c.setAttribute('tabindex', '-1'); c.removeAttribute('href');
       c.title = "Buyers use only the Buyer's Input Sheet"; });
     const l = document.querySelector('main .lede');
-    if (l) l.textContent = 'You are the buyer for ' + d.bis_divisions.join(', ') + ' - open the Buyer's Input Sheet to type your inputs; Save sends them to the planner.';
+    if (l) l.textContent = "You are the buyer for " + d.bis_divisions.join(", ") + " - open the Buyer's Input Sheet to type your inputs; Save sends them to the planner.";
   }
   [['launch-all-btn', 'servers'], ['sync-now-btn', 'data_sync'], ['sync-all-btn', 'data_sync']].forEach(([id, k]) => {
     const b = document.getElementById(id);
