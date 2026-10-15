@@ -853,7 +853,9 @@ def run_qty():
 
         def to_qty(plan_l, asp_val):
             if asp_val and asp_val > 0:
-                return round(plan_l * 1e5 / asp_val, 0)
+                # pieces to 2 decimals, not whole (user, 2026-10-15: "Donot round numbers let it be as is round till 2
+                # decimals" - whole pieces dropped Rs 44.7 L of small cells to 0 pcs; the plan file keeps decimals too)
+                return round(plan_l * 1e5 / asp_val, 2)
             return None
 
         t_qty  = to_qty(r["table_plan"],    t_asp)

@@ -7620,7 +7620,9 @@ function _vlTag(vers){
   return vers;
 }
 function _vlBase(v){return v.kind==='original'?'Original':'Iteration '+v.iter;}
-function _vlName(v){return v.name?`${v.name} (${_vlBase(v)})`:_vlBase(v);}   // own name (2026-10-13), the number kept
+// a renamed version shows its own name only (user, 2026-10-15: "i renamed and still itertation is coming it should not
+// happen. Let the user choose to have the space for name only"); the iteration number stays in the rules hover
+function _vlName(v){return v.name?String(v.name):_vlBase(v);}
 function _vlShort(iso){return new Date(iso).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'numeric',minute:'2-digit'});}
 // same plan inputs (growth %, locks, hidden departments) - rounded so a re-save's float noise is not a change
 /* The rules an iteration was made under (user, 2026-10-15: "Keep the different rules in the iteration for planner growth"):
@@ -7662,7 +7664,7 @@ function _renderVerSel(){
   el.disabled=false;
   const list=[...vers].sort((a,b)=>(a.kind==='original'?-1:b.kind==='original'?1:a.iter-b.iter));
   el.innerHTML=(list.some(v=>v.id===act)?'':'<option value="" selected disabled>Pick a version</option>')
-    +list.map(v=>`<option value="${v.id}"${v.id===act?' selected':''} title="${_attr(_vlRulesText(v.rules))}">${_vlName(v)} · ${_vlShort(v.savedAt)}</option>`).join('')
+    +list.map(v=>`<option value="${v.id}"${v.id===act?' selected':''} title="${_attr(_vlBase(v)+'\n'+_vlRulesText(v.rules))}">${_vlName(v)} · ${_vlShort(v.savedAt)}</option>`).join('')
     // user, 2026-10-13: "add a save as button for new iteration, a new iteration button to create a new BIS sheet, a
     // rename button to rename existing iterations" - here, as the remover is: the toolbar has no room left at 1366 px
     +'<option disabled>──────────</option>'

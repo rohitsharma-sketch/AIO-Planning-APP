@@ -7,6 +7,11 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-15
 
+### Renamed iterations show their name only; qty to 2 decimals
+- **Asked (user):** "i renamed and still itertation is coming it should not happen. Let the user choose to have the space for name only"; "Donot round numbers let it be as is round till 2 decimals".
+- **BIS:** a renamed version shows only its name in the picker (`_vlName`); its "Iteration N" stays in the hover with its rules.
+- **Qty:** pieces = value x 1e5 / ASP to 2 decimals (were whole pieces: Rs 44.72 L in 22,417 small cells read 0 pcs). Now every rupee has a qty: apparel MAMJ 77,981.45 L = 22,923,177.17 pcs (the plan file: 23,066,009.13 pcs on the same value - its department mix differs by Rs 1,424 L, so the ASP mix differs).
+
 ### Every iteration kept; rules register; ASP cached
 - **Asked (user):** "save all the iterations which are being saved and update the rules wherever they are being changed, update the ASP and save it in cache memory. I want the run through to be as smooth and as accurate to its manual counterpart as it can be unless i change or update the rules."
 - **Iterations:** the cap of 10 versions (server `bis_plan_versions.MAX_VERSIONS`, BIS `_VL_MAX`) silently deleted the oldest iteration - now none is dropped (test updated: 18 iterations + Original kept). Each iteration keeps its rules (B10).
