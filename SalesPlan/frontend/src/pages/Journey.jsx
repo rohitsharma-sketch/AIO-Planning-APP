@@ -6,7 +6,8 @@ import { theme, alpha } from '../theme'
 // want all the fields availble for export till display type") - GET /display-type/journey (engines/journey.py): one
 // store x department x month (x MRP x display type) from its sources to qty, each step re-derived and checked.
 const API = '/api/planning/display-type'
-const L = v => `₹${(v ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} L`
+// Rs crore on screen (user, 2026-10-16: "except values in L convert them into Cr"); the plan is kept in lakh
+const L = v => `₹${((v ?? 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} Cr`
 const STAGE_C = { Store: '#475569', Department: '#1F4D3A', MRP: '#7C3AED', 'Display type': '#B45309', Qty: '#0E7490' }
 
 async function get(url) {
@@ -59,7 +60,7 @@ export default function Journey() {
 
   const scopeBar = (
     <div role="radiogroup" aria-label="Show" style={{ display: 'inline-flex', border: `1px solid ${theme.border}`, borderRadius: 8, overflow: 'hidden' }}>
-      {[['company', 'Company (holistic)'], ['store', 'Store specific']].map(([k, t]) => (
+      {[['company', 'Company'], ['store', 'Store']].map(([k, t]) => (
         <button key={k} type="button" role="radio" aria-checked={scope === k} onClick={() => setScope(k)}
           style={{ padding: '6px 14px', fontSize: 12.5, fontWeight: 700, border: 'none', cursor: 'pointer',
             background: scope === k ? theme.primary : theme.surface, color: scope === k ? '#fff' : theme.textPrimary }}>{t}</button>))}
@@ -252,7 +253,6 @@ function CompanyBridge({ scopeBar }) {
   const sgn = v => `${v >= 0 ? '+' : '−'}${L(Math.abs(v))}`
   const col = v => v > 1e-9 ? (theme.success || '#15803d') : v < -1e-9 ? theme.danger : theme.textMuted
   const keys = (h?.bridge || []).map(b => b.key)
-  const maxAbs = Math.max(1e-9, ...(h?.bridge || []).map(b => Math.abs(b.change)))
   const table = (title, rows, open) => (
     <details open={open} style={{ ...card, padding: '10px 14px' }}>
       <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.4 }}>{title}</summary>
@@ -310,19 +310,26 @@ function CompanyBridge({ scopeBar }) {
             <div style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.4 }}>What moved the plan - in plain words</div>
             <div style={{ fontSize: 13.5, color: theme.textPrimary, margin: '6px 0 10px', lineHeight: 1.55 }}>{h.story}</div>
             <div style={{ display: 'grid', gap: 6, fontSize: 12.5 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '220px minmax(0, 1fr) 150px 130px', gap: 12 }}>
-                <b>Last year</b><span /><b style={{ textAlign: 'right', fontFamily: theme.fontMono }}>{L(h.ly)}</b><span />
+              <div style={{ display: 'grid', gridTemplateColumns: '18px 200px minmax(0, 1fr) 190px', gap: 10, alignItems: 'baseline' }}>
+                <span />
+                <div><b style={{ fontSize: 13 }}>Last year</b><div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: theme.textMuted }}>starts at</div></div>
+                <div style={{ fontSize: 12.5, color: theme.textSecondary }}>What these stores sold in the same months last year (like-for-like stores: their actual sales).</div>
+                <b style={{ textAlign: 'right', fontFamily: theme.fontMono, color: theme.navy }}>{L(h.ly)}</b>
               </div>
               {h.bridge.map(b => (
                 <details key={b.key} style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 6 }}>
-                  <summary style={{ display: 'grid', gridTemplateColumns: '220px minmax(0, 1fr) 150px 130px', gap: 12, alignItems: 'center', cursor: 'pointer', listStyle: 'none' }}>
-                    <span><span aria-hidden="true" style={{ color: theme.textMuted, fontSize: 11 }}>▸ </span><b>{b.what}</b></span>
-                    <span aria-hidden="true" style={{ height: 10, background: theme.border, borderRadius: 5, position: 'relative' }}>
-                      <span style={{ position: 'absolute', top: 0, bottom: 0, left: b.change >= 0 ? '50%' : `${50 - Math.abs(b.change) / maxAbs * 50}%`,
-                        width: `${Math.abs(b.change) / maxAbs * 50}%`, background: col(b.change), borderRadius: 5 }} />
-                    </span>
-                    <b style={{ textAlign: 'right', fontFamily: theme.fontMono, color: col(b.change) }}>{sgn(b.change)}</b>
-                    <span style={{ textAlign: 'right', color: theme.textMuted }}>{b.share != null ? `${b.share.toFixed(1)}% of the change` : ''}</span>
+                  <summary style={{ display: 'grid', gridTemplateColumns: '18px 200px minmax(0, 1fr) 190px', gap: 10, alignItems: 'baseline', cursor: 'pointer', listStyle: 'none', padding: '2px 0' }}>
+                    <span aria-hidden="true" style={{ color: theme.textMuted, fontSize: 11 }}>▸</span>
+                    <div>
+                      <b style={{ fontSize: 13, color: theme.textPrimary }}>{b.what}</b>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: col(b.change) }}>{b.change > 1e-9 ? 'pushed up' : b.change < -1e-9 ? 'pulled down' : 'no change'}</div>
+                    </div>
+                    <div style={{ fontSize: 12.5, color: theme.textSecondary, lineHeight: 1.5 }}>{b.plain || b.why}</div>
+                    <div style={{ textAlign: 'right', fontFamily: theme.fontMono, fontSize: 12.5 }}>
+                      <div style={{ color: col(b.change), fontWeight: 700 }}>{sgn(b.change)}{b.pct_of_ly != null ? ` (${b.pct_of_ly >= 0 ? '+' : ''}${b.pct_of_ly.toFixed(2)}%)` : ''}</div>
+                      {b.share != null && <div style={{ fontSize: 11, color: theme.textMuted }}>{b.share.toFixed(1)}% of the change</div>}
+                      <b style={{ color: theme.navy }}>{L(b.after)}</b>
+                    </div>
                   </summary>
                   <div style={{ margin: '6px 0 8px 14px', padding: '8px 12px', borderRadius: 8, background: alpha(theme.primary, '0a'), lineHeight: 1.6, color: theme.textSecondary }}>
                     <div>{b.why}{b.pct_of_ly != null ? ` ${b.pct_of_ly >= 0 ? '+' : ''}${b.pct_of_ly.toFixed(2)}% of last year.` : ''}</div>
@@ -331,10 +338,11 @@ function CompanyBridge({ scopeBar }) {
                         {(h.by[dim] || []).filter(r => Math.abs(r[b.key]) > 1e-9).map(r => `${r.key} ${sgn(r[b.key])}`).join(' · ') || '-'}</div>))}
                   </div>
                 </details>))}
-              <div style={{ display: 'grid', gridTemplateColumns: '220px minmax(0, 1fr) 150px 130px', gap: 12, borderTop: `2px solid ${theme.navy}`, paddingTop: 6 }}>
-                <b>= Plan</b><span />
+              <div style={{ display: 'grid', gridTemplateColumns: '18px 200px minmax(0, 1fr) 190px', gap: 10, alignItems: 'baseline', borderTop: `2px solid ${theme.navy}`, paddingTop: 6 }}>
+                <span />
+                <b style={{ fontSize: 13 }}>= Plan</b>
+                <div style={{ fontSize: 12.5, color: theme.textSecondary }}>{h.pct != null ? `${h.pct >= 0 ? '+' : ''}${h.pct.toFixed(2)}% on last year.` : ''}</div>
                 <b style={{ textAlign: 'right', fontFamily: theme.fontMono, color: theme.navy }}>{L(h.plan)}</b>
-                <span style={{ textAlign: 'right', color: theme.textMuted }}>{h.pct != null ? `${h.pct >= 0 ? '+' : ''}${h.pct.toFixed(2)}% on last year` : ''}</span>
               </div>
             </div>
           </div>

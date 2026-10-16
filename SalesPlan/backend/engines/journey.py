@@ -122,7 +122,7 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
         dev.append({"kind": kind, "what": what, "before": before, "after": after, "change": after - before,
                     "pct": (after / before - 1) * 100 if before else None, "why": why, "detail": detail or []})
 
-    L = lambda v: f"₹{v:,.4f} L"   # noqa: E731
+    L = lambda v: f"₹{v / 100:,.4f} Cr"   # noqa: E731 - Rs crore on screen (user, 2026-10-16); the plan is in lakh
     pc = lambda f: f"{(f - 1) * 100:+.2f}%"   # noqa: E731
     step("Store", f"{store} · {group}",
          f"Cluster {sd.get('cluster') or '-'}, tag {sd.get('tag') or '-'}. " +
@@ -299,7 +299,7 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
                 whose = "its own" if how_a == "own" else "the other display type's (fallback)" if how_a else "-"
                 step("Qty", f"{nm} ÷ ASP = pieces", (f"ASP ₹{a:,.2f} per piece - {whose} ASP for {dept} × {mrp} × {month} in the ASP master."
                                                     if a else "No ASP - no qty."),
-                     float(qq) if qq is not None and qq == qq else None, formula=f"{L(pl)} × 1e5 ÷ ₹{a:,.2f}" if a else "", unit="pieces")
+                     float(qq) if qq is not None and qq == qq else None, formula=f"{L(pl)} × 1e7 ÷ ₹{a:,.2f}" if a else "", unit="pieces")
                 dev.append({"kind": "qty", "what": f"{nm} pieces", "before": pl, "after": float(qq) if qq is not None and qq == qq else None,
                             "change": None, "pct": None,
                             "why": (f"{L(pl)} at ₹{a:,.2f} a piece ({whose} ASP) = {float(qq):,.0f} pieces." if a and qq is not None and qq == qq
@@ -320,7 +320,7 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
 
 def _story(dev: list, dept: str, store: str, month: str, ly: float, ty: float, ssg: bool) -> str:
     """The deviation journey as one short paragraph."""
-    L = lambda v: f"₹{v:,.2f} L"   # noqa: E731
+    L = lambda v: f"₹{v / 100:,.4f} Cr"   # noqa: E731
     ch = [d for d in dev if d["kind"] == "change"]
     st0 = next((d for d in dev if d["kind"] == "start"), None)
     if st0 and st0["what"].startswith("Reference "):   # a new department
@@ -363,7 +363,9 @@ def journey_xlsx(store: str, dept: str, month: str, mrp: str = "", display: str 
             ("How to read", "Each row is one step; its value is worked out from the row above with the calculation shown. "
                             "Rs lakh unless the unit says pieces. The department row is checked against the saved plan.")]
     steps = pd.DataFrame([{"#": i + 1, "Stage": x["stage"], "Step": x["title"], "In plain words": x["text"],
-                           "Calculation": x["formula"], "Value": x["value"], "Unit": x["unit"] or "",
+                           "Calculation": x["formula"],
+                           "Value": x["value"] / 100 if x["value"] is not None and x["unit"] == "₹ L" else x["value"],
+                           "Unit": "₹ Cr" if x["unit"] == "₹ L" else (x["unit"] or ""),
                            "Check": "lands on the saved plan" if x.get("check") is True else "does NOT land on the saved plan" if x.get("check") is False else ""}
                           for i, x in enumerate(j["steps"])])
     allm = export_rows(store=store)
@@ -374,7 +376,10 @@ def journey_xlsx(store: str, dept: str, month: str, mrp: str = "", display: str 
         steps.to_excel(xw, sheet_name="Journey", index=False, startrow=len(head) + 1)
         mv = pd.DataFrame([{"#": i + 1, "What": d["what"], "Kind": {"start": "starts at", "change": "moved it", "split": "share taken",
                                                                      "qty": "pieces"}[d["kind"]],
-                            "Before": d["before"], "After": d["after"], "Change": d["change"], "Change %": d["pct"], "Why, in plain words": d["why"]}
+                            "Before (₹ Cr)": None if d["before"] is None else d["before"] / 100,
+                            "After (₹ Cr / pieces)": None if d["after"] is None else (d["after"] if d["kind"] == "qty" else d["after"] / 100),
+                            "Change (₹ Cr)": None if d["change"] is None else d["change"] / 100, "Change %": d["pct"],
+                            "Share of the change %": d.get("share"), "Why, in plain words": d["why"]}
                            for i, d in enumerate(j["deviation"])])
         pd.DataFrame([[j["story"]]], columns=["What moved this number"]).to_excel(xw, sheet_name="What moved it", index=False)
         mv.to_excel(xw, sheet_name="What moved it", index=False, startrow=3)
@@ -473,6 +478,40 @@ def holistic(division: str = "", month: str = "", group: str = "") -> dict:
                "share": float(df[k].sum()) / dev * 100 if abs(dev) > 1e-12 else None,
                "pct_of_ly": float(df[k].sum()) / ly * 100 if ly else None} for k, nm, why in BRIDGE]
     bridge = [b for b in bridge if abs(b["change"]) > 1e-9]
+    C = lambda v: f"₹{v / 100:,.2f} Cr"   # noqa: E731
+    sg = lambda v: f"{'+' if v >= 0 else '-'}{C(abs(v))}"   # noqa: E731
+    lfl = df[df["Group"] == "SSG"]
+    l_ly = float(lfl["LY"].sum())
+    l_bis = float(lfl["bis"].sum())
+    l_pre = l_ly + l_bis
+    for b in bridge:   # what moved it, in plain words with its numbers (like the store journey's lines)
+        k, c = b["key"], b["change"]
+        if k == "bis":
+            b["plain"] = (f"The buyers' plans (BIS) put {c / l_ly * 100 if l_ly else 0:+.2f}% on the like-for-like stores' last year "
+                          f"({C(l_ly)}), department by department: {sg(c)}.")
+        elif k == "cap":
+            b["plain"] = (f"Cluster by cluster, the buyers' plans came to {'less' if c > 0 else 'more'} than the AOP target of their "
+                          f"like-for-like stores, so every department of a cluster (all divisions) was scaled to land on it - "
+                          f"{c / l_pre * 100 if l_pre else 0:+.2f}% overall, {sg(c)}.")
+        elif k == "bal":
+            b["plain"] = (f"Inside each cluster the stores were moved onto their own AOP targets; the other stores moved the other way, "
+                          f"so overall it nets to {sg(c)}.")
+        elif k == "newd":
+            b["plain"] = (f"New departments were carved out of their reference departments and each cluster re-balanced back onto the "
+                          f"AOP - it moves sales between departments; overall {sg(c)}.")
+        elif k == "off":
+            n = int(df.loc[df["off"] != 0, "Department"].nunique())
+            b["plain"] = f"{n} department{'s' if n != 1 else ''} switched off (off season or switched off) gave up their last year: {sg(c)}."
+        else:
+            g = df[df["Group"] == ("NSO" if k == "nso" else "Others")]
+            n = int(g["Store"].nunique())
+            b["plain"] = (f"{n} {'new store' if k == 'nso' else 'other store'}{'s' if n != 1 else ''} "
+                          f"{'outside the like-for-like 148 ' if k == 'oth' else ''}are planned on their AOP target, not their own last "
+                          f"year: {C(float(g['Plan'].sum()))} against {C(float(g['LY'].sum()))} last year, {sg(c)}.")
+    run = ly
+    for b in bridge:
+        run += b["change"]
+        b["after"] = run
 
     def by(col, top=None):
         g = df.groupby(col)[["LY", "Plan"] + ks].sum().reset_index()
@@ -484,9 +523,9 @@ def holistic(division: str = "", month: str = "", group: str = "") -> dict:
     biggest = max(bridge, key=lambda b: abs(b["change"])) if bridge else None
     scope = " ".join(x for x in ({"SSG": "the like-for-like stores", "NSO": "the new stores", "Others": "the other stores"}.get(group, ""),
                                  division, month) if x) or "the whole company"
-    story = (f"Across {scope}, last year sold ₹{ly:,.2f} L and the plan is ₹{ty:,.2f} L ({(ty / ly - 1) * 100 if ly else 0:+.2f}%, "
-             f"{'+' if dev >= 0 else '-'}₹{abs(dev):,.2f} L). " +
-             " ".join(f"{b['what']}: {'+' if b['change'] >= 0 else '-'}₹{abs(b['change']):,.2f} L"
+    story = (f"Across {scope}, last year sold {C(ly)} and the plan is {C(ty)} ({(ty / ly - 1) * 100 if ly else 0:+.2f}%, "
+             f"{sg(dev)}). " +
+             " ".join(f"{b['what']}: {sg(b['change'])}"
                       + (f" ({b['share']:.0f}% of the change)." if b["share"] is not None else ".") for b in bridge) +
              (f" The biggest single mover: {biggest['what']}." if biggest else ""))
     out = {"scope": {"division": division, "month": month, "group": group}, "ly": ly, "plan": ty, "change": dev,
@@ -510,22 +549,25 @@ def holistic_xlsx(division: str = "", month: str = "", group: str = "") -> tuple
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="xlsxwriter") as xw:
         pd.DataFrame([[h["story"]]], columns=["What moved the plan - company level"]).to_excel(xw, sheet_name="Bridge", index=False)
-        pd.DataFrame([{"Step": "Last year", "Rs lakh": h["ly"], "Share of the change %": None, "% of last year": None,
-                       "Why": "Actual sales last year (like-for-like stores); own sales (other stores)."}]
-                     + [{"Step": b["what"], "Rs lakh": b["change"], "Share of the change %": b["share"], "% of last year": b["pct_of_ly"],
-                         "Why": b["why"]} for b in h["bridge"]]
-                     + [{"Step": "= Plan", "Rs lakh": h["plan"], "Share of the change %": 100.0 if h["change"] else None,
-                         "% of last year": h["pct"], "Why": ""}]).to_excel(xw, sheet_name="Bridge", index=False, startrow=3)
+        pd.DataFrame([{"Step": "Last year", "₹ Cr": h["ly"] / 100, "Running ₹ Cr": h["ly"] / 100, "Share of the change %": None,
+                       "% of last year": None, "In plain words": "Actual sales last year (like-for-like stores); own sales (other stores)."}]
+                     + [{"Step": b["what"], "₹ Cr": b["change"] / 100, "Running ₹ Cr": b["after"] / 100, "Share of the change %": b["share"],
+                         "% of last year": b["pct_of_ly"], "In plain words": b["plain"]} for b in h["bridge"]]
+                     + [{"Step": "= Plan", "₹ Cr": h["plan"] / 100, "Running ₹ Cr": h["plan"] / 100,
+                         "Share of the change %": 100.0 if h["change"] else None, "% of last year": h["pct"], "In plain words": ""}]
+                     ).to_excel(xw, sheet_name="Bridge", index=False, startrow=3)
         for col in ("Division", "Month", "Group", "Cluster", "Department", "Store"):
             g = df.groupby(col)[["LY", "Plan"] + ks].sum().reset_index()
+            g[["LY", "Plan"] + ks] = g[["LY", "Plan"] + ks] / 100   # Rs crore
             g["Change"] = g["Plan"] - g["LY"]
-            g = g.rename(columns=names).sort_values("Change", key=abs, ascending=False)
+            g = g.rename(columns={**{k: v + " (₹ Cr)" for k, v in names.items()}, "LY": "Last year (₹ Cr)", "Plan": "Plan (₹ Cr)"}
+                         ).rename(columns={"Change": "Change (₹ Cr)"}).sort_values("Change (₹ Cr)", key=abs, ascending=False)
             g.to_excel(xw, sheet_name=f"By {col}", index=False)
             xw.sheets[f"By {col}"].set_column(0, 0, 28)
             xw.sheets[f"By {col}"].set_column(1, 12, 16)
         ws = xw.sheets["Bridge"]
         wrap = xw.book.add_format({"text_wrap": True, "valign": "top"})
-        ws.set_column(0, 0, 40, wrap); ws.set_column(1, 3, 18); ws.set_column(4, 4, 100, wrap)
+        ws.set_column(0, 0, 40, wrap); ws.set_column(1, 4, 18); ws.set_column(5, 5, 100, wrap)
     tag = " - ".join(x for x in (group, division, month) if x) or "company"
     return buf.getvalue(), f"Deviation bridge - {tag}.xlsx"
 

@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-16
 
+### Number journey in Rs crore; the company view in plain words like the store view; toggle "Company | Store"
+- **Asked (user):** "except values in L convert them into Cr ... for the number journey"; "and can it be similar to the plain words explaination like the store counterpart"; "and drop the holistic literal word from the toggle".
+- **Rs crore** everywhere on the Journey page, in the plain-words sentences, the step formulas (pieces = value x 1e7 / ASP) and both Excel files (this journey's "What moved it" and the deviation bridge). The plan itself stays in lakh - only what is shown changed.
+- **Company lines like the store lines:** each effect = its name with "pushed up / pulled down", a sentence with its own numbers (e.g. "The buyers' plans (BIS) put +10.97% on the like-for-like stores' last year (Rs 388.85 Cr), department by department: +Rs 42.65 Cr"; "93 departments switched off ... gave up their last year: -Rs 1.54 Cr"; "83 new stores are planned on their AOP target, not their own last year: Rs 228.80 Cr against Rs 74.50 Cr last year"), the change with % of last year and share of the change, and the running total (Rs 463.35 Cr -> ... -> Rs 779.81 Cr). The rows still open to the effect by division, month and store group.
+- **Toggle:** "Company | Store".
+
 ### BIS: a "Planner" button on every department's input cell - the top-bar Basis menu removed
 - **Asked (user):** "i want a simple button for the buyer to get this right and it should be available at each department present and if any inactive department gets activated again it should also follow the same rule. The purpose of this option is to minimise the risk of % issue carried out by the copy paste actions ... they can simply click for planner's input and it can mimic the input in the input cell and the others on which the cells are unlocked and were not being worked on can be re-calibarated as per the current rule" (the Basis menu: "too complex").
 - **"Planner"** beside each department's input tile (hover shows the planner's %): one click types the planner's block growth into that input (`takePlanner` -> `setBlockGrowth`), so the plan takes it and the unlocked departments nobody worked on re-calibrate (B14); Phase 2 also takes the planner's month growth. On every active department (one switched back on gets it at once); disabled in a locked division. Buyers can use it for their own divisions (it was blocked for them).
