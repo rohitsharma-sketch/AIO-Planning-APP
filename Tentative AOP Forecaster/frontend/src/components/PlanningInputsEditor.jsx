@@ -203,19 +203,29 @@ function MultiSelect({ label, options, selected, onChange }) {
 }
 
 /* ── Store Master XLSX template ──────────────────────────────────── */
-function downloadStoreMasterTemplate() {
-  const HEADERS  = ['store_code','store_name','tag','cluster_key','ref_store','region_type','store_grade','erp_cluster_type','festival_grouping']
-  const EXAMPLE1 = ['STORE001','Example LFL Store','LFL','NORTH-1','REF001','North','A','','']
-  const EXAMPLE2 = ['STORE002','Example Ramp Store','Ramp','SOUTH-2','','South','B','','']
-  const EXAMPLE3 = ['STORE003','Example NSO Store','NSO','EAST-3','','East','C','','']
-  const ws = XLSX.utils.aoa_to_sheet([HEADERS, EXAMPLE1, EXAMPLE2, EXAMPLE3])
+// the template = the table (user, 2026-10-16): store_code, store_name, tag, lfl_ramp_nso, cluster_key, ref_store - filled with
+// the stores on screen (examples when there are none). lfl_ramp_nso is worked out from the tag + opening date, so an
+// import reads tag / cluster / ref store and leaves it alone.
+function downloadStoreMasterTemplate(stores, classOf) {
+  const HEADERS = ['store_code', 'store_name', 'tag', 'lfl_ramp_nso', 'cluster_key', 'ref_store']
+  const rows = (stores || []).length
+    ? stores.map(s => [s.store_id, s.store_name || '', s.tag || '', classOf(s), s.cluster_key || '', s.ref_store || ''])
+    : [['STORE001', 'Example LFL Store', 'LFL', 'LFL', 'NORTH-1', 'REF001'], ['STORE002', 'Example Ramp Store', 'Ramp', 'RAMP', 'SOUTH-2', ''],
+       ['STORE003', 'Example NSO Store', 'NSO', 'NSO', 'EAST-3', '']]
   const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, 'Store Master')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([HEADERS, ...rows]), 'Store Master')
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ['Column', 'How it is used'],
+    ['store_code', 'The store (required).'],
+    ['tag', 'Imported - the store tag (e.g. 032 - Stores, FY26 - Q2, NSO).'],
+    ['lfl_ramp_nso', 'Not imported - the class the plan uses: an NSO tag is NSO; otherwise a trading store opened by 31 Dec before the plan year is LFL, a later one RAMP.'],
+    ['cluster_key', 'Imported - the cluster.'],
+    ['ref_store', 'Imported - the reference store.'],
+  ]), 'Read me')
   XLSX.writeFile(wb, 'store_master_template.xlsx')
 }
 
 const SM_CACHE_KEY = 'aop-store-master-cache'
-const SM_CONTEXT_KEY = 'aop.storeMaster.contextCols'
 
 /* ── Store Master Tab ────────────────────────────────────────────── */
 function StoreMasterTab({ stores, setStores, loadErr, reload }) {
@@ -223,20 +233,13 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
     try { return JSON.parse(localStorage.getItem(SM_CACHE_KEY) || '{}') } catch { return {} }
   })
   const [search, setSearch] = useState('')
-  const [filters, setFilters] = useState({ tag: [], cluster: [], region: [], grade: [] })
+  const [filters, setFilters] = useState({ cls: [], tag: [], cluster: [] })
   const [status, setStatus] = useState(null)
   const [busy, setBusy]     = useState(false)
   const [importing, setImporting] = useState(false)
-  // UI declutter (2026-10-07): filter dropdowns sit behind a "Filters" toggle; the read-only
-  // context columns (Region / Grade / ERP Cluster / Festival Group) behind "+ Context columns",
-  // remembered in this browser.
+  // UI declutter (2026-10-07): filter dropdowns sit behind a "Filters" toggle. The read-only Region / Grade / ERP Cluster /
+  // Festival Group columns were removed (2026-10-16: not in use - Save never wrote them).
   const [showFilters, setShowFilters] = useState(false)
-  const [showContext, setShowContext] = useState(() => {
-    try { return localStorage.getItem(SM_CONTEXT_KEY) === '1' } catch { return false }
-  })
-  useEffect(() => {
-    try { localStorage.setItem(SM_CONTEXT_KEY, showContext ? '1' : '0') } catch {}
-  }, [showContext])
   const fileRef = useRef(null)
   // Use empty array when DB load failed so import tools still render
   const safeStores = stores || []
@@ -272,10 +275,6 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
         tag:      raw.findIndex(h => ['tag','store_tag','storetag','store_type','storetype'].includes(h)),
         cluster:  raw.findIndex(h => ['cluster_key','cluster','clusterkey'].includes(h)),
         ref:      raw.findIndex(h => ['ref_store','ref','refstore','reference_store'].includes(h)),
-        region:   raw.findIndex(h => ['region_type','region','regiontype'].includes(h)),
-        grade:    raw.findIndex(h => ['store_grade','grade','storegrade'].includes(h)),
-        erp:      raw.findIndex(h => ['erp_cluster_type','erp_cluster','erp','erpcluster'].includes(h)),
-        festival: raw.findIndex(h => ['festival_grouping','festival','festival_group'].includes(h)),
       }
       if (colIdx.store === -1) throw new Error('Column "store_code" not found in file')
       let staged = 0, skipped = 0
@@ -289,10 +288,6 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
         if (colIdx.tag      >= 0) patch.tag               = cols[colIdx.tag]      ?? ''
         if (colIdx.cluster  >= 0) patch.cluster_key       = cols[colIdx.cluster]  ?? ''
         if (colIdx.ref      >= 0) patch.ref_store         = cols[colIdx.ref]      ?? ''
-        if (colIdx.region   >= 0) patch.region_type       = cols[colIdx.region]   ?? ''
-        if (colIdx.grade    >= 0) patch.store_grade       = cols[colIdx.grade]    ?? ''
-        if (colIdx.erp      >= 0) patch.erp_cluster_type  = cols[colIdx.erp]      ?? ''
-        if (colIdx.festival >= 0) patch.festival_grouping = cols[colIdx.festival] ?? ''
         if (Object.keys(patch).length) { next[sid] = { ...(next[sid] || {}), ...patch }; staged++ }
         else skipped++
       }
@@ -304,6 +299,17 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
       setStatus({ err: false, msg: `Staged ${staged} store(s) from import${skipped ? ` · ${skipped} row(s) skipped` : ''}. Review and Save changes.` })
     } catch (err) { setStatus({ err: true, msg: `Import failed: ${err.message}` }) }
     finally { setImporting(false) }
+  }
+
+  // LFL / RAMP / NSO - the class the plan uses (GET store-master plan_class); a tag changed here but not saved yet shows
+  // the class of its tag set (the opening-date rule applies on Save)
+  function classOf(s) {
+    const ed = edits[s.store_id]
+    if (ed && ed.tag !== undefined) {
+      const t = (ed.tag || '').trim()
+      return NSO_TAG_SET.has(t) ? 'NSO' : LFL_TAG_SET.has(t) ? 'LFL' : RAMP_TAG_SET.has(t) ? 'RAMP' : ''
+    }
+    return s.plan_class || ''
   }
 
   function tileVariant(tag) {
@@ -328,10 +334,9 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
   const opts = useMemo(() => {
     const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort()
     return {
+      cls:     ['LFL', 'RAMP', 'NSO'].filter(c => mergedStores.some(s => classOf(s) === c)),
       tag:     uniq(mergedStores.map(s => s.tag)),
       cluster: uniq(mergedStores.map(s => s.cluster_key)),
-      region:  uniq(mergedStores.map(s => s.region_type)),
-      grade:   uniq(mergedStores.map(s => s.store_grade)),
     }
   }, [mergedStores])
 
@@ -342,10 +347,9 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
         const q = search.toLowerCase()
         if (!(s.store_id || '').toLowerCase().includes(q) && !(s.store_name || '').toLowerCase().includes(q)) return false
       }
+      if (filters.cls.length     && !filters.cls.includes(classOf(s)))      return false
       if (filters.tag.length     && !filters.tag.includes(s.tag))             return false
       if (filters.cluster.length && !filters.cluster.includes(s.cluster_key)) return false
-      if (filters.region.length  && !filters.region.includes(s.region_type))  return false
-      if (filters.grade.length   && !filters.grade.includes(s.store_grade))   return false
       return true
     })
   }, [mergedStores, filters, search])
@@ -354,11 +358,11 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
   // so tile counts stay stable while the table below is filtered.
   const groupCounts = useMemo(() => {
     const c = { lfl: 0, nso: 0, ramp: 0 }
-    mergedStores.forEach(s => {
-      const t = (s.tag || '').trim()
-      if      (LFL_TAG_SET.has(t))  c.lfl++
-      else if (NSO_TAG_SET.has(t))  c.nso++
-      else if (RAMP_TAG_SET.has(t)) c.ramp++
+    mergedStores.forEach(s => {   // by the class the plan uses (2026-10-16), not the raw tag
+      const k = classOf(s)
+      if (k === 'LFL') c.lfl++
+      else if (k === 'NSO') c.nso++
+      else if (k === 'RAMP') c.ramp++
     })
     return c
   }, [mergedStores])
@@ -369,25 +373,17 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
   , [mergedStores])
 
   // Tile click: toggle group filter on the table. TOTAL clears all tag filters.
-  const GROUP_TAGS = {
-    lfl:  [...LFL_TAG_SET],
-    nso:  [...NSO_TAG_SET],
-    ramp: [...RAMP_TAG_SET],
-  }
+  const GROUP_CLS = { lfl: 'LFL', nso: 'NSO', ramp: 'RAMP' }
   function handleTileClick(group) {
-    if (group === null) { setFilters(f => ({ ...f, tag: [] })); return }
-    const tags = GROUP_TAGS[group] || []
-    setFilters(f => {
-      const alreadyActive = tags.length > 0 && tags.every(t => f.tag.includes(t)) && f.tag.length === tags.length
-      return { ...f, tag: alreadyActive ? [] : tags }
-    })
+    if (group === null) { setFilters(f => ({ ...f, cls: [], tag: [] })); return }
+    const k = GROUP_CLS[group]
+    setFilters(f => ({ ...f, cls: f.cls.length === 1 && f.cls[0] === k ? [] : [k] }))
   }
 
   // Whether a tile is currently the active filter
   function tileActive(group) {
-    if (group === null) return filters.tag.length === 0
-    const tags = GROUP_TAGS[group] || []
-    return tags.length > 0 && tags.every(t => filters.tag.includes(t)) && filters.tag.length === tags.length
+    if (group === null) return filters.cls.length === 0 && filters.tag.length === 0
+    return filters.cls.length === 1 && filters.cls[0] === GROUP_CLS[group]
   }
 
   function setField(store_id, field, value) {
@@ -413,7 +409,7 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
   }
 
   const unsavedCount = Object.keys(edits).length
-  const FILTER_KEYS = [['tag', 'Tag'], ['cluster', 'Cluster'], ['region', 'Region'], ['grade', 'Grade']]
+  const FILTER_KEYS = [['cls', 'LFL / RAMP / NSO'], ['tag', 'Tag'], ['cluster', 'Cluster']]
   const activeFilterCount = FILTER_KEYS.filter(([k]) => filters[k].length).length
 
   if (!stores && !loadErr) return <div className="card pie-card pie-loading">Loading store master…</div>
@@ -467,15 +463,11 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
         <button className={`btn-outline${showFilters ? ' pie-toggle-on' : ''}`} aria-expanded={showFilters} onClick={() => setShowFilters(o => !o)}>
           Filters{activeFilterCount ? ` · ${activeFilterCount}` : ''}
         </button>
-        <button className={`btn-outline${showContext ? ' pie-toggle-on' : ''}`} aria-pressed={showContext} onClick={() => setShowContext(o => !o)}
-                title="Region, Grade, ERP Cluster and Festival Group (read-only)">
-          {showContext ? '− Context columns' : '+ Context columns'}
-        </button>
         <span className="pie-count-label">{filtered.length} stores{unsavedCount > 0 ? ` · ${unsavedCount} unsaved` : ''}</span>
         <details className="aop-menu aop-menu--right">
           <summary>{importing ? 'Importing…' : 'File ▾'}</summary>
           <div className="aop-menu-pop">
-            <button onClick={downloadStoreMasterTemplate}>Template</button>
+            <button onClick={() => downloadStoreMasterTemplate(mergedStores, classOf)} title="The table's columns, filled with the stores">Template</button>
             <button onClick={() => fileRef.current?.click()} disabled={importing}>{importing ? 'Importing…' : 'Import'}</button>
           </div>
         </details>
@@ -486,10 +478,9 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
       </div>
       {showFilters && (
         <div className="pie-toolbar pie-filter-row">
+          <MultiSelect label="LFL / RAMP / NSO" options={opts.cls} selected={filters.cls} onChange={v => setFilters(f => ({ ...f, cls: v }))} />
           <MultiSelect label="Tag"     options={opts.tag}     selected={filters.tag}     onChange={v => setFilters(f => ({ ...f, tag: v }))} />
           <MultiSelect label="Cluster" options={opts.cluster} selected={filters.cluster} onChange={v => setFilters(f => ({ ...f, cluster: v }))} />
-          <MultiSelect label="Region"  options={opts.region}  selected={filters.region}  onChange={v => setFilters(f => ({ ...f, region: v }))} />
-          <MultiSelect label="Grade"   options={opts.grade}   selected={filters.grade}   onChange={v => setFilters(f => ({ ...f, grade: v }))} />
         </div>
       )}
       {activeFilterCount > 0 && (
@@ -513,14 +504,9 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
               <th>Store</th>
               <th>Name</th>
               <th>Tag</th>
+              <th title="The class the plan uses: an NSO tag is NSO; otherwise a trading store opened by 31 Dec before the plan year is LFL, a later one RAMP">LFL / RAMP / NSO</th>
               <th>Cluster</th>
               <th>Ref Store</th>
-              {showContext && <>
-                <th>Region</th>
-                <th>Grade</th>
-                <th>ERP Cluster</th>
-                <th>Festival Group</th>
-              </>}
             </tr>
           </thead>
           <tbody>
@@ -540,6 +526,11 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
                       {STORE_TAGS.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </td>
+                  <td title={`${classOf(s) || 'Untagged'}${s.opening_date ? ` - opened ${s.opening_date}` : ''}${s.store_status ? ` - ${s.store_status}` : ''}${edited.tag !== undefined ? ' (from the new tag - the opening-date rule applies on Save)' : ''}`}>
+                    {classOf(s)
+                      ? <span className={`sm-class sm-class-${classOf(s).toLowerCase()}`}>{classOf(s)}</span>
+                      : <span className="sm-null">—</span>}
+                  </td>
                   <td>
                     <input
                       className="sm-input"
@@ -556,21 +547,11 @@ function StoreMasterTab({ stores, setStores, loadErr, reload }) {
                       onChange={e => setField(s.store_id, 'ref_store', e.target.value)}
                     />
                   </td>
-                  {showContext && <>
-                    <td>{s.region_type || <span className="sm-null">—</span>}</td>
-                    <td>
-                      <span className={`sm-grade sm-grade-${(s.store_grade || '').toLowerCase()}`}>
-                        {s.store_grade || '—'}
-                      </span>
-                    </td>
-                    <td className="sm-muted">{s.erp_cluster_type || '—'}</td>
-                    <td className="sm-muted">{s.festival_grouping || '—'}</td>
-                  </>}
                 </tr>
               )
             })}
             {!filtered.length && (
-              <tr><td colSpan={showContext ? 9 : 5} className="sm-empty-row">No stores match the current filters.</td></tr>
+              <tr><td colSpan={6} className="sm-empty-row">No stores match the current filters.</td></tr>
             )}
           </tbody>
         </table>

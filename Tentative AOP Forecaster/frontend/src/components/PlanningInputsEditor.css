@@ -445,6 +445,11 @@
 .sm-grade-a { background: var(--green-bg); color: var(--green); }
 .sm-grade-b { background: var(--lfl-bg); color: var(--lfl); }
 .sm-grade-c { background: var(--amber-bg); color: var(--amber); }
+/* LFL / RAMP / NSO - the class the plan uses (2026-10-16) */
+.sm-class { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 4px; letter-spacing: .3px; }
+.sm-class-lfl  { background: var(--lfl-bg);  color: var(--lfl); }
+.sm-class-ramp { background: var(--ramp-bg); color: var(--ramp); }
+.sm-class-nso  { background: var(--nso-bg);  color: var(--nso); }
 
 .sm-select {
   border: 1px solid var(--border);

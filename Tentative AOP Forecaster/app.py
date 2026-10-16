@@ -923,9 +923,18 @@ async def import_aop_overrides_config(file: UploadFile = File(...)):
             raise HTTPException(422, f"Could not parse file: {e}")
 
 
+def plan_class(tag, opening_date, status) -> str:
+    """LFL / RAMP / NSO - the class the engine plans a store with (engine_v3.auto_tag: an NSO tag stays NSO; otherwise a
+    trading store opened by the LfL cut-off is LFL and a later one RAMP, whatever the tag says); '' = untagged."""
+    from engine_v3 import auto_tag, LFL_TAGS, RAMP_TAGS, NSO_TAGS
+    t = auto_tag(tag, opening_date, status)
+    return "NSO" if t in NSO_TAGS else "LFL" if t in LFL_TAGS else "RAMP" if t in RAMP_TAGS else ""
+
+
 @router.get("/api/config/store-master")
 def get_store_master_config():
-    """Current store records with planning attributes (tag, cluster, ref_store etc.)."""
+    """Current store records with planning attributes (tag, cluster, ref_store) and the LFL / RAMP / NSO class the
+    engine plans each with (2026-10-16)."""
     from sqlalchemy import select
     from db.base import SessionLocal
     from db.models.masterdata import Store
@@ -947,6 +956,8 @@ def get_store_master_config():
                 "erp_cluster_type": r.erp_cluster_type,
                 "store_status": r.store_current_status,
                 "festival_grouping": r.festival_grouping,
+                "opening_date": r.opening_date.isoformat() if r.opening_date else None,
+                "plan_class": plan_class(r.tag, r.opening_date, r.store_current_status),
             }
             for r in rows
         ]

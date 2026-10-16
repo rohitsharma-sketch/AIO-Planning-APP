@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-16
 
+### AOP Store Master: unused columns removed, an LFL / RAMP / NSO column, the template follows the table
+- **Asked (user):** "remove the extra columns which are not in use and add a column for LFL/RAMP/NSO Tag here and base it for the template download too".
+- **Removed:** Region, Grade, ERP Cluster and Festival Group (the "+ Context columns" toggle) - read-only, and Save never wrote them; their import mapping and the Region / Grade filters went too.
+- **LFL / RAMP / NSO** column (after Tag): the class the plan uses - `GET /api/config/store-master` returns `plan_class` (`app.plan_class` = `engine_v3.auto_tag`: an NSO tag is NSO; otherwise a trading store opened by 31 Dec before the plan year is LFL, a later one RAMP) and `opening_date`; hover shows the opening date and status; a tag changed but not saved shows its tag set's class. Filter "LFL / RAMP / NSO"; the LFL / NSO / Ramp count tiles count and filter by it (were by raw tag). Today: 148 LFL, 74 RAMP, 97 NSO, 111 untagged.
+- **Template:** the table's columns - store_code, store_name, tag, lfl_ramp_nso, cluster_key, ref_store - filled with the stores on screen, + a "Read me" sheet (lfl_ramp_nso is worked out, not imported; the import reads tag / cluster / ref store).
+
 ### Journey (Company): the full hierarchy as filters
 - **Asked (user):** "department and other hierarchy missing from this page".
 - **Filters** (the suite's Excel-style per-field multi-select, (All) / (Multiple Items)): Store group, Cluster, Store, Division, Attribute, Department, Month - several values each; each list shows only what the other filters leave; Clear all. The bridge, its plain words, the tables and the Excel all follow the slice.
