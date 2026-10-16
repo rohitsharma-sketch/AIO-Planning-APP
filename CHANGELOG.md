@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-16
 
+### Buyer view = a personal scratch pad; Landing shows a buyer only the Buyer's Input tile
+- **Asked (user):** "I want this view to use it as a personal scratch pad where i lock and unlock my growth % and all the views which are availble and is a derivative of the Buy's data table should be available in all buyer's view for thier respective Departments ... How can i make this as simple as it can be ?"; "Instead of greying out the tiles in main landing page for Buyer's id - i want the extra tiles to not be visible to any buyer role".
+- **BIS for a buyer:** lock / unlock their own departments (the lock icons are back; other divisions refused); the Division, Department and Attribute summaries and Inactive Depts are on the left, filtered to their divisions (Inactive Depts read-only - switching a department on / off stays the planner's). It is all in their browser - only the input tiles leave it, with "Send to planner". Banner: "Your scratch pad - ...".
+- **Landing:** any Buyer-role account sees only the Buyer's Input tile - the other core tiles, Data sync and the side tools are not shown (were greyed out); no arrow off the lone tile.
+- **Checked (127.0.0.1:5050, buyer MENS in memory, state restored):** 4 reports open, summaries show MENS only, 27 lock icons, a MENS department locks, a LADIES one is refused, Inactive Depts has no live buttons; all script blocks of BIS and Landing pass `node --check`.
+
 ### Number journey in Rs crore; the company view in plain words like the store view; toggle "Company | Store"
 - **Asked (user):** "except values in L convert them into Cr ... for the number journey"; "and can it be similar to the plain words explaination like the store counterpart"; "and drop the holistic literal word from the toggle".
 - **Rs crore** everywhere on the Journey page, in the plain-words sentences, the step formulas (pieces = value x 1e7 / ASP) and both Excel files (this journey's "What moved it" and the deviation bridge). The plan itself stays in lakh - only what is shown changed.

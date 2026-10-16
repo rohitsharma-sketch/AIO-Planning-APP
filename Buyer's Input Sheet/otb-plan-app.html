@@ -676,8 +676,7 @@ tr:hover .blk-lock,.blk-lock:focus-visible{opacity:1}
 .pl-use:hover{background:var(--ac-l)}
 /* BIS buyer (2026-10-15): only the Buyer's Plan, their divisions and the input tiles */
 body.buyer-mode #planMenu,body.buyer-mode #aop-btn,body.buyer-mode #mode-btn,body.buyer-mode #dataMenu,
-body.buyer-mode #verSel,body.buyer-mode .tbar-sep,body.buyer-mode #ni-summary,body.buyer-mode #ni-dept,body.buyer-mode #ni-attr,
-body.buyer-mode #ni-inactive,body.buyer-mode .add-dept-ni,body.buyer-mode .blk-lock,body.buyer-mode #bsub-btn,body.buyer-mode #cmp-btn,body.buyer-mode .pl-use:not([data-take]),
+body.buyer-mode #verSel,body.buyer-mode .tbar-sep,body.buyer-mode .add-dept-ni,body.buyer-mode #bsub-btn,body.buyer-mode #cmp-btn,body.buyer-mode .pl-use:not([data-take]),
 body.buyer-mode #lfl-tog,body.buyer-mode #syncChk,body.buyer-mode #syncChkDet{display:none!important}
 .buyer-banner{margin:8px 16px 0;padding:8px 12px;border-radius:8px;background:color-mix(in srgb,var(--ac) 10%,var(--sf));border:1px solid color-mix(in srgb,var(--ac) 35%,transparent);font-size:12.5px;color:var(--tx)}
 </style>
@@ -4793,7 +4792,7 @@ function _recalHtml(sec,dv){
    tiles to the planner (/api/bis/submissions) - never to Sales Plan. Landing's server refuses everything else for them.
    The planner: "Buyer inputs" in the toolbar -> apply one to the plan (or dismiss), check, then Save sends it as usual. */
 var BUYER=null;   // (var: read by refresh / saveState before this line runs) Set of division ids ('mens', ...) this person is the buyer for; null = a planner
-const _BUYER_NO=['toggleSecLock','toggleDivLock','clearAllInputs','capToApparelAop','recalibrateToAop',
+const _BUYER_NO=['toggleDivLock','toggleSecVis','showAllSecs','clearAllInputs','capToApparelAop','recalibrateToAop',
   'resetPlanToAop','revertToLyCont','toggleLockAllMAMJ','lockAllMAMJ','unlockAllMAMJ','openImportGrowth','applyImportGrowth','previewImportGrowth',
   'openAopModal','syncFromAop','syncAll','seedPlanFromAop','revertToAop','clearAop','togglePlanPhase','setGrowth','setAttrMonGrowth',
   'setAttrBlockGrowth','toggleAttrEdit','openNewDeptModal','openAddDeptModal','addCustomDept','deleteCustomDept','openFactorTable',
@@ -4802,7 +4801,7 @@ const _BUYER_NO=['toggleSecLock','toggleDivLock','clearAllInputs','capToApparelA
   'openBuyerSubs','uploadFillRate'];
 function _buyerHold(){
   if(!BUYER)return;
-  S.report='buyers';S.filters.div=new Set(BUYER);if(S.divTab&&!BUYER.has(S.divTab))S.divTab=null;
+  S.filters.div=new Set(BUYER);if(S.divTab&&!BUYER.has(S.divTab))S.divTab=null;
   if(!S.divTab&&BUYER.size===1)S.divTab=[...BUYER][0];
   // their divisions open in this browser (the plan's division locks hold the imported plan for the planner)
   BUYER.forEach(id=>{if(S.divLocked.has(id)){S.divLocked.delete(id);(S.divLockAdded[id]||[]).forEach(k=>S.locked.delete(k));delete S.divLockAdded[id];}});
@@ -4821,14 +4820,13 @@ function _buyerEnter(divs){
   const no=()=>toast('Buyers type only the Block Growth % input tiles - the planner does the rest');
   _BUYER_NO.forEach(n=>{if(typeof window[n]==='function')window[n]=no;});
   const sr=window.setReport,sd=window.setDivTab;
-  window.setReport=r=>{if(r==='buyers')sr(r);};
   window.setDivTab=id=>{if(id==='all'?BUYER.size>1:BUYER.has(id))sd(id);};
   const sb=document.getElementById('save-btn');
   if(sb){sb.textContent='Send to planner';sb.title='Sends your input tiles to the planner for review - they apply them and send the plan to Sales Plan';}
   const ws=document.querySelector('.cstrip');
   if(ws&&!document.getElementById('buyer-banner')){
     const b=document.createElement('div');b.id='buyer-banner';b.className='buyer-banner';
-    b.textContent=`Buyer view - ${divs.join(', ')}: type your Block Growth % in the input tiles, or click "Planner" beside one to take the planner's input; Re-cal Gr% shows what the plan makes of it. "Send to planner" sends your tiles for review - the planner applies them and sends the plan to Sales Plan.`;
+    b.textContent=`Your scratch pad - ${divs.join(', ')}: type your Block Growth % in the input tiles (or click "Planner" beside one), lock and unlock them, and check the Division, Department and Attribute summaries on the left - only this browser sees it. "Send to planner" sends your tiles for review; the planner applies them and sends the plan to Sales Plan.`;
     ws.parentNode.insertBefore(b,ws);
   }
   refresh();
@@ -4986,7 +4984,7 @@ function _lkRefresh(key){
 // Locked sections are skipped by _divReapp; unlocked sections absorb the redistribution.
 function toggleSecLock(secKey){
   const dv=DVDATA.find(d=>d.secs.some(s=>s.id===secKey));
-  if(!dv||S.divLocked.has(dv.id))return;
+  if(!dv||S.divLocked.has(dv.id)||(BUYER&&!BUYER.has(dv.id)))return;
   _touchDept(secKey);
   const allLocked=AOP_MIS.every(mi=>S.locked.has(secKey+'__'+mi));
   if(allLocked){
