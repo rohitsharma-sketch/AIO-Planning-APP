@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { theme, alpha } from '../theme'
+import ExcelFilter from '../components/ExcelFilter'
 
 // Number journey (user, 2026-10-14: "i want a journey mapper in the side tile where i can know about how a number was
 // derived till udf. Make sure that each and every contribution towards the numbers are mapped in a plain flow. Also i
@@ -239,17 +240,21 @@ export default function Journey() {
 // on holistic level too") - GET /display-type/journey/holistic: last year -> each effect -> the plan, every effect's share
 // of the change, by division / month / store group / cluster / department; the same effects as the store journey, added up.
 function CompanyBridge({ scopeBar }) {
-  const [f, setF] = useState({ group: '', division: '', month: '' })
+  // the hierarchy as Excel-style filters (user, 2026-10-16: "department and other hierarchy missing from this page"): store group,
+  // cluster, store, division, attribute, department, month - several values each; each list = what the other filters leave
+  const [f, setF] = useState({})
+  const [edit, setEdit] = useState(null)
   const [h, setH] = useState(null)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const qs = new URLSearchParams(Object.fromEntries(Object.entries(f).map(([k, v]) => [k, v.join(',')]))).toString()
   useEffect(() => {
     setBusy(true); setErr('')
-    get(`${API}/journey/holistic?${new URLSearchParams(f)}`).then(setH).catch(e => setErr(e.message)).finally(() => setBusy(false))
-  }, [f.group, f.division, f.month])
+    get(`${API}/journey/holistic?${qs}`).then(setH).catch(e => setErr(e.message)).finally(() => setBusy(false))
+  }, [qs])
+  const FIELDS = h?.fields || [['group', 'Store group'], ['cluster', 'Cluster'], ['store', 'Store'], ['division', 'Division'], ['attribute', 'Attribute'], ['department', 'Department'], ['month', 'Month']]
+  const cap = c => (!f[c] ? '(All)' : f[c].length === 1 ? f[c][0] : `(Multiple Items) ${f[c].length}`)
   const card = { background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 12 }
-  const lab = { fontSize: 11, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.4, display: 'grid', gap: 4 }
-  const sel_ = { height: 32, padding: '0 8px', borderRadius: 7, border: `1px solid ${theme.border}`, fontSize: 13, background: theme.surface, color: theme.textPrimary, minWidth: 150 }
   const sgn = v => `${v >= 0 ? '+' : '−'}${L(Math.abs(v))}`
   const col = v => v > 1e-9 ? (theme.success || '#15803d') : v < -1e-9 ? theme.danger : theme.textMuted
   const keys = (h?.bridge || []).map(b => b.key)
@@ -279,27 +284,22 @@ function CompanyBridge({ scopeBar }) {
         <div style={{ fontSize: 15, fontWeight: 700, color: theme.navy }}>What moved the plan - the whole company, from last year to the plan</div>
         <div style={{ fontSize: 12.5, color: theme.textMuted, marginTop: 4 }}>
           The same steps as a single store's journey, added up over every store, department and month: how much each one moved the plan and what share of the
-          whole change it is. Narrow it to a store group, a division or a month.
+          whole change it is. Narrow it down the hierarchy - store group, cluster, store, division, attribute, department, month (SSG = like-for-like stores).
         </div>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12, alignItems: 'end' }}>
-          <label style={lab}>Store group
-            <select value={f.group} onChange={e => setF(x => ({ ...x, group: e.target.value }))} style={sel_} aria-label="Store group">
-              <option value="">All stores</option><option value="SSG">Like-for-like (SSG)</option><option value="NSO">New stores (NSO)</option><option value="Others">Others</option>
-            </select>
-          </label>
-          <label style={lab}>Division
-            <select value={f.division} onChange={e => setF(x => ({ ...x, division: e.target.value }))} style={sel_} aria-label="Division">
-              <option value="">All divisions</option>{['KIDS', 'LADIES', 'MENS'].map(d => <option key={d}>{d}</option>)}
-            </select>
-          </label>
-          <label style={lab}>Month
-            <select value={f.month} onChange={e => setF(x => ({ ...x, month: e.target.value }))} style={sel_} aria-label="Month">
-              <option value="">All months</option>{(h?.by?.Month || []).map(m => <option key={m.key}>{m.key}</option>)}
-            </select>
-          </label>
-          <a href={`${API}/journey/holistic/export?${new URLSearchParams(f)}`}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12, alignItems: 'center' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.6 }}>Filters</span>
+          {FIELDS.map(([c, t]) => (
+            <button key={c} type="button" data-no-undo onClick={e => { const el = e.currentTarget; setEdit(x => (x && x.c === c ? null : { c, t, el })) }}
+              style={{ display: 'inline-flex', gap: 6, padding: '4px 9px', borderRadius: 4, fontSize: 12, cursor: 'pointer', border: `1px solid ${f[c] ? theme.primary : theme.border}`, background: f[c] ? alpha(theme.primary, '12') : theme.surface, color: theme.textPrimary }}>
+              <span style={{ color: theme.textMuted }}>{t}</span><b style={{ fontWeight: f[c] ? 700 : 500 }}>{cap(c)}</b><span style={{ color: theme.textMuted, fontSize: 10 }}>▾</span>
+            </button>))}
+          {Object.keys(f).length > 0 && <button type="button" onClick={() => setF({})} style={{ all: 'unset', cursor: 'pointer', fontSize: 12, color: theme.textMuted, textDecoration: 'underline' }}>Clear all</button>}
+          {edit && <ExcelFilter key={edit.c + qs} title={edit.t} anchor={edit.el} picked={f[edit.c]} load={() => h?.options?.[edit.c] || []}
+            onDone={v => { if (v !== undefined) setF(x => { const n = { ...x }; if (v.length && v.length < (h?.options?.[edit.c] || []).length) n[edit.c] = v; else delete n[edit.c]; return n }); setEdit(null) }} />}
+          <span style={{ flex: 1 }} />
+          <a href={`${API}/journey/holistic/export?${qs}`}
             style={{ padding: '7px 14px', borderRadius: 7, fontSize: 12.5, fontWeight: 700, textDecoration: 'none', background: theme.primary, color: '#fff', border: `1px solid ${theme.primary}` }}
-            title="The bridge + the effects by division, month, store group, cluster, department and store">⬇ Excel (deviation bridge)</a>
+            title="This slice: the bridge + the effects by store group, cluster, store, division, attribute, department and month">⬇ Excel (deviation bridge)</a>
         </div>
       </div>
       {err && <div style={{ color: theme.danger, fontSize: 13 }}>{err}</div>}
@@ -347,10 +347,12 @@ function CompanyBridge({ scopeBar }) {
             </div>
           </div>
           {table('By division', h.by.Division, true)}
+          {table('By attribute', h.by.Attribute, true)}
           {table('By month', h.by.Month, true)}
           {table('By store group', h.by.Group, false)}
           {table('By cluster', h.by.Cluster, false)}
           {table('Departments that moved most (top 25)', h.by.Department, false)}
+          {table('Stores that moved most (top 25)', h.by.Store, false)}
         </div>)}
     </>)
 }

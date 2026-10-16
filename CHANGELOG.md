@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-16
 
+### Journey (Company): the full hierarchy as filters
+- **Asked (user):** "department and other hierarchy missing from this page".
+- **Filters** (the suite's Excel-style per-field multi-select, (All) / (Multiple Items)): Store group, Cluster, Store, Division, Attribute, Department, Month - several values each; each list shows only what the other filters leave; Clear all. The bridge, its plain words, the tables and the Excel all follow the slice.
+- **Tables:** + By attribute and Stores that moved most (top 25); the Excel has a sheet per level (store group, cluster, store, division, attribute, department, month) and lists the filters on the Bridge sheet.
+- **Engine:** the whole plan's effect rows (with attribute) are built once per saved plan, then each slice is a filter (0.1 s); `GET /display-type/journey/holistic` and `/export` take group, cluster, store, division, attribute, department, month (comma-separated) and return each filter's `options`.
+- **Checked:** whole company still Rs 463.35 -> 779.81 Cr, check true; MENS / SUMMER / ML_JEANS + MSE_BERMUDA: +Rs 8.68 Cr explained, check true; SSG / BH - (NP): +Rs 12.62 Cr; Excel built; frontend built; 8010 restarted.
+
 ### One address for the whole suite: http://10.0.0.117:7800
 - **Asked (user):** "convert all apps in one ip and put the landing also on one ip and drop the rest of the ips so that there is no multi ip session".
 - **How it stood:** every app already listens on 127.0.0.1 only, behind Landing; Landing (0.0.0.0:7800) answered on 10.0.0.117, CKHO-L-A9820, CKHO-L-A9820.citykr.com, localhost and 127.0.0.1 - each a separate browser sign-in.

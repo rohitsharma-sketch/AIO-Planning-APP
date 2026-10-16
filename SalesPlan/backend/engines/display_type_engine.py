@@ -985,17 +985,20 @@ def get_journey_export(store: str, dept: str, month: str, mrp: str = "", display
 
 
 @router.get("/journey/holistic")
-def get_journey_holistic(division: str = "", month: str = "", group: str = ""):
-    """The company-level deviation bridge: last year -> each effect -> the plan, with each effect's share (2026-10-16)."""
+def get_journey_holistic(group: str = "", cluster: str = "", store: str = "", division: str = "", attribute: str = "",
+                         department: str = "", month: str = ""):
+    """The company-level deviation bridge for any slice of the hierarchy (comma-separated values per field, 2026-10-16)."""
     from engines.journey import holistic
-    return holistic(division, month, group)
+    return holistic(group=group, cluster=cluster, store=store, division=division, attribute=attribute, department=department, month=month)
 
 
 @router.get("/journey/holistic/export")
-def get_journey_holistic_export(division: str = "", month: str = "", group: str = ""):
+def get_journey_holistic_export(group: str = "", cluster: str = "", store: str = "", division: str = "", attribute: str = "",
+                                department: str = "", month: str = ""):
     from engines.journey import holistic_xlsx
     from urllib.parse import quote
-    data, name = holistic_xlsx(division, month, group)
+    data, name = holistic_xlsx(group=group, cluster=cluster, store=store, division=division, attribute=attribute,
+                               department=department, month=month)
     return StreamingResponse(io.BytesIO(data), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                              headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"})
 
