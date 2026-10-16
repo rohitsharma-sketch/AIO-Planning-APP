@@ -410,9 +410,10 @@ BRIDGE = [   # (key, name, plain words) - in the order the plan applies them; th
 _hol_cache = {}
 _eff_cache = {}
 # the filters of the company view, in hierarchy order: (query name, column, label)
-HFIELDS = [("group", "Group", "Store group"), ("cluster", "Cluster", "Cluster"), ("store", "Store", "Store"),
-           ("division", "Division", "Division"), ("attribute", "Attribute", "Attribute"), ("department", "Department", "Department"),
-           ("month", "Month", "Month")]
+HFIELDS = [("cluster", "Cluster", "Cluster"), ("store", "Store", "Store"), ("division", "Division", "Division"),
+           ("attribute", "Attribute", "Attribute"), ("department", "Department", "Department"), ("mrp", "MRP", "MRP"),
+           ("display", "Display", "Display type"), ("article", "Article", "Article name"), ("month", "Month", "Month")]
+_cell_cache = {}
 
 
 def _plan_stamp():
@@ -491,37 +492,106 @@ def _mon_key(x):
     return (0, t.toordinal(), x) if not pd.isna(t) else (1, 0, x)
 
 
+def ks_ssg():
+    return [k for k, _, _ in BRIDGE if k not in ("nso", "oth")]
+
+
+MIX = ("mix", "MRP / display mix", "Below department the plan splits each department over its MRPs and display types differently "
+       "from last year's sales - it moves sales between them; a department's total doesn't change.")
+
+
+def _cells_all() -> pd.DataFrame:
+    """Like-for-like (SSG) stores only, one row per store x department x MRP x display type x article x month (user,
+    2026-10-16: "comparison should be of SSG stores and not NSOs"; "Article name and Display Type"). Each department-month's
+    steps are split the way the plan splits the department - over its MRP x display cells (the published Display tree:
+    the plan and the re-apportioned last year of each cell), then over the buyers' plan file's articles of that cluster
+    (departments without a file: "(no article split)"). Step "mix": last year moved from its own MRP / display split onto the
+    plan's (dept LY x plan share - cell LY) - it nets to 0 in a department. Everything adds up to plan - last year exactly."""
+    import os
+    disp = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sales_plan_display.pkl")
+    key = (_plan_stamp(), os.path.getmtime(disp) if os.path.exists(disp) else None)
+    if _cell_cache.get("key") == key:
+        return _cell_cache["df"]
+    eff = _effects_all()
+    eff = eff[eff["Group"] == "SSG"].drop(columns=["Group", "nso", "oth"])
+    cells = pd.read_pickle(disp)["cells"] if os.path.exists(disp) else pd.DataFrame(
+        columns=["store", "division", "attribute", "department", "mrp", "display", "month", "ly", "ty"])
+    cells = cells[cells["store"].isin(set(eff["Store"]))]
+    cells = cells.assign(Month=cells["month"].str[:6]).groupby(
+        ["store", "department", "mrp", "display", "Month"], as_index=False)[["ly", "ty"]].sum()
+    cells = cells.rename(columns={"store": "Store", "department": "Department", "mrp": "MRP", "display": "Display", "ly": "cLY", "ty": "cTY"})
+    m = eff.merge(cells, on=["Store", "Department", "Month"], how="left")
+    hit = m["MRP"].notna()
+    # the plan's own split (a negative department plan too - a negative-LY fix); last year's only where the plan is 0
+    w = (m["cTY"] / m["Plan"]).where(m["Plan"].abs() > 1e-12, (m["cLY"] / m["LY"]).where(m["LY"].abs() > 1e-12, 0.0))
+    w = w.where(hit, 1.0).fillna(0.0)
+    for k in ks_ssg():
+        m[k] = m[k] * w
+    m["mix"] = (m["LY"] * w - m["cLY"]).where(hit, 0.0)
+    m["LY"] = m["cLY"].where(hit, m["LY"])
+    m["Plan"] = m["cTY"].where(hit, m["Plan"])
+    m["MRP"] = m["MRP"].where(hit, "(not split)").astype(str)
+    m["Display"] = m["Display"].where(hit, "-").astype(str)
+    m = m.drop(columns=["cLY", "cTY"])
+    # articles: the buyers' plan file's split of each cluster x department x MRP x display type x month
+    try:
+        from engines import plan_file_mix as pfm
+        ap = pfm.article_plan(_plan())
+        if "Group" in ap:
+            ap = ap[ap["Group"] == "SSG"]
+        ap = ap.groupby(["Cluster", "Department", "MRP", "Display type", "Month", "Article"], as_index=False)["Plan (Rs L)"].sum()
+        ap["MRP"] = ap["MRP"].astype(str)
+        tot = ap.groupby(["Cluster", "Department", "MRP", "Display type", "Month"])["Plan (Rs L)"].transform("sum")
+        ap = ap.assign(ash=ap["Plan (Rs L)"] / tot)[tot > 0][["Cluster", "Department", "MRP", "Display type", "Month", "Article", "ash"]]
+        ap = ap.rename(columns={"Display type": "Display"})
+        m = m.merge(ap, on=["Cluster", "Department", "MRP", "Display", "Month"], how="left")
+    except Exception:   # noqa: BLE001 - no plan file: no article level
+        m["Article"], m["ash"] = None, None
+    has = m["ash"].notna()
+    m["Article"] = m["Article"].where(has, "(no article split)")
+    sh = m["ash"].where(has, 1.0)
+    for k in ["LY", "Plan", "mix"] + ks_ssg():
+        m[k] = m[k] * sh
+    m = m.drop(columns=["ash"])
+    _cell_cache.update(key=key, df=m)
+    return m
+
+
 def holistic(**f) -> dict:
-    """The company-level deviation bridge: last year -> each effect -> the plan, with each effect's share of the change,
-    for any slice of the hierarchy (store group, cluster, store, division, attribute, department, month - several values
-    each); its tables by each level; and each filter's values left by the other filters."""
+    """The like-for-like (SSG) deviation bridge: last year -> each step -> the plan, with each step's share of the change, for
+    any slice of the hierarchy (cluster, store, division, attribute, department, MRP, display type, article name, month -
+    several values each); its tables by each level; and each filter's values left by the other filters."""
     pick = _pick(f)
     key = (_plan_stamp(), tuple(sorted((k, tuple(v)) for k, v in pick.items())))
     if key in _hol_cache:
         return _hol_cache[key]
-    full = _effects_all()
+    full = _cells_all()
     df = _filtered(full, pick)
-    ks = [k for k, _, _ in BRIDGE]
+    steps = [MIX] + [x for x in BRIDGE if x[0] not in ("nso", "oth")]
+    ks = [k for k, _, _ in steps]
     ly, ty = float(df["LY"].sum()), float(df["Plan"].sum())
     dev = ty - ly
+    tol = max(1e-7, abs(ly) * 1e-9)
     bridge = [{"key": k, "what": nm, "why": why, "change": float(df[k].sum()),
                "share": float(df[k].sum()) / dev * 100 if abs(dev) > 1e-12 else None,
-               "pct_of_ly": float(df[k].sum()) / ly * 100 if ly else None} for k, nm, why in BRIDGE]
-    bridge = [b for b in bridge if abs(b["change"]) > 1e-9]
+               "pct_of_ly": float(df[k].sum()) / ly * 100 if ly else None} for k, nm, why in steps]
+    bridge = [b for b in bridge if abs(b["change"]) > tol]
     C = lambda v: f"₹{v / 100:,.2f} Cr"   # noqa: E731
     sg = lambda v: f"{'+' if v >= 0 else '-'}{C(abs(v))}"   # noqa: E731
-    lfl = df[df["Group"] == "SSG"]
-    l_ly = float(lfl["LY"].sum())
-    l_pre = l_ly + float(lfl["bis"].sum())
+    base = ly + float(df["mix"].sum())
+    pre = base + float(df["bis"].sum())
     for b in bridge:   # what moved it, in plain words with its numbers (like the store journey's lines)
         k, c = b["key"], b["change"]
-        if k == "bis":
-            b["plain"] = (f"The buyers' plans (BIS) put {c / l_ly * 100 if l_ly else 0:+.2f}% on the like-for-like stores' last year "
-                          f"({C(l_ly)}), department by department: {sg(c)}.")
+        if k == "mix":
+            b["plain"] = (f"The plan splits these departments over their MRPs and display types differently from last year's sales, "
+                          f"which moves {sg(c)} onto this slice before any growth.")
+        elif k == "bis":
+            b["plain"] = (f"The buyers' plans (BIS) put {c / base * 100 if base else 0:+.2f}% on last year here ({C(base)}), department by "
+                          f"department: {sg(c)}.")
         elif k == "cap":
-            b["plain"] = (f"Cluster by cluster, the buyers' plans came to {'less' if c > 0 else 'more'} than the AOP target of their "
+            b["plain"] = (f"Cluster by cluster, the buyers' plans came to {'less' if c > 0 else 'more'} than the AOP target of the "
                           f"like-for-like stores, so every department of a cluster (all divisions) was scaled to land on it - "
-                          f"{c / l_pre * 100 if l_pre else 0:+.2f}% here, {sg(c)}.")
+                          f"{c / pre * 100 if pre else 0:+.2f}% here, {sg(c)}.")
         elif k == "bal":
             b["plain"] = (f"Inside each cluster the stores were moved onto their own AOP targets; the other stores moved the other way, "
                           f"so here it nets to {sg(c)}.")
@@ -529,35 +599,34 @@ def holistic(**f) -> dict:
             b["plain"] = (f"New departments were carved out of their reference departments and each cluster re-balanced back onto the "
                           f"AOP - it moves sales between departments; here {sg(c)}.")
         elif k == "off":
-            n = int(df.loc[df["off"] != 0, "Department"].nunique())
+            n = int(df.loc[df["off"].abs() > 1e-12, "Department"].nunique())
             b["plain"] = f"{n} department{'s' if n != 1 else ''} switched off (off season or switched off) gave up their last year: {sg(c)}."
-        else:
-            g = df[df["Group"] == ("NSO" if k == "nso" else "Others")]
-            n = int(g["Store"].nunique())
-            b["plain"] = (f"{n} {'new store' if k == 'nso' else 'other store'}{'s' if n != 1 else ''} "
-                          f"{'outside the like-for-like 148 ' if k == 'oth' else ''}are planned on their AOP target, not their own last "
-                          f"year: {C(float(g['Plan'].sum()))} against {C(float(g['LY'].sum()))} last year, {sg(c)}.")
     run = ly
     for b in bridge:
         run += b["change"]
         b["after"] = run
+
+    def mrp_key(x):
+        x = str(x)
+        return (0, float(x), x) if x.replace(".", "", 1).isdigit() else (1, 0.0, x)
 
     def by(col, top=None):
         g = df.groupby(col)[["LY", "Plan"] + ks].sum().reset_index()
         g["Change"] = g["Plan"] - g["LY"]
         if top:
             g = g.sort_values("Change", key=abs, ascending=False).head(top)
-        elif col == "Month":
-            g = g.iloc[sorted(range(len(g)), key=lambda i: _mon_key(g[col].iloc[i]))]
+        elif col in ("Month", "MRP"):
+            kf = _mon_key if col == "Month" else mrp_key
+            g = g.iloc[sorted(range(len(g)), key=lambda i: kf(g[col].iloc[i]))]
         else:
             g = g.sort_values(col)
-        return [{"key": r[col], "ly": float(r["LY"]), "plan": float(r["Plan"]), "change": float(r["Change"]),
+        return [{"key": str(r[col]), "ly": float(r["LY"]), "plan": float(r["Plan"]), "change": float(r["Change"]),
                  "pct": float((r["Plan"] / r["LY"] - 1) * 100) if r["LY"] > 0 else None, **{k: float(r[k]) for k in ks}}
                 for _, r in g.iterrows()]
     biggest = max(bridge, key=lambda b: abs(b["change"])) if bridge else None
-    gname = {"SSG": "like-for-like stores", "NSO": "new stores", "Others": "other stores"}
-    scope = "; ".join(f"{lab.lower()} " + (", ".join(gname.get(v, v) for v in pick[col]) if len(pick[col]) <= 3 else f"{len(pick[col])} picked")
-                      for _, col, lab in HFIELDS if col in pick) or "the whole company"
+    scope = "; ".join(f"{lab.lower()} " + (", ".join(pick[col]) if len(pick[col]) <= 3 else f"{len(pick[col])} picked")
+                      for _, col, lab in HFIELDS if col in pick)
+    scope = "the like-for-like stores" + (f" ({scope})" if scope else "")
     story = (f"Across {scope}: last year sold {C(ly)} and the plan is {C(ty)} ({(ty / ly - 1) * 100 if ly else 0:+.2f}%, "
              f"{sg(dev)}). " +
              " ".join(f"{b['what']}: {sg(b['change'])}"
@@ -565,14 +634,15 @@ def holistic(**f) -> dict:
              (f" The biggest single mover: {biggest['what']}." if biggest else ""))
     opts = {}
     for q, col, _ in HFIELDS:   # each filter's values: what the OTHER filters leave (Excel AutoFilter)
-        vals = _filtered(full, pick, but=col)[col].dropna().unique().tolist()
-        opts[q] = sorted(vals, key=_mon_key) if col == "Month" else sorted(vals)
+        vals = [str(v) for v in _filtered(full, pick, but=col)[col].dropna().unique().tolist()]
+        opts[q] = sorted(vals, key=_mon_key) if col == "Month" else sorted(vals, key=mrp_key) if col == "MRP" else sorted(vals)
     out = {"scope": {col: v for col, v in pick.items()}, "ly": ly, "plan": ty, "change": dev,
            "pct": (ty / ly - 1) * 100 if ly else None, "bridge": bridge, "story": story,
-           "names": {k: nm for k, nm, _ in BRIDGE}, "fields": [[q, lab] for q, _, lab in HFIELDS], "options": opts,
-           "by": {"Division": by("Division"), "Attribute": by("Attribute"), "Month": by("Month"), "Group": by("Group"),
-                  "Cluster": by("Cluster"), "Department": by("Department", top=25), "Store": by("Store", top=25)},
-           "check": abs(sum(b["change"] for b in bridge) - dev) < 1e-6}
+           "names": {k: nm for k, nm, _ in steps}, "fields": [[q, lab] for q, _, lab in HFIELDS], "options": opts,
+           "by": {"Division": by("Division"), "Attribute": by("Attribute"), "Month": by("Month"), "Cluster": by("Cluster"),
+                  "MRP": by("MRP"), "Display": by("Display"), "Department": by("Department", top=25),
+                  "Article": by("Article", top=25), "Store": by("Store", top=25)},
+           "check": abs(sum(b["change"] for b in bridge) - dev) < max(1e-6, tol * 10)}
     if len(_hol_cache) > 64:
         _hol_cache.clear()
     _hol_cache[key] = out
@@ -580,20 +650,21 @@ def holistic(**f) -> dict:
 
 
 def holistic_xlsx(**f) -> tuple:
-    """The company-level bridge as Excel, for the same slice: Bridge (the paragraph, the filters, each effect with its share
-    and running total) and the effects by every level - store group, cluster, store, division, attribute, department, month."""
+    """The like-for-like bridge as Excel, for the same slice: Bridge (the paragraph, the filters, each step with its share and
+    running total) and the steps by every level - cluster, store, division, attribute, department, MRP, display type,
+    article name, month."""
     h = holistic(**f)
     pick = _pick(f)
-    df = _filtered(_effects_all(), pick)
-    ks = [k for k, _, _ in BRIDGE]
-    names = {k: nm for k, nm, _ in BRIDGE}
+    df = _filtered(_cells_all(), pick)
+    names = h["names"]
+    ks = list(names)
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="xlsxwriter") as xw:
         top = pd.DataFrame([[h["story"]]] + [[f"{lab}: {', '.join(pick[col])}"] for _, col, lab in HFIELDS if col in pick],
-                           columns=["What moved the plan"])
+                           columns=["What moved the plan - like-for-like stores"])
         top.to_excel(xw, sheet_name="Bridge", index=False)
         pd.DataFrame([{"Step": "Last year", "₹ Cr": h["ly"] / 100, "Running ₹ Cr": h["ly"] / 100, "Share of the change %": None,
-                       "% of last year": None, "In plain words": "Actual sales last year (like-for-like stores); own sales (other stores)."}]
+                       "% of last year": None, "In plain words": "Actual sales last year of the like-for-like stores."}]
                      + [{"Step": b["what"], "₹ Cr": b["change"] / 100, "Running ₹ Cr": b["after"] / 100, "Share of the change %": b["share"],
                          "% of last year": b["pct_of_ly"], "In plain words": b["plain"]} for b in h["bridge"]]
                      + [{"Step": "= Plan", "₹ Cr": h["plan"] / 100, "Running ₹ Cr": h["plan"] / 100,
@@ -611,7 +682,7 @@ def holistic_xlsx(**f) -> tuple:
         ws = xw.sheets["Bridge"]
         wrap = xw.book.add_format({"text_wrap": True, "valign": "top"})
         ws.set_column(0, 0, 40, wrap); ws.set_column(1, 4, 18); ws.set_column(5, 5, 100, wrap)
-    tag = " - ".join(",".join(v) if len(v) <= 2 else f"{len(v)} {c.lower()}s" for c, v in pick.items()) or "company"
+    tag = " - ".join(",".join(v) if len(v) <= 2 else f"{len(v)} {c.lower()}s" for c, v in pick.items()) or "like-for-like"
     return buf.getvalue(), f"Deviation bridge - {tag}.xlsx".replace("/", "-")[:150]
 
 

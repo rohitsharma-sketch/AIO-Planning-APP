@@ -805,7 +805,7 @@ function RefStoreMapTab({ stores, loadErr, reload }) {
 
       <div className="pie-scroll">
         <table className="pie-row-table sm-table">
-          <thead><tr><th>Store</th><th>Name</th><th>Tag</th><th>Ref Store / Buddy Store</th></tr></thead>
+          <thead><tr><th>Store</th><th>Tag</th><th>Ref Store / Buddy Store</th></tr></thead>
           <tbody>
             {filtered.map(s => {
               const priorEntry = logByStore[s.store_id]
@@ -816,7 +816,6 @@ function RefStoreMapTab({ stores, loadErr, reload }) {
                     {s.store_id}
                     {priorEntry && <span className="refmap-changed-badge" title={`Changed from "${priorEntry.oldRefStore || '(none)'}"`}>changed</span>}
                   </td>
-                  <td className="sm-name">{s.store_name || <span className="sm-null">—</span>}</td>
                   <td className="sm-muted">{s.tag || '—'}</td>
                   <td className="refmap-ref-cell" ref={mixOpen ? mixPopoverRef : null}>
                     <StoreRefSelect
@@ -857,7 +856,7 @@ function RefStoreMapTab({ stores, loadErr, reload }) {
                 </tr>
               )
             })}
-            {!filtered.length && <tr><td colSpan={4} className="sm-empty-row">No stores match.</td></tr>}
+            {!filtered.length && <tr><td colSpan={3} className="sm-empty-row">No stores match.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -994,8 +993,18 @@ function AopTab() {
     load()
     fetchJson('/api/config/store-master')
       .then(stores => {
+        // the class the plan uses for each store (plan_class) - a tag staged in Store Master but not saved yet counts by its
+        // tag set, so the tiles follow an imported store file at once (user, 2026-10-16: "tiles should be dynamic")
+        let staged = {}
+        try { staged = JSON.parse(localStorage.getItem(SM_CACHE_KEY) || '{}') } catch { staged = {} }
         const m = new Map()
-        for (const s of stores) m.set((s.store_id || s.store_code || '').toUpperCase(), (s.tag || '').trim())
+        for (const s of stores) m.set((s.store_id || s.store_code || '').toUpperCase(), s.plan_class || '')
+        for (const [sid, ed] of Object.entries(staged)) {
+          if (ed && ed.tag !== undefined) {
+            const t = (ed.tag || '').trim()
+            m.set(sid.toUpperCase(), NSO_TAG_SET.has(t) ? 'NSO' : LFL_TAG_SET.has(t) ? 'LFL' : RAMP_TAG_SET.has(t) ? 'RAMP' : '')
+          }
+        }
         setStoreTagMap(m)
       })
       .catch(() => setStoreTagMap(new Map()))
@@ -1018,19 +1027,22 @@ function AopTab() {
   const filtered = search ? merged.filter(r => r.store_id.toLowerCase().includes(search.toLowerCase())) : merged
 
   const aopTiles = useMemo(() => {
-    const totals = { lfl: 0, nso: 0, ramp: 0 }
+    // every row counts somewhere: LFL / NSO / RAMP by the class the plan uses, the rest "Not classified"; + a total to check
+    // against the imported file (user, 2026-10-16: "give a total too just to verify")
+    const totals = { lfl: 0, nso: 0, ramp: 0, other: 0 }, n = { lfl: new Set(), nso: new Set(), ramp: new Set(), other: new Set() }
     for (const r of merged) {
       const v = Number(edits[r._key] != null ? edits[r._key] : r.value) || 0
-      const tag = storeTagMap?.get((r.store_id || '').toUpperCase()) ?? ''
-      if (LFL_TAG_SET.has(tag))       totals.lfl  += v
-      else if (NSO_TAG_SET.has(tag))  totals.nso  += v
-      else if (RAMP_TAG_SET.has(tag)) totals.ramp += v
+      const k = { LFL: 'lfl', NSO: 'nso', RAMP: 'ramp' }[storeTagMap?.get((r.store_id || '').toUpperCase()) ?? ''] || 'other'
+      totals[k] += v; n[k].add(r.store_id)
     }
     const fmt = v => (v / 100).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+    const all = totals.lfl + totals.nso + totals.ramp + totals.other
     return [
-      { key: 'lfl',  label: 'LFL',  value: fmt(totals.lfl),  cls: 'lfl'  },
-      { key: 'nso',  label: 'NSO',  value: fmt(totals.nso),  cls: 'nso'  },
-      { key: 'ramp', label: 'Ramp', value: fmt(totals.ramp), cls: 'ramp' },
+      { key: 'lfl',  label: `LFL · ${n.lfl.size} stores`,  value: fmt(totals.lfl),  cls: 'lfl'  },
+      { key: 'nso',  label: `NSO · ${n.nso.size} stores`,  value: fmt(totals.nso),  cls: 'nso'  },
+      { key: 'ramp', label: `Ramp · ${n.ramp.size} stores`, value: fmt(totals.ramp), cls: 'ramp' },
+      ...(totals.other ? [{ key: 'other', label: `Not classified · ${n.other.size} stores (untagged / not in the store master)`, value: fmt(totals.other), cls: 'other' }] : []),
+      { key: 'total', label: `Total · ${new Set(merged.map(r => r.store_id)).size} stores · ${merged.length} rows`, value: fmt(all), cls: 'total' },
     ]
   }, [merged, storeTagMap, edits])
 

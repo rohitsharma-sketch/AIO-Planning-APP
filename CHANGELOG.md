@@ -7,6 +7,13 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-16
 
+### Journey (Company): like-for-like stores only, down to MRP / display type / article name; AOP tiles dynamic with a total; Ref Store tab without Name
+- **Asked (user):** "Hierarchy missing like Article name and Display Type. comparison should be of SSG stores and not NSOs"; "tiles should be dynamic as per the imported file but the total was the same before and after change it and make it dynamic" + "give a total too just to verify"; "remove the second column" (Ref Store Mapping).
+- **Journey (Company) = like-for-like (SSG) stores only** (new and other stores have no comparable last year): Rs 388.85 Cr -> Rs 431.88 Cr (+11.06%). Filters: Cluster, Store, Division, Attribute, Department, **MRP, Display type, Article name**, Month. Below department each step is split the way the plan splits the department - its MRP x display cells (the published Display tree, with each cell's re-apportioned last year), then the buyers' plan file's articles of that cluster ("(no article split)" for departments without a file). New first step **"MRP / display mix"**: last year moved from its own MRP / display split onto the plan's - it nets to 0 in a department and shows the shift below it (e.g. LADIES / TABLE / Apr'27: +Rs 0.21 Cr of +Rs 0.52 Cr). Tables + By MRP, By display type, Article names that moved most. Every row adds up exactly (largest residual 1e-15; a negative department plan is split by its own plan shares).
+- **AOP Overrides tiles:** every row now counts - LFL / NSO / Ramp by the class the plan uses (store-master `plan_class`, or the tag staged in Store Master but not saved yet), a "Not classified" tile for untagged / unknown stores (they used to be left out of every tile, so an imported file didn't move the totals), store counts on each tile, and a **Total** tile (stores, rows, Rs Cr) to check against the file.
+- **Ref Store Mapping tab:** the Name column removed.
+- 8010 and AOP 8000 restarted.
+
 ### AOP Store Master: unused columns removed, an LFL / RAMP / NSO column, the template follows the table
 - **Asked (user):** "remove the extra columns which are not in use and add a column for LFL/RAMP/NSO Tag here and base it for the template download too".
 - **Removed:** Region, Grade, ERP Cluster and Festival Group (the "+ Context columns" toggle) - read-only, and Save never wrote them; their import mapping and the Region / Grade filters went too.

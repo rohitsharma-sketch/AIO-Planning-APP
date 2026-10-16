@@ -423,6 +423,10 @@
 .aop-tag-tile-nso  .aop-tag-tile-val { color: var(--green); }
 .aop-tag-tile-ramp { border-color: var(--amber-bd); background: var(--amber-bg); }
 .aop-tag-tile-ramp .aop-tag-tile-val { color: var(--amber); }
+.aop-tag-tile-other { border-color: var(--border); background: var(--surface, #fff); }
+.aop-tag-tile-other .aop-tag-tile-val { color: var(--muted); }
+.aop-tag-tile-total { border-color: var(--navy3, #334); background: color-mix(in srgb, var(--navy3, #334) 8%, transparent); }
+.aop-tag-tile-total .aop-tag-tile-val { color: var(--char); }
 
 /* Store table */
 .sm-table th { min-width: 80px; }

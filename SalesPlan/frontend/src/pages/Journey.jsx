@@ -252,7 +252,7 @@ function CompanyBridge({ scopeBar }) {
     setBusy(true); setErr('')
     get(`${API}/journey/holistic?${qs}`).then(setH).catch(e => setErr(e.message)).finally(() => setBusy(false))
   }, [qs])
-  const FIELDS = h?.fields || [['group', 'Store group'], ['cluster', 'Cluster'], ['store', 'Store'], ['division', 'Division'], ['attribute', 'Attribute'], ['department', 'Department'], ['month', 'Month']]
+  const FIELDS = h?.fields || [['cluster', 'Cluster'], ['store', 'Store'], ['division', 'Division'], ['attribute', 'Attribute'], ['department', 'Department'], ['mrp', 'MRP'], ['display', 'Display type'], ['article', 'Article name'], ['month', 'Month']]
   const cap = c => (!f[c] ? '(All)' : f[c].length === 1 ? f[c][0] : `(Multiple Items) ${f[c].length}`)
   const card = { background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 12 }
   const sgn = v => `${v >= 0 ? '+' : '−'}${L(Math.abs(v))}`
@@ -281,10 +281,11 @@ function CompanyBridge({ scopeBar }) {
     <>
       <div style={{ ...card, padding: '14px 18px' }}>
         <div style={{ marginBottom: 10 }}>{scopeBar}</div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: theme.navy }}>What moved the plan - the whole company, from last year to the plan</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: theme.navy }}>What moved the plan - the like-for-like (SSG) stores, from last year to the plan</div>
         <div style={{ fontSize: 12.5, color: theme.textMuted, marginTop: 4 }}>
           The same steps as a single store's journey, added up over every store, department and month: how much each one moved the plan and what share of the
-          whole change it is. Narrow it down the hierarchy - store group, cluster, store, division, attribute, department, month (SSG = like-for-like stores).
+          whole change it is. Only the like-for-like stores - new and other stores have no comparable last year. Narrow it down the hierarchy - cluster, store,
+          division, attribute, department, MRP, display type, article name, month.
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 12, alignItems: 'center' }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.6 }}>Filters</span>
@@ -299,7 +300,7 @@ function CompanyBridge({ scopeBar }) {
           <span style={{ flex: 1 }} />
           <a href={`${API}/journey/holistic/export?${qs}`}
             style={{ padding: '7px 14px', borderRadius: 7, fontSize: 12.5, fontWeight: 700, textDecoration: 'none', background: theme.primary, color: '#fff', border: `1px solid ${theme.primary}` }}
-            title="This slice: the bridge + the effects by store group, cluster, store, division, attribute, department and month">⬇ Excel (deviation bridge)</a>
+            title="This slice: the bridge + the steps by cluster, store, division, attribute, department, MRP, display type, article name and month">⬇ Excel (deviation bridge)</a>
         </div>
       </div>
       {err && <div style={{ color: theme.danger, fontSize: 13 }}>{err}</div>}
@@ -313,7 +314,7 @@ function CompanyBridge({ scopeBar }) {
               <div style={{ display: 'grid', gridTemplateColumns: '18px 200px minmax(0, 1fr) 190px', gap: 10, alignItems: 'baseline' }}>
                 <span />
                 <div><b style={{ fontSize: 13 }}>Last year</b><div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: theme.textMuted }}>starts at</div></div>
-                <div style={{ fontSize: 12.5, color: theme.textSecondary }}>What these stores sold in the same months last year (like-for-like stores: their actual sales).</div>
+                <div style={{ fontSize: 12.5, color: theme.textSecondary }}>What the like-for-like stores sold in the same months last year (their actual sales).</div>
                 <b style={{ textAlign: 'right', fontFamily: theme.fontMono, color: theme.navy }}>{L(h.ly)}</b>
               </div>
               {h.bridge.map(b => (
@@ -349,9 +350,11 @@ function CompanyBridge({ scopeBar }) {
           {table('By division', h.by.Division, true)}
           {table('By attribute', h.by.Attribute, true)}
           {table('By month', h.by.Month, true)}
-          {table('By store group', h.by.Group, false)}
           {table('By cluster', h.by.Cluster, false)}
+          {table('By MRP', h.by.MRP, false)}
+          {table('By display type', h.by.Display, false)}
           {table('Departments that moved most (top 25)', h.by.Department, false)}
+          {table('Article names that moved most (top 25)', h.by.Article, false)}
           {table('Stores that moved most (top 25)', h.by.Store, false)}
         </div>)}
     </>)
