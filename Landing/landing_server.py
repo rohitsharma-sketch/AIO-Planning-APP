@@ -149,6 +149,42 @@ class _BodyReader:
         return b
 
 
+# One address for the whole suite (user, 2026-10-16: "convert all apps in one ip and put the landing also on one ip and drop the
+# rest of the ips so that there is no multi ip session"): every app is loopback-only behind Landing, and Landing answers on
+# this machine's LAN IP, its names and localhost - each a separate browser sign-in. A page opened on any other name of THIS
+# machine goes to http://<the LAN IP>:7800 first (other hosts, e.g. a tunnel, are left alone). RS_CANONICAL_HOST overrides
+# the IP; it is re-read every 5 minutes, so a new DHCP address is followed.
+_canon = {"host": None, "at": 0.0}
+
+
+def _lan_ip():
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("10.255.255.255", 1))   # no packet is sent - it only picks the outgoing interface
+        return s.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        s.close()
+
+
+def canonical_host():
+    if time.time() - _canon["at"] > 300:
+        _canon.update(host=os.environ.get("RS_CANONICAL_HOST") or _lan_ip(), at=time.time())
+    return _canon["host"]
+
+
+def _own_names() -> set:
+    names = {"localhost", "127.0.0.1", "::1", "[::1]"}
+    try:
+        hn = socket.gethostname()
+        names |= {hn.lower(), socket.getfqdn().lower()}
+        names |= {a[4][0] for a in socket.getaddrinfo(hn, None, socket.AF_INET)}
+    except OSError:
+        pass
+    return names
+
+
 def _find_proxy(path):
     """Return (target_base, rewritten_path) or (None, None). path must have no query string."""
     for prefix, target, strip in PROXY_ROUTES:
@@ -420,7 +456,22 @@ class Handler(SimpleHTTPRequestHandler):
 
     # ── verb handlers ──────────────────────────────────────────────────────────
 
+    def _canonical_redirect(self):
+        """A browser page opened on another name of this machine -> the one suite address (same path)."""
+        if self.command not in ("GET", "HEAD") or "text/html" not in (self.headers.get("Accept") or ""):
+            return False
+        host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]").lower() if not (self.headers.get("Host") or "").startswith("[")             else (self.headers.get("Host") or "").split("]")[0].strip("[").lower()
+        canon = canonical_host()
+        if not canon or not host or host == canon.lower() or host not in _own_names():
+            return False
+        self.send_response(302)
+        self.send_header("Location", f"http://{canon}:{self.server.server_address[1]}{self.path}")
+        self.end_headers()
+        return True
+
     def do_GET(self):
+        if self._canonical_redirect():
+            return
         # Local port-status endpoint: /api/port-status/<port>
         # Returns HTTP 200 (online) or 503 (offline) so the JS can distinguish
         # without mode:'no-cors' opacity.

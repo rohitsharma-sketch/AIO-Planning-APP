@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-16
 
+### One address for the whole suite: http://10.0.0.117:7800
+- **Asked (user):** "convert all apps in one ip and put the landing also on one ip and drop the rest of the ips so that there is no multi ip session".
+- **How it stood:** every app already listens on 127.0.0.1 only, behind Landing; Landing (0.0.0.0:7800) answered on 10.0.0.117, CKHO-L-A9820, CKHO-L-A9820.citykr.com, localhost and 127.0.0.1 - each a separate browser sign-in.
+- **Now:** a page opened on any other name of this machine is sent to `http://10.0.0.117:7800` + the same path before sign-in, so there is one address and one session (`landing_server.canonical_host` / `_canonical_redirect`). The address is this machine's LAN IP, re-read every 5 minutes (a new DHCP address is followed); `RS_CANONICAL_HOST` overrides it. API calls are not redirected (they follow the page's address); a host that isn't this machine (e.g. a tunnel) is left alone.
+- **Checked:** localhost / 127.0.0.1 / CKHO-L-A9820 / CKHO-L-A9820.citykr.com -> 302 to http://10.0.0.117:7800/buyer/?x=1; 10.0.0.117 -> served (sign-in as before); an API call via localhost -> not redirected; a tunnel host -> not redirected. Landing restarted.
+
 ### Buyer view = a personal scratch pad; Landing shows a buyer only the Buyer's Input tile
 - **Asked (user):** "I want this view to use it as a personal scratch pad where i lock and unlock my growth % and all the views which are availble and is a derivative of the Buy's data table should be available in all buyer's view for thier respective Departments ... How can i make this as simple as it can be ?"; "Instead of greying out the tiles in main landing page for Buyer's id - i want the extra tiles to not be visible to any buyer role".
 - **BIS for a buyer:** lock / unlock their own departments (the lock icons are back; other divisions refused); the Division, Department and Attribute summaries and Inactive Depts are on the left, filtered to their divisions (Inactive Depts read-only - switching a department on / off stays the planner's). It is all in their browser - only the input tiles leave it, with "Send to planner". Banner: "Your scratch pad - ...".
