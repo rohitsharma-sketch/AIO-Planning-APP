@@ -984,6 +984,22 @@ def get_journey_export(store: str, dept: str, month: str, mrp: str = "", display
                              headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"})
 
 
+@router.get("/journey/holistic")
+def get_journey_holistic(division: str = "", month: str = "", group: str = ""):
+    """The company-level deviation bridge: last year -> each effect -> the plan, with each effect's share (2026-10-16)."""
+    from engines.journey import holistic
+    return holistic(division, month, group)
+
+
+@router.get("/journey/holistic/export")
+def get_journey_holistic_export(division: str = "", month: str = "", group: str = ""):
+    from engines.journey import holistic_xlsx
+    from urllib.parse import quote
+    data, name = holistic_xlsx(division, month, group)
+    return StreamingResponse(io.BytesIO(data), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                             headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"})
+
+
 @router.get("/journey")
 def get_journey(store: str, dept: str, month: str, mrp: str = "", display: str = ""):
     """How one store x department x month (x MRP x display type) is made, step by step down to qty - engines/journey."""

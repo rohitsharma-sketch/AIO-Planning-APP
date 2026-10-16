@@ -23,6 +23,10 @@ export default function Journey() {
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const [ex, setEx] = useState({ division: '', group: '' })
+  const [openAll, setOpenAll] = useState(false)
+  // Company (holistic) | Store - the last choice is this user's default on this browser (user, 2026-10-16)
+  const [scope, setScope_] = useState(() => { try { return localStorage.getItem('sp.journey.scope') || 'store' } catch { return 'store' } })
+  const setScope = v => { setScope_(v); try { localStorage.setItem('sp.journey.scope', v) } catch { /* private window */ } }
   const set = k => e => setSel(s => ({ ...s, [k]: e.target.value, ...(k === 'store' ? { dept: '', mrp: '' } : k === 'dept' ? { mrp: '' } : {}) }))
 
   useEffect(() => {
@@ -53,9 +57,22 @@ export default function Journey() {
     border: `1px solid ${primary ? theme.primary : theme.border}`, background: primary ? theme.primary : theme.surface, color: primary ? '#fff' : theme.textPrimary })
   const exq = fmt => `${API}/export?${new URLSearchParams({ format: fmt, ...(ex.division ? { division: ex.division } : {}), ...(ex.group ? { group: ex.group } : {}) })}`
 
+  const scopeBar = (
+    <div role="radiogroup" aria-label="Show" style={{ display: 'inline-flex', border: `1px solid ${theme.border}`, borderRadius: 8, overflow: 'hidden' }}>
+      {[['company', 'Company (holistic)'], ['store', 'Store specific']].map(([k, t]) => (
+        <button key={k} type="button" role="radio" aria-checked={scope === k} onClick={() => setScope(k)}
+          style={{ padding: '6px 14px', fontSize: 12.5, fontWeight: 700, border: 'none', cursor: 'pointer',
+            background: scope === k ? theme.primary : theme.surface, color: scope === k ? '#fff' : theme.textPrimary }}>{t}</button>))}
+    </div>)
+  if (scope === 'company') return (
+    <div style={{ padding: '24px 32px', display: 'grid', gap: 16, alignContent: 'start' }}>
+      <CompanyBridge scopeBar={scopeBar} />
+    </div>)
+
   return (
     <div style={{ padding: '24px 32px', display: 'grid', gap: 16, alignContent: 'start' }}>
       <div style={{ ...card, padding: '14px 18px' }}>
+        <div style={{ marginBottom: 10 }}>{scopeBar}</div>
         <div style={{ fontSize: 15, fontWeight: 700, color: theme.navy }}>How a plan number is made - from its sources down to UDF and pieces</div>
         <div style={{ fontSize: 12.5, color: theme.textMuted, marginTop: 4 }}>
           Pick a store, department and month (and an MRP, to go down to display type and qty). Every step is worked out again from its own input
@@ -109,28 +126,43 @@ export default function Journey() {
           {/* the deviation journey (user, 2026-10-15: "explain in simplest words what affected to arrive at this number") */}
           {j?.deviation?.length > 0 && (
             <div style={{ ...card, padding: '12px 16px', marginBottom: 14, borderLeft: `4px solid ${theme.navy}` }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.4 }}>What moved this number - in plain words</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                <div style={{ flex: 1, fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.4 }}>What moved this number - in plain words</div>
+                <button type="button" onClick={() => setOpenAll(o => !o)} style={{ ...btn(false), padding: '3px 10px', fontSize: 11.5 }}>{openAll ? 'Collapse all' : 'Expand all'}</button>
+              </div>
               <div style={{ fontSize: 13.5, color: theme.textPrimary, margin: '6px 0 10px', lineHeight: 1.55 }}>{j.story}</div>
               <div style={{ display: 'grid', gap: 6 }}>
                 {j.deviation.map((d, i) => {
                   const up = d.change != null && d.change > 1e-9, down = d.change != null && d.change < -1e-9
                   const tag = d.kind === 'start' ? 'starts at' : d.kind === 'split' ? 'share' : d.kind === 'qty' ? 'pieces' : up ? 'pushed up' : down ? 'pulled down' : 'no change'
                   const col = d.kind === 'change' ? (up ? theme.success || '#15803d' : down ? theme.danger : theme.textMuted) : theme.textMuted
+                  const more = (d.detail || []).length > 0 || d.share != null
                   return (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '170px minmax(0, 1fr) 150px', gap: 10, alignItems: 'baseline',
-                      padding: '6px 0', borderTop: i ? `1px solid ${theme.border}` : 'none' }}>
-                      <div>
-                        <b style={{ fontSize: 13, color: theme.textPrimary }}>{d.what}</b>
-                        <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: col }}>{tag}</div>
-                      </div>
-                      <div style={{ fontSize: 12.5, color: theme.textSecondary, lineHeight: 1.5 }}>{d.why}</div>
-                      <div style={{ textAlign: 'right', fontFamily: theme.fontMono, fontSize: 12.5 }}>
-                        {d.kind === 'change' && <div style={{ color: col, fontWeight: 700 }}>{up ? '+' : down ? '−' : ''}{L(Math.abs(d.change))}{d.pct != null ? ` (${d.pct >= 0 ? '+' : ''}${d.pct.toFixed(2)}%)` : ''}</div>}
-                        {d.kind === 'qty'
-                          ? <b>{d.after != null ? `${Math.round(d.after).toLocaleString('en-IN')} pcs` : '-'}</b>
-                          : <b style={{ color: theme.navy }}>{L(d.after)}</b>}
-                      </div>
-                    </div>)
+                    <details key={`${i}-${openAll}`} open={openAll} style={{ borderTop: i ? `1px solid ${theme.border}` : 'none' }}>
+                      <summary style={{ display: 'grid', gridTemplateColumns: '18px 170px minmax(0, 1fr) 170px', gap: 10, alignItems: 'baseline',
+                        padding: '6px 0', cursor: more ? 'pointer' : 'default', listStyle: 'none' }}>
+                        <span aria-hidden="true" style={{ color: theme.textMuted, fontSize: 11 }}>{more ? '▸' : ''}</span>
+                        <div>
+                          <b style={{ fontSize: 13, color: theme.textPrimary }}>{d.what}</b>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: col }}>{tag}</div>
+                        </div>
+                        <div style={{ fontSize: 12.5, color: theme.textSecondary, lineHeight: 1.5 }}>{d.why}</div>
+                        <div style={{ textAlign: 'right', fontFamily: theme.fontMono, fontSize: 12.5 }}>
+                          {d.kind === 'change' && <div style={{ color: col, fontWeight: 700 }}>{up ? '+' : down ? '−' : ''}{L(Math.abs(d.change))}{d.pct != null ? ` (${d.pct >= 0 ? '+' : ''}${d.pct.toFixed(2)}%)` : ''}</div>}
+                          {d.share != null && <div style={{ fontSize: 11, color: theme.textMuted }}>{d.share.toFixed(1)}% of the change</div>}
+                          {d.kind === 'qty'
+                            ? <b>{d.after != null ? `${Math.round(d.after).toLocaleString('en-IN')} pcs` : '-'}</b>
+                            : <b style={{ color: theme.navy }}>{L(d.after)}</b>}
+                        </div>
+                      </summary>
+                      {more && (
+                        <div style={{ margin: '0 0 8px 28px', padding: '8px 12px', borderRadius: 8, background: alpha(theme.primary, '0a'), fontSize: 12, color: theme.textSecondary, lineHeight: 1.6 }}>
+                          {d.share != null && j.deviation_total && (
+                            <div>Of the whole change from {String(j.deviation_total.from).toLowerCase()} ({L(j.deviation_total.start)}) to the plan ({L(j.deviation_total.plan)}) -
+                              {' '}{j.deviation_total.change >= 0 ? '+' : '−'}{L(Math.abs(j.deviation_total.change))} - this step is <b>{d.share.toFixed(1)}%</b>.</div>)}
+                          {(d.detail || []).map((t, k) => <div key={k} style={{ fontFamily: theme.fontMono, fontSize: 11.5 }}>{t}</div>)}
+                        </div>)}
+                    </details>)
                 })}
               </div>
             </div>
@@ -199,4 +231,118 @@ export default function Journey() {
       </div>
     </div>
   )
+}
+
+
+// Company (holistic) deviation bridge (user, 2026-10-16: "How much of deviation is taken for this so that it gets recorded
+// on holistic level too") - GET /display-type/journey/holistic: last year -> each effect -> the plan, every effect's share
+// of the change, by division / month / store group / cluster / department; the same effects as the store journey, added up.
+function CompanyBridge({ scopeBar }) {
+  const [f, setF] = useState({ group: '', division: '', month: '' })
+  const [h, setH] = useState(null)
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    setBusy(true); setErr('')
+    get(`${API}/journey/holistic?${new URLSearchParams(f)}`).then(setH).catch(e => setErr(e.message)).finally(() => setBusy(false))
+  }, [f.group, f.division, f.month])
+  const card = { background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 12 }
+  const lab = { fontSize: 11, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.4, display: 'grid', gap: 4 }
+  const sel_ = { height: 32, padding: '0 8px', borderRadius: 7, border: `1px solid ${theme.border}`, fontSize: 13, background: theme.surface, color: theme.textPrimary, minWidth: 150 }
+  const sgn = v => `${v >= 0 ? '+' : '−'}${L(Math.abs(v))}`
+  const col = v => v > 1e-9 ? (theme.success || '#15803d') : v < -1e-9 ? theme.danger : theme.textMuted
+  const keys = (h?.bridge || []).map(b => b.key)
+  const maxAbs = Math.max(1e-9, ...(h?.bridge || []).map(b => Math.abs(b.change)))
+  const table = (title, rows, open) => (
+    <details open={open} style={{ ...card, padding: '10px 14px' }}>
+      <summary style={{ cursor: 'pointer', fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.4 }}>{title}</summary>
+      <div style={{ overflowX: 'auto', marginTop: 8 }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+          <thead><tr>{['', 'Last year', 'Plan', 'Change', '%', ...keys.map(k => h.names[k])].map((t, i) => (
+            <th key={i} style={{ textAlign: i ? 'right' : 'left', padding: '4px 8px', borderBottom: `1px solid ${theme.border}`, color: theme.textMuted, fontWeight: 700, whiteSpace: i > 4 ? 'normal' : 'nowrap', minWidth: i > 4 ? 90 : undefined }}>{t}</th>))}</tr></thead>
+          <tbody>{rows.map(r => (
+            <tr key={r.key}>
+              <td style={{ padding: '4px 8px', fontWeight: 700 }}>{r.key || '-'}</td>
+              <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: theme.fontMono }}>{L(r.ly)}</td>
+              <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: theme.fontMono }}>{L(r.plan)}</td>
+              <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: theme.fontMono, color: col(r.change), fontWeight: 700 }}>{sgn(r.change)}</td>
+              <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: theme.fontMono }}>{r.pct != null ? `${r.pct >= 0 ? '+' : ''}${r.pct.toFixed(1)}%` : '-'}</td>
+              {keys.map(k => <td key={k} style={{ padding: '4px 8px', textAlign: 'right', fontFamily: theme.fontMono, color: col(r[k]) }}>{Math.abs(r[k]) > 1e-9 ? sgn(r[k]) : '-'}</td>)}
+            </tr>))}</tbody>
+        </table>
+      </div>
+    </details>)
+  return (
+    <>
+      <div style={{ ...card, padding: '14px 18px' }}>
+        <div style={{ marginBottom: 10 }}>{scopeBar}</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: theme.navy }}>What moved the plan - the whole company, from last year to the plan</div>
+        <div style={{ fontSize: 12.5, color: theme.textMuted, marginTop: 4 }}>
+          The same steps as a single store's journey, added up over every store, department and month: how much each one moved the plan and what share of the
+          whole change it is. Narrow it to a store group, a division or a month.
+        </div>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 12, alignItems: 'end' }}>
+          <label style={lab}>Store group
+            <select value={f.group} onChange={e => setF(x => ({ ...x, group: e.target.value }))} style={sel_} aria-label="Store group">
+              <option value="">All stores</option><option value="SSG">Like-for-like (SSG)</option><option value="NSO">New stores (NSO)</option><option value="Others">Others</option>
+            </select>
+          </label>
+          <label style={lab}>Division
+            <select value={f.division} onChange={e => setF(x => ({ ...x, division: e.target.value }))} style={sel_} aria-label="Division">
+              <option value="">All divisions</option>{['KIDS', 'LADIES', 'MENS'].map(d => <option key={d}>{d}</option>)}
+            </select>
+          </label>
+          <label style={lab}>Month
+            <select value={f.month} onChange={e => setF(x => ({ ...x, month: e.target.value }))} style={sel_} aria-label="Month">
+              <option value="">All months</option>{(h?.by?.Month || []).map(m => <option key={m.key}>{m.key}</option>)}
+            </select>
+          </label>
+          <a href={`${API}/journey/holistic/export?${new URLSearchParams(f)}`}
+            style={{ padding: '7px 14px', borderRadius: 7, fontSize: 12.5, fontWeight: 700, textDecoration: 'none', background: theme.primary, color: '#fff', border: `1px solid ${theme.primary}` }}
+            title="The bridge + the effects by division, month, store group, cluster, department and store">⬇ Excel (deviation bridge)</a>
+        </div>
+      </div>
+      {err && <div style={{ color: theme.danger, fontSize: 13 }}>{err}</div>}
+      {!h && !err && <div style={{ fontSize: 12.5, color: theme.textMuted }}>Adding up every store, department and month…</div>}
+      {h && (
+        <div style={{ display: 'grid', gap: 14, opacity: busy ? 0.6 : 1 }} aria-busy={busy}>
+          <div style={{ ...card, padding: '12px 16px', borderLeft: `4px solid ${theme.navy}` }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.4 }}>What moved the plan - in plain words</div>
+            <div style={{ fontSize: 13.5, color: theme.textPrimary, margin: '6px 0 10px', lineHeight: 1.55 }}>{h.story}</div>
+            <div style={{ display: 'grid', gap: 6, fontSize: 12.5 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '220px minmax(0, 1fr) 150px 130px', gap: 12 }}>
+                <b>Last year</b><span /><b style={{ textAlign: 'right', fontFamily: theme.fontMono }}>{L(h.ly)}</b><span />
+              </div>
+              {h.bridge.map(b => (
+                <details key={b.key} style={{ borderTop: `1px solid ${theme.border}`, paddingTop: 6 }}>
+                  <summary style={{ display: 'grid', gridTemplateColumns: '220px minmax(0, 1fr) 150px 130px', gap: 12, alignItems: 'center', cursor: 'pointer', listStyle: 'none' }}>
+                    <span><span aria-hidden="true" style={{ color: theme.textMuted, fontSize: 11 }}>▸ </span><b>{b.what}</b></span>
+                    <span aria-hidden="true" style={{ height: 10, background: theme.border, borderRadius: 5, position: 'relative' }}>
+                      <span style={{ position: 'absolute', top: 0, bottom: 0, left: b.change >= 0 ? '50%' : `${50 - Math.abs(b.change) / maxAbs * 50}%`,
+                        width: `${Math.abs(b.change) / maxAbs * 50}%`, background: col(b.change), borderRadius: 5 }} />
+                    </span>
+                    <b style={{ textAlign: 'right', fontFamily: theme.fontMono, color: col(b.change) }}>{sgn(b.change)}</b>
+                    <span style={{ textAlign: 'right', color: theme.textMuted }}>{b.share != null ? `${b.share.toFixed(1)}% of the change` : ''}</span>
+                  </summary>
+                  <div style={{ margin: '6px 0 8px 14px', padding: '8px 12px', borderRadius: 8, background: alpha(theme.primary, '0a'), lineHeight: 1.6, color: theme.textSecondary }}>
+                    <div>{b.why}{b.pct_of_ly != null ? ` ${b.pct_of_ly >= 0 ? '+' : ''}${b.pct_of_ly.toFixed(2)}% of last year.` : ''}</div>
+                    {['Division', 'Month', 'Group'].map(dim => (
+                      <div key={dim} style={{ marginTop: 4 }}><b>By {dim === 'Group' ? 'store group' : dim.toLowerCase()}:</b>{' '}
+                        {(h.by[dim] || []).filter(r => Math.abs(r[b.key]) > 1e-9).map(r => `${r.key} ${sgn(r[b.key])}`).join(' · ') || '-'}</div>))}
+                  </div>
+                </details>))}
+              <div style={{ display: 'grid', gridTemplateColumns: '220px minmax(0, 1fr) 150px 130px', gap: 12, borderTop: `2px solid ${theme.navy}`, paddingTop: 6 }}>
+                <b>= Plan</b><span />
+                <b style={{ textAlign: 'right', fontFamily: theme.fontMono, color: theme.navy }}>{L(h.plan)}</b>
+                <span style={{ textAlign: 'right', color: theme.textMuted }}>{h.pct != null ? `${h.pct >= 0 ? '+' : ''}${h.pct.toFixed(2)}% on last year` : ''}</span>
+              </div>
+            </div>
+          </div>
+          {table('By division', h.by.Division, true)}
+          {table('By month', h.by.Month, true)}
+          {table('By store group', h.by.Group, false)}
+          {table('By cluster', h.by.Cluster, false)}
+          {table('Departments that moved most (top 25)', h.by.Department, false)}
+        </div>)}
+    </>)
 }

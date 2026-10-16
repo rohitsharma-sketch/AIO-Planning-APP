@@ -118,9 +118,9 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
 
     # the deviation journey (user, 2026-10-15: "explain in simplest words what affected to arrive at this number"):
     # kind "start" = where the number starts, "change" = something that moved it up or down, "split" = a share taken of it
-    def move(kind, what, before, after, why):
+    def move(kind, what, before, after, why, detail=None):
         dev.append({"kind": kind, "what": what, "before": before, "after": after, "change": after - before,
-                    "pct": (after / before - 1) * 100 if before else None, "why": why})
+                    "pct": (after / before - 1) * 100 if before else None, "why": why, "detail": detail or []})
 
     L = lambda v: f"₹{v:,.4f} L"   # noqa: E731
     pc = lambda f: f"{(f - 1) * 100:+.2f}%"   # noqa: E731
@@ -167,7 +167,9 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
         move("start", "Last year", ly, ly, f"{dept} sold {L(ly)} at {store} in {lym} (actual sales).")
         move("change", "Buyer's growth (BIS)", ly, pre1 + pre2,
              f"BIS planned {((pre1 + pre2) / ly - 1) * 100 if ly else 0:+.2f}% on last year for {dept} "
-             f"(P1 {g1 - 100:+.2f}%, P2 {g2 - 100:+.2f}%).")
+             f"(P1 {g1 - 100:+.2f}%, P2 {g2 - 100:+.2f}%).",
+             [f"P1 (1st-15th): last year {L(l1)} x {g1 / 100:.4f} = {L(pre1)}", f"P2 (16th-end): last year {L(l2)} x {g2 / 100:.4f} = {L(pre2)}",
+              f"Last year split by {src_h}"])
         a1, a2 = pre1 * h1, pre2 * h2
         fc = (a1 + a2) / (pre1 + pre2) if pre1 + pre2 else 1.0
         step("Department", "× AOP cap (SSG cluster × month × half)", f"Every like-for-like department of cluster {cl or '-'} in each half "
@@ -180,7 +182,10 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
              f"(P1 {pc(h1)}, P2 {pc(h2)}) to land on it." +
              (f" P1 and P2 moved differently because the AOP spreads {month} over its two halves differently from last year's "
               f"sales: it wants {'more' if h2 > h1 else 'less'} of the month in the second half (16th to month end)."
-              if abs(h1 - h2) > 0.02 else ""))
+              if abs(h1 - h2) > 0.02 else ""),
+             [f"P1: {L(pre1)} x {h1:.6f} = {L(a1)}", f"P2: {L(pre2)} x {h2:.6f} = {L(a2)}",
+              f"One factor per half for every like-for-like department of cluster {cl or '-'}, all divisions; the cluster lands "
+              "on the AOP store plans of its like-for-like stores (their own total, not the 2-decimal publish)."])
         after = a1 + a2
         if abs(b1 - 1) > 1e-12 or abs(b2 - 1) > 1e-12:
             after = a1 * b1 + a2 * b2
@@ -191,7 +196,9 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
             move("change", "Store balance", a1 + a2, after,
                  f"{store} on its own came out {'above' if fb < 1 else 'below'} its AOP target, so its departments were moved "
                  f"{pc(fb)} (P1 {pc(b1)}, P2 {pc(b2)}) to land the store on it; the other stores of the cluster moved the other way "
-                 "so each department keeps its cluster total.")
+                 "so each department keeps its cluster total.",
+                 [f"P1: {L(a1)} x {b1:.6f} = {L(a1 * b1)}", f"P2: {L(a2)} x {b2:.6f} = {L(a2 * b2)}",
+                  f"{store}'s month total lands on its AOP store plan, split P1 / P2 by the AOP's own halves."])
         derived = after
         if _load_new_dept_map():   # the carve + re-balance: per SSG cluster over all divisions (2026-10-14), so every division
             f = ty / after if after else 1.0
@@ -301,7 +308,12 @@ def journey(store: str, dept: str, month: str, mrp: str = "", display: str = "")
             step("Display type", "No plan on this MRP here", "Nothing to split into Table / Non-Table, so no qty.", unit="")
         else:
             step("Display type", "Not in the Display Type run", "Run Display Type (Plan Run) to split this MRP into Table / Non-Table.", unit="")
+    st0 = next((d for d in dev if d["kind"] == "start"), None)
+    tot_dev = (ty - st0["after"]) if st0 else 0.0
+    for d in dev:   # how much of the deviation (plan - where it started) this effect is
+        d["share"] = d["change"] / tot_dev * 100 if d["kind"] == "change" and abs(tot_dev) > 1e-12 else None
     return {"store": store, "group": group, "division": div, "dept": dept, "month": month, "mrp": mrp, "display": display,
+            "deviation_total": {"from": st0["what"] if st0 else None, "start": st0["after"] if st0 else None, "plan": ty, "change": tot_dev},
             "steps": steps, "ok": ok, "mrps": sorted(mrps, key=lambda r: -r["ty"]), "mrp_source": src if bands else None,
             "deviation": dev, "story": _story(dev, dept, store, month, ly, ty, ssg)}
 
@@ -377,6 +389,145 @@ def journey_xlsx(store: str, dept: str, month: str, mrp: str = "", display: str 
         xw.sheets["All MRPs to UDF"].set_column(0, 40, 16)
     name = f"Journey - {store} - {dept} - {month}{' - ' + mrp if mrp else ''}.xlsx".replace("/", "-")
     return buf.getvalue(), name
+
+
+# ── the company-level deviation bridge (user, 2026-10-16) ─────────────────────────────────────────────────────────
+
+BRIDGE = [   # (key, name, plain words) - in the order the plan applies them; they add up to plan - last year exactly
+    ("bis", "Buyer's growth (BIS)", "The growth the buyers' plan (BIS) put on last year's sales, department by department."),
+    ("cap", "AOP cap (cluster)", "Each like-for-like cluster scaled, all divisions together, so each half-month lands on the AOP target."),
+    ("bal", "Store balance", "Each like-for-like store moved onto its own AOP target; the other stores of its cluster move the other way."),
+    ("newd", "New departments", "New departments carved out of their references and the clusters re-balanced back onto the AOP."),
+    ("off", "Departments switched off", "Departments inactive in the plan (off season / switched off): their last year goes to 0."),
+    ("nso", "New stores (NSO), on their AOP target", "New stores: planned on their AOP target with their reference store's mix, not on their own (short or no) last year."),
+    ("oth", "Other stores, on their AOP target", "The other stores outside the like-for-like 148: planned on their AOP target, not on their last year."),
+]
+_hol_cache = {}
+
+
+def _plan_stamp():
+    import os
+    from engines.dept_sales_engine import FINAL_PLAN_PATH
+    return os.path.getmtime(FINAL_PLAN_PATH) if os.path.exists(FINAL_PLAN_PATH) else None
+
+
+def _effects(p: dict, division: str = "", month: str = "", group: str = "") -> pd.DataFrame:
+    """One row per store x department x month: last year, plan and each effect of BRIDGE (they add up to plan - LY)."""
+    meta = p.get("meta") or {}
+    hold_c, hold_d = meta.get("lfl_hold_cluster") or {}, meta.get("lfl_hold_on_aop") or {}
+    recs = []
+    for s, sd in p["stores"].items():
+        ssg, cl, grp = bool(sd.get("is_ssg")), sd.get("cluster") or "", _group(sd)
+        if group and grp != group:
+            continue
+        for dv, dd in sd["divisions"].items():
+            if division and dv != division:
+                continue
+            for m, md in dd["months"].items():
+                if month and m != month:
+                    continue
+                for d, r in (md.get("departments") or {}).items():
+                    if not isinstance(r, dict):
+                        continue
+                    ly = float(r.get("ly") or 0.0)
+                    ty = float(r.get("ty") or 0.0) if r.get("active", True) else 0.0
+                    if not ly and not ty:
+                        continue
+                    e = dict.fromkeys([k for k, _, _ in BRIDGE], 0.0)
+                    if not r.get("active", True):
+                        e["off"] = -ly
+                    elif not ssg:
+                        e["nso" if grp == "NSO" else "oth"] = ty - ly
+                    else:
+                        l1 = float(r["ly_p1"]) if r.get("ly_p1") is not None else ly / 2
+                        l2 = float(r["ly_p2"]) if r.get("ly_p2") is not None else ly / 2
+                        g1, g2 = float(r.get("g_p1") or 0.0) / 100, float(r.get("g_p2") or 0.0) / 100
+                        hc = (hold_c.get(cl) or {}).get(m)
+                        hd = float((hold_d.get(dv) or {}).get(m) or 1.0)
+                        if isinstance(hc, dict):
+                            h1, h2 = float(hc.get("P1", 1.0)), float(hc.get("P2", 1.0))
+                        else:
+                            h1 = h2 = float(hc) if hc else hd
+                        b1 = float(r.get("bal_p1", r.get("bal", 1.0)) or 1.0)
+                        b2 = float(r.get("bal_p2", r.get("bal", 1.0)) or 1.0)
+                        pre1, pre2 = l1 * g1, l2 * g2
+                        a1, a2 = pre1 * h1, pre2 * h2
+                        bal = a1 * b1 + a2 * b2
+                        e["bis"], e["cap"], e["bal"], e["newd"] = pre1 + pre2 - ly, a1 + a2 - pre1 - pre2, bal - a1 - a2, ty - bal
+                    recs.append({"Store": s, "Group": grp, "Cluster": cl, "Division": dv, "Month": m, "Department": d,
+                                 "LY": ly, "Plan": ty, **e})
+    return pd.DataFrame(recs)
+
+
+def holistic(division: str = "", month: str = "", group: str = "") -> dict:
+    """The company-level deviation bridge: last year -> each effect -> the plan, with the share of the deviation each
+    takes, by division / month / store group / cluster / department - the store journey's effects added up."""
+    key = (_plan_stamp(), division, month, group)
+    if key in _hol_cache:
+        return _hol_cache[key]
+    df = _effects(_plan(), division, month, group)
+    ks = [k for k, _, _ in BRIDGE]
+    ly, ty = float(df["LY"].sum()), float(df["Plan"].sum())
+    dev = ty - ly
+    bridge = [{"key": k, "what": nm, "why": why, "change": float(df[k].sum()),
+               "share": float(df[k].sum()) / dev * 100 if abs(dev) > 1e-12 else None,
+               "pct_of_ly": float(df[k].sum()) / ly * 100 if ly else None} for k, nm, why in BRIDGE]
+    bridge = [b for b in bridge if abs(b["change"]) > 1e-9]
+
+    def by(col, top=None):
+        g = df.groupby(col)[["LY", "Plan"] + ks].sum().reset_index()
+        g["Change"] = g["Plan"] - g["LY"]
+        g = g.sort_values("Change", key=abs, ascending=False).head(top) if top else g.sort_values(col)
+        return [{"key": r[col], "ly": float(r["LY"]), "plan": float(r["Plan"]), "change": float(r["Change"]),
+                 "pct": float((r["Plan"] / r["LY"] - 1) * 100) if r["LY"] > 0 else None, **{k: float(r[k]) for k in ks}}
+                for _, r in g.iterrows()]
+    biggest = max(bridge, key=lambda b: abs(b["change"])) if bridge else None
+    scope = " ".join(x for x in ({"SSG": "the like-for-like stores", "NSO": "the new stores", "Others": "the other stores"}.get(group, ""),
+                                 division, month) if x) or "the whole company"
+    story = (f"Across {scope}, last year sold ₹{ly:,.2f} L and the plan is ₹{ty:,.2f} L ({(ty / ly - 1) * 100 if ly else 0:+.2f}%, "
+             f"{'+' if dev >= 0 else '-'}₹{abs(dev):,.2f} L). " +
+             " ".join(f"{b['what']}: {'+' if b['change'] >= 0 else '-'}₹{abs(b['change']):,.2f} L"
+                      + (f" ({b['share']:.0f}% of the change)." if b["share"] is not None else ".") for b in bridge) +
+             (f" The biggest single mover: {biggest['what']}." if biggest else ""))
+    out = {"scope": {"division": division, "month": month, "group": group}, "ly": ly, "plan": ty, "change": dev,
+           "pct": (ty / ly - 1) * 100 if ly else None, "bridge": bridge, "story": story,
+           "names": {k: nm for k, nm, _ in BRIDGE},
+           "by": {"Division": by("Division"), "Month": by("Month"), "Group": by("Group"), "Cluster": by("Cluster"),
+                  "Department": by("Department", top=25)},
+           "check": abs(sum(b["change"] for b in bridge) - dev) < 1e-6}
+    _hol_cache.clear()
+    _hol_cache[key] = out
+    return out
+
+
+def holistic_xlsx(division: str = "", month: str = "", group: str = "") -> tuple:
+    """The company-level bridge as Excel: Bridge (+ the paragraph) and the effects by division / month / group / cluster /
+    department / store - each effect's column and the change."""
+    h = holistic(division, month, group)
+    df = _effects(_plan(), division, month, group)
+    ks = [k for k, _, _ in BRIDGE]
+    names = {k: nm for k, nm, _ in BRIDGE}
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as xw:
+        pd.DataFrame([[h["story"]]], columns=["What moved the plan - company level"]).to_excel(xw, sheet_name="Bridge", index=False)
+        pd.DataFrame([{"Step": "Last year", "Rs lakh": h["ly"], "Share of the change %": None, "% of last year": None,
+                       "Why": "Actual sales last year (like-for-like stores); own sales (other stores)."}]
+                     + [{"Step": b["what"], "Rs lakh": b["change"], "Share of the change %": b["share"], "% of last year": b["pct_of_ly"],
+                         "Why": b["why"]} for b in h["bridge"]]
+                     + [{"Step": "= Plan", "Rs lakh": h["plan"], "Share of the change %": 100.0 if h["change"] else None,
+                         "% of last year": h["pct"], "Why": ""}]).to_excel(xw, sheet_name="Bridge", index=False, startrow=3)
+        for col in ("Division", "Month", "Group", "Cluster", "Department", "Store"):
+            g = df.groupby(col)[["LY", "Plan"] + ks].sum().reset_index()
+            g["Change"] = g["Plan"] - g["LY"]
+            g = g.rename(columns=names).sort_values("Change", key=abs, ascending=False)
+            g.to_excel(xw, sheet_name=f"By {col}", index=False)
+            xw.sheets[f"By {col}"].set_column(0, 0, 28)
+            xw.sheets[f"By {col}"].set_column(1, 12, 16)
+        ws = xw.sheets["Bridge"]
+        wrap = xw.book.add_format({"text_wrap": True, "valign": "top"})
+        ws.set_column(0, 0, 40, wrap); ws.set_column(1, 3, 18); ws.set_column(4, 4, 100, wrap)
+    tag = " - ".join(x for x in (group, division, month) if x) or "company"
+    return buf.getvalue(), f"Deviation bridge - {tag}.xlsx"
 
 
 # ── the export: every field, store x department x MRP x month ─────────────────────────────────────────────────────

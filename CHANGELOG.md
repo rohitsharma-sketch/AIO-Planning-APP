@@ -5,6 +5,17 @@ Newest first. Each entry names its commit.
 
 ---
 
+## 2026-10-16
+
+### Sales Plan Journey: share of the deviation, Company (holistic) | Store view, expandable details
+- **Asked (user):** "wanted a deviation explanation too. How much of deviation is taken for this so that it gets recorded on holistic level too. Either make it user default to choose between holistic overall company level information or store specific information. and then expand the info tabs".
+- **Share of the change:** every effect in "What moved this number" now says what share of the whole change (plan - where it started) it is - e.g. ABD / MSE_R/N T-SHIRT H/S Mar'27: BIS 93.8%, AOP cap 16.9%, store balance -1.9%, new departments -8.8% of +Rs 0.46 L.
+- **Company (holistic) view** (switch at the top - Company (holistic) | Store specific; the last choice is the user's default on that browser): the same effects added up over every store x department x month - last year -> buyer's growth (BIS) -> AOP cap -> store balance -> new departments -> departments switched off -> new stores (NSO) on their AOP target -> other stores on their AOP target -> plan, each with Rs, its share of the change and a bar; filters store group / division / month; tables by division, month, store group, cluster and the 25 departments that moved most. `GET /display-type/journey/holistic` (+ `/export`: Excel "Deviation bridge" - Bridge sheet and By Division / Month / Group / Cluster / Department / Store). The effects add up to plan - last year exactly (`check`).
+  - Whole company: LY Rs 46,334.97 L -> plan Rs 77,981.46 L (+31,646.50): BIS +4,265.46 (13%), AOP cap +191.05, switched off -153.88, new stores +15,430.78 (49%), other stores +11,913.09 (38%).
+  - Like-for-like stores: LY Rs 38,885.41 L -> Rs 43,188.04 L (+11.06%): BIS +4,265.46 (99%), AOP cap +191.05 (4%), switched off -153.88 (-4%).
+- **Expandable info:** every line opens (click / Expand all) to its working - P1 / P2 numbers and factors, where last year's halves came from, the share of the change; company lines open to the effect by division, month and store group; the tables fold.
+- **Checked:** `python -m engines.journey` (SSG / NSO / Others land); holistic check true for all and for SSG; Excel built; frontend built. Manual parity still PASS on today's regenerated plan (the plan's input key includes the date, so 8010 regenerated it at 09:30 - same numbers).
+
 ## 2026-10-15
 
 ### Finalised: no pop-up without a change, Plan Iteration - 01 confirmed final, the manual parity gate
