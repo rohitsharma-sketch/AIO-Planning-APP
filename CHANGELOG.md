@@ -7,6 +7,12 @@ Newest first. Each entry names its commit.
 
 ## 2026-10-16
 
+### BIS: a "Planner" button on every department's input cell - the top-bar Basis menu removed
+- **Asked (user):** "i want a simple button for the buyer to get this right and it should be available at each department present and if any inactive department gets activated again it should also follow the same rule. The purpose of this option is to minimise the risk of % issue carried out by the copy paste actions ... they can simply click for planner's input and it can mimic the input in the input cell and the others on which the cells are unlocked and were not being worked on can be re-calibarated as per the current rule" (the Basis menu: "too complex").
+- **"Planner"** beside each department's input tile (hover shows the planner's %): one click types the planner's block growth into that input (`takePlanner` -> `setBlockGrowth`), so the plan takes it and the unlocked departments nobody worked on re-calibrate (B14); Phase 2 also takes the planner's month growth. On every active department (one switched back on gets it at once); disabled in a locked division. Buyers can use it for their own divisions (it was blocked for them).
+- **Removed:** the top-bar Basis menu (Buyer / Planner / Blend, Apply) and its state (`S.basis`), and the department "Use" button in the Planner Gr% column (it only showed when the two differed and didn't fill the input cell). The attribute-level "Use" stays.
+- **Checked (127.0.0.1:5050, in memory, state restored):** 132 buttons; on M_IN_BRIEF it put 9.63 (= the planner's) in the cell, MENS = AOP in every month, no other tile changed; both script blocks pass `node --check`.
+
 ### Sales Plan Journey: share of the deviation, Company (holistic) | Store view, expandable details
 - **Asked (user):** "wanted a deviation explanation too. How much of deviation is taken for this so that it gets recorded on holistic level too. Either make it user default to choose between holistic overall company level information or store specific information. and then expand the info tabs".
 - **Share of the change:** every effect in "What moved this number" now says what share of the whole change (plan - where it started) it is - e.g. ABD / MSE_R/N T-SHIRT H/S Mar'27: BIS 93.8%, AOP cap 16.9%, store balance -1.9%, new departments -8.8% of +Rs 0.46 L.

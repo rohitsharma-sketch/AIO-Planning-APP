@@ -675,9 +675,9 @@ tr:hover .blk-lock,.blk-lock:focus-visible{opacity:1}
 .pl-use{border-radius:999px;background:transparent;border-color:var(--ac-b);color:var(--ac-h);font-weight:600;padding:3px 10px}
 .pl-use:hover{background:var(--ac-l)}
 /* BIS buyer (2026-10-15): only the Buyer's Plan, their divisions and the input tiles */
-body.buyer-mode #planMenu,body.buyer-mode #basisMenu,body.buyer-mode #aop-btn,body.buyer-mode #mode-btn,body.buyer-mode #dataMenu,
+body.buyer-mode #planMenu,body.buyer-mode #aop-btn,body.buyer-mode #mode-btn,body.buyer-mode #dataMenu,
 body.buyer-mode #verSel,body.buyer-mode .tbar-sep,body.buyer-mode #ni-summary,body.buyer-mode #ni-dept,body.buyer-mode #ni-attr,
-body.buyer-mode #ni-inactive,body.buyer-mode .add-dept-ni,body.buyer-mode .blk-lock,body.buyer-mode #bsub-btn,body.buyer-mode #cmp-btn,
+body.buyer-mode #ni-inactive,body.buyer-mode .add-dept-ni,body.buyer-mode .blk-lock,body.buyer-mode #bsub-btn,body.buyer-mode #cmp-btn,body.buyer-mode .pl-use:not([data-take]),
 body.buyer-mode #lfl-tog,body.buyer-mode #syncChk,body.buyer-mode #syncChkDet{display:none!important}
 .buyer-banner{margin:8px 16px 0;padding:8px 12px;border-radius:8px;background:color-mix(in srgb,var(--ac) 10%,var(--sf));border:1px solid color-mix(in srgb,var(--ac) 35%,transparent);font-size:12.5px;color:var(--tx)}
 </style>
@@ -759,11 +759,6 @@ body.buyer-mode #lfl-tog,body.buyer-mode #syncChk,body.buyer-mode #syncChkDet{di
         </div>
         <div class="tbar-sep"></div>
         <div class="tbtn" id="mode-btn" onclick="togglePlanPhase()" title="Phase 1 = one growth % per department for the whole block; Phase 2 = month by month, holding Phase 1's block totals and each month's AOP. Click to switch.">Phase 1 · Block</div>
-        <!-- 2026-10-15: the plan's basis - Buyer's input / Planner's input / Blend (default), locked once applied -->
-        <div class="tmenu" id="basisMenu">
-          <div class="tbtn" onclick="toggleMenu('basisMenu',event);_renderBasis()" title="What the plan is built on: the buyer's input, the planner's input or a blend of the two (default) - locked once applied"><span id="basis-lbl">Basis</span> <span class="caret">&#x25BE;</span></div>
-          <div class="tmenu-pop" id="basis-pop" style="min-width:310px;padding:10px 12px" onclick="event.stopPropagation()"></div>
-        </div>
         <!-- 2026-10-07: Refresh data + its status, History and Export -> one Data menu -->
         <div class="tmenu" id="dataMenu">
           <div class="tbtn" onclick="toggleMenu('dataMenu',event)" title="Refresh data, plan history, export"><span id="sync-dot" class="sdot"></span>Data <span class="caret">&#x25BE;</span></div>
@@ -1840,7 +1835,6 @@ const DEPT_TO_SEC = {
 /* ── STATE ─────────────────────────────────────── */
 let S = {
   report: 'buyers',
-  basis: {mode:'blend',w:50,locked:false},   // the plan's basis (2026-10-15): buyer / planner / blend (default), locked once applied
   drv: {},   // driver inputs: each department's block % as typed / imported (2026-10-15) - the rules never change it
   selM: new Set([0,1,2,3,4,5,6,7,8,9,10,11]),
   viewMode: 'detail',  // 'detail' | 'summary'
@@ -3403,7 +3397,10 @@ function cellVal(row,def){
       // New departments % of its reference (Plan Total / vs LY show what it gets)
       if(nd&&!isLkDiv)return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center" title="${_attr(`New department: no buyer growth of its own (0) - its plan is ${+(nd.np*100).toFixed(2)}% of ${nd.refNm}'s (${bg!=null?(bg>=0?'+':'')+bg+'% on its own LY':'-'}), then the division is re-balanced to AOP. Set in New departments, not here.`)}"><span class="nd-tag">NEW</span><input class="gi" data-bk="${sec.id}" type="number" value="0" disabled></span>`;
       const dvl=S.drv[sec.id],dcls='gi'+(dvl==null?'':dvl<0?' neg':' has')+(isLkSec?' lkd':'')+anim;   // the driver, as typed (2026-10-15)
-      return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="${dcls}" data-bk="${sec.id}" type="number" step="0.01" placeholder="${bg!=null?'AOP':'%'}" value="${dvl!=null?+dvl:''}" ${isLkDiv?'disabled title="Division locked"':`title="${_attr((dvl!=null?'Your input (driver) - the plan uses Re-cal Gr% next to it':'No input typed: the plain AOP share (Re-cal Gr% next to it) - type a % to drive it')+'\n'+_blockWhy(row))}"`} oninput="setBlockGrowth('${sec.id}',this.value)" onblur="refresh()"></span>`;
+      // one click = the planner's growth typed into this input (user, 2026-10-16: no copy-paste of %s)
+      const pg=_plannerRowAgg({_key:sec.id,_divId:dv.id},AOP_MIS)?.gr;
+      const take=pg==null?'':`<button type="button" class="pl-use" data-take="${sec.id}" onclick="event.stopPropagation();takePlanner('${sec.id}')" ${isLkDiv?'disabled title="Division locked - unlock it to change this department"':`title="${_attr(`Put the planner's input ${fP(pg)} in this cell - as if typed; the other unlocked departments you haven't worked on re-calibrate`)}"`} aria-label="Use the planner's input ${fP(pg)} for ${_attr(sec.nm)}">Planner</button>`;
+      return `<span style="display:inline-flex;align-items:center;gap:3px;justify-content:center">${lockBtn}<input class="${dcls}" data-bk="${sec.id}" type="number" step="0.01" placeholder="${bg!=null?'AOP':'%'}" value="${dvl!=null?+dvl:''}" ${isLkDiv?'disabled title="Division locked"':`title="${_attr((dvl!=null?'Your input (driver) - the plan uses Re-cal Gr% next to it':'No input typed: the plain AOP share (Re-cal Gr% next to it) - type a % to drive it')+'\n'+_blockWhy(row))}"`} oninput="setBlockGrowth('${sec.id}',this.value)" onblur="refresh()">${take}</span>`;
     }
     case 'pl_fac': {
       if(row._key==null||row._isGrand||_parseAttrKey(row._key)){ // a group: its departments' factors weighted by AOP share
@@ -3423,7 +3420,7 @@ function cellVal(row,def){
       const ai=_attrEdit&&row._key?_parseAttrKey(row._key):null;
       const bg=isDept||ai?_effGrowth(row,AOP_MIS):null;
       const useAttr=ai&&bg!=null&&Math.abs(bg-a.gr)>0.005&&!S.divLocked.has(ai.dvId)?` <button type="button" class="pl-use" onclick="event.stopPropagation();useAttrPlannerGr('${ai.dvId}','${ai.attr.replace(/'/g,"\\'")}')" title="Set every ${ai.attr} department to the planner's Gr % ${fP(a.gr)} (now ${fP(bg)})" aria-label="Use the planner's Gr % ${fP(a.gr)} for ${ai.attr}, buyer now ${fP(bg)}">Use</button>`:'';
-      const use=useAttr||isDept&&bg!=null&&Math.abs(bg-a.gr)>0.005?useAttr||` <button type="button" class="pl-use" onclick="event.stopPropagation();usePlannerGr('${row._key}')" title="Set this department's buyer Gr % to the planner's ${fP(a.gr)} (now ${fP(bg)})" aria-label="Use the planner's Gr % ${fP(a.gr)} for ${DVDATA.find(d=>d.id===row._divId)?.secs.find(x=>x.id===row._key)?.nm||row._key}, buyer now ${fP(bg)}">Use</button>`:'';
+      const use=useAttr;   // a department takes the planner's input from the button on its input cell (2026-10-16)
       return `<span class="${gCls(a.gr)}" style="cursor:help" title="${_attr(_plannerWhy(row,AOP_MIS)+'\nLocked - it moves only with the factor table or its inputs')}">${fP(a.gr)}</span>${use}`;
     }
     case 'pl_val': {
@@ -4774,7 +4771,7 @@ function _recalWhy(sec,dv){
   const lk=AOP_MIS.every(mi=>S.locked.has(sec.id+'__'+mi)),nd=_ndOf(sec.id);
   const why=S.divLocked.has(dv.id)?'division locked - held as entered':lk?'locked - held as typed, the unlocked departments re-calibrate around it'
     :nd?`new department - ${Math.round(nd.np*100)}% of ${nd.refNm}'s plan`
-    :`unlocked - re-calibrated with ${dv.nm} to its AOP (and the apparel cap on Save)`+(S.basis.at?`; basis ${_basisLabel()}`:'');
+    :`unlocked - re-calibrated with ${dv.nm} to its AOP (and the apparel cap on Save)`;
   return {d,e,why,off:d!=null&&e!=null&&Math.abs(e-d)>0.005};
 }
 function _recalCells(){   // refresh the Re-cal Gr% cells in place (no full redraw while typing)
@@ -4789,59 +4786,6 @@ function _recalHtml(sec,dv){
   const t=(w.d!=null?`Input ${fP(w.d)} → plan ${fP(w.e)}`:`No input typed - plan ${fP(w.e)} (AOP share)`)+`\n${w.why}`;
   return `<span data-rc="${sec.id}" class="${gCls(w.e)}" style="cursor:help;${w.off?'background:var(--wa-b);border:1px solid var(--wa-br);border-radius:6px;padding:1px 6px;':''}" title="${_attr(t)}">${fP(w.e)}</span>`;
 }
-/* The plan's basis (user, 2026-10-15: "add the basis selector for buyer, planner and blend", "make the Blend As
-   default"; earlier "Whichever is amalgmamted as per the user and locked"). Buyer = the Block Growth% tiles (S.drv);
-   Planner = the planner's growth per department and month (_plannerCalc - what each row's "Use" takes);
-   Blend = w% buyer + (100 - w)% planner, 50/50 by default (one of the two where the other has none).
-   Apply: every department's unlocked months are re-seeded from the basis, the import's division locks are released (a
-   cell or tile you locked stays held), each division is re-calibrated to its AOP, and the basis locks. The tiles keep the
-   buyer's text; Re-cal Gr% shows the plan; nothing reaches Sales Plan until Save. */
-const BASIS_NM={buyer:"Buyer's input",planner:"Planner's input",blend:'Blend'};
-let _basisPick=null;
-function _basisLabel(b=S.basis){return b.mode==='blend'?`Blend ${b.w}% buyer / ${100-b.w}% planner`:BASIS_NM[b.mode]||b.mode;}
-function _basisG(sec,dv,mi,mode,w){
-  const b=S.drv[sec.id],pl=_plannerCalc()[dv.id]?.[mi]?.[sec.id]?.gr;
-  const p=pl!=null&&isFinite(pl)?pl:null;
-  if(mode==='buyer')return b??null;
-  if(mode==='planner')return p;
-  if(b==null)return p;if(p==null)return b;
-  return b*w/100+p*(100-w)/100;
-}
-function _renderBasis(){
-  const b=S.basis,lbl=document.getElementById('basis-lbl');
-  if(lbl)lbl.innerHTML=`Basis: ${b.mode==='blend'?`Blend ${b.w}/${100-b.w}`:BASIS_NM[b.mode]}${b.locked?' &#x1F512;':b.at?'':' &middot; not applied'}`;
-  const pop=document.getElementById('basis-pop');if(!pop)return;
-  const pk=_basisPick||{mode:b.mode,w:b.w},dis=b.locked?' disabled':'';
-  const opt=(m,extra)=>`<label style="display:flex;align-items:center;gap:8px;padding:5px 2px;font-size:12.5px"><input type="radio" name="basisMode" value="${m}"${pk.mode===m?' checked':''}${dis} onchange="_basisPick={...(_basisPick||{w:S.basis.w}),mode:'${m}'}"> <b>${BASIS_NM[m]}</b>${extra}</label>`;
-  pop.innerHTML=`<div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mu);margin-bottom:4px">Plan basis</div>`
-    +opt('blend',` <input type="number" min="0" max="100" step="5" value="${pk.w}" style="width:56px"${dis} oninput="_basisPick={...(_basisPick||{}),mode:'blend',w:Math.max(0,Math.min(100,+this.value||0))};document.querySelector('#basis-pop input[value=blend]').checked=true" aria-label="Buyer weight %"> <small style="color:var(--mu)">% buyer, rest planner (default)</small>`)
-    +opt('buyer',' <small style="color:var(--mu)">the Block Growth% tiles</small>')
-    +opt('planner',` <small style="color:var(--mu)">the planner's growth, each month</small>`)
-    +`<div style="font-size:11.5px;color:var(--mu);margin:6px 0 8px;line-height:1.45">${b.at?`In use: <b>${_basisLabel()}</b>, applied ${_vlShort(b.at)}.`:'Not applied yet - the plan is the inputs as imported.'} ${b.locked?'Locked - unlock to change it.':'Apply re-seeds every unlocked month from the basis, re-calibrates each division to its AOP and locks the basis; cells you locked stay held. Save sends it to Sales Plan.'}</div>`
-    +`<div style="display:flex;gap:6px;justify-content:flex-end">`
-    +(b.locked?`<button type="button" class="tbtn" onclick="S.basis.locked=false;saveState();_renderBasis()">&#x1F513; Unlock to change</button>`
-      :`<button type="button" class="tbtn" style="background:var(--ac);color:#fff" onclick="applyBasis()">Apply basis</button>`)
-    +`</div>`;
-}
-function applyBasis(){
-  const pk=_basisPick||{mode:S.basis.mode,w:S.basis.w},nm=_basisLabel(pk);
-  if(!confirm(`Re-seed the plan from: ${nm}?\n\nEvery department's unlocked months take the basis growth, the import's division locks are released (cells you locked stay held) and each division is re-calibrated to its AOP. The input tiles keep the buyer's text; Re-cal Gr% shows the plan. Nothing goes to Sales Plan until you Save.`))return;
-  let n=0;
-  DVDATA.forEach(dv=>{
-    if(!AOP_DIVS.some(d=>d.id===dv.id))return;
-    if(S.divLocked.has(dv.id)){S.divLocked.delete(dv.id);(S.divLockAdded[dv.id]||[]).forEach(k=>S.locked.delete(k));delete S.divLockAdded[dv.id];}
-    dv.secs.forEach(sec=>{
-      if(S.hiddenSecs.has(sec.id)||_ndNoLy(sec))return;
-      let hit=false;
-      AOP_MIS.forEach(mi=>{const k=sec.id+'__'+mi;if(S.locked.has(k))return;const g=_basisG(sec,dv,mi,pk.mode,pk.w);if(g!=null){S.inputs[k]=g;hit=true;}});
-      if(hit){n++;S.buyerSet.add(sec.id);}
-    });
-    AOP_MIS.forEach(mi=>_divRescale(dv,mi));
-  });
-  S.basis={mode:pk.mode,w:pk.w,locked:true,at:new Date().toISOString()};_basisPick=null;
-  saveState();refresh();closeMenus();
-  toast(`${nm}: ${n} departments re-seeded and re-calibrated to AOP - Save to send it to Sales Plan`);
-}
 /* BIS buyer mode (user, 2026-10-15: "delegate the BIS function for the specific division only the rest of the things get
    locked for the buyer only the inputs should be open for them to do in the input tile"; "Save for the planner to review,
    then send"). Users & access > BIS divisions makes a person the buyer for some divisions; /api/auth/rights says which.
@@ -4849,12 +4793,12 @@ function applyBasis(){
    tiles to the planner (/api/bis/submissions) - never to Sales Plan. Landing's server refuses everything else for them.
    The planner: "Buyer inputs" in the toolbar -> apply one to the plan (or dismiss), check, then Save sends it as usual. */
 var BUYER=null;   // (var: read by refresh / saveState before this line runs) Set of division ids ('mens', ...) this person is the buyer for; null = a planner
-const _BUYER_NO=['toggleSecLock','toggleDivLock','usePlannerGr','clearAllInputs','applyBasis','capToApparelAop','recalibrateToAop',
+const _BUYER_NO=['toggleSecLock','toggleDivLock','clearAllInputs','capToApparelAop','recalibrateToAop',
   'resetPlanToAop','revertToLyCont','toggleLockAllMAMJ','lockAllMAMJ','unlockAllMAMJ','openImportGrowth','applyImportGrowth','previewImportGrowth',
   'openAopModal','syncFromAop','syncAll','seedPlanFromAop','revertToAop','clearAop','togglePlanPhase','setGrowth','setAttrMonGrowth',
   'setAttrBlockGrowth','toggleAttrEdit','openNewDeptModal','openAddDeptModal','addCustomDept','deleteCustomDept','openFactorTable',
   'saveFactorTable','onVerSelChange','loadVersion','renameVersion','removeIteration','onAopVersionChange','magRevertAop','magReapportion',
-  'magLive','magCommit','_ndSet','_ndSave','_ndDel','_ndAdd','_ndUpload','openVersionLog','openMainCompare','undoMainEdits','undoAttrEdits',
+  'magLive','magCommit','_ndSet','_ndSave','_ndDel','_ndAdd','_ndUpload','openVersionLog','openMainCompare','undoMainEdits','undoAttrEdits','useAttrPlannerGr',
   'openBuyerSubs','uploadFillRate'];
 function _buyerHold(){
   if(!BUYER)return;
@@ -4867,7 +4811,7 @@ function _buyerHold(){
 function _buyerLockDom(){
   const mine=id=>BUYER.has(DVDATA.find(d=>d.secs.some(x=>x.id===id))?.id);
   document.querySelectorAll('#dtbl input,#dtbl select,#dtbl button,#dtbl textarea').forEach(el=>{
-    if(!(el.matches('input[data-bk]')&&mine(el.dataset.bk)))el.disabled=true;});
+    if(!((el.matches('input[data-bk]')&&mine(el.dataset.bk))||(el.matches('button[data-take]')&&mine(el.dataset.take))))el.disabled=true;});
 }
 function _buyerEnter(divs){
   BUYER=new Set(divs.map(d=>String(d).toLowerCase()));
@@ -4884,7 +4828,7 @@ function _buyerEnter(divs){
   const ws=document.querySelector('.cstrip');
   if(ws&&!document.getElementById('buyer-banner')){
     const b=document.createElement('div');b.id='buyer-banner';b.className='buyer-banner';
-    b.textContent=`Buyer view - ${divs.join(', ')}: type your Block Growth % in the input tiles; Re-cal Gr% shows what the plan makes of it. "Send to planner" sends your tiles for review - the planner applies them and sends the plan to Sales Plan.`;
+    b.textContent=`Buyer view - ${divs.join(', ')}: type your Block Growth % in the input tiles, or click "Planner" beside one to take the planner's input; Re-cal Gr% shows what the plan makes of it. "Send to planner" sends your tiles for review - the planner applies them and sends the plan to Sales Plan.`;
     ws.parentNode.insertBefore(b,ws);
   }
   refresh();
@@ -5731,7 +5675,7 @@ function saveState(logVersion=false){
   // default rule (user, 2026-10-15): every Save holds the apparel total on the AOP - one factor a month over the three
   // divisions (capToApparelAop), the divisions free to differ from their own AOP
   if(logVersion&&S.aopLocked)capToApparelAop(true);
-  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopVersionId:S.aopVersionId,aopUnit:S.aopUnit,locked:[...S.locked],buyerSet:[...S.buyerSet],divLocked:[...S.divLocked],divLockAdded:S.divLockAdded,aopSeeds:S.aopSeeds,aopSeededFrom:S.aopSeededFrom,aopSeedFp:S.aopSeedFp,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],seasonOff:[...S.seasonOff],drv:S.drv,basis:S.basis,customDepts:S.customDepts,deptSplit:1,at:now.toISOString()}))}catch(e){}
+  try{localStorage.setItem('ck_otb_state',JSON.stringify({inputs:S.inputs,selM:[...S.selM],report:S.report,aop:S.aop,aopLocked:S.aopLocked,aopVersionId:S.aopVersionId,aopUnit:S.aopUnit,locked:[...S.locked],buyerSet:[...S.buyerSet],divLocked:[...S.divLocked],divLockAdded:S.divLockAdded,aopSeeds:S.aopSeeds,aopSeededFrom:S.aopSeededFrom,aopSeedFp:S.aopSeedFp,divTab:S.divTab,hiddenSecs:[...S.hiddenSecs],manualInactive:[...S.manualInactive],seasonOff:[...S.seasonOff],drv:S.drv,customDepts:S.customDepts,deptSplit:1,at:now.toISOString()}))}catch(e){}
   _updateSaveLabel(now);
   if(logVersion){_maybeSaveVersion(now,_vlNext);_vlNext=null;_renderVerSel();}
   _mainSnapTake('saved');   // the main sheet's before / after starts again from what was just saved
@@ -5983,7 +5927,6 @@ function loadState(){
     if(p.manualInactive)S.manualInactive=new Set(p.manualInactive);
     if(p.seasonOff)S.seasonOff=new Set(p.seasonOff);
     if(p.drv)S.drv=p.drv;
-    if(p.basis)S.basis={...S.basis,...p.basis};
     if(p.customDepts)S.customDepts=p.customDepts;
     if(!p.deptSplit)_deptMigrated=_migrateDeptIds(S); // once: saved state is stamped deptSplit from then on
     _applyCustomDepts();
@@ -6300,7 +6243,6 @@ function _autoInactive100(){
 function refresh(){
   _buyerHold();     // a BIS buyer: their divisions, Phase 1, the Buyer's Plan (2026-10-15)
   _drvSeed();       // driver tiles for plans saved before 15 Oct
-  _renderBasis();   // the Basis button's label (2026-10-15)
   _syncChkSoon();   // the sync pill (2026-10-15)
   _autoInactive100();
   syncRange();
@@ -6799,17 +6741,23 @@ function _offLY(row,mi){
     dv.secs.forEach(s=>{if(S.hiddenSecs.has(s.id))l+=_secMonLY(s,dv,mi);});});
   return l;
 }
-// "use" - the department's buyer growth goes back to the planner's Gr % (month by month), the rest re-balance
-function usePlannerGr(secId){
-  const dv=DVDATA.find(d=>d.secs.some(s=>s.id===secId));if(!dv||S.divLocked.has(dv.id))return;
-  _touchDept(secId);
-  AOP_MIS.forEach(mi=>{const o=_plannerCalc()[dv.id]?.[mi]?.[secId];if(o&&o.gr!=null)S.inputs[secId+'__'+mi]=o.gr;});
-  S.buyerSet.add(secId); // taking the planner's Gr % is the buyer's choice - a re-seed keeps it
-  AOP_MIS.forEach(mi=>_divReapp(dv,mi,secId));
+/* "Planner" on a department's input cell (user, 2026-10-16): the planner's block growth goes into the input exactly as if
+   the buyer typed it (setBlockGrowth - the driver tile, the plan takes it, the unlocked departments nobody worked on
+   re-calibrate by the current rule); in Phase 2 its months take the planner's month growth. A department switched back on
+   has the same button. Buyers have it for their own divisions. */
+function takePlanner(secId){
+  const dv=DVDATA.find(d=>d.secs.some(s=>s.id===secId));
+  if(!dv||S.divLocked.has(dv.id)||(BUYER&&!BUYER.has(dv.id)))return;
+  const g=_plannerRowAgg({_key:secId,_divId:dv.id},AOP_MIS)?.gr;
+  if(g==null){toast('No planner input for this department');return;}
+  setBlockGrowth(secId,String(+g.toFixed(2)));
+  if(_planMode()==='month'){
+    AOP_MIS.forEach(mi=>{const o=_plannerCalc()[dv.id]?.[mi]?.[secId];if(o&&o.gr!=null)S.inputs[secId+'__'+mi]=o.gr;});
+    AOP_MIS.forEach(mi=>_divReapp(dv,mi,secId));
+  }
   refresh();
-  // the button goes once the two match - keep keyboard focus on this department's own growth input
-  (document.querySelector(`input[data-bk="${secId}"]`)||document.querySelector(`input[data-key^="${secId}__"]`))?.focus({preventScroll:true});
-  toast(`Planner's Gr % applied to ${dv.secs.find(s=>s.id===secId)?.nm||secId} ✓`);
+  document.querySelector(`input[data-bk="${secId}"]`)?.focus({preventScroll:true});
+  toast(`${dv.secs.find(s=>s.id===secId)?.nm||secId}: planner's input ${fP(+g.toFixed(2))} put in - the unlocked departments re-calibrated`);
 }
 /* Two phases (user, 2026-10-05: "transform the model into 2 phases remove the prompt banner keep the model button on
    topbar, and rename Block wise to phase 1 and the month wise to phase 2"). Stored as 'block' / 'month' as before.
@@ -7959,7 +7907,6 @@ function _vlRules(){
   const sec=id=>DVDATA.flatMap(d=>d.secs).find(s=>s.id===id),nm=id=>sec(id)?.nm||id;
   return {
     planner_growth:meth,
-    basis:S.basis.at?_basisLabel()+(S.basis.locked?' (locked)':''):'as imported',
     aop:_aopCache?.version_label?`${_aopCache.version_label} (publish ${_aopCache.version_id})`:null,
     apparel_on_aop:S.aopLocked&&AOP_MIS.every(mi=>{const t=_apparelTot(mi);return !(t.aop>0)||Math.abs(t.ty-t.aop)<=0.00005;}),
     divisions_locked:[...S.divLocked],
@@ -7971,7 +7918,7 @@ function _vlRules(){
 }
 function _vlRulesText(r){
   if(!r)return 'Rules not recorded (saved before 15 Oct 2026)';
-  return [...(r.basis?[`Basis: ${r.basis}`]:[]),`Planner growth: ${r.planner_growth}`,`AOP: ${r.aop||'-'}${r.apparel_on_aop?' · apparel = AOP':''}`,
+  return [`Planner growth: ${r.planner_growth}`,`AOP: ${r.aop||'-'}${r.apparel_on_aop?' · apparel = AOP':''}`,
     `Divisions locked: ${(r.divisions_locked||[]).map(x=>x.toUpperCase()).join(', ')||'none'}`,
     `Season: ${r.season||'-'} (${r.off_season||0} off season)`,`Inactive departments: ${r.inactive}`,
     `New departments: ${(r.new_departments||[]).join('; ')||'none'}`].join('\n');
@@ -8100,8 +8047,7 @@ function _vlSnapshot(){
     divLocked:[...S.divLocked],
     divLockAdded:JSON.parse(JSON.stringify(S.divLockAdded||{})),
     seasonOff:[...S.seasonOff],
-    drv:{...S.drv},
-    basis:{...S.basis}
+    drv:{...S.drv}
   };
 }
 let _vlNext=null;   // {name} = the next save is a new iteration whatever changed (Save as / New iteration, 2026-10-13)
@@ -8252,7 +8198,6 @@ function loadVersion(idx){
   if(snap.divLocked){S.divLocked=new Set(snap.divLocked);S.divLockAdded=snap.divLockAdded||{};}
   S.seasonOff=new Set(snap.seasonOff||[]);
   S.drv=snap.drv?{...snap.drv}:{};   // older versions: seeded from their plan below (_drvSeed)
-  S.basis=snap.basis?{...snap.basis}:{mode:'blend',w:50,locked:false};
   if(!snap.deptSplit)_migrateDeptIds(S);
   _vlSetActive(v.id);
   saveState();
